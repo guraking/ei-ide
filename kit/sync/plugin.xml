@@ -1,0 +1,26 @@
+<idea-plugin>
+  <id>kinggura.sync</id>
+  <name>EI Synchronize</name>
+  <vendor>EI IDE</vendor>
+  <description><![CDATA[
+    이클립스 Team › Synchronize Workspace 처럼 원격과 비교해 들어올 변경 · 나갈 변경 · 충돌을 한 창에서 보여 준다.
+  ]]></description>
+
+  <depends>com.intellij.modules.platform</depends>
+  <depends>com.intellij.modules.vcs</depends>
+  <!-- Git 은 저장소 변경 알림(GIT_REPO_CHANGE)을 받으려 플러그인이 필요하다. SVN 은 svn 명령줄만 쓰므로 svn4idea 없이도 된다. -->
+  <depends>Git4Idea</depends>
+
+  <extensions defaultExtensionNs="com.intellij">
+    <toolWindow id="Synchronize" anchor="bottom" icon="AllIcons.Actions.Refresh"
+                factoryClass="kinggura.sync.SyncToolWindowFactory"/>
+  </extensions>
+
+  <actions>
+    <action id="KingGura.SynchronizeWorkspace" class="kinggura.sync.SyncToolWindowFactory$OpenAction"
+            text="Synchronize Workspace" icon="AllIcons.Actions.Refresh">
+      <add-to-group group-id="Git.MainMenu" anchor="first"/>
+      <add-to-group group-id="Git.ContextMenu" anchor="first"/>
+    </action>
+  </actions>
+</idea-plugin>

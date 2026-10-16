@@ -1,0 +1,53 @@
+<idea-plugin>
+    <id>local.bootservers</id>
+    <name>Boot Servers</name>
+    <vendor>local</vendor>
+    <description><![CDATA[
+        프로젝트 트리에서 모듈을 우클릭해 스프링 부트 서버를 시작 · 디버그 · 재시작 · 중지하고,
+        실행 중인 모듈 옆에 상태를 표시한다.
+        아래쪽 「서버」 창에서 여러 서버를 한꺼번에 다루고 프로필 · VM 옵션 · 포트를 고친다.
+    ]]></description>
+
+    <depends>com.intellij.java</depends>
+    <depends>Git4Idea</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <projectViewNodeDecorator implementation="local.bootservers.ServerStatusDecorator"/>
+        <toolWindow id="Servers" anchor="bottom" icon="AllIcons.Nodes.Services"
+                    factoryClass="local.bootservers.ServersToolWindowFactory"/>
+    </extensions>
+
+    <projectListeners>
+        <listener class="local.bootservers.ServerStatusRefresher" topic="com.intellij.execution.ExecutionListener"/>
+    </projectListeners>
+
+    <actions>
+        <group id="BootServers.Menu" class="local.bootservers.ServerActions$Menu" text="스프링 부트 서버" popup="true"
+               icon="AllIcons.Nodes.Services">
+            <action id="BootServers.Start" class="local.bootservers.ServerActions$Start"
+                    text="서버 시작" icon="AllIcons.Actions.Execute"/>
+            <action id="BootServers.Debug" class="local.bootservers.ServerActions$Debug"
+                    text="디버그로 시작" icon="AllIcons.Actions.StartDebugger"/>
+            <action id="BootServers.Restart" class="local.bootservers.ServerActions$Restart"
+                    text="재시작" icon="AllIcons.Actions.Restart"/>
+            <action id="BootServers.Stop" class="local.bootservers.ServerActions$Stop"
+                    text="중지" icon="AllIcons.Actions.Suspend"/>
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="first"/>
+        </group>
+
+        <!-- 이클립스 Import · Team 메뉴 대응. 인텔리제이 기본 동작을 우클릭 메뉴에 연결만 한다. -->
+        <group id="BootServers.Workspace" text="작업공간" popup="true" icon="AllIcons.Nodes.Folder">
+            <reference ref="ImportModule"/>
+            <reference ref="Vcs.VcsClone"/>
+            <separator/>
+            <reference ref="Git.Init"/>
+            <reference ref="Git.Configure.Remotes"/>
+            <add-to-group group-id="ProjectViewPopupMenu" relative-to-action="BootServers.Menu" anchor="after"/>
+        </group>
+
+        <!-- 이클립스 키맵은 Ctrl+F 를 「바꾸기」 에 주므로, 콘솔에서만 켜지는 찾기를 Ctrl+F 에 따로 건다. 이클립스 키맵은 $default 를 물려받는다. -->
+        <action id="KingGura.ConsoleFind" class="local.bootservers.ConsoleFindAction" text="콘솔에서 찾기" icon="AllIcons.Actions.Find">
+            <keyboard-shortcut keymap="$default" first-keystroke="control F"/>
+        </action>
+    </actions>
+</idea-plugin>

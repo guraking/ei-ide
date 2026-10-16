@@ -1,0 +1,9 @@
+# 바탕 소스는 get-source.bat 로 받는다. 빌드 산출물 · 사본 · 로그는 올리지 않는다.
+intellij-community/
+backup/
+logs/
+tmpjars/
+노트북용/
+plugins/*.jar
+bundled-plugins/lombok/
+build-number.txt

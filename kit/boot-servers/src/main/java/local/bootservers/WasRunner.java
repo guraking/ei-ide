@@ -1,0 +1,608 @@
+package local.bootservers;
+
+import com.intellij.credentialStore.CredentialAttributes;
+import com.intellij.credentialStore.CredentialAttributesKt;
+import com.intellij.execution.ExecutionException;
+import com.intellij.execution.ProgramRunnerUtil;
+import com.intellij.execution.RunContentExecutor;
+import com.intellij.execution.RunManager;
+import com.intellij.execution.RunnerAndConfigurationSettings;
+import com.intellij.execution.configurations.GeneralCommandLine;
+import com.intellij.execution.executors.DefaultDebugExecutor;
+import com.intellij.execution.process.CapturingProcessHandler;
+import com.intellij.execution.process.KillableColoredProcessHandler;
+import com.intellij.execution.process.ProcessEvent;
+import com.intellij.execution.process.ProcessHandler;
+import com.intellij.execution.process.ProcessListener;
+import com.intellij.execution.process.ProcessOutput;
+import com.intellij.execution.process.ProcessOutputTypes;
+import com.intellij.execution.process.ProcessTerminatedListener;
+import com.intellij.execution.remote.RemoteConfiguration;
+import com.intellij.execution.remote.RemoteConfigurationType;
+import com.intellij.ide.passwordSafe.PasswordSafe;
+import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.PathManager;
+import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.components.Service;
+import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.module.Module;
+import com.intellij.openapi.module.ModuleManager;
+import com.intellij.openapi.project.Project;
+import com.intellij.openapi.projectRoots.Sdk;
+import com.intellij.openapi.roots.ModuleRootManager;
+import com.intellij.openapi.roots.OrderEnumerator;
+import com.intellij.openapi.roots.ProjectRootManager;
+import com.intellij.openapi.ui.Messages;
+import com.intellij.openapi.util.Key;
+import com.intellij.openapi.util.SystemInfo;
+import com.intellij.openapi.vfs.VfsUtilCore;
+import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.task.ProjectTaskListener;
+import com.intellij.task.ProjectTaskManager;
+import com.intellij.util.concurrency.AppExecutorUtil;
+import local.bootservers.was.ExplodedSync;
+import local.bootservers.was.JeusBase;
+import local.bootservers.was.TomcatBase;
+import local.bootservers.was.WasSettings;
+import local.bootservers.was.WeblogicBase;
+import local.bootservers.was.WildflyBase;
+import org.jetbrains.annotations.NotNull;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+
+/**
+ * 서버 창에 추가한 WAS 를 시작 · 중지 · 재시작 · 반영한다. Tomcat · JBoss/WildFly · WebLogic · JEUS 를 실행한다.
+ * 시작하면 올릴 모듈을 먼저 빌드하고, WAS 마다 전용 실행 폴더를 꾸린 뒤 실행 창에 띄운다.
+ * Tomcat 은 프로젝트 폴더를 그 자리에서 연결하고, WildFly · WebLogic · JEUS 는 펼친 war 폴더로 복사해 올린다.
+ * 디버그로 시작하면 디버그 포트로 띄우고, JVM 의 대기 문구가 나오면 원격 디버거를 붙인다.
+ * <p>
+ * JEUS 는 {@link JeusBase} 의 명령 틀로 시작 · 중지 · 배포한다. 비밀번호는 설정에 두지 않고 처음 시작할 때 묻고,
+ * 원하면 IDE 비밀번호 저장소에 기억한다. JEUS 의 JVM 옵션은 도메인 설정에서 읽으므로 디버그 포트를 이 플러그인이 열 수 없다.
+ * 사용자가 도메인 설정의 JVM 옵션이나 시작 명령 틀의 {vmoptions} 로 jdwp 를 넣으면, 대기 문구를 보고 디버거만 붙인다.
+ * 명령줄 인자로 비밀번호를 넘기므로 실행 중에는 OS 프로세스 목록에서 보일 수 있다(실행 창 · 기록에는 가려서 보인다).
+ */
+@Service(Service.Level.PROJECT)
+public final class WasRunner {
+
+    private static final Logger LOG = Logger.getInstance(WasRunner.class);
+    private static final String TITLE = "WAS";
+    private static final String LISTENING = "Listening for transport dt_socket at address";
+    // 정상 종료 명령이 먹히지 않을 때 프로세스를 강제로 끝내기까지 기다리는 시간.
+    private static final int STOP_GRACE_SECONDS = 15;
+    // JEUS 배포 명령 하나를 기다리는 한도. 비밀번호 입력 등을 기다리며 멈춘 명령이 작업 스레드를 붙잡지 않게 한다.
+    private static final int DEPLOY_TIMEOUT_SECONDS = 180;
+    // 비밀번호 저장소에서 이 플러그인의 항목을 구분하는 이름.
+    private static final String CREDENTIAL_SUBSYSTEM = "KingGura WAS";
+    // WildFly standalone.conf 의 기본 JVM 옵션. JAVA_OPTS 를 주면 기본값을 통째로 대신하므로 VM 옵션 앞에 다시 넣는다.
+    private static final String WILDFLY_DEFAULT_OPTS =
+            "-Xms64m -Xmx512m -XX:MetaspaceSize=96M -XX:MaxMetaspaceSize=256m -Djava.net.preferIPv4Stack=true "
+            + "-Djboss.modules.system.pkgs=org.jboss.byteman -Djava.awt.headless=true";
+
+    private final Project project;
+    private final Map<String, ProcessHandler> running = new ConcurrentHashMap<>();
+    private final Map<String, Boolean> debugMode = new ConcurrentHashMap<>();
+    // 이번 IDE 실행 동안 쓰는 JEUS 비밀번호(서버 id → 비밀번호). 기억하지 않기로 한 비밀번호도 중지 · 배포에 쓰려고 둔다.
+    private final Map<String, String> jeusPasswords = new ConcurrentHashMap<>();
+
+    public WasRunner(Project project) {
+        this.project = project;
+        // 저장 → 자동 빌드가 끝나면, 「자동 반영」 이 켜진 실행 중인 WildFly · WebLogic · JEUS 에 바뀐 파일을 올린다.
+        // Tomcat 은 실행 폴더가 컴파일 결과를 직접 보므로 할 일이 없다.
+        project.getMessageBus().connect().subscribe(ProjectTaskListener.TOPIC, new ProjectTaskListener() {
+            @Override
+            public void finished(@NotNull ProjectTaskManager.Result result) {
+                if (result.isAborted() || result.hasErrors()) {
+                    return;
+                }
+                for (WasSettings.Server s : WasSettings.getInstance(project).servers()) {
+                    if (s.reloadable && copiesApps(s) && isLive(s)) {
+                        syncCopied(s);
+                    }
+                }
+            }
+        });
+    }
+
+    public static WasRunner getInstance(@NotNull Project project) {
+        return project.getService(WasRunner.class);
+    }
+
+    static String registryKey(WasSettings.Server server) {
+        return "was:" + server.id;
+    }
+
+    /** 종류별 설치 폴더 판별. 맞지 않으면 null. */
+    static String detectVersion(WasSettings.Kind kind, Path home) {
+        return switch (kind) {
+            case TOMCAT -> TomcatBase.detectVersion(home);
+            case WILDFLY -> WildflyBase.detectVersion(home);
+            case WEBLOGIC -> WeblogicBase.detectVersion(home);
+            case JEUS -> JeusBase.detectVersion(home);
+        };
+    }
+
+    /** 앱을 펼친 war 로 복사해 올리는 종류인지(Tomcat 은 그 자리에서 연결한다). */
+    private static boolean copiesApps(WasSettings.Server server) {
+        return server.kind() != WasSettings.Kind.TOMCAT;
+    }
+
+    private Path baseDir(WasSettings.Server server) {
+        return PathManager.getSystemDir().resolve("kinggura-was").resolve(server.id);
+    }
+
+    ServerLauncher.State state(WasSettings.Server server) {
+        ServerRegistry.Run run = ServerRegistry.getInstance(project).get(registryKey(server));
+        ProcessHandler handler = running.get(server.id);
+        if (handler != null && !handler.isProcessTerminated()) {
+            return run != null && run.started ? ServerLauncher.State.RUNNING : ServerLauncher.State.STARTING;
+        }
+        return run != null && run.failed() ? ServerLauncher.State.FAILED : ServerLauncher.State.STOPPED;
+    }
+
+    boolean isLive(WasSettings.Server server) {
+        ServerLauncher.State s = state(server);
+        return s == ServerLauncher.State.RUNNING || s == ServerLauncher.State.STARTING;
+    }
+
+    /** 화면 스레드에서 부른다. 올릴 모듈을 빌드하고, 성공하면 이어서 띄운다. */
+    void start(WasSettings.Server server, boolean debug) {
+        if (isLive(server)) {
+            return;
+        }
+        if (!server.kind().supported) {
+            Messages.showInfoMessage(project, server.kind().label + " 실행은 아직 준비 중입니다.", TITLE);
+            return;
+        }
+        if (detectVersion(server.kind(), Path.of(server.home)) == null) {
+            Messages.showErrorDialog(project, server.kind().label + " 설치 폴더가 아닙니다: " + server.home, TITLE);
+            return;
+        }
+        if (server.kind() == WasSettings.Kind.JEUS && jeusPassword(server, true) == null) {
+            return;
+        }
+        List<Module> modules = deployedModules(server, true);
+        if (modules == null) {
+            return;
+        }
+        if (modules.isEmpty()) {
+            launch(server, debug);
+            return;
+        }
+        ProjectTaskManager.getInstance(project).build(modules.toArray(Module[]::new)).onSuccess(result ->
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    if (result.isAborted() || result.hasErrors()) {
+                        Messages.showErrorDialog(project, "빌드에 실패해서 " + server.name + " 을(를) 띄우지 않았습니다. 문제 창을 확인하세요.", TITLE);
+                    }
+                    else {
+                        launch(server, debug);
+                    }
+                }));
+    }
+
+    /** 올린 모듈의 컴파일 결과 모듈 목록. 프로젝트에 없는 모듈은 report 면 알리고 null, 아니면 건너뛴다. */
+    private List<Module> deployedModules(WasSettings.Server server, boolean report) {
+        List<Module> result = new ArrayList<>();
+        for (WasSettings.Deployment d : server.deployments) {
+            Module folder = ModuleManager.getInstance(project).findModuleByName(d.module);
+            if (folder == null) {
+                if (report) {
+                    Messages.showErrorDialog(project, "'" + d.module + "' 모듈이 프로젝트에 없습니다. WAS 설정에서 빼거나 다시 고르세요.", TITLE);
+                    return null;
+                }
+                continue;
+            }
+            result.add(classModule(folder));
+        }
+        return result;
+    }
+
+    private List<TomcatBase.App> apps(WasSettings.Server server, Path base) throws IOException {
+        List<TomcatBase.App> apps = new ArrayList<>();
+        for (WasSettings.Deployment d : server.deployments) {
+            Module folder = ModuleManager.getInstance(project).findModuleByName(d.module);
+            if (folder != null) {
+                apps.add(app(folder, d.contextPath, base));
+            }
+        }
+        return apps;
+    }
+
+    private void launch(WasSettings.Server server, boolean debug) {
+        Path base = baseDir(server);
+        GeneralCommandLine cmd;
+        List<TomcatBase.App> apps;
+        try {
+            apps = apps(server, base);
+            if (server.kind() == WasSettings.Kind.WILDFLY) {
+                WildflyBase.prepare(Path.of(server.home), base, apps);
+                cmd = wildflyRun(server, base, debug);
+            }
+            else if (server.kind() == WasSettings.Kind.WEBLOGIC) {
+                WeblogicBase.prepare(Path.of(server.home), apps);
+                cmd = weblogicRun(server, debug);
+            }
+            else if (server.kind() == WasSettings.Kind.JEUS) {
+                JeusBase.prepare(base, apps);
+                cmd = jeusRun(server, debug);
+            }
+            else {
+                TomcatBase.prepare(Path.of(server.home), base, server.httpPort, server.shutdownPort, apps, server.reloadable);
+                cmd = tomcatRun(server, base, debug);
+            }
+        }
+        catch (IOException e) {
+            Messages.showErrorDialog(project, "실행 폴더를 꾸미지 못했습니다: " + e.getMessage(), TITLE);
+            return;
+        }
+
+        boolean jeus = server.kind() == WasSettings.Kind.JEUS;
+        KillableColoredProcessHandler handler;
+        try {
+            // JEUS 명령줄에는 비밀번호가 들어 있으므로 실행 창에 보일 명령줄은 가린 것으로 준다.
+            handler = jeus
+                    ? new KillableColoredProcessHandler(cmd.createProcess(),
+                            JeusBase.mask(cmd.getCommandLineString(), jeusPasswords.get(server.id)), StandardCharsets.UTF_8)
+                    : new KillableColoredProcessHandler(cmd);
+        }
+        catch (ExecutionException e) {
+            Messages.showErrorDialog(project, server.kind().label + " 을(를) 띄우지 못했습니다: " + e.getMessage(), TITLE);
+            return;
+        }
+        ProcessTerminatedListener.attach(handler);
+        ServerRegistry registry = ServerRegistry.getInstance(project);
+        registry.track(registryKey(server), handler);
+        ServerRegistry.Run run = registry.get(registryKey(server));
+        run.port = server.httpPort;
+        running.put(server.id, handler);
+        debugMode.put(server.id, debug);
+        // 기록기의 출력 감시가 먼저 붙어 있으므로, 같은 출력에서 시작 완료(run.started)가 이미 반영된 뒤에 아래가 불린다.
+        handler.addProcessListener(new ProcessListener() {
+            private boolean attached;
+            private boolean deployed;
+
+            @Override
+            public void onTextAvailable(@NotNull ProcessEvent event, @NotNull Key outputType) {
+                if (debug && !attached && event.getText().contains(LISTENING)) {
+                    attached = true;
+                    ApplicationManager.getApplication().invokeLater(() -> attachDebugger(server));
+                }
+                if (jeus && !deployed && run.started) {
+                    deployed = true;
+                    AppExecutorUtil.getAppExecutorService().execute(() -> {
+                        for (TomcatBase.App app : apps) {
+                            jeusDeploy(server, handler, app);
+                        }
+                    });
+                }
+            }
+
+            @Override
+            public void processTerminated(@NotNull ProcessEvent event) {
+                running.remove(server.id, handler);
+            }
+        });
+        new RunContentExecutor(project, handler)
+                .withTitle(server.name)
+                .withActivateToolWindow(true)
+                .withStop(() -> stop(server), () -> !handler.isProcessTerminated())
+                .withRerun(() -> restart(server))
+                .run();
+    }
+
+    private GeneralCommandLine tomcatRun(WasSettings.Server server, Path base, boolean debug) {
+        StringBuilder opts = new StringBuilder("-Dfile.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8");
+        if (debug) {
+            // suspend=y: 디버거가 붙기 전에는 시작하지 않으므로 시작 중 중단점도 걸린다.
+            opts.append(" -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=localhost:").append(server.debugPort);
+        }
+        if (!server.vmOptions.isBlank()) {
+            opts.append(' ').append(server.vmOptions.strip());
+        }
+        return tomcatScript(server, base, "run").withEnvironment("CATALINA_OPTS", opts.toString());
+    }
+
+    private GeneralCommandLine tomcatScript(WasSettings.Server server, Path base, String command) {
+        return withJdk(script(server, "catalina", command), base)
+                .withEnvironment("CATALINA_HOME", server.home)
+                .withEnvironment("CATALINA_BASE", base.toString());
+    }
+
+    private GeneralCommandLine wildflyRun(WasSettings.Server server, Path base, boolean debug) {
+        GeneralCommandLine cmd = withJdk(script(server, "standalone",
+                "-Djboss.server.base.dir=" + base,
+                "-Djboss.http.port=" + server.httpPort,
+                "-Djboss.management.http.port=" + server.shutdownPort), base);
+        if (debug) {
+            // standalone 스크립트가 jdwp 를 suspend=n 으로 붙인다. 디버거는 대기 문구를 보고 붙는다.
+            cmd.addParameters("--debug", String.valueOf(server.debugPort));
+        }
+        if (!server.vmOptions.isBlank()) {
+            cmd.withEnvironment("JAVA_OPTS", WILDFLY_DEFAULT_OPTS + " " + server.vmOptions.strip());
+        }
+        return cmd;
+    }
+
+    /**
+     * 도메인 폴더의 startWebLogic 을 띄운다. 듣는 포트는 -Dweblogic.ListenPort 로 바꾼다.
+     * boot.properties 가 없는 도메인은 처음에 실행 창에서 관리자 계정을 묻는다(실행 창에 입력하면 된다).
+     */
+    private GeneralCommandLine weblogicRun(WasSettings.Server server, boolean debug) {
+        StringBuilder opts = new StringBuilder("-Dfile.encoding=UTF-8 -Dweblogic.ListenPort=").append(server.httpPort);
+        if (debug) {
+            opts.append(" -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=localhost:").append(server.debugPort);
+        }
+        if (!server.vmOptions.isBlank()) {
+            opts.append(' ').append(server.vmOptions.strip());
+        }
+        return withJdk(script(server, "startWebLogic"), Path.of(server.home)).withEnvironment("JAVA_OPTIONS", opts.toString());
+    }
+
+    /**
+     * JEUS 시작 명령. {vmoptions} 에는 VM 옵션과, 디버그면 jdwp(suspend=n: 서버가 디버거를 기다리지 않음)를 넣는다.
+     * 기본 틀은 {vmoptions} 를 쓰지 않는다 — JEUS 는 JVM 옵션을 도메인 설정에서 읽기 때문이다.
+     */
+    private GeneralCommandLine jeusRun(WasSettings.Server server, boolean debug) {
+        String vm = server.vmOptions.strip();
+        if (debug) {
+            vm = (vm + " -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=localhost:" + server.debugPort).strip();
+        }
+        return jeusCommand(server, server.startCommand, JeusBase.DEFAULT_START, Map.of("vmoptions", vm));
+    }
+
+    /**
+     * JEUS 명령 틀(비어 있으면 fallback)을 채워 명령줄로 만든다. JAVA_HOME 은 건드리지 않는다 —
+     * JEUS 스크립트는 설치 때 정한 JDK(bin/jeus.properties)를 쓰고, 지원 JDK 판이 프로젝트 JDK 와 다를 수 있다.
+     */
+    private GeneralCommandLine jeusCommand(WasSettings.Server server, String template, String fallback, Map<String, String> extra) {
+        Map<String, String> values = new HashMap<>(extra);
+        values.put("home", server.home);
+        values.put("domain", server.jeusDomain);
+        values.put("server", server.jeusServer);
+        values.put("user", server.jeusUser);
+        values.put("password", jeusPasswords.getOrDefault(server.id, ""));
+        values.put("host", "localhost");
+        values.put("port", String.valueOf(server.shutdownPort));
+        List<String> argv = JeusBase.command(template.isBlank() ? fallback : template, values, SystemInfo.isWindows);
+        return new GeneralCommandLine(argv).withWorkDirectory(server.home).withCharset(StandardCharsets.UTF_8);
+    }
+
+    /**
+     * 앱 하나에 배포 명령을 돌리고, 가린 명령줄과 출력을 그 서버의 실행 창에 붙인다. 작업 스레드에서 부른다.
+     * 실패(종료 코드 0 이 아님 · 시간 초과 · 실행 불가)는 실행 창에 오류 글로 알린다.
+     */
+    private void jeusDeploy(WasSettings.Server server, ProcessHandler console, TomcatBase.App app) {
+        String name = ExplodedSync.warName(app.contextPath());
+        GeneralCommandLine cmd = jeusCommand(server, server.deployCommand, JeusBase.DEFAULT_DEPLOY, Map.of(
+                "path", JeusBase.warDir(baseDir(server), app.contextPath()).toString(),
+                "name", name,
+                "ctx", app.contextPath())).withRedirectErrorStream(true);
+        String shown = JeusBase.mask(cmd.getCommandLineString(), jeusPasswords.get(server.id));
+        console.notifyTextAvailable("\n> " + shown + "\n", ProcessOutputTypes.SYSTEM);
+        String failure;
+        try {
+            ProcessOutput out = new CapturingProcessHandler(cmd.createProcess(), StandardCharsets.UTF_8, shown)
+                    .runProcess((int) TimeUnit.SECONDS.toMillis(DEPLOY_TIMEOUT_SECONDS));
+            console.notifyTextAvailable(out.getStdout(), ProcessOutputTypes.STDOUT);
+            failure = out.isTimeout() ? DEPLOY_TIMEOUT_SECONDS + "초 안에 끝나지 않았습니다"
+                    : out.getExitCode() != 0 ? "종료 코드 " + out.getExitCode() : null;
+        }
+        catch (ExecutionException e) {
+            failure = "명령을 띄우지 못했습니다: " + e.getMessage();
+        }
+        if (failure != null) {
+            console.notifyTextAvailable(name + " 배포 실패 — " + failure + ". WAS 편집에서 배포 명령을 확인하세요.\n", ProcessOutputTypes.STDERR);
+        }
+    }
+
+    /**
+     * JEUS 비밀번호. 이번 실행에 쓴 것 → 비밀번호 저장소 순으로 찾고, 없으면 ask 일 때만 묻는다(화면 스레드).
+     * 물어서 받은 비밀번호는 저장소에 기억할지 한 번 묻는다. 취소하거나 빈 값이면 null.
+     */
+    private String jeusPassword(WasSettings.Server server, boolean ask) {
+        String password = jeusPasswords.get(server.id);
+        if (password != null) {
+            return password;
+        }
+        CredentialAttributes key = jeusCredential(server);
+        password = PasswordSafe.getInstance().getPassword(key);
+        if (password == null && ask) {
+            password = Messages.showPasswordDialog(project, server.jeusUser + " 계정의 비밀번호를 입력하세요.", server.name, null);
+            if (password == null || password.isEmpty()) {
+                return null;
+            }
+            if (Messages.showYesNoDialog(project, "비밀번호를 IDE 비밀번호 저장소에 기억할까요?", TITLE, null) == Messages.YES) {
+                PasswordSafe.getInstance().setPassword(key, password);
+            }
+        }
+        if (password != null) {
+            jeusPasswords.put(server.id, password);
+        }
+        return password;
+    }
+
+    /** 기억한 JEUS 비밀번호를 지운다. 다음 시작 때 다시 묻는다. */
+    void forgetJeusPassword(WasSettings.Server server) {
+        jeusPasswords.remove(server.id);
+        PasswordSafe.getInstance().setPassword(jeusCredential(server), null);
+    }
+
+    private static CredentialAttributes jeusCredential(WasSettings.Server server) {
+        return new CredentialAttributes(CredentialAttributesKt.generateServiceName(CREDENTIAL_SUBSYSTEM, server.id));
+    }
+
+    private static GeneralCommandLine script(WasSettings.Server server, String name, String... args) {
+        // WebLogic 도메인 스크립트는 .cmd, Tomcat · WildFly 는 .bat
+        String ext = SystemInfo.isWindows ? (server.kind() == WasSettings.Kind.WEBLOGIC ? ".cmd" : ".bat") : ".sh";
+        Path bin = Path.of(server.home).resolve("bin").resolve(name + ext);
+        return new GeneralCommandLine(bin.toString()).withParameters(args);
+    }
+
+    /** 프로젝트 JDK 로 띄운다. Tomcat setclasspath 는 JRE_HOME 이 있으면 그것을 먼저 쓰므로 둘 다 맞춘다. */
+    private GeneralCommandLine withJdk(GeneralCommandLine cmd, Path base) {
+        cmd.withWorkDirectory(base.toFile()).withCharset(StandardCharsets.UTF_8);
+        Sdk sdk = ProjectRootManager.getInstance(project).getProjectSdk();
+        if (sdk != null && sdk.getHomePath() != null) {
+            cmd.withEnvironment("JAVA_HOME", sdk.getHomePath()).withEnvironment("JRE_HOME", sdk.getHomePath());
+        }
+        return cmd;
+    }
+
+    /**
+     * 정상 종료 명령(Tomcat: catalina stop, WildFly: 관리 포트로 :shutdown)을 보내고, 안 끝나면 강제로 끝낸다.
+     * WebLogic 의 stopWebLogic 은 관리자 계정을 물을 수 있어 쓰지 않고 바로 프로세스를 끝낸다.
+     * JEUS 는 중지 명령 틀(기본: stopServer)을 쓴다.
+     */
+    void stop(WasSettings.Server server) {
+        ProcessHandler handler = running.get(server.id);
+        if (handler == null || handler.isProcessTerminated()) {
+            return;
+        }
+        ServerRegistry.getInstance(project).markStopped(registryKey(server));
+        if (server.kind() == WasSettings.Kind.WEBLOGIC) {
+            handler.destroyProcess();
+            return;
+        }
+        Path base = baseDir(server);
+        GeneralCommandLine stop = switch (server.kind()) {
+            case WILDFLY -> withJdk(script(server, "jboss-cli", "--connect", "--controller=localhost:" + server.shutdownPort, "--command=:shutdown"), base);
+            case JEUS -> jeusCommand(server, server.stopCommand, JeusBase.DEFAULT_STOP, Map.of());
+            default -> tomcatScript(server, base, "stop");
+        };
+        AppExecutorUtil.getAppExecutorService().execute(() -> {
+            try {
+                stop.createProcess().waitFor(STOP_GRACE_SECONDS, TimeUnit.SECONDS);
+                handler.waitFor(TimeUnit.SECONDS.toMillis(STOP_GRACE_SECONDS));
+            }
+            catch (ExecutionException e) {
+                LOG.info("정상 종료 명령을 띄우지 못해 강제로 끝냅니다: " + e.getMessage());
+            }
+            catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            if (!handler.isProcessTerminated()) {
+                handler.destroyProcess();
+            }
+        });
+    }
+
+    /** 실행 중이면 끝난 뒤 같은 방식(실행 · 디버그)으로 다시 띄운다. 꺼져 있으면 그냥 띄운다. */
+    void restart(WasSettings.Server server) {
+        boolean debug = debugMode.getOrDefault(server.id, false);
+        ProcessHandler handler = running.get(server.id);
+        if (handler == null || handler.isProcessTerminated()) {
+            start(server, debug);
+            return;
+        }
+        handler.addProcessListener(new ProcessListener() {
+            @Override
+            public void processTerminated(@NotNull ProcessEvent event) {
+                ApplicationManager.getApplication().invokeLater(() -> start(server, debug));
+            }
+        });
+        stop(server);
+    }
+
+    /**
+     * 「반영」 단추. 올린 모듈을 다시 빌드한다. Tomcat 은 바뀐 클래스를 보고 스스로 다시 올리고,
+     * WildFly · WebLogic · JEUS 는 빌드가 끝나면 바뀐 파일만 복사해 그 앱만 다시 올린다(자동 반영이 꺼져 있어도 이 단추로는 올린다).
+     */
+    void publish(WasSettings.Server server) {
+        List<Module> modules = deployedModules(server, false);
+        if (modules == null || modules.isEmpty()) {
+            return;
+        }
+        ProjectTaskManager.getInstance(project).build(modules.toArray(Module[]::new)).onSuccess(result -> {
+            if (!result.isAborted() && !result.hasErrors() && copiesApps(server) && !server.reloadable) {
+                syncCopied(server);
+            }
+        });
+    }
+
+    private void syncCopied(WasSettings.Server server) {
+        AppExecutorUtil.getAppExecutorService().execute(() -> {
+            try {
+                Path base = baseDir(server);
+                for (TomcatBase.App app : ReadAction.compute(() -> apps(server, base))) {
+                    if (server.kind() == WasSettings.Kind.WEBLOGIC) {
+                        WeblogicBase.publish(Path.of(server.home), app);
+                    }
+                    else if (server.kind() == WasSettings.Kind.JEUS) {
+                        // shortcut: 다시 올리기를 배포 명령을 한 번 더 돌리는 것으로 대신한다. 현장에서 재배포 명령(redeploy-application 등)이 따로 필요하면 틀을 나눈다.
+                        ProcessHandler console = running.get(server.id);
+                        if (JeusBase.publish(base, app) && console != null && state(server) == ServerLauncher.State.RUNNING) {
+                            jeusDeploy(server, console, app);
+                        }
+                    }
+                    else {
+                        WildflyBase.publish(base, app);
+                    }
+                }
+            }
+            catch (IOException e) {
+                LOG.warn(server.kind().label + " 반영 실패: " + server.name, e);
+            }
+        });
+    }
+
+    private void attachDebugger(WasSettings.Server server) {
+        RunManager runManager = RunManager.getInstance(project);
+        RunnerAndConfigurationSettings settings = runManager.createConfiguration(
+                server.name + " 디버그", RemoteConfigurationType.getInstance().getConfigurationFactories()[0]);
+        RemoteConfiguration remote = (RemoteConfiguration) settings.getConfiguration();
+        remote.HOST = "localhost";
+        remote.PORT = String.valueOf(server.debugPort);
+        remote.SERVER_MODE = false;
+        remote.USE_SOCKET_TRANSPORT = true;
+        ProgramRunnerUtil.executeConfiguration(settings, DefaultDebugExecutor.getDebugExecutorInstance());
+    }
+
+    /** Gradle 은 컴파일 결과가 「폴더 모듈.main」 에 있다. Maven 은 폴더 모듈 그대로. */
+    static Module classModule(Module folder) {
+        Module main = ModuleManager.getInstance(folder.getProject()).findModuleByName(folder.getName() + ".main");
+        return main != null ? main : folder;
+    }
+
+    /** 모듈 하나를 앱으로: 웹 폴더(src/main/webapp) · 컴파일 결과 폴더 · 실행 시 필요한 jar(provided 제외). */
+    private static TomcatBase.App app(Module folder, String contextPath, Path base) throws IOException {
+        Path docBase = null;
+        for (VirtualFile root : ModuleRootManager.getInstance(folder).getContentRoots()) {
+            Path web = root.toNioPath().resolve("src/main/webapp");
+            if (Files.isDirectory(web)) {
+                docBase = web;
+                break;
+            }
+        }
+        if (docBase == null) {
+            docBase = Files.createDirectories(base.resolve("empty-webapp").resolve(folder.getName()));
+        }
+        List<Path> dirs = new ArrayList<>();
+        Set<Path> jars = new LinkedHashSet<>();
+        Set<String> jarNames = new LinkedHashSet<>();
+        // 방금 빌드한 결과 폴더는 VFS 에 아직 안 보일 수 있으므로 주소로 받아 디스크에서 확인한다.
+        for (String url : OrderEnumerator.orderEntries(classModule(folder)).withoutSdk().runtimeOnly().productionOnly()
+                .recursively().classes().getUrls()) {
+            Path path = Path.of(VfsUtilCore.urlToPath(url).replaceFirst("!/?$", ""));
+            if (url.startsWith("jar://")) {
+                // 같은 이름의 jar 가 둘이면 /WEB-INF/lib 에 같은 자리를 차지하므로 먼저 나온 것만 쓴다.
+                if (Files.isRegularFile(path) && jarNames.add(path.getFileName().toString())) {
+                    jars.add(path);
+                }
+            }
+            else if (Files.isDirectory(path)) {
+                dirs.add(path);
+            }
+        }
+        return new TomcatBase.App(contextPath, docBase, dirs, new ArrayList<>(jars));
+    }
+}
