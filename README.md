@@ -43,8 +43,8 @@
 ### Synchronize (`kinggura-sync`)
 이클립스 Team → Synchronize Workspace와 같은 창입니다. 프로젝트 안의 모든 저장소(Git 여러 개, SVN)를 저장소별로 묶어 들어올 변경 · 나갈 변경 · 충돌을 보여 주고, 우클릭으로 무시 목록 추가 · 되돌리기 · **변경 모른 척하기(assume-unchanged)** 를 합니다. 「변경 모른 척하기」는 커밋 창의 파일 우클릭 메뉴에도 있습니다. 프로젝트를 열면 Git 저장소마다 `.git/info/exclude`에 `*.iml` · `.idea/`를 넣어 IDE 파일이 변경 목록에 뜨지 않게 합니다(팀 `.gitignore`와 서버에는 영향 없음). 커밋 · Push 뒤 자동으로 다시 비교합니다. SVN은 `svn` 명령줄 도구가 PATH에 있어야 합니다.
 
-### 한국어 · Claude Code
-한국어 언어 팩(JetBrains)과 Claude Code 플러그인(Anthropic, 마켓 `com.anthropic.code.plugin`)은 남의 것이라 본체에 넣지 않습니다. `플러그인설치.bat`이 없으면 내려받아(한국어 팩 → 릴리스 「plugins」, Claude Code → JetBrains 마켓) 사용자 플러그인 폴더에 복사합니다. 한국어 팩 262 판은 마켓에 없고 IDEA 2026.2.3 배포판에만 들어 있어 릴리스에 그대로 올려 둔 것입니다. 한국어 언어 팩은 정식 IntelliJ IDEA 같은 판에서 `plugins/localization-ko`를 사용자 플러그인 폴더(`%APPDATA%\JetBrains\EIIDE2026.2\plugins`)에 복사하면 설정 → Language and Region에서 고를 수 있습니다.
+### 한국어 · Claude Code · One Dark 테마
+한국어 언어 팩(JetBrains), Claude Code 플러그인(Anthropic, 마켓 `com.anthropic.code.plugin`), One Dark 테마(마켓 `com.markskelton.one-dark-theme`, VS Code 색감의 UI 테마 + 편집기 색 구성표)는 남의 것이라 본체에 넣지 않습니다. `플러그인설치.bat`이 없으면 내려받아(한국어 팩 → 릴리스 「plugins」, Claude Code → JetBrains 마켓) 사용자 플러그인 폴더에 복사합니다. 한국어 팩 262 판은 마켓에 없고 IDEA 2026.2.3 배포판에만 들어 있어 릴리스에 그대로 올려 둔 것입니다. 한국어 언어 팩은 정식 IntelliJ IDEA 같은 판에서 `plugins/localization-ko`를 사용자 플러그인 폴더(`%APPDATA%\JetBrains\EIIDE2026.2\plugins`)에 복사하면 설정 → Language and Region에서 고를 수 있습니다.
 
 ## 설치와 판 올리기
 
