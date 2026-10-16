@@ -7,7 +7,9 @@ import com.intellij.diff.requests.NoDiffRequest;
 import com.intellij.diff.requests.SimpleDiffRequest;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.actionSystem.ActionManager;
+import com.intellij.ide.DataManager;
 import com.intellij.openapi.actionSystem.AnAction;
+import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.ex.ActionUtil;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.fileTypes.FileType;
@@ -402,7 +404,15 @@ final class SyncPanel extends JPanel {
         status.setText(text + " 동작을 찾을 수 없습니다(" + actionId + ").");
         return;
       }
-      ActionUtil.invokeAction(action, this, "KingGuraSynchronize", null, null);
+      // 동작이 꺼져 있으면(예: Merge Tool 은 git 이 실제 충돌 상태인 파일이 있을 때만) 아무 일도 없이 끝나므로 이유를 상태줄에 적는다.
+      AnActionEvent event = AnActionEvent.createFromAnAction(action, null, "KingGuraSynchronize", DataManager.getInstance().getDataContext(this));
+      ActionUtil.updateAction(action, event);
+      if (!event.getPresentation().isEnabled()) {
+        status.setText(text + ": 지금은 할 수 없습니다" + ("Git.ResolveConflicts".equals(actionId)
+          ? " — git 에 충돌(unmerged) 상태인 파일이 없습니다. Pull 뒤 충돌이 나면 이 단추로 해결합니다." : "."));
+        return;
+      }
+      ActionUtil.performActionDumbAwareWithCallbacks(action, event);
     });
     return button;
   }
