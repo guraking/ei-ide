@@ -118,6 +118,10 @@ EDITS = [
     ("platform/platform-impl/src/com/intellij/openapi/updateSettings/impl/UpdateOptions.kt",
      '  @get:OptionTag("PLUGINS_CHECK_NEEDED")\n  var isPluginsCheckNeeded: Boolean by property(true)\n',
      '  @get:OptionTag("PLUGINS_CHECK_NEEDED")\n  var isPluginsCheckNeeded: Boolean by property(false)  // EI IDE: 번들 플러그인이 마켓 판으로 덮이지 않게\n'),
+    # 14) 편집기 오른쪽 여백선(120자 세로선)을 기본으로 숨긴다. 설정 → 에디터 → 일반 → 모양새 「시각적 안내선 표시」와 같은 값.
+    ("platform/ide-core-impl/src/com/intellij/openapi/editor/ex/EditorSettingsExternalizable.java",
+     '    public boolean IS_RIGHT_MARGIN_SHOWN = true;\n',
+     '    public boolean IS_RIGHT_MARGIN_SHOWN = false;  // EI IDE: 여백선은 기본으로 숨긴다\n'),
 ]
 
 
