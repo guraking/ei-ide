@@ -189,6 +189,14 @@ final class SyncPanel extends JPanel {
       revert.addActionListener(a -> revert(revertable));
       menu.add(revert);
     }
+    // 이미 추적 중이라 무시 목록으로는 못 빼는 파일(.iml 등)은 git update-index --assume-unchanged 로 변경을 모른 척한다.
+    // 내 작업본에만 적용되고, 되돌리려면 --no-assume-unchanged. SVN 에는 대응 기능이 없다.
+    List<Change> assumable = revertable.stream().filter(c -> c.repo().vcs() == Vcs.GIT).toList();
+    if (!assumable.isEmpty()) {
+      JMenuItem assume = new JMenuItem("변경 모른 척하기 — assume-unchanged (" + assumable.size() + "개 파일)");
+      assume.addActionListener(a -> assumeUnchanged(assumable));
+      menu.add(assume);
+    }
     menu.show(tree, e.getX(), e.getY());
   }
 
@@ -296,6 +304,30 @@ final class SyncPanel extends JPanel {
           else run(repo.root(), "svn", args.toArray(String[]::new));
         }
         message = targets.size() + "개 파일을 되돌렸습니다.";
+      }
+      catch (IOException ex) {
+        message = ex.getMessage();
+      }
+      catch (InterruptedException ex) {
+        Thread.currentThread().interrupt();
+        return;
+      }
+      String m = message;
+      SwingUtilities.invokeLater(() -> { status.setText(m); recompare(); });
+    });
+  }
+
+  /** 파일 내용은 그대로 두고 git 이 변경을 보고하지 않게 한다. pull 로 서버 쪽 내용이 바뀌면 git 이 표시를 풀고 다시 보인다. */
+  private void assumeUnchanged(List<Change> targets) {
+    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+      String message;
+      try {
+        for (Map.Entry<Repo, List<Change>> entry : byRepo(targets).entrySet()) {
+          List<String> args = new ArrayList<>(List.of("update-index", "--assume-unchanged", "--"));
+          for (Change c : entry.getValue()) args.add(c.path());
+          git(entry.getKey().root(), args.toArray(String[]::new));
+        }
+        message = targets.size() + "개 파일의 변경을 모른 척합니다. 되돌리려면 git update-index --no-assume-unchanged <파일>";
       }
       catch (IOException ex) {
         message = ex.getMessage();

@@ -16,6 +16,11 @@
                 factoryClass="kinggura.sync.SyncToolWindowFactory"/>
   </extensions>
 
+  <projectListeners>
+    <!-- 저장소 목록이 잡힐 때마다 .git/info/exclude 에 *.iml · .idea/ 를 넣는다. -->
+    <listener class="kinggura.sync.ExcludeIdeFiles" topic="com.intellij.openapi.vcs.VcsListener"/>
+  </projectListeners>
+
   <actions>
     <action id="KingGura.SynchronizeWorkspace" class="kinggura.sync.SyncToolWindowFactory$OpenAction"
             text="Synchronize Workspace" icon="AllIcons.Actions.Refresh">

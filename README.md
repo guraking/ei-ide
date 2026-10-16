@@ -41,7 +41,7 @@
   - Tomcat 9 · WildFly 26으로 시작 · 배포 · 반영 · 종료를 확인했습니다. WebLogic · JEUS는 실제 서버로 아직 확인하지 못했습니다.
 
 ### Synchronize (`kinggura-sync`)
-이클립스 Team → Synchronize Workspace와 같은 창입니다. 프로젝트 안의 모든 저장소(Git 여러 개, SVN)를 저장소별로 묶어 들어올 변경 · 나갈 변경 · 충돌을 보여 주고, 우클릭으로 무시 목록 추가 · 되돌리기를 합니다. 커밋 · Push 뒤 자동으로 다시 비교합니다. SVN은 `svn` 명령줄 도구가 PATH에 있어야 합니다.
+이클립스 Team → Synchronize Workspace와 같은 창입니다. 프로젝트 안의 모든 저장소(Git 여러 개, SVN)를 저장소별로 묶어 들어올 변경 · 나갈 변경 · 충돌을 보여 주고, 우클릭으로 무시 목록 추가 · 되돌리기 · **변경 모른 척하기(assume-unchanged)** 를 합니다. 프로젝트를 열면 Git 저장소마다 `.git/info/exclude`에 `*.iml` · `.idea/`를 넣어 IDE 파일이 변경 목록에 뜨지 않게 합니다(팀 `.gitignore`와 서버에는 영향 없음). 커밋 · Push 뒤 자동으로 다시 비교합니다. SVN은 `svn` 명령줄 도구가 PATH에 있어야 합니다.
 
 ### 한국어 · Claude Code
 한국어 언어 팩(JetBrains)과 Claude Code 플러그인(Anthropic, 마켓 `com.anthropic.code.plugin`)은 남의 것이라 본체에 넣지 않습니다. `플러그인설치.bat`이 없으면 내려받아(한국어 팩 → 릴리스 「plugins」, Claude Code → JetBrains 마켓) 사용자 플러그인 폴더에 복사합니다. 한국어 팩 262 판은 마켓에 없고 IDEA 2026.2.3 배포판에만 들어 있어 릴리스에 그대로 올려 둔 것입니다. 한국어 언어 팩은 정식 IntelliJ IDEA 같은 판에서 `plugins/localization-ko`를 사용자 플러그인 폴더(`%APPDATA%\JetBrains\EIIDE2026.2\plugins`)에 복사하면 설정 → Language and Region에서 고를 수 있습니다.
@@ -71,6 +71,7 @@ build-windows.bat
 ```
 
 - 결과: `intellij-community\out\idea-ce\artifacts\eiide-262.10968.N.exe` (N은 빌드마다 하나씩 올라감, `build-number.txt`)
+- N은 **1000부터** 씁니다. 바탕 판(262.10968.63)보다 작으면 IDE가 JetBrains 마켓의 Java · Gradle · Maven 등 번들 플러그인을 「새 판」으로 보고 사용자 플러그인 폴더에 내려받아 본체(와 여기서 고친 기본값)를 덮어 버립니다.
 - `bundled-plugins\<이름>\lib\*.jar`에 둔 플러그인은 본체에 함께 들어갑니다.
 - 소스를 고치는 대본은 모두 두 번 돌려도 같은 결과가 되고, 고치기 전 원본을 `backup\`에 남깁니다.
 
