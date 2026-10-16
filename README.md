@@ -44,13 +44,13 @@
 이클립스 Team → Synchronize Workspace와 같은 창입니다. 프로젝트 안의 모든 저장소(Git 여러 개, SVN)를 저장소별로 묶어 들어올 변경 · 나갈 변경 · 충돌을 보여 주고, 우클릭으로 무시 목록 추가 · 되돌리기를 합니다. 커밋 · Push 뒤 자동으로 다시 비교합니다. SVN은 `svn` 명령줄 도구가 PATH에 있어야 합니다.
 
 ### 한국어 · Claude Code
-한국어 언어 팩(JetBrains)과 Claude Code 플러그인(Anthropic, 마켓 `com.anthropic.code.plugin`)은 남의 것이라 본체에 넣지 않고 `노트북용\plugins`에 두어 `플러그인설치.bat`이 사용자 플러그인 폴더에 복사합니다. 한국어 언어 팩은 정식 IntelliJ IDEA 같은 판에서 `plugins/localization-ko`를 사용자 플러그인 폴더(`%APPDATA%\JetBrains\EIIDE2026.2\plugins`)에 복사하면 설정 → Language and Region에서 고를 수 있습니다.
+한국어 언어 팩(JetBrains)과 Claude Code 플러그인(Anthropic, 마켓 `com.anthropic.code.plugin`)은 남의 것이라 본체에 넣지 않습니다. `플러그인설치.bat`이 없으면 내려받아(한국어 팩 → 릴리스 「plugins」, Claude Code → JetBrains 마켓) 사용자 플러그인 폴더에 복사합니다. 한국어 팩 262 판은 마켓에 없고 IDEA 2026.2.3 배포판에만 들어 있어 릴리스에 그대로 올려 둔 것입니다. 한국어 언어 팩은 정식 IntelliJ IDEA 같은 판에서 `plugins/localization-ko`를 사용자 플러그인 폴더(`%APPDATA%\JetBrains\EIIDE2026.2\plugins`)에 복사하면 설정 → Language and Region에서 고를 수 있습니다.
 
 ## 설치와 판 올리기
 
 1. `eiide-262.10968.N.exe`를 실행해 설치합니다. 서버 창 · Synchronize · Lombok · SVN은 본체에 들어 있어 따로 넣을 것이 없습니다.
 2. EI IDE를 한 번 켰다가 끕니다(설정 폴더가 만들어집니다).
-3. `노트북용\플러그인설치.bat`을 더블클릭합니다. 한국어 언어 팩과 Claude Code 플러그인을 사용자 플러그인 폴더에 넣고, 예전에 따로 넣어 둔 플러그인 사본은 본체와 겹치지 않게 치웁니다. IDE가 켜져 있으면 「먼저 종료」만 띄우고 멈춥니다.
+3. `노트북용\플러그인설치.bat`을 더블클릭합니다. 한국어 언어 팩과 Claude Code 플러그인을 사용자 플러그인 폴더에 넣고(옆 `plugins` 폴더에 없으면 한국어 팩은 이 저장소의 릴리스 「plugins」에서, Claude Code 는 JetBrains 마켓에서 내려받음), 예전에 따로 넣어 둔 플러그인 사본은 본체와 겹치지 않게 치웁니다. IDE가 켜져 있으면 「먼저 종료」만 띄우고 멈춥니다.
 4. EI IDE를 켜고 설정 → Language and Region에서 Korean을 고릅니다.
 
 판을 올릴 때도 같은 순서입니다. 설정(단축키 · 실행 설정 · 플러그인)은 `%APPDATA%\JetBrains\EIIDE2026.2`에 있어 재설치해도 남습니다.
