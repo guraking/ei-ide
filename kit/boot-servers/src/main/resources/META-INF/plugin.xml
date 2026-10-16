@@ -15,7 +15,12 @@
         <projectViewNodeDecorator implementation="local.bootservers.ServerStatusDecorator"/>
         <toolWindow id="Servers" anchor="bottom" icon="AllIcons.Nodes.Services"
                     factoryClass="local.bootservers.ServersToolWindowFactory"/>
+        <notificationGroup id="EI IDE 새 판" displayType="STICKY_BALLOON"/>
     </extensions>
+
+    <applicationListeners>
+        <listener class="local.bootservers.UpdateCheck" topic="com.intellij.ide.AppLifecycleListener"/>
+    </applicationListeners>
 
     <projectListeners>
         <listener class="local.bootservers.ServerStatusRefresher" topic="com.intellij.execution.ExecutionListener"/>
