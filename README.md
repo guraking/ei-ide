@@ -42,6 +42,17 @@
 ### 한국어
 한국어 언어 팩은 JetBrains 것이라 본체에 넣지 않습니다. 정식 IntelliJ IDEA 같은 판에서 `plugins/localization-ko`를 사용자 플러그인 폴더(`%APPDATA%\JetBrains\EIIDE2026.2\plugins`)에 복사하면 설정 → Language and Region에서 고를 수 있습니다.
 
+## 설치와 판 올리기
+
+1. `eiide-262.10968.N.exe`를 실행해 설치합니다. 서버 창 · Synchronize · Lombok · SVN은 본체에 들어 있어 따로 넣을 것이 없습니다.
+2. EI IDE를 한 번 켰다가 끕니다(설정 폴더가 만들어집니다).
+3. `노트북용\플러그인설치.bat`을 더블클릭합니다. 한국어 언어 팩을 사용자 플러그인 폴더에 넣고, 예전에 따로 넣어 둔 플러그인 사본은 본체와 겹치지 않게 치웁니다. IDE가 켜져 있으면 「먼저 종료」만 띄우고 멈춥니다.
+4. EI IDE를 켜고 설정 → Language and Region에서 Korean을 고릅니다.
+
+판을 올릴 때도 같은 순서입니다. 설정(단축키 · 실행 설정 · 플러그인)은 `%APPDATA%\JetBrains\EIIDE2026.2`에 있어 재설치해도 남습니다.
+
+플러그인만 고쳐서 jar가 새로 나왔을 때는 빌드 없이 `노트북용\plugins`에 넣고 3번만 다시 돌리면 됩니다.
+
 ## 빌드
 
 Windows 기준입니다. 빌드는 Bazel을 써서 처음은 30분 안팎, 그 뒤 바뀐 부분만 다시 컴파일할 때는 10분 안팎 걸립니다.
@@ -50,10 +61,8 @@ Windows 기준입니다. 빌드는 Bazel을 써서 처음은 30분 안팎, 그 �
 get-source.bat          rem intellij-community + android 소스 받기 (태그 idea/262.10968.63)
 python kit\customize.py intellij-community "EI IDE" brand
 python kit\customize.py intellij-community "EI IDE" slim
-python kit\rename.py intellij-community "EI IDE" "EI IDE"
 python kit\menu\apply_menu.py intellij-community
 python kit\defaults\apply_defaults.py intellij-community
-kit\brand\apply_brand.bat
 build-windows.bat
 ```
 
@@ -65,10 +74,9 @@ build-windows.bat
 |---|---|
 | `kit/customize.py brand` | 제품 이름 · 설치 폴더 · 설정 폴더 이름 |
 | `kit/customize.py slim` | 번들 플러그인 덜어 내기, Android 빌드 제외 |
-| `kit/rename.py` | 제품 이름 · 설치 폴더 · 설정 폴더 · 설치 파일 이름 바꾸기 |
+| `kit/rename.py` | 이미 brand 를 적용한 소스의 제품 이름을 다른 이름으로 바꾸기 (`rename.py intellij-community "지금 이름" "새 이름"`) |
 | `kit/menu/apply_menu.py` | 이클립스식 주 메뉴, 트리 우클릭에 Maven · Gradle 다시 읽기 |
 | `kit/defaults/apply_defaults.py` | 위 「기본값」 표의 항목들, SVN 번들, 플러그인 본체 포함 |
-| `kit/brand/apply_brand.bat` | EI 모노그램 아이콘 · 시작 화면 · 설치 프로그램 그림 |
 
 ## 폴더
 
@@ -84,6 +92,7 @@ backup/               고치기 전 · 후 원본
 
 ## 하기로 한 것
 
+- 로고 · 시작 화면 교체 (지금은 IntelliJ 로고가 남아 있음 — JetBrains 상표라 공개 배포 전에 바꿔야 함)
 - WebLogic · JEUS 실제 서버로 확인
 - 화면 묶음(퍼스펙티브)은 창 배치가 제대로 안 바뀌어 뺐음. 다시 넣으려면 배치 적용부터 손봐야 함
 - 빌드가 끝나면 GitHub 릴리스로 자동 올리기
