@@ -106,6 +106,10 @@ EDITS = [
     ("build/src/org/jetbrains/intellij/build/IdeaCommunityProperties.kt",
      '      "intellij.dev",  // KingGura: 플러그인 개발용 실행 도구는 쓰지 않는다\n    ))\n',
      '      "intellij.dev",  // KingGura: 플러그인 개발용 실행 도구는 쓰지 않는다\n    )).add("intellij.vcs.svn")  // KingGura: SVN 저장소도 쓴다\n'),
+    # 12) 편집기 기본 글꼴을 한글 폭이 맞는 JetBrainsMonoHangul 로 한다. 글꼴 파일은 boot-servers 플러그인이 켤 때 등록한다(BundledFonts).
+    ("platform/editor-ui-api/src/com/intellij/openapi/editor/colors/FontPreferences.java",
+     '    if (SystemInfo.isJetBrainsJvm) {\n      return JETBRAINS_MONO;\n    }\n',
+     '    if (SystemInfo.isJetBrainsJvm) {\n      return "JetBrainsMonoHangul";  // EI IDE: boot-servers 플러그인이 등록하는 한글 글꼴\n    }\n'),
 ]
 
 

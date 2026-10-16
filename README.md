@@ -22,6 +22,7 @@
 | 형상 관리 | Git · GitHub · GitLab · **SVN** | SVN 없음 |
 | 프론트 파일 색 | JS · JSX(React) · TS · TSX · HTML · CSS · SCSS · LESS · JSON · **Vue · Svelte · Astro** (TextMate 문법, 색·괄호·접기까지) | Vue · Svelte · Astro 없음 |
 | Gradle 빌드 · 실행 | IDE가 직접 (이클립스와 같음) | Gradle에 위임 |
+| 편집기 글꼴 | **JetBrainsMonoHangul** (한글 폭이 영문 두 칸에 딱 맞는 JetBrains Mono + D2Coding, OFL). 글꼴 파일이 본체에 들어 있어 OS 에 설치할 필요 없음 | JetBrains Mono (한글은 다른 글꼴로 대체돼 폭이 어긋남) |
 
 ## 들어 있는 플러그인
 
@@ -34,6 +35,7 @@
 - 여러 줄을 고르고 한꺼번에 시작 · 디버그 · 재시작 · 중지. 포트를 누르면 브라우저로 엽니다.
 - 오른쪽 칸에서 프로필 · VM 옵션 · 포트를 바로 고칩니다.
 - 프로젝트 트리의 모듈 옆에도 상태와 포트가 표시되고, 우클릭 메뉴에서도 시작 · 중지할 수 있습니다.
+- **글꼴 내장**: JetBrainsMonoHangul 4종(Regular · Bold · Italic · BoldItalic)을 켤 때 JVM 에 등록합니다. 설정 → 에디터 → 글꼴 목록에 바로 나옵니다.
 - **새 판 알림**: IDE 를 켤 때 이 저장소의 최신 릴리스를 보고 지금 판보다 새 것이 있으면 오른쪽 아래에 「내려받기」 풍선을 띄웁니다. 인터넷이 안 되면 조용히 넘어갑니다.
 - **WAS 추가**: Tomcat · JBoss/WildFly · WebLogic · JEUS. 설치 폴더는 건드리지 않고 서버마다 전용 실행 폴더를 씁니다. 올릴 프로젝트와 컨텍스트 경로를 고르면 war로 묶지 않고 그 자리에서 연결하거나 바뀐 파일만 복사합니다. 디버그로 시작하면 디버거가 자동으로 붙습니다.
   - Tomcat 9 · WildFly 26으로 시작 · 배포 · 반영 · 종료를 확인했습니다. WebLogic · JEUS는 실제 서버로 아직 확인하지 못했습니다.
@@ -78,7 +80,7 @@ build-windows.bat
 | `kit/customize.py slim` | 번들 플러그인 덜어 내기, Android 빌드 제외 |
 | `kit/rename.py` | 이미 brand 를 적용한 소스의 제품 이름을 다른 이름으로 바꾸기 (`rename.py intellij-community "지금 이름" "새 이름"`) |
 | `kit/menu/apply_menu.py` | 이클립스식 주 메뉴, 트리 우클릭에 Maven · Gradle 다시 읽기 |
-| `kit/defaults/apply_defaults.py` | 위 「기본값」 표의 항목들, SVN 번들, 플러그인 본체 포함 |
+| `kit/defaults/apply_defaults.py` | 위 「기본값」 표의 항목들(편집기 글꼴 포함), SVN 번들, 플러그인 본체 포함 |
 | `kit/textmate-bundles/` | 본체 TextMate 번들에 더 넣을 문법 — `vue` · `svelte` · `astro` (각 공식 VS Code 확장의 문법만, MIT). `build-windows.bat`이 빌드 전에 자동으로 복사한다 |
 
 ## 폴더
@@ -101,4 +103,4 @@ backup/               고치기 전 · 후 원본
 
 ## 라이선스
 
-바탕이 되는 intellij-community는 Apache License 2.0입니다. 이 저장소의 대본과 플러그인 소스도 같은 조건으로 둡니다. IntelliJ · JetBrains 이름과 로고는 JetBrains의 상표입니다.
+바탕이 되는 intellij-community는 Apache License 2.0입니다. 이 저장소의 대본과 플러그인 소스도 같은 조건으로 둡니다. 들어 있는 글꼴 JetBrainsMonoHangul 과 TextMate 문법(vue · svelte · astro)은 각각 SIL OFL 1.1 · MIT 이며 원문 라이선스를 함께 둡니다. IntelliJ · JetBrains 이름과 로고는 JetBrains의 상표입니다.
