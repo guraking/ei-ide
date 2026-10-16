@@ -46,6 +46,10 @@ if errorlevel 1 (
 echo 완료. 결과물은 %CD%\out\idea-ce\artifacts 에 있습니다.
 rem 노트북에 가져갈 수 있게 설치 파일을 노트북용 폴더에도 둔다.
 copy /Y "%~dp0intellij-community\out\idea-ce\artifacts\eiide-*.exe" "%~dp0노트북용\" >nul && echo 설치 파일을 노트북용 폴더에도 복사했습니다.
+rem GitHub 릴리스로 올린다. gh 명령줄 도구가 있고 로그인돼 있어야 한다(winget install GitHub.cli → gh auth login). 없으면 건너뛴다.
+where gh >nul 2>&1 && (
+    gh release create "v%BUILD_NUMBER%" "%~dp0노트북용\eiide-%BUILD_NUMBER%.exe" --repo guraking/ei-ide --title "EI IDE %BUILD_NUMBER%" --notes "빌드 %BUILD_NUMBER%" && echo GitHub 릴리스 v%BUILD_NUMBER% 로 올렸습니다.
+) || echo gh 명령줄 도구가 없어 GitHub 릴리스 업로드는 건너뜁니다.
 rem 더블클릭으로 돌렸을 때 결과를 읽을 수 있게 창을 닫지 않는다.
 pause
 exit /b 0
