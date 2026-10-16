@@ -20,6 +20,7 @@
 | 저장 | 자동 빌드, 자바 import 정리, 바뀐 줄만 서식 | 끔 |
 | 콘솔 검색 | 실행 창 콘솔에서 Ctrl+F | Eclipse 단축키에서는 없음 |
 | 형상 관리 | Git · GitHub · GitLab · **SVN** | SVN 없음 |
+| 프론트 파일 색 | JS · JSX · TS · TSX · HTML · CSS · SCSS · LESS · JSON · **Vue** (TextMate 문법) | Vue 없음 |
 | Gradle 빌드 · 실행 | IDE가 직접 (이클립스와 같음) | Gradle에 위임 |
 
 ## 들어 있는 플러그인
@@ -63,6 +64,7 @@ python kit\customize.py intellij-community "EI IDE" brand
 python kit\customize.py intellij-community "EI IDE" slim
 python kit\menu\apply_menu.py intellij-community
 python kit\defaults\apply_defaults.py intellij-community
+xcopy /E /I /Y kit\textmate-bundles intellij-community\plugins\textmate\lib\bundles
 build-windows.bat
 ```
 
@@ -77,6 +79,7 @@ build-windows.bat
 | `kit/rename.py` | 이미 brand 를 적용한 소스의 제품 이름을 다른 이름으로 바꾸기 (`rename.py intellij-community "지금 이름" "새 이름"`) |
 | `kit/menu/apply_menu.py` | 이클립스식 주 메뉴, 트리 우클릭에 Maven · Gradle 다시 읽기 |
 | `kit/defaults/apply_defaults.py` | 위 「기본값」 표의 항목들, SVN 번들, 플러그인 본체 포함 |
+| `kit/textmate-bundles/` | 본체 TextMate 번들에 더 넣을 문법. 지금은 `vue` (vuejs/language-tools, MIT) |
 
 ## 폴더
 
@@ -95,7 +98,6 @@ backup/               고치기 전 · 후 원본
 - 로고 · 시작 화면 교체 (지금은 IntelliJ 로고가 남아 있음 — JetBrains 상표라 공개 배포 전에 바꿔야 함)
 - WebLogic · JEUS 실제 서버로 확인
 - 화면 묶음(퍼스펙티브)은 창 배치가 제대로 안 바뀌어 뺐음. 다시 넣으려면 배치 적용부터 손봐야 함
-- 빌드가 끝나면 GitHub 릴리스로 자동 올리기
 
 ## 라이선스
 
