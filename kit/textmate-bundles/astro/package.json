@@ -1,0 +1,57 @@
+{
+ "name": "astro",
+ "displayName": "Astro (grammar only)",
+ "version": "2.16.20",
+ "license": "MIT",
+ "repository": "git+https://github.com/withastro/astro.git",
+ "contributes": {
+  "languages": [
+   {
+    "id": "astro",
+    "extensions": [
+     ".astro"
+    ],
+    "aliases": [
+     "Astro"
+    ],
+    "configuration": "./languages/astro-language-configuration.json",
+    "icon": {
+     "light": "./assets/lang-icon-light.svg",
+     "dark": "./assets/lang-icon-dark.svg"
+    }
+   }
+  ],
+  "grammars": [
+   {
+    "language": "astro",
+    "scopeName": "source.astro",
+    "path": "./syntaxes/astro.tmLanguage.json",
+    "embeddedLanguages": {
+     "text.html": "html",
+     "text.html.markdown": "markdown",
+     "source.css": "css",
+     "source.css.less": "less",
+     "source.css.scss": "scss",
+     "source.sass": "sass",
+     "source.stylus": "stylus",
+     "source.js": "javascript",
+     "source.ts": "typescript",
+     "source.json": "json",
+     "source.tsx": "typescriptreact",
+     "meta.tag.tsx": "jsx-tags",
+     "meta.tag.without-attributes.tsx": "jsx-tags",
+     "meta.tag.attributes.tsx": "typescriptreact",
+     "meta.embedded.expression.tsx": "typescriptreact"
+    },
+    "unbalancedBracketScopes": [
+     "keyword.operator.relational",
+     "storage.type.function.arrow",
+     "keyword.operator.bitwise.shift",
+     "meta.brace.angle",
+     "punctuation.definition.tag",
+     "keyword.operator.assignment.compound.bitwise.ts"
+    ]
+   }
+  ]
+ }
+}

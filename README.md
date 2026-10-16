@@ -20,7 +20,7 @@
 | 저장 | 자동 빌드, 자바 import 정리, 바뀐 줄만 서식 | 끔 |
 | 콘솔 검색 | 실행 창 콘솔에서 Ctrl+F | Eclipse 단축키에서는 없음 |
 | 형상 관리 | Git · GitHub · GitLab · **SVN** | SVN 없음 |
-| 프론트 파일 색 | JS · JSX · TS · TSX · HTML · CSS · SCSS · LESS · JSON · **Vue** (TextMate 문법) | Vue 없음 |
+| 프론트 파일 색 | JS · JSX(React) · TS · TSX · HTML · CSS · SCSS · LESS · JSON · **Vue · Svelte · Astro** (TextMate 문법, 색·괄호·접기까지) | Vue · Svelte · Astro 없음 |
 | Gradle 빌드 · 실행 | IDE가 직접 (이클립스와 같음) | Gradle에 위임 |
 
 ## 들어 있는 플러그인
@@ -64,7 +64,6 @@ python kit\customize.py intellij-community "EI IDE" brand
 python kit\customize.py intellij-community "EI IDE" slim
 python kit\menu\apply_menu.py intellij-community
 python kit\defaults\apply_defaults.py intellij-community
-xcopy /E /I /Y kit\textmate-bundles intellij-community\plugins\textmate\lib\bundles
 build-windows.bat
 ```
 
@@ -79,7 +78,7 @@ build-windows.bat
 | `kit/rename.py` | 이미 brand 를 적용한 소스의 제품 이름을 다른 이름으로 바꾸기 (`rename.py intellij-community "지금 이름" "새 이름"`) |
 | `kit/menu/apply_menu.py` | 이클립스식 주 메뉴, 트리 우클릭에 Maven · Gradle 다시 읽기 |
 | `kit/defaults/apply_defaults.py` | 위 「기본값」 표의 항목들, SVN 번들, 플러그인 본체 포함 |
-| `kit/textmate-bundles/` | 본체 TextMate 번들에 더 넣을 문법. 지금은 `vue` (vuejs/language-tools, MIT) |
+| `kit/textmate-bundles/` | 본체 TextMate 번들에 더 넣을 문법 — `vue` · `svelte` · `astro` (각 공식 VS Code 확장의 문법만, MIT). `build-windows.bat`이 빌드 전에 자동으로 복사한다 |
 
 ## 폴더
 

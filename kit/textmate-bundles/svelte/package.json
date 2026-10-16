@@ -1,0 +1,66 @@
+{
+ "name": "svelte",
+ "displayName": "Svelte for VS Code (grammar only)",
+ "version": "110.3.1",
+ "license": "MIT",
+ "repository": "https://github.com/sveltejs/language-tools.git",
+ "contributes": {
+  "languages": [
+   {
+    "id": "svelte",
+    "aliases": [
+     "Svelte",
+     "svelte"
+    ],
+    "extensions": [
+     ".svelte"
+    ],
+    "configuration": "./language-configuration.json"
+   }
+  ],
+  "grammars": [
+   {
+    "language": "svelte",
+    "scopeName": "source.svelte",
+    "path": "./syntaxes/svelte.tmLanguage.json",
+    "embeddedLanguages": {
+     "text.html.basic": "html",
+     "text.html.markdown": "markdown",
+     "text.pug": "jade",
+     "meta.tag.start.svelte": "svelte-start-tag",
+     "punctuation.definition.tag.begin.svelte": "svelte",
+     "source.css": "css",
+     "source.css.less": "less",
+     "source.css.scss": "scss",
+     "source.css.postcss": "postcss",
+     "source.sass": "sass",
+     "source.stylus": "stylus",
+     "source.js": "javascript",
+     "source.ts": "typescript",
+     "source.coffee": "coffeescript"
+    },
+    "unbalancedBracketScopes": [
+     "keyword.operator.relational",
+     "storage.type.function.arrow",
+     "keyword.operator.bitwise.shift",
+     "meta.brace.angle",
+     "punctuation.definition.tag"
+    ],
+    "tokenTypes": {
+     "punctuation.definition.template-expression": "other",
+     "entity.name.type.instance.jsdoc": "other",
+     "entity.name.function.tagged-template": "other",
+     "meta.import string.quoted": "other",
+     "variable.other.jsdoc": "other"
+    }
+   },
+   {
+    "scopeName": "source.css.postcss",
+    "path": "./syntaxes/postcss.json",
+    "injectTo": [
+     "source.svelte"
+    ]
+   }
+  ]
+ }
+}
