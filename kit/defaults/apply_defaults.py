@@ -110,6 +110,14 @@ EDITS = [
     ("platform/editor-ui-api/src/com/intellij/openapi/editor/colors/FontPreferences.java",
      '    if (SystemInfo.isJetBrainsJvm) {\n      return JETBRAINS_MONO;\n    }\n',
      '    if (SystemInfo.isJetBrainsJvm) {\n      return "JetBrainsMonoHangul";  // EI IDE: boot-servers 플러그인이 등록하는 한글 글꼴\n    }\n'),
+    # 13) JetBrains 쪽 자동 업데이트 확인을 끈다. IDE 새 판은 GitHub 릴리스를 보는 boot-servers 가 알리고,
+    #     플러그인 확인은 마켓의 번들 플러그인(Java · Gradle 등)을 「새 판」으로 받아 와 여기서 고친 기본값을 덮는 일이 있었다.
+    ("platform/platform-impl/src/com/intellij/openapi/updateSettings/impl/UpdateOptions.kt",
+     '  @get:OptionTag("CHECK_NEEDED")\n  var isCheckNeeded: Boolean by property(true)\n',
+     '  @get:OptionTag("CHECK_NEEDED")\n  var isCheckNeeded: Boolean by property(false)  // EI IDE: 새 판은 GitHub 릴리스로 알린다\n'),
+    ("platform/platform-impl/src/com/intellij/openapi/updateSettings/impl/UpdateOptions.kt",
+     '  @get:OptionTag("PLUGINS_CHECK_NEEDED")\n  var isPluginsCheckNeeded: Boolean by property(true)\n',
+     '  @get:OptionTag("PLUGINS_CHECK_NEEDED")\n  var isPluginsCheckNeeded: Boolean by property(false)  // EI IDE: 번들 플러그인이 마켓 판으로 덮이지 않게\n'),
 ]
 
 

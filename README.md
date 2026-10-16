@@ -22,6 +22,7 @@
 | 형상 관리 | Git · GitHub · GitLab · **SVN** | SVN 없음 |
 | 프론트 파일 색 | JS · JSX(React) · TS · TSX · HTML · CSS · SCSS · LESS · JSON · **Vue · Svelte · Astro** (TextMate 문법, 색·괄호·접기까지) | Vue · Svelte · Astro 없음 |
 | Gradle 빌드 · 실행 | IDE가 직접 (이클립스와 같음) | Gradle에 위임 |
+| 업데이트 확인 | 꺼짐 (IDE · 플러그인 모두). 새 판은 GitHub 릴리스를 보고 알림 | JetBrains 서버에 자동 확인 |
 | 편집기 글꼴 | **JetBrainsMonoHangul** (한글 폭이 영문 두 칸에 딱 맞는 JetBrains Mono + D2Coding, OFL). 글꼴 파일이 본체에 들어 있어 OS 에 설치할 필요 없음 | JetBrains Mono (한글은 다른 글꼴로 대체돼 폭이 어긋남) |
 
 ## 들어 있는 플러그인
