@@ -22,6 +22,10 @@
   </projectListeners>
 
   <actions>
+    <!-- 커밋 창 · 변경 목록 우클릭에도 Synchronize 와 같은 「변경 모른 척하기」 를 둔다. -->
+    <action id="KingGura.AssumeUnchanged" class="kinggura.sync.AssumeUnchangedAction" text="변경 모른 척하기 (assume-unchanged)">
+      <add-to-group group-id="ChangesViewPopupMenu" anchor="last"/>
+    </action>
     <action id="KingGura.SynchronizeWorkspace" class="kinggura.sync.SyncToolWindowFactory$OpenAction"
             text="Synchronize Workspace" icon="AllIcons.Actions.Refresh">
       <add-to-group group-id="Git.MainMenu" anchor="first"/>
