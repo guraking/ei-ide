@@ -30,6 +30,11 @@ import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.JTable;
+import java.util.Locale;
+import java.util.Set;
+import java.util.HashSet;
+import java.sql.Connection;
+import ei.db.Meta;
 import java.util.ArrayList;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseAdapter;
@@ -154,6 +159,7 @@ final class ResultPanel extends JPanel {
     bar.add(button("복사", AllIcons.Actions.Copy, this::copyTsv));
     bar.add(button("CSV 내보내기", AllIcons.Actions.Download, this::exportCsv));
     bar.add(button("INSERT 문으로", null, this::copyInserts));
+    bar.add(button("UPDATE 문으로", null, () -> copyUpdates(c)));
     bar.add(button("DTO 만들기", null, () -> DtoDialog.show(project, c, result)));
 
     add(bar, BorderLayout.NORTH);
@@ -331,17 +337,48 @@ final class ResultPanel extends JPanel {
     Notify.info(project, "INSERT 문 " + rows.length + "개를 복사했습니다.");
   }
 
+  /** 고른 행(없으면 전체)을 UPDATE 문으로 복사. PK 는 접속해서 표 정의로 찾으므로 뒤에서 읽은 뒤 복사한다. */
+  private void copyUpdates(DbConfig c) {
+    String target = table;
+    if (target == null) {
+      target = Messages.showInputDialog(project, "UPDATE 할 표 이름", "UPDATE 문으로", null);
+      if (target == null || target.isBlank()) return;
+      target = target.strip();
+    }
+    String name = target;
+    int[] rowIndexes = chosenRows();
+    List<List<Object>> rows = new ArrayList<>();
+    for (int row : rowIndexes) rows.add(result.rows().get(row));
+    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+      Set<String> pks = new HashSet<>();
+      String bare = name.substring(name.lastIndexOf('.') + 1).replace("\"", "");
+      try {
+        Connection conn = DbSessions.get(project).connection(c);
+        // Oracle 은 대문자, PostgreSQL 은 소문자로 저장되므로 그대로 · 대문자 · 소문자 순서로 찾는다.
+        for (String candidate : new String[]{bare, bare.toUpperCase(Locale.ROOT), bare.toLowerCase(Locale.ROOT)}) {
+          for (Meta.Column col : Meta.columns(conn, c, Meta.schemaOf(c), candidate)) {
+            if (col.pk()) pks.add(col.name().toUpperCase(Locale.ROOT));
+          }
+          if (!pks.isEmpty()) break;
+        }
+      } catch (Exception e) {
+        // PK 를 못 읽어도 첫 칼럼 조건 + 확인 주석으로 만든다(SqlText.updates).
+      }
+      String sql = SqlText.updates(name, result.columns(), rows, pks);
+      ApplicationManager.getApplication().invokeLater(() -> {
+        CopyPasteManager.getInstance().setContents(new StringSelection(sql));
+        Notify.info(project, "UPDATE 문 " + rows.size() + "개를 복사했습니다." + (pks.isEmpty() ? " PK 를 찾지 못했으니 WHERE 를 확인하세요." : ""));
+      });
+    });
+  }
+
   /** ANSI 표기(TIMESTAMP · DATE 글자)라 Oracle · MySQL · PostgreSQL 에서 같이 쓴다. */
   static String literal(Object v) {
-    if (v == null) return "NULL";
-    if (v instanceof Number) return text(v);
-    if (v instanceof Timestamp t) return "TIMESTAMP '" + t + "'";
-    if (v instanceof java.sql.Date d) return "DATE '" + d + "'";
-    return "'" + text(v).replace("'", "''") + "'";
+    return SqlText.literal(v);
   }
 
   static String text(Object v) {
-    return v instanceof BigDecimal b ? b.toPlainString() : String.valueOf(v);
+    return SqlText.text(v);
   }
 
   /** 0번 칸은 행 번호. 머리글은 칼럼 이름 + 한글 주석(작고 흐리게) 두 줄. 읽기 전용. */
