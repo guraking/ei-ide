@@ -60,8 +60,8 @@ final class ConsoleBar extends JPanel {
   private final JBLabel bandTarget = new JBLabel();
   private final ComboBox<DbConfig> combo = new ComboBox<>();
   private final JBCheckBox autoCommit = new JBCheckBox("자동 커밋");
-  /** 조회 건수. ALL_ROWS 는 「전부」. 프로젝트의 모든 콘솔 · 표 데이터 보기에 같이 적용된다. */
-  private final ComboBox<Integer> rows = new ComboBox<>(new Integer[] {DbSessions.MAX_ROWS, 1000, 5000, 10000, DbSessions.ALL_ROWS});
+  /** 조회 건수. 목록에서 고르거나 1 이상 숫자를 직접 쓴다. 프로젝트의 모든 콘솔 · 표 데이터 보기에 같이 적용된다. */
+  private final ComboBox<Integer> rows = new ComboBox<>(new Integer[] {DbSessions.MAX_ROWS, 1000, 5000, 10000});
   private final JBLabel badge = new JBLabel();
   private final JButton commit = new JButton("커밋", AllIcons.Actions.Commit);
   private final JButton rollback = new JButton("롤백", AllIcons.Actions.Rollback);
@@ -125,12 +125,11 @@ final class ConsoleBar extends JPanel {
       @Override public void popupMenuCanceled(PopupMenuEvent e) { }
     });
     combo.addActionListener(e -> switchConnection());
-    rows.setRenderer(SimpleListCellRenderer.create("", n -> n == DbSessions.ALL_ROWS ? "전부" : n + "건"));
-    rows.setToolTipText("조회할 건수 · 다음 실행부터 · 「전부」는 큰 표에서 느리고 메모리를 많이 씁니다");
+    rows.setEditable(true);
+    rows.setRenderer(SimpleListCellRenderer.create("", n -> n + "건"));
+    rows.setToolTipText("조회할 건수 · 고르거나 숫자를 쓰고 Enter · 다음 실행부터 적용");
     rows.setMaximumSize(rows.getPreferredSize());
-    rows.addActionListener(e -> {
-      if (!updating && rows.getSelectedItem() instanceof Integer n) DbSessions.get(project).setMaxRows(n);
-    });
+    rows.addActionListener(e -> changeRows());
     autoCommit.addActionListener(e -> toggleAutoCommit());
     badge.setForeground(UiColors.WARNING);
     commit.addActionListener(e -> endTransaction(true));
@@ -242,6 +241,25 @@ final class ConsoleBar extends JPanel {
       revalidate();
       repaint();
     }
+  }
+
+  /** 직접 쓴 값은 글자로 온다. 1 이상 정수(쉼표 · 「건」 허용)만 받고, 아니면 알리고 지금 값으로 되돌린다. */
+  private void changeRows() {
+    if (updating) return;
+    Object v = rows.getSelectedItem();
+    String text = v == null ? "" : v.toString().replace(",", "").replace("건", "").strip();
+    int n;
+    try {
+      n = Integer.parseInt(text);
+    } catch (NumberFormatException e) {
+      n = 0;
+    }
+    if (n < 1) {
+      Notify.error(project, "조회 건수는 1 이상 숫자로 써 주세요: " + text);
+      refresh();
+      return;
+    }
+    DbSessions.get(project).setMaxRows(n);
   }
 
   private void switchConnection() {
