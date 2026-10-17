@@ -137,7 +137,7 @@ table.grid tr.sel td{background:var(--sel)}
 .treeview .sel{background:var(--sel)}
 .treeview .muted{color:var(--muted)}
 .tag{display:inline-block; font-size:10.5px; border-radius:4px; padding:0 5px; margin-left:6px; vertical-align:1px}
-.tag.in{background:var(--info-soft); color:var(--info)} .tag.out{background:var(--ok-soft); color:var(--ok)} .tag.cf{background:var(--accent-soft); color:var(--accent)}
+.tag{background:var(--panel-2); color:var(--muted)} .tag.in{background:var(--info-soft); color:var(--info)} .tag.out{background:var(--ok-soft); color:var(--ok)} .tag.cf{background:var(--accent-soft); color:var(--accent)}
 .menu{position:absolute; background:var(--panel); border:1px solid var(--line); border-radius:8px; box-shadow:var(--shadow); padding:4px 0; font-size:12.5px; min-width:190px; z-index:2}
 .menu div{padding:4px 14px; white-space:nowrap}
 .menu div.on{background:var(--sel)}
@@ -378,7 +378,7 @@ footer{padding:56px 0 40px; color:var(--muted); font-size:13px}
     <div class="figure">
       <div>
         <div class="scroll">
-          <div class="ide rel" style="min-height:300px">
+          <div class="ide rel" style="min-height:340px">
             <div class="title"><span class="dots"><i></i><i></i><i></i></span>Synchronize</div>
             <div class="bar"><span class="mark">1</span><span class="btn">전체</span><span class="btn">들어올</span><span class="btn">나갈</span><span class="btn">충돌</span><span class="sepv"></span><span class="btn">새로고침</span></div>
             <div class="treeview">
@@ -392,6 +392,8 @@ footer{padding:56px 0 40px; color:var(--muted); font-size:13px}
               <div class="l2">application-local.yml</div>
               <div class="l1">▾ 충돌 <span class="tag cf">1</span></div>
               <div class="l2">pom.xml</div>
+              <div class="l1">▾ 모른 척 중 <span class="tag">1</span> <span class="mark">4</span></div>
+              <div class="l2">application-dev.yml</div>
               <div>▸ 저장소 front <span class="muted">— 원격과 같습니다</span></div>
             </div>
             <div class="menu" style="left:250px; top:190px">
@@ -408,7 +410,8 @@ footer{padding:56px 0 40px; color:var(--muted); font-size:13px}
       <ol class="legend">
         <li><span class="mark">1</span><div><b>보기 거르기</b> <span class="t">전체 · 들어올 · 나갈 · 충돌만 따로 볼 수 있습니다.</span></div></li>
         <li><span class="mark">2</span><div><b>파일 우클릭</b> <span class="t">Commit · 내 변경 되돌리기 · 무시 목록에 추가 · 변경 모른 척하기.</span></div></li>
-        <li><span class="mark">3</span><div><b>변경 모른 척하기</b> <span class="t"><code>application-local.yml</code> 처럼 내 PC 에서만 고친 파일이 커밋 목록에 계속 뜰 때 씁니다. 커밋 창의 파일 우클릭에도 있습니다. 풀려면 <code>git update-index --no-assume-unchanged 파일</code>.</span></div></li>
+        <li><span class="mark">3</span><div><b>변경 모른 척하기</b> <span class="t"><code>application-local.yml</code> 처럼 내 PC 에서만 고친 파일이 커밋 목록에 계속 뜰 때 씁니다. 커밋 창 · 프로젝트 트리의 파일 우클릭에도 있습니다(프로젝트 트리에는 「모른 척 풀기」도). </span></div></li>
+        <li><span class="mark">4</span><div><b>모른 척 중 · 풀기</b> <span class="t">모른 척한 파일은 「전체」 보기 맨 아래 「모른 척 중」 묶음에 모입니다. 우클릭 「모른 척 풀기」로 되돌리면 내 변경이 다시 나갈 변경으로 보입니다. 파일 내용은 그대로입니다.</span></div></li>
         <li><span class="mark">+</span><div><b>IDE 파일은 처음부터 안 뜸</b> <span class="t">프로젝트를 열면 저장소마다 <code>.git/info/exclude</code> 에 <code>*.iml</code> · <code>.idea/</code> 를 넣습니다. 팀 <code>.gitignore</code> 와 서버에는 영향이 없습니다.</span></div></li>
       </ol>
     </div>

@@ -62,7 +62,8 @@ import java.util.concurrent.TimeUnit;
  * shortcut: Git 설정 화면의 git 경로를 따르지 않는다, PATH 에 git 이 없는 PC 를 지원해야 할 때 Git4Idea 의 실행 파일 관리자로 바꾼다.
  */
 final class SyncPanel extends JPanel {
-  enum Kind { CONFLICT("충돌"), INCOMING("들어올 변경"), OUTGOING("나갈 변경");
+  /** ASSUMED 는 변경이 아니라 assume-unchanged 로 모른 척 중인 Git 파일이다. 「전체」 보기에서만 맨 아래 묶음으로 보인다. */
+  enum Kind { CONFLICT("충돌"), INCOMING("들어올 변경"), OUTGOING("나갈 변경"), ASSUMED("모른 척 중");
     final String label;
     Kind(String label) { this.label = label; }
   }
@@ -95,6 +96,9 @@ final class SyncPanel extends JPanel {
   // 새 파일 표시. Git 은 "??", SVN 은 "?"(svn 자체 표기). 되돌리기에서 제외하는 기준이다.
   private static final Set<String> UNTRACKED_STATUS = Set.of("??", "?");
   private static final String SVN_IGNORE_PROP = "svn:ignore";
+  /** git ls-files -v 에서 assume-unchanged 표시가 붙은 줄의 머리(소문자 h + 공백). */
+  private static final String ASSUMED_PREFIX = "h ";
+  static final String UNASSUME_HINT = "풀려면 Synchronize 의 「모른 척 중」 묶음에서 우클릭 → 모른 척 풀기";
 
   private final Project project;
   private final Tree tree = new Tree(new DefaultTreeModel(new DefaultMutableTreeNode()));
@@ -163,12 +167,25 @@ final class SyncPanel extends JPanel {
     if (!e.isPopupTrigger()) return;
     TreePath clicked = tree.getPathForLocation(e.getX(), e.getY());
     if (clicked != null && !tree.isPathSelected(clicked)) tree.setSelectionPath(clicked);
-    List<Change> selected = selectedChanges();
-    if (selected.isEmpty()) return;
+    List<Change> all = selectedChanges();
+    if (all.isEmpty()) return;
+    JPopupMenu menu = new JPopupMenu();
+    // 모른 척 중인 파일은 변경이 아니므로 무시 · 되돌리기 대신 풀기만 둔다.
+    List<Change> assumed = all.stream().filter(c -> c.kind() == Kind.ASSUMED).toList();
+    if (!assumed.isEmpty()) {
+      JMenuItem unassume = new JMenuItem("모른 척 풀기 (" + assumed.size() + "개 파일)");
+      unassume.addActionListener(a -> assumeUnchanged(assumed, false));
+      menu.add(unassume);
+    }
+    List<Change> selected = all.stream().filter(c -> c.kind() != Kind.ASSUMED).toList();
+    if (selected.isEmpty()) {
+      menu.show(tree, e.getX(), e.getY());
+      return;
+    }
+    if (!assumed.isEmpty()) menu.addSeparator();
 
     boolean allGit = selected.stream().allMatch(c -> c.repo().vcs() == Vcs.GIT);
     String ignoreName = allGit ? ".gitignore" : "무시 목록";
-    JPopupMenu menu = new JPopupMenu();
     JMenuItem ignoreFiles = new JMenuItem(ignoreName + " 에 추가 (" + selected.size() + "개 파일)");
     ignoreFiles.addActionListener(a -> ignore(selected, false));
     menu.add(ignoreFiles);
@@ -196,7 +213,7 @@ final class SyncPanel extends JPanel {
     List<Change> assumable = revertable.stream().filter(c -> c.repo().vcs() == Vcs.GIT).toList();
     if (!assumable.isEmpty()) {
       JMenuItem assume = new JMenuItem("변경 모른 척하기 — assume-unchanged (" + assumable.size() + "개 파일)");
-      assume.addActionListener(a -> assumeUnchanged(assumable));
+      assume.addActionListener(a -> assumeUnchanged(assumable, true));
       menu.add(assume);
     }
     menu.show(tree, e.getX(), e.getY());
@@ -319,17 +336,21 @@ final class SyncPanel extends JPanel {
     });
   }
 
-  /** 파일 내용은 그대로 두고 git 이 변경을 보고하지 않게 한다. pull 로 서버 쪽 내용이 바뀌면 git 이 표시를 풀고 다시 보인다. */
-  private void assumeUnchanged(List<Change> targets) {
+  /**
+   * on 이면 파일 내용은 그대로 두고 git 이 변경을 보고하지 않게 한다(pull 로 서버 쪽 내용이 바뀌면 git 이 표시를 풀고 다시 보인다).
+   * on 이 아니면 그 표시를 풀어 내 변경이 다시 나갈 변경으로 보이게 한다. 파일 내용은 어느 쪽도 바꾸지 않는다.
+   */
+  private void assumeUnchanged(List<Change> targets, boolean on) {
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       String message;
       try {
         for (Map.Entry<Repo, List<Change>> entry : byRepo(targets).entrySet()) {
-          List<String> args = new ArrayList<>(List.of("update-index", "--assume-unchanged", "--"));
+          List<String> args = new ArrayList<>(List.of("update-index", on ? "--assume-unchanged" : "--no-assume-unchanged", "--"));
           for (Change c : entry.getValue()) args.add(c.path());
           git(entry.getKey().root(), args.toArray(String[]::new));
         }
-        message = targets.size() + "개 파일의 변경을 모른 척합니다. 되돌리려면 git update-index --no-assume-unchanged <파일>";
+        message = on ? targets.size() + "개 파일의 변경을 모른 척합니다. " + UNASSUME_HINT
+                     : targets.size() + "개 파일의 모른 척을 풀었습니다. 내 변경이 다시 보입니다.";
       }
       catch (IOException ex) {
         message = ex.getMessage();
@@ -541,7 +562,18 @@ final class SyncPanel extends JPanel {
       if (UNMERGED.contains(xy)) unmerged.add(path);
       else outgoing.putIfAbsent(path, xy.trim().isEmpty() ? "M" : xy.trim());
     }
-    return merge(repo, incoming, outgoing, unmerged);
+    List<Change> result = merge(repo, incoming, outgoing, unmerged);
+    for (String path : parseAssumed(git(root, "ls-files", "-v"))) result.add(new Change(Kind.ASSUMED, "모른 척", path, repo));
+    return result;
+  }
+
+  /** git ls-files -v 출력에서 assume-unchanged 로 표시된 파일 경로만 꺼낸다(대문자 H 등은 보통 파일). */
+  static List<String> parseAssumed(String output) {
+    List<String> result = new ArrayList<>();
+    for (String line : output.split("\n")) {
+      if (line.startsWith(ASSUMED_PREFIX)) result.add(unquote(line.substring(ASSUMED_PREFIX.length())));
+    }
+    return result;
   }
 
   /**
@@ -630,9 +662,11 @@ final class SyncPanel extends JPanel {
   static String summary(List<Change> changes) {
     Map<Kind, Integer> count = new EnumMap<>(Kind.class);
     for (Change c : changes) count.merge(c.kind(), 1, Integer::sum);
-    if (changes.isEmpty()) return "원격과 같습니다";
+    int assumed = count.getOrDefault(Kind.ASSUMED, 0);
+    String tail = assumed > 0 ? " · 모른 척 " + assumed : "";
+    if (changes.size() == assumed) return "원격과 같습니다" + tail;
     return "들어올 " + count.getOrDefault(Kind.INCOMING, 0) + " · 나갈 " + count.getOrDefault(Kind.OUTGOING, 0)
-           + " · 충돌 " + count.getOrDefault(Kind.CONFLICT, 0);
+           + " · 충돌 " + count.getOrDefault(Kind.CONFLICT, 0) + tail;
   }
 
   /** 저장소가 하나면 종류별 묶음만, 둘 이상이면 저장소 → 종류별 묶음으로 보인다. */

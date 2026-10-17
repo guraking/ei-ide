@@ -26,6 +26,14 @@
     <action id="KingGura.AssumeUnchanged" class="kinggura.sync.AssumeUnchangedAction" text="변경 모른 척하기 (assume-unchanged)">
       <add-to-group group-id="ChangesViewPopupMenu" anchor="last"/>
     </action>
+    <!-- 프로젝트 트리에서 고른 파일에도 모른 척하기 · 풀기. 모른 척 중인 파일은 변경 목록에 안 뜨므로 풀기는 여기와 Synchronize 에 둔다. -->
+    <group id="KingGura.AssumeGroup">
+      <separator/>
+      <reference ref="KingGura.AssumeUnchanged"/>
+      <action id="KingGura.AssumeUnchanged.Undo" class="kinggura.sync.AssumeUnchangedAction$Undo" text="모른 척 풀기 (no-assume-unchanged)"/>
+      <separator/>
+      <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+    </group>
     <action id="KingGura.SynchronizeWorkspace" class="kinggura.sync.SyncToolWindowFactory$OpenAction"
             text="Synchronize Workspace" icon="AllIcons.Actions.Refresh">
       <add-to-group group-id="Git.MainMenu" anchor="first"/>
