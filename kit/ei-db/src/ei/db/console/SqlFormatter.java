@@ -8,6 +8,7 @@ import java.util.Set;
 
 /**
  * SQL 정렬. 절 키워드를 6칸 오른쪽 맞춤(강물 정렬)으로 줄 앞에 두고, SELECT · SET · GROUP BY · ORDER BY 목록은 칼럼마다 한 줄,
+ * 쉼표는 줄 앞(「     , 칼럼」), SELECT 는 키워드만 한 줄에 두고 첫 칼럼부터 다음 줄에 쓴다. INSERT 칼럼 · VALUES 값도 쉼표를 줄 앞에 둔다.
  * WHERE · HAVING · ON 의 AND · OR 는 줄마다, FROM 의 표 목록은 한 줄(구식 조인)로 둔다. 괄호 안이 SELECT 이면 한 단계 들여 쓰고,
  * 그 밖의 괄호(함수 · IN 목록 · (+))는 한 줄로 둔다. 키워드만 대문자로 바꾸고 이름 · 문자열 · 주석은 그대로 둔다.
  * 구문 분석기가 아니라 낱말 단위로 보므로 처음 보는 문법은 낱말 사이 공백만 정리된다.
@@ -20,6 +21,8 @@ final class SqlFormatter {
   private static final char MARK = '\u0001';
   private static final String COMMENT_GAP = "  ";
   private static final String LIST_INDENT = " ".repeat(RIVER + 1);
+  /** 앞 쉼표 줄의 머리. 쉼표 뒤 칼럼이 LIST_INDENT 와 같은 열에서 시작한다. */
+  private static final String LEAD_COMMA = " ".repeat(RIVER - 1) + ", ";
 
   private static final Set<String> KEYWORDS = Set.of(
       "SELECT", "FROM", "WHERE", "AND", "OR", "NOT", "IN", "IS", "NULL", "LIKE", "BETWEEN", "EXISTS", "AS", "ON",
@@ -164,6 +167,11 @@ final class SqlFormatter {
         clause = JOIN_HEADS.contains(u) ? "JOIN" : u;
         betweenOpen = false;
         newLine = false;
+        if (u.equals("SELECT")) {
+          breakLine(sb);
+          sb.append(indent).append(LIST_INDENT);
+          newLine = true;
+        }
         continue;
       }
       if (t.is("ON") && clause.equals("JOIN")) {
@@ -186,13 +194,10 @@ final class SqlFormatter {
       if (t.is("BETWEEN")) betweenOpen = true;
       if (t.kind == Kind.COMMA) {
         if (LIST_CLAUSES.contains(clause)) {
-          // 「a -- 주석」 뒤에 온 쉼표는 주석 앞으로, 「a, -- 주석」 의 주석은 그 줄 끝에 둔다.
-          int mark = i > 0 && toks.get(i - 1).kind == Kind.TRAIL_COMMENT ? sb.lastIndexOf(String.valueOf(MARK)) : -1;
-          if (mark >= 0) sb.insert(mark, ',');
-          else sb.append(',');
+          // 「a, -- 주석」 의 주석은 앞 칼럼 줄 끝에 남기고, 쉼표는 다음 줄 앞으로 보낸다.
           if (i + 1 < toks.size() && toks.get(i + 1).kind == Kind.TRAIL_COMMENT) sb.append(MARK).append(toks.get(++i).text);
           breakLine(sb);
-          sb.append(indent).append(LIST_INDENT);
+          sb.append(indent).append(LEAD_COMMA);
           newLine = true;
         } else {
           sb.append(", ");
@@ -212,7 +217,7 @@ final class SqlFormatter {
           sb.append(newLine ? "(" : " (");
           for (int k = 0; k < items.size(); k++) {
             breakLine(sb);
-            sb.append(indent).append(LIST_INDENT).append(items.get(k)).append(k < items.size() - 1 ? "," : "");
+            sb.append(indent).append(k == 0 ? LIST_INDENT : LEAD_COMMA).append(items.get(k));
             if (named) sb.append(MARK).append("-- ").append(insertColumns.get(k));
           }
           breakLine(sb);
@@ -228,6 +233,13 @@ final class SqlFormatter {
           sb.append('(').append(inline(inner)).append(')');
         }
         i = close;
+        newLine = false;
+        continue;
+      }
+      if (t.kind == Kind.BLOCK_COMMENT && LIST_CLAUSES.contains(clause) && sb.indexOf(String.valueOf(MARK), sb.lastIndexOf("\n") + 1) < 0
+          && (i + 1 == toks.size() || toks.get(i + 1).kind == Kind.COMMA || toks.get(i + 1).kind == Kind.WORD && isHead(toks, i + 1))) {
+        // 칼럼 뒤 /* 주석 */ 도 줄 끝 주석처럼 한 열에 맞춘다.
+        sb.append(MARK).append(t.text);
         newLine = false;
         continue;
       }

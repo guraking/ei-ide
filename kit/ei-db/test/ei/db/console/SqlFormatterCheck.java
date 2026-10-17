@@ -9,21 +9,25 @@ public class SqlFormatterCheck {
        "SELECT A.NAME, 'Kim' FROM T A -- note\nWHERE A.ID = #{userId} AND \"Mixed\" = 1");
     eq(SqlFormatter.changeCase("SELECT X FROM T WHERE N = 'It''s'", false), "select x from t where n = 'It''s'");
 
-    // 줄 끝 주석은 그 칼럼 줄에 남고 한 열에 맞춘다(탐색기 SELECT 만들기 결과를 다시 정렬해도 같은 모양).
+    // 줄 끝 주석은 그 칼럼 줄에 남고 한 열에 맞춘다. 뒤 쉼표로 쓴 문장도 앞 쉼표로 바뀐다.
     String generated = "SELECT t.OFLN_BID_NO,  -- 오프라인입찰번호\n       t.ANC_NM,       -- 공고명\n       t.ITEM_DSCD     -- 품목구분코드\n  FROM APP.BID t\n WHERE 1 = 1";
-    eq(SqlFormatter.format(generated), generated);
-    eq(SqlFormatter.format("select a -- 가\n, bb -- 나\nfrom t"), "SELECT a,  -- 가\n       bb  -- 나\n  FROM t");
-    eq(SqlFormatter.format("-- 머리 주석\nselect a from t"), "-- 머리 주석\nSELECT a\n  FROM t");
+    eq(SqlFormatter.format(generated),
+       "SELECT\n       t.OFLN_BID_NO  -- 오프라인입찰번호\n     , t.ANC_NM       -- 공고명\n     , t.ITEM_DSCD    -- 품목구분코드\n  FROM APP.BID t\n WHERE 1 = 1");
+    // 쉼표는 줄 앞, SELECT 다음 줄부터 칼럼, 칼럼 뒤 /* */ 주석은 한 열로.
+    eq(SqlFormatter.format("SELECT A.X /* 가 */,\n A.LONG_NAME /* 나 */\nFROM T A ORDER BY A.X DESC, A.Y"),
+       "SELECT\n       A.X          /* 가 */\n     , A.LONG_NAME  /* 나 */\n  FROM T A\n ORDER BY A.X DESC\n     , A.Y");
+    eq(SqlFormatter.format("select a -- 가\n, bb -- 나\nfrom t"), "SELECT\n       a   -- 가\n     , bb  -- 나\n  FROM t");
+    eq(SqlFormatter.format("-- 머리 주석\nselect a from t"), "-- 머리 주석\nSELECT\n       a\n  FROM t");
 
     eq(SqlFormatter.format("INSERT INTO T_A(a_no, nm, amt) VALUES ('A1', '가나 001', nvl(x, 0))"),
        "INSERT INTO T_A (\n"
-       + "       a_no,\n"
-       + "       nm,\n"
-       + "       amt\n"
+       + "       a_no\n"
+       + "     , nm\n"
+       + "     , amt\n"
        + ") VALUES (\n"
-       + "       'A1',        -- a_no\n"
-       + "       '가나 001',  -- nm\n"
-       + "       nvl(x, 0)    -- amt\n"
+       + "       'A1'        -- a_no\n"
+       + "     , '가나 001'  -- nm\n"
+       + "     , nvl(x, 0)   -- amt\n"
        + ")");
 
     System.out.println(SqlFormatter.format(

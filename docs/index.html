@@ -656,33 +656,35 @@ footer{padding:56px 0 40px; color:var(--muted); font-size:13px}
       <div class="side"><h5>정렬 전</h5><pre>select t.order_no, t.cust_nm, nvl(i.qty,0) qty from orders t, order_item i where t.order_no=i.order_no(+) and t.st in ('A','B') and exists (select 1 from x where x.id=t.order_no) order by t.order_no desc;
 
 insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확인');</pre></div>
-      <div class="side"><h5>정렬 뒤</h5><pre><span class="kw">SELECT</span> t.order_no,
-       t.cust_nm,
-       nvl(i.qty, <span class="nu">0</span>) qty
+      <div class="side"><h5>정렬 뒤</h5><pre><span class="kw">SELECT</span>
+       t.order_no
+     , t.cust_nm
+     , nvl(i.qty, <span class="nu">0</span>) qty
   <span class="kw">FROM</span> orders t, order_item i
  <span class="kw">WHERE</span> t.order_no = i.order_no(+)
    <span class="kw">AND</span> t.st <span class="kw">IN</span> (<span class="st">'A'</span>, <span class="st">'B'</span>)
    <span class="kw">AND</span> <span class="kw">EXISTS</span> (
-       <span class="kw">SELECT</span> <span class="nu">1</span>
+       <span class="kw">SELECT</span>
+              <span class="nu">1</span>
          <span class="kw">FROM</span> x
         <span class="kw">WHERE</span> x.id = t.order_no
        )
  <span class="kw">ORDER BY</span> t.order_no <span class="kw">DESC</span>;
 
 <span class="kw">INSERT INTO</span> order_log (
-       log_no,
-       order_no,
-       memo
+       log_no
+     , order_no
+     , memo
 ) <span class="kw">VALUES</span> (
-       <span class="st">'L1'</span>,           <span class="cm">-- log_no</span>
-       <span class="st">'O100'</span>,         <span class="cm">-- order_no</span>
-       <span class="st">'주문 확인'</span>     <span class="cm">-- memo</span>
+       <span class="st">'L1'</span>         <span class="cm">-- log_no</span>
+     , <span class="st">'O100'</span>       <span class="cm">-- order_no</span>
+     , <span class="st">'주문 확인'</span>  <span class="cm">-- memo</span>
 )</pre></div>
     </div>
     <div class="notes">
-      <div class="note"><b>강물 정렬</b>절 키워드를 6칸 오른쪽에 맞추고, 칼럼 · AND 는 줄마다. FROM 의 표 목록은 한 줄(구식 조인).</div>
+      <div class="note"><b>강물 정렬 · 앞 쉼표</b>절 키워드를 6칸 오른쪽에 맞추고, 칼럼 · AND 는 줄마다, 쉼표는 줄 앞. SELECT 는 키워드만 한 줄이고 칼럼은 다음 줄부터. FROM 의 표 목록은 한 줄(구식 조인).</div>
       <div class="note"><b>INSERT</b>칼럼 · 값을 줄마다 두고, 값 줄 끝에 어느 칼럼인지 주석을 답니다.</div>
-      <div class="note"><b>줄 끝 주석은 그 자리에</b>칼럼 뒤 <code>-- 주석</code> 은 내려가지 않고 한 열로 맞춥니다. 키워드만 대문자로 바꾸고 이름은 그대로.</div>
+      <div class="note"><b>줄 끝 주석은 그 자리에</b>칼럼 뒤 <code>-- 주석</code> · <code>/* 주석 */</code> 은 내려가지 않고 한 열로 맞춥니다. 키워드만 대문자로 바꾸고 이름은 그대로.</div>
     </div>
 
     <h3>③ 결과 창</h3>
