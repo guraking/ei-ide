@@ -27,6 +27,7 @@ import org.jetbrains.annotations.NotNull;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.DefaultComboBoxModel;
+import javax.swing.Icon;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
@@ -41,7 +42,7 @@ import java.sql.SQLException;
 import java.util.function.Function;
 
 /**
- * 콘솔 편집기 위의 띠: 운영 경고(운영 접속일 때) + 도구줄(실행 · 전체 실행 · 접속 · 자동 커밋 · 미반영 배지 · 커밋 · 롤백).
+ * 콘솔 편집기 위의 띠: 운영 경고(운영 접속일 때) + 도구줄(실행 · 전체 실행 · 정렬 · 대문자 · 소문자 · 접속 · 자동 커밋 · 미반영 배지 · 커밋 · 롤백).
  * 편집기 하나에 하나만 만들고 편집기가 닫힐 때 리스너도 풀린다.
  */
 final class ConsoleBar extends JPanel {
@@ -49,6 +50,9 @@ final class ConsoleBar extends JPanel {
   private static final Key<ConsoleBar> BAR = Key.create("ei.db.console.bar");
   private static final String RUN_ACTION = "ei.db.console.Run";
   private static final String RUN_ALL_ACTION = "ei.db.console.RunAll";
+  private static final String FORMAT_ACTION = "ei.db.console.Format";
+  private static final String UPPER_ACTION = "ei.db.console.Upper";
+  private static final String LOWER_ACTION = "ei.db.console.Lower";
 
   private final Project project;
   private final VirtualFile file;
@@ -105,6 +109,13 @@ final class ConsoleBar extends JPanel {
     runAll.setToolTipText(allKey.isEmpty() ? "모든 문장을 차례로 실행" : "모든 문장을 차례로 실행 (" + allKey + ")");
     runAll.addActionListener(e -> ConsoleRun.runAll(project, editor, file));
 
+    JButton format = textButton("정렬", AllIcons.Actions.ReformatCode, "선택 영역(없으면 전체) SQL 정렬", FORMAT_ACTION);
+    format.addActionListener(e -> ConsoleRun.format(project, editor));
+    JButton upper = textButton("대문자", null, "선택 영역(없으면 전체) 대문자로 · 문자열 · 주석은 그대로", UPPER_ACTION);
+    upper.addActionListener(e -> ConsoleRun.toCase(project, editor, true));
+    JButton lower = textButton("소문자", null, "선택 영역(없으면 전체) 소문자로 · 문자열 · 주석은 그대로", LOWER_ACTION);
+    lower.addActionListener(e -> ConsoleRun.toCase(project, editor, false));
+
     combo.setRenderer(SimpleListCellRenderer.create("", ConsoleBar::label));
     combo.addPopupMenuListener(new PopupMenuListener() {
       @Override public void popupMenuWillBecomeVisible(PopupMenuEvent e) { reloadConnections(); }
@@ -126,6 +137,12 @@ final class ConsoleBar extends JPanel {
     bar.add(Box.createHorizontalStrut(JBUI.scale(8)));
     bar.add(runAll);
     bar.add(separator());
+    bar.add(format);
+    bar.add(Box.createHorizontalStrut(JBUI.scale(4)));
+    bar.add(upper);
+    bar.add(Box.createHorizontalStrut(JBUI.scale(4)));
+    bar.add(lower);
+    bar.add(separator());
     bar.add(combo);
     bar.add(separator());
     bar.add(autoCommit);
@@ -146,6 +163,14 @@ final class ConsoleBar extends JPanel {
 
   private static String label(DbConfig c) {
     return c.name + " · " + c.effectiveSchema();
+  }
+
+  /** 단축키가 있으면 풀이 끝에 붙인다. */
+  private static JButton textButton(String text, Icon icon, String tip, String actionId) {
+    JButton b = new JButton(text, icon);
+    String key = KeymapUtil.getFirstKeyboardShortcutText(actionId);
+    b.setToolTipText(key.isEmpty() ? tip : tip + " (" + key + ")");
+    return b;
   }
 
   private static JComponent separator() {

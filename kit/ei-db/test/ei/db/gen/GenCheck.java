@@ -37,7 +37,7 @@ public class GenCheck {
     eq(Names.pascal("ORDER_ITEM"), "OrderItem");
     eq(Names.alias("ORDER_ITEM"), "oi");
     eq(Names.alias("ORDER_REQUEST"), "t");
-    eq(Names.sql("PRODUCT"), "product");
+    eq(Names.sql("product"), "PRODUCT");
 
     eq(TypeMap.javaType("NUMBER", false), "Long");
     eq(TypeMap.javaType("NUMBER", true), "BigDecimal");
@@ -64,24 +64,24 @@ public class GenCheck {
     eq(doc.getElementsByTagName("resultMap").getLength(), 1);
     eq(doc.getElementsByTagName("id").getLength(), 1);
     ok(xml.startsWith("<?xml") && xml.contains("mybatis-3-mapper.dtd"), "DOCTYPE");
-    ok(xml.contains("p.created_at <![CDATA[ >= ]]> #{createdAtFrom}"), "날짜 From CDATA");
-    ok(xml.contains("p.created_at <![CDATA[ <= ]]> #{createdAtTo}"), "날짜 To CDATA");
+    ok(xml.contains("p.CREATED_AT <![CDATA[ >= ]]> #{createdAtFrom}"), "날짜 From CDATA");
+    ok(xml.contains("p.CREATED_AT <![CDATA[ <= ]]> #{createdAtTo}"), "날짜 To CDATA");
     ok(!xml.contains("&lt;=") && !xml.contains("&gt;="), "부등호 엔티티 없음");
-    ok(xml.contains("AND p.product_name LIKE '%' || #{productName} || '%'"), "문자 LIKE");
-    ok(xml.contains("AND p.unit_price = #{unitPrice}"), "숫자 =");
+    ok(xml.contains("AND p.PRODUCT_NAME LIKE '%' || #{productName} || '%'"), "문자 LIKE");
+    ok(xml.contains("AND p.UNIT_PRICE = #{unitPrice}"), "숫자 =");
     ok(xml.contains("WHERE 1 = 1\n"), "WHERE 1 = 1");
-    ok(xml.contains("FROM product p\n"), "FROM");
+    ok(xml.contains("FROM PRODUCT p\n"), "FROM");
     ok(xml.contains("property=\"unitPrice\" column=\"UNIT_PRICE\""), "낙타 대응");
     ok(xml.contains("/* 상품 ID */"), "SQL 주석");
-    ok(xml.contains("<if test=\"productName != null\">product_name = #{productName},</if>"), "update set if");
-    ok(xml.contains("AND product_id = #{productId}"), "PK 조건");
+    ok(xml.contains("<if test=\"productName != null\">PRODUCT_NAME = #{productName},</if>"), "update set if");
+    ok(xml.contains("AND PRODUCT_ID = #{productId}"), "PK 조건");
 
     MapperGen plain = new MapperGen("PRODUCT", COLS, "m.ProductMapper", "ProductDto", new MapperGen.Options(false, false, false, false, true));
     String plainXml = plain.xmlFile(MapperGen.allKinds());
     parse(plainXml);
     ok(plainXml.contains("&gt;= #{createdAtFrom}") && plainXml.contains("<where>"), "CDATA 끔 · where 태그");
     ok(plainXml.contains("CONCAT('%', #{productName}, '%')"), "MySQL LIKE");
-    ok(plainXml.contains("     WHERE product_id = #{productId}"), "WHERE 1 = 1 끔");
+    ok(plainXml.contains("     WHERE PRODUCT_ID = #{productId}"), "WHERE 1 = 1 끔");
 
     MapperGen noPk = new MapperGen("LOG", List.of(new Meta.Column("MSG", "VARCHAR2", 10, 0, false, false, true, "")), "a.LogMapper", "a.LogDto", style);
     eq(noPk.xmlBlocks(MapperGen.allKinds()).size(), 3);

@@ -6,10 +6,14 @@ import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.actionSystem.DataContext;
+import com.intellij.openapi.command.WriteCommandAction;
+import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.Editor;
+import com.intellij.openapi.editor.SelectionModel;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Key;
+import com.intellij.openapi.util.TextRange;
 import com.intellij.openapi.vfs.VirtualFile;
 import ei.db.DbConfig;
 import ei.db.Notify;
@@ -21,6 +25,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
+import java.util.function.UnaryOperator;
 
 /**
  * 콘솔 실행. 여러 문장은 앞 문장의 결과(ResultView.show/showError)가 온 뒤에 다음 문장을 넘긴다.
@@ -47,6 +52,26 @@ public final class ConsoleRun {
 
   static void runAll(Project project, Editor editor, VirtualFile file) {
     start(project, file, texts(SqlSplitter.split(editor.getDocument().getText())));
+  }
+
+  /** 선택 영역(없으면 콘솔 전체)의 글을 f 로 바꾼다. 바뀐 것이 없으면 실행 취소 기록도 남기지 않는다. */
+  static void rewrite(Project project, Editor editor, String name, UnaryOperator<String> f) {
+    Document doc = editor.getDocument();
+    SelectionModel sel = editor.getSelectionModel();
+    int start = sel.hasSelection() ? sel.getSelectionStart() : 0;
+    int end = sel.hasSelection() ? sel.getSelectionEnd() : doc.getTextLength();
+    String before = doc.getText(new TextRange(start, end));
+    String after = f.apply(before);
+    if (after.equals(before)) return;
+    WriteCommandAction.runWriteCommandAction(project, name, null, () -> doc.replaceString(start, end, after));
+  }
+
+  static void format(Project project, Editor editor) {
+    rewrite(project, editor, "SQL 정렬", SqlFormatter::format);
+  }
+
+  static void toCase(Project project, Editor editor, boolean upper) {
+    rewrite(project, editor, upper ? "대문자로" : "소문자로", sql -> SqlFormatter.changeCase(sql, upper));
   }
 
   private static List<String> texts(List<SqlSplitter.Stmt> stmts) {
@@ -128,6 +153,30 @@ public final class ConsoleRun {
     @Override
     void perform(Project project, Editor editor, VirtualFile file) {
       runAll(project, editor, file);
+    }
+  }
+
+  /** 「정렬」 Ctrl+Shift+F. */
+  public static final class Format extends ConsoleAction {
+    @Override
+    void perform(Project project, Editor editor, VirtualFile file) {
+      format(project, editor);
+    }
+  }
+
+  /** 「대문자로」 Ctrl+Shift+X. */
+  public static final class Upper extends ConsoleAction {
+    @Override
+    void perform(Project project, Editor editor, VirtualFile file) {
+      toCase(project, editor, true);
+    }
+  }
+
+  /** 「소문자로」 Ctrl+Shift+Y. */
+  public static final class Lower extends ConsoleAction {
+    @Override
+    void perform(Project project, Editor editor, VirtualFile file) {
+      toCase(project, editor, false);
     }
   }
 

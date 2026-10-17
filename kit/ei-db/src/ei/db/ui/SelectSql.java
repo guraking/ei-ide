@@ -4,9 +4,11 @@ import ei.db.Meta;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * 탐색기 「SELECT · INSERT · UPDATE 문 만들기」의 본문. 칼럼마다 한 줄이고, 주석이 있으면 줄 끝에 `-- 주석` 을 같은 열에 맞춰 붙인다.
+ * 스키마 · 표 · 칼럼 이름은 대문자, 별칭은 소문자로 쓴다(따옴표 없는 이름은 Oracle 은 그대로, PostgreSQL 은 소문자로 접어 같은 표를 가리킨다).
  * 값 자리는 NULL 로 두고, 조건을 바로 이어 쓰도록 문장 끝 ; 은 붙이지 않는다.
  */
 final class SelectSql {
@@ -25,12 +27,12 @@ final class SelectSql {
       List<String> items = new ArrayList<>();
       List<String> comments = new ArrayList<>();
       for (Meta.Column col : columns) {
-        items.add(ALIAS + "." + col.name());
+        items.add(ALIAS + "." + up(col.name()));
         comments.add(col.comment());
       }
       lines(sb, FIRST, NEXT, items, ",", comments);
     }
-    sb.append("  FROM ").append(schema).append('.').append(table).append(' ').append(ALIAS).append('\n');
+    sb.append("  FROM ").append(up(schema)).append('.').append(up(table)).append(' ').append(ALIAS).append('\n');
     sb.append(" WHERE 1 = 1");
     return sb.toString();
   }
@@ -42,12 +44,12 @@ final class SelectSql {
     List<String> values = new ArrayList<>();
     List<String> valueNotes = new ArrayList<>();
     for (Meta.Column col : columns) {
-      names.add(col.name());
+      names.add(up(col.name()));
       comments.add(col.comment());
       values.add(VALUE);
-      valueNotes.add(col.name() + " " + col.typeLabel());
+      valueNotes.add(up(col.name()) + " " + col.typeLabel());
     }
-    StringBuilder sb = new StringBuilder("INSERT INTO ").append(schema).append('.').append(table).append(" (\n");
+    StringBuilder sb = new StringBuilder("INSERT INTO ").append(up(schema)).append('.').append(up(table)).append(" (\n");
     lines(sb, NEXT, NEXT, names, ",", comments);
     sb.append(") VALUES (\n");
     lines(sb, NEXT, NEXT, values, ",", valueNotes);
@@ -62,11 +64,11 @@ final class SelectSql {
     List<String> keys = new ArrayList<>();
     List<String> keyNotes = new ArrayList<>();
     for (Meta.Column col : columns) {
-      String item = ALIAS + "." + col.name() + " = " + VALUE;
+      String item = ALIAS + "." + up(col.name()) + " = " + VALUE;
       if (col.pk()) { keys.add(item); keyNotes.add(col.comment()); }
       else { sets.add(item); setNotes.add(col.comment()); }
     }
-    StringBuilder sb = new StringBuilder("UPDATE ").append(schema).append('.').append(table).append(' ').append(ALIAS).append('\n');
+    StringBuilder sb = new StringBuilder("UPDATE ").append(up(schema)).append('.').append(up(table)).append(' ').append(ALIAS).append('\n');
     if (sets.isEmpty()) sb.append("   SET -- 바꿀 칼럼이 없습니다(모두 PK)\n");
     else lines(sb, "   SET ", NEXT, sets, ",", setNotes);
     sb.append(" WHERE 1 = 1");
@@ -89,6 +91,10 @@ final class SelectSql {
       String comment = comments.get(i).replaceAll("\\s+", " ").trim();
       sb.append(i == 0 ? first : next).append(comment.isEmpty() ? item : pad(item, width) + "  -- " + comment).append('\n');
     }
+  }
+
+  private static String up(String name) {
+    return name.toUpperCase(Locale.ROOT);
   }
 
   private static String pad(String s, int width) {

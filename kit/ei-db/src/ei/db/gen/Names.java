@@ -51,9 +51,9 @@ public final class Names {
     return a.isEmpty() || RESERVED.contains(a) ? FALLBACK_ALIAS : a;
   }
 
-  /** SQL 본문 표기. 모두 대문자인 이름(Oracle 기본)만 소문자로 쓰고, 대소문자가 섞인 이름은 따옴표 없이 쓰면 달라지므로 그대로 둔다. */
+  /** SQL 본문 표기. 표 · 칼럼 이름은 대문자로 쓴다(별칭은 alias 가 소문자로 만든다). */
   public static String sql(String name) {
-    return name.equals(name.toUpperCase(Locale.ROOT)) ? name.toLowerCase(Locale.ROOT) : name;
+    return name.toUpperCase(Locale.ROOT);
   }
 
   /** 마지막 점 뒤(단순 이름). */

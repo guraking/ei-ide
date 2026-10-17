@@ -23,7 +23,7 @@ public class SelectSqlCheck {
        + "       t.UNIT_PRICE   -- 단가 (원)\n"
        + "  FROM APP.ORDER_ITEM t\n"
        + " WHERE 1 = 1");
-    eq(SelectSql.build("public", "users", List.of()), "SELECT t.*\n  FROM public.users t\n WHERE 1 = 1");
+    eq(SelectSql.build("public", "users", List.of()), "SELECT t.*\n  FROM PUBLIC.USERS t\n WHERE 1 = 1");
     List<Meta.Column> cols = List.of(pk("ORDER_ID", "주문번호"), col("QTY", "수량"), col("MEMO", ""));
     eq(SelectSql.insert("APP", "ORDER_ITEM", cols),
        "INSERT INTO APP.ORDER_ITEM (\n"
@@ -42,7 +42,7 @@ public class SelectSqlCheck {
        + " WHERE 1 = 1\n"
        + "   AND t.ORDER_ID = NULL  -- 주문번호");
     eq(SelectSql.update("public", "logs", List.of(col("msg", ""))),
-       "UPDATE public.logs t\n   SET t.msg = NULL\n WHERE 1 = 1\n   -- PK 가 없습니다. 조건을 직접 쓰세요");
+       "UPDATE PUBLIC.LOGS t\n   SET t.MSG = NULL\n WHERE 1 = 1\n   -- PK 가 없습니다. 조건을 직접 쓰세요");
     System.out.println("SelectSqlCheck 통과");
   }
 }

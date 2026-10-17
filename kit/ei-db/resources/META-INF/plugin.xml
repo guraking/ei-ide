@@ -36,6 +36,21 @@
       <keyboard-shortcut keymap="$default" first-keystroke="control shift ENTER"/>
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="ei.db.console.Run"/>
     </action>
+    <action id="ei.db.console.Format" class="ei.db.console.ConsoleRun$Format" text="SQL 정렬"
+            description="선택 영역(없으면 콘솔 전체)의 SQL 을 줄 맞춰 정렬합니다" icon="AllIcons.Actions.ReformatCode">
+      <keyboard-shortcut keymap="$default" first-keystroke="control shift F"/>
+      <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="ei.db.console.RunAll"/>
+    </action>
+    <action id="ei.db.console.Upper" class="ei.db.console.ConsoleRun$Upper" text="대문자로"
+            description="선택 영역(없으면 콘솔 전체)을 대문자로 바꿉니다. 문자열 · 주석은 그대로 둡니다">
+      <keyboard-shortcut keymap="$default" first-keystroke="control shift X"/>
+      <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="ei.db.console.Format"/>
+    </action>
+    <action id="ei.db.console.Lower" class="ei.db.console.ConsoleRun$Lower" text="소문자로"
+            description="선택 영역(없으면 콘솔 전체)을 소문자로 바꿉니다. 문자열 · 주석은 그대로 둡니다">
+      <keyboard-shortcut keymap="$default" first-keystroke="control shift Y"/>
+      <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="ei.db.console.Upper"/>
+    </action>
     <action id="EiDb.MyBatis.Run" class="ei.db.mybatis.RunStatementAction" text="MyBatis 쿼리 실행" icon="AllIcons.Actions.Execute">
       <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt ENTER"/>
       <add-to-group group-id="EditorPopupMenu" anchor="first"/>
