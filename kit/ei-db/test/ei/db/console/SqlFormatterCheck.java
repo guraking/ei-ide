@@ -15,6 +15,17 @@ public class SqlFormatterCheck {
     eq(SqlFormatter.format("select a -- 가\n, bb -- 나\nfrom t"), "SELECT a,  -- 가\n       bb  -- 나\n  FROM t");
     eq(SqlFormatter.format("-- 머리 주석\nselect a from t"), "-- 머리 주석\nSELECT a\n  FROM t");
 
+    eq(SqlFormatter.format("INSERT INTO T_A(a_no, nm, amt) VALUES ('A1', '가나 001', nvl(x, 0))"),
+       "INSERT INTO T_A (\n"
+       + "       a_no,\n"
+       + "       nm,\n"
+       + "       amt\n"
+       + ") VALUES (\n"
+       + "       'A1',        -- a_no\n"
+       + "       '가나 001',  -- nm\n"
+       + "       nvl(x, 0)    -- amt\n"
+       + ")");
+
     System.out.println(SqlFormatter.format(
         "select a.id, a.name, nvl(b.qty,0) qty from orders a, items b where a.id = b.order_id(+) and a.dt between :s and :e and a.st in ('A','B') and exists (select 1 from x where x.id=a.id) order by a.id desc, a.name;"
         + "update t set a=1, b='x' where id=#{id};"

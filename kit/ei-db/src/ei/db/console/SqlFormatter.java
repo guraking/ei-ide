@@ -131,6 +131,7 @@ final class SqlFormatter {
     StringBuilder sb = new StringBuilder();
     String clause = "";
     boolean betweenOpen = false;
+    List<String> insertColumns = null;
     boolean newLine = true;
     for (int i = 0; i < toks.size(); i++) {
       Tok t = toks.get(i);
@@ -152,8 +153,13 @@ final class SqlFormatter {
           head.append(' ').append(toks.get(j).upper());
           j++;
         }
-        breakLine(sb);
-        sb.append(indent).append(pad(head.toString()));
+        if (u.equals("VALUES") && i > 0 && toks.get(i - 1).kind == Kind.CLOSE && clause.equals("INSERT")) {
+          // INSERT 칼럼 목록을 닫은 줄에 이어 「) VALUES (」 로 쓴다.
+          sb.append(' ').append(head);
+        } else {
+          breakLine(sb);
+          sb.append(indent).append(pad(head.toString()));
+        }
         i = j - 1;
         clause = JOIN_HEADS.contains(u) ? "JOIN" : u;
         betweenOpen = false;
@@ -198,6 +204,23 @@ final class SqlFormatter {
         int close = matching(toks, i);
         List<Tok> inner = toks.subList(i + 1, close);
         boolean sub = !inner.isEmpty() && (inner.get(0).is("SELECT") || inner.get(0).is("WITH"));
+        if (!sub && (clause.equals("INSERT") || clause.equals("VALUES"))) {
+          // INSERT 칼럼 · VALUES 값은 줄마다 하나. 개수가 같으면 값 줄 끝에 칼럼 이름을 달아 어느 값인지 보이게 한다.
+          List<String> items = items(inner);
+          if (clause.equals("INSERT")) insertColumns = items;
+          boolean named = clause.equals("VALUES") && insertColumns != null && insertColumns.size() == items.size();
+          sb.append(newLine ? "(" : " (");
+          for (int k = 0; k < items.size(); k++) {
+            breakLine(sb);
+            sb.append(indent).append(LIST_INDENT).append(items.get(k)).append(k < items.size() - 1 ? "," : "");
+            if (named) sb.append(MARK).append("-- ").append(insertColumns.get(k));
+          }
+          breakLine(sb);
+          sb.append(indent).append(')');
+          i = close;
+          newLine = false;
+          continue;
+        }
         if (!newLine && needsSpaceBeforeParen(toks, i)) sb.append(' ');
         if (sub) {
           sb.append("(\n").append(block(inner, indent + LIST_INDENT)).append('\n').append(indent).append(LIST_INDENT).append(')');
@@ -259,6 +282,35 @@ final class SqlFormatter {
     return sb.toString();
   }
 
+  /** 괄호 안을 바깥 쉼표로 나눠 한 줄씩. */
+  private static List<String> items(List<Tok> toks) {
+    List<String> out = new ArrayList<>();
+    int depth = 0;
+    int start = 0;
+    for (int i = 0; i <= toks.size(); i++) {
+      Kind k = i < toks.size() ? toks.get(i).kind : Kind.COMMA;
+      if (k == Kind.OPEN) depth++;
+      else if (k == Kind.CLOSE) depth--;
+      else if (k == Kind.COMMA && depth == 0) {
+        out.add(inline(toks.subList(start, i)).strip());
+        start = i + 1;
+      }
+    }
+    return out;
+  }
+
+  /** 고정폭 글꼴에서 한글 · 한자 등 넓은 글자는 두 칸으로 센다. */
+  private static int displayWidth(String s) {
+    int w = 0;
+    for (int i = 0; i < s.length(); i++) {
+      char c = s.charAt(i);
+      boolean wide = c >= '\u1100' && c <= '\u115F' || c >= '\u2E80' && c <= '\uA4CF' || c >= '\uAC00' && c <= '\uD7A3'
+          || c >= '\uF900' && c <= '\uFAFF' || c >= '\uFF00' && c <= '\uFF60';
+      w += wide ? 2 : 1;
+    }
+    return w;
+  }
+
   private static boolean needsSpaceBeforeParen(List<Tok> toks, int open) {
     if (open == 0) return false;
     Tok prev = toks.get(open - 1);
@@ -309,13 +361,13 @@ final class SqlFormatter {
       int end = i;
       int width = 0;
       while (end < lines.length && lines[end].indexOf(MARK) >= 0) {
-        width = Math.max(width, lines[end].substring(0, lines[end].indexOf(MARK)).stripTrailing().length());
+        width = Math.max(width, displayWidth(lines[end].substring(0, lines[end].indexOf(MARK)).stripTrailing()));
         end++;
       }
       for (int k = i; k < end; k++) {
         int m = lines[k].indexOf(MARK);
         String code = lines[k].substring(0, m).stripTrailing();
-        lines[k] = code + " ".repeat(width - code.length()) + COMMENT_GAP + lines[k].substring(m + 1);
+        lines[k] = code + " ".repeat(width - displayWidth(code)) + COMMENT_GAP + lines[k].substring(m + 1);
       }
       i = end;
     }
