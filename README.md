@@ -4,6 +4,8 @@
 
 **[화면으로 보는 사용 설명서](https://raw.githack.com/guraking/ei-ide/main/docs/index.html)** — 설치 순서, 프로젝트 열기 · Maven · Gradle 설정, 서버 창(스프링 부트 · WAS 설정), Synchronize, 데이터베이스, 단축키 (`docs/index.html`)
 
+**[수정 내역](수정내역.md)** — 날짜별로 무엇이 바뀌었는지
+
 - 바탕: IntelliJ IDEA Community 2026.2.3 (태그 `idea/262.10968.63`, Apache 2.0)
 - 목표: 이클립스의 익숙한 흐름(서버 창 · Synchronize · 화면 묶음 · 우클릭 메뉴)은 가져오고, 무거운 것과 쓰지 않는 것은 덜어 낸다
 - 남긴 것: Java · Maven · Gradle · Groovy · Git · GitHub · GitLab · Markdown · YAML · Properties · Lombok · JUnit · 터미널 · 이클립스 단축키
