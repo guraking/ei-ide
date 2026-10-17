@@ -1,9 +1,14 @@
 package ei.db.ui;
 
 import ei.db.Meta;
+import ei.db.gen.Names;
 
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.Locale;
 
 /**
@@ -80,6 +85,110 @@ final class SelectSql {
       sb.setLength(sb.length() - 1);
     }
     return sb.toString();
+  }
+
+  /** 앞 쉼표 목록의 줄 머리: 첫 칼럼은 SELECT 다음 줄 7칸, 다음 칼럼부터 「     , 」. */
+  private static final String LEAD_FIRST = "       ";
+  private static final String LEAD_NEXT = "     , ";
+  static final String GUESS_NOTE = "이름이 같은 칼럼으로 추정 (FK 없음)";
+
+  /**
+   * 여러 표의 조인 SELECT(구식 조인: FROM 에 표를 나열하고 WHERE 에 조건). 표마다 별칭을 붙이고 모든 칼럼을 앞 쉼표로 나열한다.
+   * 조건은 고른 표끼리의 FK 로 만들고, 두 표 사이에 FK 가 없으면 한쪽의 PK 칼럼과 이름이 같은 칼럼을 찾아 추정 조건을 단다.
+   * 그래도 못 이은 표는 조건을 직접 쓰라는 주석 줄을 남긴다. tables 는 고른 순서, columns · fks 는 표 이름(대소문자 그대로) 기준.
+   */
+  static String join(String schema, List<String> tables, Map<String, List<Meta.Column>> columns, List<Meta.ForeignKey> fks) {
+    Map<String, String> alias = aliases(tables);
+    List<String> items = new ArrayList<>();
+    List<String> notes = new ArrayList<>();
+    for (String t : tables) {
+      for (Meta.Column col : columns.getOrDefault(t, List.of())) {
+        items.add(alias.get(t) + "." + up(col.name()));
+        notes.add(col.comment());
+      }
+    }
+    StringBuilder sb = new StringBuilder("SELECT\n");
+    leading(sb, items, notes);
+    List<String> from = new ArrayList<>();
+    for (String t : tables) from.add(up(schema) + "." + up(t) + " " + alias.get(t));
+    sb.append("  FROM ").append(String.join(", ", from)).append('\n');
+    sb.append(" WHERE 1 = 1");
+
+    List<String> conds = new ArrayList<>();
+    List<String> condNotes = new ArrayList<>();
+    Set<String> linked = new HashSet<>();
+    for (Meta.ForeignKey fk : fks) {
+      if (!alias.containsKey(fk.fkTable()) || !alias.containsKey(fk.pkTable()) || fk.fkTable().equals(fk.pkTable())) continue;
+      conds.add(alias.get(fk.fkTable()) + "." + up(fk.fkColumn()) + " = " + alias.get(fk.pkTable()) + "." + up(fk.pkColumn()));
+      condNotes.add(fk.name().isEmpty() ? "FK" : "FK " + fk.name());
+      linked.add(pair(fk.fkTable(), fk.pkTable()));
+    }
+    for (int i = 0; i < tables.size(); i++) {
+      for (int j = i + 1; j < tables.size(); j++) {
+        String a = tables.get(i);
+        String b = tables.get(j);
+        if (linked.contains(pair(a, b))) continue;
+        int before = conds.size();
+        guess(a, b, columns, alias, conds, condNotes);
+        guess(b, a, columns, alias, conds, condNotes);
+        if (conds.size() > before) linked.add(pair(a, b));
+      }
+    }
+    if (!conds.isEmpty()) {
+      sb.append('\n');
+      lines(sb, "   AND ", "   AND ", conds, "", condNotes);
+      sb.setLength(sb.length() - 1);
+    }
+    for (int i = 1; i < tables.size(); i++) {
+      String t = tables.get(i);
+      boolean any = false;
+      for (String other : tables) any |= !other.equals(t) && linked.contains(pair(t, other));
+      if (!any) sb.append("\n   -- ").append(up(t)).append(" 와 이을 조건을 찾지 못했습니다. 직접 쓰세요");
+    }
+    return sb.toString();
+  }
+
+  /** parent 의 PK 칼럼과 이름이 같은 칼럼이 child 에 있으면 child.칼럼 = parent.칼럼. 이미 같은 조건이 있으면 넣지 않는다. */
+  private static void guess(String child, String parent, Map<String, List<Meta.Column>> columns, Map<String, String> alias,
+                            List<String> conds, List<String> notes) {
+    Set<String> childNames = new HashSet<>();
+    for (Meta.Column c : columns.getOrDefault(child, List.of())) childNames.add(up(c.name()));
+    for (Meta.Column p : columns.getOrDefault(parent, List.of())) {
+      if (!p.pk() || !childNames.contains(up(p.name()))) continue;
+      String cond = alias.get(child) + "." + up(p.name()) + " = " + alias.get(parent) + "." + up(p.name());
+      String reverse = alias.get(parent) + "." + up(p.name()) + " = " + alias.get(child) + "." + up(p.name());
+      if (conds.contains(cond) || conds.contains(reverse)) continue;
+      conds.add(cond);
+      notes.add(GUESS_NOTE);
+    }
+  }
+
+  private static String pair(String a, String b) {
+    return a.compareTo(b) < 0 ? a + "\u0000" + b : b + "\u0000" + a;
+  }
+
+  /** Names.alias(소문자 머리글자)를 쓰고, 겹치면 뒤에 2 · 3 … 을 붙인다. */
+  private static Map<String, String> aliases(List<String> tables) {
+    Map<String, String> out = new LinkedHashMap<>();
+    Set<String> used = new HashSet<>();
+    for (String t : tables) {
+      String base = Names.alias(t);
+      String a = base;
+      for (int n = 2; !used.add(a); n++) a = base + n;
+      out.put(t, a);
+    }
+    return out;
+  }
+
+  /** 앞 쉼표 목록. 주석은 같은 열에 맞춘다(줄바꿈은 공백으로). */
+  private static void leading(StringBuilder sb, List<String> items, List<String> comments) {
+    int width = 0;
+    for (String item : items) width = Math.max(width, LEAD_FIRST.length() + item.length());
+    for (int i = 0; i < items.size(); i++) {
+      String line = (i == 0 ? LEAD_FIRST : LEAD_NEXT) + items.get(i);
+      String comment = comments.get(i).replaceAll("\\s+", " ").trim();
+      sb.append(comment.isEmpty() ? line : pad(line, width) + "  -- " + comment).append('\n');
+    }
   }
 
   /** 첫 줄은 first, 다음 줄은 next 로 시작하고 마지막 줄을 빼고 separator 를 붙인다. 주석은 같은 열에 맞춘다(줄바꿈은 공백으로). */

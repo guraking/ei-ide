@@ -61,6 +61,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -409,19 +411,39 @@ final class DbExplorer extends SimpleToolWindowPanel {
     }
     if (o instanceof TableItem t) {
       g.add(new Act("데이터 보기", AllIcons.Actions.Execute, () -> true, () -> viewData(t)));
-      g.add(new Act("SELECT 문 만들기", null, () -> true, () -> withColumns(n, t,
-          cols -> ConsoleOpener.open(project, t.c, SelectSql.build(t.schema, t.table.name(), cols)))));
+      List<String> picked = selectedTables(t);
+      if (picked.size() > 1) {
+        g.add(new Act("SELECT 문 만들기 (표 " + picked.size() + "개 조인)", null, () -> true, () -> joinSelect(n, t, picked)));
+      } else {
+        g.add(new Act("SELECT 문 만들기", null, () -> true, () -> withColumns(n, t,
+            cols -> ConsoleOpener.open(project, t.c, SelectSql.build(t.schema, t.table.name(), cols)))));
+      }
       g.add(new Act("INSERT 문 만들기", null, () -> true, () -> withColumns(n, t,
           cols -> ConsoleOpener.open(project, t.c, SelectSql.insert(t.schema, t.table.name(), cols)))));
       g.add(new Act("UPDATE 문 만들기", null, () -> true, () -> withColumns(n, t,
           cols -> ConsoleOpener.open(project, t.c, SelectSql.update(t.schema, t.table.name(), cols)))));
       g.add(new Act("매퍼 뼈대 만들기", null, () -> true, () -> MapperDialog.show(project, t.c, t.schema, t.table.name())));
       g.addSeparator();
-      List<String> tables = selectedTables(t);
-      g.add(new Act("ERD 열기", null, () -> true, () -> ErdView.open(project, t.c, t.schema, tables)));
+      g.add(new Act("ERD 열기", null, () -> true, () -> ErdView.open(project, t.c, t.schema, picked)));
       return g;
     }
     return null;
+  }
+
+  /** 고른 표들의 칼럼 · FK 를 뒤에서 읽어 조인 SELECT 를 콘솔에 연다. */
+  private void joinSelect(DefaultMutableTreeNode node, TableItem base, List<String> tables) {
+    DbSessions sessions = DbSessions.get(project);
+    background(node, base.c, () -> {
+      Connection conn = sessions.connection(base.c);
+      Map<String, List<Meta.Column>> columns = new HashMap<>();
+      List<Meta.ForeignKey> fks = new ArrayList<>();
+      for (String table : tables) {
+        columns.put(table, Meta.columns(conn, base.c, base.schema, table));
+        fks.addAll(Meta.importedKeys(conn, base.c, base.schema, table));
+      }
+      String sql = SelectSql.join(base.schema, tables, columns, fks);
+      return () -> ConsoleOpener.open(project, base.c, sql);
+    });
   }
 
   private void viewData(TableItem t) {
