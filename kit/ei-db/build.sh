@@ -5,9 +5,9 @@ S=/tmp/claude-0/-home-claude/1430a897-9ca2-50f9-8007-1cf8ec6091fe/scratchpad
 cd "$(dirname "$0")"
 OUT=${OUT:-out}
 rm -rf "$OUT" && mkdir -p "$OUT"
-CP=$(ls $S/cp/*.jar $S/cp2/*.jar $S/cp3/*.jar $S/cp4/*.jar | tr '\n' ':')
+CP=$(ls $S/cp/*.jar $S/cp2/*.jar $S/cp3/*.jar $S/cp4/*.jar $S/cp5/*.jar | tr '\n' ':')
 set +e
-javac -encoding UTF-8 --release 21 -proc:none -nowarn -Xlint:none -cp "$CP" -d "$OUT" $(find src -name '*.java') > "$OUT.log" 2>&1
+/usr/lib/jvm/java-25-openjdk-amd64/bin/javac -encoding UTF-8 --release 21 -XDaddTypeAnnotationsToSymbol=false -proc:none -nowarn -Xlint:none -cp "$CP" -d "$OUT" $(find src -name '*.java') > "$OUT.log" 2>&1
 rc=$?
 set -e
 grep -v "JAVA_TOOL_OPTIONS\|^Note:" "$OUT.log" || true

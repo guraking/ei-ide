@@ -30,6 +30,8 @@ import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.JTable;
+import java.awt.Dimension;
+import javax.swing.table.JTableHeader;
 import javax.swing.SwingConstants;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
@@ -94,8 +96,25 @@ final class ResultPanel extends JPanel {
     add(label, BorderLayout.NORTH);
   }
 
+  /** 두 줄 머리의 위아래 여백(px, 배율 전). */
+  private static final int HEADER_PADDING = 10;
+
   private void buildQuery(DbConfig c) {
-    grid = new JBTable(new Model(result));
+    boolean twoLineHeader = !result.comments().isEmpty();
+    grid = new JBTable(new Model(result)) {
+      @Override
+      protected JTableHeader createDefaultTableHeader() {
+        return new JBTableHeader() {
+          // 주석 줄이 있으면 머리를 두 줄 높이로 둔다. 기본 머리는 한 줄 높이로 고정돼 아래 줄이 잘린다.
+          @Override
+          public Dimension getPreferredSize() {
+            Dimension d = super.getPreferredSize();
+            if (twoLineHeader) d.height = Math.max(d.height, getFontMetrics(getFont()).getHeight() * 2 + JBUI.scale(HEADER_PADDING));
+            return d;
+          }
+        };
+      }
+    };
     grid.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
     grid.setDefaultRenderer(Object.class, new CellRenderer());
     grid.getTableHeader().setReorderingAllowed(false);

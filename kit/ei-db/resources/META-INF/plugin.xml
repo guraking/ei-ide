@@ -16,6 +16,8 @@
     <!-- SQL 콘솔 · 결과 -->
     <editorNotificationProvider implementation="ei.db.console.ConsoleBar$Provider"/>
     <actionPromoter implementation="ei.db.console.ConsoleRun$Promoter"/>
+    <completion.contributor language="any" implementationClass="ei.db.console.SqlCompletion"/>
+    <typedHandler implementation="ei.db.console.DotAutoPopup"/>
     <toolWindow id="EI Database Result" anchor="bottom" icon="AllIcons.Nodes.DataTables" doNotActivateOnStart="true"
                 factoryClass="ei.db.console.ResultView$Factory"/>
     <!-- MyBatis: 매퍼 XML 의 문장 옆 실행 아이콘 -->

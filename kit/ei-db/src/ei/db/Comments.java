@@ -24,6 +24,7 @@ public final class Comments {
 
   public static void clear(String configId) {
     CACHE.keySet().removeIf(k -> k.startsWith(configId + "|"));
+    SchemaCache.clear(configId);
   }
 
   /** 표 하나의 칼럼 이름(대문자) → 주석. */
