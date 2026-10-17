@@ -4,14 +4,14 @@
 지금 상태 · 다음 할 일은 `진행상황.md`, 바뀐 내용은 `수정내역.md`, 사용법은 `README.md` · `docs/index.html`.
 
 ## 폴더
-- 사용자 PC 원본: `D:\myide` (이 저장소 + 받은 소스 `intellij-community` + `backup` · `logs` · `tmpjars` · `노트북용` 내용물)
+- 사용자 PC 원본: `D:\myide` (이 저장소 + 받은 소스 `intellij-community` + `backup` · `logs` · `tmpjars` · `release` 내용물)
 - 사용자 설정 폴더: `%APPDATA%\JetBrains\EIIDE2026.2` (시험용 플러그인은 `plugins\<이름>-N.jar`, 옛 판은 `..\_to_delete`)
 - `kit/` 소스 손질 대본과 우리 플러그인 소스
   - `kit/ei-db` 데이터베이스(접속 · 콘솔 · 결과 · MyBatis · 생성 · ERD), 점검 `kit/ei-db/test/**/*Check.java`
   - `kit/boot-servers` 서버 창(스프링 부트 · WAS), 점검 `src/test/java`
   - `kit/sync` 동기화 창(Git · SVN), 점검 `SyncCheck.java`
   - `kit/customize.py`(brand · slim) · `kit/menu/apply_menu.py` · `kit/defaults/apply_defaults.py` · `kit/brand/apply_brand.bat` · `kit/check_update.py`(새 판 점검)
-- `bundled-plugins/<이름>/lib/*.jar` 는 빌드 때 본체에 들어간다. `노트북용/플러그인설치.bat` 은 노트북 설치 대본.
+- `bundled-plugins/<이름>/lib/*.jar` 는 빌드 때 본체에 들어간다. `release/플러그인설치.bat` 은 노트북 설치 대본.
 
 ## 바꿀 때마다 반영할 곳 (빠짐없이)
 1. 본체 jar `D:\myide\bundled-plugins\<플러그인>\lib\*.jar`
@@ -41,7 +41,7 @@ python kit\defaults\apply_defaults.py intellij-community
 kit\brand\apply_brand.bat
 build-windows.bat
 ```
-- 판 번호 `262.10968.N`, N 은 `build-number.txt`(1000 이상). 결과 `노트북용\eiide-262.10968.N.exe`, 끝나면 GitHub 릴리스로 올림.
+- 판 번호 `262.10968.N`, N 은 `build-number.txt`(1000 이상). 결과 `release\eiide-262.10968.N.exe`, 끝나면 GitHub 릴리스로 올림.
 - 커뮤니티 새 판: `python kit\check_update.py` (새 소스를 `intellij-community-new` 에 받아 kit 적용 · 플러그인 컴파일 · 판 번호 박힌 곳 보고).
 
 ## 플러그인 컴파일 · 점검

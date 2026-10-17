@@ -44,8 +44,8 @@ if errorlevel 1 (
     exit /b 1
 )
 echo 완료. 결과물은 %CD%\out\idea-ce\artifacts 에 있습니다.
-rem 노트북에 가져갈 수 있게 설치 파일을 노트북용 폴더에도 둔다.
-copy /Y "%~dp0intellij-community\out\idea-ce\artifacts\eiide-*.exe" "%~dp0노트북용\" >nul && echo 설치 파일을 노트북용 폴더에도 복사했습니다.
+rem 노트북에 가져갈 수 있게 설치 파일을 release 폴더에도 둔다.
+copy /Y "%~dp0intellij-community\out\idea-ce\artifacts\eiide-*.exe" "%~dp0release\" >nul && echo 설치 파일을 release 폴더에도 복사했습니다.
 rem 릴리스 설명은 수정내역.md 의 맨 위 절(「## 」 줄부터 다음 「## 」 줄 전까지)이다. 읽지 못하면 판 번호만 적는다.
 rem 경로는 환경 변수로 넘겨 한글 경로를 PowerShell 따옴표 안에 쓰지 않는다.
 set "CHANGELOG=%~dp0수정내역.md"
@@ -55,7 +55,7 @@ set "NOTESVAL=%NOTES%"
 powershell -NoProfile -Command "$t=[IO.File]::ReadAllText($env:CHANGELOG,[Text.Encoding]::UTF8); $m=[regex]::Match($t,'(?ms)^## .*?(?=^## |\z)'); if(-not $m.Success){exit 1}; [IO.File]::WriteAllText($env:NOTES,$m.Value.Trim(),(New-Object Text.UTF8Encoding $false))" || (set "NOTESOPT=--notes" & set "NOTESVAL=빌드 %BUILD_NUMBER%")
 rem GitHub 릴리스로 올린다. gh 명령줄 도구가 있고 로그인돼 있어야 한다(winget install GitHub.cli → gh auth login). 없으면 건너뛴다.
 where gh >nul 2>&1 && (
-    gh release create "v%BUILD_NUMBER%" "%~dp0노트북용\eiide-%BUILD_NUMBER%.exe" --repo guraking/ei-ide --title "EI IDE %BUILD_NUMBER%" %NOTESOPT% "%NOTESVAL%" && echo GitHub 릴리스 v%BUILD_NUMBER% 로 올렸습니다.
+    gh release create "v%BUILD_NUMBER%" "%~dp0release\eiide-%BUILD_NUMBER%.exe" --repo guraking/ei-ide --title "EI IDE %BUILD_NUMBER%" %NOTESOPT% "%NOTESVAL%" && echo GitHub 릴리스 v%BUILD_NUMBER% 로 올렸습니다.
 ) || echo gh 명령줄 도구가 없어 GitHub 릴리스 업로드는 건너뜁니다.
 rem 더블클릭으로 돌렸을 때 결과를 읽을 수 있게 창을 닫지 않는다.
 pause

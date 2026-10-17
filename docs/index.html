@@ -266,7 +266,7 @@ footer{padding:56px 0 40px; color:var(--muted); font-size:13px}
         <div class="n">3</div>
         <h4>플러그인설치.bat</h4>
         <p>IDE 가 꺼진 상태에서 두 번 누릅니다. 한국어 팩 · Claude Code · One Dark 를 넣고, JDK · Gradle · DB 드라이버를 사용자 폴더에 풀어 둡니다. 시험용 본체 플러그인 사본은 치웁니다.</p>
-        <div class="file">노트북용\플러그인설치.bat</div>
+        <div class="file">release\플러그인설치.bat</div>
       </div>
       <div class="step">
         <div class="n">4</div>
@@ -282,8 +282,8 @@ footer{padding:56px 0 40px; color:var(--muted); font-size:13px}
       <div class="note ok"><b>새 판 알림</b>IDE 를 켤 때 이 저장소의 최신 릴리스를 보고, 새 판이 있으면 오른쪽 아래에 「내려받기」 풍선이 뜹니다.</div>
     </div>
 
-    <h3>노트북용 폴더</h3>
-    <div class="tree">노트북용\
+    <h3>release 폴더</h3>
+    <div class="tree">release\
 ├─ <span class="hl">eiide-262.10968.N.exe</span>        <span class="c">설치 파일</span>
 ├─ <span class="hl">플러그인설치.bat</span>               <span class="c">3번 단계</span>
 ├─ plugins\
@@ -843,7 +843,7 @@ build-windows.bat
     <div class="notes">
       <div class="note"><b>판 번호 N</b><code>build-number.txt</code> 에서 빌드마다 하나씩 올라갑니다.</div>
       <div class="note warn"><b>N 은 1000 부터</b>바탕 판(.63)보다 작으면 JetBrains 마켓의 Java · Gradle 등 번들 플러그인을 새 판으로 보고 내려받아 본체를 덮어 버립니다.</div>
-      <div class="note ok"><b>플러그인만 고쳤을 때</b>빌드 없이 jar 를 <code>노트북용\plugins</code> 에 넣고 설치 3번만 다시 돌리면 됩니다.</div>
+      <div class="note ok"><b>플러그인만 고쳤을 때</b>빌드 없이 jar 를 <code>release\plugins</code> 에 넣고 설치 3번만 다시 돌리면 됩니다.</div>
     </div>
   </div>
 </section>

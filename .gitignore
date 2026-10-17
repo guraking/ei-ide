@@ -3,8 +3,8 @@ intellij-community/
 backup/
 logs/
 tmpjars/
-노트북용/*
-!노트북용/플러그인설치.bat
+release/*
+!release/플러그인설치.bat
 plugins/*.jar
 bundled-plugins/lombok/
 build-number.txt
