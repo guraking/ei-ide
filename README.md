@@ -132,7 +132,7 @@ DataGrip 은 커뮤니티 판에 넣을 수 없어 직접 만든 DB 도구입니
 
 1. `eiide-262.10968.N.exe`를 실행해 설치합니다. 서버 창 · Synchronize · 데이터베이스 · Lombok · SVN은 본체에 들어 있어 따로 넣을 것이 없습니다.
 2. EI IDE를 한 번 켰다가 끕니다(설정 폴더가 만들어집니다).
-3. `노트북용\플러그인설치.bat`을 더블클릭합니다. 한국어 언어 팩 · Claude Code · One Dark 테마를 사용자 플러그인 폴더에 넣고(옆 `plugins` 폴더에 없으면 한국어 팩은 이 저장소의 릴리스 「plugins」에서, Claude Code · One Dark 는 JetBrains 마켓에서 내려받음), 시험용으로 따로 넣어 둔 본체 플러그인 사본(boot-servers · kinggura · ei-db)은 본체와 겹치지 않게 치웁니다. 옆 `jdk` · `gradle` · `drivers` 폴더가 있으면 JDK(Temurin 17 · 21)를 `%USERPROFILE%\.jdks` 에, Gradle 8.14.6 을 wrapper 가 찾는 자리에, DB 드라이버(Oracle · MySQL · PostgreSQL)를 `~/.m2` 에 풀어 둡니다(인터넷 없이, 이미 있으면 건너뜀). JDK 는 EI IDE 를 켤 때 SDK 목록에 자동 등록됩니다. IDE가 켜져 있으면 「먼저 종료」만 띄우고 멈춥니다.
+3. `노트북용\플러그인설치.bat`을 더블클릭합니다. 한국어 언어 팩 · Claude Code · One Dark 테마를 사용자 플러그인 폴더에 넣고(옆 `plugins` 폴더에 없으면 한국어 팩은 이 저장소의 릴리스 「plugins」에서, Claude Code · One Dark 는 JetBrains 마켓에서 내려받음), 시험용으로 따로 넣어 둔 본체 플러그인 사본(boot-servers · kinggura · ei-db)은 본체와 겹치지 않게 치웁니다. 옆 `jdk` · `gradle` · `drivers` 폴더가 있으면 JDK(Temurin 17 · 21 · 27)를 `%USERPROFILE%\.jdks` 에, Gradle 8.14.6 을 wrapper 가 찾는 자리에, DB 드라이버(Oracle · MySQL · PostgreSQL)를 `~/.m2` 에 풀어 둡니다(인터넷 없이, 이미 있으면 건너뜀). JDK 는 EI IDE 를 켤 때 SDK 목록에 자동 등록됩니다. IDE가 켜져 있으면 「먼저 종료」만 띄우고 멈춥니다.
 4. EI IDE를 켜고 설정 → Language and Region에서 Korean을 고릅니다.
 
 판을 올릴 때도 같은 순서입니다. 설정(단축키 · 실행 설정 · 플러그인)은 `%APPDATA%\JetBrains\EIIDE2026.2`에 있어 재설치해도 남습니다.
