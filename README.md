@@ -46,25 +46,69 @@
 이클립스 Team → Synchronize Workspace와 같은 창입니다. 프로젝트 안의 모든 저장소(Git 여러 개, SVN)를 저장소별로 묶어 들어올 변경 · 나갈 변경 · 충돌을 보여 주고, 우클릭으로 무시 목록 추가 · 되돌리기 · **변경 모른 척하기(assume-unchanged)** 를 합니다. 「변경 모른 척하기」는 커밋 창의 파일 우클릭 메뉴에도 있습니다. 프로젝트를 열면 Git 저장소마다 `.git/info/exclude`에 `*.iml` · `.idea/`를 넣어 IDE 파일이 변경 목록에 뜨지 않게 합니다(팀 `.gitignore`와 서버에는 영향 없음). 커밋 · Push 뒤 자동으로 다시 비교합니다. SVN은 `svn` 명령줄 도구가 PATH에 있어야 합니다.
 
 ### 데이터베이스 (`ei-db`)
-DataGrip 은 커뮤니티 판에 넣을 수 없어 직접 만든 DB 도구입니다. 오른쪽 「데이터베이스」 창에서 씁니다.
-- Oracle · MySQL · PostgreSQL 접속. 비밀번호는 IDE 암호 저장소, JDBC 드라이버는 `~/.m2` 에 있는 jar 를 찾아 쓰고, 없으면 Maven 저장소(`~/.m2/settings.xml` 에 사내 mirror 가 있으면 그쪽)에서 최신 판을 받아 `~/.m2` 에 둡니다(SHA-1 확인, 플러그인에 넣지 않음).
-- 탐색기: 접속 → 스키마 → 표 · 뷰 → 칼럼(PK · FK · 형식 · 한글 주석). 표 더블클릭 → 데이터, 우클릭 → SELECT · INSERT · UPDATE 문 · 매퍼 뼈대 · ERD. 만드는 문장의 표 · 칼럼 이름은 대문자, 별칭만 소문자.
-- SQL 콘솔: Ctrl+Enter 커서 문장 실행, Ctrl+Shift+Enter 전체. 표 · 칼럼 자동완성(「별칭.」 뒤엔 그 표 칼럼, 한글 주석 표시). 「새 콘솔」은 누를 때마다 새 탭(같은 접속은 연결을 같이 씀). 조회 건수 콤보(고르거나 직접 입력)와 결과의 「500건 더」 · 건수 입력 「조회」. Ctrl+Shift+F SQL 정렬, Ctrl+Shift+X · Y 대 · 소문자(문자열 · 주석 · `#{}` 는 그대로). 자동 커밋 기본 꺼짐, 미반영 건수 · 커밋 · 롤백.
-- 결과 표: 칼럼 머리에 한글 주석, 칸 단위 선택(머리 누르면 칼럼 전체), 우클릭으로 값 · 칼럼 값 · 칼럼 이름 · IN 목록 복사, 복사 · CSV · INSERT 문 · UPDATE 문(PK 를 표 정의에서 찾아 WHERE 로) · DTO 만들기.
-- **운영 보호**: WHERE 없는 UPDATE · DELETE, DROP · TRUNCATE, 운영 접속의 모든 변경은 표 이름을 입력해야 실행. 읽기 전용 접속은 변경 거절.
-- **MyBatis 바로 실행**: 매퍼 XML 문장 옆 ▶(또는 Ctrl+Alt+Enter) → 매개변수 입력 → `<if>` · `<foreach>` 등을 풀어 실제 SQL 미리보기 → 실행. resultType DTO 와 SELECT 칼럼이 안 맞으면 경고.
-- **SQL 로그 → 실행 SQL**: 서버 콘솔의 MyBatis `Preparing:` / `Parameters:` 로그 우클릭 → 값을 채운 SQL 복사 · 콘솔에서 실행 · 실행 창으로 열기.
-- **매퍼 뼈대 · DTO 만들기**: 표나 결과에서 resultMap · select · insert · update · delete · 인터페이스 · DTO 생성(구식 조인, 부등호 CDATA, `WHERE 1 = 1`). 있는 파일은 덮어쓰지 않고 덧붙임.
-- **ERD**: 표 카드(한글 주석) + FK 선, 끌어 옮기기 · 확대 · PNG 저장.
+DataGrip 은 커뮤니티 판에 넣을 수 없어 직접 만든 DB 도구입니다. 오른쪽 「데이터베이스」 창(탐색기)과 아래 「결과」 창으로 씁니다.
+
+**접속**
+- Oracle · MySQL · PostgreSQL. 비밀번호는 IDE 암호 저장소에 둡니다.
+- JDBC 드라이버는 `~/.m2` 에 있는 jar 를 찾아 쓰고, 없으면 Maven 저장소(`~/.m2/settings.xml` 에 사내 mirror 가 있으면 그쪽)에서 최신 판을 받아 `~/.m2` 에 둡니다(SHA-1 확인, 플러그인에 넣지 않음). 접속 창의 「내려받기」로 미리 받을 수도 있습니다.
+- 운영 접속 · 읽기 전용 표시를 접속마다 켭니다(아래 「운영 보호」).
+
+**탐색기**
+- 접속 → 스키마 → 표 · 뷰 → 칼럼(PK · FK · 형식 · 한글 주석).
+- 표 더블클릭 → 데이터 보기.
+- 표 우클릭 → SELECT · INSERT · UPDATE 문 만들기, 매퍼 뼈대, ERD. 만드는 문장은 표 · 칼럼 이름 대문자, 별칭만 소문자, 칼럼마다 한 줄에 한글 주석.
+- 「새 콘솔」은 누를 때마다 새 탭(`콘솔 · 접속.sql`, `콘솔 · 접속 (2).sql` …)을 엽니다. 같은 접속의 콘솔은 연결 하나(미반영 변경 · 커밋 · 롤백)를 같이 씁니다. 탐색기 · MyBatis · 로그에서 보내는 SQL 은 그 접속에서 마지막으로 연 콘솔에 붙습니다.
+
+**SQL 콘솔**
+- 도구줄: 실행 · 전체 실행 · 정렬 · 대문자 · 소문자 · 접속 바꾸기 · 조회 건수 · 자동 커밋 · 미반영 건수 · 커밋 · 롤백. 자동 커밋은 기본 꺼짐.
+- 표 · 칼럼 자동완성: 「별칭.」 뒤에는 그 표의 칼럼, 한글 주석을 함께 보여 줍니다. 소문자로 치면 소문자로 넣습니다.
+- **정렬**: 절 키워드 6칸 오른쪽 맞춤, SELECT · SET · GROUP BY · ORDER BY 는 칼럼마다 한 줄, WHERE 의 AND · OR 는 줄마다, FROM 의 표 목록은 한 줄(구식 조인), 하위 질의는 들여쓰기. INSERT 는 칼럼 · 값을 줄마다 두고 값 줄 끝에 `-- 칼럼 이름`. 줄 끝 `-- 주석` 은 그 줄에 남기고 한 열에 맞춥니다. 키워드만 대문자로 바꾸고 이름은 그대로 둡니다.
+- **대문자 · 소문자**: 문자열 · 따옴표 이름 · 주석 · `#{}` · `${}` 는 그대로 두고 바꿉니다.
+- 정렬 · 대소문자는 선택 영역에만, 선택이 없으면 콘솔 전체에. Ctrl+Z 로 되돌립니다.
+- **조회 건수**: 도구줄 칸에서 500 · 1000 · 5000 · 10000 을 고르거나 숫자를 직접 쓰고 Enter. 이번 세션 동안 프로젝트 전체(모든 콘솔 · 데이터 보기)에 적용됩니다.
+
+| 단축키 (콘솔 안) | 하는 일 |
+|---|---|
+| Ctrl+Enter | 커서가 있는 문장(또는 선택 영역) 실행 |
+| Ctrl+Shift+Enter | 모든 문장을 차례로 실행 |
+| Ctrl+Shift+F | SQL 정렬 |
+| Ctrl+Shift+X · Ctrl+Shift+Y | 대문자 · 소문자 |
+
+콘솔 밖에서는 같은 단축키가 원래 기능으로 동작합니다(예: Ctrl+Shift+F 는 경로에서 찾기).
+
+**결과 창**
+- 실행마다 탭 「결과 N · 표 이름」, 10개가 넘으면 오래된 것부터 닫힘. 탭 ✕ · 가운데 단추 · 우클릭 「다른 탭 닫기 · 모든 탭 닫기」로 닫습니다.
+- 칼럼 머리에 한글 주석. 칸 단위 선택(머리를 누르면 칼럼 전체, Ctrl 로 더하기).
+- 우클릭: 값 · 고른 행 · 칼럼 값(줄마다) · 칼럼 값 IN 목록 · 칼럼 이름 · 칼럼 이름 모두 복사.
+- 단추: 복사 · CSV 내보내기 · INSERT 문으로 · UPDATE 문으로(PK 를 표 정의에서 찾아 WHERE, 못 찾으면 첫 칼럼 + 확인 주석) · DTO 만들기.
+- 잘렸으면 「N건에서 자름」 옆에 「500건 더」와 건수 입력칸 + 「조회」. 같은 문장을 그 건수까지 처음부터 다시 읽어 그 탭을 바꿉니다(MyBatis 매개변수 포함).
+
+**운영 보호**
+- WHERE 없는 UPDATE · DELETE, DROP · TRUNCATE, 운영 접속의 모든 변경은 표 이름을 입력해야 실행.
+- 읽기 전용 접속은 변경 문장을 거절.
+
+**MyBatis 바로 실행** (Ctrl+Alt+Enter)
+- 매퍼 XML 문장 옆 ▶ → 매개변수 입력 → `<if>` · `<foreach>` 등을 풀어 실제 SQL 미리보기 → 실행.
+- resultType DTO 와 SELECT 칼럼이 안 맞으면 실행 창에 경고.
+
+**SQL 로그 → 실행 SQL** (Ctrl+Alt+C)
+- 서버 콘솔의 MyBatis `Preparing:` / `Parameters:` 로그 우클릭 → 값을 채운 SQL 복사 · 콘솔에서 실행 · MyBatis 실행 창으로 열기.
+
+**매퍼 뼈대 · DTO 만들기**
+- 표나 결과에서 resultMap · select · insert · update · delete · 인터페이스 · DTO 생성.
+- 구식 조인, 부등호 CDATA, `WHERE 1 = 1`, 표 · 칼럼 이름 대문자 · 별칭 소문자. 있는 파일은 덮어쓰지 않고 덧붙입니다.
+
+**ERD**
+- 표 카드(한글 주석) + FK 선, 끌어 옮기기 · 확대 · PNG 저장. 카드 더블클릭 → 데이터 보기.
 
 ### 한국어 · Claude Code · One Dark 테마
-한국어 언어 팩(JetBrains), Claude Code 플러그인(Anthropic, 마켓 `com.anthropic.code.plugin`), One Dark 테마(마켓 `com.markskelton.one-dark-theme`, VS Code 색감의 UI 테마 + 편집기 색 구성표)는 남의 것이라 본체에 넣지 않습니다. `플러그인설치.bat`이 없으면 내려받아(한국어 팩 → 릴리스 「plugins」, Claude Code → JetBrains 마켓) 사용자 플러그인 폴더에 복사합니다. 한국어 팩 262 판은 마켓에 없고 IDEA 2026.2.3 배포판에만 들어 있어 릴리스에 그대로 올려 둔 것입니다. 한국어 언어 팩은 정식 IntelliJ IDEA 같은 판에서 `plugins/localization-ko`를 사용자 플러그인 폴더(`%APPDATA%\JetBrains\EIIDE2026.2\plugins`)에 복사하면 설정 → Language and Region에서 고를 수 있습니다.
+한국어 언어 팩(JetBrains), Claude Code 플러그인(Anthropic, 마켓 `com.anthropic.code.plugin`), One Dark 테마(마켓 `com.markskelton.one-dark-theme`, VS Code 색감의 UI 테마 + 편집기 색 구성표)는 남의 것이라 본체에 넣지 않습니다. `플러그인설치.bat`이 없으면 내려받아(한국어 팩 → 릴리스 「plugins」, Claude Code · One Dark → JetBrains 마켓) 사용자 플러그인 폴더에 복사합니다. 한국어 팩 262 판은 마켓에 없고 IDEA 2026.2.3 배포판에만 들어 있어 릴리스에 그대로 올려 둔 것입니다. 한국어 언어 팩은 정식 IntelliJ IDEA 같은 판에서 `plugins/localization-ko`를 사용자 플러그인 폴더(`%APPDATA%\JetBrains\EIIDE2026.2\plugins`)에 복사하면 설정 → Language and Region에서 고를 수 있습니다.
 
 ## 설치와 판 올리기
 
-1. `eiide-262.10968.N.exe`를 실행해 설치합니다. 서버 창 · Synchronize · Lombok · SVN은 본체에 들어 있어 따로 넣을 것이 없습니다.
+1. `eiide-262.10968.N.exe`를 실행해 설치합니다. 서버 창 · Synchronize · 데이터베이스 · Lombok · SVN은 본체에 들어 있어 따로 넣을 것이 없습니다.
 2. EI IDE를 한 번 켰다가 끕니다(설정 폴더가 만들어집니다).
-3. `노트북용\플러그인설치.bat`을 더블클릭합니다. 한국어 언어 팩과 Claude Code 플러그인을 사용자 플러그인 폴더에 넣고(옆 `plugins` 폴더에 없으면 한국어 팩은 이 저장소의 릴리스 「plugins」에서, Claude Code 는 JetBrains 마켓에서 내려받음), 예전에 따로 넣어 둔 플러그인 사본은 본체와 겹치지 않게 치웁니다. IDE가 켜져 있으면 「먼저 종료」만 띄우고 멈춥니다.
+3. `노트북용\플러그인설치.bat`을 더블클릭합니다. 한국어 언어 팩 · Claude Code · One Dark 테마를 사용자 플러그인 폴더에 넣고(옆 `plugins` 폴더에 없으면 한국어 팩은 이 저장소의 릴리스 「plugins」에서, Claude Code · One Dark 는 JetBrains 마켓에서 내려받음), 시험용으로 따로 넣어 둔 본체 플러그인 사본(boot-servers · kinggura · ei-db)은 본체와 겹치지 않게 치웁니다. IDE가 켜져 있으면 「먼저 종료」만 띄우고 멈춥니다.
 4. EI IDE를 켜고 설정 → Language and Region에서 Korean을 고릅니다.
 
 판을 올릴 때도 같은 순서입니다. 설정(단축키 · 실행 설정 · 플러그인)은 `%APPDATA%\JetBrains\EIIDE2026.2`에 있어 재설치해도 남습니다.
@@ -102,7 +146,7 @@ build-windows.bat
 
 ```
 intellij-community/   바탕 소스 (받은 그대로 + 대본이 고친 부분)
-kit/                  소스를 고치는 대본, 주 메뉴 코드, 플러그인 소스(boot-servers · sync)
+kit/                  소스를 고치는 대본, 주 메뉴 코드, 플러그인 소스(boot-servers · sync · ei-db)
 bundled-plugins/      본체에 넣을 플러그인 jar
 plugins/              플러그인 판별 jar (사용자 플러그인 폴더에 직접 넣을 때)
 노트북용/             설치 파일 + 플러그인 묶음 + 플러그인설치.bat
