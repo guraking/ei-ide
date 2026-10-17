@@ -41,7 +41,7 @@ if not exist "%SRC%\one-dark-theme" (
 )
 
 if not exist "%DEST%" mkdir "%DEST%"
-for %%f in ("%DEST%\boot-servers*.jar" "%DEST%\kinggura-sync*.jar" "%DEST%\kinggura-perspectives*.jar") do if exist %%f (del /q %%f && echo 치움: %%~nxf)
+for %%f in ("%DEST%\boot-servers*.jar" "%DEST%\kinggura-sync*.jar" "%DEST%\kinggura-perspectives*.jar" "%DEST%\ei-db*.jar") do if exist %%f (del /q %%f && echo 치움: %%~nxf)
 if exist "%DEST%\lombok" (rmdir /s /q "%DEST%\lombok" && echo 치움: lombok)
 xcopy /E /I /Y "%SRC%" "%DEST%" >nul || (
   echo 복사에 실패했습니다: %DEST%
