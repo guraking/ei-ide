@@ -9,6 +9,7 @@
   4~9) 이클립스 단축키 · 하위 빌드 파일 자동 연결 · 저장 시 자동 빌드 · 저장 시 import 정리와 바뀐 줄 서식 · 플러그인 본체 포함.
   10) AI 에이전트 연결 · 플러그인 개발용 실행 도구 플러그인 제외.
   11) SVN 플러그인 번들 추가.
+  15) 설치 화면 「설치 옵션」 칸을 모두 체크한 채로 띄운다.
 고치기 전 원본은 <intellij-community>/../backup/<시각>-before/ 에 같은 상대경로로 남긴다.
 모든 원문을 먼저 찾아 본 뒤에 쓴다. 하나라도 못 찾으면 아무 파일도 바꾸지 않는다. 줄끝(LF · CRLF)은 파일마다 원래대로 둔다.
 두 번 실행해도 같은 결과가 된다.
@@ -123,7 +124,20 @@ EDITS = [
     ("platform/ide-core-impl/src/com/intellij/openapi/editor/ex/EditorSettingsExternalizable.java",
      '    public boolean IS_RIGHT_MARGIN_SHOWN = true;\n',
      '    public boolean IS_RIGHT_MARGIN_SHOWN = false;  // EI IDE: 여백선은 기본으로 숨긴다\n'),
-]
+    # 15) 설치 화면 「설치 옵션」의 체크 칸(데스크톱 바로가기 · PATH · 폴더를 프로젝트로 열기 · 파일 연결)을 모두 체크한 채로 띄운다.
+    #     칸마다 위치 값이 달라 State 앞의 위치 줄까지 붙여야 원문이 한 번만 나온다. 조용히 설치(/S)는 silent.config 값을 따른다.
+] + [("build/conf/nsis/desktop.ini", f"{pos}\nState=0\n", f"{pos}\nState=1\n") for pos in (
+    "Right=135\nTop=25\nBottom=35",   # Field 2  데스크톱 바로가기
+    "Right=-1\nTop=25\nBottom=35",    # Field 4  PATH 에 bin 추가
+    "Right=135\nTop=60\nBottom=70",   # Field 6  폴더를 프로젝트로 열기
+    "Right=43\nTop=95\nBottom=105",   # Field 8~14  파일 연결
+    "Right=86\nTop=95\nBottom=105",
+    "Right=129\nTop=95\nBottom=105",
+    "Right=172\nTop=95\nBottom=105",
+    "Right=215\nTop=95\nBottom=105",
+    "Right=258\nTop=95\nBottom=105",
+    "Right=301\nTop=95\nBottom=105",
+)]
 
 
 def read_source(path):
