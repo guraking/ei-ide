@@ -47,7 +47,7 @@
 
 ### 데이터베이스 (`ei-db`)
 DataGrip 은 커뮤니티 판에 넣을 수 없어 직접 만든 DB 도구입니다. 오른쪽 「데이터베이스」 창에서 씁니다.
-- Oracle · MySQL · PostgreSQL 접속. 비밀번호는 IDE 암호 저장소, JDBC 드라이버는 `~/.m2` 에 있는 jar 를 찾아 씁니다(플러그인에 넣지 않음).
+- Oracle · MySQL · PostgreSQL 접속. 비밀번호는 IDE 암호 저장소, JDBC 드라이버는 `~/.m2` 에 있는 jar 를 찾아 쓰고, 없으면 Maven 저장소(`~/.m2/settings.xml` 에 사내 mirror 가 있으면 그쪽)에서 최신 판을 받아 `~/.m2` 에 둡니다(SHA-1 확인, 플러그인에 넣지 않음).
 - 탐색기: 접속 → 스키마 → 표 · 뷰 → 칼럼(PK · FK · 형식 · 한글 주석). 표 더블클릭 → 데이터, 우클릭 → SELECT 문 · 매퍼 뼈대 · ERD.
 - SQL 콘솔: Ctrl+Enter 커서 문장 실행, Ctrl+Shift+Enter 전체. 자동 커밋 기본 꺼짐, 미반영 건수 · 커밋 · 롤백.
 - 결과 표: 칼럼 머리에 한글 주석, 복사 · CSV · INSERT 문 · DTO 만들기.

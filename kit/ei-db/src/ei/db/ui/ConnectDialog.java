@@ -4,6 +4,7 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.fileChooser.FileChooser;
 import com.intellij.openapi.fileChooser.FileChooserDescriptor;
+import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.openapi.ui.Messages;
@@ -75,6 +76,7 @@ public final class ConnectDialog extends DialogWrapper {
   private final JBTextField schema = new JBTextField();
   private final JBLabel driverName = new JBLabel();
   private final JBLabel driverStatus = new JBLabel("", UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER);
+  private final ActionLink downloadLink = new ActionLink("내려받기", (ActionListener) e -> downloadDriver());
   private final JBLabel url = new JBLabel();
   private final JBCheckBox autoCommit = new JBCheckBox("자동 커밋");
   private final JBCheckBox readOnly = new JBCheckBox("읽기 전용 (UPDATE · DELETE 막음)");
@@ -152,6 +154,8 @@ public final class ConnectDialog extends DialogWrapper {
     JPanel driverRow = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0));
     driverRow.add(driverName);
     driverRow.add(driverStatus);
+    downloadLink.setVisible(false);
+    driverRow.add(downloadLink);
     driverRow.add(new ActionLink("다른 jar 고르기", (ActionListener) e -> chooseJar()));
 
     JPanel safety = new JPanel();
@@ -254,8 +258,23 @@ public final class ConnectDialog extends DialogWrapper {
         driverName.setText(jar != null ? jar.getFileName().toString() : chosen ? Path.of(driverJar).getFileName().toString() : kind.artifactPrefix + " jar");
         driverStatus.setText(jar == null ? "찾지 못함" : chosen ? "직접 고름" : ".m2 에서 찾음");
         driverStatus.setForeground(jar == null ? ERROR_COLOR : UIUtil.getContextHelpForeground());
+        downloadLink.setVisible(jar == null && !chosen);
       }, modality);
     });
+  }
+
+  /** Maven 저장소(사내 mirror 가 있으면 그쪽)에서 최신 드라이버를 받아 ~/.m2 에 둔다. 연결할 때도 없으면 자동으로 받는다. */
+  private void downloadDriver() {
+    DbKind target = kind;
+    try {
+      Path jar = ProgressManager.getInstance().runProcessWithProgressSynchronously(
+          () -> Drivers.download(target), target.label + " 드라이버 내려받는 중", true, project);
+      Messages.showInfoMessage(getContentPane(), jar.getFileName() + " 을 받았습니다.", "드라이버");
+    } catch (Exception e) {
+      Messages.showErrorDialog(getContentPane(), "드라이버를 받지 못했습니다: " + e.getMessage()
+          + "\n인터넷이 막혀 있으면 「다른 jar 고르기」로 직접 고르세요.", "드라이버");
+    }
+    refreshDriver();
   }
 
   private void chooseJar() {

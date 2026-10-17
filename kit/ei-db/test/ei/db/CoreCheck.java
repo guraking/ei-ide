@@ -17,6 +17,14 @@ public class CoreCheck {
     eq(Comments.tablesOf("SELECT a FROM order_item oi, product p WHERE 1 = 1"), List.of("ORDER_ITEM", "PRODUCT"));
     eq(Comments.tablesOf("select * from app.orders o join users u on o.user_id = u.user_id order by 1"), List.of("ORDERS", "USERS"));
     eq(new DbConfig().url(), "jdbc:oracle:thin:@//localhost:1521/");
+    eq(Drivers.repository(null), "https://repo1.maven.org/maven2/");
+    eq(Drivers.repository("<settings><mirrors><mirror><id>n</id><mirrorOf>*</mirrorOf><url>http://nexus.local/repo</url></mirror></mirrors></settings>"), "http://nexus.local/repo/");
+    eq(Drivers.repository("<mirror><mirrorOf>snapshots</mirrorOf><url>http://x/</url></mirror>"), "https://repo1.maven.org/maven2/");
+    try {
+      eq(Drivers.latestVersion("<metadata><versioning><release>23.26.3.0.0</release></versioning></metadata>"), "23.26.3.0.0");
+      eq(Drivers.latestVersion("<versions><version>1.0</version><version>1.1</version></versions>"), "1.1");
+    } catch (java.io.IOException e) { throw new AssertionError(e); }
+    eq(Drivers.sha1("abc".getBytes()), "a9993e364706816aba3e25717850c26c9cd0d89d");
     System.out.println("CoreCheck 통과");
   }
 }
