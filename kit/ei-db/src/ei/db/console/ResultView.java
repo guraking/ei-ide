@@ -1,0 +1,81 @@
+package ei.db.console;
+
+import com.intellij.openapi.project.DumbAware;
+import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.Key;
+import com.intellij.openapi.wm.ToolWindow;
+import com.intellij.openapi.wm.ToolWindowFactory;
+import com.intellij.openapi.wm.ToolWindowManager;
+import com.intellij.ui.content.Content;
+import com.intellij.ui.content.ContentFactory;
+import com.intellij.ui.content.ContentManager;
+import ei.db.DbConfig;
+import ei.db.Notify;
+import ei.db.QueryResult;
+import org.jetbrains.annotations.NotNull;
+
+import javax.swing.JComponent;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/** 아래 「결과」 창. 실행마다 탭 「결과 N · 표 이름」을 더하고 오래된 것부터 지워 MAX_TABS 개만 둔다. 화면 스레드에서 불린다. */
+public final class ResultView {
+  private ResultView() {}
+
+  static final String TOOL_WINDOW_ID = "EI Database Result";
+  private static final int MAX_TABS = 10;
+  private static final Key<Integer> COUNTER = Key.create("ei.db.console.resultCounter");
+  private static final Pattern FROM = Pattern.compile("(?i)\\bFROM\\s+([\\w.$#\"]+)");
+
+  /** plugin.xml 의 toolWindow. 줄무늬 이름은 「결과」. */
+  public static final class Factory implements ToolWindowFactory, DumbAware {
+    @Override
+    public void init(@NotNull ToolWindow toolWindow) {
+      toolWindow.setStripeTitle("결과");
+    }
+
+    @Override
+    public void createToolWindowContent(@NotNull Project project, @NotNull ToolWindow toolWindow) {
+      // 탭은 실행할 때 더한다.
+    }
+  }
+
+  public static void show(Project project, DbConfig c, QueryResult result) {
+    String title = result.isQuery() ? firstTable(result.sql()) : "변경";
+    addTab(project, title == null ? "조회" : title, new ResultPanel(project, c, result, firstTable(result.sql())));
+    ConsoleRun.finished(project, c, true);
+  }
+
+  public static void showError(Project project, DbConfig c, String sql, Exception error) {
+    String message = error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage();
+    addTab(project, "오류", ResultPanel.error(sql, message));
+    Notify.error(project, c.name + " 실행 실패: " + message);
+    ConsoleRun.finished(project, c, false);
+  }
+
+  /** 첫 FROM 뒤의 표 이름(스키마 · 따옴표 제외, 쓴 그대로). 없으면 null. */
+  static String firstTable(String sql) {
+    Matcher m = FROM.matcher(sql);
+    if (!m.find()) return null;
+    String name = m.group(1).replace("\"", "");
+    return name.substring(name.lastIndexOf('.') + 1);
+  }
+
+  private static void addTab(Project project, String title, JComponent panel) {
+    ToolWindow window = ToolWindowManager.getInstance(project).getToolWindow(TOOL_WINDOW_ID);
+    if (window == null) {
+      Notify.error(project, "결과 창을 찾을 수 없습니다.");
+      return;
+    }
+    Integer last = project.getUserData(COUNTER);
+    int n = last == null ? 1 : last + 1;
+    project.putUserData(COUNTER, n);
+    ContentManager contents = window.getContentManager();
+    Content content = ContentFactory.getInstance().createContent(panel, "결과 " + n + " · " + title, false);
+    content.setCloseable(true);
+    contents.addContent(content);
+    while (contents.getContentCount() > MAX_TABS) contents.removeContent(contents.getContent(0), true);
+    contents.setSelectedContent(content);
+    window.show();
+  }
+}

@@ -1,0 +1,51 @@
+<idea-plugin>
+  <id>ei.database</id>
+  <name>EI Database</name>
+  <vendor>EI IDE</vendor>
+  <description><![CDATA[
+    Oracle · MySQL · PostgreSQL 접속, SQL 콘솔, 결과 표, MyBatis 쿼리 바로 실행, SQL 로그 변환, 매퍼 · DTO 생성, ERD.
+  ]]></description>
+
+  <depends>com.intellij.modules.platform</depends>
+  <depends>com.intellij.java</depends>
+
+  <extensions defaultExtensionNs="com.intellij">
+    <notificationGroup id="EI Database" displayType="BALLOON"/>
+    <!-- 탐색기 -->
+    <toolWindow id="EI Database" anchor="right" icon="AllIcons.Nodes.DataTables" factoryClass="ei.db.ui.DbToolWindowFactory"/>
+    <!-- SQL 콘솔 · 결과 -->
+    <editorNotificationProvider implementation="ei.db.console.ConsoleBar$Provider"/>
+    <actionPromoter implementation="ei.db.console.ConsoleRun$Promoter"/>
+    <toolWindow id="EI Database Result" anchor="bottom" icon="AllIcons.Nodes.DataTables" doNotActivateOnStart="true"
+                factoryClass="ei.db.console.ResultView$Factory"/>
+    <!-- MyBatis: 매퍼 XML 의 문장 옆 실행 아이콘 -->
+    <codeInsight.lineMarkerProvider language="XML" implementationClass="ei.db.mybatis.MyBatisLineMarker"/>
+    <!-- ERD 도구 창은 ErdView 가 처음 열 때 등록한다. -->
+  </extensions>
+
+  <actions>
+    <action id="ei.db.console.Run" class="ei.db.console.ConsoleRun$Statement" text="실행"
+            description="선택 영역 또는 커서가 있는 문장을 실행합니다" icon="AllIcons.Actions.Execute">
+      <keyboard-shortcut keymap="$default" first-keystroke="control ENTER"/>
+      <add-to-group group-id="EditorPopupMenu" anchor="first"/>
+    </action>
+    <action id="ei.db.console.RunAll" class="ei.db.console.ConsoleRun$All" text="전체 실행"
+            description="콘솔의 모든 문장을 차례로 실행합니다" icon="AllIcons.Actions.RunAll">
+      <keyboard-shortcut keymap="$default" first-keystroke="control shift ENTER"/>
+      <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="ei.db.console.Run"/>
+    </action>
+    <action id="EiDb.MyBatis.Run" class="ei.db.mybatis.RunStatementAction" text="MyBatis 쿼리 실행" icon="AllIcons.Actions.Execute">
+      <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt ENTER"/>
+      <add-to-group group-id="EditorPopupMenu" anchor="first"/>
+    </action>
+    <group id="EiDb.MyBatis.LogGroup">
+      <action id="EiDb.MyBatis.LogCopy" class="ei.db.mybatis.LogActions$Copy" text="SQL 로 바꿔 복사">
+        <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt C"/>
+      </action>
+      <action id="EiDb.MyBatis.LogRun" class="ei.db.mybatis.LogActions$Run" text="데이터베이스 콘솔에서 실행"/>
+      <action id="EiDb.MyBatis.LogOpen" class="ei.db.mybatis.LogActions$Open" text="MyBatis 실행 창으로 열기"/>
+      <separator/>
+      <add-to-group group-id="ConsoleView.PopupMenu" anchor="first"/>
+    </group>
+  </actions>
+</idea-plugin>

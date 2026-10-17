@@ -45,6 +45,18 @@
 ### Synchronize (`kinggura-sync`)
 이클립스 Team → Synchronize Workspace와 같은 창입니다. 프로젝트 안의 모든 저장소(Git 여러 개, SVN)를 저장소별로 묶어 들어올 변경 · 나갈 변경 · 충돌을 보여 주고, 우클릭으로 무시 목록 추가 · 되돌리기 · **변경 모른 척하기(assume-unchanged)** 를 합니다. 「변경 모른 척하기」는 커밋 창의 파일 우클릭 메뉴에도 있습니다. 프로젝트를 열면 Git 저장소마다 `.git/info/exclude`에 `*.iml` · `.idea/`를 넣어 IDE 파일이 변경 목록에 뜨지 않게 합니다(팀 `.gitignore`와 서버에는 영향 없음). 커밋 · Push 뒤 자동으로 다시 비교합니다. SVN은 `svn` 명령줄 도구가 PATH에 있어야 합니다.
 
+### 데이터베이스 (`ei-db`)
+DataGrip 은 커뮤니티 판에 넣을 수 없어 직접 만든 DB 도구입니다. 오른쪽 「데이터베이스」 창에서 씁니다.
+- Oracle · MySQL · PostgreSQL 접속. 비밀번호는 IDE 암호 저장소, JDBC 드라이버는 `~/.m2` 에 있는 jar 를 찾아 씁니다(플러그인에 넣지 않음).
+- 탐색기: 접속 → 스키마 → 표 · 뷰 → 칼럼(PK · FK · 형식 · 한글 주석). 표 더블클릭 → 데이터, 우클릭 → SELECT 문 · 매퍼 뼈대 · ERD.
+- SQL 콘솔: Ctrl+Enter 커서 문장 실행, Ctrl+Shift+Enter 전체. 자동 커밋 기본 꺼짐, 미반영 건수 · 커밋 · 롤백.
+- 결과 표: 칼럼 머리에 한글 주석, 복사 · CSV · INSERT 문 · DTO 만들기.
+- **운영 보호**: WHERE 없는 UPDATE · DELETE, DROP · TRUNCATE, 운영 접속의 모든 변경은 표 이름을 입력해야 실행. 읽기 전용 접속은 변경 거절.
+- **MyBatis 바로 실행**: 매퍼 XML 문장 옆 ▶(또는 Ctrl+Alt+Enter) → 매개변수 입력 → `<if>` · `<foreach>` 등을 풀어 실제 SQL 미리보기 → 실행. resultType DTO 와 SELECT 칼럼이 안 맞으면 경고.
+- **SQL 로그 → 실행 SQL**: 서버 콘솔의 MyBatis `Preparing:` / `Parameters:` 로그 우클릭 → 값을 채운 SQL 복사 · 콘솔에서 실행 · 실행 창으로 열기.
+- **매퍼 뼈대 · DTO 만들기**: 표나 결과에서 resultMap · select · insert · update · delete · 인터페이스 · DTO 생성(구식 조인, 부등호 CDATA, `WHERE 1 = 1`). 있는 파일은 덮어쓰지 않고 덧붙임.
+- **ERD**: 표 카드(한글 주석) + FK 선, 끌어 옮기기 · 확대 · PNG 저장.
+
 ### 한국어 · Claude Code · One Dark 테마
 한국어 언어 팩(JetBrains), Claude Code 플러그인(Anthropic, 마켓 `com.anthropic.code.plugin`), One Dark 테마(마켓 `com.markskelton.one-dark-theme`, VS Code 색감의 UI 테마 + 편집기 색 구성표)는 남의 것이라 본체에 넣지 않습니다. `플러그인설치.bat`이 없으면 내려받아(한국어 팩 → 릴리스 「plugins」, Claude Code → JetBrains 마켓) 사용자 플러그인 폴더에 복사합니다. 한국어 팩 262 판은 마켓에 없고 IDEA 2026.2.3 배포판에만 들어 있어 릴리스에 그대로 올려 둔 것입니다. 한국어 언어 팩은 정식 IntelliJ IDEA 같은 판에서 `plugins/localization-ko`를 사용자 플러그인 폴더(`%APPDATA%\JetBrains\EIIDE2026.2\plugins`)에 복사하면 설정 → Language and Region에서 고를 수 있습니다.
 

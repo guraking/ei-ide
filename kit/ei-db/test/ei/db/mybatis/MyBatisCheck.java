@@ -1,0 +1,216 @@
+package ei.db.mybatis;
+
+import java.math.BigDecimal;
+import java.sql.Date;
+import java.sql.Timestamp;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
+/** MyBatis 순수 논리 자체 점검: java -cp out:test-out ei.db.mybatis.MyBatisCheck */
+public class MyBatisCheck {
+  static void eq(Object a, Object b) { if (!Objects.equals(a, b)) throw new AssertionError("\n" + a + "\n!=\n" + b); }
+
+  static final String XML = """
+      <?xml version="1.0" encoding="UTF-8"?>
+      <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+      <mapper namespace="com.example.order.mapper.OrderMapper">
+        <!-- <select id="commented"> 는 문장이 아니다 -->
+        <sql id="cols">oi.order_id, oi.line_no, p.product_name, oi.qty</sql>
+        <select id="selectOrderItems" resultType="OrderItemDto">
+          SELECT <include refid="cols"/>
+            FROM order_item oi, product p
+           WHERE 1 = 1
+             AND oi.product_id = p.product_id
+             AND oi.order_id = #{orderId}
+          <if test="fromDate != null">
+             AND oi.created_at &gt;= #{fromDate}
+          </if>
+          <if test="productIds != null and productIds.size() &gt; 0">
+             AND oi.product_id IN
+            <foreach collection="productIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+          </if>
+          <if test="status != null and status != ''">
+             AND oi.status = #{status}
+          </if>
+           ORDER BY oi.line_no
+        </select>
+        <select id="search">
+          <bind name="pattern" value="'%' + name + '%'"/>
+          SELECT * FROM users
+          <where>
+            <if test="name != null">AND name LIKE #{pattern}</if>
+            <choose>
+              <when test="kind == 'A'">AND kind = 'A?'</when>
+              <otherwise>OR kind = #{kind, jdbcType=VARCHAR}</otherwise>
+            </choose>
+            <![CDATA[ AND age < #{age} ]]>
+          </where>
+          ORDER BY ${sort}
+        </select>
+        <update id="updateUser">
+          UPDATE users
+          <set>
+            <if test="name != null">name = #{name},</if>
+            <if test="age gt 0">age = #{age},</if>
+          </set>
+          WHERE id = #{id}
+        </update>
+        <insert id="insertMany">
+          INSERT INTO t (a, b)
+          <trim prefix="VALUES" prefixOverrides=",">
+            <foreach collection="rows" item="r" index="i" separator=" UNION ALL ">, #{r.a}</foreach>
+          </trim>
+        </insert>
+        <delete id="unclosed">
+          DELETE FROM t WHERE id = #{id}
+      """;
+
+  public static void main(String[] args) {
+    MapperDoc doc = MapperDoc.parse(XML);
+    eq(doc.namespace, "com.example.order.mapper.OrderMapper");
+    eq(doc.shortNamespace(), "OrderMapper");
+    eq(doc.statements.size(), 5);
+    eq(doc.statement("unclosed").end, XML.length());
+    MapperDoc.Node sel = doc.statement("selectOrderItems");
+    int caret = XML.indexOf("ORDER BY oi.line_no");
+    eq(doc.statementAt(caret), sel);
+    eq(doc.statementAt(XML.indexOf("<sql")), null);
+    eq(MapperDoc.decodeEntities("a &lt; b &amp;&amp; c &quot;&apos;&#65;&#x42; &bogus;"), "a < b && c \"'AB &bogus;");
+
+    eq(DynamicSql.paramNames(doc, sel), List.of("orderId", "fromDate", "productIds", "status"));
+    eq(DynamicSql.listNames(doc, sel).contains("productIds"), true);
+
+    Map<String, Object> p = new HashMap<>();
+    p.put("orderId", 100231L);
+    p.put("fromDate", Date.valueOf("2026-10-10"));
+    p.put("productIds", List.of(1003L, 1007L));
+    p.put("status", null);
+    DynamicSql.Result r = DynamicSql.resolve(doc, sel, p);
+    eq(r.binds, List.of(100231L, Date.valueOf("2026-10-10"), 1003L, 1007L));
+    eq(r.summary(), "<if> 3개 중 2개 포함 · foreach 2개");
+    eq(r.inlined(), """
+        SELECT oi.order_id, oi.line_no, p.product_name, oi.qty
+          FROM order_item oi, product p
+         WHERE 1 = 1
+           AND oi.product_id = p.product_id
+           AND oi.order_id = 100231
+           AND oi.created_at >= DATE '2026-10-10'
+           AND oi.product_id IN
+          (1003, 1007)
+         ORDER BY oi.line_no""");
+
+    Map<String, Object> q = new HashMap<>();
+    q.put("name", "kim");
+    q.put("kind", "B");
+    q.put("age", 30L);
+    q.put("sort", "name DESC");
+    DynamicSql.Result s = DynamicSql.resolve(doc, doc.statement("search"), q);
+    eq(s.sql.replaceAll("\\s+", " ").trim(),
+       "SELECT * FROM users WHERE name LIKE ? OR kind = ? AND age < ? ORDER BY name DESC");
+    eq(s.binds, List.of("%kim%", "B", 30L));
+    eq(DynamicSql.paramNames(doc, doc.statement("search")), List.of("name", "kind", "age", "sort"));
+    q.put("name", null);
+    q.put("kind", "A");
+    s = DynamicSql.resolve(doc, doc.statement("search"), q);
+    eq(s.sql.replaceAll("\\s+", " ").trim(), "SELECT * FROM users WHERE kind = 'A?' AND age < ? ORDER BY name DESC");
+    eq(s.inlined().replaceAll("\\s+", " ").trim(), "SELECT * FROM users WHERE kind = 'A?' AND age < 30 ORDER BY name DESC");
+
+    Map<String, Object> u = new HashMap<>();
+    u.put("name", "O'Neil");
+    u.put("age", 0L);
+    u.put("id", 7L);
+    DynamicSql.Result up = DynamicSql.resolve(doc, doc.statement("updateUser"), u);
+    eq(up.inlined().replaceAll("\\s+", " ").trim(), "UPDATE users SET name = 'O''Neil' WHERE id = 7");
+
+    Map<String, Object> rows = new HashMap<>();
+    rows.put("rows", List.of(Map.of("a", 1L), Map.of("a", 2L)));
+    DynamicSql.Result ins = DynamicSql.resolve(doc, doc.statement("insertMany"), rows);
+    eq(ins.inlined().replaceAll("\\s+", " ").trim(), "INSERT INTO t (a, b) VALUES 1 UNION ALL , 2");
+    eq(DynamicSql.paramNames(doc, doc.statement("insertMany")), List.of("rows"));
+
+    // OGNL
+    Map<String, Object> o = new HashMap<>();
+    o.put("a", 3L);
+    o.put("s", "");
+    o.put("list", List.of());
+    o.put("m", Map.of("x", "y"));
+    eq(Ognl.test("a gt 2 and (s == '' || x != null)", o::get), true);
+    eq(Ognl.test("list.isEmpty() && !(a lte 1)", o::get), true);
+    eq(Ognl.test("s.length() > 0", o::get), false);
+    eq(Ognl.test("a.toString() == '3' and a == 3.0", o::get), true);
+    eq(Ognl.test("m.x eq \"y\"", k -> DynamicSql.lookup(o, k)), true);
+    eq(Ognl.test("a >", o::get), false);
+    eq(Ognl.test("a ?? b", o::get), false);
+    eq(Ognl.test("missing", o::get), false);
+    eq(Ognl.names("productIds != null and productIds.size() > 0 and user.name != ''"),
+       List.of("productIds", "productIds", "user.name"));
+
+    // 값 변환
+    eq(SqlValues.parse("2026-10-10", false), Date.valueOf("2026-10-10"));
+    eq(SqlValues.parse("2026-10-10 13:31", false), Timestamp.valueOf("2026-10-10 13:31:00"));
+    eq(SqlValues.parse("100231", false), 100231L);
+    eq(SqlValues.parse("00123", false), "00123");
+    eq(SqlValues.parse("'123'", false), "123");
+    eq(SqlValues.parse("1.50", false), new BigDecimal("1.50"));
+    eq(SqlValues.parse("  ", false), null);
+    eq(SqlValues.parse("1003, 1007", true), List.of(1003L, 1007L));
+    eq(SqlValues.format("100231"), "'100231'");
+    eq(SqlValues.format(List.of(1L, 2L)), "1, 2");
+    eq(SqlValues.literal(Timestamp.valueOf("2026-10-10 13:31:18.5")), "TIMESTAMP '2026-10-10 13:31:18'");
+    eq(SqlValues.inline("a = ? and b = '?' -- ?\n and c = ? and d = ?", List.of("x", 2L)), "a = 'x' and b = '?' -- ?\n and c = 2 and d = ?");
+
+    // 로그
+    String log = """
+        13:31:18.051 DEBUG c.e.shop.service.OrderService : findItems orderId=100231
+        2026-10-17 13:31:18.063 DEBUG 4242 --- [nio-8080-exec-1] c.e.o.mapper.OrderMapper.selectOrderItems  : ==>  Preparing: SELECT oi.order_id FROM order_item oi WHERE oi.order_id = ? AND oi.created_at >= ? AND oi.memo = '?' AND oi.product_id IN ( ? , ? ) AND oi.status = ? AND oi.note = ?
+        2026-10-17 13:31:18.063 DEBUG 4242 --- [nio-8080-exec-2] c.e.o.mapper.OtherMapper.x  : ==> Parameters: 9(Long)
+        2026-10-17 13:31:18.064 DEBUG 4242 --- [nio-8080-exec-1] c.e.o.mapper.OrderMapper.selectOrderItems  : ==> Parameters: 100231(Long), 2026-10-10(Date), 1003(Long), 1007(Long), null, a, b (c)(String)
+        2026-10-17 13:31:18.071 DEBUG 4242 --- [nio-8080-exec-1] c.e.o.mapper.OrderMapper.selectOrderItems  : <==      Total: 4
+        """;
+    MyBatisLog.Entry e = MyBatisLog.parse(log);
+    eq(e.logger, "c.e.o.mapper.OrderMapper.selectOrderItems");
+    eq(e.mapperName(), "OrderMapper");
+    eq(e.statementId(), "selectOrderItems");
+    eq(e.values, java.util.Arrays.asList(100231L, Date.valueOf("2026-10-10"), 1003L, 1007L, null, "a, b (c)"));
+    eq(e.runnableSql(), "SELECT oi.order_id FROM order_item oi WHERE oi.order_id = 100231 AND oi.created_at >= DATE '2026-10-10'"
+                        + " AND oi.memo = '?' AND oi.product_id IN ( 1003 , 1007 ) AND oi.status = NULL AND oi.note = 'a, b (c)'");
+    eq(MyBatisLog.parameters("(String), 1(Integer), 2026-10-10 13:31:18.0(Timestamp), true(Boolean), 1.5(BigDecimal)"),
+       List.of("", 1L, Timestamp.valueOf("2026-10-10 13:31:18"), true, new BigDecimal("1.5")));
+    eq(MyBatisLog.parameters("2026-10-10(LocalDate), 2026-10-10T01:02:03(LocalDateTime)").toString(), "[2026-10-10, 2026-10-10T01:02:03]");
+    eq(MyBatisLog.parse("nothing here"), null);
+    MyBatisLog.Entry plain = MyBatisLog.parse("DEBUG [main] - ==>  Preparing: select 1 from dual\nDEBUG [main] - ==> Parameters: ");
+    eq(plain.logger, null);
+    eq(plain.runnableSql(), "select 1 from dual");
+    eq(plain.values, List.of());
+    eq(MyBatisLog.loggerMatches("c.e.o.mapper.OrderMapper", "com.example.order.mapper.OrderMapper"), true);
+    eq(MyBatisLog.loggerMatches("c.e.x.mapper.OrderMapper", "com.example.order.mapper.OrderMapper"), false);
+
+    // 로그 값 → 대화창 미리 채우기(status 의 <if> 는 빠진 로그)
+    MyBatisLog.Entry fromMapper = MyBatisLog.parse(
+        "x.OrderMapper.selectOrderItems : ==>  Preparing: SELECT oi.order_id, oi.line_no, p.product_name, oi.qty FROM order_item oi, product p "
+        + "WHERE 1 = 1 AND oi.product_id = p.product_id AND oi.order_id = ? AND oi.product_id IN ( ? , ? ) ORDER BY oi.line_no\n"
+        + "x.OrderMapper.selectOrderItems : ==> Parameters: 100231(Long), 1003(Long), 1007(String)");
+    Map<String, String> pre = MyBatisLog.prefill(doc, sel, fromMapper);
+    eq(pre.get("orderId"), "100231");
+    eq(pre.get("productIds"), "1003, '1007'");
+    eq(pre.get("fromDate"), null);
+    eq(pre.get("status"), null);
+
+    // resultType 비교
+    List<String> cols = ResultColumns.of(r.sql);
+    eq(cols, List.of("ORDER_ID", "LINE_NO", "PRODUCT_NAME", "QTY"));
+    eq(ResultColumns.of("select a.*, b from t"), null);
+    eq(ResultColumns.of("SELECT DISTINCT NVL(x, 0) qty, a + b, CASE WHEN a = 1 THEN 'x, y' END AS kind, c \"camelCase\", COUNT(*)"
+                        + " FROM t WHERE (select 1 from dual) = 1"), List.of("QTY", "KIND", "camelCase"));
+    List<ResultColumns.Issue> issues = ResultColumns.compare(cols, List.of("orderId", "lineNo", "productName", "quantity", "unitPrice"));
+    eq(issues.size(), 3);
+    eq(issues.get(0).column + " " + issues.get(0).field + " " + issues.get(0).similar, "QTY qty quantity");
+    eq(issues.get(1).field, "quantity");
+    eq(issues.get(2).field, "unitPrice");
+    eq(ResultColumns.camel("ORDER_ID"), "orderId");
+
+    System.out.println("MyBatisCheck 통과");
+  }
+}
