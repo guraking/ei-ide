@@ -1,0 +1,684 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EI IDE 사용 설명서</title>
+<meta name="description" content="EI IDE 설치 순서와 서버 창 · Synchronize · 데이터베이스 사용법을 화면 그림으로 정리한 설명서">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* 배치: 머리 → 위 목차(고정) → 설치 → 기본값 → 서버 창 → Synchronize → 데이터베이스 → 단축키 → 빌드 */
+:root{
+  --bg:#f4f6fa; --panel:#ffffff; --panel-2:#eef1f7; --line:#d9dfea; --fg:#141a29; --muted:#5b6680;
+  --accent:#d92a3c; --accent-soft:#fbe3e6; --ok:#1d8a5a; --ok-soft:#dcf3e8; --info:#2f6fd6; --info-soft:#e2ecfc;
+  --warn:#b26b00; --warn-soft:#fbefd9;
+  --ide:#f7f8fb; --ide-bar:#eceff5; --sel:#dfe7f7; --code-kw:#a626a4; --code-str:#50a14f; --code-cm:#8a93a6; --code-num:#986801;
+  --shadow:0 12px 32px rgba(20,26,41,.12);
+  --f-body:"IBM Plex Sans KR","Pretendard","Malgun Gothic","Apple SD Gothic Neo",sans-serif;
+  --f-mono:"JetBrains Mono","D2Coding",Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0d1424; --panel:#131c30; --panel-2:#18233b; --line:#26324d; --fg:#e6eaf3; --muted:#8d98b3;
+  --accent:#ff4d5e; --accent-soft:#3a1a26; --ok:#4cc38a; --ok-soft:#14302a; --info:#6ea8ff; --info-soft:#17284a;
+  --warn:#f0b04a; --warn-soft:#3a2c14;
+  --ide:#1e222a; --ide-bar:#262b35; --sel:#2c3a55; --code-kw:#c678dd; --code-str:#98c379; --code-cm:#7f8796; --code-num:#d19a66;
+  --shadow:0 14px 36px rgba(0,0,0,.45); color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#0d1424; --panel:#131c30; --panel-2:#18233b; --line:#26324d; --fg:#e6eaf3; --muted:#8d98b3;
+  --accent:#ff4d5e; --accent-soft:#3a1a26; --ok:#4cc38a; --ok-soft:#14302a; --info:#6ea8ff; --info-soft:#17284a;
+  --warn:#f0b04a; --warn-soft:#3a2c14;
+  --ide:#1e222a; --ide-bar:#262b35; --sel:#2c3a55; --code-kw:#c678dd; --code-str:#98c379; --code-cm:#7f8796; --code-num:#d19a66;
+  --shadow:0 14px 36px rgba(0,0,0,.45); color-scheme:dark }
+*{box-sizing:border-box}
+html{scroll-behavior:smooth; scroll-padding-top:64px}
+body{margin:0; background:var(--bg); color:var(--fg); font:15px/1.65 var(--f-body); word-break:keep-all; overflow-wrap:anywhere}
+a{color:var(--info)}
+code,kbd,.mono{font-family:var(--f-mono); font-size:.88em}
+code{background:var(--panel-2); border:1px solid var(--line); border-radius:5px; padding:1px 5px}
+kbd{display:inline-block; background:var(--panel); border:1px solid var(--line); border-bottom-width:2px; border-radius:5px; padding:0 6px; white-space:nowrap}
+.wrap{max-width:1180px; margin:0 auto; padding:0 16px}
+
+/* 머리 */
+header.top{padding:48px 0 28px}
+header.top .eyebrow{color:var(--accent); font-weight:600; letter-spacing:.04em; font-size:13px}
+header.top h1{font-size:clamp(28px,4.4vw,44px); line-height:1.2; margin:6px 0 12px}
+header.top p{color:var(--muted); max-width:720px; margin:0}
+.chips{display:flex; flex-wrap:wrap; gap:8px; margin-top:18px}
+.chip{border:1px solid var(--line); background:var(--panel); border-radius:999px; padding:4px 12px; font-size:13px; color:var(--muted); text-decoration:none}
+.chip b{color:var(--fg); font-weight:600}
+a.chip:hover{border-color:var(--accent); color:var(--fg)}
+
+/* 목차 */
+nav.toc{position:sticky; top:0; z-index:5; background:color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter:blur(8px); border-bottom:1px solid var(--line)}
+nav.toc .wrap{display:flex; align-items:center; gap:4px; overflow-x:auto; scrollbar-width:none; height:52px}
+nav.toc .wrap::-webkit-scrollbar{display:none}
+nav.toc a{flex:none; color:var(--muted); text-decoration:none; padding:6px 12px; border-radius:8px; font-size:14px}
+nav.toc a:hover,nav.toc a.on{color:var(--fg); background:var(--panel-2)}
+nav.toc .sp{flex:1}
+#theme{flex:none; border:1px solid var(--line); background:var(--panel); color:var(--fg); border-radius:8px; padding:5px 10px; font:inherit; font-size:13px; cursor:pointer}
+
+/* 절 */
+section{padding:56px 0 8px}
+section > .wrap > h2{font-size:clamp(22px,3vw,30px); margin:0 0 6px; display:flex; align-items:baseline; gap:12px; flex-wrap:wrap}
+h2 .no{font-family:var(--f-mono); color:var(--accent); font-size:.6em}
+.lead{color:var(--muted); margin:0 0 24px; max-width:760px}
+h3{font-size:18px; margin:36px 0 12px}
+
+/* 설치 단계 */
+.steps{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; counter-reset:s}
+.step{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px; position:relative; box-shadow:var(--shadow)}
+.step .n{width:30px; height:30px; border-radius:50%; background:var(--accent); color:#fff; display:grid; place-items:center; font-weight:600; font-size:14px}
+.step h4{margin:12px 0 6px; font-size:16px}
+.step p{margin:0; color:var(--muted); font-size:14px}
+.step .file{margin-top:12px; font-family:var(--f-mono); font-size:12px; background:var(--panel-2); border:1px solid var(--line); border-radius:8px; padding:6px 8px; color:var(--fg)}
+.step:not(:last-child)::after{content:"→"; position:absolute; right:-13px; top:22px; color:var(--accent); font-weight:600; z-index:1}
+.notes{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin-top:16px}
+.note{border-left:3px solid var(--info); background:var(--info-soft); border-radius:0 10px 10px 0; padding:12px 14px; font-size:14px}
+.note.warn{border-color:var(--warn); background:var(--warn-soft)}
+.note.ok{border-color:var(--ok); background:var(--ok-soft)}
+.note b{display:block; margin-bottom:2px}
+
+/* 폴더 그림 */
+.tree{font-family:var(--f-mono); font-size:13px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px; line-height:1.8; overflow-x:auto; white-space:pre}
+.tree .c{color:var(--muted)}
+.tree .hl{color:var(--accent)}
+
+/* 기본값 카드 */
+.cards{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px}
+.card{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px}
+.card h4{margin:0 0 4px; font-size:15px}
+.card p{margin:0; font-size:14px; color:var(--muted)}
+.card .was{display:block; margin-top:6px; font-size:12px; color:var(--muted); opacity:.8}
+.card .was::before{content:"원래: "}
+
+/* 화면 그림 + 설명 */
+.figure{display:grid; grid-template-columns:minmax(0,1.7fr) minmax(0,1fr); gap:20px; align-items:start; margin-top:8px}
+.figure.wide{grid-template-columns:minmax(0,1fr)}
+.legend{list-style:none; margin:0; padding:0; display:grid; gap:10px}
+.legend li{display:grid; grid-template-columns:24px minmax(0,1fr); gap:10px; font-size:14px}
+.legend li b{font-weight:600}
+.legend li span.t{color:var(--muted)}
+.mark{display:inline-grid; place-items:center; width:20px; height:20px; border-radius:50%; background:var(--accent); color:#fff; font:600 11px/1 var(--f-body); flex:none; vertical-align:middle}
+.scroll{overflow-x:auto; border-radius:12px; box-shadow:var(--shadow)}
+.hint{display:none; font-size:12px; color:var(--muted); margin:6px 2px 0}
+
+/* IDE 모형 */
+.ide{min-width:640px; background:var(--ide); border:1px solid var(--line); border-radius:12px; overflow:hidden; font-size:13px}
+.ide .title{display:flex; align-items:center; gap:8px; padding:7px 12px; background:var(--ide-bar); border-bottom:1px solid var(--line); color:var(--muted); font-size:12px}
+.ide .dots{display:flex; gap:5px}.ide .dots i{width:9px;height:9px;border-radius:50%;background:var(--line)}
+.ide .bar{display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:7px 10px; border-bottom:1px solid var(--line)}
+.btn{display:inline-flex; align-items:center; gap:5px; border:1px solid var(--line); background:var(--panel); border-radius:6px; padding:3px 9px; font-size:12px; white-space:nowrap; color:var(--fg)}
+.btn.pri{border-color:var(--ok); color:var(--ok)}
+.btn.dim{opacity:.55}
+.combo{display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); background:var(--panel); border-radius:6px; padding:3px 8px; font-size:12px; white-space:nowrap}
+.combo::after{content:"▾"; color:var(--muted); font-size:10px}
+.input{border:1px solid var(--info); background:var(--panel); border-radius:6px; padding:2px 8px; font:12px var(--f-mono); min-width:52px; text-align:right}
+.sepv{width:1px; height:18px; background:var(--line); margin:0 4px}
+.key{font:11px var(--f-mono); color:var(--muted)}
+.check{display:inline-flex; align-items:center; gap:5px; font-size:12px; white-space:nowrap}
+.check::before{content:""; width:12px; height:12px; border:1px solid var(--muted); border-radius:3px}
+.split{display:grid; grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)}
+.split > div + div{border-left:1px solid var(--line)}
+table.grid{width:100%; border-collapse:collapse; font-size:12px}
+table.grid th,table.grid td{text-align:left; padding:6px 10px; border-bottom:1px solid var(--line); white-space:nowrap}
+table.grid th{color:var(--muted); font-weight:500; background:var(--ide-bar)}
+table.grid th small{display:block; font-size:11px; opacity:.8; font-weight:400}
+table.grid tr.sel td{background:var(--sel)}
+.dot{display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; vertical-align:middle}
+.dot.up{background:var(--ok)} .dot.down{background:var(--muted)} .dot.dbg{background:var(--warn)}
+.form{padding:12px; display:grid; gap:10px; font-size:12px}
+.form label{display:grid; gap:4px; color:var(--muted)}
+.form .f{border:1px solid var(--line); background:var(--panel); border-radius:6px; padding:4px 8px; color:var(--fg); font-family:var(--f-mono); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.treeview{padding:8px 0; font-size:12.5px}
+.treeview div{padding:3px 12px; white-space:nowrap}
+.treeview .l1{padding-left:26px}.treeview .l2{padding-left:42px}.treeview .l3{padding-left:58px}
+.treeview .sel{background:var(--sel)}
+.treeview .muted{color:var(--muted)}
+.tag{display:inline-block; font-size:10.5px; border-radius:4px; padding:0 5px; margin-left:6px; vertical-align:1px}
+.tag.in{background:var(--info-soft); color:var(--info)} .tag.out{background:var(--ok-soft); color:var(--ok)} .tag.cf{background:var(--accent-soft); color:var(--accent)}
+.menu{position:absolute; background:var(--panel); border:1px solid var(--line); border-radius:8px; box-shadow:var(--shadow); padding:4px 0; font-size:12.5px; min-width:190px; z-index:2}
+.menu div{padding:4px 14px; white-space:nowrap}
+.menu div.on{background:var(--sel)}
+.menu hr{border:0; border-top:1px solid var(--line); margin:4px 0}
+.rel{position:relative}
+.tabs{display:flex; border-bottom:1px solid var(--line); font-size:12px; overflow:hidden}
+.tabs span{padding:6px 12px; color:var(--muted); white-space:nowrap; display:inline-flex; align-items:center; gap:6px}
+.tabs span.on{color:var(--fg); box-shadow:inset 0 -2px 0 var(--info)}
+.tabs span .x{opacity:.7}
+.tabs span.mark{padding:0; display:inline-grid}
+pre.sql{margin:0; padding:10px 0; font:12.5px/1.7 var(--f-mono); counter-reset:ln; overflow:hidden}
+pre.sql span.ln{display:block; padding-left:46px; position:relative; white-space:pre}
+pre.sql span.ln::before{counter-increment:ln; content:counter(ln); position:absolute; left:0; width:32px; text-align:right; color:var(--muted); opacity:.6}
+.kw{color:var(--code-kw)} .st{color:var(--code-str)} .cm{color:var(--code-cm)} .nu{color:var(--code-num)}
+.statusline{display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:6px 10px; border-bottom:1px solid var(--line); font-size:12px}
+.statusline .ok{color:var(--ok)} .statusline .w{color:var(--warn)} .statusline .m{color:var(--muted)}
+.statusline .gap{flex:1}
+
+/* 흐름(가로 단계) */
+.flow{display:flex; flex-wrap:wrap; gap:10px; align-items:stretch}
+.flow .box{flex:1 1 180px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px 14px; font-size:14px; position:relative}
+.flow .box b{display:block; margin-bottom:2px}
+.flow .box span{color:var(--muted); font-size:13px}
+.flow .arrow{align-self:center; color:var(--accent); font-weight:600}
+
+/* 전후 비교 */
+.ba{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:14px}
+.ba .side{background:var(--ide); border:1px solid var(--line); border-radius:12px; overflow:hidden}
+.ba .side h5{margin:0; padding:7px 12px; font-size:12px; background:var(--ide-bar); border-bottom:1px solid var(--line); color:var(--muted); font-weight:500}
+.ba pre{margin:0; padding:10px 12px; font:12px/1.65 var(--f-mono); white-space:pre-wrap; overflow-wrap:anywhere}
+
+/* 대화상자 */
+.dialog{max-width:440px; background:var(--panel); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); overflow:hidden; font-size:13px}
+.dialog .dh{padding:10px 14px; border-bottom:1px solid var(--line); font-weight:600}
+.dialog .db{padding:14px; display:grid; gap:10px}
+.dialog .danger{background:var(--accent-soft); color:var(--accent); border-radius:8px; padding:8px 10px}
+.dialog .df{display:flex; justify-content:flex-end; gap:8px; padding:10px 14px; border-top:1px solid var(--line)}
+
+/* 단축키 표 */
+table.keys{width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--line); border-radius:12px; overflow:hidden; font-size:14px}
+table.keys th,table.keys td{padding:9px 14px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top}
+table.keys th{background:var(--panel-2); color:var(--muted); font-weight:500; font-size:13px}
+table.keys td:first-child{white-space:nowrap}
+table.keys td.where{color:var(--muted); font-size:13px}
+
+/* 명령 */
+pre.cmd{margin:0; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px; font:13px/1.8 var(--f-mono); overflow-x:auto}
+pre.cmd .cm{color:var(--code-cm)}
+
+footer{padding:56px 0 40px; color:var(--muted); font-size:13px}
+
+@media (max-width:1000px){
+  .steps{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .step:nth-child(2)::after{display:none}
+  .figure{grid-template-columns:minmax(0,1fr)}
+  .cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .notes{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:640px){
+  body{font-size:14.5px}
+  header.top{padding:32px 0 20px}
+  .steps,.cards,.ba{grid-template-columns:minmax(0,1fr)}
+  .step::after{display:none}
+  .hint{display:block}
+  ol.legend{grid-template-columns:minmax(0,1fr) !important}
+  .flow .arrow{display:none}
+  table.keys td.where{display:none}
+  table.keys th.where{display:none}
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <div class="eyebrow">EI IDE · 사용 설명서</div>
+    <h1>설치하고, 서버 띄우고, DB 까지<br>한 화면씩 따라 하기</h1>
+    <p>인텔리제이 커뮤니티를 바탕으로 이클립스 흐름을 얹은 가벼운 자바 개발 도구입니다. 설치 순서와 직접 만든 기능 세 가지(서버 창 · Synchronize · 데이터베이스)를 실제 화면 모양으로 정리했습니다.</p>
+    <div class="chips">
+      <span class="chip">판 <b>262.10968.1006</b></span>
+      <span class="chip">바탕 <b>IntelliJ Community 2026.2.3</b></span>
+      <a class="chip" href="https://github.com/guraking/ei-ide/releases/latest">최신 설치 파일 받기 →</a>
+      <a class="chip" href="https://github.com/guraking/ei-ide">저장소</a>
+    </div>
+  </div>
+</header>
+
+<nav class="toc" aria-label="목차">
+  <div class="wrap">
+    <a href="#install">설치</a>
+    <a href="#defaults">달라진 기본값</a>
+    <a href="#servers">서버 창</a>
+    <a href="#sync">Synchronize</a>
+    <a href="#db">데이터베이스</a>
+    <a href="#keys">단축키</a>
+    <a href="#build">빌드</a>
+    <span class="sp"></span>
+    <button id="theme" type="button" aria-label="밝게 · 어둡게 바꾸기">밝게 · 어둡게</button>
+  </div>
+</nav>
+
+<!-- 1. 설치 -->
+<section id="install">
+  <div class="wrap">
+    <h2><span class="no">01</span>설치</h2>
+    <p class="lead">처음 설치와 판 올리기 모두 같은 네 단계입니다. 설정(단축키 · 실행 설정 · 플러그인)은 <code>%APPDATA%\JetBrains\EIIDE2026.2</code> 에 있어 다시 설치해도 남습니다.</p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="n">1</div>
+        <h4>설치 파일 실행</h4>
+        <p>서버 창 · Synchronize · 데이터베이스 · Lombok · SVN 은 본체에 들어 있습니다.</p>
+        <div class="file">eiide-262.10968.N.exe</div>
+      </div>
+      <div class="step">
+        <div class="n">2</div>
+        <h4>한 번 켰다가 끄기</h4>
+        <p>설정 폴더가 만들어집니다. 플러그인을 넣을 자리가 생기는 단계입니다.</p>
+        <div class="file">%APPDATA%\JetBrains\EIIDE2026.2</div>
+      </div>
+      <div class="step">
+        <div class="n">3</div>
+        <h4>플러그인설치.bat</h4>
+        <p>IDE 가 꺼진 상태에서 두 번 누릅니다. 한국어 팩 · Claude Code · One Dark 를 넣고, 시험용으로 넣어 둔 본체 플러그인 사본은 치웁니다.</p>
+        <div class="file">노트북용\플러그인설치.bat</div>
+      </div>
+      <div class="step">
+        <div class="n">4</div>
+        <h4>한국어 고르기</h4>
+        <p>설정 → Language and Region 에서 Korean. 한 번만 하면 됩니다.</p>
+        <div class="file">설정 → Language and Region</div>
+      </div>
+    </div>
+
+    <div class="notes">
+      <div class="note warn"><b>IDE 가 켜져 있으면</b>3번 bat 은 「먼저 종료」만 띄우고 멈춥니다. 끄고 다시 실행하세요.</div>
+      <div class="note"><b>인터넷이 없을 때</b>bat 옆 <code>plugins</code> 폴더에 있는 것을 씁니다. 없을 때만 저장소 릴리스 · JetBrains 마켓에서 받습니다.</div>
+      <div class="note ok"><b>새 판 알림</b>IDE 를 켤 때 이 저장소의 최신 릴리스를 보고, 새 판이 있으면 오른쪽 아래에 「내려받기」 풍선이 뜹니다.</div>
+    </div>
+
+    <h3>노트북용 폴더</h3>
+    <div class="tree">노트북용\
+├─ <span class="hl">eiide-262.10968.N.exe</span>        <span class="c">설치 파일</span>
+├─ <span class="hl">플러그인설치.bat</span>               <span class="c">3번 단계</span>
+└─ plugins\
+   ├─ localization-ko\              <span class="c">한국어 팩 (262 판은 마켓에 없어 릴리스에 따로 올려 둠)</span>
+   ├─ claude-code-jetbrains-plugin\ <span class="c">Claude Code</span>
+   └─ one-dark-theme\               <span class="c">VS Code 색감 테마 + 편집기 색</span></div>
+  </div>
+</section>
+
+<!-- 2. 기본값 -->
+<section id="defaults">
+  <div class="wrap">
+    <h2><span class="no">02</span>처음 켰을 때 달라진 것</h2>
+    <p class="lead">설정을 손대지 않아도 처음부터 이렇게 켜집니다.</p>
+    <div class="cards">
+      <div class="card"><h4>이클립스 단축키 · 메뉴</h4><p>File · Edit · Source · Refactor · Navigate · Search · Project · Run · Git · Window · Help</p><span class="was">Windows 단축키, View · Code · Build · Tools</span></div>
+      <div class="card"><h4>저장하면 자동 빌드</h4><p>자바 import 정리, 바뀐 줄만 서식. Gradle 빌드 · 실행도 IDE 가 직접.</p><span class="was">끔, Gradle 에 위임</span></div>
+      <div class="card"><h4>한글 폭이 맞는 글꼴</h4><p>JetBrainsMonoHangul 내장. 한글이 영문 두 칸에 딱 맞아 열이 어긋나지 않습니다.</p><span class="was">JetBrains Mono, 한글 폭 어긋남</span></div>
+      <div class="card"><h4>실행 설정 창</h4><p>VM 옵션 칸이 처음부터 보입니다.</p><span class="was">「Modify options」로 꺼내야 함</span></div>
+      <div class="card"><h4>프론트 파일 색</h4><p>JS · JSX · TS · TSX · HTML · CSS · SCSS · LESS · JSON · Vue · Svelte · Astro</p><span class="was">Vue · Svelte · Astro 없음</span></div>
+      <div class="card"><h4>형상 관리</h4><p>Git · GitHub · GitLab · SVN. IDE 파일(<code>*.iml</code> · <code>.idea/</code>)은 변경 목록에 안 뜸.</p><span class="was">SVN 없음</span></div>
+      <div class="card"><h4>콘솔 검색</h4><p>실행 창 콘솔에서 <kbd>Ctrl</kbd>+<kbd>F</kbd>.</p><span class="was">이클립스 단축키에서는 없음</span></div>
+      <div class="card"><h4>편집기</h4><p>오른쪽 「세로로 분할」 단추, 120자 여백선 숨김, 커밋 뒤 메시지 비움.</p><span class="was">분할 단추 없음, 여백선 보임</span></div>
+      <div class="card"><h4>업데이트 확인 끔</h4><p>IDE · 플러그인 모두. 새 판은 GitHub 릴리스로만 알립니다.</p><span class="was">JetBrains 서버에 자동 확인</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 3. 서버 창 -->
+<section id="servers">
+  <div class="wrap">
+    <h2><span class="no">03</span>서버 창</h2>
+    <p class="lead">아래쪽 「서버」 창. STS 부트 대시보드와 이클립스 Servers 뷰를 합친 것입니다. <code>@SpringBootApplication</code> 모듈은 저절로 한 줄씩 잡히고, Tomcat 같은 WAS 는 직접 추가합니다.</p>
+
+    <div class="figure">
+      <div>
+        <div class="scroll">
+          <div class="ide">
+            <div class="title"><span class="dots"><i></i><i></i><i></i></span>서버</div>
+            <div class="bar">
+              <span class="mark">1</span>
+              <span class="btn pri">▶ 시작</span><span class="btn">디버그로 시작</span><span class="btn">재시작</span><span class="btn">■ 중지</span><span class="btn">모두 중지</span>
+              <span class="sepv"></span>
+              <span class="mark">2</span><span class="btn">서버 복제</span><span class="btn">WAS 추가…</span>
+            </div>
+            <div class="split">
+              <div>
+                <table class="grid">
+                  <tr><th>이름</th><th>상태</th><th>포트 <span class="mark">3</span></th><th>컨텍스트 · 프로필</th><th>실행 시간</th></tr>
+                  <tr class="sel"><td>api-server</td><td><span class="dot up"></span>올라감</td><td><a href="#servers">8080</a></td><td>local</td><td>12분</td></tr>
+                  <tr class="sel"><td>api-server (복제)</td><td><span class="dot dbg"></span>디버그</td><td><a href="#servers">8081</a></td><td>dev</td><td>3분</td></tr>
+                  <tr><td>batch</td><td><span class="dot down"></span>멈춤</td><td>–</td><td>local</td><td>–</td></tr>
+                  <tr><td>Tomcat 9</td><td><span class="dot up"></span>올라감</td><td><a href="#servers">9090</a></td><td>/web</td><td>40분</td></tr>
+                </table>
+              </div>
+              <div class="form">
+                <div style="display:flex;align-items:center;gap:6px;color:var(--fg)"><span class="mark">4</span>api-server</div>
+                <label>프로필<span class="f">local</span></label>
+                <label>VM 옵션<span class="f">-Xmx1g -Dfile.encoding=UTF-8</span></label>
+                <label>포트<span class="f">8080</span></label>
+                <div><span class="btn">적용</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
+      </div>
+      <ol class="legend">
+        <li><span class="mark">1</span><div><b>여러 줄 한꺼번에</b> <span class="t">Ctrl 로 여러 서버를 고르고 시작 · 디버그 · 재시작 · 중지. 디버그로 시작하면 디버거가 자동으로 붙습니다.</span></div></li>
+        <li><span class="mark">2</span><div><b>서버 복제 · WAS 추가</b> <span class="t">같은 모듈을 다른 프로필 · 포트로 하나 더. WAS 는 Tomcat · JBoss/WildFly · WebLogic · JEUS, 설치 폴더는 건드리지 않습니다.</span></div></li>
+        <li><span class="mark">3</span><div><b>포트를 누르면 브라우저</b> <span class="t">콘솔 출력에서 포트를 찾아 보여 줍니다.</span></div></li>
+        <li><span class="mark">4</span><div><b>오른쪽 칸에서 바로 고치기</b> <span class="t">프로필 · VM 옵션 · 포트를 고치고 「적용」. 프로젝트 트리의 모듈 옆에도 상태 · 포트가 나오고 우클릭으로 시작 · 중지할 수 있습니다.</span></div></li>
+      </ol>
+    </div>
+
+    <h3>WAS 에 올리기</h3>
+    <div class="flow">
+      <div class="box"><b>WAS 추가…</b><span>종류와 설치 폴더를 고릅니다. 서버마다 전용 실행 폴더를 따로 씁니다.</span></div>
+      <div class="arrow">→</div>
+      <div class="box"><b>프로젝트 · 컨텍스트 고르기</b><span>올릴 프로젝트와 <code>/web</code> 같은 경로.</span></div>
+      <div class="arrow">→</div>
+      <div class="box"><b>시작</b><span>war 로 묶지 않고 그 자리에서 연결하거나 바뀐 파일만 복사합니다.</span></div>
+      <div class="arrow">→</div>
+      <div class="box"><b>반영 (다시 빌드)</b><span>고친 뒤 우클릭 → 반영. 재시작 없이 바뀐 파일만.</span></div>
+    </div>
+    <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note warn"><b>확인 범위</b>Tomcat 9 · WildFly 26 으로 시작 · 배포 · 반영 · 종료를 확인했습니다. WebLogic · JEUS 는 실제 서버로 아직 확인하지 못했습니다.</div></div>
+  </div>
+</section>
+
+<!-- 4. Synchronize -->
+<section id="sync">
+  <div class="wrap">
+    <h2><span class="no">04</span>Synchronize</h2>
+    <p class="lead">이클립스 Team → Synchronize Workspace 와 같은 창입니다. 프로젝트 안의 Git 저장소 여러 개와 SVN 을 저장소별로 묶어, 들어올 변경 · 나갈 변경 · 충돌을 한눈에 봅니다. 커밋 · Push 뒤에는 자동으로 다시 비교합니다.</p>
+
+    <div class="figure">
+      <div>
+        <div class="scroll">
+          <div class="ide rel" style="min-height:300px">
+            <div class="title"><span class="dots"><i></i><i></i><i></i></span>Synchronize</div>
+            <div class="bar"><span class="mark">1</span><span class="btn">전체</span><span class="btn">들어올</span><span class="btn">나갈</span><span class="btn">충돌</span><span class="sepv"></span><span class="btn">새로고침</span></div>
+            <div class="treeview">
+              <div>▾ 저장소 backend <span class="muted">— 마지막 Fetch 2분 전</span></div>
+              <div class="l1">▾ 들어올 변경 <span class="tag in">2</span></div>
+              <div class="l2">OrderService.java</div>
+              <div class="l2">application.yml</div>
+              <div class="l1">▾ 나갈 변경 <span class="tag out">3</span></div>
+              <div class="l2 sel">OrderMapper.xml <span class="mark">2</span></div>
+              <div class="l2">OrderDto.java</div>
+              <div class="l2">application-local.yml</div>
+              <div class="l1">▾ 충돌 <span class="tag cf">1</span></div>
+              <div class="l2">pom.xml</div>
+              <div>▸ 저장소 front <span class="muted">— 원격과 같습니다</span></div>
+            </div>
+            <div class="menu" style="left:250px; top:190px">
+              <div>Commit…</div>
+              <div>내 변경 되돌리기</div>
+              <div>무시 목록에 추가</div>
+              <div class="on">변경 모른 척하기 — assume-unchanged <span class="mark">3</span></div>
+              <hr><div>새로고침</div>
+            </div>
+          </div>
+        </div>
+        <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
+      </div>
+      <ol class="legend">
+        <li><span class="mark">1</span><div><b>보기 거르기</b> <span class="t">전체 · 들어올 · 나갈 · 충돌만 따로 볼 수 있습니다.</span></div></li>
+        <li><span class="mark">2</span><div><b>파일 우클릭</b> <span class="t">Commit · 내 변경 되돌리기 · 무시 목록에 추가 · 변경 모른 척하기.</span></div></li>
+        <li><span class="mark">3</span><div><b>변경 모른 척하기</b> <span class="t"><code>application-local.yml</code> 처럼 내 PC 에서만 고친 파일이 커밋 목록에 계속 뜰 때 씁니다. 커밋 창의 파일 우클릭에도 있습니다. 풀려면 <code>git update-index --no-assume-unchanged 파일</code>.</span></div></li>
+        <li><span class="mark">+</span><div><b>IDE 파일은 처음부터 안 뜸</b> <span class="t">프로젝트를 열면 저장소마다 <code>.git/info/exclude</code> 에 <code>*.iml</code> · <code>.idea/</code> 를 넣습니다. 팀 <code>.gitignore</code> 와 서버에는 영향이 없습니다.</span></div></li>
+      </ol>
+    </div>
+    <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note"><b>SVN</b><code>svn</code> 명령줄 도구가 PATH 에 있어야 SVN 저장소도 함께 보입니다.</div></div>
+  </div>
+</section>
+
+<!-- 5. 데이터베이스 -->
+<section id="db">
+  <div class="wrap">
+    <h2><span class="no">05</span>데이터베이스</h2>
+    <p class="lead">DataGrip 은 커뮤니티 판에 넣을 수 없어 직접 만든 DB 도구입니다. 오른쪽 「데이터베이스」 창(탐색기) → 콘솔 → 아래 「결과」 창 순서로 씁니다. Oracle · MySQL · PostgreSQL.</p>
+
+    <h3>① 접속 추가 · 탐색기</h3>
+    <div class="figure">
+      <div>
+        <div class="scroll">
+          <div class="ide rel" style="min-height:330px; min-width:560px">
+            <div class="title"><span class="dots"><i></i><i></i><i></i></span>데이터베이스</div>
+            <div class="bar"><span class="mark">1</span><span class="btn">＋ 접속 추가</span><span class="mark">3</span><span class="btn">새 콘솔</span><span class="btn">새로고침</span></div>
+            <div class="treeview">
+              <div>▾ <span class="dot up"></span>dev · APP</div>
+              <div class="l1">▾ APP</div>
+              <div class="l2">▾ 표</div>
+              <div class="l3 sel">ORDERS <span class="muted">주문</span> <span class="mark">2</span></div>
+              <div class="l3">ORDER_ITEM <span class="muted">주문 품목</span></div>
+              <div class="l3">PRODUCT <span class="muted">상품</span></div>
+              <div class="l2">▸ 뷰</div>
+              <div>▸ <span class="dot down"></span>운영 · APP <span class="tag cf">운영</span></div>
+            </div>
+            <div class="menu" style="left:220px; top:118px">
+              <div>데이터 보기</div>
+              <hr>
+              <div class="on">SELECT 문 만들기</div>
+              <div>INSERT 문 만들기</div>
+              <div>UPDATE 문 만들기</div>
+              <hr>
+              <div>매퍼 뼈대 만들기</div>
+              <div>ERD 열기</div>
+            </div>
+          </div>
+        </div>
+        <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
+      </div>
+      <ol class="legend">
+        <li><span class="mark">1</span><div><b>접속 추가</b> <span class="t">종류 · 주소 · 계정 · 스키마. 비밀번호는 IDE 암호 저장소에 둡니다. 운영 · 읽기 전용 표시도 여기서 켭니다.</span></div></li>
+        <li><span class="mark">D</span><div><b>드라이버는 알아서</b> <span class="t"><code>~/.m2</code> 에서 JDBC jar 를 찾고, 없으면 Maven 저장소(사내 mirror 가 있으면 그쪽)에서 받아 둡니다. 접속 창의 「내려받기」로 미리 받아도 됩니다.</span></div></li>
+        <li><span class="mark">2</span><div><b>표 우클릭</b> <span class="t">데이터 보기(더블클릭과 같음), SELECT · INSERT · UPDATE 문 만들기, 매퍼 뼈대, ERD.</span></div></li>
+        <li><span class="mark">3</span><div><b>새 콘솔</b> <span class="t">누를 때마다 새 탭(<code>콘솔 · dev.sql</code>, <code>콘솔 · dev (2).sql</code>). 같은 접속의 콘솔은 연결 하나를 같이 씁니다.</span></div></li>
+      </ol>
+    </div>
+
+    <h3>② SQL 콘솔</h3>
+    <div class="figure wide">
+      <div>
+        <div class="scroll">
+          <div class="ide" style="min-width:980px">
+            <div class="tabs"><span class="on">콘솔 · dev.sql <span class="x">✕</span></span><span>콘솔 · dev (2).sql <span class="x">✕</span></span></div>
+            <div class="bar">
+              <span class="mark">1</span><span class="btn pri">▷ 실행</span><span class="key">Ctrl+Enter</span><span class="btn">▷ 전체 실행</span>
+              <span class="sepv"></span>
+              <span class="mark">2</span><span class="btn">≡ 정렬</span><span class="btn">대문자</span><span class="btn">소문자</span>
+              <span class="sepv"></span>
+              <span class="mark">3</span><span class="combo">dev · APP</span><span class="combo mono">500</span>
+              <span class="sepv"></span>
+              <span class="mark">4</span><span class="check">자동 커밋</span><span class="btn dim">커밋</span><span class="btn dim">롤백</span>
+            </div>
+<pre class="sql"><span class="ln"><span class="kw">SELECT</span> t.ORDER_NO,    <span class="cm">-- 주문번호</span></span><span class="ln">       t.ORDER_DT,    <span class="cm">-- 주문일자</span></span><span class="ln">       t.CUST_NM,     <span class="cm">-- 고객명</span></span><span class="ln">       p.PRODUCT_NM   <span class="cm">-- 상품명</span></span><span class="ln">  <span class="kw">FROM</span> APP.ORDERS t, APP.ORDER_ITEM i, APP.PRODUCT p</span><span class="ln"> <span class="kw">WHERE</span> t.ORDER_NO = i.ORDER_NO</span><span class="ln">   <span class="kw">AND</span> i.PRODUCT_ID = p.PRODUCT_ID(+)</span><span class="ln">   <span class="kw">AND</span> t.ORDER_DT <span class="kw">BETWEEN</span> <span class="st">'20260101'</span> <span class="kw">AND</span> <span class="st">'20261231'</span></span><span class="ln"> <span class="kw">ORDER BY</span> t.ORDER_DT <span class="kw">DESC</span></span></pre>
+          </div>
+        </div>
+        <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
+      </div>
+      <ol class="legend" style="grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:14px">
+        <li><span class="mark">1</span><div><b>실행</b> <span class="t">커서가 있는 문장(또는 선택 영역) <kbd>Ctrl</kbd>+<kbd>Enter</kbd>, 전체는 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd>. 여러 문장은 앞 문장이 끝나야 다음을 실행하고, 실패하면 멈춥니다.</span></div></li>
+        <li><span class="mark">2</span><div><b>정렬 · 대소문자</b> <span class="t">선택 영역에만, 없으면 전체에. 정렬 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd>, 대문자 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd>, 소문자 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Y</kbd>. 문자열 · 주석 · <code>#{}</code> 는 그대로. <kbd>Ctrl</kbd>+<kbd>Z</kbd> 로 되돌림.</span></div></li>
+        <li><span class="mark">3</span><div><b>접속 · 조회 건수</b> <span class="t">콘솔마다 접속을 바꿀 수 있습니다. 건수는 500 · 1000 · 5000 · 10000 을 고르거나 숫자를 쓰고 Enter.</span></div></li>
+        <li><span class="mark">4</span><div><b>자동 커밋 · 커밋 · 롤백</b> <span class="t">자동 커밋은 기본 꺼짐. 변경을 실행하면 「미반영 변경 N건」이 뜨고 커밋 · 롤백이 켜집니다.</span></div></li>
+        <li><span class="mark">+</span><div><b>자동완성</b> <span class="t">표 이름과 칼럼, 한글 주석을 함께 보여 줍니다. <code>t.</code> 를 치면 그 별칭 표의 칼럼만. 소문자로 치면 소문자로 넣습니다.</span></div></li>
+      </ol>
+    </div>
+
+    <h3>정렬하면 이렇게 바뀝니다</h3>
+    <div class="ba">
+      <div class="side"><h5>정렬 전</h5><pre>select t.order_no, t.cust_nm, nvl(i.qty,0) qty from orders t, order_item i where t.order_no=i.order_no(+) and t.st in ('A','B') and exists (select 1 from x where x.id=t.order_no) order by t.order_no desc;
+
+insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확인');</pre></div>
+      <div class="side"><h5>정렬 뒤</h5><pre><span class="kw">SELECT</span> t.order_no,
+       t.cust_nm,
+       nvl(i.qty, <span class="nu">0</span>) qty
+  <span class="kw">FROM</span> orders t, order_item i
+ <span class="kw">WHERE</span> t.order_no = i.order_no(+)
+   <span class="kw">AND</span> t.st <span class="kw">IN</span> (<span class="st">'A'</span>, <span class="st">'B'</span>)
+   <span class="kw">AND</span> <span class="kw">EXISTS</span> (
+       <span class="kw">SELECT</span> <span class="nu">1</span>
+         <span class="kw">FROM</span> x
+        <span class="kw">WHERE</span> x.id = t.order_no
+       )
+ <span class="kw">ORDER BY</span> t.order_no <span class="kw">DESC</span>;
+
+<span class="kw">INSERT INTO</span> order_log (
+       log_no,
+       order_no,
+       memo
+) <span class="kw">VALUES</span> (
+       <span class="st">'L1'</span>,           <span class="cm">-- log_no</span>
+       <span class="st">'O100'</span>,         <span class="cm">-- order_no</span>
+       <span class="st">'주문 확인'</span>     <span class="cm">-- memo</span>
+)</pre></div>
+    </div>
+    <div class="notes">
+      <div class="note"><b>강물 정렬</b>절 키워드를 6칸 오른쪽에 맞추고, 칼럼 · AND 는 줄마다. FROM 의 표 목록은 한 줄(구식 조인).</div>
+      <div class="note"><b>INSERT</b>칼럼 · 값을 줄마다 두고, 값 줄 끝에 어느 칼럼인지 주석을 답니다.</div>
+      <div class="note"><b>줄 끝 주석은 그 자리에</b>칼럼 뒤 <code>-- 주석</code> 은 내려가지 않고 한 열로 맞춥니다. 키워드만 대문자로 바꾸고 이름은 그대로.</div>
+    </div>
+
+    <h3>③ 결과 창</h3>
+    <div class="figure wide">
+      <div>
+        <div class="scroll">
+          <div class="ide rel" style="min-width:980px; min-height:420px">
+            <div class="tabs"><span>결과 1 · ORDERS <span class="x">✕</span></span><span class="on">결과 2 · PRODUCT <span class="x">✕</span></span><span class="mark" style="align-self:center">1</span></div>
+            <div class="statusline">
+              <span class="ok">500건</span><span class="m">· 357 ms</span><span class="w">· 500건에서 자름</span>
+              <span class="mark">2</span><span class="btn">500건 더</span><span class="input">1000</span><span>건</span><span class="btn">조회</span>
+              <span class="gap"></span>
+              <span class="mark">3</span><span class="btn">복사</span><span class="btn">CSV 내보내기</span><span class="btn">INSERT 문으로</span><span class="btn">UPDATE 문으로</span><span class="btn">DTO 만들기</span>
+            </div>
+            <table class="grid">
+              <tr><th>PRODUCT_ID<small>상품 ID</small></th><th>PRODUCT_NM <span class="mark">4</span><small>상품명</small></th><th>UNIT_PRICE<small>단가</small></th><th>USE_YN<small>사용 여부</small></th><th>CREATED_AT<small>등록일시</small></th></tr>
+              <tr><td>P0001</td><td style="background:var(--sel)">키보드</td><td>32000</td><td>Y</td><td>2026-03-02 09:12:00</td></tr>
+              <tr><td>P0002</td><td style="background:var(--sel)">마우스</td><td>18000</td><td>Y</td><td>2026-03-02 09:15:41</td></tr>
+              <tr><td>P0003</td><td style="background:var(--sel)">모니터 받침</td><td>45000</td><td>N</td><td>2026-04-11 14:03:27</td></tr>
+            </table>
+            <div class="menu" style="left:330px; top:200px">
+              <div>값 복사</div>
+              <div>고른 행 복사</div>
+              <hr>
+              <div>칼럼 이름 복사</div>
+              <div>칼럼 이름 모두 복사</div>
+              <div class="on">이 칼럼 값 복사 (줄마다 하나)</div>
+              <div>이 칼럼 값을 IN 목록으로 복사</div>
+            </div>
+          </div>
+        </div>
+        <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
+      </div>
+      <ol class="legend" style="grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:14px">
+        <li><span class="mark">1</span><div><b>결과 탭</b> <span class="t">실행마다 하나씩, 10개가 넘으면 오래된 것부터 닫힙니다. 탭의 ✕, 가운데 단추, 우클릭 「다른 탭 닫기 · 모든 탭 닫기」.</span></div></li>
+        <li><span class="mark">2</span><div><b>더 보기</b> <span class="t">잘렸을 때만 나옵니다. 「500건 더」 또는 건수를 쓰고 「조회」(Enter). 같은 문장을 처음부터 다시 읽어 이 탭을 바꿉니다.</span></div></li>
+        <li><span class="mark">3</span><div><b>꺼내 쓰기</b> <span class="t">탭 구분 복사 · CSV · INSERT 문 · UPDATE 문(PK 를 표 정의에서 찾아 WHERE) · DTO.</span></div></li>
+        <li><span class="mark">4</span><div><b>칼럼 단위로</b> <span class="t">머리를 누르면 칼럼 전체 선택(Ctrl 로 더하기), 머리 아래 한글 주석. 우클릭으로 칼럼 값 · IN 목록 · 칼럼 이름 복사.</span></div></li>
+      </ol>
+    </div>
+
+    <h3>④ 운영 보호</h3>
+    <div class="figure">
+      <div class="dialog">
+        <div class="dh">실행 확인</div>
+        <div class="db">
+          <div class="danger"><b>WHERE 없는 DELETE</b> · ORDER_LOG 의 모든 행이 지워집니다.</div>
+          <div class="mono" style="font-size:12px; color:var(--muted)">DELETE FROM APP.ORDER_LOG</div>
+          <div>실행하려면 표 이름을 그대로 입력하세요</div>
+          <div class="input" style="text-align:left; border-color:var(--accent)">ORDER_LOG</div>
+        </div>
+        <div class="df"><span class="btn">취소</span><span class="btn" style="border-color:var(--accent); color:var(--accent)">실행</span></div>
+      </div>
+      <ul class="legend">
+        <li><span class="mark">!</span><div><b>표 이름을 입력해야 실행</b> <span class="t">WHERE 없는 UPDATE · DELETE, DROP · TRUNCATE, 그리고 운영 접속의 모든 변경.</span></div></li>
+        <li><span class="mark">!</span><div><b>운영 접속 띠</b> <span class="t">운영으로 표시한 접속의 콘솔은 위에 붉은 띠 「운영 접속 · 변경은 매번 확인합니다」가 붙습니다.</span></div></li>
+        <li><span class="mark">!</span><div><b>읽기 전용 접속</b> <span class="t">변경 문장은 실행하지 않고 알림만 띄웁니다.</span></div></li>
+      </ul>
+    </div>
+
+    <h3>⑤ MyBatis 바로 실행 <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Enter</kbd></h3>
+    <div class="flow">
+      <div class="box"><b>매퍼 XML 문장 옆 ▶</b><span>select · insert · update · delete 어디서든 커서를 두고 단축키.</span></div>
+      <div class="arrow">→</div>
+      <div class="box"><b>매개변수 입력</b><span>비우면 <code>&lt;if&gt;</code> 가 빠집니다. 넣은 값은 문장마다 기억합니다.</span></div>
+      <div class="arrow">→</div>
+      <div class="box"><b>실제 실행될 SQL</b><span><code>&lt;if&gt;</code> · <code>&lt;foreach&gt;</code> 를 풀어 미리 보여 줍니다. 복사도 됩니다.</span></div>
+      <div class="arrow">→</div>
+      <div class="box"><b>실행</b><span>결과 창으로. resultType DTO 와 SELECT 칼럼이 안 맞으면 경고.</span></div>
+    </div>
+
+    <h3>⑥ SQL 로그 → 실행 SQL <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>C</kbd></h3>
+    <div class="ba">
+      <div class="side"><h5>서버 콘솔 로그 (우클릭)</h5><pre>==&gt;  Preparing: SELECT * FROM ORDERS WHERE ORDER_NO = ? AND ST = ?
+==&gt; Parameters: O100(String), A(String)</pre></div>
+      <div class="side"><h5>값을 채운 SQL</h5><pre><span class="kw">SELECT</span> * <span class="kw">FROM</span> ORDERS <span class="kw">WHERE</span> ORDER_NO = <span class="st">'O100'</span> <span class="kw">AND</span> ST = <span class="st">'A'</span></pre></div>
+    </div>
+    <p class="lead" style="margin-top:10px">우클릭 메뉴: 「SQL 로 바꿔 복사」 · 「데이터베이스 콘솔에서 실행」 · 「MyBatis 실행 창으로 열기」.</p>
+
+    <h3>⑦ 매퍼 뼈대 · DTO · ERD</h3>
+    <div class="cards">
+      <div class="card"><h4>매퍼 뼈대 만들기</h4><p>표 우클릭 → resultMap · select · insert · update · delete · 인터페이스. 구식 조인, 부등호 CDATA, <code>WHERE 1 = 1</code>, 표 · 칼럼 이름 대문자 · 별칭 소문자. 있는 파일은 덮어쓰지 않고 덧붙입니다.</p></div>
+      <div class="card"><h4>DTO 만들기</h4><p>결과 창 「DTO 만들기」 → 결과 칼럼으로 자바 DTO 와 resultMap. 칼럼 이름은 낙타 표기 필드로.</p></div>
+      <div class="card"><h4>ERD</h4><p>표 카드(한글 주석) + FK 선. 끌어 옮기기 · 확대 · PNG 저장, 카드 더블클릭 → 데이터 보기.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 6. 단축키 -->
+<section id="keys">
+  <div class="wrap">
+    <h2><span class="no">06</span>단축키 모음</h2>
+    <p class="lead">이클립스 단축키가 기본입니다. 아래는 EI IDE 에서 더한 것만 모았습니다.</p>
+    <table class="keys">
+      <tr><th>키</th><th>하는 일</th><th class="where">어디서</th></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td><td>커서 문장(또는 선택 영역) 실행</td><td class="where">SQL 콘솔</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd></td><td>모든 문장 차례로 실행</td><td class="where">SQL 콘솔</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></td><td>SQL 정렬 (콘솔 밖에서는 원래 기능)</td><td class="where">SQL 콘솔</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> · <kbd>Y</kbd></td><td>대문자 · 소문자</td><td class="where">SQL 콘솔</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Enter</kbd></td><td>커서가 있는 MyBatis 문장 실행</td><td class="where">매퍼 XML</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>C</kbd></td><td>MyBatis 로그를 값 채운 SQL 로 복사</td><td class="where">서버 콘솔</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td><td>콘솔 출력 검색</td><td class="where">실행 · 서버 콘솔</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- 7. 빌드 -->
+<section id="build">
+  <div class="wrap">
+    <h2><span class="no">07</span>직접 빌드하기</h2>
+    <p class="lead">Windows cmd 기준입니다. 처음은 30분 안팎, 그 뒤 바뀐 부분만 다시 컴파일할 때는 10분 안팎 걸립니다. 소스를 고치는 대본은 두 번 돌려도 결과가 같고, 고치기 전 원본을 <code>backup\</code> 에 남깁니다.</p>
+    <div class="flow" style="margin-bottom:14px">
+      <div class="box"><b>소스 받기</b><span>태그 <code>idea/262.10968.63</code></span></div>
+      <div class="arrow">→</div>
+      <div class="box"><b>이름 · 덜어 내기</b><span>제품 이름, 번들 플러그인 정리</span></div>
+      <div class="arrow">→</div>
+      <div class="box"><b>메뉴 · 기본값</b><span>이클립스식 메뉴, 위 02 의 기본값</span></div>
+      <div class="arrow">→</div>
+      <div class="box"><b>빌드</b><span><code>eiide-262.10968.N.exe</code></span></div>
+    </div>
+<pre class="cmd">get-source.bat
+python kit\customize.py intellij-community "EI IDE" brand
+python kit\customize.py intellij-community "EI IDE" slim
+python kit\menu\apply_menu.py intellij-community
+python kit\defaults\apply_defaults.py intellij-community
+build-windows.bat
+<span class="cm">rem 결과: intellij-community\out\idea-ce\artifacts\eiide-262.10968.N.exe</span></pre>
+    <div class="notes">
+      <div class="note"><b>판 번호 N</b><code>build-number.txt</code> 에서 빌드마다 하나씩 올라갑니다.</div>
+      <div class="note warn"><b>N 은 1000 부터</b>바탕 판(.63)보다 작으면 JetBrains 마켓의 Java · Gradle 등 번들 플러그인을 새 판으로 보고 내려받아 본체를 덮어 버립니다.</div>
+      <div class="note ok"><b>플러그인만 고쳤을 때</b>빌드 없이 jar 를 <code>노트북용\plugins</code> 에 넣고 설치 3번만 다시 돌리면 됩니다.</div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">개인 학습용 프로젝트 · 바탕 intellij-community(Apache 2.0) · 글꼴 JetBrainsMonoHangul(SIL OFL 1.1) · IntelliJ · JetBrains 이름과 로고는 JetBrains 의 상표입니다.</div>
+</footer>
+
+<script>
+// 테마 단추: 저장은 이 브라우저에서만, 막혀 있으면 이번 화면에만 적용한다.
+(function(){
+  var root=document.documentElement, key="ei-ide-theme";
+  try{ var saved=localStorage.getItem(key); if(saved) root.dataset.theme=saved; }catch(e){}
+  document.getElementById("theme").addEventListener("click",function(){
+    var dark=root.dataset.theme ? root.dataset.theme==="dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    root.dataset.theme = dark ? "light" : "dark";
+    try{ localStorage.setItem(key, root.dataset.theme); }catch(e){}
+  });
+  // 목차에서 지금 보고 있는 절을 표시한다.
+  var links=[].slice.call(document.querySelectorAll("nav.toc a"));
+  var obs=new IntersectionObserver(function(es){
+    es.forEach(function(en){ if(!en.isIntersecting) return;
+      links.forEach(function(a){ a.classList.toggle("on", a.getAttribute("href")==="#"+en.target.id); }); });
+  },{rootMargin:"-40% 0px -55% 0px"});
+  document.querySelectorAll("section[id]").forEach(function(s){ obs.observe(s); });
+})();
+</script>
+</body>
+</html>
