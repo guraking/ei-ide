@@ -156,6 +156,7 @@ build-windows.bat
 - N은 **1000부터** 씁니다. 바탕 판(262.10968.63)보다 작으면 IDE가 JetBrains 마켓의 Java · Gradle · Maven 등 번들 플러그인을 「새 판」으로 보고 사용자 플러그인 폴더에 내려받아 본체(와 여기서 고친 기본값)를 덮어 버립니다.
 - `bundled-plugins\<이름>\lib\*.jar`에 둔 플러그인은 본체에 함께 들어갑니다.
 - 소스를 고치는 대본은 모두 두 번 돌려도 같은 결과가 되고, 고치기 전 원본을 `backup\`에 남깁니다.
+- **새 판 점검**: `python kit\check_update.py` — JetBrains 최신 정식판이 지금 판보다 새로우면 그 소스를 `intellij-community-new` 에 받아 위 대본(brand · slim · 메뉴 · 기본값)을 적용해 보고, 새 판 플랫폼 jar 로 우리 플러그인 세 개를 컴파일해 보고, 판 번호가 박혀 손봐야 할 줄을 찾아 `logs\새판점검-<판>.txt` 에 적습니다. 지금 소스 · 대본은 바꾸지 않습니다. 특정 판을 보려면 `python kit\check_update.py 262.11234.5`.
 
 | 대본 | 하는 일 |
 |---|---|
