@@ -226,10 +226,25 @@ public final class DbSessions implements Disposable {
       closeWithoutCommit(conn);
       throw e;
     }
+    warnOldDriver(c, conn);
     open.put(c.id, conn);
     pending.put(c.id, 0);
     fire();
     return conn;
+  }
+
+  /** PostgreSQL 드라이버가 Drivers.PG_MIN_DRIVER 보다 낮으면 알린다. 판을 읽지 못하면 알리지 않는다(접속은 그대로 쓴다). */
+  private void warnOldDriver(DbConfig c, Connection conn) {
+    if (c.kind != DbKind.POSTGRES) return;
+    try {
+      String version = conn.getMetaData().getDriverVersion();
+      if (Drivers.isOlderDriver(version, Drivers.PG_MIN_DRIVER)) {
+        Notify.warning(project, c.name + " 의 PostgreSQL 드라이버(" + version + ")가 낡았습니다. 드라이버를 새 판으로 바꾸세요"
+            + "(접속 창의 「내려받기」). 이 판은 읽기 전용 접속을 서버에서 막지 못합니다.");
+      }
+    } catch (SQLException e) {
+      // 판 확인은 안내용이라 실패해도 접속을 막지 않는다.
+    }
   }
 
   /** 드라이버를 읽어 연다. 드라이버가 주소를 받지 않으면 오류. */

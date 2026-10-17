@@ -127,10 +127,14 @@ EDITS = [
 
 
 def read_source(path):
-    """줄끝을 \\n 으로 맞춘 글과 원래 줄끝을 돌려준다. 원문 비교는 \\n 기준이고, 쓸 때 원래 줄끝으로 되돌린다."""
+    """줄끝을 \\n 으로 맞춘 글과 원래 줄끝을 돌려준다. 원문 비교는 \\n 기준이고, 쓸 때 원래 줄끝으로 되돌린다.
+    모든 줄이 \\r\\n 일 때만 바꾼다. LF · CRLF 가 섞인 파일은 그대로 두어(쓸 때도 그대로) 한쪽으로 통일되지 않게 한다.
+    섞인 파일에서 CRLF 줄에 걸친 원문은 찾지 못해 「못 찾음」으로 멈춘다(파일은 쓰지 않는다)."""
     raw = path.read_bytes().decode("utf-8")
-    newline = "\r\n" if "\r\n" in raw else "\n"
-    return raw.replace("\r\n", "\n"), newline
+    crlf = raw.count("\r\n")
+    if crlf > 0 and crlf == raw.count("\n"):
+        return raw.replace("\r\n", "\n"), "\r\n"
+    return raw, "\n"
 
 
 def write_source(path, text, newline):

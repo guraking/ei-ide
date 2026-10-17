@@ -97,6 +97,17 @@ public final class Drivers {
     return best;
   }
 
+  /** readOnlyMode(읽기 전용을 서버에서 막기)를 받는 가장 낮은 PostgreSQL 드라이버 판. 이보다 낮으면 그 속성을 조용히 무시한다. */
+  static final String PG_MIN_DRIVER = "42.2.10";
+  private static final Pattern DRIVER_VERSION = Pattern.compile("\\d+(\\.\\d+)+");
+
+  /** 드라이버 판 글(예: 「PostgreSQL JDBC Driver 42.2.5」)의 첫 판 번호가 min 보다 낮은지. 판 번호가 없으면 false. */
+  static boolean isOlderDriver(String driverVersion, String min) {
+    if (driverVersion == null) return false;
+    Matcher m = DRIVER_VERSION.matcher(driverVersion);
+    return m.find() && Drivers.compareVersions(m.group(), min) < 0;
+  }
+
   /** . · - 로 나눈 조각을 숫자끼리는 수로, 아니면 글자로 비교한다. 조각이 더 많은 쪽이 크다(1.0.1 > 1.0). */
   static int compareVersions(String a, String b) {
     String[] x = VERSION_PART.split(a);

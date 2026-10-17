@@ -45,6 +45,12 @@ public class CoreCheck {
     eq(SqlGuard.isDdl("comment on table t is 'x'"), true);
     eq(SqlGuard.isDdl("insert into t values (1)"), false);
     eq(SqlGuard.isDdl("alter session set nls_date_format = 'YYYY'"), false);
+    eq(Drivers.isOlderDriver("PostgreSQL JDBC Driver 42.2.5", Drivers.PG_MIN_DRIVER), true);
+    eq(Drivers.isOlderDriver("PostgreSQL JDBC Driver 9.4.1212", Drivers.PG_MIN_DRIVER), true);
+    eq(Drivers.isOlderDriver("PostgreSQL JDBC Driver 42.2.10", Drivers.PG_MIN_DRIVER), false);
+    eq(Drivers.isOlderDriver("PostgreSQL JDBC Driver 42.7.4", Drivers.PG_MIN_DRIVER), false);
+    eq(Drivers.isOlderDriver("알 수 없음", Drivers.PG_MIN_DRIVER), false);
+    eq(Drivers.isOlderDriver(null, Drivers.PG_MIN_DRIVER), false);
     eq(SqlGuard.isDdl("create temporary table t (a int)"), false);
     eq(SqlGuard.isDdl("create global temporary table t (a int)"), true);
     eq(SqlGuard.isWrite("select '" + "x".repeat(50_000) + "' from dual"), false);

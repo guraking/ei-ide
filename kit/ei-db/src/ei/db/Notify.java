@@ -11,6 +11,10 @@ public final class Notify {
     send(project, text, NotificationType.INFORMATION);
   }
 
+  public static void warning(Project project, String text) {
+    send(project, text, NotificationType.WARNING);
+  }
+
   public static void error(Project project, String text) {
     send(project, text, NotificationType.ERROR);
   }
