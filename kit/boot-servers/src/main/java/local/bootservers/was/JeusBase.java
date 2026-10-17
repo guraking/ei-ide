@@ -3,10 +3,17 @@ package local.bootservers.was;
 import com.intellij.util.execution.ParametersListUtil;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.nio.file.attribute.AclEntry;
+import java.nio.file.attribute.AclEntryPermission;
+import java.nio.file.attribute.AclEntryType;
+import java.nio.file.attribute.AclFileAttributeView;
+import java.nio.file.attribute.PosixFileAttributeView;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -22,8 +29,12 @@ import java.util.jar.Manifest;
  * 기본 틀은 JEUS 8 기준이며, 현장(판 · 도메인 구성)에 따라 고쳐야 할 수 있다.
  * <p>
  * 틀의 자리 표시: {home} 설치 폴더 · {domain} 도메인 · {server} 서버 이름 · {user} 관리자 계정 · {password} 비밀번호 ·
- * {host} localhost · {port} 관리(기본) 포트 · {path} 펼친 war 폴더 · {ctx} 컨텍스트 경로 · {name} 앱 id ·
- * {vmoptions} VM 옵션(디버그면 jdwp 포함). {path} · {ctx} · {name} 은 배포 명령에서만 채운다.
+ * {passwordFile} 비밀번호만 든 파일 경로 · {host} localhost · {port} 관리(기본) 포트 · {path} 펼친 war 폴더 ·
+ * {ctx} 컨텍스트 경로 · {name} 앱 id · {vmoptions} VM 옵션(디버그면 jdwp 포함). {path} · {ctx} · {name} 은 배포 명령에서만 채운다.
+ * <p>
+ * {password} 는 명령줄 인자라 실행 중 OS 프로세스 목록에 보인다. 현장 JEUS 가 파일에서 비밀번호를 읽는 방법을 지원하면
+ * 틀을 {passwordFile} 로 바꿔 쓴다. 이 파일은 사용자만 읽게 만들고 서버가 꺼지면 지운다.
+ * 기본 틀은 판마다 지원이 달라 확인할 수 없으므로 {password} 를 그대로 둔다.
  * <p>
  * 앱은 서버별 실행 폴더의 apps/이름.war 로 펼쳐 복사하고, 서버가 뜬 뒤 배포 명령으로 올린다.
  * 이 apps 폴더는 플러그인만 쓰므로 목록에서 빠진 앱 폴더는 지운다. 판 판별 · 명령 조립은 IDE 없이 시험할 수 있다.
@@ -35,9 +46,11 @@ public final class JeusBase {
             "{home}/bin/startDomainAdminServer -domain {domain} -server {server} -u {user} -p {password}";
     /** 기본 중지 명령(JEUS 8). {port} 는 관리(기본) 포트. */
     public static final String DEFAULT_STOP = "{home}/bin/stopServer -host {host}:{port} -u {user} -p {password}";
-    /** 기본 배포 명령(JEUS 8). 따옴표 안은 jeusadmin 이 받는 명령 하나다. */
+    /** 기본 배포 명령(JEUS 8). 바깥 따옴표 안은 jeusadmin 이 받는 명령 하나이고, 경로에 띄어쓰기가 있어도 되게 {path} 를 안쪽 따옴표로 감싼다. */
     public static final String DEFAULT_DEPLOY = "{home}/bin/jeusadmin -host {host}:{port} -u {user} -p {password} "
-            + "\"deploy-application -path {path} -id {name} -servers {server} -cr {ctx}\"";
+            + "\"deploy-application -path \\\"{path}\\\" -id {name} -servers {server} -cr {ctx}\"";
+    /** 틀에 이 자리가 있을 때만 비밀번호 파일을 만든다. */
+    public static final String PASSWORD_FILE_TOKEN = "{passwordFile}";
     /** 화면에 보이는 명령줄에서 비밀번호 대신 쓰는 글자. */
     public static final String MASK = "******";
 
@@ -139,6 +152,33 @@ public final class JeusBase {
             }
         }
         return argv;
+    }
+
+    /**
+     * 비밀번호만 든 파일을 사용자만 읽고 쓰게 새로 만든다(POSIX 는 rw-------, 윈도우는 소유자 한 명만 허용하는 ACL).
+     * 권한을 먼저 좁힌 뒤에 내용을 쓴다. 권한을 좁힐 수 없는 파일 시스템이면 IOException 으로 멈춘다.
+     */
+    public static Path writePasswordFile(Path file, String password) throws IOException {
+        Files.createDirectories(file.getParent());
+        Files.deleteIfExists(file);
+        if (Files.getFileStore(file.getParent()).supportsFileAttributeView(PosixFileAttributeView.class)) {
+            Files.createFile(file, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")));
+        }
+        else {
+            Files.createFile(file);
+            AclFileAttributeView acl = Files.getFileAttributeView(file, AclFileAttributeView.class);
+            if (acl == null) {
+                Files.delete(file);
+                throw new IOException("비밀번호 파일의 권한을 사용자 한 명으로 좁힐 수 없는 폴더입니다: " + file.getParent());
+            }
+            acl.setAcl(List.of(AclEntry.newBuilder()
+                    .setType(AclEntryType.ALLOW)
+                    .setPrincipal(Files.getOwner(file))
+                    .setPermissions(AclEntryPermission.values())
+                    .build()));
+        }
+        Files.writeString(file, password, StandardCharsets.UTF_8);
+        return file;
     }
 
     /** 실행 창 · 기록에 보일 글에서 비밀번호를 가린다. */

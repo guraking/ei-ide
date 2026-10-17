@@ -39,12 +39,14 @@ import java.util.Map;
 
 /**
  * 스키마의 표들을 ERD 로 그린다. 편집기 탭용 FileEditorProvider 가 빌드 클래스패스에 없어
- * 「EI ERD」 도구 창(아래쪽)에 「ERD · 스키마」 탭으로 연다. 같은 도구 창에 여러 ERD 탭이 쌓인다.
+ * 「ERD」 도구 창(아래쪽)에 「ERD · 스키마」 탭으로 연다. 같은 도구 창에 여러 ERD 탭이 쌓인다.
  */
 public final class ErdView {
   private ErdView() {}
 
+  /** 도구 창 id(설정 저장용 열쇠라 바꾸지 않는다). 화면에는 STRIPE_TITLE 로 보인다. */
   static final String TOOL_WINDOW_ID = "EI ERD";
+  private static final String STRIPE_TITLE = "ERD";
   private static final int MAX_TABLES = 60;
   private static final String[] TABLE_TYPES = {"TABLE"};
   private static final String LEGEND = "PK 주황 · FK 파랑 · 표 더블클릭 → 데이터 보기 · 칼럼에 마우스 → 형식 · 주석 · 휠 → 확대 · 빈 곳 끌기 → 이동";
@@ -97,7 +99,7 @@ public final class ErdView {
   }
 
   private static void show(Project project, DbConfig c, String schema, List<ErdCanvas.Card> cards, List<Meta.ForeignKey> fks) {
-    ErdCanvas canvas = new ErdCanvas(cards, fks, table -> SqlRunner.run(project, c, "SELECT * FROM " + schema + "." + table, List.of()));
+    ErdCanvas canvas = new ErdCanvas(cards, fks, table -> SqlRunner.run(project, c, "SELECT * FROM " + Names.sql(c.kind, schema, table), List.of()));
 
     JButton relayout = new JButton("자동 배치");
     relayout.addActionListener(e -> canvas.autoLayout());
@@ -129,7 +131,10 @@ public final class ErdView {
 
     ToolWindowManager twm = ToolWindowManager.getInstance(project);
     ToolWindow tw = twm.getToolWindow(TOOL_WINDOW_ID);
-    if (tw == null) tw = twm.registerToolWindow(TOOL_WINDOW_ID, true, ToolWindowAnchor.BOTTOM);
+    if (tw == null) {
+      tw = twm.registerToolWindow(TOOL_WINDOW_ID, true, ToolWindowAnchor.BOTTOM);
+      tw.setStripeTitle(STRIPE_TITLE);
+    }
     Content content = ContentFactory.getInstance().createContent(panel, "ERD · " + schema, false);
     tw.getContentManager().addContent(content);
     tw.getContentManager().setSelectedContent(content);

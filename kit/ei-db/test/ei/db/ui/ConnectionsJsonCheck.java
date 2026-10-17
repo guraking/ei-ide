@@ -29,8 +29,10 @@ public class ConnectionsJsonCheck {
     a.service = "app";
     a.user = "scott";
     a.production = true;
+    a.driverJar = "/home/me/.m2/postgresql.jar";
     String json = ConnectionsJson.write(List.of(a));
     if (json.contains(a.id)) throw new AssertionError("id 가 들어가면 안 됨");
+    if (json.contains("driverJar")) throw new AssertionError("드라이버 jar 경로가 들어가면 안 됨");
     if (json.toLowerCase().contains("password")) throw new AssertionError("비밀번호 키가 들어가면 안 됨");
 
     List<DbConfig> back = ConnectionsJson.read("﻿" + json);
@@ -41,6 +43,7 @@ public class ConnectionsJsonCheck {
     eq(b.port, 5433);
     eq(b.production, true);
     eq(b.readOnly, false);
+    eq(b.driverJar, "");
     if (b.id.equals(a.id)) throw new AssertionError("가져온 접속은 새 id");
     eq(ConnectionsJson.write(List.of(b)), json);
     eq(ConnectionsJson.read(ConnectionsJson.write(List.of())).size(), 0);

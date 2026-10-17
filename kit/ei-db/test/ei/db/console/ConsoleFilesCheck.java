@@ -23,6 +23,24 @@ public class ConsoleFilesCheck {
     eq(ConsoleFiles.freeSlot(dir, id, 0), 3);
     eq(ConsoleFiles.freeSlot(dir, id, 4), 5);
     try (var s = Files.list(dir)) { eq(s.count(), 2L); } // 임시 파일이 남지 않는다
+
+    // 프로젝트 폴더와 예전 자리 옮기기: 없는 것만 옮기고 있는 것은 덮지 않는다.
+    Path root = Files.createTempDirectory("root");
+    eq(ConsoleFiles.projectDir(root, "gpm.1a2b").getFileName().toString(), "gpm.1a2b");
+    eq(ConsoleFiles.projectDir(root, "..").getParent(), root);
+    eq(ConsoleFiles.projectDir(root, "a/b").getParent(), root);
+    Path proj = ConsoleFiles.projectDir(root, "p1");
+    eq(ConsoleFiles.migrate(root, proj), 0);
+    ConsoleFiles.write(root.resolve("x.sql"), "예전 x");
+    ConsoleFiles.write(root.resolve("y.sql"), "예전 y");
+    ConsoleFiles.write(proj.resolve("y.sql"), "새 y");
+    eq(ConsoleFiles.migrate(root, proj), 1);
+    eq(ConsoleFiles.read(proj.resolve("x.sql")), "예전 x");
+    eq(ConsoleFiles.read(proj.resolve("y.sql")), "새 y");
+    eq(ConsoleFiles.read(root.resolve("x.sql")), "예전 x");
+    eq(ConsoleFiles.read(root.resolve("y.sql")), "예전 y");
+    eq(ConsoleFiles.migrate(root, ConsoleFiles.projectDir(root, "p2")), 2);
+    eq(ConsoleFiles.migrate(root, ConsoleFiles.projectDir(root, "p2")), 0);
     System.out.println("ConsoleFilesCheck 통과");
   }
 }

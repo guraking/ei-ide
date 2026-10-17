@@ -15,7 +15,7 @@ public class SqlTextCheck {
   public static void main(String[] args) {
     List<String> cols = List.of("ORDER_ID", "LINE_NO", "QTY", "MEMO");
     List<List<Object>> rows = List.of(Arrays.asList(100231, 1, 2, "it's"), Arrays.asList(100231, 2, null, null));
-    eq(SqlText.updates("order_item", cols, rows, Set.of("ORDER_ID", "LINE_NO")),
+    eq(SqlText.updates("order_item", cols, List.of(), rows, Set.of("ORDER_ID", "LINE_NO"), null),
        "UPDATE order_item\n"
      + "   SET QTY = 2\n"
      + "     , MEMO = 'it''s'\n"
@@ -29,14 +29,14 @@ public class SqlTextCheck {
      + " WHERE 1 = 1\n"
      + "   AND ORDER_ID = 100231\n"
      + "   AND LINE_NO = 2;\n");
-    String noPk = SqlText.updates("t", List.of("a", "b"), List.of(Arrays.asList(1, "x")), Set.of());
+    String noPk = SqlText.updates("t", List.of("a", "b"), List.of(), List.of(Arrays.asList(1, "x")), Set.of(), null);
     eq(noPk.startsWith("-- PK 를 찾지 못해 첫 칼럼(a)"), true);
     eq(noPk.endsWith("UPDATE t\n   SET b = 'x'\n WHERE 1 = 1\n   AND a = 1;\n"), true);
-    eq(SqlText.updates("t", List.of("id"), List.of(Arrays.asList(1)), Set.of("ID")), "");
+    eq(SqlText.updates("t", List.of("id"), List.of(), List.of(Arrays.asList(1)), Set.of("ID"), null), "");
     eq(SqlText.update("t", List.of("ID", "V"), Arrays.asList(null, 3), new boolean[]{true, false}),
        "UPDATE t\n   SET V = 3\n WHERE 1 = 1\n   AND ID IS NULL;\n");
 
-    eq(SqlText.inserts("T", List.of("A", "B"), List.of(Arrays.asList("x", 1), Arrays.asList(null, 22))),
+    eq(SqlText.inserts("T", List.of("A", "B"), List.of(), List.of(Arrays.asList("x", 1), Arrays.asList(null, 22)), null),
        "INSERT INTO T (\n"
      + "       A\n"
      + "     , B\n"
@@ -52,7 +52,7 @@ public class SqlTextCheck {
      + "       NULL  -- A\n"
      + "     , 22    -- B\n"
      + ");\n");
-    eq(SqlText.inserts("T", List.of("A"), List.of()), "");
+    eq(SqlText.inserts("T", List.of("A"), List.of(), List.of(), null), "");
 
     eq(SqlText.isNumericType("NUMBER"), true);
     eq(SqlText.isNumericType("int unsigned"), true);
@@ -101,6 +101,36 @@ public class SqlTextCheck {
     eq(u.sql(), "UPDATE emp\n   SET NAME = ?\n     , MEMO = NULL\n WHERE 1 = 1\n   AND ID = ?;\n");
     eq(u.binds(), Arrays.asList("a\\", 7));
     eq(SqlText.updateWithBinds("emp", List.of("ID"), Arrays.asList(1), new boolean[]{true}), null);
+    // 복합 PK 일부만 결과에 있으면 만들지 않는다(첫 칼럼 대체는 PK 를 못 읽었을 때만).
+    fails(() -> SqlText.updates("order_item", List.of("ORDER_ID", "QTY"), List.of(), List.of(Arrays.asList(1, 2)), Set.of("ORDER_ID", "LINE_NO"), null));
+    fails(() -> SqlText.updates("t", List.of("A", "B"), List.of(), List.of(Arrays.asList(1, 2)), Set.of("ID"), null));
+    // LOB · 이진 칼럼은 SET · VALUES 에서 빠지고 주석이 붙는다: 형식 이름 · byte[] · 잘린 CLOB 글.
+    String cut = "x".repeat(4000) + "…";
+    List<String> lobCols = List.of("ID", "DOC", "IMG", "RAWV", "NAME");
+    List<String> lobTypes = List.of("NUMBER", "VARCHAR2", "BLOB", "VARCHAR2", "VARCHAR2");
+    List<List<Object>> lobRows = List.of(Arrays.asList(1, cut, "(BLOB 3 바이트)", new byte[]{1}, "a"));
+    eq(SqlText.updates("t", lobCols, lobTypes, lobRows, Set.of("ID"), null),
+       "-- LOB 칼럼 제외: DOC, IMG, RAWV\nUPDATE t\n   SET NAME = 'a'\n WHERE 1 = 1\n   AND ID = 1;\n");
+    eq(SqlText.inserts("t", lobCols, lobTypes, lobRows, null),
+       "-- LOB 칼럼 제외: DOC, IMG, RAWV\nINSERT INTO t (\n       ID\n     , NAME\n) VALUES (\n       1    -- ID\n     , 'a'  -- NAME\n);\n");
+    eq(SqlText.isLobValue(new Object() { @Override public String toString() { return "x"; } }), false);
+    eq(SqlText.isLobValue("x".repeat(3999) + "…"), false);
+    fails(() -> SqlText.updates("t", List.of("ID", "V"), List.of("RAW", "NUMBER"), List.of(Arrays.asList(new byte[]{1}, 2)), Set.of("ID"), null));
+    // MySQL 은 \ 도 이스케이프.
+    eq(SqlText.literal("a\\b'c"), "'a\\b''c'");
+    eq(SqlText.literal("a\\b'c", ei.db.DbKind.MYSQL), "'a\\\\b''c'");
+    eq(SqlText.inserts("T", List.of("A"), List.of(), List.of(Arrays.asList("C:\\")), ei.db.DbKind.MYSQL).contains("'C:\\\\'"), true);
+
+    // 주석 · 문자열 지우기와 다시 읽기 판정.
+    eq(SqlText.code("SELECT '--x' a -- FROM T_BAK\n/* FROM Z */ FROM t"), "SELECT '' a  \n  FROM t");
+    eq(SqlText.isRereadable("-- 조회\nselect * from t"), true);
+    eq(SqlText.isRereadable("WITH x AS (SELECT 1 FROM dual) SELECT * FROM x"), true);
+    eq(SqlText.isRereadable("(SELECT 1 FROM dual) UNION (SELECT 2 FROM dual)"), true);
+    eq(SqlText.isRereadable("SELECT * FROM t FOR UPDATE"), true);
+    eq(SqlText.isRereadable("SELECT 'DELETE' FROM t"), true);
+    eq(SqlText.isRereadable("INSERT INTO t VALUES (1) RETURNING id"), false);
+    eq(SqlText.isRereadable("WITH d AS (DELETE FROM t RETURNING *) SELECT * FROM d"), false);
+    eq(SqlText.isRereadable("UPDATE t SET a = 1 RETURNING a"), false);
     System.out.println("SqlTextCheck 통과");
   }
 }

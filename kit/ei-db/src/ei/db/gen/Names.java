@@ -1,7 +1,10 @@
 package ei.db.gen;
 
+import ei.db.DbKind;
+
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /** DB 이름 → 자바 이름 · SQL 표기. IntelliJ 에 기대지 않는다(자체 점검에서 바로 부른다). */
 public final class Names {
@@ -10,6 +13,9 @@ public final class Names {
   /** 두 글자 별칭이 SQL 예약어와 겹치면 별칭으로 못 쓴다. */
   private static final Set<String> RESERVED = Set.of("as", "at", "by", "do", "go", "if", "in", "is", "of", "on", "or", "to");
   private static final String FALLBACK_ALIAS = "t";
+  /** 따옴표 없이 써도 그 이름 그대로 잡히는 꼴: Oracle 은 대문자로, PostgreSQL 은 소문자로 접힌다. */
+  private static final Pattern ORACLE_PLAIN = Pattern.compile("[A-Z][A-Z0-9_$#]*");
+  private static final Pattern POSTGRES_PLAIN = Pattern.compile("[a-z_][a-z0-9_$]*");
 
   /** PRODUCT_ID → productId. 밑줄이 없고 대소문자가 섞인 이름(productId)은 첫 글자만 낮춘다. 식별자에 못 쓰는 글자는 밑줄로 본다. */
   public static String camel(String raw) {
@@ -51,9 +57,27 @@ public final class Names {
     return a.isEmpty() || RESERVED.contains(a) ? FALLBACK_ALIAS : a;
   }
 
-  /** SQL 본문 표기. 표 · 칼럼 이름은 대문자로 쓴다(별칭은 alias 가 소문자로 만든다). */
-  public static String sql(String name) {
-    return name.toUpperCase(Locale.ROOT);
+  /**
+   * SQL 본문의 스키마 · 표 · 칼럼 표기(메타에서 읽은 이름을 받는다. 별칭은 alias 가 소문자로 만든다).
+   * Oracle: 대문자 이름이면 그대로(대문자), 아니면 "그대로". PostgreSQL: 소문자 이름이면 대문자로(접혀서 같은 이름), 아니면 "그대로".
+   * MySQL: 리눅스에서 표 이름 대소문자를 가리므로 그대로.
+   * shortcut: 예약어와 같은 이름(USER · ORDER 등)은 따옴표를 붙이지 않는다. 그런 표가 생기면 예약어 목록을 더한다.
+   */
+  public static String sql(DbKind kind, String name) {
+    return switch (kind) {
+      case MYSQL -> name;
+      case ORACLE -> ORACLE_PLAIN.matcher(name).matches() ? name : quote(name);
+      case POSTGRES -> POSTGRES_PLAIN.matcher(name).matches() ? name.toUpperCase(Locale.ROOT) : quote(name);
+    };
+  }
+
+  /** 스키마.표 표기. */
+  public static String sql(DbKind kind, String schema, String table) {
+    return sql(kind, schema) + "." + sql(kind, table);
+  }
+
+  private static String quote(String name) {
+    return '"' + name.replace("\"", "\"\"") + '"';
   }
 
   /** 마지막 점 뒤(단순 이름). */

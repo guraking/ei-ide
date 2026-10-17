@@ -26,8 +26,11 @@ import ei.db.Notify;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import javax.swing.Icon;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
@@ -66,7 +69,7 @@ final class MapperNav {
     if (!MyBatisLineMarker.isStatementTagName(element)) return null;
     Project project = element.getProject();
     if (DumbService.isDumb(project)) return null;
-    MapperIndex.Entry e = MapperIndex.entry(element.getContainingFile().getViewProvider().getVirtualFile());
+    MapperIndex.Entry e = MapperIndex.entry(project, element.getContainingFile().getViewProvider().getVirtualFile());
     if (e == null || e.namespace() == null) return null;
     int tagStart = element.getPrevSibling().getTextRange().getStartOffset();
     String id = null;
@@ -96,6 +99,14 @@ final class MapperNav {
     return found;
   }
 
+  /**
+   * 줄 아이콘. 짝 찾기는 색인 · 파일 읽기라 빠른 단계(getLineMarkerInfo)가 아닌 collectSlowLineMarkers 에서 단다.
+   */
+  private static LineMarkerInfo<PsiElement> marker(PsiElement element, Icon icon, String tooltip, Consumer<PsiElement> open) {
+    return new LineMarkerInfo<>(element, element.getTextRange(), icon,
+        e -> tooltip, (mouse, e) -> open.accept(e), GutterIconRenderer.Alignment.LEFT, () -> tooltip);
+  }
+
   private static final String FINDING = "이동할 곳 찾는 중";
   private static final String NOT_FOUND = "이동할 곳을 찾지 못했습니다";
 
@@ -104,10 +115,15 @@ final class MapperNav {
     private static final String TOOLTIP = "매퍼 XML 로 이동";
 
     @Override
-    public @Nullable LineMarkerInfo<?> getLineMarkerInfo(@NotNull PsiElement element) {
-      if (xmlTarget(element) == null) return null;
-      return new LineMarkerInfo<>(element, element.getTextRange(), AllIcons.Gutter.ImplementedMethod,
-          e -> TOOLTIP, (mouse, e) -> open(e), GutterIconRenderer.Alignment.LEFT, () -> TOOLTIP);
+    public @Nullable LineMarkerInfo<?> getLineMarkerInfo(@NotNull PsiElement element) { return null; }
+
+    @Override
+    public void collectSlowLineMarkers(@NotNull List<? extends PsiElement> elements,
+                                       @NotNull Collection<? super LineMarkerInfo<?>> result) {
+      for (PsiElement element : elements) {
+        ProgressManager.checkCanceled();
+        if (xmlTarget(element) != null) result.add(marker(element, AllIcons.Gutter.ImplementedMethod, TOOLTIP, JavaMarker::open));
+      }
     }
 
     /** 누른 때 다시 찾는다(그 사이 XML 이 바뀌었을 수 있다). */
@@ -123,10 +139,15 @@ final class MapperNav {
     private static final String TOOLTIP = "인터페이스 메서드로 이동";
 
     @Override
-    public @Nullable LineMarkerInfo<?> getLineMarkerInfo(@NotNull PsiElement element) {
-      if (javaTarget(element) == null) return null;
-      return new LineMarkerInfo<>(element, element.getTextRange(), AllIcons.Gutter.ImplementingMethod,
-          e -> TOOLTIP, (mouse, e) -> open(e), GutterIconRenderer.Alignment.LEFT, () -> TOOLTIP);
+    public @Nullable LineMarkerInfo<?> getLineMarkerInfo(@NotNull PsiElement element) { return null; }
+
+    @Override
+    public void collectSlowLineMarkers(@NotNull List<? extends PsiElement> elements,
+                                       @NotNull Collection<? super LineMarkerInfo<?>> result) {
+      for (PsiElement element : elements) {
+        ProgressManager.checkCanceled();
+        if (javaTarget(element) != null) result.add(marker(element, AllIcons.Gutter.ImplementingMethod, TOOLTIP, XmlMarker::open));
+      }
     }
 
     private static void open(PsiElement e) {

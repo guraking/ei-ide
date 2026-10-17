@@ -1,5 +1,6 @@
 package ei.db.ui;
 
+import ei.db.DbKind;
 import ei.db.Meta;
 import ei.db.gen.Names;
 
@@ -9,12 +10,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.Locale;
 
 /**
  * 탐색기 「SELECT · INSERT · UPDATE 문 만들기」의 본문. 칼럼마다 한 줄이고 쉼표는 줄 앞(「     , 」)에 둔다.
  * 주석이 있으면 줄 끝에 `-- 주석` 을 같은 열에 맞춰 붙인다.
- * 스키마 · 표 · 칼럼 이름은 대문자, 별칭은 소문자로 쓴다(따옴표 없는 이름은 Oracle 은 그대로, PostgreSQL 은 소문자로 접어 같은 표를 가리킨다).
+ * 스키마 · 표 · 칼럼 이름은 Names.sql 표기(Oracle · PostgreSQL 은 대문자, 접히지 않는 이름은 따옴표, MySQL 은 그대로), 별칭은 소문자로 쓴다.
  * 값 자리는 NULL 로 두고, 조건을 바로 이어 쓰도록 문장 끝 ; 은 붙이지 않는다.
  */
 final class SelectSql {
@@ -23,7 +23,7 @@ final class SelectSql {
   private static final String ALIAS = "t";
   private static final String VALUE = "NULL";
 
-  static String build(String schema, String table, List<Meta.Column> columns) {
+  static String build(DbKind kind, String schema, String table, List<Meta.Column> columns) {
     StringBuilder sb = new StringBuilder("SELECT\n");
     if (columns.isEmpty()) {
       sb.append(LEAD_FIRST).append(ALIAS).append(".*\n");
@@ -31,29 +31,29 @@ final class SelectSql {
       List<String> items = new ArrayList<>();
       List<String> comments = new ArrayList<>();
       for (Meta.Column col : columns) {
-        items.add(ALIAS + "." + up(col.name()));
+        items.add(ALIAS + "." + Names.sql(kind, col.name()));
         comments.add(col.comment());
       }
       leading(sb, LEAD_FIRST, items, comments);
     }
-    sb.append("  FROM ").append(up(schema)).append('.').append(up(table)).append(' ').append(ALIAS).append('\n');
+    sb.append("  FROM ").append(Names.sql(kind, schema, table)).append(' ').append(ALIAS).append('\n');
     sb.append(" WHERE 1 = 1");
     return sb.toString();
   }
 
   /** 모든 칼럼에 NULL 을 넣는 INSERT. 값 줄 끝에는 칼럼 이름 · 형식을 달아 어느 값인지 보이게 한다. */
-  static String insert(String schema, String table, List<Meta.Column> columns) {
+  static String insert(DbKind kind, String schema, String table, List<Meta.Column> columns) {
     List<String> names = new ArrayList<>();
     List<String> comments = new ArrayList<>();
     List<String> values = new ArrayList<>();
     List<String> valueNotes = new ArrayList<>();
     for (Meta.Column col : columns) {
-      names.add(up(col.name()));
+      names.add(Names.sql(kind, col.name()));
       comments.add(col.comment());
       values.add(VALUE);
-      valueNotes.add(up(col.name()) + " " + col.typeLabel());
+      valueNotes.add(Names.sql(kind, col.name()) + " " + col.typeLabel());
     }
-    StringBuilder sb = new StringBuilder("INSERT INTO ").append(up(schema)).append('.').append(up(table)).append(" (\n");
+    StringBuilder sb = new StringBuilder("INSERT INTO ").append(Names.sql(kind, schema, table)).append(" (\n");
     leading(sb, LEAD_FIRST, names, comments);
     sb.append(") VALUES (\n");
     leading(sb, LEAD_FIRST, values, valueNotes);
@@ -61,18 +61,22 @@ final class SelectSql {
     return sb.toString();
   }
 
-  /** PK 가 아닌 칼럼은 SET, PK 칼럼은 WHERE 조건으로. PK 가 없으면 조건을 직접 쓰라는 줄을 남긴다. */
-  static String update(String schema, String table, List<Meta.Column> columns) {
+  /**
+   * PK 가 아닌 칼럼은 SET, PK 칼럼은 WHERE 조건으로. PK 가 없으면 조건을 직접 쓰라는 줄을 남긴다.
+   * PostgreSQL 은 SET 왼쪽에 별칭을 붙이면 오류라 SET 에서만 별칭을 뺀다.
+   */
+  static String update(DbKind kind, String schema, String table, List<Meta.Column> columns) {
+    String setPrefix = kind == DbKind.POSTGRES ? "" : ALIAS + ".";
     List<String> sets = new ArrayList<>();
     List<String> setNotes = new ArrayList<>();
     List<String> keys = new ArrayList<>();
     List<String> keyNotes = new ArrayList<>();
     for (Meta.Column col : columns) {
-      String item = ALIAS + "." + up(col.name()) + " = " + VALUE;
-      if (col.pk()) { keys.add(item); keyNotes.add(col.comment()); }
-      else { sets.add(item); setNotes.add(col.comment()); }
+      String name = Names.sql(kind, col.name()) + " = " + VALUE;
+      if (col.pk()) { keys.add(ALIAS + "." + name); keyNotes.add(col.comment()); }
+      else { sets.add(setPrefix + name); setNotes.add(col.comment()); }
     }
-    StringBuilder sb = new StringBuilder("UPDATE ").append(up(schema)).append('.').append(up(table)).append(' ').append(ALIAS).append('\n');
+    StringBuilder sb = new StringBuilder("UPDATE ").append(Names.sql(kind, schema, table)).append(' ').append(ALIAS).append('\n');
     if (sets.isEmpty()) sb.append("   SET -- 바꿀 칼럼이 없습니다(모두 PK)\n");
     else leading(sb, "   SET ", sets, setNotes);
     sb.append(" WHERE 1 = 1");
@@ -96,20 +100,20 @@ final class SelectSql {
    * 조건은 고른 표끼리의 FK 로 만들고, 두 표 사이에 FK 가 없으면 한쪽의 PK 칼럼과 이름이 같은 칼럼을 찾아 추정 조건을 단다.
    * 그래도 못 이은 표는 조건을 직접 쓰라는 주석 줄을 남긴다. tables 는 고른 순서, columns · fks 는 표 이름(대소문자 그대로) 기준.
    */
-  static String join(String schema, List<String> tables, Map<String, List<Meta.Column>> columns, List<Meta.ForeignKey> fks) {
+  static String join(DbKind kind, String schema, List<String> tables, Map<String, List<Meta.Column>> columns, List<Meta.ForeignKey> fks) {
     Map<String, String> alias = aliases(tables);
     List<String> items = new ArrayList<>();
     List<String> notes = new ArrayList<>();
     for (String t : tables) {
       for (Meta.Column col : columns.getOrDefault(t, List.of())) {
-        items.add(alias.get(t) + "." + up(col.name()));
+        items.add(alias.get(t) + "." + Names.sql(kind, col.name()));
         notes.add(col.comment());
       }
     }
     StringBuilder sb = new StringBuilder("SELECT\n");
     leading(sb, LEAD_FIRST, items, notes);
     List<String> from = new ArrayList<>();
-    for (String t : tables) from.add(up(schema) + "." + up(t) + " " + alias.get(t));
+    for (String t : tables) from.add(Names.sql(kind, schema, t) + " " + alias.get(t));
     sb.append("  FROM ").append(String.join(", ", from)).append('\n');
     sb.append(" WHERE 1 = 1");
 
@@ -118,7 +122,7 @@ final class SelectSql {
     Set<String> linked = new HashSet<>();
     for (Meta.ForeignKey fk : fks) {
       if (!alias.containsKey(fk.fkTable()) || !alias.containsKey(fk.pkTable()) || fk.fkTable().equals(fk.pkTable())) continue;
-      conds.add(alias.get(fk.fkTable()) + "." + up(fk.fkColumn()) + " = " + alias.get(fk.pkTable()) + "." + up(fk.pkColumn()));
+      conds.add(alias.get(fk.fkTable()) + "." + Names.sql(kind, fk.fkColumn()) + " = " + alias.get(fk.pkTable()) + "." + Names.sql(kind, fk.pkColumn()));
       condNotes.add(fk.name().isEmpty() ? "FK" : "FK " + fk.name());
       linked.add(pair(fk.fkTable(), fk.pkTable()));
     }
@@ -128,8 +132,8 @@ final class SelectSql {
         String b = tables.get(j);
         if (linked.contains(pair(a, b))) continue;
         int before = conds.size();
-        guess(a, b, columns, alias, conds, condNotes);
-        guess(b, a, columns, alias, conds, condNotes);
+        guess(kind, a, b, columns, alias, conds, condNotes);
+        guess(kind, b, a, columns, alias, conds, condNotes);
         if (conds.size() > before) linked.add(pair(a, b));
       }
     }
@@ -138,24 +142,24 @@ final class SelectSql {
       lines(sb, "   AND ", conds, condNotes);
       sb.setLength(sb.length() - 1);
     }
-    for (int i = 1; i < tables.size(); i++) {
-      String t = tables.get(i);
+    for (String t : tables) {
       boolean any = false;
       for (String other : tables) any |= !other.equals(t) && linked.contains(pair(t, other));
-      if (!any) sb.append("\n   -- ").append(up(t)).append(" 와 이을 조건을 찾지 못했습니다. 직접 쓰세요");
+      if (!any) sb.append("\n   -- ").append(Names.sql(kind, t)).append(" 와 이을 조건을 찾지 못했습니다. 직접 쓰세요");
     }
     return sb.toString();
   }
 
   /** parent 의 PK 칼럼과 이름이 같은 칼럼이 child 에 있으면 child.칼럼 = parent.칼럼. 이미 같은 조건이 있으면 넣지 않는다. */
-  private static void guess(String child, String parent, Map<String, List<Meta.Column>> columns, Map<String, String> alias,
+  private static void guess(DbKind kind, String child, String parent, Map<String, List<Meta.Column>> columns, Map<String, String> alias,
                             List<String> conds, List<String> notes) {
     Set<String> childNames = new HashSet<>();
-    for (Meta.Column c : columns.getOrDefault(child, List.of())) childNames.add(up(c.name()));
+    for (Meta.Column c : columns.getOrDefault(child, List.of())) childNames.add(Names.sql(kind, c.name()));
     for (Meta.Column p : columns.getOrDefault(parent, List.of())) {
-      if (!p.pk() || !childNames.contains(up(p.name()))) continue;
-      String cond = alias.get(child) + "." + up(p.name()) + " = " + alias.get(parent) + "." + up(p.name());
-      String reverse = alias.get(parent) + "." + up(p.name()) + " = " + alias.get(child) + "." + up(p.name());
+      String name = Names.sql(kind, p.name());
+      if (!p.pk() || !childNames.contains(name)) continue;
+      String cond = alias.get(child) + "." + name + " = " + alias.get(parent) + "." + name;
+      String reverse = alias.get(parent) + "." + name + " = " + alias.get(child) + "." + name;
       if (conds.contains(cond) || conds.contains(reverse)) continue;
       conds.add(cond);
       notes.add(GUESS_NOTE);
@@ -198,10 +202,6 @@ final class SelectSql {
       String comment = comments.get(i).replaceAll("\\s+", " ").trim();
       sb.append(prefix).append(comment.isEmpty() ? items.get(i) : pad(items.get(i), width) + "  -- " + comment).append('\n');
     }
-  }
-
-  private static String up(String name) {
-    return name.toUpperCase(Locale.ROOT);
   }
 
   private static String pad(String s, int width) {

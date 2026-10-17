@@ -25,6 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * 프로젝트의 매퍼 XML 을 namespace 로 찾는다. namespace 표는 프로젝트마다 한 번 만들어 두고 VFS 나 PSI 가
  * 바뀐 뒤에만 다시 만든다. 다시 만들 때도 파일마다 수정 표시(열린 문서면 문서의 것)를 보고 바뀐 파일만 다시 읽는다.
+ * 파일별 결과도 표에 딸려 프로젝트 사용자 데이터에 있어 프로젝트를 닫으면 함께 사라지고, 다시 만들 때 지금 없는 파일은 빠진다.
  * 읽기 접근 안에서 부른다. 색인 중이면 빈 결과.
  */
 final class MapperIndex {
@@ -35,10 +36,8 @@ final class MapperIndex {
   /** 매퍼 XML 하나. ids 는 문장 id → 여는 태그 위치(문서 순서). 매퍼가 아니면 namespace 가 null. */
   record Entry(VirtualFile file, long stamp, String namespace, Map<String, Integer> ids) {}
 
-  private static final Map<VirtualFile, Entry> CACHE = new ConcurrentHashMap<>();
-
-  /** namespace → 매퍼 XML 들. version 은 만들 때의 VFS 수정 수 + PSI 수정 수. */
-  private record Table(long version, Map<String, List<Entry>> byNamespace) {}
+  /** namespace → 매퍼 XML 들. version 은 만들 때의 VFS 수정 수 + PSI 수정 수. files 는 파일별 결과(매퍼 아닌 XML 포함). */
+  private record Table(long version, Map<String, List<Entry>> byNamespace, Map<VirtualFile, Entry> files) {}
 
   private static final Key<Table> TABLE = Key.create("ei.db.mybatis.MapperIndex.table");
 
@@ -48,28 +47,48 @@ final class MapperIndex {
     return table(project).byNamespace().getOrDefault(namespace, List.of());
   }
 
+  /** 프로젝트의 모든 매퍼 XML. 색인 중이면 빈 목록. */
+  static List<Entry> all(Project project) {
+    if (DumbService.isDumb(project)) return List.of();
+    List<Entry> out = new ArrayList<>();
+    for (List<Entry> l : table(project).byNamespace().values()) out.addAll(l);
+    return out;
+  }
+
   private static Table table(Project project) {
     long version = VirtualFileManager.getInstance().getModificationCount()
         + PsiModificationTracker.getInstance(project).getModificationCount();
     Table t = project.getUserData(TABLE);
     if (t != null && t.version() == version) return t;
+    Map<VirtualFile, Entry> old = t == null ? Map.of() : t.files();
     Map<String, List<Entry>> byNamespace = new HashMap<>();
+    Map<VirtualFile, Entry> files = new ConcurrentHashMap<>();
     for (VirtualFile f : FilenameIndex.getAllFilesByExt(project, XML_EXT, GlobalSearchScope.projectScope(project))) {
       ProgressManager.checkCanceled();
-      Entry e = entry(f);
-      if (e != null && e.namespace() != null) byNamespace.computeIfAbsent(e.namespace(), k -> new ArrayList<>()).add(e);
+      Entry e = entry(old, f);
+      if (e == null) continue;
+      files.put(f, e);
+      if (e.namespace() != null) byNamespace.computeIfAbsent(e.namespace(), k -> new ArrayList<>()).add(e);
     }
-    t = new Table(version, byNamespace);
+    t = new Table(version, byNamespace, files);
     project.putUserData(TABLE, t);
     return t;
   }
 
-  /** 파일 하나의 최신 결과. 읽지 못하면 null. */
-  static Entry entry(VirtualFile f) {
+  /** 파일 하나의 최신 결과. 읽지 못하면 null. 색인 중이 아닐 때 부른다. */
+  static Entry entry(Project project, VirtualFile f) {
+    Map<VirtualFile, Entry> files = table(project).files();
+    Entry e = entry(files, f);
+    if (e != null) files.put(f, e);
+    return e;
+  }
+
+  /** cache 의 결과가 수정 표시와 같으면 그것, 아니면 새로 읽은 것. cache 는 바꾸지 않는다. */
+  private static Entry entry(Map<VirtualFile, Entry> cache, VirtualFile f) {
     if (f == null || !f.isValid() || f.isDirectory()) return null;
     Document doc = FileDocumentManager.getInstance().getCachedDocument(f);
     long stamp = doc != null ? doc.getModificationStamp() : f.getModificationStamp();
-    Entry old = CACHE.get(f);
+    Entry old = cache.get(f);
     if (old != null && old.stamp() == stamp) return old;
     CharSequence text;
     try {
@@ -78,9 +97,7 @@ final class MapperIndex {
       // 읽지 못한 파일은 매퍼 후보에서 빠질 뿐이고, 다음 호출에서 다시 시도한다.
       return null;
     }
-    Entry e = read(f, stamp, text);
-    CACHE.put(f, e);
-    return e;
+    return read(f, stamp, text);
   }
 
   private static Entry read(VirtualFile f, long stamp, CharSequence text) {

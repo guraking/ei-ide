@@ -1,6 +1,6 @@
 package ei.db;
 
-/** 지원하는 DB 종류. 드라이버는 ~/.m2 에서 groupPath 아래 artifact 이름으로 시작하는 jar 를 찾는다. */
+/** 지원하는 DB 종류. 드라이버는 ~/.m2 의 groupPath/downloadArtifact 아래에서 찾는다(Drivers.findInMaven). artifactPrefix 는 화면 표시용. */
 public enum DbKind {
   ORACLE("Oracle", 1521, "oracle.jdbc.OracleDriver", "com/oracle/database/jdbc", "ojdbc", "ojdbc11"),
   MYSQL("MySQL", 3306, "com.mysql.cj.jdbc.Driver", "com/mysql", "mysql-connector-j", "mysql-connector-j"),

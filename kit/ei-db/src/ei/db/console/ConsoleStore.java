@@ -21,7 +21,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 콘솔 글을 IDE 설정 폴더의 ei-db/consoles/ 에 접속 id(와 콘솔 번호)별로 저장해 IDE 를 다시 열어도 남게 한다.
+ * 콘솔 글을 IDE 설정 폴더의 ei-db/consoles/<프로젝트 구분>/ 에 접속 id(와 콘솔 번호)별로 저장해 IDE 를 다시 열어도 남게 한다.
+ * 예전 자리(ei-db/consoles/ 바로 아래) 파일은 이 프로젝트에서 첫 콘솔을 열 때 한 번 이 프로젝트 폴더로 옮긴다(있는 파일은 덮지 않는다).
  * 글이 바뀌면 SAVE_DELAY_MS 동안 모았다가 백그라운드에서 쓰고, 프로젝트가 닫힐 때(IDE 종료 포함) 남은 것을 모두 쓴다.
  * 저장 파일을 읽지 못한 콘솔은 그 파일을 덮지 않도록 저장하지 않는다.
  */
@@ -31,13 +32,16 @@ public final class ConsoleStore implements Disposable {
   private static final int SAVE_DELAY_MS = 1000;
 
   private final Project project;
-  private final Path dir = PathManager.getConfigDir().resolve("ei-db").resolve("consoles");
+  private final Path root = PathManager.getConfigDir().resolve("ei-db").resolve("consoles");
+  private final Path dir;
+  private boolean migrated;
   private final Map<Document, Path> paths = new ConcurrentHashMap<>();
   private final Set<Document> dirty = ConcurrentHashMap.newKeySet();
   private final Alarm alarm = new Alarm(Alarm.ThreadToUse.POOLED_THREAD, this);
 
   public ConsoleStore(Project project) {
     this.project = project;
+    this.dir = ConsoleFiles.projectDir(root, project.getLocationHash());
   }
 
   static ConsoleStore get(Project project) {
@@ -46,12 +50,24 @@ public final class ConsoleStore implements Disposable {
 
   /** 접속 id 의 n 번째 콘솔에 저장된 글. 없으면 "". 읽지 못하면 알리고 null. 작은 파일 하나라 부른 스레드에서 읽는다. */
   String load(String id, int n) {
+    migrateOnce();
     Path p = ConsoleFiles.consolePath(dir, id, n);
     try {
       return ConsoleFiles.read(p);
     } catch (IOException e) {
       Notify.error(project, "저장된 콘솔 내용을 읽지 못해 이 콘솔은 저장하지 않습니다: " + p + " · " + e.getMessage());
       return null;
+    }
+  }
+
+  /** 예전 자리 파일 복사. 실패하면 알리고 다시 시도하지 않는다. */
+  private void migrateOnce() {
+    if (migrated) return;
+    migrated = true;
+    try {
+      ConsoleFiles.migrate(root, dir);
+    } catch (IOException e) {
+      Notify.error(project, "예전 콘솔 저장 파일을 가져오지 못했습니다: " + root + " · " + e.getMessage());
     }
   }
 

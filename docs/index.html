@@ -532,16 +532,16 @@ footer{padding:56px 0 40px; color:var(--muted); font-size:13px}
 <section id="sync">
   <div class="wrap">
     <h2><span class="no">05</span>Synchronize</h2>
-    <p class="lead">이클립스 Team → Synchronize Workspace 와 같은 창입니다. 프로젝트 안의 Git 저장소 여러 개와 SVN 을 저장소별로 묶어, 들어올 변경 · 나갈 변경 · 충돌을 한눈에 봅니다. 커밋 · Push 뒤에는 자동으로 다시 비교합니다.</p>
+    <p class="lead">이클립스 Team → Synchronize Workspace 와 같은 창입니다. 프로젝트 안의 Git 저장소 여러 개와 SVN 을 저장소별로 묶어, 들어올 변경 · 나갈 변경 · 충돌을 한눈에 봅니다. 커밋 · 올리기(Push) 뒤에는 자동으로 다시 비교합니다. 창 아래 단추는 받기(Pull) · 커밋… · 올리기(Push) · 충돌 해결입니다.</p>
 
     <div class="figure">
       <div>
         <div class="scroll">
           <div class="ide rel" style="min-height:340px">
-            <div class="title"><span class="dots"><i></i><i></i><i></i></span>Synchronize</div>
+            <div class="title"><span class="dots"><i></i><i></i><i></i></span>동기화</div>
             <div class="bar"><span class="mark">1</span><span class="btn">전체</span><span class="btn">들어올</span><span class="btn">나갈</span><span class="btn">충돌</span><span class="sepv"></span><span class="btn">새로고침</span></div>
             <div class="treeview">
-              <div>▾ 저장소 backend <span class="muted">— 마지막 Fetch 2분 전</span></div>
+              <div>▾ 저장소 backend <span class="muted">— 마지막 원격 확인 10:42</span></div>
               <div class="l1">▾ 들어올 변경 <span class="tag in">2</span></div>
               <div class="l2">OrderService.java</div>
               <div class="l2">application.yml</div>
@@ -556,10 +556,10 @@ footer{padding:56px 0 40px; color:var(--muted); font-size:13px}
               <div>▸ 저장소 front <span class="muted">— 원격과 같습니다</span></div>
             </div>
             <div class="menu" style="left:250px; top:190px">
-              <div>Commit…</div>
+              <div>.gitignore 에 추가</div>
               <div>내 변경 되돌리기</div>
-              <div>무시 목록에 추가</div>
-              <div class="on">변경 모른 척하기 — assume-unchanged <span class="mark">3</span></div>
+              <div>스테이징만 풀기 — 파일은 그대로</div>
+              <div class="on">변경 모른 척하기 <span class="mark">3</span></div>
               <hr><div>새로고침</div>
             </div>
           </div>
@@ -568,8 +568,8 @@ footer{padding:56px 0 40px; color:var(--muted); font-size:13px}
       </div>
       <ol class="legend">
         <li><span class="mark">1</span><div><b>보기 거르기</b> <span class="t">전체 · 들어올 · 나갈 · 충돌만 따로 볼 수 있습니다.</span></div></li>
-        <li><span class="mark">2</span><div><b>파일 우클릭</b> <span class="t">Commit · 내 변경 되돌리기 · 무시 목록에 추가 · 변경 모른 척하기.</span></div></li>
-        <li><span class="mark">3</span><div><b>변경 모른 척하기</b> <span class="t"><code>application-local.yml</code> 처럼 내 PC 에서만 고친 파일이 커밋 목록에 계속 뜰 때 씁니다. 커밋 창 · 프로젝트 트리의 파일 우클릭에도 있습니다(프로젝트 트리에는 「모른 척 풀기」도). </span></div></li>
+        <li><span class="mark">2</span><div><b>파일 우클릭</b> <span class="t">무시 목록에 추가 · 내 변경 되돌리기 · 변경 모른 척하기. 새로 추가 · 이름 바꿈 · 복사한 파일은 지워지지 않게 되돌리기에서 빠지고 「스테이징만 풀기」로 갑니다.</span></div></li>
+        <li><span class="mark">3</span><div><b>변경 모른 척하기</b> <span class="t"><code>application-local.yml</code> 처럼 내 PC 에서만 고친 파일이 커밋 목록에 계속 뜰 때 씁니다. 커밋 창 · 프로젝트 트리의 파일 우클릭에도 있습니다(프로젝트 트리에는 「모른 척 풀기」도). 원격에서 그 파일이 바뀌면 받기(Pull)가 멈추니 그때는 먼저 모른 척을 푸세요.</span></div></li>
         <li><span class="mark">4</span><div><b>모른 척 중 · 풀기</b> <span class="t">모른 척한 파일은 「전체」 보기 맨 아래 「모른 척 중」 묶음에 모입니다. 우클릭 「모른 척 풀기」로 되돌리면 내 변경이 다시 나갈 변경으로 보입니다. 파일 내용은 그대로입니다.</span></div></li>
         <li><span class="mark">+</span><div><b>IDE 파일은 처음부터 안 뜸</b> <span class="t">프로젝트를 열면 저장소마다 <code>.git/info/exclude</code> 에 <code>*.iml</code> · <code>.idea/</code> 를 넣습니다. 팀 <code>.gitignore</code> 와 서버에는 영향이 없습니다.</span></div></li>
       </ol>
@@ -757,7 +757,8 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       <ul class="legend">
         <li><span class="mark">!</span><div><b>표 이름을 입력해야 실행</b> <span class="t">WHERE 없는 UPDATE · DELETE, DROP · TRUNCATE, 그리고 운영 접속의 모든 변경.</span></div></li>
         <li><span class="mark">!</span><div><b>운영 접속 띠</b> <span class="t">운영으로 표시한 접속의 콘솔은 위에 붉은 띠 「운영 접속 · 변경은 매번 확인합니다」가 붙습니다.</span></div></li>
-        <li><span class="mark">!</span><div><b>읽기 전용 접속</b> <span class="t">변경 문장은 실행하지 않고 알림만 띄웁니다.</span></div></li>
+        <li><span class="mark">!</span><div><b>읽기 전용 접속</b> <span class="t">변경 문장은 실행하지 않고 알림만 띄웁니다. <code>WITH … DELETE</code> · <code>REPLACE INTO</code> · 프로시저 호출도 변경으로 봅니다.</span></div></li>
+        <li><span class="mark">!</span><div><b>DDL 은 앞 변경까지 커밋</b> <span class="t">자동 커밋이 꺼진 Oracle · MySQL 에서 CREATE · DROP 같은 DDL 은 미반영 변경을 함께 커밋하므로 먼저 묻습니다. 접속을 끊거나 닫을 때 커밋하지 않은 변경은 롤백합니다.</span></div></li>
       </ul>
     </div>
 

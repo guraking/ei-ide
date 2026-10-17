@@ -109,7 +109,7 @@ final class WasDialog extends DialogWrapper {
         stopCommand.getEmptyText().setText(JeusBase.DEFAULT_STOP);
         deployCommand.setText(server.deployCommand);
         deployCommand.getEmptyText().setText(JeusBase.DEFAULT_DEPLOY);
-        String placeholders = "자리 표시: {home} {domain} {server} {user} {password} {host} {port} {vmoptions}, 배포는 {path} {ctx} {name} 도";
+        String placeholders = "자리 표시: {home} {domain} {server} {user} {password} {passwordFile} {host} {port} {vmoptions}, 배포는 {path} {ctx} {name} 도";
         for (JBTextField f : List.of(startCommand, stopCommand, deployCommand)) {
             f.setToolTipText(placeholders);
         }

@@ -91,6 +91,24 @@ public final class ExplodedSync {
         }
     }
 
+    /**
+     * 펼친 war 자리를 이 플러그인 것으로 차지한다. 그 자리에 파일이나 비어 있지 않은 폴더가 이미 있는데
+     * 표시 파일(markRel, warDir 기준 상대 경로)이 없으면 사용자가 직접 둔 앱이므로 건드리지 않고 IOException 으로 멈춘다.
+     * 차지하면 표시 파일부터 만든다 — 복사 도중 실패해도 다음 동기화가 자기 폴더로 알아본다.
+     */
+    public static void claim(Path warDir, String markRel) throws IOException {
+        Path mark = warDir.resolve(markRel);
+        if (Files.exists(mark)) {
+            return;
+        }
+        if (Files.isRegularFile(warDir) || Files.isDirectory(warDir) && !isEmpty(warDir)) {
+            throw new IOException("같은 이름의 앱이 이미 있어 덮어쓰지 않았습니다: " + warDir
+                    + ". 직접 둔 앱이면 다른 곳으로 옮기거나 컨텍스트 경로를 바꾼 뒤 다시 시작하세요.");
+        }
+        Files.createDirectories(mark.getParent());
+        Files.createFile(mark);
+    }
+
     /** "/" → ROOT, "/a/b" → a#b (Tomcat 규칙과 같게 맞춘다). WildFly · WebLogic 은 war 이름이 곧 컨텍스트 경로다. */
     public static String warName(String contextPath) {
         return TomcatBase.contextFileName(contextPath);

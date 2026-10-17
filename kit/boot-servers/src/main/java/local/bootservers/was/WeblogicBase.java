@@ -42,7 +42,10 @@ public final class WeblogicBase {
         }
     }
 
-    /** autodeploy 에 앱을 맞추고 다시 올리도록 표시한다. 이 플러그인이 올렸다가 목록에서 빠진 앱은 지운다. */
+    /**
+     * autodeploy 에 앱을 맞추고 다시 올리도록 표시한다. 이 플러그인이 올렸다가 목록에서 빠진 앱은 지운다.
+     * 같은 이름으로 사용자가 직접 둔 앱(표시 파일 없음)이 있으면 건드리지 않고 IOException 으로 멈춘다.
+     */
     public static void prepare(Path domain, List<TomcatBase.App> apps) throws IOException {
         Path autodeploy = Files.createDirectories(domain.resolve("autodeploy"));
         Set<String> keep = new HashSet<>();
@@ -70,12 +73,8 @@ public final class WeblogicBase {
     }
 
     private static boolean syncAndMark(Path warDir, TomcatBase.App app) throws IOException {
+        ExplodedSync.claim(warDir, OWNED_MARK);
         boolean changed = ExplodedSync.sync(app, warDir, Set.of(OWNED_MARK, "WEB-INF/REDEPLOY"));
-        Path owned = warDir.resolve(OWNED_MARK);
-        if (!Files.exists(owned)) {
-            Files.createDirectories(owned.getParent());
-            Files.createFile(owned);
-        }
         if (changed) {
             ExplodedSync.touch(warDir.resolve("WEB-INF").resolve("REDEPLOY"));
         }

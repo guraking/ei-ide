@@ -30,7 +30,7 @@ public final class ExplainPlan {
   private static final String ORACLE_DISPLAY = "SELECT PLAN_TABLE_OUTPUT FROM TABLE(DBMS_XPLAN.DISPLAY(NULL, ?, 'TYPICAL'))";
 
   public static void run(Project project, Editor editor, VirtualFile file) {
-    DbConfig c = ConsoleOpener.config(file);
+    DbConfig c = ConsoleOpener.config(project, file);
     if (c == null) {
       Notify.error(project, "이 콘솔의 접속이 지워졌습니다. 도구줄에서 다른 접속을 고르세요.");
       return;

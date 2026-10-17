@@ -70,14 +70,23 @@ def slim_edits():
     ]
 
 
+def read_source(path: Path):
+    """줄끝을 \\n 으로 맞춘 글과 원래 줄끝을 돌려준다. 원문 비교는 \\n 기준이고, 쓸 때 원래 줄끝으로 되돌린다."""
+    raw = path.read_bytes().decode("utf-8")
+    newline = "\r\n" if "\r\n" in raw else "\n"
+    return raw.replace("\r\n", "\n"), newline
+
+
 def apply(root: Path, edits):
     # 모든 수정이 찾아질 때만 쓴다. 하나라도 못 찾으면 아무것도 바꾸지 않는다.
     texts = {}
+    newlines = {}
     for rel, old, new in edits:
         path = root / rel
         if not path.is_file():
             raise SystemExit(f"파일이 없습니다: {rel}")
-        texts.setdefault(rel, path.read_text(encoding="utf-8"))
+        if rel not in texts:
+            texts[rel], newlines[rel] = read_source(path)
     changed = set()
     for rel, old, new in edits:
         text = texts[rel]
@@ -88,7 +97,8 @@ def apply(root: Path, edits):
         texts[rel] = text.replace(old, new)
         changed.add(rel)
     for rel in changed:
-        (root / rel).write_text(texts[rel], encoding="utf-8")
+        # 바이트로 써서 운영체제가 줄끝을 바꾸지 않게 한다(윈도우의 write_text 는 \n 을 \r\n 으로 바꾼다).
+        (root / rel).write_bytes(texts[rel].replace("\n", newlines[rel]).encode("utf-8"))
     return sorted(changed)
 
 

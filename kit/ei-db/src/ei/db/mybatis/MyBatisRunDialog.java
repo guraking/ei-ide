@@ -2,9 +2,13 @@ package ei.db.mybatis;
 
 import com.intellij.icons.AllIcons;
 import com.intellij.ide.util.PropertiesComponent;
+import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.editor.colors.EditorColorsManager;
 import com.intellij.openapi.editor.colors.EditorFontType;
 import com.intellij.openapi.ide.CopyPasteManager;
+import com.intellij.openapi.progress.ProgressIndicator;
+import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.ComboBox;
 import com.intellij.openapi.ui.DialogWrapper;
@@ -59,6 +63,7 @@ public final class MyBatisRunDialog extends DialogWrapper {
   public static final String CONNECTION_KEY = "ei.db.mybatis.connection";
   private static final String VALUE_KEY = "ei.db.mybatis.value.";
   private static final String TITLE = "MyBatis 쿼리 실행";
+  private static final String FINDING_TYPES = "매개변수 · 결과 클래스 찾는 중";
   private static final int PREVIEW_ROWS = 12;
   private static final int PREVIEW_COLUMNS = 80;
   private static final JBColor WARNING = new JBColor(new Color(0xC27D0E), new Color(0xE0A64F));
@@ -75,6 +80,7 @@ public final class MyBatisRunDialog extends DialogWrapper {
   private final JPanel warning = new JPanel(new BorderLayout());
   private final PsiClass dto;
   private final List<String> dtoFields;
+  private final Set<String> textParams;
   private DynamicSql.Result result;
 
   private static final class Row {
@@ -91,11 +97,21 @@ public final class MyBatisRunDialog extends DialogWrapper {
       Notify.error(project, "커서 위치에서 select · insert · update · delete 문장을 찾지 못했습니다.");
       return;
     }
-    new MyBatisRunDialog(project, doc, s, null).show();
+    new Task.Backgroundable(project, FINDING_TYPES, true) {
+      @Override
+      public void run(@NotNull ProgressIndicator indicator) {
+        DtoFields.ForRun types = ReadAction.nonBlocking(() -> DtoFields.forRun(project, doc, s)).wrapProgress(indicator).executeSynchronously();
+        ApplicationManager.getApplication().invokeLater(() -> new MyBatisRunDialog(project, doc, s, null, types).show(), project.getDisposed());
+      }
+    }.queue();
   }
 
-  /** prefill 이 null 이면 기억한 값, 아니면 그 값(없는 이름은 빈 값)으로 채운다. */
-  public MyBatisRunDialog(Project project, MapperDoc doc, MapperDoc.Node statement, @Nullable Map<String, String> prefill) {
+  /**
+   * prefill 이 null 이면 기억한 값, 아니면 그 값(없는 이름은 빈 값)으로 채운다.
+   * types 는 색인 · PSI 를 보는 일이라 화면 스레드 밖에서 DtoFields.forRun 으로 구해 넘긴다.
+   */
+  public MyBatisRunDialog(Project project, MapperDoc doc, MapperDoc.Node statement, @Nullable Map<String, String> prefill,
+                          DtoFields.ForRun types) {
     super(project);
     this.project = project;
     this.doc = doc;
@@ -113,9 +129,9 @@ public final class MyBatisRunDialog extends DialogWrapper {
     connection.setRenderer(SimpleListCellRenderer.create("", MyBatisRunDialog::connectionLabel));
     DbConfig last = DbSettings.getInstance().find(props.getValue(CONNECTION_KEY, ""));
     if (last != null) connection.setSelectedItem(last);
-    boolean select = "select".equals(statement.name) && statement.attr("resultMap") == null;
-    dto = select ? DtoFields.find(project, statement.attr("resultType")) : null;
-    dtoFields = dto == null ? List.of() : DtoFields.of(dto);
+    dto = types.result();
+    dtoFields = types.resultFields();
+    textParams = types.textParams();
     setTitle(TITLE);
     setOKButtonText("실행");
     getOKAction().putValue(Action.SMALL_ICON, AllIcons.Actions.Execute);
@@ -231,7 +247,8 @@ public final class MyBatisRunDialog extends DialogWrapper {
     Map<String, Object> out = new HashMap<>();
     for (Map.Entry<String, Row> e : rows.entrySet()) {
       Row row = e.getValue();
-      out.put(e.getKey(), row.isNull.isSelected() ? null : SqlValues.parse(row.value.getText(), listNames.contains(e.getKey())));
+      String name = e.getKey();
+      out.put(name, row.isNull.isSelected() ? null : SqlValues.parse(row.value.getText(), listNames.contains(name), textParams.contains(name)));
     }
     return out;
   }
@@ -305,7 +322,7 @@ public final class MyBatisRunDialog extends DialogWrapper {
           return;
         }
         DbConfig c = selected();
-        String sql = result.inlined();
+        String sql = SqlValues.inline(result.sql, result.binds, c.kind);
         close(NEXT_USER_EXIT_CODE);
         ConsoleOpener.open(project, c, sql);
       }

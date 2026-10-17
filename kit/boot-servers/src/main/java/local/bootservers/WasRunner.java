@@ -20,6 +20,8 @@ import com.intellij.execution.process.ProcessTerminatedListener;
 import com.intellij.execution.remote.RemoteConfiguration;
 import com.intellij.execution.remote.RemoteConfigurationType;
 import com.intellij.ide.passwordSafe.PasswordSafe;
+import com.intellij.notification.NotificationGroupManager;
+import com.intellij.notification.NotificationType;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.application.ReadAction;
@@ -42,6 +44,7 @@ import com.intellij.task.ProjectTaskManager;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import local.bootservers.was.ExplodedSync;
 import local.bootservers.was.JeusBase;
+import local.bootservers.was.RunSupport;
 import local.bootservers.was.TomcatBase;
 import local.bootservers.was.WasSettings;
 import local.bootservers.was.WeblogicBase;
@@ -54,9 +57,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -70,7 +75,10 @@ import java.util.concurrent.TimeUnit;
  * JEUS 는 {@link JeusBase} 의 명령 틀로 시작 · 중지 · 배포한다. 비밀번호는 설정에 두지 않고 처음 시작할 때 묻고,
  * 원하면 IDE 비밀번호 저장소에 기억한다. JEUS 의 JVM 옵션은 도메인 설정에서 읽으므로 디버그 포트를 이 플러그인이 열 수 없다.
  * 사용자가 도메인 설정의 JVM 옵션이나 시작 명령 틀의 {vmoptions} 로 jdwp 를 넣으면, 대기 문구를 보고 디버거만 붙인다.
- * 명령줄 인자로 비밀번호를 넘기므로 실행 중에는 OS 프로세스 목록에서 보일 수 있다(실행 창 · 기록에는 가려서 보인다).
+ * 기본 틀은 명령줄 인자로 비밀번호를 넘기므로 실행 중에는 OS 프로세스 목록에서 보일 수 있다(실행 창 · 기록에는 가려서 보인다).
+ * 현장 JEUS 가 파일에서 비밀번호를 읽을 수 있으면 틀의 {passwordFile} 로 바꿔 이를 피한다({@link JeusBase} 참고).
+ * <p>
+ * 시작 전에 HTTP · 관리(종료) · 디버그 포트가 비었는지 본다. 이미 쓰이면 다른 서버를 잘못 끄거나 그 서버에 붙지 않도록 띄우지 않는다.
  */
 @Service(Service.Level.PROJECT)
 public final class WasRunner {
@@ -84,6 +92,12 @@ public final class WasRunner {
     private static final int DEPLOY_TIMEOUT_SECONDS = 180;
     // 비밀번호 저장소에서 이 플러그인의 항목을 구분하는 이름.
     private static final String CREDENTIAL_SUBSYSTEM = "KingGura WAS";
+    // plugin.xml 의 알림 묶음 id.
+    private static final String NOTIFICATION_GROUP = "서버 실행";
+    // 서버 실행 폴더 안 JEUS 비밀번호 파일 이름. 틀에 {passwordFile} 이 있을 때만 만들고, 서버가 꺼지면 지운다.
+    private static final String PASSWORD_FILE = "jeus-password";
+    // 스크립트 · 도메인 설정이 JVM 옵션을 정하는 WAS 에 출력 인코딩만 더하는 환경 변수. JVM 이 명령줄 옵션보다 먼저 읽는다.
+    private static final String JAVA_TOOL_OPTIONS = "JAVA_TOOL_OPTIONS";
     // WildFly standalone.conf 의 기본 JVM 옵션. JAVA_OPTS 를 주면 기본값을 통째로 대신하므로 VM 옵션 앞에 다시 넣는다.
     private static final String WILDFLY_DEFAULT_OPTS =
             "-Xms64m -Xmx512m -XX:MetaspaceSize=96M -XX:MaxMetaspaceSize=256m -Djava.net.preferIPv4Stack=true "
@@ -94,6 +108,8 @@ public final class WasRunner {
     private final Map<String, Boolean> debugMode = new ConcurrentHashMap<>();
     // 이번 IDE 실행 동안 쓰는 JEUS 비밀번호(서버 id → 비밀번호). 기억하지 않기로 한 비밀번호도 중지 · 배포에 쓰려고 둔다.
     private final Map<String, String> jeusPasswords = new ConcurrentHashMap<>();
+    // 실행 폴더를 꾸미는 중인 서버 id. 그사이 다시 누른 시작을 막는다.
+    private final Set<String> launching = ConcurrentHashMap.newKeySet();
 
     public WasRunner(Project project) {
         this.project = project;
@@ -218,12 +234,37 @@ public final class WasRunner {
         return apps;
     }
 
+    /** 화면 스레드에서 부른다. 포트 점검 · 실행 폴더 꾸미기 · 프로세스 만들기는 작업 스레드에서 하고, 실행 창 띄우기만 화면 스레드에서 한다. */
     private void launch(WasSettings.Server server, boolean debug) {
+        if (!launching.add(server.id)) {
+            return;
+        }
+        AppExecutorUtil.getAppExecutorService().execute(() -> {
+            try {
+                prepareAndRun(server, debug);
+            }
+            catch (RuntimeException e) {
+                showError(server.name + " 을(를) 띄우지 못했습니다: " + e.getMessage());
+            }
+            finally {
+                launching.remove(server.id);
+            }
+        });
+    }
+
+    /** 작업 스레드에서 부른다. */
+    private void prepareAndRun(WasSettings.Server server, boolean debug) {
+        String busy = busyPorts(server, debug);
+        if (busy != null) {
+            showError(busy + " 포트를 다른 프로그램이 쓰고 있어 " + server.name
+                    + " 을(를) 띄우지 않았습니다. 그 프로그램을 끄거나 WAS 편집에서 포트를 바꾸세요.");
+            return;
+        }
         Path base = baseDir(server);
         GeneralCommandLine cmd;
         List<TomcatBase.App> apps;
         try {
-            apps = apps(server, base);
+            apps = ReadAction.compute(() -> apps(server, base));
             if (server.kind() == WasSettings.Kind.WILDFLY) {
                 WildflyBase.prepare(Path.of(server.home), base, apps);
                 cmd = wildflyRun(server, base, debug);
@@ -242,7 +283,7 @@ public final class WasRunner {
             }
         }
         catch (IOException e) {
-            Messages.showErrorDialog(project, "실행 폴더를 꾸미지 못했습니다: " + e.getMessage(), TITLE);
+            showError("실행 폴더를 꾸미지 못했습니다: " + e.getMessage());
             return;
         }
 
@@ -256,7 +297,7 @@ public final class WasRunner {
                     : new KillableColoredProcessHandler(cmd);
         }
         catch (ExecutionException e) {
-            Messages.showErrorDialog(project, server.kind().label + " 을(를) 띄우지 못했습니다: " + e.getMessage(), TITLE);
+            showError(server.kind().label + " 을(를) 띄우지 못했습니다: " + e.getMessage());
             return;
         }
         ProcessTerminatedListener.attach(handler);
@@ -290,14 +331,50 @@ public final class WasRunner {
             @Override
             public void processTerminated(@NotNull ProcessEvent event) {
                 running.remove(server.id, handler);
+                if (jeus) {
+                    deletePasswordFile(server);
+                }
             }
         });
-        new RunContentExecutor(project, handler)
-                .withTitle(server.name)
-                .withActivateToolWindow(true)
-                .withStop(() -> stop(server), () -> !handler.isProcessTerminated())
-                .withRerun(() -> restart(server))
-                .run();
+        // 실행 창이 startNotify 를 부르기 전에는 출력을 읽지 않으므로, 화면 스레드로 넘기는 사이의 출력도 잃지 않는다.
+        // 그사이 프로젝트가 닫혔으면 출력을 읽을 창이 없어 서버가 멈춘 채 남으므로 끝낸다.
+        ApplicationManager.getApplication().invokeLater(() -> {
+            if (project.isDisposed()) {
+                handler.destroyProcess();
+                return;
+            }
+            new RunContentExecutor(project, handler)
+                    .withTitle(server.name)
+                    .withActivateToolWindow(true)
+                    .withStop(() -> stop(server), () -> !handler.isProcessTerminated())
+                    .withRerun(() -> restart(server))
+                    .run();
+        });
+    }
+
+    /** 이 서버가 쓸 포트 중 이미 쓰이는 것(예: "HTTP 8080, 관리 9990"). 모두 비었으면 null. 디버그 포트는 디버그로 띄울 때만 본다. */
+    private static String busyPorts(WasSettings.Server server, boolean debug) {
+        Map<String, Integer> ports = new LinkedHashMap<>();
+        ports.put("HTTP", server.httpPort);
+        // WebLogic 은 두 번째 포트를 쓰지 않는다.
+        if (server.kind() != WasSettings.Kind.WEBLOGIC) {
+            ports.put(server.kind() == WasSettings.Kind.TOMCAT ? "종료" : "관리", server.shutdownPort);
+        }
+        if (debug) {
+            ports.put("디버그", server.debugPort);
+        }
+        List<String> busy = new ArrayList<>();
+        for (Map.Entry<String, Integer> e : ports.entrySet()) {
+            if (RunSupport.portInUse(e.getValue())) {
+                busy.add(e.getKey() + " " + e.getValue());
+            }
+        }
+        return busy.isEmpty() ? null : String.join(", ", busy);
+    }
+
+    /** 어느 스레드에서든 부른다. */
+    private void showError(String message) {
+        ApplicationManager.getApplication().invokeLater(() -> Messages.showErrorDialog(project, message, TITLE), project.getDisposed());
     }
 
     private GeneralCommandLine tomcatRun(WasSettings.Server server, Path base, boolean debug) {
@@ -330,7 +407,17 @@ public final class WasRunner {
         if (!server.vmOptions.isBlank()) {
             cmd.withEnvironment("JAVA_OPTS", WILDFLY_DEFAULT_OPTS + " " + server.vmOptions.strip());
         }
-        return cmd;
+        return withOutputEncoding(cmd, server.vmOptions);
+    }
+
+    /**
+     * 실행 창은 출력을 UTF-8 로 읽는다. JVM 옵션을 스크립트 · 도메인 설정이 정하는 WAS(WildFly · JEUS)는 그 설정을 덮지 않도록
+     * JAVA_TOOL_OPTIONS 에 출력 인코딩 옵션을 더한다. 이미 받은 JAVA_TOOL_OPTIONS 와 사용자 VM 옵션에 있는 옵션은 다시 넣지 않는다.
+     */
+    private static GeneralCommandLine withOutputEncoding(GeneralCommandLine cmd, String vmOptions) {
+        String inherited = Objects.requireNonNullElse(System.getenv(JAVA_TOOL_OPTIONS), "");
+        String added = RunSupport.encodingOptions(inherited + " " + vmOptions);
+        return added.isEmpty() ? cmd : cmd.withEnvironment(JAVA_TOOL_OPTIONS, (inherited + " " + added).strip());
     }
 
     /**
@@ -338,7 +425,15 @@ public final class WasRunner {
      * boot.properties 가 없는 도메인은 처음에 실행 창에서 관리자 계정을 묻는다(실행 창에 입력하면 된다).
      */
     private GeneralCommandLine weblogicRun(WasSettings.Server server, boolean debug) {
-        StringBuilder opts = new StringBuilder("-Dfile.encoding=UTF-8 -Dweblogic.ListenPort=").append(server.httpPort);
+        // WebLogic 은 예전부터 file.encoding 도 UTF-8 로 띄웠다(사용자 VM 옵션에 있으면 그 값을 둔다).
+        StringBuilder opts = new StringBuilder("-Dweblogic.ListenPort=").append(server.httpPort);
+        if (!server.vmOptions.contains("-Dfile.encoding=")) {
+            opts.append(" -Dfile.encoding=UTF-8");
+        }
+        String encoding = RunSupport.encodingOptions(server.vmOptions);
+        if (!encoding.isEmpty()) {
+            opts.append(' ').append(encoding);
+        }
         if (debug) {
             opts.append(" -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=localhost:").append(server.debugPort);
         }
@@ -352,7 +447,7 @@ public final class WasRunner {
      * JEUS 시작 명령. {vmoptions} 에는 VM 옵션과, 디버그면 jdwp(suspend=n: 서버가 디버거를 기다리지 않음)를 넣는다.
      * 기본 틀은 {vmoptions} 를 쓰지 않는다 — JEUS 는 JVM 옵션을 도메인 설정에서 읽기 때문이다.
      */
-    private GeneralCommandLine jeusRun(WasSettings.Server server, boolean debug) {
+    private GeneralCommandLine jeusRun(WasSettings.Server server, boolean debug) throws IOException {
         String vm = server.vmOptions.strip();
         if (debug) {
             vm = (vm + " -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=localhost:" + server.debugPort).strip();
@@ -363,18 +458,42 @@ public final class WasRunner {
     /**
      * JEUS 명령 틀(비어 있으면 fallback)을 채워 명령줄로 만든다. JAVA_HOME 은 건드리지 않는다 —
      * JEUS 스크립트는 설치 때 정한 JDK(bin/jeus.properties)를 쓰고, 지원 JDK 판이 프로젝트 JDK 와 다를 수 있다.
+     * 틀에 {passwordFile} 이 있으면 사용자만 읽는 비밀번호 파일을 만든다(이미 있으면 그대로 쓴다).
+     *
+     * @throws IOException 비밀번호 파일을 만들지 못한 경우
      */
-    private GeneralCommandLine jeusCommand(WasSettings.Server server, String template, String fallback, Map<String, String> extra) {
+    private GeneralCommandLine jeusCommand(WasSettings.Server server, String template, String fallback, Map<String, String> extra)
+            throws IOException {
+        String chosen = template.isBlank() ? fallback : template;
+        String password = jeusPasswords.getOrDefault(server.id, "");
         Map<String, String> values = new HashMap<>(extra);
         values.put("home", server.home);
         values.put("domain", server.jeusDomain);
         values.put("server", server.jeusServer);
         values.put("user", server.jeusUser);
-        values.put("password", jeusPasswords.getOrDefault(server.id, ""));
+        values.put("password", password);
         values.put("host", "localhost");
         values.put("port", String.valueOf(server.shutdownPort));
-        List<String> argv = JeusBase.command(template.isBlank() ? fallback : template, values, SystemInfo.isWindows);
-        return new GeneralCommandLine(argv).withWorkDirectory(server.home).withCharset(StandardCharsets.UTF_8);
+        if (chosen.contains(JeusBase.PASSWORD_FILE_TOKEN)) {
+            Path file = passwordFile(server);
+            values.put("passwordFile", (Files.exists(file) ? file : JeusBase.writePasswordFile(file, password)).toString());
+        }
+        List<String> argv = JeusBase.command(chosen, values, SystemInfo.isWindows);
+        return withOutputEncoding(new GeneralCommandLine(argv).withWorkDirectory(server.home).withCharset(StandardCharsets.UTF_8),
+                server.vmOptions);
+    }
+
+    private Path passwordFile(WasSettings.Server server) {
+        return baseDir(server).resolve(PASSWORD_FILE);
+    }
+
+    private void deletePasswordFile(WasSettings.Server server) {
+        try {
+            Files.deleteIfExists(passwordFile(server));
+        }
+        catch (IOException e) {
+            LOG.warn("JEUS 비밀번호 파일을 지우지 못했습니다: " + passwordFile(server), e);
+        }
     }
 
     /**
@@ -383,14 +502,15 @@ public final class WasRunner {
      */
     private void jeusDeploy(WasSettings.Server server, ProcessHandler console, TomcatBase.App app) {
         String name = ExplodedSync.warName(app.contextPath());
-        GeneralCommandLine cmd = jeusCommand(server, server.deployCommand, JeusBase.DEFAULT_DEPLOY, Map.of(
-                "path", JeusBase.warDir(baseDir(server), app.contextPath()).toString(),
-                "name", name,
-                "ctx", app.contextPath())).withRedirectErrorStream(true);
-        String shown = JeusBase.mask(cmd.getCommandLineString(), jeusPasswords.get(server.id));
-        console.notifyTextAvailable("\n> " + shown + "\n", ProcessOutputTypes.SYSTEM);
         String failure;
         try {
+            // jeusadmin 의 따옴표 안 명령에 들어가므로 역슬래시 대신 빗금으로 준다(윈도우 자바도 빗금 경로를 받는다).
+            GeneralCommandLine cmd = jeusCommand(server, server.deployCommand, JeusBase.DEFAULT_DEPLOY, Map.of(
+                    "path", JeusBase.warDir(baseDir(server), app.contextPath()).toString().replace('\\', '/'),
+                    "name", name,
+                    "ctx", app.contextPath())).withRedirectErrorStream(true);
+            String shown = JeusBase.mask(cmd.getCommandLineString(), jeusPasswords.get(server.id));
+            console.notifyTextAvailable("\n> " + shown + "\n", ProcessOutputTypes.SYSTEM);
             ProcessOutput out = new CapturingProcessHandler(cmd.createProcess(), StandardCharsets.UTF_8, shown)
                     .runProcess((int) TimeUnit.SECONDS.toMillis(DEPLOY_TIMEOUT_SECONDS));
             console.notifyTextAvailable(out.getStdout(), ProcessOutputTypes.STDOUT);
@@ -399,6 +519,9 @@ public final class WasRunner {
         }
         catch (ExecutionException e) {
             failure = "명령을 띄우지 못했습니다: " + e.getMessage();
+        }
+        catch (IOException e) {
+            failure = "비밀번호 파일을 만들지 못했습니다: " + e.getMessage();
         }
         if (failure != null) {
             console.notifyTextAvailable(name + " 배포 실패 — " + failure + ". WAS 편집에서 배포 명령을 확인하세요.\n", ProcessOutputTypes.STDERR);
@@ -434,6 +557,7 @@ public final class WasRunner {
     /** 기억한 JEUS 비밀번호를 지운다. 다음 시작 때 다시 묻는다. */
     void forgetJeusPassword(WasSettings.Server server) {
         jeusPasswords.remove(server.id);
+        deletePasswordFile(server);
         PasswordSafe.getInstance().setPassword(jeusCredential(server), null);
     }
 
@@ -451,7 +575,7 @@ public final class WasRunner {
     /** 프로젝트 JDK 로 띄운다. Tomcat setclasspath 는 JRE_HOME 이 있으면 그것을 먼저 쓰므로 둘 다 맞춘다. */
     private GeneralCommandLine withJdk(GeneralCommandLine cmd, Path base) {
         cmd.withWorkDirectory(base.toFile()).withCharset(StandardCharsets.UTF_8);
-        Sdk sdk = ProjectRootManager.getInstance(project).getProjectSdk();
+        Sdk sdk = ReadAction.compute(() -> ProjectRootManager.getInstance(project).getProjectSdk());
         if (sdk != null && sdk.getHomePath() != null) {
             cmd.withEnvironment("JAVA_HOME", sdk.getHomePath()).withEnvironment("JRE_HOME", sdk.getHomePath());
         }
@@ -473,18 +597,12 @@ public final class WasRunner {
             handler.destroyProcess();
             return;
         }
-        Path base = baseDir(server);
-        GeneralCommandLine stop = switch (server.kind()) {
-            case WILDFLY -> withJdk(script(server, "jboss-cli", "--connect", "--controller=localhost:" + server.shutdownPort, "--command=:shutdown"), base);
-            case JEUS -> jeusCommand(server, server.stopCommand, JeusBase.DEFAULT_STOP, Map.of());
-            default -> tomcatScript(server, base, "stop");
-        };
         AppExecutorUtil.getAppExecutorService().execute(() -> {
             try {
-                stop.createProcess().waitFor(STOP_GRACE_SECONDS, TimeUnit.SECONDS);
+                runDiscardingOutput(stopCommand(server));
                 handler.waitFor(TimeUnit.SECONDS.toMillis(STOP_GRACE_SECONDS));
             }
-            catch (ExecutionException e) {
+            catch (ExecutionException | IOException e) {
                 LOG.info("정상 종료 명령을 띄우지 못해 강제로 끝냅니다: " + e.getMessage());
             }
             catch (InterruptedException e) {
@@ -494,6 +612,32 @@ public final class WasRunner {
                 handler.destroyProcess();
             }
         });
+    }
+
+    private GeneralCommandLine stopCommand(WasSettings.Server server) throws IOException {
+        Path base = baseDir(server);
+        return switch (server.kind()) {
+            case WILDFLY -> withJdk(script(server, "jboss-cli", "--connect", "--controller=localhost:" + server.shutdownPort, "--command=:shutdown"), base);
+            case JEUS -> jeusCommand(server, server.stopCommand, JeusBase.DEFAULT_STOP, Map.of());
+            default -> tomcatScript(server, base, "stop");
+        };
+    }
+
+    /**
+     * 명령을 돌리고 STOP_GRACE_SECONDS 까지 기다린다. 출력은 버린다(읽지 않으면 버퍼가 차서 명령이 멈출 수 있다).
+     * 한도 안에 끝나지 않으면 자손 프로세스까지 강제로 끝낸다(윈도우 배치 파일은 자식 java 를 남긴다).
+     */
+    private static void runDiscardingOutput(GeneralCommandLine cmd) throws ExecutionException, IOException, InterruptedException {
+        Process process = cmd.toProcessBuilder()
+                .redirectErrorStream(true)
+                .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                .start();
+        if (!process.waitFor(STOP_GRACE_SECONDS, TimeUnit.SECONDS)) {
+            for (ProcessHandle child : process.descendants().toList()) {
+                child.destroyForcibly();
+            }
+            process.destroyForcibly();
+        }
     }
 
     /** 실행 중이면 끝난 뒤 같은 방식(실행 · 디버그)으로 다시 띄운다. 꺼져 있으면 그냥 띄운다. */
@@ -551,8 +695,21 @@ public final class WasRunner {
             }
             catch (IOException e) {
                 LOG.warn(server.kind().label + " 반영 실패: " + server.name, e);
+                reportSyncFailure(server, e.getMessage());
             }
         });
+    }
+
+    /** 반영 실패를 그 서버 실행 창(떠 있으면)과 알림으로 보인다. 어느 스레드에서든 부른다. */
+    private void reportSyncFailure(WasSettings.Server server, String reason) {
+        String text = server.name + " 반영 실패 — " + reason;
+        ProcessHandler console = running.get(server.id);
+        if (console != null) {
+            console.notifyTextAvailable(text + "\n", ProcessOutputTypes.STDERR);
+        }
+        NotificationGroupManager.getInstance().getNotificationGroup(NOTIFICATION_GROUP)
+                .createNotification(TITLE, text, NotificationType.ERROR)
+                .notify(project);
     }
 
     private void attachDebugger(WasSettings.Server server) {

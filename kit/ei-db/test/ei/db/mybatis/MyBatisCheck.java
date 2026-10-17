@@ -160,6 +160,24 @@ public class MyBatisCheck {
     eq(SqlValues.format(List.of(1L, 2L)), "1, 2");
     eq(SqlValues.literal(Timestamp.valueOf("2026-10-10 13:31:18.5")), "TIMESTAMP '2026-10-10 13:31:18'");
     eq(SqlValues.inline("a = ? and b = '?' -- ?\n and c = ? and d = ?", List.of("x", 2L)), "a = 'x' and b = '?' -- ?\n and c = 2 and d = ?");
+    // 문자열 필드로 받는 값은 숫자 · 날짜 꼴이어도 문자열, 앞 0 은 늘 문자열
+    eq(SqlValues.parse("1001", false, true), "1001");
+    eq(SqlValues.parse("20240101", false, true), "20240101");
+    eq(SqlValues.parse("2024-01-01", false, true), "2024-01-01");
+    eq(SqlValues.parse("'a'", false, true), "a");
+    eq(SqlValues.parse("1001, 1002", true, true), List.of("1001", "1002"));
+    eq(SqlValues.parse("20240101", false, false), 20240101L);
+    eq(SqlValues.parse("007", false), "007");
+    // 없는 날짜 · 시각은 예외 없이 문자열
+    eq(SqlValues.parse("2026-13-01", false), "2026-13-01");
+    eq(SqlValues.parse("2026-02-30", false), "2026-02-30");
+    eq(SqlValues.parse("2026-10-10 25:00", false), "2026-10-10 25:00");
+    eq(SqlValues.format("2026-13-01"), "2026-13-01");
+    // MySQL 은 역빗금도 이스케이프, 다른 DB 는 그대로
+    eq(SqlValues.inline("a = ?", List.of("C:\\x'y"), ei.db.DbKind.MYSQL), "a = 'C:\\\\x''y'");
+    eq(SqlValues.inline("a = ?", List.of("C:\\x"), ei.db.DbKind.ORACLE), "a = 'C:\\x'");
+    eq(SqlValues.inline("a in (?)", List.of(List.of("\\")), ei.db.DbKind.MYSQL), "a in ('\\\\')");
+    eq(SqlValues.literal("C:\\x"), "'C:\\x'");
 
     // 로그
     String log = """
@@ -210,6 +228,12 @@ public class MyBatisCheck {
     eq(issues.get(1).field, "quantity");
     eq(issues.get(2).field, "unitPrice");
     eq(ResultColumns.camel("ORDER_ID"), "orderId");
+    // 칼럼 뒤 · 앞 주석
+    eq(ResultColumns.of("SELECT t.USER_ID /* 사용자 */\n     , t.USER_NM -- 이름, 별칭\n     , /* 메일 */ t.EMAIL AS mail -- x\n"
+                        + "     , t.DEPT_CD \"deptCode\" /* 부서 */\n     , 'a b' kind\n  FROM TB_USER t"),
+       List.of("USER_ID", "USER_NM", "MAIL", "deptCode", "KIND"));
+    eq(ResultColumns.compare(ResultColumns.of("SELECT t.USER_ID /* 사용자 */, t.USER_NM -- 이름\n FROM t"),
+                             List.of("userId", "userNm")).size(), 0);
 
     System.out.println("MyBatisCheck 통과");
   }

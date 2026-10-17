@@ -16,6 +16,7 @@ import com.intellij.openapi.util.Key;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.openapi.vfs.VirtualFile;
 import ei.db.DbConfig;
+import ei.db.DbSessions;
 import ei.db.Notify;
 import ei.db.SqlGuard;
 import ei.db.SqlRunner;
@@ -24,13 +25,16 @@ import org.jetbrains.annotations.NotNull;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.function.UnaryOperator;
 
 /**
  * 콘솔 실행. 여러 문장은 앞 문장의 결과(ResultView.show/showError)가 온 뒤에 다음 문장을 넘긴다.
  * SqlRunner 는 문장마다 따로 백그라운드 작업을 띄우므로 한꺼번에 넘기면 순서가 섞인다.
- * 실패 · 확인창 취소 · 읽기 전용 거절이면 남은 문장은 버린다.
+ * 대기열은 콘솔 파일마다 하나다(파일 사용자 데이터). 실패 · 취소 · 확인창 취소 · 읽기 전용 거절 · 같은 콘솔의 새 실행이면
+ * 남은 문장은 버리고 몇 개를 실행하지 않았는지 알린다.
  * 이름 자리(:name · #{name} · ${name})가 있으면 실행 전에 모든 문장의 값을 한 번에 묻고 ? 와 값으로 바꿔 넘긴다.
  */
 public final class ConsoleRun {
@@ -46,6 +50,8 @@ public final class ConsoleRun {
   }
 
   private static final Key<Queue> QUEUE = Key.create("ei.db.console.queue");
+  /** 대기열이 있는 콘솔 파일들. 결과가 왔을 때 어느 콘솔의 대기열인지 찾는다. 화면 스레드에서만 쓴다. */
+  private static final Key<Set<VirtualFile>> QUEUED = Key.create("ei.db.console.queued");
 
   /** 선택 영역이 있으면 그 안의 문장들, 없으면 커서가 있는 문장. */
   static void runCurrent(Project project, Editor editor, VirtualFile file) {
@@ -93,44 +99,81 @@ public final class ConsoleRun {
       Notify.info(project, "실행할 문장이 없습니다.");
       return;
     }
-    DbConfig c = ConsoleOpener.config(file);
+    DbConfig c = ConsoleOpener.config(project, file);
     if (c == null) {
       Notify.error(project, "이 콘솔의 접속이 지워졌습니다. 도구줄에서 다른 접속을 고르세요.");
       return;
     }
     List<SqlParams.Bound> bound = BindDialog.ask(project, sqls);
     if (bound == null) return;
-    project.putUserData(QUEUE, new Queue(c, new ArrayDeque<>(bound)));
-    next(project);
+    drop(project, file);
+    file.putUserData(QUEUE, new Queue(c, new ArrayDeque<>(bound)));
+    queued(project).add(file);
+    next(project, file);
   }
 
-  private static void next(Project project) {
-    Queue q = project.getUserData(QUEUE);
+  private static void next(Project project, VirtualFile file) {
+    Queue q = file.getUserData(QUEUE);
     if (q == null) return;
     SqlParams.Bound stmt = q.rest.poll();
     q.waiting = normalize(stmt.sql());
-    // 마지막 문장이거나 SqlRunner 가 결과 없이 거절할 문장이면 기다릴 것이 없다.
-    if (q.rest.isEmpty() || (q.c.readOnly && SqlGuard.isWrite(stmt.sql()))) project.putUserData(QUEUE, null);
+    if (q.rest.isEmpty()) {
+      clear(project, file);
+    } else if (q.c.readOnly && SqlGuard.isWrite(stmt.sql())) {
+      // SqlRunner 가 결과 없이 거절하므로 기다릴 것이 없다.
+      drop(project, file);
+    }
     SqlRunner.run(project, q.c, stmt.sql(), stmt.binds());
   }
 
-  /** ResultView 가 결과를 보인 뒤 부른다. 같은 접속에서 기다리는 그 문장의 결과일 때만 대기열을 움직인다. */
+  /** ResultView 가 결과를 보인 뒤 부른다. 같은 접속에서 그 문장을 기다리는 콘솔의 대기열만 움직인다. */
   static void finished(Project project, DbConfig c, String sql, boolean ok) {
-    Queue q = project.getUserData(QUEUE);
-    if (q == null || !q.c.id.equals(c.id) || sql == null || !normalize(sql).equals(q.waiting)) return;
-    if (ok) next(project);
-    else stop(project);
+    VirtualFile file = waitingFile(project, c, sql);
+    if (file == null) return;
+    if (ok) next(project, file);
+    else drop(project, file);
   }
 
-  static void stop(Project project) {
-    project.putUserData(QUEUE, null);
+  /** 확인창에서 취소한 문장(c · sql)을 기다리던 콘솔의 남은 문장을 버린다. */
+  public static void stop(Project project, DbConfig c, String sql) {
+    VirtualFile file = waitingFile(project, c, sql);
+    if (file != null) drop(project, file);
   }
 
-  /** DbSessions.run 이 실행 전에 하는 정리와 같다: 앞뒤 공백, 끝의 ;(PL/SQL 블록의 END; 는 남김). */
+  private static VirtualFile waitingFile(Project project, DbConfig c, String sql) {
+    if (sql == null) return null;
+    String key = normalize(sql);
+    for (VirtualFile file : queued(project)) {
+      Queue q = file.getUserData(QUEUE);
+      if (q != null && q.c.id.equals(c.id) && key.equals(q.waiting)) return file;
+    }
+    return null;
+  }
+
+  /** 대기열을 버린다. 남은 문장이 있으면 알린다. */
+  private static void drop(Project project, VirtualFile file) {
+    Queue q = file.getUserData(QUEUE);
+    clear(project, file);
+    if (q != null && !q.rest.isEmpty()) Notify.info(project, "남은 " + q.rest.size() + "개 문장을 실행하지 않았습니다.");
+  }
+
+  private static void clear(Project project, VirtualFile file) {
+    file.putUserData(QUEUE, null);
+    queued(project).remove(file);
+  }
+
+  private static Set<VirtualFile> queued(Project project) {
+    Set<VirtualFile> set = project.getUserData(QUEUED);
+    if (set == null) {
+      set = new LinkedHashSet<>();
+      project.putUserData(QUEUED, set);
+    }
+    return set;
+  }
+
+  /** DbSessions.run 이 실행 전에 하는 정리와 같다. */
   static String normalize(String sql) {
-    String text = sql.strip();
-    if (text.endsWith(";") && !text.toUpperCase().endsWith("END;")) text = text.substring(0, text.length() - 1).strip();
-    return text;
+    return DbSessions.normalizeSql(sql);
   }
 
   private abstract static class ConsoleAction extends DumbAwareAction {

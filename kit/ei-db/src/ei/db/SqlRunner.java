@@ -4,7 +4,9 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.ui.Messages;
 import com.intellij.util.concurrency.AppExecutorUtil;
+import ei.db.console.ConsoleRun;
 import ei.db.console.GuardDialog;
 import ei.db.console.ResultView;
 import ei.db.console.RunHistory;
@@ -20,7 +22,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * 실행의 공통 입구(콘솔 · MyBatis 실행 · 로그 변환 · 표 데이터 보기). 화면 스레드에서 부른다.
  * 순서: 읽기 전용 접속의 변경 거절 → 위험 문장(WHERE 없는 UPDATE · DELETE, DROP · TRUNCATE)과 운영 접속의 변경은 확인창
- * → 백그라운드 실행 → 결과 창에 표시 → 실행 기록(RunHistory)에 남김.
+ * → 미반영 변경이 있는 접속(Oracle · MySQL)의 DDL 은 함께 커밋된다는 확인 → 백그라운드 실행 → 결과 창에 표시 → 실행 기록(RunHistory)에 남김.
  * 진행 막대를 취소하면 DbSessions.cancel 로 드라이버에 취소를 보낸다.
  */
 public final class SqlRunner {
@@ -37,6 +39,10 @@ public final class SqlRunner {
     }
     String danger = SqlGuard.danger(sql);
     if ((danger != null || (c.production && write)) && !GuardDialog.confirm(project, c, sql, danger, SqlGuard.table(sql))) {
+      return;
+    }
+    if (!confirmImplicitCommit(project, c, sql)) {
+      ConsoleRun.stop(project, c, sql);
       return;
     }
     new Task.Backgroundable(project, c.name + " 에서 실행 중", true) {
@@ -61,6 +67,14 @@ public final class SqlRunner {
         }
       }
     }.queue();
+  }
+
+  /** Oracle · MySQL 은 DDL 앞에서 미반영 변경을 커밋한다. 그런 변경이 있으면 실행해도 되는지 묻는다. PostgreSQL 은 DDL 도 트랜잭션 안이라 묻지 않는다. */
+  private static boolean confirmImplicitCommit(Project project, DbConfig c, String sql) {
+    int pending = DbSessions.get(project).pending(c.id);
+    if (pending == 0 || c.kind == DbKind.POSTGRES || !SqlGuard.isDdl(sql)) return true;
+    return Messages.showOkCancelDialog(project, "미반영 변경 " + pending + "건이 함께 커밋됩니다. 실행할까요?", "DDL 실행 확인",
+        "실행", "취소", Messages.getWarningIcon()) == Messages.OK;
   }
 
   /**

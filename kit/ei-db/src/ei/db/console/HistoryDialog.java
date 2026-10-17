@@ -143,7 +143,7 @@ final class HistoryDialog extends DialogWrapper {
     close(OK_EXIT_CODE);
     VirtualFile file = ConsoleOpener.open(project, c, pasteSql(e));
     if (!run) return;
-    DbConfig console = ConsoleOpener.config(file);
+    DbConfig console = ConsoleOpener.config(project, file);
     if (console != null) SqlRunner.run(project, console, e.sql(), e.binds());
   }
 

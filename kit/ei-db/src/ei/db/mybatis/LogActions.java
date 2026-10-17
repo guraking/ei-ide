@@ -15,9 +15,9 @@ import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.ide.CopyPasteManager;
 import com.intellij.openapi.progress.ProgressIndicator;
+import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.ui.MessageType;
 import com.intellij.openapi.ui.popup.Balloon;
 import com.intellij.openapi.ui.popup.JBPopupFactory;
@@ -101,7 +101,7 @@ public final class LogActions {
 
   static void runInConsole(Project project, DbConfig c, MyBatisLog.Entry entry) {
     PropertiesComponent.getInstance(project).setValue(MyBatisRunDialog.CONNECTION_KEY, c.id);
-    ConsoleOpener.open(project, c, entry.runnableSql());
+    ConsoleOpener.open(project, c, SqlValues.inline(entry.sql, entry.values, c.kind));
     SqlRunner.run(project, c, entry.sql, new ArrayList<>(entry.values));
   }
 
@@ -178,44 +178,45 @@ public final class LogActions {
       new Task.Backgroundable(project, "매퍼 XML 찾는 중", true) {
         @Override
         public void run(@NotNull ProgressIndicator indicator) {
-          String text = ReadAction.compute(() -> search(project, entry, indicator));
-          ApplicationManager.getApplication().invokeLater(() -> open(project, entry, text));
+          Found found = ReadAction.nonBlocking(() -> search(project, entry)).inSmartMode(project).wrapProgress(indicator).executeSynchronously();
+          ApplicationManager.getApplication().invokeLater(() -> open(project, entry, found), project.getDisposed());
         }
       }.queue();
     }
 
-    private static void open(Project project, MyBatisLog.Entry entry, String text) {
-      if (project.isDisposed()) return;
-      String name = entry.mapperName() + "." + entry.statementId();
-      if (text == null) {
-        Notify.error(project, "프로젝트에서 " + name + " 문장이 있는 매퍼 XML 을 찾지 못했습니다.");
+    /** 찾은 매퍼 문서 · 문장과 실행 창에 넘길 클래스 정보. */
+    private record Found(MapperDoc doc, MapperDoc.Node statement, DtoFields.ForRun types) {}
+
+    private static void open(Project project, MyBatisLog.Entry entry, Found found) {
+      if (found == null) {
+        Notify.error(project, "프로젝트에서 " + entry.mapperName() + "." + entry.statementId() + " 문장이 있는 매퍼 XML 을 찾지 못했습니다.");
         return;
       }
-      MapperDoc doc = MapperDoc.parse(text);
-      MapperDoc.Node s = doc.statement(entry.statementId());
-      new MyBatisRunDialog(project, doc, s, MyBatisLog.prefill(doc, s, entry)).show();
+      new MyBatisRunDialog(project, found.doc(), found.statement(), MyBatisLog.prefill(found.doc(), found.statement(), entry), found.types()).show();
     }
 
-    /** 네임스페이스가 매퍼 이름으로 끝나고 그 문장이 있는 XML 의 글. 줄여 찍힌 패키지까지 맞는 것을 먼저 고른다. */
-    private static String search(Project project, MyBatisLog.Entry entry, ProgressIndicator indicator) {
+    /**
+     * 매퍼 색인에서 네임스페이스가 매퍼 이름으로 끝나고 그 문장이 있는 XML 을 고른다. 줄여 찍힌 패키지까지 맞는 것이 먼저.
+     * 읽기 접근 안에서 부른다. 없으면 null.
+     */
+    private static Found search(Project project, MyBatisLog.Entry entry) {
       String mapper = entry.mapperName();
-      String[] best = new String[2];
-      ProjectFileIndex.getInstance(project).iterateContent(file -> {
-        indicator.checkCanceled();
-        if (file.isDirectory() || !"xml".equalsIgnoreCase(file.getExtension())) return true;
-        String text = text(file);
-        if (text == null || !text.contains("<mapper") || !text.contains(mapper)) return true;
-        MapperDoc doc = MapperDoc.parse(text);
-        String ns = doc.namespace;
-        if (ns == null || !(ns.equals(mapper) || ns.endsWith("." + mapper)) || doc.statement(entry.statementId()) == null) return true;
+      MapperIndex.Entry best = null;
+      for (MapperIndex.Entry e : MapperIndex.all(project)) {
+        ProgressManager.checkCanceled();
+        String ns = e.namespace();
+        if (!(ns.equals(mapper) || ns.endsWith("." + mapper)) || !e.ids().containsKey(entry.statementId())) continue;
         if (MyBatisLog.loggerMatches(entry.loggerNamespace(), ns)) {
-          best[0] = text;
-          return false;
+          best = e;
+          break;
         }
-        if (best[1] == null) best[1] = text;
-        return true;
-      });
-      return best[0] != null ? best[0] : best[1];
+        if (best == null) best = e;
+      }
+      String text = best == null ? null : text(best.file());
+      if (text == null) return null;
+      MapperDoc doc = MapperDoc.parse(text);
+      MapperDoc.Node s = doc.statement(entry.statementId());
+      return s == null ? null : new Found(doc, s, DtoFields.forRun(project, doc, s));
     }
 
     private static String text(VirtualFile file) {

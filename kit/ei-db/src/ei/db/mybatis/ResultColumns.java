@@ -59,19 +59,16 @@ public final class ResultColumns {
     return out;
   }
 
+  /** 이름은 주석 · 문자열을 지운 글에서 자른다. 따옴표 별칭은 지운 글에도 그대로 남아 있다. */
   private static String name(String item, boolean firstItem) {
     String masked = blankQuotedAndComments(item).trim();
-    String raw = item.trim();
     if (firstItem) {
       for (String w : List.of("DISTINCT ", "ALL ", "UNIQUE ")) {
-        if (masked.toUpperCase(Locale.ROOT).startsWith(w)) {
-          masked = masked.substring(w.length()).trim();
-          raw = raw.substring(raw.length() - masked.length());
-        }
+        if (masked.toUpperCase(Locale.ROOT).startsWith(w)) masked = masked.substring(w.length()).trim();
       }
     }
     int cut = lastTopLevelSpace(masked);
-    String last = cut < 0 ? raw : raw.substring(cut + 1).trim();
+    String last = cut < 0 ? masked : masked.substring(cut + 1);
     if (cut >= 0) {
       String prev = masked.substring(0, cut).trim();
       boolean as = prev.toUpperCase(Locale.ROOT).endsWith(" AS") || prev.equalsIgnoreCase("AS");

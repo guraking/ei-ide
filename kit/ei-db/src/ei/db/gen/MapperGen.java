@@ -1,5 +1,6 @@
 package ei.db.gen;
 
+import ei.db.DbKind;
 import ei.db.Meta;
 
 import java.util.ArrayList;
@@ -20,15 +21,18 @@ public final class MapperGen {
 
   /**
    * oldJoin 은 단일 표 문장이라 지금 글에는 영향이 없다(조인이 생기면 콤마 + WHERE 로 쓴다는 약속만 보존).
-   * mysql 이면 LIKE 이어 붙이기를 CONCAT 으로.
+   * kind 는 이름 표기(Names.sql)와 LIKE 이어 붙이기(MySQL 은 CONCAT)를 정한다.
    */
-  public record Options(boolean oldJoin, boolean cdata, boolean where11, boolean sqlComments, boolean mysql) {}
+  public record Options(boolean oldJoin, boolean cdata, boolean where11, boolean sqlComments, DbKind kind) {}
 
   /** id 는 XML 문장 id 또는 자바 메서드 이름, text 는 덧붙일 글 그대로. */
   public record Block(String id, String text) {}
 
   private static final String RANGE_FROM = "From";
   private static final String RANGE_TO = "To";
+  /** 앞 쉼표 목록의 줄 머리(XML 안 4칸 + 7칸). */
+  private static final String LEAD_FIRST = "           ";
+  private static final String LEAD_NEXT = "         , ";
 
   private final String table;
   private final String alias;
@@ -65,11 +69,22 @@ public final class MapperGen {
     };
   }
 
-  /** PK 가 없으면 PK 로 찾는 문장(ONE · UPDATE · DELETE)은 빠진다. */
+  /** PK 가 아닌 칼럼이 있어야 UPDATE 의 SET 이 빈 채로 남지 않는다. */
+  public boolean hasNonPk() {
+    for (Meta.Column c : cols) if (!c.pk()) return true;
+    return false;
+  }
+
+  /** 만들 수 있는 문장인지: PK 로 찾는 문장(ONE · UPDATE · DELETE)은 PK 가, UPDATE 는 PK 아닌 칼럼도 있어야 한다. */
+  public boolean possible(Kind k) {
+    return (!needsPk(k) || hasPk()) && (k != Kind.UPDATE || hasNonPk());
+  }
+
+  /** 만들 수 없는 문장(possible 이 거짓)은 빠진다. */
   public List<Block> xmlBlocks(Set<Kind> kinds) {
     List<Block> out = new ArrayList<>();
     for (Kind k : Kind.values()) {
-      if (!kinds.contains(k) || (needsPk(k) && !hasPk())) continue;
+      if (!kinds.contains(k) || !possible(k)) continue;
       String text = switch (k) {
         case RESULT_MAP -> DtoGen.resultMap(id(k), dtoType, fields(), pkColumns());
         case LIST -> selectList(kinds.contains(Kind.RESULT_MAP));
@@ -106,7 +121,7 @@ public final class MapperGen {
     String dto = Names.simple(dtoType);
     List<Block> out = new ArrayList<>();
     for (Kind k : Kind.values()) {
-      if (!kinds.contains(k) || k == Kind.RESULT_MAP || (needsPk(k) && !hasPk())) continue;
+      if (!kinds.contains(k) || k == Kind.RESULT_MAP || !possible(k)) continue;
       String sig = switch (k) {
         case LIST -> "List<" + dto + "> " + id(k) + "(Map<String, Object> param);";
         case ONE -> dto + " " + id(k) + "(" + dto + " param);";
@@ -175,14 +190,15 @@ public final class MapperGen {
     return useMap ? " resultMap=\"" + id(Kind.RESULT_MAP) + "\"" : " resultType=\"" + dtoType + "\"";
   }
 
+  /** SELECT 는 키워드만 한 줄, 칼럼은 다음 줄부터 앞 쉼표(첫 칼럼 앞 7칸, 다음부터 「     , 」, XML 안 4칸 위에). */
   private String selectColumns() {
     int width = 0;
-    for (Meta.Column c : cols) width = Math.max(width, Names.sql(c.name()).length());
-    StringBuilder b = new StringBuilder();
+    for (Meta.Column c : cols) width = Math.max(width, name(c.name()).length());
+    StringBuilder b = new StringBuilder("    SELECT\n");
     boolean first = true;
     for (Meta.Column c : cols) {
-      b.append(first ? "    SELECT " : "         , ").append(alias).append('.');
-      String name = Names.sql(c.name());
+      b.append(first ? LEAD_FIRST : LEAD_NEXT).append(alias).append('.');
+      String name = name(c.name());
       if (o.sqlComments() && !c.comment().isBlank()) {
         b.append(pad(name, width)).append(' ').append(sqlComment(c.comment()));
       } else {
@@ -191,7 +207,7 @@ public final class MapperGen {
       b.append('\n');
       first = false;
     }
-    b.append("      FROM ").append(Names.sql(table)).append(' ').append(alias).append('\n');
+    b.append("      FROM ").append(name(table)).append(' ').append(alias).append('\n');
     return b.toString();
   }
 
@@ -206,7 +222,7 @@ public final class MapperGen {
       indent = "      ";
     }
     for (Meta.Column c : cols) {
-      String col = alias + "." + Names.sql(c.name());
+      String col = alias + "." + name(c.name());
       String f = Names.camel(c.name());
       if (isDate(c.type())) {
         ifBlock(b, indent, f + RANGE_FROM + " != null", "AND " + col + " " + cmp(">=") + " #{" + f + RANGE_FROM + "}");
@@ -230,16 +246,16 @@ public final class MapperGen {
 
   private String insert() {
     StringBuilder b = new StringBuilder(head(Kind.INSERT, "insert", " parameterType=\"" + dtoType + "\""));
-    b.append("    INSERT INTO ").append(Names.sql(table)).append(" (\n");
+    b.append("    INSERT INTO ").append(name(table)).append(" (\n");
     boolean first = true;
     for (Meta.Column c : cols) {
-      b.append(first ? "           " : "         , ").append(Names.sql(c.name())).append('\n');
+      b.append(first ? LEAD_FIRST : LEAD_NEXT).append(name(c.name())).append('\n');
       first = false;
     }
     b.append("    ) VALUES (\n");
     first = true;
     for (Meta.Column c : cols) {
-      b.append(first ? "           " : "         , ").append("#{").append(Names.camel(c.name())).append("}\n");
+      b.append(first ? LEAD_FIRST : LEAD_NEXT).append("#{").append(Names.camel(c.name())).append("}\n");
       first = false;
     }
     return b.append("    )\n  </insert>\n").toString();
@@ -247,12 +263,12 @@ public final class MapperGen {
 
   private String update() {
     StringBuilder b = new StringBuilder(head(Kind.UPDATE, "update", " parameterType=\"" + dtoType + "\""));
-    b.append("    UPDATE ").append(Names.sql(table)).append('\n');
+    b.append("    UPDATE ").append(name(table)).append('\n');
     b.append("    <set>\n");
     for (Meta.Column c : cols) {
       if (c.pk()) continue;
       String f = Names.camel(c.name());
-      b.append("      <if test=\"").append(f).append(" != null\">").append(Names.sql(c.name()))
+      b.append("      <if test=\"").append(f).append(" != null\">").append(name(c.name()))
        .append(" = #{").append(f).append("},</if>\n");
     }
     b.append("    </set>\n");
@@ -262,7 +278,7 @@ public final class MapperGen {
 
   private String delete() {
     StringBuilder b = new StringBuilder(head(Kind.DELETE, "delete", " parameterType=\"" + dtoType + "\""));
-    b.append("    DELETE FROM ").append(Names.sql(table)).append('\n');
+    b.append("    DELETE FROM ").append(name(table)).append('\n');
     pkWhere(b, "");
     return b.append("  </delete>\n").toString();
   }
@@ -273,7 +289,7 @@ public final class MapperGen {
     if (o.where11()) b.append("     WHERE 1 = 1\n");
     for (Meta.Column c : cols) {
       if (!c.pk()) continue;
-      b.append(first ? "     WHERE " : "       AND ").append(prefix).append(Names.sql(c.name()))
+      b.append(first ? "     WHERE " : "       AND ").append(prefix).append(name(c.name()))
        .append(" = #{").append(Names.camel(c.name())).append("}\n");
       first = false;
     }
@@ -290,11 +306,15 @@ public final class MapperGen {
   }
 
   private String like(String f) {
-    return o.mysql() ? "CONCAT('%', #{" + f + "}, '%')" : "'%' || #{" + f + "} || '%'";
+    return o.kind() == DbKind.MYSQL ? "CONCAT('%', #{" + f + "}, '%')" : "'%' || #{" + f + "} || '%'";
   }
 
   private static String sqlComment(String s) {
     return "/* " + Xml.text(s.replace("*/", "* /").replace('\n', ' ').strip()) + " */";
+  }
+
+  private String name(String raw) {
+    return Names.sql(o.kind(), raw);
   }
 
   private static String pad(String s, int width) {

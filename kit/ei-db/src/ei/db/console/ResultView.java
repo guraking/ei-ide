@@ -52,7 +52,7 @@ public final class ResultView {
   }
 
   public static void showError(Project project, DbConfig c, String sql, Exception error) {
-    String message = error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage();
+    String message = message(error);
     addTab(project, "오류", ResultPanel.error(sql, message));
     Notify.error(project, c.name + " 실행 실패: " + message);
     ConsoleRun.finished(project, c, sql, false);
@@ -70,9 +70,14 @@ public final class ResultView {
     ConsoleRun.finished(project, c, sql, false);
   }
 
-  /** 첫 FROM 뒤의 표 이름(스키마 · 따옴표 제외, 쓴 그대로). 없으면 null. */
+  /** 화면에 보일 오류 문구. 메시지가 없으면 예외 클래스 이름 대신 한국어 문구. */
+  static String message(Exception e) {
+    return e.getMessage() == null || e.getMessage().isBlank() ? "알 수 없는 오류입니다(오류 문구 없음)." : e.getMessage();
+  }
+
+  /** 첫 FROM 뒤의 표 이름(스키마 · 따옴표 제외, 쓴 그대로). 주석 · 문자열 안의 FROM 은 보지 않는다. 없으면 null. */
   static String firstTable(String sql) {
-    Matcher m = FROM.matcher(sql);
+    Matcher m = FROM.matcher(SqlText.code(sql));
     if (!m.find()) return null;
     String name = m.group(1).replace("\"", "");
     return name.substring(name.lastIndexOf('.') + 1);

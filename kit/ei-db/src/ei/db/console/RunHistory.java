@@ -11,7 +11,10 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * SqlRunner 로 실행한 문장의 기록. IDE 설정 폴더의 ei-db/history.tsv 에 한 줄 한 건(오래된 것부터), 최근 MAX 건만 둔다.
@@ -19,6 +22,8 @@ import java.util.List;
  * 탭으로 나누고 \ 탭 줄바꿈은 \\ \t \n \r 로 쓴다. 바인드 칸이 없는 예전 줄은 값 없음으로 읽는다.
  * 바인드 값 칸은 「형식 글자:값」. S 문자열 · L Long · I Integer · N BigDecimal(그 밖의 숫자 포함) · B Boolean ·
  * D 날짜(java.sql.Date) · T 시각(Timestamp) · 칸 전체가 「-」이면 null. 그 밖의 형식은 문자열로 남긴다.
+ * 저장 전에 비밀번호를 MASK 로 가린다: 문장의 IDENTIFIED BY 값 · PASSWORD '값', 그리고 비밀번호 이름(isSecretName)의 자리에서 온 바인드 값
+ * (BindDialog 가 markSecret 으로 알려 준 값과 같은 값). 가린 기록은 다시 실행해도 원래 값으로 돌지 않는다.
  * 형식 · 자르기는 IntelliJ 없이 돈다(test 의 RunHistoryCheck). 여러 스레드에서 불러도 된다.
  */
 public final class RunHistory {
@@ -29,6 +34,15 @@ public final class RunHistory {
   /** 바인드 값을 뺀 칸 수. */
   private static final int FIELDS = 7;
   private static final String NULL_BIND = "-";
+  static final String MASK = "****";
+  /** 기억해 두는 비밀번호 바인드 값 수(오래된 것부터 잊는다). */
+  private static final int MAX_SECRETS = 50;
+  private static final Pattern IDENTIFIED_BY = Pattern.compile(
+      "(?i)(\\bIDENTIFIED\\b(?:\\s+WITH\\s+\\S+)?\\s+BY\\s+)(?:\"[^\"]*\"|'(?:[^']|'')*'|[^\\s;]+)");
+  /** PostgreSQL 의 [ENCRYPTED] PASSWORD '값'. */
+  private static final Pattern PASSWORD_LITERAL = Pattern.compile("(?i)(\\bPASSWORD\\s+)'(?:[^']|'')*'");
+  private static final Pattern SECRET_NAME = Pattern.compile("(?i).*(PASSWORD|PASSWD|PWD).*");
+  private static final Set<Object> SECRETS = new LinkedHashSet<>();
 
   /** count 는 조회면 읽은 행 수, 변경이면 변경 수, 모르면 NO_COUNT. binds 는 ? 자리 값(없으면 빈 목록). */
   public record Entry(long time, String configId, String configName, long millis, int count, boolean ok, String sql, List<Object> binds) {}
@@ -57,10 +71,10 @@ public final class RunHistory {
     return out;
   }
 
-  /** 더하고 파일을 다시 쓴다. 파일을 읽지 못했으면 덮지 않고 예외를 낸다. */
+  /** 비밀번호를 가려 더하고 파일을 다시 쓴다. 파일을 읽지 못했으면 덮지 않고 예외를 낸다. */
   public synchronized void add(Entry e) throws IOException {
     List<Entry> list = load();
-    list.add(e);
+    list.add(masked(e));
     while (list.size() > MAX) list.remove(0);
     StringBuilder text = new StringBuilder();
     for (Entry x : list) text.append(format(x)).append('\n');
@@ -76,6 +90,40 @@ public final class RunHistory {
     }
     entries = list;
     return list;
+  }
+
+  /** 바인드 자리 이름이 비밀번호(PASSWORD · PASSWD · PWD 를 품은 이름, 대소문자 무시)인지. */
+  public static boolean isSecretName(String name) {
+    return name != null && SECRET_NAME.matcher(name).matches();
+  }
+
+  /** 비밀번호 자리에 들어간 값을 알려 둔다. 이 값과 같은 바인드 값은 기록에서 가린다. null 은 무시. */
+  public static void markSecret(Object value) {
+    if (value == null) return;
+    synchronized (SECRETS) {
+      SECRETS.remove(value);
+      SECRETS.add(value);
+      while (SECRETS.size() > MAX_SECRETS) SECRETS.remove(SECRETS.iterator().next());
+    }
+  }
+
+  private static boolean isSecretValue(Object value) {
+    synchronized (SECRETS) {
+      return value != null && SECRETS.contains(value);
+    }
+  }
+
+  /** 문장 안의 IDENTIFIED BY 값 · PASSWORD '값' 을 MASK 로. */
+  static String maskSql(String sql) {
+    if (sql == null) return null;
+    String s = IDENTIFIED_BY.matcher(sql).replaceAll("$1" + MASK);
+    return PASSWORD_LITERAL.matcher(s).replaceAll("$1'" + MASK + "'");
+  }
+
+  static Entry masked(Entry e) {
+    List<Object> binds = new ArrayList<>(e.binds().size());
+    for (Object v : e.binds()) binds.add(isSecretValue(v) ? MASK : v);
+    return new Entry(e.time(), e.configId(), e.configName(), e.millis(), e.count(), e.ok(), maskSql(e.sql()), binds);
   }
 
   static String format(Entry e) {

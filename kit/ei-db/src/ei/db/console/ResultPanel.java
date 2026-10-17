@@ -143,8 +143,9 @@ final class ResultPanel extends JPanel {
 
   private void buildUpdate(DbConfig c) {
     int count = Math.max(result.updateCount(), 0);
-    JBLabel label = new JBLabel(count + "행 변경됨 · " + (c.autoCommit ? "자동 커밋됨" : "커밋 전") + " · " + result.millis() + " ms");
-    label.setForeground(c.autoCommit ? UiColors.SUCCESS : UiColors.WARNING);
+    boolean auto = DbSessions.get(project).autoCommit(c);
+    JBLabel label = new JBLabel(count + "행 변경됨 · " + (auto ? "자동 커밋됨" : "커밋 전") + " · " + result.millis() + " ms");
+    label.setForeground(auto ? UiColors.SUCCESS : UiColors.WARNING);
     label.setToolTipText(result.sql());
     label.setBorder(JBUI.Borders.empty(10, 12));
     add(label, BorderLayout.NORTH);
@@ -205,6 +206,9 @@ final class ResultPanel extends JPanel {
       JBLabel cut = new JBLabel(" · " + result.rows().size() + "건에서 자름  ");
       cut.setForeground(UiColors.WARNING);
       bar.add(cut);
+    }
+    // 다시 읽기는 문장을 처음부터 다시 실행하므로 변경이 섞인 문장(INSERT … RETURNING 등)에는 두지 않는다.
+    if (result.truncated() && SqlText.isRereadable(result.sql())) {
       bar.add(button(DbSessions.MAX_ROWS + "건 더", null, () -> readMore(c, result.rows().size() + DbSessions.MAX_ROWS)));
       JBTextField wanted = new JBTextField(String.valueOf(result.rows().size() + DbSessions.MAX_ROWS), 6);
       wanted.setToolTipText("읽을 건수 · Enter 또는 「조회」");
@@ -283,7 +287,7 @@ final class ResultPanel extends JPanel {
         QueryResult more = DbSessions.get(project).run(c, result.sql(), result.binds(), limit);
         ApplicationManager.getApplication().invokeLater(() -> replaceWith(new ResultPanel(project, c, more, table)));
       } catch (Exception e) {
-        Notify.error(project, c.name + " 더 읽기 실패: " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()));
+        Notify.error(project, c.name + " 더 읽기 실패: " + ResultView.message(e));
       }
     });
   }
@@ -546,8 +550,15 @@ final class ResultPanel extends JPanel {
     }
     List<List<Object>> rows = new ArrayList<>();
     for (int row : chosenRows()) rows.add(result.rows().get(row));
-    CopyPasteManager.getInstance().setContents(new StringSelection(SqlText.inserts(target, result.columns(), rows)));
-    Notify.info(project, "INSERT 문 " + rows.size() + "개를 복사했습니다.");
+    String sql;
+    try {
+      sql = SqlText.inserts(target, result.columns(), result.columnTypes(), rows, config.kind);
+    } catch (IllegalArgumentException e) {
+      Notify.error(project, e.getMessage());
+      return;
+    }
+    CopyPasteManager.getInstance().setContents(new StringSelection(sql));
+    Notify.info(project, "INSERT 문 " + rows.size() + "개를 복사했습니다." + lobNotice(sql));
   }
 
   /** 고른 행(없으면 전체)을 UPDATE 문으로 복사. PK 는 접속해서 표 정의로 찾으므로 뒤에서 읽은 뒤 복사한다. */
@@ -571,12 +582,22 @@ final class ResultPanel extends JPanel {
       } catch (Exception e) {
         // PK 를 못 읽어도 첫 칼럼 조건 + 확인 주석으로 만든다(SqlText.updates).
       }
-      String sql = SqlText.updates(name, result.columns(), rows, pks);
+      String sql;
+      try {
+        sql = SqlText.updates(name, result.columns(), result.columnTypes(), rows, pks, c.kind);
+      } catch (IllegalArgumentException e) {
+        Notify.error(project, e.getMessage());
+        return;
+      }
       ApplicationManager.getApplication().invokeLater(() -> {
         CopyPasteManager.getInstance().setContents(new StringSelection(sql));
-        Notify.info(project, "UPDATE 문 " + rows.size() + "개를 복사했습니다." + (pks.isEmpty() ? " PK 를 찾지 못했으니 WHERE 를 확인하세요." : ""));
+        Notify.info(project, "UPDATE 문 " + rows.size() + "개를 복사했습니다." + (pks.isEmpty() ? " PK 를 찾지 못했으니 WHERE 를 확인하세요." : "") + lobNotice(sql));
       });
     });
+  }
+
+  private static String lobNotice(String sql) {
+    return sql.startsWith(SqlText.LOB_EXCLUDED) ? " LOB · 이진 칼럼은 뺐습니다." : "";
   }
 
   /**
@@ -638,7 +659,7 @@ final class ResultPanel extends JPanel {
       } catch (Exception e) {
         // 다음 두 번 누름에서 다시 읽게 상태를 두지 않는다.
         ApplicationManager.getApplication().invokeLater(() -> loadingEdit = false);
-        Notify.error(project, "표 정의를 읽지 못해 고칠 수 없습니다: " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()));
+        Notify.error(project, "표 정의를 읽지 못해 고칠 수 없습니다: " + ResultView.message(e));
       }
     });
   }
@@ -653,6 +674,7 @@ final class ResultPanel extends JPanel {
       Boolean pk = pkByName.get(result.columns().get(i).toUpperCase(Locale.ROOT));
       if (pk == null) return "칼럼 " + result.columns().get(i) + " 은 표 " + table + " 에 없어(별칭 · 식) 결과를 고칠 수 없습니다.";
       keys[i] = pk;
+      if (pk && SqlText.isUneditableType(typeOf(i))) return "PK 칼럼 " + result.columns().get(i) + " 이 이진 형식이라 결과를 고칠 수 없습니다.";
     }
     Set<String> shown = new HashSet<>();
     for (String name : result.columns()) shown.add(name.toUpperCase(Locale.ROOT));
@@ -755,7 +777,7 @@ final class ResultPanel extends JPanel {
     text.setFont(monoFont());
     JBScrollPane scroll = new JBScrollPane(text);
     scroll.setPreferredSize(new Dimension(JBUI.scale(PREVIEW_WIDTH), JBUI.scale(PREVIEW_HEIGHT)));
-    JBLabel note = new JBLabel(config.name + " 에서 아래 문장을 차례로 실행합니다." + (config.autoCommit ? "" : " 자동 커밋이 꺼져 있어 커밋해야 반영됩니다."));
+    JBLabel note = new JBLabel(config.name + " 에서 아래 문장을 차례로 실행합니다." + (DbSessions.get(project).autoCommit(config) ? "" : " 자동 커밋이 꺼져 있어 커밋해야 반영됩니다."));
     note.setBorder(JBUI.Borders.emptyBottom(8));
     DialogBuilder dialog = new DialogBuilder(project);
     dialog.setTitle("고친 값 반영 · UPDATE 문 " + statements.size() + "개");

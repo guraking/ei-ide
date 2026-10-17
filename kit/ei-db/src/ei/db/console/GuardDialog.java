@@ -62,7 +62,7 @@ public final class GuardDialog extends DialogWrapper {
   /** reason 은 SqlGuard.danger 결과(운영 접속의 일반 변경이면 null), table 은 대상 표(모르면 null). 실행해도 되면 true. */
   public static boolean confirm(Project project, DbConfig c, String sql, String reason, String table) {
     boolean ok = new GuardDialog(project, c, sql, reason, table).showAndGet();
-    if (!ok) ConsoleRun.stop(project);
+    if (!ok) ConsoleRun.stop(project, c, sql);
     return ok;
   }
 

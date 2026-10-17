@@ -15,13 +15,14 @@ import java.util.Set;
  * 접속 목록 내보내기 · 가져오기 파일(JSON). 순수 자바.
  * 꼴: {"connections": [{"name": "...", "kind": "ORACLE", ...}]}. DbConfig 의 공개 필드(문자열 · 정수 · 참거짓 · 열거)를 그대로 쓰고,
  * id 는 쓰지 않는다(가져올 때 새로 만든다. 비밀번호가 id 에 묶여 있어 다른 접속의 비밀번호를 물려받지 않게).
+ * driverJar 도 쓰지 않는다(이 PC 의 절대 경로라 다른 PC 에서는 없는 파일을 가리킨다. 비워 두면 드라이버를 자동으로 찾는다).
  * 비밀번호는 DbConfig 에 없으므로 파일에 들어가지 않는다. 가져올 때 모르는 키는 무시하고 빠진 키는 기본값으로 둔다.
  */
 final class ConnectionsJson {
   private ConnectionsJson() {}
 
   static final String ROOT = "connections";
-  private static final String SKIPPED = "id";
+  private static final Set<String> SKIPPED = Set.of("id", "driverJar");
   private static final String IMPORTED = " (가져옴";
   private static final String BOM = "\uFEFF";
 
@@ -65,7 +66,7 @@ final class ConnectionsJson {
     List<Field> out = new ArrayList<>();
     for (Field f : DbConfig.class.getFields()) {
       int mod = f.getModifiers();
-      if (!Modifier.isStatic(mod) && !Modifier.isFinal(mod) && !f.getName().equals(SKIPPED)) out.add(f);
+      if (!Modifier.isStatic(mod) && !Modifier.isFinal(mod) && !SKIPPED.contains(f.getName())) out.add(f);
     }
     return out;
   }

@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>local.bootservers</id>
-    <name>Boot Servers</name>
-    <vendor>local</vendor>
+    <name>서버 창</name>
+    <vendor>개인</vendor>
     <description><![CDATA[
         프로젝트 트리에서 모듈을 우클릭해 스프링 부트 서버를 시작 · 디버그 · 재시작 · 중지하고,
         실행 중인 모듈 옆에 상태를 표시한다.
@@ -16,6 +16,7 @@
         <toolWindow id="Servers" anchor="bottom" icon="AllIcons.Nodes.Services"
                     factoryClass="local.bootservers.ServersToolWindowFactory"/>
         <notificationGroup id="EI IDE 새 판" displayType="STICKY_BALLOON"/>
+        <notificationGroup id="서버 실행" displayType="BALLOON"/>
     </extensions>
 
     <applicationListeners>

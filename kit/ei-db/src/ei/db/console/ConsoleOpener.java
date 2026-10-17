@@ -9,6 +9,7 @@ import com.intellij.openapi.util.Key;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.testFramework.LightVirtualFile;
 import ei.db.DbConfig;
+import ei.db.DbSessions;
 import ei.db.DbSettings;
 import ei.db.Notify;
 
@@ -19,15 +20,14 @@ import java.util.Map;
 /**
  * SQL 콘솔 = 메모리 파일(LightVirtualFile, 이름 끝 .sql 이라 SQL 색칠이 붙는다). 한 접속에 콘솔을 여러 개 열 수 있고,
  * 같은 접속의 콘솔은 연결 하나(미반영 변경 · 커밋 · 롤백)를 같이 쓴다.
- * 파일 사용자 데이터에 접속 id 와 이 세션에서만 쓰는 자동 커밋 값을 둔다. 탭을 닫아도 파일(내용)은 프로젝트가 닫힐 때까지 남는다.
+ * 파일 사용자 데이터에 접속 id 를 둔다. 콘솔에서 바꾼 자동 커밋은 접속마다 하나(DbSessions.autoCommitOverride)라 같은 접속의 콘솔이 같이 쓴다.
+ * 탭을 닫아도 파일(내용)은 프로젝트가 닫힐 때까지 남는다.
  * 콘솔 글은 ConsoleStore 가 접속 id · 콘솔 번호별로 저장하고, 다음 세션에 같은 번호의 콘솔을 처음 만들 때 되살린다.
  */
 public final class ConsoleOpener {
   private ConsoleOpener() {}
 
   static final Key<String> CONFIG_ID = Key.create("ei.db.console.configId");
-  /** 콘솔에서 바꾼 자동 커밋. null 이면 접속 설정 값. 설정 파일에는 저장하지 않는다. */
-  static final Key<Boolean> AUTO_COMMIT = Key.create("ei.db.console.autoCommit");
   /** 접속 id → 그 접속에서 마지막으로 연 콘솔. SQL 을 보내는 곳. */
   private static final Key<Map<String, LightVirtualFile>> CONSOLES = Key.create("ei.db.console.files");
   /** 접속 id → 지금까지 연 콘솔 수. 두 번째부터 탭 이름에 번호를 붙인다. */
@@ -79,12 +79,17 @@ public final class ConsoleOpener {
     return file != null && file.getUserData(CONFIG_ID) != null;
   }
 
-  /** 콘솔이 쓰는 접속(설정 사본에 이 콘솔의 자동 커밋을 얹은 것). 접속이 지워졌으면 null. */
+  /** 콘솔이 쓰는 접속 설정(자동 커밋 덮어쓰기 없이). 접속이 지워졌으면 null. 실행 · 커밋 표시에는 config(project, file). */
   static DbConfig config(VirtualFile file) {
-    DbConfig base = DbSettings.getInstance().find(file.getUserData(CONFIG_ID));
+    return DbSettings.getInstance().find(file.getUserData(CONFIG_ID));
+  }
+
+  /** 콘솔이 쓰는 접속(설정 사본에 그 접속의 자동 커밋 덮어쓰기를 얹은 것). 접속이 지워졌으면 null. */
+  static DbConfig config(Project project, VirtualFile file) {
+    DbConfig base = config(file);
     if (base == null) return null;
     DbConfig c = base.copy();
-    Boolean auto = file.getUserData(AUTO_COMMIT);
+    Boolean auto = DbSessions.get(project).autoCommitOverride(c.id);
     if (auto != null) c.autoCommit = auto;
     return c;
   }
@@ -95,7 +100,6 @@ public final class ConsoleOpener {
     consoles.remove(file.getUserData(CONFIG_ID));
     if (file instanceof LightVirtualFile light) consoles.put(target.id, light);
     file.putUserData(CONFIG_ID, target.id);
-    file.putUserData(AUTO_COMMIT, null);
     counts(project).put(target.id, ConsoleStore.get(project).rebind(file, target.id, counts(project).getOrDefault(target.id, 0)));
     try {
       file.rename(ConsoleOpener.class, fileName(target));

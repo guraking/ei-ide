@@ -43,6 +43,7 @@ import ei.db.SqlRunner;
 import ei.db.console.ConsoleOpener;
 import ei.db.gen.ErdView;
 import ei.db.gen.MapperDialog;
+import ei.db.gen.Names;
 import org.jetbrains.annotations.NotNull;
 
 import javax.swing.Icon;
@@ -434,12 +435,12 @@ final class DbExplorer extends SimpleToolWindowPanel {
         g.add(new Act("SELECT 문 만들기 (표 " + picked.size() + "개 조인)", null, () -> true, () -> joinSelect(n, t, picked)));
       } else {
         g.add(new Act("SELECT 문 만들기", null, () -> true, () -> withColumns(n, t,
-            cols -> ConsoleOpener.open(project, t.c, SelectSql.build(t.schema, t.table.name(), cols)))));
+            cols -> ConsoleOpener.open(project, t.c, SelectSql.build(t.c.kind, t.schema, t.table.name(), cols)))));
       }
       g.add(new Act("INSERT 문 만들기", null, () -> true, () -> withColumns(n, t,
-          cols -> ConsoleOpener.open(project, t.c, SelectSql.insert(t.schema, t.table.name(), cols)))));
+          cols -> ConsoleOpener.open(project, t.c, SelectSql.insert(t.c.kind, t.schema, t.table.name(), cols)))));
       g.add(new Act("UPDATE 문 만들기", null, () -> true, () -> withColumns(n, t,
-          cols -> ConsoleOpener.open(project, t.c, SelectSql.update(t.schema, t.table.name(), cols)))));
+          cols -> ConsoleOpener.open(project, t.c, SelectSql.update(t.c.kind, t.schema, t.table.name(), cols)))));
       g.add(new Act("매퍼 뼈대 만들기", null, () -> true, () -> MapperDialog.show(project, t.c, t.schema, t.table.name())));
       g.addSeparator();
       g.add(new Act("ERD 열기", null, () -> true, () -> ErdView.open(project, t.c, t.schema, picked)));
@@ -459,13 +460,13 @@ final class DbExplorer extends SimpleToolWindowPanel {
         columns.put(table, Meta.columns(conn, base.c, base.schema, table));
         fks.addAll(Meta.importedKeys(conn, base.c, base.schema, table));
       }
-      String sql = SelectSql.join(base.schema, tables, columns, fks);
+      String sql = SelectSql.join(base.c.kind, base.schema, tables, columns, fks);
       return () -> ConsoleOpener.open(project, base.c, sql);
     });
   }
 
   private void viewData(TableItem t) {
-    SqlRunner.run(project, t.c, "SELECT * FROM " + t.schema + "." + t.table.name(), List.of());
+    SqlRunner.run(project, t.c, "SELECT * FROM " + Names.sql(t.c.kind, t.schema, t.table.name()), List.of());
   }
 
   // ---- 표 · 칼럼 찾기 ----
@@ -507,7 +508,7 @@ final class DbExplorer extends SimpleToolWindowPanel {
     // 나무에 없는 표라 붙어 있지 않은 마디를 넘긴다: 실패하면 알림만 하고 나무는 건드리지 않는다.
     background(new DefaultMutableTreeNode(), c, () -> {
       List<Meta.Column> cols = Meta.columns(sessions.connection(c), c, schema, table);
-      String sql = SelectSql.build(schema, table, cols);
+      String sql = SelectSql.build(c.kind, schema, table, cols);
       return () -> ConsoleOpener.open(project, c, sql);
     });
   }
@@ -575,15 +576,34 @@ final class DbExplorer extends SimpleToolWindowPanel {
     if (ConnectDialog.edit(project, c) != null) rebuild();
   }
 
+  /** 저장된 비밀번호가 없으면(저장을 끈 접속의 IDE 재실행 뒤) 먼저 묻고 IDE 를 끌 때까지 기억한다. */
   private void connect(DbConfig c) {
     DbSessions sessions = DbSessions.get(project);
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
-      try {
-        sessions.connection(c);
-      } catch (Exception e) {
-        Notify.error(project, c.name + " 에 연결하지 못했습니다: " + e.getMessage());
+      if (!sessions.isOpen(c.id) && Passwords.get(c) == null) {
+        ApplicationManager.getApplication().invokeLater(() -> askPasswordAndConnect(c), project.getDisposed());
+        return;
       }
+      openSession(c);
     });
+  }
+
+  private void askPasswordAndConnect(DbConfig c) {
+    String pw = Messages.showPasswordDialog(project, c.name + " · " + c.user + " 의 비밀번호를 넣으세요.\nIDE 를 끌 때까지만 기억합니다.", "비밀번호", null);
+    if (pw == null) return;
+    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+      SessionPassword.set(c, pw);
+      openSession(c);
+    });
+  }
+
+  /** 백그라운드에서 부른다. */
+  private void openSession(DbConfig c) {
+    try {
+      DbSessions.get(project).connection(c);
+    } catch (Exception e) {
+      Notify.error(project, c.name + " 에 연결하지 못했습니다: " + e.getMessage());
+    }
   }
 
   /** 미반영 변경이 있으면 롤백된다고 먼저 묻는다. 끊기로 했으면 true. */
@@ -607,8 +627,12 @@ final class DbExplorer extends SimpleToolWindowPanel {
     if (Messages.showYesNoDialog(project, c.name + " 접속을 삭제할까요?", "접속 삭제", Messages.getWarningIcon()) != Messages.YES) return;
     if (!confirmRollback(c, "접속 삭제")) return;
     DbSettings.getInstance().remove(c.id);
-    Passwords.set(c, null);
-    closeInBackground(c);
+    DbSessions sessions = DbSessions.get(project);
+    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+      Passwords.set(c, null);
+      SessionPassword.set(c, null);
+      sessions.close(c.id);
+    });
     rebuild();
   }
 

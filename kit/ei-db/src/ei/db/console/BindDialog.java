@@ -3,6 +3,7 @@ package ei.db.console;
 import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
+import com.intellij.openapi.ui.ValidationInfo;
 import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBScrollPane;
@@ -28,9 +29,11 @@ import java.util.Map;
 
 /**
  * 콘솔 실행 전 이름 자리(:name · #{name} · ${name}) 값 입력. 값은 이름마다 마지막 것을 프로젝트에 기억한다.
- * 화면 스레드에서 부른다.
+ * 비밀번호 이름(RunHistory.isSecretName)의 값은 기억하지 않고, 실행 기록에서 가리도록 RunHistory 에 알린다.
+ * 값으로 바꿀 수 없는 글(잘못된 날짜 꼴)이 있으면 실행하지 않고 그 칸에 알린다. 화면 스레드에서 부른다.
  */
 final class BindDialog extends DialogWrapper {
+  private static final java.util.regex.Pattern DATE_LIKE = java.util.regex.Pattern.compile("\\d{4}-\\d{2}-\\d{2}([ T]\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?)?");
   private static final String VALUE_KEY = "ei.db.console.bind.";
   private static final int VALUE_COLUMNS = 28;
   private static final int MAX_VISIBLE_ROWS = 12;
@@ -63,6 +66,9 @@ final class BindDialog extends DialogWrapper {
       values = d.values();
     }
     List<SqlParams.Bound> out = new ArrayList<>();
+    for (SqlParams.Param p : params) {
+      if (p.kind() != SqlParams.Kind.RAW && RunHistory.isSecretName(p.name())) RunHistory.markSecret(SqlParams.value(values.get(p.name())));
+    }
     for (String sql : sqls) out.add(SqlParams.apply(sql, values));
     return out;
   }
@@ -112,11 +118,38 @@ final class BindDialog extends DialogWrapper {
     return fields.isEmpty() ? null : fields.values().iterator().next();
   }
 
+  /** 「실행」 전에 DialogWrapper 가 부른다. 값으로 바꿀 수 없는 칸이 있으면 그 칸에 문구를 띄우고 닫지 않는다. */
+  @Override
+  protected @Nullable ValidationInfo doValidate() {
+    for (SqlParams.Param p : params) {
+      JBTextField field = fields.get(p.name());
+      if (p.kind() != SqlParams.Kind.RAW && badDate(field.getText())) {
+        return new ValidationInfo("날짜 형식이 맞지 않습니다: " + p.label() + " = " + field.getText().strip(), field);
+      }
+    }
+    return null;
+  }
+
+  /** 비밀번호 이름의 값은 기억하지 않는다(지난 값을 지운다). */
   @Override
   protected void doOKAction() {
     PropertiesComponent props = PropertiesComponent.getInstance(project);
-    for (Map.Entry<String, JBTextField> e : fields.entrySet()) props.setValue(VALUE_KEY + e.getKey(), e.getValue().getText());
+    for (Map.Entry<String, JBTextField> e : fields.entrySet()) {
+      if (RunHistory.isSecretName(e.getKey())) props.unsetValue(VALUE_KEY + e.getKey());
+      else props.setValue(VALUE_KEY + e.getKey(), e.getValue().getText());
+    }
     super.doOKAction();
+  }
+
+  /** 값으로 바꾸다 난 예외. 바뀌면 null. SqlValues.parse 는 2026-13-01 처럼 날짜 꼴인데 없는 날짜면 예외를 낸다. */
+  /** 따옴표 없이 날짜 꼴(yyyy-mm-dd[ hh:mm[:ss]])인데 날짜로 읽히지 않는 값(2026-13-01 등)인지. 이런 값은 SqlValues 가 글자로 넘긴다. */
+  private static boolean badDate(String text) {
+    if (!DATE_LIKE.matcher(text.strip()).matches()) return false;
+    try {
+      return !(SqlParams.value(text) instanceof java.util.Date);
+    } catch (RuntimeException e) {
+      return true;
+    }
   }
 
   private Map<String, String> values() {
@@ -148,6 +181,7 @@ final class BindDialog extends DialogWrapper {
 
   static String typeLabel(SqlParams.Param p, String text) {
     if (p.kind() == SqlParams.Kind.RAW) return "글자 그대로";
+    if (badDate(text)) return "날짜 형식 오류";
     Object v = SqlParams.value(text);
     if (v == null) return "NULL";
     if (v instanceof Long || v instanceof BigDecimal) return "숫자";

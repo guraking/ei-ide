@@ -7,10 +7,13 @@ import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.regex.Pattern;
+
+import ei.db.DbKind;
 
 /** 값 ↔ 입력 글 · SQL 리터럴 변환과, ? 자리에 리터럴을 끼워 넣는 일. */
 public final class SqlValues {
@@ -22,29 +25,38 @@ public final class SqlValues {
   private static final Pattern DECIMAL = Pattern.compile("-?\\d*\\.\\d+");
   private static final String TIMESTAMP_FORMAT = "yyyy-MM-dd HH:mm:ss";
   private static final int LONG_DIGITS = 18;
+  private static final String QUOTE = "'";
 
   /**
    * 입력 글을 값으로. 비면 null. 'abc' 처럼 따옴표로 감싸면 늘 문자열.
    * yyyy-MM-dd → java.sql.Date, yyyy-MM-dd HH:mm(:ss) → Timestamp, 정수 → Long, 소수 → BigDecimal, 나머지 문자열.
+   * 날짜 꼴이지만 없는 날짜(2026-13-01)면 문자열.
    * 0 으로 시작하는 여러 자리 숫자(코드 값)는 앞 0 이 사라지지 않게 문자열로 둔다.
    * list 면 쉼표로 나눠 각각 바꾼 List 를 준다.
    */
-  public static Object parse(String text, boolean list) {
+  public static Object parse(String text, boolean list) { return parse(text, list, false); }
+
+  /** asText 가 참이면(받는 쪽이 문자열 필드) 따옴표만 벗기고 늘 문자열로 둔다. 문자 칼럼을 숫자 · 날짜로 비교하지 않게. */
+  public static Object parse(String text, boolean list, boolean asText) {
     if (text == null || text.isBlank()) return null;
-    if (!list) return scalar(text.trim());
+    if (!list) return scalar(text.trim(), asText);
     List<Object> out = new ArrayList<>();
     for (String part : text.split(",")) {
-      if (!part.isBlank()) out.add(scalar(part.trim()));
+      if (!part.isBlank()) out.add(scalar(part.trim(), asText));
     }
     return out;
   }
 
-  private static Object scalar(String t) {
-    if (t.length() >= 2 && t.startsWith("'") && t.endsWith("'")) return t.substring(1, t.length() - 1).replace("''", "'");
-    if (DATE.matcher(t).matches()) return Date.valueOf(t);
-    if (DATE_TIME.matcher(t).matches()) {
-      String s = t.replace('T', ' ');
-      return Timestamp.valueOf(s.length() == "yyyy-MM-dd HH:mm".length() ? s + ":00" : s);
+  private static Object scalar(String t) { return scalar(t, false); }
+
+  private static Object scalar(String t, boolean asText) {
+    if (t.length() >= 2 && t.startsWith(QUOTE) && t.endsWith(QUOTE)) return t.substring(1, t.length() - 1).replace("''", QUOTE);
+    if (asText) return t;
+    try {
+      if (DATE.matcher(t).matches()) return Date.valueOf(LocalDate.parse(t));
+      if (DATE_TIME.matcher(t).matches()) return Timestamp.valueOf(LocalDateTime.parse(t.replace(' ', 'T')));
+    } catch (DateTimeParseException e) {
+      return t; // 없는 날짜 · 시각은 사용자가 넣은 글 그대로 문자열로 넘긴다.
     }
     boolean leadingZero = t.length() > 1 && (t.startsWith("0") || t.startsWith("-0")) && !t.contains(".");
     if (INTEGER.matcher(t).matches() && !leadingZero) {
@@ -80,7 +92,10 @@ public final class SqlValues {
    * SQL 리터럴. 문자열은 ' 를 '' 로, java.sql.Date · LocalDate → DATE 'yyyy-mm-dd',
    * Timestamp · java.util.Date · LocalDateTime → TIMESTAMP 'yyyy-mm-dd hh:mi:ss', 숫자는 그대로, null → NULL.
    */
-  public static String literal(Object v) {
+  public static String literal(Object v) { return literal(v, null); }
+
+  /** kind 가 MySQL 이면 문자열 안 \ 도 \\ 로(MySQL 은 \ 를 이스케이프로 읽는다). null 이면 표준 SQL. */
+  public static String literal(Object v, DbKind kind) {
     if (v == null) return "NULL";
     if (v instanceof Date || v instanceof LocalDate) return "DATE '" + v + "'";
     if (v instanceof java.util.Date d) return "TIMESTAMP '" + new SimpleDateFormat(TIMESTAMP_FORMAT).format(d) + "'";
@@ -89,14 +104,19 @@ public final class SqlValues {
     if (v instanceof Number || v instanceof Boolean) return String.valueOf(v);
     if (v instanceof Collection<?> c) {
       List<String> parts = new ArrayList<>();
-      for (Object o : c) parts.add(literal(o));
+      for (Object o : c) parts.add(literal(o, kind));
       return String.join(", ", parts);
     }
-    return "'" + String.valueOf(v).replace("'", "''") + "'";
+    String s = String.valueOf(v);
+    if (kind == DbKind.MYSQL) s = s.replace("\\", "\\\\");
+    return QUOTE + s.replace(QUOTE, "''") + QUOTE;
   }
 
   /** 문자열 · 따옴표 이름 · 주석 안의 ? 는 건너뛰고 차례로 리터럴을 넣는다. 값이 모자라면 남은 ? 는 그대로 둔다. */
-  public static String inline(String sql, List<Object> binds) {
+  public static String inline(String sql, List<Object> binds) { return inline(sql, binds, null); }
+
+  /** kind 에 맞춘 리터럴로 넣는다(literal(Object, DbKind)). */
+  public static String inline(String sql, List<Object> binds, DbKind kind) {
     StringBuilder b = new StringBuilder(sql.length() + binds.size() * 8);
     int n = 0;
     int i = 0;
@@ -107,7 +127,7 @@ public final class SqlValues {
         b.append(sql, i, skip);
         i = skip;
       } else if (c == '?' && n < binds.size()) {
-        b.append(literal(binds.get(n++)));
+        b.append(literal(binds.get(n++), kind));
         i++;
       } else {
         b.append(c);

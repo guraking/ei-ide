@@ -73,10 +73,14 @@ public final class ConnectDialog extends DialogWrapper {
   private final JBTextField user = new JBTextField();
   private final JBPasswordField password = new JBPasswordField();
   private final JBCheckBox savePassword = new JBCheckBox("IDE 암호 저장소에 저장", true);
+  /** 사용자가 비밀번호 칸을 고쳤는지. 저장소에서 읽어 채운 값은 치지 않는다. 화면 스레드에서만 바꾼다. */
+  private boolean passwordTouched;
+  private boolean fillingPassword;
   private final JBTextField schema = new JBTextField();
   private final JBLabel driverName = new JBLabel();
   private final JBLabel driverStatus = new JBLabel("", UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER);
   private final ActionLink downloadLink = new ActionLink("내려받기", (ActionListener) e -> downloadDriver());
+  private final ActionLink autoDriverLink = new ActionLink("자동으로", (ActionListener) e -> autoDriver());
   private final JBLabel url = new JBLabel();
   private final JBCheckBox autoCommit = new JBCheckBox("자동 커밋");
   private final JBCheckBox readOnly = new JBCheckBox("읽기 전용 (UPDATE · DELETE 막음)");
@@ -150,6 +154,10 @@ public final class ConnectDialog extends DialogWrapper {
     JPanel passwordRow = new JPanel(new BorderLayout(JBUI.scale(8), 0));
     passwordRow.add(password, BorderLayout.CENTER);
     passwordRow.add(savePassword, BorderLayout.EAST);
+    savePassword.setToolTipText("끄면 비밀번호를 IDE 를 끌 때까지만 기억하고, 다음 실행 뒤 처음 연결할 때 묻습니다");
+    password.getDocument().addDocumentListener(new DocumentAdapter() {
+      @Override protected void textChanged(@NotNull DocumentEvent e) { if (!fillingPassword) passwordTouched = true; }
+    });
 
     JPanel driverRow = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0));
     driverRow.add(driverName);
@@ -157,6 +165,8 @@ public final class ConnectDialog extends DialogWrapper {
     downloadLink.setVisible(false);
     driverRow.add(downloadLink);
     driverRow.add(new ActionLink("다른 jar 고르기", (ActionListener) e -> chooseJar()));
+    autoDriverLink.setToolTipText("고른 jar 를 비우고 .m2 에서 자동으로 찾습니다");
+    driverRow.add(autoDriverLink);
 
     JPanel safety = new JPanel();
     safety.setLayout(new BoxLayout(safety, BoxLayout.Y_AXIS));
@@ -246,6 +256,7 @@ public final class ConnectDialog extends DialogWrapper {
   /** ~/.m2 검색은 파일을 훑으므로 백그라운드에서. 결과가 오기 전에 종류 · jar 가 바뀌었으면 버린다. */
   private void refreshDriver() {
     DbConfig probe = current();
+    autoDriverLink.setVisible(!driverJar.isBlank());
     driverName.setText("찾는 중…");
     driverStatus.setText("");
     // 창이 뜨기 전(init)에도 불리므로 current() 를 쓰면 바깥 상태가 잡혀 창이 닫힐 때까지 갱신이 밀린다. 글자만 바꾸므로 any() 로 둔다.
@@ -287,16 +298,46 @@ public final class ConnectDialog extends DialogWrapper {
     refreshDriver();
   }
 
+  private void autoDriver() {
+    driverJar = "";
+    refreshDriver();
+  }
+
+  /** 저장된 값을 채우고, 메모리에만 있던 값이면 「저장」을 끈 채로 보인다. */
   private void loadPassword(DbConfig existing) {
     // 창이 뜨기 전(init)에도 불리므로 current() 를 쓰면 바깥 상태가 잡혀 창이 닫힐 때까지 갱신이 밀린다. 글자만 바꾸므로 any() 로 둔다.
     ModalityState modality = ModalityState.any();
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       String stored = Passwords.get(existing);
       if (stored == null) return;
-      ApplicationManager.getApplication().invokeLater(() -> {
-        if (password.getPassword().length == 0) password.setText(stored); // 그 사이 사용자가 친 값은 덮지 않는다.
-      }, modality);
+      boolean memoryOnly = SessionPassword.memoryOnly(existing);
+      ApplicationManager.getApplication().invokeLater(() -> fillPassword(stored, memoryOnly), modality);
     });
+  }
+
+  /** 그 사이 사용자가 친 값은 덮지 않는다. */
+  private void fillPassword(String stored, boolean memoryOnly) {
+    if (passwordTouched) return;
+    fillingPassword = true;
+    try {
+      password.setText(stored);
+    } finally {
+      fillingPassword = false;
+    }
+    if (memoryOnly) savePassword.setSelected(false);
+  }
+
+  /**
+   * 칸을 건드리지 않았으면 이미 있는 값을 쓴다(읽기 전에 저장해도 빈 값으로 덮지 않게).
+   * 저장을 켰으면 암호 저장소에, 껐으면 저장소 값은 지우고 IDE 를 끌 때까지 메모리에만 둔다.
+   */
+  private static void storePassword(DbConfig c, boolean keep, boolean typed, String typedValue) {
+    String value = typed ? typedValue : Passwords.get(c);
+    if (keep) {
+      if (value != null) Passwords.set(c, value);
+    } else {
+      SessionPassword.set(c, value);
+    }
   }
 
   private void testConnection() {
@@ -356,8 +397,14 @@ public final class ConnectDialog extends DialogWrapper {
       return;
     }
     DbSettings.getInstance().put(c);
-    if (savePassword.isSelected()) Passwords.set(c, new String(password.getPassword()));
-    if (reopen) ApplicationManager.getApplication().executeOnPooledThread(() -> sessions.close(c.id));
+    boolean keep = savePassword.isSelected();
+    boolean typed = passwordTouched;
+    String typedValue = new String(password.getPassword());
+    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+      storePassword(c, keep, typed, typedValue);
+      if (reopen) sessions.close(c.id);
+      sessions.setAutoCommitOverride(c.id, null); // 저장한 접속 설정의 자동 커밋이 콘솔에서 바꾼 값보다 앞선다.
+    });
     saved = c;
     super.doOKAction();
   }

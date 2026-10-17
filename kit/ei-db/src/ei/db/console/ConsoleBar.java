@@ -236,7 +236,7 @@ final class ConsoleBar extends JPanel {
   /** 접속 · 대기 변경 수에 맞춰 띠와 단추를 고친다. 화면 스레드. */
   private void refresh() {
     if (project.isDisposed()) return;
-    DbConfig c = ConsoleOpener.config(file);
+    DbConfig c = ConsoleOpener.config(project, file);
     updating = true;
     try {
       band.setVisible(c != null && c.production);
@@ -290,12 +290,12 @@ final class ConsoleBar extends JPanel {
   }
 
   /**
-   * 이 콘솔(이번 세션)의 자동 커밋을 바꾸고, 열린 접속에도 바로 건다. 미반영 변경이 있는데 켜면 드라이버가 커밋하므로
-   * 먼저 묻고 커밋으로 처리한다.
+   * 이 접속(이번 세션, 같은 접속의 모든 콘솔)의 자동 커밋을 바꾸고, 열린 접속에도 바로 건다(DbSessions.setAutoCommitOverride).
+   * 미반영 변경이 있는데 켜면 드라이버가 커밋하므로 먼저 묻고 커밋으로 처리한다. 접속이 열려 있지 않아도 모든 도구줄을 바로 맞춘다.
    */
   private void toggleAutoCommit() {
     if (updating) return;
-    DbConfig c = ConsoleOpener.config(file);
+    DbConfig c = ConsoleOpener.config(project, file);
     if (c == null) return;
     boolean on = autoCommit.isSelected();
     DbSessions sessions = DbSessions.get(project);
@@ -305,27 +305,26 @@ final class ConsoleBar extends JPanel {
       refresh();
       return;
     }
-    file.putUserData(ConsoleOpener.AUTO_COMMIT, on);
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       try {
-        if (!sessions.isOpen(c.id)) return;
         if (on && pending > 0) sessions.commit(c.id);
-        sessions.connection(c).setAutoCommit(on);
+        sessions.setAutoCommitOverride(c.id, on);
       } catch (SQLException e) {
-        Notify.error(project, c.name + " 자동 커밋을 바꾸지 못했습니다: " + e.getMessage());
+        Notify.error(project, c.name + " 커밋하지 못해 자동 커밋을 켜지 않았습니다: " + e.getMessage());
       }
-      ApplicationManager.getApplication().invokeLater(this::refresh);
+      // 리스너가 같은 접속의 모든 콘솔 도구줄을 다시 그린다(실패했으면 원래 값으로).
+      sessions.notifyChanged();
     });
   }
 
   private void cancelRun() {
-    DbConfig c = ConsoleOpener.config(file);
+    DbConfig c = ConsoleOpener.config(project, file);
     if (c == null) return;
     ApplicationManager.getApplication().executeOnPooledThread(() -> SqlRunner.cancel(project, c));
   }
 
   private void endTransaction(boolean doCommit) {
-    DbConfig c = ConsoleOpener.config(file);
+    DbConfig c = ConsoleOpener.config(project, file);
     if (c == null) return;
     String what = doCommit ? "커밋" : "롤백";
     ApplicationManager.getApplication().executeOnPooledThread(() -> {

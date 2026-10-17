@@ -65,6 +65,24 @@ public class RunHistoryCheck {
     eq(mixed.size(), 2);
     eq(mixed.get(0).binds().size(), binds.size());
     eq(mixed.get(1).binds(), List.of());
+
+    // 비밀번호 가리기: IDENTIFIED BY · PASSWORD '값' · 비밀번호 이름 자리의 바인드 값.
+    eq(RunHistory.maskSql("ALTER USER scott IDENTIFIED BY tiger;"), "ALTER USER scott IDENTIFIED BY ****;");
+    eq(RunHistory.maskSql("create user u identified by \"p w\" default tablespace t"), "create user u identified by **** default tablespace t");
+    eq(RunHistory.maskSql("CREATE USER 'u'@'%' IDENTIFIED WITH mysql_native_password BY 'it''s'"), "CREATE USER 'u'@'%' IDENTIFIED WITH mysql_native_password BY ****");
+    eq(RunHistory.maskSql("ALTER ROLE u WITH ENCRYPTED PASSWORD 'x'"), "ALTER ROLE u WITH ENCRYPTED PASSWORD '****'");
+    eq(RunHistory.maskSql("SELECT password FROM t"), "SELECT password FROM t");
+    eq(RunHistory.isSecretName("user_pwd"), true);
+    eq(RunHistory.isSecretName("newPassword"), true);
+    eq(RunHistory.isSecretName("userId"), false);
+    RunHistory.markSecret("s3cret");
+    RunHistory.markSecret(null);
+    Path secretFile = dir.resolve("secret.tsv");
+    RunHistory sh = new RunHistory(secretFile);
+    sh.add(new RunHistory.Entry(1, "id", "n", 0, 0, true, "UPDATE T SET PWD = ? WHERE ID = ?", Arrays.asList("s3cret", "kim")));
+    RunHistory.Entry saved = new RunHistory(secretFile).entries().get(0);
+    eq(saved.binds(), Arrays.asList(RunHistory.MASK, "kim"));
+    eq(Files.readString(secretFile).contains("s3cret"), false);
     System.out.println("RunHistoryCheck 통과");
   }
 }

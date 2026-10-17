@@ -22,9 +22,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 커밋 창 · 변경 목록 · 프로젝트 트리 우클릭 메뉴의 「변경 모른 척하기」. 고른 파일을 Git 저장소별로 묶어 git update-index --assume-unchanged 를 돌린다.
- * 「모른 척 풀기」(Undo)는 같은 파일에 --no-assume-unchanged 를 돌린다. 모른 척 중이 아닌 파일에 풀기를 해도 아무 일도 없다.
- * 폴더 · Git 저장소 밖 파일은 건너뛴다. Synchronize 창의 같은 메뉴와 동작이 같다.
+ * 커밋 창 · 변경 목록 · 프로젝트 트리 우클릭 메뉴의 「변경 모른 척하기」. 고른 파일을 Git 저장소별로 묶어 git update-index --skip-worktree 를 돌린다.
+ * 「모른 척 풀기」(Undo)는 같은 파일의 skip-worktree 와 예전 방식 assume-unchanged 표시를 모두 푼다. 모른 척 중이 아닌 파일에 풀기를 해도 아무 일도 없다.
+ * 폴더 · Git 저장소 밖 파일은 건너뛴다. 동기화 창의 같은 메뉴와 동작이 같다(SyncPanel.setHidden).
  */
 public class AssumeUnchangedAction extends AnAction implements DumbAware {
 
@@ -53,13 +53,10 @@ public class AssumeUnchangedAction extends AnAction implements DumbAware {
       try {
         int count = 0;
         for (Map.Entry<File, List<String>> entry : byRoot.entrySet()) {
-          List<String> args = new ArrayList<>(List.of("update-index", on() ? "--assume-unchanged" : "--no-assume-unchanged", "--"));
-          args.addAll(entry.getValue());
-          SyncPanel.git(entry.getKey(), args.toArray(String[]::new));
+          SyncPanel.setHidden(entry.getKey(), entry.getValue(), on());
           count += entry.getValue().size();
         }
-        message = on() ? count + "개 파일의 변경을 모른 척합니다. 풀려면 같은 메뉴의 「모른 척 풀기」 또는 " + SyncPanel.UNASSUME_HINT
-                       : count + "개 파일의 모른 척을 풀었습니다. 내 변경이 다시 보입니다.";
+        message = SyncPanel.hideMessage(count, on());
       }
       catch (IOException ex) {
         message = ex.getMessage();

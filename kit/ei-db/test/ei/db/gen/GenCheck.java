@@ -1,5 +1,6 @@
 package ei.db.gen;
 
+import ei.db.DbKind;
 import ei.db.Meta;
 
 import java.io.StringReader;
@@ -37,7 +38,14 @@ public class GenCheck {
     eq(Names.pascal("ORDER_ITEM"), "OrderItem");
     eq(Names.alias("ORDER_ITEM"), "oi");
     eq(Names.alias("ORDER_REQUEST"), "t");
-    eq(Names.sql("product"), "PRODUCT");
+    eq(Names.sql(DbKind.POSTGRES, "product"), "PRODUCT");
+    eq(Names.sql(DbKind.POSTGRES, "Product"), "\"Product\"");
+    eq(Names.sql(DbKind.POSTGRES, "PRODUCT"), "\"PRODUCT\"");
+    eq(Names.sql(DbKind.ORACLE, "PRODUCT_1$"), "PRODUCT_1$");
+    eq(Names.sql(DbKind.ORACLE, "Product"), "\"Product\"");
+    eq(Names.sql(DbKind.ORACLE, "A\"B"), "\"A\"\"B\"");
+    eq(Names.sql(DbKind.MYSQL, "OrderItem"), "OrderItem");
+    eq(Names.sql(DbKind.POSTGRES, "public", "order_item"), "PUBLIC.ORDER_ITEM");
 
     eq(TypeMap.javaType("NUMBER", false), "Long");
     eq(TypeMap.javaType("NUMBER", true), "BigDecimal");
@@ -54,7 +62,7 @@ public class GenCheck {
     eq(TypeMap.anyFraction(rows, 0), true);
     eq(TypeMap.anyFraction(List.of(List.of(new BigDecimal("3.00"))), 0), false);
 
-    MapperGen.Options style = new MapperGen.Options(true, true, true, true, false);
+    MapperGen.Options style = new MapperGen.Options(true, true, true, true, DbKind.ORACLE);
     MapperGen g = new MapperGen("PRODUCT", COLS, "com.example.mapper.ProductMapper", "com.example.dto.ProductDto", style);
     String xml = g.xmlFile(MapperGen.allKinds());
     if (args.length > 0) System.out.println(xml + "\n" + g.interfaceFile(MapperGen.allKinds()));
@@ -71,12 +79,13 @@ public class GenCheck {
     ok(xml.contains("AND p.UNIT_PRICE = #{unitPrice}"), "숫자 =");
     ok(xml.contains("WHERE 1 = 1\n"), "WHERE 1 = 1");
     ok(xml.contains("FROM PRODUCT p\n"), "FROM");
+    ok(xml.contains("    SELECT\n           p.PRODUCT_ID   /* 상품 ID */\n         , p.SUPPLIER_ID  /* 공급사 ID */\n"), "SELECT 다음 줄부터 앞 쉼표");
     ok(xml.contains("property=\"unitPrice\" column=\"UNIT_PRICE\""), "낙타 대응");
     ok(xml.contains("/* 상품 ID */"), "SQL 주석");
     ok(xml.contains("<if test=\"productName != null\">PRODUCT_NAME = #{productName},</if>"), "update set if");
     ok(xml.contains("AND PRODUCT_ID = #{productId}"), "PK 조건");
 
-    MapperGen plain = new MapperGen("PRODUCT", COLS, "m.ProductMapper", "ProductDto", new MapperGen.Options(false, false, false, false, true));
+    MapperGen plain = new MapperGen("PRODUCT", COLS, "m.ProductMapper", "ProductDto", new MapperGen.Options(false, false, false, false, DbKind.MYSQL));
     String plainXml = plain.xmlFile(MapperGen.allKinds());
     parse(plainXml);
     ok(plainXml.contains("&gt;= #{createdAtFrom}") && plainXml.contains("<where>"), "CDATA 끔 · where 태그");
@@ -85,6 +94,17 @@ public class GenCheck {
 
     MapperGen noPk = new MapperGen("LOG", List.of(new Meta.Column("MSG", "VARCHAR2", 10, 0, false, false, true, "")), "a.LogMapper", "a.LogDto", style);
     eq(noPk.xmlBlocks(MapperGen.allKinds()).size(), 3);
+
+    MapperGen pkOnly = new MapperGen("CODE", List.of(new Meta.Column("CD", "VARCHAR2", 10, 0, true, false, false, "")), "a.CodeMapper", "a.CodeDto", style);
+    String pkOnlyXml = pkOnly.xmlFile(MapperGen.allKinds());
+    parse(pkOnlyXml);
+    ok(!pkOnlyXml.contains("<update") && !pkOnlyXml.contains("<set>"), "PK 만 있으면 UPDATE 없음");
+    ok(!pkOnly.interfaceFile(MapperGen.allKinds()).contains("updateCode"), "PK 만 있으면 수정 메서드 없음");
+    eq(pkOnly.xmlBlocks(MapperGen.allKinds()).size(), 5);
+
+    MapperGen pg = new MapperGen("order_item", List.of(new Meta.Column("Qty", "int4", 10, 0, true, false, false, "")), "a.M", "a.D",
+                                 new MapperGen.Options(true, true, true, false, DbKind.POSTGRES));
+    ok(pg.xmlFile(MapperGen.allKinds()).contains("      FROM ORDER_ITEM oi\n") && pg.xmlFile(MapperGen.allKinds()).contains("oi.\"Qty\""), "PostgreSQL 이름 표기");
 
     String itf = g.interfaceFile(MapperGen.allKinds());
     ok(itf.contains("List<ProductDto> selectProductList(Map<String, Object> param);"), "목록 메서드");

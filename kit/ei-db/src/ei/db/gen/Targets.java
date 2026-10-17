@@ -4,7 +4,9 @@ import com.intellij.ide.util.PsiNavigationSupport;
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
+import com.intellij.openapi.module.Module;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.roots.ProjectRootManager;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -15,7 +17,9 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -28,6 +32,8 @@ final class Targets {
   private static final String DEFAULT_RESOURCES = "src/main/resources";
   private static final String RESOURCES_DIR = "resources";
   private static final String TEST_SEGMENT = "/test/";
+  /** generated-sources · generated/sources 등 빌드가 만드는 소스 루트. */
+  private static final String GENERATED = "/generated";
   private static final String MAPPER_SUFFIX = "Mapper.java";
   private static final Pattern PACKAGE = Pattern.compile("^\\s*package\\s+([\\w.]+)\\s*;", Pattern.MULTILINE);
   /** 매퍼 패키지 끝 마디가 이 중 하나면 그 위를 기본 패키지로 본다. */
@@ -55,24 +61,36 @@ final class Targets {
   }
 
   /**
-   * 테스트가 아닌 소스 루트 중 이름이 resources 인 것은 리소스, 나머지 첫째는 자바로 본다.
-   * shortcut: 루트 종류(JavaSourceRootType)가 빌드 클래스패스에 없어 이름으로 가른다. 이름이 다른 리소스 루트는 자바로 잡힌다.
+   * 테스트 · 생성 소스(generated)가 아닌 소스 루트를 모듈별로 모아, 자바 루트가 있는 첫 모듈에서 자바 · 리소스 루트를 함께 고른다.
+   * 이름이 resources 인 루트는 리소스, 나머지는 자바로 본다. 그 모듈에 리소스 루트가 없으면 자바 루트 옆 resources 로 둔다.
+   * shortcut: 루트 종류(JavaSourceRootType)가 빌드 클래스패스에 없어 이름 · 경로로 가른다. 이름이 다른 리소스 루트는 자바로 잡힌다.
    */
   static Roots find(Project project) {
     String base = project.getBasePath();
-    VirtualFile java = null;
-    VirtualFile res = null;
+    ProjectFileIndex index = ProjectFileIndex.getInstance(project);
+    Map<Module, VirtualFile> javaOf = new LinkedHashMap<>();
+    Map<Module, VirtualFile> resOf = new LinkedHashMap<>();
     for (VirtualFile root : ProjectRootManager.getInstance(project).getContentSourceRoots()) {
-      if (root.getPath().contains(TEST_SEGMENT)) continue;
-      if (RESOURCES_DIR.equals(root.getName())) {
-        if (res == null) res = root;
-      } else if (java == null) {
-        java = root;
-      }
+      String path = root.getPath();
+      if (path.contains(TEST_SEGMENT) || path.contains(GENERATED)) continue;
+      Module module = index.getModuleForFile(root);
+      (RESOURCES_DIR.equals(root.getName()) ? resOf : javaOf).putIfAbsent(module, root);
     }
-    String javaPath = java != null ? java.getPath() : base + "/" + DEFAULT_JAVA;
-    String resPath = res != null ? res.getPath() : base + "/" + DEFAULT_RESOURCES;
-    return new Roots(base, javaPath, resPath, java == null ? FALLBACK_PACKAGE : guessPackage(java));
+    if (javaOf.isEmpty()) {
+      VirtualFile res = resOf.isEmpty() ? null : resOf.values().iterator().next();
+      return new Roots(base, base + "/" + DEFAULT_JAVA, res != null ? res.getPath() : base + "/" + DEFAULT_RESOURCES, FALLBACK_PACKAGE);
+    }
+    Map.Entry<Module, VirtualFile> first = javaOf.entrySet().iterator().next();
+    VirtualFile java = first.getValue();
+    VirtualFile res = resOf.get(first.getKey());
+    String resPath = res != null ? res.getPath() : siblingResources(java);
+    return new Roots(base, java.getPath(), resPath, guessPackage(java));
+  }
+
+  /** src/main/java → src/main/resources. 부모가 없으면 자바 루트 아래 resources. */
+  private static String siblingResources(VirtualFile java) {
+    VirtualFile parent = java.getParent();
+    return (parent != null ? parent.getPath() : java.getPath()) + "/" + RESOURCES_DIR;
   }
 
   /** 있는 *Mapper.java 의 패키지(층 이름 마디는 뗌), 없으면 하위 폴더가 하나뿐인 동안 내려간 패키지, 그것도 없으면 com.example. */

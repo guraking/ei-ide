@@ -17,4 +17,11 @@ public record QueryResult(String sql,
                           List<Object> binds) {
 
   public boolean isQuery() { return !columns.isEmpty(); }
+
+  /**
+   * 이진 칼럼(byte[] · BLOB) 값 자리. 값은 읽지 않고 길이만 둔다. 복사 · INSERT 만들기는 이 값을 실제 값으로 쓰지 말 것.
+   */
+  public record BinaryValue(long length) {
+    @Override public String toString() { return "(이진 " + length + "바이트)"; }
+  }
 }

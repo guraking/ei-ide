@@ -1,6 +1,8 @@
 package ei.db.console;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -8,8 +10,11 @@ import java.util.Set;
 /**
  * 콘솔 글을 문장으로 나눈다. 순수 자바(플랫폼 의존 없음).
  * 경계: 따옴표 · 주석 밖의 ; (문장에 포함), 빈 줄, / 만 있는 줄(문장에서 뺀다).
- * PL/SQL 블록(BEGIN · DECLARE · CREATE PROCEDURE/FUNCTION/PACKAGE/TRIGGER/TYPE BODY)은 BEGIN·CASE 와 END 의 짝이
- * 맞은 뒤의 ; 에서만 끝나고 빈 줄로 나누지 않는다. PostgreSQL 의 $$ 본문은 하나의 글자열로 본다.
+ * PL/SQL 블록(BEGIN · DECLARE · CREATE [OR REPLACE] PROCEDURE/FUNCTION/PACKAGE [BODY]/TRIGGER/TYPE BODY)은 빈 줄로 나누지 않고
+ * 여는 쪽(BEGIN · CASE · DECLARE · 하위 프로그램 머리의 IS/AS)과 END 의 짝이 모두 맞은 뒤의 ; 에서만 끝난다.
+ * 하위 프로그램(지역 함수 · 패키지 · 타입 메서드)의 IS/AS 가 연 겹은 그 BEGIN 이 이어받아 END 하나로 닫힌다.
+ * END IF · END LOOP · END WHILE · END REPEAT 는 겹을 닫지 않고, END CASE 는 CASE 만 닫는다.
+ * CREATE 블록은 짝이 맞은 END 뒤 이름이 없거나 객체 이름과 같을 때만 끝난다(그 밖에는 / 줄에서). PostgreSQL 의 $$ 본문은 하나의 글자열로 본다.
  * 문장 앞의 공백 · 주석은 문장에 넣지 않는다.
  */
 public final class SqlSplitter {
@@ -20,7 +25,8 @@ public final class SqlSplitter {
 
   private static final Set<String> NOT_BLOCK_END = Set.of("IF", "LOOP", "WHILE", "REPEAT");
   private static final Set<String> CREATE_MODIFIERS = Set.of("OR", "REPLACE", "EDITIONABLE", "NONEDITIONABLE");
-  private static final Set<String> CREATE_BLOCKS = Set.of("PROCEDURE", "FUNCTION", "PACKAGE", "TRIGGER");
+  /** 선언부 겹(DECLARE · 하위 프로그램 머리의 IS/AS). 이어지는 BEGIN 이 이 겹을 이어받는다. */
+  private static final String DECL = "DECL";
 
   public static List<Stmt> split(String text) {
     List<Stmt> out = new ArrayList<>();
@@ -55,6 +61,7 @@ public final class SqlSplitter {
       }
       seg.code(i);
       if (ch == ';') {
+        seg.other(ch);
         seg.lastCode = i + 1;
         if (seg.endsAtSemicolon()) {
           seg.flush(text, out, i + 1);
@@ -67,6 +74,7 @@ public final class SqlSplitter {
       }
       int end = quotedEnd(text, i);
       if (end > i) {
+        seg.other(ch);
         if (ch == '$') seg.dollar = true;
         seg.lastCode = end;
         i = end;
@@ -75,11 +83,12 @@ public final class SqlSplitter {
       if (Character.isLetter(ch) || ch == '_') {
         int j = i + 1;
         while (j < n && isIdent(text.charAt(j))) j++;
-        seg.word(text.substring(i, j).toUpperCase(Locale.ROOT));
+        seg.word(text.substring(i, j).toUpperCase(Locale.ROOT), j < n && text.charAt(j) == '.');
         seg.lastCode = j;
         i = j;
         continue;
       }
+      seg.other(ch);
       seg.lastCode = i + 1;
       i++;
     }
@@ -160,68 +169,106 @@ public final class SqlSplitter {
     boolean block;
     boolean decided;
     boolean dollar;
-    int depth;
-    boolean endSeen;
-    /** 블록 판정과 END 다음 낱말 확인용. ; 는 ";" 로 들어간다. */
+    /** 블록 판정용 앞 낱말들. ; 는 ";" 로 들어간다. */
     final List<String> words = new ArrayList<>();
-    boolean afterEnd;
-    int depthBeforeEnd;
+    /** 열린 겹: BEGIN · CASE · DECL. */
+    final Deque<String> open = new ArrayDeque<>();
+    /** 하위 프로그램 머리(FUNCTION · PROCEDURE · CREATE 머리)를 지나 IS/AS 를 기다리는 중. ; 에서 풀린다(앞선 선언). */
+    boolean header;
+    /** CREATE 객체 이름을 기다리는 중과 그 이름(스키마를 뗀 대문자). 따옴표 이름이면 null 로 남는다. */
+    boolean expectName;
+    String name;
+    /** END 를 읽고 그 뒤 낱말을 기다리는 중. */
+    boolean pendingEnd;
+    /** 바로 앞 END 로 겹이 모두 닫혔다. endLabel 은 그 END 뒤 이름(없으면 null). */
+    boolean closed;
+    String endLabel;
 
     void code(int i) {
       if (start < 0) start = i;
     }
 
-    void word(String w) {
+    void word(String w, boolean dotNext) {
       words.add(w);
-      if (!decided) decide();
+      if (!decided && decide()) return;
       if (!block) return;
-      if (afterEnd && NOT_BLOCK_END.contains(w)) {
-        // END IF · END LOOP 는 여는 쪽을 세지 않았으므로 되돌린다.
-        depth = depthBeforeEnd;
-        endSeen = false;
+      if (pendingEnd && afterEnd(w)) return;
+      closed = false;
+      if (expectName) {
+        if (w.equals("BODY")) return;
+        name = w;
+        expectName = dotNext;
+        return;
       }
-      afterEnd = false;
       switch (w) {
-        case "BEGIN", "CASE" -> { depth++; endSeen = false; }
-        case "END" -> {
-          depthBeforeEnd = depth;
-          depth = Math.max(0, depth - 1);
-          endSeen = depth == 0;
-          afterEnd = true;
+        case "BEGIN" -> {
+          if (DECL.equals(open.peek())) open.pop();
+          open.push("BEGIN");
+          header = false;
         }
+        case "DECLARE" -> {
+          // BEGIN 안의 DECLARE 는 MySQL 지역 선언이라 겹을 열지 않는다. Oracle 의 안쪽 DECLARE … BEGIN 은 이어지는 BEGIN 이 겹을 연다.
+          if (!"BEGIN".equals(open.peek())) open.push(DECL);
+          header = false;
+        }
+        case "CASE" -> open.push("CASE");
+        case "IS", "AS" -> {
+          if (header) open.push(DECL);
+          header = false;
+        }
+        case "FUNCTION", "PROCEDURE" -> header = true;
+        case "END" -> pendingEnd = true;
         default -> { }
       }
     }
 
-    /** 처음 몇 낱말로 블록인지 정한다. BEGIN 바로 뒤가 ; 이면(트랜잭션 시작) 블록이 아니다. */
-    private void decide() {
+    /** 낱말이 아닌 글(; · 따옴표 · 기호). */
+    void other(char ch) {
+      if (!block) return;
+      if (pendingEnd) afterEnd(null);
+      if (ch != '.') expectName = false;
+      if (ch == ';') header = false;
+    }
+
+    /** END 뒤 낱말(없으면 null)로 END 를 마무리한다. 그 낱말을 END 의 일부로 썼으면 참. */
+    private boolean afterEnd(String next) {
+      pendingEnd = false;
+      if (next != null && NOT_BLOCK_END.contains(next)) return true;
+      if (!open.isEmpty()) open.pop();
+      if ("CASE".equals(next)) return true;
+      closed = open.isEmpty();
+      endLabel = next;
+      return next != null;
+    }
+
+    /** 처음 몇 낱말로 블록인지 정한다. CREATE 머리 낱말을 여기서 다 썼으면 참. */
+    private boolean decide() {
       String first = words.get(0);
       if (first.equals("BEGIN") || first.equals("DECLARE")) {
         block = true;
         decided = true;
-        return;
-      }
-      if (!first.equals("CREATE")) {
-        decided = true;
-        return;
-      }
-      String last = words.get(words.size() - 1);
-      if (words.size() == 1 || CREATE_MODIFIERS.contains(last)) return;
-      if (last.equals("TYPE")) return;
-      if (words.get(words.size() - 2).equals("TYPE")) {
-        block = last.equals("BODY");
-      } else {
-        block = CREATE_BLOCKS.contains(last);
-        // 패키지는 AS/IS 가 한 겹을 연다: 패키지 안 프로시저의 END 에서 끝나지 않게 한다.
-        if (last.equals("PACKAGE")) depth = 1;
+        return false;
       }
       decided = true;
+      if (!first.equals("CREATE")) return true;
+      String last = words.get(words.size() - 1);
+      if (words.size() == 1 || CREATE_MODIFIERS.contains(last) || last.equals("TYPE")) {
+        decided = false;
+        return true;
+      }
+      boolean typeBody = last.equals("BODY") && words.get(words.size() - 2).equals("TYPE");
+      block = typeBody || Set.of("PROCEDURE", "FUNCTION", "PACKAGE", "TRIGGER").contains(last);
+      expectName = block;
+      // 트리거 머리에는 IS/AS 가 없다(REFERENCING … AS 는 별칭).
+      header = block && !last.equals("TRIGGER");
+      return true;
     }
 
+    /** BEGIN 하나뿐(트랜잭션 시작)이면 블록이 아니다. */
     boolean endsAtSemicolon() {
-      afterEnd = false;
       if (!block || (words.size() == 1 && words.get(0).equals("BEGIN"))) return true;
-      return depth == 0 && (endSeen || dollar);
+      if (dollar) return true;
+      return closed && (name == null || endLabel == null || endLabel.equals(name));
     }
 
     void flush(String text, List<Stmt> out, int limit) {

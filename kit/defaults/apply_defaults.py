@@ -10,6 +10,7 @@
   10) AI 에이전트 연결 · 플러그인 개발용 실행 도구 플러그인 제외.
   11) SVN 플러그인 번들 추가.
 고치기 전 원본은 <intellij-community>/../backup/<시각>-before/ 에 같은 상대경로로 남긴다.
+모든 원문을 먼저 찾아 본 뒤에 쓴다. 하나라도 못 찾으면 아무 파일도 바꾸지 않는다. 줄끝(LF · CRLF)은 파일마다 원래대로 둔다.
 두 번 실행해도 같은 결과가 된다.
 """
 import shutil
@@ -125,25 +126,57 @@ EDITS = [
 ]
 
 
+def read_source(path):
+    """줄끝을 \\n 으로 맞춘 글과 원래 줄끝을 돌려준다. 원문 비교는 \\n 기준이고, 쓸 때 원래 줄끝으로 되돌린다."""
+    raw = path.read_bytes().decode("utf-8")
+    newline = "\r\n" if "\r\n" in raw else "\n"
+    return raw.replace("\r\n", "\n"), newline
+
+
+def write_source(path, text, newline):
+    # 바이트로 써서 운영체제가 줄끝을 바꾸지 않게 한다(윈도우의 write_text 는 \n 을 \r\n 으로 바꾼다).
+    path.write_bytes(text.replace("\n", newline).encode("utf-8"))
+
+
 def main():
     if len(sys.argv) != 2:
         raise SystemExit(__doc__)
     root = Path(sys.argv[1])
-    backup = root.parent / "backup" / (time.strftime("%Y%m%d-%H%M%S") + "-before")
+    # 1단계: 모든 수정을 메모리에서만 검사 · 적용한다. 하나라도 못 찾으면 아무 파일도 쓰지 않고 멈춘다.
+    texts = {}
+    changed = []
+    errors = []
     for rel, old, new in EDITS:
-        path = root / rel
-        text = path.read_text(encoding="utf-8")
+        if rel not in texts:
+            path = root / rel
+            if not path.is_file():
+                errors.append(f"파일이 없습니다: {rel}")
+                texts[rel] = None
+                continue
+            texts[rel] = read_source(path)
+        if texts[rel] is None:
+            continue
+        text, newline = texts[rel]
         # 바꿀 내용이 원문을 품는 수정(줄 추가)도 있으므로 바꿀 내용이 이미 있으면 적용된 것으로 본다.
         if new in text:
             print(f"이미 적용됨: {rel}")
             continue
         if text.count(old) != 1:
-            raise SystemExit(f"원문을 정확히 한 번 찾지 못했습니다: {rel}")
+            errors.append(f"원문을 정확히 한 번 찾지 못했습니다({text.count(old)}번): {rel}\n  {old[:80]}")
+            continue
+        texts[rel] = (text.replace(old, new), newline)
+        if rel not in changed:
+            changed.append(rel)
+    if errors:
+        raise SystemExit("아무 파일도 바꾸지 않았습니다.\n" + "\n".join(errors))
+    # 2단계: 원본을 남기고 쓴다.
+    backup = root.parent / "backup" / (time.strftime("%Y%m%d-%H%M%S") + "-before")
+    for rel in changed:
+        path = root / rel
         dest = backup / rel
         dest.parent.mkdir(parents=True, exist_ok=True)
-        if not dest.exists():  # 한 파일에 수정이 여럿이면 첫 원본만 남긴다.
-            shutil.copy2(path, dest)
-        path.write_text(text.replace(old, new), encoding="utf-8")
+        shutil.copy2(path, dest)
+        write_source(path, *texts[rel])
         print(f"적용: {rel}")
 
 
