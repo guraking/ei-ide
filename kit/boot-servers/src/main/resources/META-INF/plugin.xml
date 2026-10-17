@@ -15,6 +15,7 @@
         <projectViewNodeDecorator implementation="local.bootservers.ServerStatusDecorator"/>
         <toolWindow id="Servers" anchor="bottom" icon="AllIcons.Nodes.Services"
                     factoryClass="local.bootservers.ServersToolWindowFactory"/>
+        <defaultToolWindowLayout implementation="local.bootservers.ToolWindowOrder" order="last"/>
         <notificationGroup id="EI IDE 새 판" displayType="STICKY_BALLOON"/>
         <notificationGroup id="서버 실행" displayType="BALLOON"/>
     </extensions>

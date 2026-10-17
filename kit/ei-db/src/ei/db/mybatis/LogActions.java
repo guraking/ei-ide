@@ -161,6 +161,41 @@ public final class LogActions {
     }
   }
 
+  /**
+   * 「쿼리 콘솔로 보내기」: 실행하지 않고 고른 접속에서 마지막으로 연 콘솔(없으면 새로) 끝에 SQL 을 붙인다.
+   * MyBatis 로그(선택 글 또는 커서 근처)면 ? 를 로그 값으로 채운 SQL, 아니면 선택한 글 그대로. 둘 다 없으면 보이지 않는다.
+   */
+  public static final class Send extends AnAction {
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() { return ActionUpdateThread.BGT; }
+
+    @Override
+    public void update(@NotNull AnActionEvent e) {
+      e.getPresentation().setEnabledAndVisible(e.getProject() != null && (find(e) != null || selected(e) != null));
+    }
+
+    @Override
+    public void actionPerformed(@NotNull AnActionEvent e) {
+      Project project = e.getProject();
+      Editor editor = editor(e);
+      if (project == null || editor == null) return;
+      MyBatisLog.Entry entry = find(e);
+      String selected = selected(e);
+      if (entry == null && selected == null) return;
+      chooseConnection(project, editor, c -> {
+        PropertiesComponent.getInstance(project).setValue(MyBatisRunDialog.CONNECTION_KEY, c.id);
+        ConsoleOpener.open(project, c, entry != null ? SqlValues.inline(entry.sql, entry.values, c.kind) : selected);
+      });
+    }
+
+    /** 공백이 아닌 선택 글. 없으면 null. */
+    private static String selected(AnActionEvent e) {
+      Editor editor = editor(e);
+      String text = editor == null ? null : editor.getSelectionModel().getSelectedText();
+      return text == null || text.isBlank() ? null : text;
+    }
+  }
+
   /** 「MyBatis 실행 창으로 열기」: 로거 이름으로 매퍼 XML 을 찾아 로그 값을 채운 실행 창을 연다. */
   public static final class Open extends LogAction {
     @Override

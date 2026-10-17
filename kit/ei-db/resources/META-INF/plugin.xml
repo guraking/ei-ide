@@ -70,6 +70,7 @@
         <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt C"/>
       </action>
       <action id="EiDb.MyBatis.LogRun" class="ei.db.mybatis.LogActions$Run" text="데이터베이스 콘솔에서 실행"/>
+      <action id="EiDb.MyBatis.LogSend" class="ei.db.mybatis.LogActions$Send" text="쿼리 콘솔로 보내기"/>
       <action id="EiDb.MyBatis.LogOpen" class="ei.db.mybatis.LogActions$Open" text="MyBatis 실행 창으로 열기"/>
       <separator/>
       <add-to-group group-id="ConsoleView.PopupMenu" anchor="first"/>
