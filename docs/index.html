@@ -265,7 +265,7 @@ footer{padding:56px 0 40px; color:var(--muted); font-size:13px}
       <div class="step">
         <div class="n">3</div>
         <h4>플러그인설치.bat</h4>
-        <p>IDE 가 꺼진 상태에서 두 번 누릅니다. 한국어 팩 · Claude Code · One Dark 를 넣고, 시험용으로 넣어 둔 본체 플러그인 사본은 치웁니다.</p>
+        <p>IDE 가 꺼진 상태에서 두 번 누릅니다. 한국어 팩 · Claude Code · One Dark 를 넣고, JDK · Gradle · DB 드라이버를 사용자 폴더에 풀어 둡니다. 시험용 본체 플러그인 사본은 치웁니다.</p>
         <div class="file">노트북용\플러그인설치.bat</div>
       </div>
       <div class="step">
@@ -286,10 +286,14 @@ footer{padding:56px 0 40px; color:var(--muted); font-size:13px}
     <div class="tree">노트북용\
 ├─ <span class="hl">eiide-262.10968.N.exe</span>        <span class="c">설치 파일</span>
 ├─ <span class="hl">플러그인설치.bat</span>               <span class="c">3번 단계</span>
-└─ plugins\
-   ├─ localization-ko\              <span class="c">한국어 팩 (262 판은 마켓에 없어 릴리스에 따로 올려 둠)</span>
-   ├─ claude-code-jetbrains-plugin\ <span class="c">Claude Code</span>
-   └─ one-dark-theme\               <span class="c">VS Code 색감 테마 + 편집기 색</span></div>
+├─ plugins\
+│  ├─ localization-ko\              <span class="c">한국어 팩 (262 판은 마켓에 없어 릴리스에 따로 올려 둠)</span>
+│  ├─ claude-code-jetbrains-plugin\ <span class="c">Claude Code</span>
+│  └─ one-dark-theme\               <span class="c">VS Code 색감 테마 + 편집기 색</span>
+├─ jdk\                             <span class="c">Temurin JDK 17 · 21 zip → %USERPROFILE%\.jdks 에 풀고, IDE 를 켜면 SDK 목록에 자동 등록</span>
+├─ gradle\                          <span class="c">Gradle 8.14.6 → wrapper 가 같은 판을 찾는 자리에 (인터넷 없이 빌드)</span>
+└─ drivers\                         <span class="c">ojdbc11 · mysql-connector-j · postgresql → ~/.m2/repository (데이터베이스 창이 바로 씀)</span></div>
+    <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note ok"><b>이클립스처럼 JDK 까지 한 번에</b>사내망처럼 인터넷이 막힌 곳에서도 3번 bat 하나로 JDK · Gradle · DB 드라이버가 준비됩니다. 이미 풀어 둔 것은 다시 풀지 않습니다. Maven 은 본체에 들어 있어(번들 Maven 3) 따로 넣지 않습니다.</div></div>
   </div>
 </section>
 
@@ -363,7 +367,8 @@ footer{padding:56px 0 40px; color:var(--muted); font-size:13px}
       </div>
       <ol class="legend">
         <li><span class="mark">1</span><div><b>IDE 가 직접 빌드</b> <span class="t">원래 인텔리제이는 Gradle 에 맡기지만 EI IDE 는 새 프로젝트를 「IntelliJ IDEA」 로 둡니다. 그래야 저장할 때 자동 빌드가 돌고 서버 재시작이 빠릅니다. 예전에 「Gradle」 로 정해 둔 프로젝트는 여기서 바꿉니다.</span></div></li>
-        <li><span class="mark">2</span><div><b>Gradle JVM</b> <span class="t">build.gradle 을 읽을 때 쓰는 자바입니다. 프로젝트 JDK 와 같게 두는 것이 가장 덜 꼬입니다.</span></div></li>
+        <li><span class="mark">2</span><div><b>Gradle JVM</b> <span class="t">build.gradle 을 읽을 때 쓰는 자바입니다. 프로젝트 JDK 와 같게 두는 것이 가장 덜 꼬입니다. 설치 3번에서 넣은 Temurin 17 · 21 이 목록에 있습니다.</span></div></li>
+        <li><span class="mark">G</span><div><b>사내망에서 wrapper 가 못 받을 때</b> <span class="t">프로젝트가 Gradle 8.14.6 이면 미리 넣어 둔 것을 그대로 씁니다. 다른 판이면 「Gradle 위치」를 「지정한 위치」로 바꾸고 <code>%USERPROFILE%\.gradle\wrapper\dists\gradle-8.14.6-bin\…\gradle-8.14.6</code> 을 고릅니다.</span></div></li>
         <li><span class="mark">↻</span><div><b>build.gradle 을 고친 뒤</b> <span class="t">프로젝트 트리 우클릭 맨 위의 Gradle 다시 읽기(전체). 이클립스 Gradle → Refresh 와 같습니다.</span></div></li>
         <li><span class="mark">i</span><div><b>모듈이 셋으로 보여도 정상</b> <span class="t">Gradle 프로젝트는 <code>batch</code> · <code>batch.main</code> · <code>batch.test</code> 로 나뉩니다. 서버 창은 이것을 알아서 한 서버로 묶습니다.</span></div></li>
       </ol>
