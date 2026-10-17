@@ -15,6 +15,7 @@ import com.intellij.ui.ColorUtil;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.components.JBTextArea;
+import com.intellij.ui.components.JBTextField;
 import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
@@ -158,7 +159,15 @@ final class ResultPanel extends JPanel {
       cut.setForeground(UiColors.WARNING);
       bar.add(cut);
       bar.add(button(DbSessions.MAX_ROWS + "건 더", null, () -> readMore(c, result.rows().size() + DbSessions.MAX_ROWS)));
-      bar.add(button("전부", null, () -> readMore(c, DbSessions.ALL_ROWS)));
+      JBTextField wanted = new JBTextField(String.valueOf(result.rows().size() + DbSessions.MAX_ROWS), 6);
+      wanted.setToolTipText("읽을 건수 · Enter 또는 「조회」");
+      wanted.setMaximumSize(wanted.getPreferredSize());
+      Runnable byInput = () -> readWanted(c, wanted.getText());
+      wanted.addActionListener(e -> byInput.run());
+      bar.add(Box.createHorizontalStrut(JBUI.scale(8)));
+      bar.add(wanted);
+      bar.add(new JBLabel(" 건 "));
+      bar.add(button("조회", null, byInput));
     }
     bar.add(Box.createHorizontalGlue());
     bar.add(button("복사", AllIcons.Actions.Copy, this::copyTsv));
@@ -184,6 +193,22 @@ final class ResultPanel extends JPanel {
         Notify.error(project, c.name + " 더 읽기 실패: " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()));
       }
     });
+  }
+
+  /** 직접 쓴 건수(쉼표 · 「건」 허용)로 다시 읽는다. 1 이상 정수가 아니면 알리고 읽지 않는다. */
+  private void readWanted(DbConfig c, String text) {
+    String t = text.replace(",", "").replace("건", "").strip();
+    int n;
+    try {
+      n = Integer.parseInt(t);
+    } catch (NumberFormatException e) {
+      n = 0;
+    }
+    if (n < 1) {
+      Notify.error(project, "읽을 건수는 1 이상 숫자로 써 주세요: " + text);
+      return;
+    }
+    readMore(c, n);
   }
 
   /** 이 패널이 든 결과 탭의 내용을 바꾼다. 그 사이 탭을 닫았으면 아무것도 하지 않는다. */
