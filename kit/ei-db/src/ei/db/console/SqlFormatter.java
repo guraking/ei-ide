@@ -16,6 +16,9 @@ final class SqlFormatter {
   private SqlFormatter() {}
 
   private static final int RIVER = 6;
+  /** 줄 끝 주석 자리 표시. 다 쓴 뒤 같은 덩어리의 줄 끝 주석을 한 열에 맞추고 공백 두 칸으로 바꾼다. */
+  private static final char MARK = '\u0001';
+  private static final String COMMENT_GAP = "  ";
   private static final String LIST_INDENT = " ".repeat(RIVER + 1);
 
   private static final Set<String> KEYWORDS = Set.of(
@@ -53,7 +56,7 @@ final class SqlFormatter {
   private static final Set<String> SPACE_BEFORE_PAREN = Set.of(
       "IN", "VALUES", "EXISTS", "AS", "ON", "AND", "OR", "NOT", "FROM", "JOIN", "WHERE", "SELECT", "USING", "INTO", "OVER", "THEN", "ELSE", "WHEN");
 
-  private enum Kind { WORD, STRING, NUMBER, SYMBOL, OPEN, CLOSE, COMMA, SEMI, LINE_COMMENT, BLOCK_COMMENT, DOT }
+  private enum Kind { WORD, STRING, NUMBER, SYMBOL, OPEN, CLOSE, COMMA, SEMI, LINE_COMMENT, TRAIL_COMMENT, BLOCK_COMMENT, DOT }
 
   private record Tok(Kind kind, String text) {
     String upper() { return text.toUpperCase(Locale.ROOT); }
@@ -135,7 +138,8 @@ final class SqlFormatter {
       if (t.kind == Kind.WORD && SET_OPS.contains(u)) {
         String op = u + (i + 1 < toks.size() && toks.get(i + 1).is("ALL") ? " ALL" : "");
         if (op.endsWith(" ALL")) i++;
-        sb.append('\n').append('\n').append(indent).append(op).append('\n');
+        breakLine(sb);
+        sb.append('\n').append(indent).append(op).append('\n');
         clause = "";
         newLine = true;
         continue;
@@ -148,7 +152,7 @@ final class SqlFormatter {
           head.append(' ').append(toks.get(j).upper());
           j++;
         }
-        if (sb.length() > 0) sb.append('\n');
+        breakLine(sb);
         sb.append(indent).append(pad(head.toString()));
         i = j - 1;
         clause = JOIN_HEADS.contains(u) ? "JOIN" : u;
@@ -157,7 +161,8 @@ final class SqlFormatter {
         continue;
       }
       if (t.is("ON") && clause.equals("JOIN")) {
-        sb.append('\n').append(indent).append(pad("ON"));
+        breakLine(sb);
+        sb.append(indent).append(pad("ON"));
         clause = "ON";
         newLine = false;
         continue;
@@ -166,7 +171,8 @@ final class SqlFormatter {
         if (t.is("AND") && betweenOpen) {
           betweenOpen = false;
         } else {
-          sb.append('\n').append(indent).append(pad(u));
+          breakLine(sb);
+          sb.append(indent).append(pad(u));
           newLine = false;
           continue;
         }
@@ -174,7 +180,13 @@ final class SqlFormatter {
       if (t.is("BETWEEN")) betweenOpen = true;
       if (t.kind == Kind.COMMA) {
         if (LIST_CLAUSES.contains(clause)) {
-          sb.append(",\n").append(indent).append(LIST_INDENT);
+          // 「a -- 주석」 뒤에 온 쉼표는 주석 앞으로, 「a, -- 주석」 의 주석은 그 줄 끝에 둔다.
+          int mark = i > 0 && toks.get(i - 1).kind == Kind.TRAIL_COMMENT ? sb.lastIndexOf(String.valueOf(MARK)) : -1;
+          if (mark >= 0) sb.insert(mark, ',');
+          else sb.append(',');
+          if (i + 1 < toks.size() && toks.get(i + 1).kind == Kind.TRAIL_COMMENT) sb.append(MARK).append(toks.get(++i).text);
+          breakLine(sb);
+          sb.append(indent).append(LIST_INDENT);
           newLine = true;
         } else {
           sb.append(", ");
@@ -196,9 +208,18 @@ final class SqlFormatter {
         newLine = false;
         continue;
       }
-      if (t.kind == Kind.LINE_COMMENT) {
-        if (!newLine) sb.append(' ');
-        sb.append(t.text).append('\n').append(indent).append(LIST_INDENT);
+      if (t.kind == Kind.TRAIL_COMMENT && sb.length() > 0) {
+        sb.append(MARK).append(t.text);
+        breakLine(sb);
+        sb.append(indent).append(LIST_INDENT);
+        newLine = true;
+        continue;
+      }
+      if (t.kind == Kind.LINE_COMMENT || t.kind == Kind.TRAIL_COMMENT) {
+        breakLine(sb);
+        sb.append(indent).append(sb.length() == 0 ? "" : LIST_INDENT).append(t.text);
+        breakLine(sb);
+        sb.append(indent).append(LIST_INDENT);
         newLine = true;
         continue;
       }
@@ -233,7 +254,7 @@ final class SqlFormatter {
       if (t.kind == Kind.COMMA) { sb.append(", "); continue; }
       if (i > 0 && toks.get(i - 1).kind != Kind.COMMA && spaceBetween(toks.get(i - 1), t)) sb.append(' ');
       sb.append(word(t));
-      if (t.kind == Kind.LINE_COMMENT) sb.append('\n');
+      if (t.kind == Kind.LINE_COMMENT || t.kind == Kind.TRAIL_COMMENT) sb.append('\n');
     }
     return sb.toString();
   }
@@ -270,13 +291,35 @@ final class SqlFormatter {
     return toks.size(); // 닫히지 않은 괄호: 끝까지를 안으로 본다.
   }
 
+  /** 끝 공백을 지우고, 줄이 끝나지 않았으면 줄을 바꾼다. 빈 줄은 만들지 않는다. */
+  private static void breakLine(StringBuilder sb) {
+    int end = sb.length();
+    while (end > 0 && sb.charAt(end - 1) == ' ') end--;
+    sb.setLength(end);
+    if (end > 0 && sb.charAt(end - 1) != '\n') sb.append('\n');
+  }
+
+  /** 줄 끝 공백 · 앞뒤 빈 줄을 지우고, 이어진 줄들의 줄 끝 주석(MARK)을 가장 긴 줄 뒤 한 열에 맞춘다. */
   private static String trimLines(String s) {
-    StringBuilder sb = new StringBuilder();
-    for (String line : s.split("\n", -1)) {
-      if (sb.length() > 0) sb.append('\n');
-      sb.append(line.stripTrailing());
+    String[] lines = s.split("\n", -1);
+    for (int i = 0; i < lines.length; i++) lines[i] = lines[i].stripTrailing();
+    int i = 0;
+    while (i < lines.length) {
+      if (lines[i].indexOf(MARK) < 0) { i++; continue; }
+      int end = i;
+      int width = 0;
+      while (end < lines.length && lines[end].indexOf(MARK) >= 0) {
+        width = Math.max(width, lines[end].substring(0, lines[end].indexOf(MARK)).stripTrailing().length());
+        end++;
+      }
+      for (int k = i; k < end; k++) {
+        int m = lines[k].indexOf(MARK);
+        String code = lines[k].substring(0, m).stripTrailing();
+        lines[k] = code + " ".repeat(width - code.length()) + COMMENT_GAP + lines[k].substring(m + 1);
+      }
+      i = end;
     }
-    return sb.toString().strip().isEmpty() ? "" : sb.toString().replaceAll("^\n+", "").replaceAll("\n+$", "");
+    return String.join("\n", lines).replaceAll("^\n+", "").replaceAll("\n+$", "");
   }
 
   /** 낱말 나누기. 문자열 · 따옴표 이름 · 주석은 한 덩어리로 그대로 둔다. MyBatis #{…} · ${…} 도 한 낱말. */
@@ -290,7 +333,10 @@ final class SqlFormatter {
       if (c == '-' && i + 1 < n && s.charAt(i + 1) == '-') {
         int e = s.indexOf('\n', i);
         e = e < 0 ? n : e;
-        out.add(new Tok(Kind.LINE_COMMENT, s.substring(i, e).stripTrailing()));
+        int back = i - 1;
+        while (back >= 0 && s.charAt(back) != '\n' && Character.isWhitespace(s.charAt(back))) back--;
+        boolean trailing = back >= 0 && s.charAt(back) != '\n';
+        out.add(new Tok(trailing ? Kind.TRAIL_COMMENT : Kind.LINE_COMMENT, s.substring(i, e).stripTrailing()));
         i = e;
         continue;
       }
