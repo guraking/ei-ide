@@ -30,6 +30,12 @@ import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.JTable;
+import java.util.ArrayList;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseAdapter;
+import javax.swing.SwingUtilities;
+import javax.swing.JMenuItem;
+import javax.swing.JPopupMenu;
 import java.awt.Dimension;
 import javax.swing.table.JTableHeader;
 import javax.swing.SwingConstants;
@@ -118,6 +124,16 @@ final class ResultPanel extends JPanel {
     grid.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
     grid.setDefaultRenderer(Object.class, new CellRenderer());
     grid.getTableHeader().setReorderingAllowed(false);
+    // 칸 단위로 고를 수 있게 한다(Ctrl+C 는 고른 칸만 복사). 머리를 누르면 그 칼럼 전체를 고른다.
+    grid.setCellSelectionEnabled(true);
+    grid.getTableHeader().addMouseListener(new MouseAdapter() {
+      @Override public void mousePressed(MouseEvent e) { onHeader(e); }
+      @Override public void mouseReleased(MouseEvent e) { onHeader(e); }
+    });
+    grid.addMouseListener(new MouseAdapter() {
+      @Override public void mousePressed(MouseEvent e) { onCell(e); }
+      @Override public void mouseReleased(MouseEvent e) { onCell(e); }
+    });
     fitColumns(grid);
 
     JPanel bar = new JPanel();
@@ -171,6 +187,78 @@ final class ResultPanel extends JPanel {
     int[] all = new int[result.rows().size()];
     for (int i = 0; i < all.length; i++) all[i] = i;
     return all;
+  }
+
+  /** 머리 왼쪽 누름: 칼럼 고르기(Ctrl 은 더하기). 오른쪽 누름: 칼럼 복사 메뉴. 0번(행 번호) 칼럼은 건너뛴다. */
+  private void onHeader(MouseEvent e) {
+    int view = grid.getTableHeader().columnAtPoint(e.getPoint());
+    if (view < 0) return;
+    int col = grid.convertColumnIndexToModel(view);
+    if (e.isPopupTrigger()) {
+      if (col > 0) columnMenu(col - 1).show(e.getComponent(), e.getX(), e.getY());
+      return;
+    }
+    if (e.getID() != MouseEvent.MOUSE_PRESSED || !SwingUtilities.isLeftMouseButton(e) || grid.getRowCount() == 0) return;
+    if (e.isControlDown()) grid.addColumnSelectionInterval(view, view);
+    else grid.setColumnSelectionInterval(view, view);
+    grid.setRowSelectionInterval(0, grid.getRowCount() - 1);
+  }
+
+  /** 칸 오른쪽 누름: 값 · 칼럼 · 행 복사 메뉴. 누른 칸이 골라져 있지 않으면 그 칸만 고른다. */
+  private void onCell(MouseEvent e) {
+    if (!e.isPopupTrigger()) return;
+    int row = grid.rowAtPoint(e.getPoint());
+    int view = grid.columnAtPoint(e.getPoint());
+    if (row < 0 || view < 0) return;
+    if (!grid.isCellSelected(row, view)) grid.changeSelection(row, view, false, false);
+    int col = grid.convertColumnIndexToModel(view);
+    JPopupMenu menu = col > 0 ? columnMenu(col - 1) : new JPopupMenu();
+    if (col > 0) {
+      Object v = result.rows().get(grid.convertRowIndexToModel(row)).get(col - 1);
+      menu.insert(item("값 복사", () -> copy(v == null ? "" : text(v), "값을 복사했습니다.")), 0);
+    }
+    menu.addSeparator();
+    menu.add(item("고른 행 복사 (머리 포함)", this::copyTsv));
+    menu.show(e.getComponent(), e.getX(), e.getY());
+  }
+
+  /** index 는 결과 칼럼 번호(행 번호 칼럼 제외). */
+  private JPopupMenu columnMenu(int index) {
+    String name = result.columns().get(index);
+    JPopupMenu menu = new JPopupMenu();
+    menu.add(item("칼럼 이름 복사 (" + name + ")", () -> copy(name, "칼럼 이름을 복사했습니다.")));
+    menu.add(item("칼럼 이름 모두 복사", () -> copy(String.join(", ", result.columns()), "칼럼 이름 " + result.columns().size() + "개를 복사했습니다.")));
+    menu.add(item("이 칼럼 값 복사 (줄마다 하나)", () -> {
+      List<String> values = columnValues(index);
+      copy(String.join("\n", values), values.size() + "개 값을 복사했습니다.");
+    }));
+    menu.add(item("이 칼럼 값을 IN 목록으로 복사", () -> {
+      List<String> quoted = new ArrayList<>();
+      for (String v : columnValues(index)) quoted.add("'" + v.replace("'", "''") + "'");
+      copy("(" + String.join(", ", quoted) + ")", quoted.size() + "개 값을 IN 목록으로 복사했습니다.");
+    }));
+    return menu;
+  }
+
+  /** 고른 행(없으면 전체)의 한 칼럼 값. null 은 빈 글자. */
+  private List<String> columnValues(int index) {
+    List<String> out = new ArrayList<>();
+    for (int row : chosenRows()) {
+      Object v = result.rows().get(row).get(index);
+      out.add(v == null ? "" : text(v));
+    }
+    return out;
+  }
+
+  private static JMenuItem item(String text, Runnable action) {
+    JMenuItem item = new JMenuItem(text);
+    item.addActionListener(e -> action.run());
+    return item;
+  }
+
+  private void copy(String text, String message) {
+    CopyPasteManager.getInstance().setContents(new StringSelection(text));
+    Notify.info(project, message);
   }
 
   private void copyTsv() {
