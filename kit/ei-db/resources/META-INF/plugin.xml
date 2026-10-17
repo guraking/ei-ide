@@ -22,6 +22,11 @@
                 factoryClass="ei.db.console.ResultView$Factory"/>
     <!-- MyBatis: 매퍼 XML 의 문장 옆 실행 아이콘 -->
     <codeInsight.lineMarkerProvider language="XML" implementationClass="ei.db.mybatis.MyBatisLineMarker"/>
+    <!-- MyBatis: 매퍼 인터페이스 ↔ XML 이동, #{} 필드 검사 -->
+    <codeInsight.lineMarkerProvider language="JAVA" implementationClass="ei.db.mybatis.MapperNav$JavaMarker"/>
+    <codeInsight.lineMarkerProvider language="XML" implementationClass="ei.db.mybatis.MapperNav$XmlMarker"/>
+    <gotoDeclarationHandler implementation="ei.db.mybatis.MapperNav$GotoXml"/>
+    <externalAnnotator language="XML" implementationClass="ei.db.mybatis.ParamFieldAnnotator"/>
     <!-- ERD 도구 창은 ErdView 가 처음 열 때 등록한다. -->
   </extensions>
 
@@ -50,6 +55,11 @@
             description="선택 영역(없으면 콘솔 전체)을 소문자로 바꿉니다. 문자열 · 주석은 그대로 둡니다">
       <keyboard-shortcut keymap="$default" first-keystroke="control shift Y"/>
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="ei.db.console.Upper"/>
+    </action>
+    <action id="ei.db.console.Explain" class="ei.db.console.ConsoleRun$Explain" text="실행 계획"
+            description="선택 영역 또는 커서가 있는 문장의 실행 계획을 봅니다. 문장은 실행하지 않습니다" icon="AllIcons.Actions.Preview">
+      <keyboard-shortcut keymap="$default" first-keystroke="control shift E"/>
+      <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="ei.db.console.RunAll"/>
     </action>
     <action id="EiDb.MyBatis.Run" class="ei.db.mybatis.RunStatementAction" text="MyBatis 쿼리 실행" icon="AllIcons.Actions.Execute">
       <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt ENTER"/>

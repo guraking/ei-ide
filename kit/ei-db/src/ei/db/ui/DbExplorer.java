@@ -9,10 +9,16 @@ import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.fileChooser.FileChooser;
+import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory;
+import com.intellij.openapi.fileChooser.FileChooserFactory;
+import com.intellij.openapi.fileChooser.FileSaverDescriptor;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.ui.SimpleToolWindowPanel;
+import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.openapi.vfs.VirtualFileWrapper;
 import com.intellij.ui.ColoredTreeCellRenderer;
 import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.DoubleClickListener;
@@ -56,6 +62,10 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.event.MouseEvent;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -63,6 +73,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -160,6 +171,13 @@ final class DbExplorer extends SimpleToolWindowPanel {
     bar.add(new Act("접속 끊기", AllIcons.Actions.Suspend, this::selectedIsOpen, () -> disconnect(selectedConfig())));
     bar.add(new Act("편집", AllIcons.Actions.Edit, () -> selectedConfig() != null, () -> edit(selectedConfig())));
     bar.add(new Act("삭제", AllIcons.General.Remove, () -> selectedConfig() != null, () -> delete(selectedConfig())));
+    bar.addSeparator();
+    bar.add(new Act("찾기", AllIcons.Actions.Search, () -> selectedConfig() != null, () -> openSearch(selectedConfig())));
+    DefaultActionGroup more = DefaultActionGroup.createPopupGroup(() -> "더 보기");
+    more.getTemplatePresentation().setIcon(AllIcons.Actions.More);
+    more.add(new Act("접속 내보내기", AllIcons.ToolbarDecorator.Export, () -> !DbSettings.getInstance().connections().isEmpty(), this::exportConnections));
+    more.add(new Act("접속 가져오기", AllIcons.ToolbarDecorator.Import, () -> true, this::importConnections));
+    bar.add(more);
     ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar(PLACE, bar, true);
     toolbar.setTargetComponent(this);
     setToolbar(toolbar.getComponent());
@@ -167,7 +185,7 @@ final class DbExplorer extends SimpleToolWindowPanel {
     JPanel top = new JPanel(new BorderLayout());
     top.setBorder(JBUI.Borders.empty(6));
     top.add(search, BorderLayout.CENTER);
-    JBLabel hint = new JBLabel("<html>표 더블클릭 → 데이터 보기<br>우클릭 → SELECT · INSERT · UPDATE 문 만들기</html>",
+    JBLabel hint = new JBLabel("<html>표 더블클릭 → 데이터 보기<br>우클릭 → SELECT · INSERT · UPDATE 문 만들기<br>도구줄 찾기 → 스키마 전체에서 표 · 칼럼 찾기</html>",
                                UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER);
     hint.setBorder(JBUI.Borders.empty(6, 8));
     JPanel body = new JPanel(new BorderLayout());
@@ -448,6 +466,103 @@ final class DbExplorer extends SimpleToolWindowPanel {
 
   private void viewData(TableItem t) {
     SqlRunner.run(project, t.c, "SELECT * FROM " + t.schema + "." + t.table.name(), List.of());
+  }
+
+  // ---- 표 · 칼럼 찾기 ----
+
+  private void openSearch(DbConfig c) {
+    String schema = Meta.schemaOf(c);
+    ColumnSearch.show(project, c, schema, hit -> {
+      if (!reveal(c, hit.table())) openSelect(c, schema, hit.table());
+    });
+  }
+
+  /** 이미 읽어 둔 스키마에 그 표 마디가 보이면 고르고 펼친다. 없으면(안 읽음 · 검색으로 숨김) false. */
+  private boolean reveal(DbConfig c, String table) {
+    for (int i = 0; i < root.getChildCount(); i++) {
+      DefaultMutableTreeNode conn = node(root.getChildAt(i));
+      if (((Conn) conn.getUserObject()).c() != c) continue;
+      for (int j = 0; j < conn.getChildCount(); j++) {
+        DefaultMutableTreeNode schema = node(conn.getChildAt(j));
+        for (int k = 0; k < schema.getChildCount(); k++) {
+          DefaultMutableTreeNode group = node(schema.getChildAt(k));
+          for (int m = 0; m < group.getChildCount(); m++) {
+            DefaultMutableTreeNode tn = node(group.getChildAt(m));
+            if (tn.getUserObject() instanceof TableItem t && t.table.name().equals(table)) {
+              TreePath path = new TreePath(tn.getPath());
+              tree.setSelectionPath(path);
+              tree.expandPath(path);
+              tree.scrollPathToVisible(path);
+              return true;
+            }
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  private void openSelect(DbConfig c, String schema, String table) {
+    DbSessions sessions = DbSessions.get(project);
+    // 나무에 없는 표라 붙어 있지 않은 마디를 넘긴다: 실패하면 알림만 하고 나무는 건드리지 않는다.
+    background(new DefaultMutableTreeNode(), c, () -> {
+      List<Meta.Column> cols = Meta.columns(sessions.connection(c), c, schema, table);
+      String sql = SelectSql.build(schema, table, cols);
+      return () -> ConsoleOpener.open(project, c, sql);
+    });
+  }
+
+  // ---- 접속 내보내기 · 가져오기 ----
+
+  private static final String EXPORT_FILE = "ei-db-connections.json";
+  private static final String JSON = "json";
+
+  /** 모든 접속을 JSON 파일 하나로. 비밀번호는 넣지 않는다. */
+  private void exportConnections() {
+    FileSaverDescriptor desc = new FileSaverDescriptor("접속 내보내기", "비밀번호는 파일에 넣지 않습니다.", JSON);
+    VirtualFileWrapper target = FileChooserFactory.getInstance().createSaveFileDialog(desc, project).save(EXPORT_FILE);
+    if (target == null) return;
+    Path path = target.getFile().toPath();
+    String json = ConnectionsJson.write(DbSettings.getInstance().connections());
+    int count = DbSettings.getInstance().connections().size();
+    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+      try {
+        Files.writeString(path, json, StandardCharsets.UTF_8);
+        Notify.info(project, "접속 " + count + "개를 내보냈습니다: " + path);
+      } catch (IOException e) {
+        Notify.error(project, "접속을 내보내지 못했습니다: " + e.getMessage());
+      }
+    });
+  }
+
+  /** 파일의 접속을 더한다(기존 접속은 바꾸지 않는다). 같은 이름은 「이름 (가져옴)」. */
+  private void importConnections() {
+    VirtualFile file = FileChooser.chooseFile(FileChooserDescriptorFactory.createSingleFileDescriptor(JSON).withTitle("접속 가져오기"), project, null);
+    if (file == null) return;
+    Path path = file.toNioPath();
+    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+      List<DbConfig> read;
+      try {
+        read = ConnectionsJson.read(Files.readString(path, StandardCharsets.UTF_8));
+      } catch (IOException | IllegalArgumentException e) {
+        Notify.error(project, "접속을 가져오지 못했습니다: " + e.getMessage());
+        return;
+      }
+      ApplicationManager.getApplication().invokeLater(() -> addImported(read), project.getDisposed());
+    });
+  }
+
+  private void addImported(List<DbConfig> read) {
+    DbSettings settings = DbSettings.getInstance();
+    Set<String> names = new HashSet<>();
+    for (DbConfig c : settings.connections()) names.add(c.name);
+    for (DbConfig c : read) {
+      c.name = ConnectionsJson.uniqueName(c.name, names);
+      names.add(c.name);
+      settings.put(c);
+    }
+    rebuild();
+    Notify.info(project, "접속 " + read.size() + "개를 가져왔습니다. 비밀번호는 접속 편집에서 넣으세요.");
   }
 
   // ---- 접속 다루기 ----

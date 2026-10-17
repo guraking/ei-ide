@@ -1,0 +1,157 @@
+package ei.db.console;
+
+import com.intellij.ide.util.PropertiesComponent;
+import com.intellij.openapi.project.Project;
+import com.intellij.openapi.ui.DialogWrapper;
+import com.intellij.ui.DocumentAdapter;
+import com.intellij.ui.components.JBLabel;
+import com.intellij.ui.components.JBScrollPane;
+import com.intellij.ui.components.JBTextField;
+import com.intellij.util.ui.JBUI;
+import com.intellij.util.ui.UIUtil;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import javax.swing.JComponent;
+import javax.swing.JPanel;
+import javax.swing.event.DocumentEvent;
+import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * 콘솔 실행 전 이름 자리(:name · #{name} · ${name}) 값 입력. 값은 이름마다 마지막 것을 프로젝트에 기억한다.
+ * 화면 스레드에서 부른다.
+ */
+final class BindDialog extends DialogWrapper {
+  private static final String VALUE_KEY = "ei.db.console.bind.";
+  private static final int VALUE_COLUMNS = 28;
+  private static final int MAX_VISIBLE_ROWS = 12;
+  private static final int ROW_HEIGHT = 30;
+
+  private final Project project;
+  private final Map<String, JBTextField> fields = new LinkedHashMap<>();
+  private final List<SqlParams.Param> params;
+
+  private BindDialog(Project project, List<SqlParams.Param> params) {
+    super(project);
+    this.project = project;
+    this.params = params;
+    setTitle("바인드 변수 값");
+    setOKButtonText("실행");
+    setCancelButtonText("취소");
+    init();
+  }
+
+  /**
+   * 문장들을 자리 값으로 바꾼다. 자리가 없으면 창 없이 그대로(binds null). 취소하면 null.
+   * 같은 이름은 여러 문장에 걸쳐 한 번만 묻는다.
+   */
+  static @Nullable List<SqlParams.Bound> ask(Project project, List<String> sqls) {
+    List<SqlParams.Param> params = SqlParams.distinct(sqls);
+    Map<String, String> values = new HashMap<>();
+    if (!params.isEmpty()) {
+      BindDialog d = new BindDialog(project, params);
+      if (!d.showAndGet()) return null;
+      values = d.values();
+    }
+    List<SqlParams.Bound> out = new ArrayList<>();
+    for (String sql : sqls) out.add(SqlParams.apply(sql, values));
+    return out;
+  }
+
+  @Override
+  protected @Nullable JComponent createCenterPanel() {
+    PropertiesComponent props = PropertiesComponent.getInstance(project);
+    JPanel grid = new JPanel(new GridBagLayout());
+    GridBagConstraints g = new GridBagConstraints();
+    g.insets = JBUI.insets(2, 0, 2, 10);
+    g.anchor = GridBagConstraints.WEST;
+    g.gridy = 0;
+    addRow(grid, g, header("이름"), header("값"), header("형식"));
+    for (SqlParams.Param p : params) {
+      JBTextField value = new JBTextField(props.getValue(VALUE_KEY + p.name(), ""), VALUE_COLUMNS);
+      JBLabel type = new JBLabel();
+      type.setForeground(UIUtil.getContextHelpForeground());
+      updateType(type, p, value.getText());
+      value.getDocument().addDocumentListener(new DocumentAdapter() {
+        @Override protected void textChanged(@NotNull DocumentEvent e) { updateType(type, p, value.getText()); }
+      });
+      fields.put(p.name(), value);
+      JBLabel name = new JBLabel(p.label());
+      name.setToolTipText(p.label());
+      g.gridy++;
+      addRow(grid, g, name, value, type);
+    }
+    JPanel top = new JPanel(new BorderLayout());
+    top.add(grid, BorderLayout.NORTH);
+    JBScrollPane scroll = new JBScrollPane(top);
+    scroll.setBorder(JBUI.Borders.empty());
+    int rows = Math.min(params.size() + 1, MAX_VISIBLE_ROWS);
+    scroll.setPreferredSize(new Dimension(grid.getPreferredSize().width + JBUI.scale(20), JBUI.scale(ROW_HEIGHT) * rows));
+
+    JBLabel note = new JBLabel("<html>숫자는 숫자로, 'abc' 처럼 따옴표로 감싸면 문자열, 비우면 NULL 입니다.<br>"
+                               + "${이름} 자리는 넣은 글이 그대로 들어갑니다.</html>",
+                               UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER);
+    note.setBorder(JBUI.Borders.emptyTop(8));
+    JPanel panel = new JPanel(new BorderLayout());
+    panel.add(scroll, BorderLayout.CENTER);
+    panel.add(note, BorderLayout.SOUTH);
+    return panel;
+  }
+
+  @Override
+  public @Nullable JComponent getPreferredFocusedComponent() {
+    return fields.isEmpty() ? null : fields.values().iterator().next();
+  }
+
+  @Override
+  protected void doOKAction() {
+    PropertiesComponent props = PropertiesComponent.getInstance(project);
+    for (Map.Entry<String, JBTextField> e : fields.entrySet()) props.setValue(VALUE_KEY + e.getKey(), e.getValue().getText());
+    super.doOKAction();
+  }
+
+  private Map<String, String> values() {
+    Map<String, String> out = new HashMap<>();
+    for (Map.Entry<String, JBTextField> e : fields.entrySet()) out.put(e.getKey(), e.getValue().getText());
+    return out;
+  }
+
+  private static JBLabel header(String text) {
+    JBLabel h = new JBLabel(text);
+    h.setForeground(UIUtil.getContextHelpForeground());
+    return h;
+  }
+
+  /** 가운데(값) 칸만 늘린다. */
+  private static void addRow(JPanel grid, GridBagConstraints g, JComponent name, JComponent value, JComponent type) {
+    JComponent[] cells = {name, value, type};
+    for (int k = 0; k < cells.length; k++) {
+      g.gridx = k;
+      g.weightx = k == 1 ? 1 : 0;
+      g.fill = k == 1 ? GridBagConstraints.HORIZONTAL : GridBagConstraints.NONE;
+      grid.add(cells[k], g);
+    }
+  }
+
+  private static void updateType(JBLabel type, SqlParams.Param p, String text) {
+    type.setText(typeLabel(p, text));
+  }
+
+  static String typeLabel(SqlParams.Param p, String text) {
+    if (p.kind() == SqlParams.Kind.RAW) return "글자 그대로";
+    Object v = SqlParams.value(text);
+    if (v == null) return "NULL";
+    if (v instanceof Long || v instanceof BigDecimal) return "숫자";
+    if (v instanceof java.util.Date) return "날짜";
+    return "문자열";
+  }
+}

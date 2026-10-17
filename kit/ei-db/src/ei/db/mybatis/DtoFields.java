@@ -5,13 +5,13 @@ import com.intellij.openapi.project.Project;
 import com.intellij.psi.JavaPsiFacade;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiField;
+import com.intellij.psi.PsiMethod;
 import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.search.PsiShortNamesCache;
+import com.intellij.psi.util.PropertyUtilBase;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
-import java.util.Set;
 
 /** resultType 이름을 프로젝트 클래스로 찾고 필드 이름(상위 클래스 포함, static 제외)을 준다. 읽기 접근 안에서 부른다. */
 final class DtoFields {
@@ -20,16 +20,11 @@ final class DtoFields {
   /** PsiModifier.STATIC 과 같은 값(PsiModifier 가 클래스패스에 없다). */
   private static final String STATIC = "static";
 
-  /** MyBatis 기본 별칭 중 필드 비교가 뜻 없는 것(원시형 · 문자열 · 날짜 · 숫자 · Map · 컬렉션). */
-  private static final Set<String> BUILTIN = Set.of("string", "byte", "long", "short", "int", "integer", "double",
-      "float", "boolean", "char", "character", "date", "decimal", "bigdecimal", "biginteger", "object", "map",
-      "hashmap", "list", "arraylist", "collection", "iterator", "resultset");
-
   /** 비교할 수 없는 형식이거나 찾지 못하면 null. */
   static PsiClass find(Project project, String resultType) {
     if (resultType == null || resultType.isBlank() || DumbService.isDumb(project)) return null;
     String t = resultType.trim();
-    if (t.startsWith("_") || BUILTIN.contains(t.toLowerCase(Locale.ROOT))) return null;
+    if (MapperParams.isBuiltinType(t)) return null;
     PsiClass found;
     if (t.contains(".")) {
       found = JavaPsiFacade.getInstance(project).findClass(t, GlobalSearchScope.allScope(project));
@@ -47,6 +42,17 @@ final class DtoFields {
     List<String> out = new ArrayList<>();
     for (PsiField f : c.getAllFields()) {
       if (!f.hasModifierProperty(STATIC) && !out.contains(f.getName())) out.add(f.getName());
+    }
+    return out;
+  }
+
+  /** 필드 이름에 getter 속성 이름(getXxx · isXxx, 상위 클래스 포함)을 더한 것. */
+  static List<String> properties(PsiClass c) {
+    List<String> out = of(c);
+    for (PsiMethod m : c.getAllMethods()) {
+      if (!PropertyUtilBase.isSimplePropertyGetter(m)) continue;
+      String name = PropertyUtilBase.getPropertyNameByGetter(m);
+      if (!out.contains(name)) out.add(name);
     }
     return out;
   }

@@ -20,6 +20,7 @@ import java.util.Map;
  * SQL 콘솔 = 메모리 파일(LightVirtualFile, 이름 끝 .sql 이라 SQL 색칠이 붙는다). 한 접속에 콘솔을 여러 개 열 수 있고,
  * 같은 접속의 콘솔은 연결 하나(미반영 변경 · 커밋 · 롤백)를 같이 쓴다.
  * 파일 사용자 데이터에 접속 id 와 이 세션에서만 쓰는 자동 커밋 값을 둔다. 탭을 닫아도 파일(내용)은 프로젝트가 닫힐 때까지 남는다.
+ * 콘솔 글은 ConsoleStore 가 접속 id · 콘솔 번호별로 저장하고, 다음 세션에 같은 번호의 콘솔을 처음 만들 때 되살린다.
  */
 public final class ConsoleOpener {
   private ConsoleOpener() {}
@@ -32,27 +33,27 @@ public final class ConsoleOpener {
   /** 접속 id → 지금까지 연 콘솔 수. 두 번째부터 탭 이름에 번호를 붙인다. */
   private static final Key<Map<String, Integer>> COUNTS = Key.create("ei.db.console.counts");
 
-  /** 그 접속에서 마지막으로 연 콘솔 탭을 열고(없으면 만든다) initialSql 이 null 이 아니면 끝에 덧붙인다. */
-  public static void open(Project project, DbConfig c, String initialSql) {
+  /** 그 접속에서 마지막으로 연 콘솔 탭을 열고(없으면 만든다) initialSql 이 null 이 아니면 끝에 덧붙인다. 연 콘솔을 돌려준다. */
+  public static VirtualFile open(Project project, DbConfig c, String initialSql) {
     LightVirtualFile file = consoles(project).get(c.id);
-    show(project, c, file == null ? create(project, c) : file, initialSql);
+    if (file == null) file = create(project, c);
+    show(project, c, file, initialSql);
+    return file;
   }
 
-  /** 「새 콘솔」: 늘 빈 콘솔을 새 탭으로 연다. 이후 open 은 이 콘솔로 보낸다. */
+  /** 「새 콘솔」: 다음 번호의 콘솔을 새 탭으로 연다(그 번호로 저장된 글이 있으면 되살리고, 없으면 빈 콘솔). 이후 open 은 이 콘솔로 보낸다. */
   public static void openNew(Project project, DbConfig c) {
     show(project, c, create(project, c), null);
   }
 
   private static LightVirtualFile create(Project project, DbConfig c) {
-    Map<String, Integer> counts = project.getUserData(COUNTS);
-    if (counts == null) {
-      counts = new HashMap<>();
-      project.putUserData(COUNTS, counts);
-    }
-    int n = counts.merge(c.id, 1, Integer::sum);
-    LightVirtualFile file = new LightVirtualFile(n == 1 ? fileName(c) : "콘솔 · " + c.name + " (" + n + ").sql", "");
+    int n = counts(project).merge(c.id, 1, Integer::sum);
+    ConsoleStore store = ConsoleStore.get(project);
+    String saved = store.load(c.id, n);
+    LightVirtualFile file = new LightVirtualFile(n == 1 ? fileName(c) : "콘솔 · " + c.name + " (" + n + ").sql", saved == null ? "" : saved);
     file.putUserData(CONFIG_ID, c.id);
     consoles(project).put(c.id, file);
+    if (saved != null) store.track(file, c.id, n);
     return file;
   }
 
@@ -95,6 +96,7 @@ public final class ConsoleOpener {
     if (file instanceof LightVirtualFile light) consoles.put(target.id, light);
     file.putUserData(CONFIG_ID, target.id);
     file.putUserData(AUTO_COMMIT, null);
+    counts(project).put(target.id, ConsoleStore.get(project).rebind(file, target.id, counts(project).getOrDefault(target.id, 0)));
     try {
       file.rename(ConsoleOpener.class, fileName(target));
     } catch (IOException e) {
@@ -105,6 +107,15 @@ public final class ConsoleOpener {
 
   private static String fileName(DbConfig c) {
     return "콘솔 · " + c.name + ".sql";
+  }
+
+  private static Map<String, Integer> counts(Project project) {
+    Map<String, Integer> map = project.getUserData(COUNTS);
+    if (map == null) {
+      map = new HashMap<>();
+      project.putUserData(COUNTS, map);
+    }
+    return map;
   }
 
   private static Map<String, LightVirtualFile> consoles(Project project) {

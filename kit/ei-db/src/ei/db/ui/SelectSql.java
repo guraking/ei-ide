@@ -12,7 +12,8 @@ import java.util.Set;
 import java.util.Locale;
 
 /**
- * 탐색기 「SELECT · INSERT · UPDATE 문 만들기」의 본문. 칼럼마다 한 줄이고, 주석이 있으면 줄 끝에 `-- 주석` 을 같은 열에 맞춰 붙인다.
+ * 탐색기 「SELECT · INSERT · UPDATE 문 만들기」의 본문. 칼럼마다 한 줄이고 쉼표는 줄 앞(「     , 」)에 둔다.
+ * 주석이 있으면 줄 끝에 `-- 주석` 을 같은 열에 맞춰 붙인다.
  * 스키마 · 표 · 칼럼 이름은 대문자, 별칭은 소문자로 쓴다(따옴표 없는 이름은 Oracle 은 그대로, PostgreSQL 은 소문자로 접어 같은 표를 가리킨다).
  * 값 자리는 NULL 로 두고, 조건을 바로 이어 쓰도록 문장 끝 ; 은 붙이지 않는다.
  */
@@ -20,14 +21,12 @@ final class SelectSql {
   private SelectSql() {}
 
   private static final String ALIAS = "t";
-  private static final String FIRST = "SELECT ";
-  private static final String NEXT = "       ";
   private static final String VALUE = "NULL";
 
   static String build(String schema, String table, List<Meta.Column> columns) {
-    StringBuilder sb = new StringBuilder();
+    StringBuilder sb = new StringBuilder("SELECT\n");
     if (columns.isEmpty()) {
-      sb.append(FIRST).append(ALIAS).append(".*\n");
+      sb.append(LEAD_FIRST).append(ALIAS).append(".*\n");
     } else {
       List<String> items = new ArrayList<>();
       List<String> comments = new ArrayList<>();
@@ -35,7 +34,7 @@ final class SelectSql {
         items.add(ALIAS + "." + up(col.name()));
         comments.add(col.comment());
       }
-      lines(sb, FIRST, NEXT, items, ",", comments);
+      leading(sb, LEAD_FIRST, items, comments);
     }
     sb.append("  FROM ").append(up(schema)).append('.').append(up(table)).append(' ').append(ALIAS).append('\n');
     sb.append(" WHERE 1 = 1");
@@ -55,9 +54,9 @@ final class SelectSql {
       valueNotes.add(up(col.name()) + " " + col.typeLabel());
     }
     StringBuilder sb = new StringBuilder("INSERT INTO ").append(up(schema)).append('.').append(up(table)).append(" (\n");
-    lines(sb, NEXT, NEXT, names, ",", comments);
+    leading(sb, LEAD_FIRST, names, comments);
     sb.append(") VALUES (\n");
-    lines(sb, NEXT, NEXT, values, ",", valueNotes);
+    leading(sb, LEAD_FIRST, values, valueNotes);
     sb.append(")");
     return sb.toString();
   }
@@ -75,19 +74,19 @@ final class SelectSql {
     }
     StringBuilder sb = new StringBuilder("UPDATE ").append(up(schema)).append('.').append(up(table)).append(' ').append(ALIAS).append('\n');
     if (sets.isEmpty()) sb.append("   SET -- 바꿀 칼럼이 없습니다(모두 PK)\n");
-    else lines(sb, "   SET ", NEXT, sets, ",", setNotes);
+    else leading(sb, "   SET ", sets, setNotes);
     sb.append(" WHERE 1 = 1");
     if (keys.isEmpty()) {
       sb.append("\n   -- PK 가 없습니다. 조건을 직접 쓰세요");
     } else {
       sb.append('\n');
-      lines(sb, "   AND ", "   AND ", keys, "", keyNotes);
+      lines(sb, "   AND ", keys, keyNotes);
       sb.setLength(sb.length() - 1);
     }
     return sb.toString();
   }
 
-  /** 앞 쉼표 목록의 줄 머리: 첫 칼럼은 SELECT 다음 줄 7칸, 다음 칼럼부터 「     , 」. */
+  /** 앞 쉼표 목록의 줄 머리: 첫 칼럼은 키워드 다음 줄 7칸, 다음 칼럼부터 「     , 」. */
   private static final String LEAD_FIRST = "       ";
   private static final String LEAD_NEXT = "     , ";
   static final String GUESS_NOTE = "이름이 같은 칼럼으로 추정 (FK 없음)";
@@ -108,7 +107,7 @@ final class SelectSql {
       }
     }
     StringBuilder sb = new StringBuilder("SELECT\n");
-    leading(sb, items, notes);
+    leading(sb, LEAD_FIRST, items, notes);
     List<String> from = new ArrayList<>();
     for (String t : tables) from.add(up(schema) + "." + up(t) + " " + alias.get(t));
     sb.append("  FROM ").append(String.join(", ", from)).append('\n');
@@ -136,7 +135,7 @@ final class SelectSql {
     }
     if (!conds.isEmpty()) {
       sb.append('\n');
-      lines(sb, "   AND ", "   AND ", conds, "", condNotes);
+      lines(sb, "   AND ", conds, condNotes);
       sb.setLength(sb.length() - 1);
     }
     for (int i = 1; i < tables.size(); i++) {
@@ -180,25 +179,24 @@ final class SelectSql {
     return out;
   }
 
-  /** 앞 쉼표 목록. 주석은 같은 열에 맞춘다(줄바꿈은 공백으로). */
-  private static void leading(StringBuilder sb, List<String> items, List<String> comments) {
+  /** 앞 쉼표 목록. 첫 줄은 first(LEAD_NEXT 와 같은 폭), 다음 줄부터 LEAD_NEXT. 주석은 같은 열에 맞춘다(줄바꿈은 공백으로). */
+  private static void leading(StringBuilder sb, String first, List<String> items, List<String> comments) {
     int width = 0;
-    for (String item : items) width = Math.max(width, LEAD_FIRST.length() + item.length());
+    for (String item : items) width = Math.max(width, LEAD_NEXT.length() + item.length());
     for (int i = 0; i < items.size(); i++) {
-      String line = (i == 0 ? LEAD_FIRST : LEAD_NEXT) + items.get(i);
+      String line = (i == 0 ? first : LEAD_NEXT) + items.get(i);
       String comment = comments.get(i).replaceAll("\\s+", " ").trim();
       sb.append(comment.isEmpty() ? line : pad(line, width) + "  -- " + comment).append('\n');
     }
   }
 
-  /** 첫 줄은 first, 다음 줄은 next 로 시작하고 마지막 줄을 빼고 separator 를 붙인다. 주석은 같은 열에 맞춘다(줄바꿈은 공백으로). */
-  private static void lines(StringBuilder sb, String first, String next, List<String> items, String separator, List<String> comments) {
+  /** 모든 줄을 prefix 로 시작한다(AND 조건). 주석은 같은 열에 맞춘다(줄바꿈은 공백으로). */
+  private static void lines(StringBuilder sb, String prefix, List<String> items, List<String> comments) {
     int width = 0;
-    for (String item : items) width = Math.max(width, item.length() + separator.length());
+    for (String item : items) width = Math.max(width, item.length());
     for (int i = 0; i < items.size(); i++) {
-      String item = items.get(i) + (i < items.size() - 1 ? separator : "");
       String comment = comments.get(i).replaceAll("\\s+", " ").trim();
-      sb.append(i == 0 ? first : next).append(comment.isEmpty() ? item : pad(item, width) + "  -- " + comment).append('\n');
+      sb.append(prefix).append(comment.isEmpty() ? items.get(i) : pad(items.get(i), width) + "  -- " + comment).append('\n');
     }
   }
 

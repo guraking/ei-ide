@@ -14,7 +14,12 @@ import ei.db.Notify;
 import ei.db.QueryResult;
 import org.jetbrains.annotations.NotNull;
 
+import com.intellij.ui.components.JBLabel;
+import com.intellij.util.ui.JBUI;
+
 import javax.swing.JComponent;
+import javax.swing.JPanel;
+import java.awt.BorderLayout;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -43,14 +48,26 @@ public final class ResultView {
   public static void show(Project project, DbConfig c, QueryResult result) {
     String title = result.isQuery() ? firstTable(result.sql()) : "변경";
     addTab(project, title == null ? "조회" : title, new ResultPanel(project, c, result, firstTable(result.sql())));
-    ConsoleRun.finished(project, c, true);
+    ConsoleRun.finished(project, c, result.sql(), true);
   }
 
   public static void showError(Project project, DbConfig c, String sql, Exception error) {
     String message = error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage();
     addTab(project, "오류", ResultPanel.error(sql, message));
     Notify.error(project, c.name + " 실행 실패: " + message);
-    ConsoleRun.finished(project, c, false);
+    ConsoleRun.finished(project, c, sql, false);
+  }
+
+  /** 사용자가 멈춘 실행. 오류가 아니므로 알림 없이 탭만 더하고, 같은 접속의 남은 문장은 버린다. */
+  public static void showCancelled(Project project, DbConfig c, String sql) {
+    JBLabel label = new JBLabel("취소했습니다 · " + c.name);
+    label.setForeground(UiColors.WARNING);
+    label.setToolTipText(sql);
+    label.setBorder(JBUI.Borders.empty(10, 12));
+    JPanel panel = new JPanel(new BorderLayout());
+    panel.add(label, BorderLayout.NORTH);
+    addTab(project, "취소", panel);
+    ConsoleRun.finished(project, c, sql, false);
   }
 
   /** 첫 FROM 뒤의 표 이름(스키마 · 따옴표 제외, 쓴 그대로). 없으면 null. */

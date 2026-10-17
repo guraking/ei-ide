@@ -31,11 +31,19 @@ import java.util.function.UnaryOperator;
  * 콘솔 실행. 여러 문장은 앞 문장의 결과(ResultView.show/showError)가 온 뒤에 다음 문장을 넘긴다.
  * SqlRunner 는 문장마다 따로 백그라운드 작업을 띄우므로 한꺼번에 넘기면 순서가 섞인다.
  * 실패 · 확인창 취소 · 읽기 전용 거절이면 남은 문장은 버린다.
+ * 이름 자리(:name · #{name} · ${name})가 있으면 실행 전에 모든 문장의 값을 한 번에 묻고 ? 와 값으로 바꿔 넘긴다.
  */
 public final class ConsoleRun {
   private ConsoleRun() {}
 
-  private record Queue(DbConfig c, Deque<String> rest) {}
+  /** waiting 은 지금 결과를 기다리는 문장(normalize 한 글). 다른 곳(실행 계획 · MyBatis 등)의 결과로는 움직이지 않게 비교한다. */
+  private static final class Queue {
+    final DbConfig c;
+    final Deque<SqlParams.Bound> rest;
+    String waiting;
+
+    Queue(DbConfig c, Deque<SqlParams.Bound> rest) { this.c = c; this.rest = rest; }
+  }
 
   private static final Key<Queue> QUEUE = Key.create("ei.db.console.queue");
 
@@ -90,29 +98,39 @@ public final class ConsoleRun {
       Notify.error(project, "이 콘솔의 접속이 지워졌습니다. 도구줄에서 다른 접속을 고르세요.");
       return;
     }
-    project.putUserData(QUEUE, new Queue(c, new ArrayDeque<>(sqls)));
+    List<SqlParams.Bound> bound = BindDialog.ask(project, sqls);
+    if (bound == null) return;
+    project.putUserData(QUEUE, new Queue(c, new ArrayDeque<>(bound)));
     next(project);
   }
 
   private static void next(Project project) {
     Queue q = project.getUserData(QUEUE);
     if (q == null) return;
-    String sql = q.rest.poll();
+    SqlParams.Bound stmt = q.rest.poll();
+    q.waiting = normalize(stmt.sql());
     // 마지막 문장이거나 SqlRunner 가 결과 없이 거절할 문장이면 기다릴 것이 없다.
-    if (q.rest.isEmpty() || (q.c.readOnly && SqlGuard.isWrite(sql))) project.putUserData(QUEUE, null);
-    SqlRunner.run(project, q.c, sql, null);
+    if (q.rest.isEmpty() || (q.c.readOnly && SqlGuard.isWrite(stmt.sql()))) project.putUserData(QUEUE, null);
+    SqlRunner.run(project, q.c, stmt.sql(), stmt.binds());
   }
 
-  /** ResultView 가 결과를 보인 뒤 부른다. 같은 접속의 대기열만 움직인다. */
-  static void finished(Project project, DbConfig c, boolean ok) {
+  /** ResultView 가 결과를 보인 뒤 부른다. 같은 접속에서 기다리는 그 문장의 결과일 때만 대기열을 움직인다. */
+  static void finished(Project project, DbConfig c, String sql, boolean ok) {
     Queue q = project.getUserData(QUEUE);
-    if (q == null || !q.c.id.equals(c.id)) return;
+    if (q == null || !q.c.id.equals(c.id) || sql == null || !normalize(sql).equals(q.waiting)) return;
     if (ok) next(project);
     else stop(project);
   }
 
   static void stop(Project project) {
     project.putUserData(QUEUE, null);
+  }
+
+  /** DbSessions.run 이 실행 전에 하는 정리와 같다: 앞뒤 공백, 끝의 ;(PL/SQL 블록의 END; 는 남김). */
+  static String normalize(String sql) {
+    String text = sql.strip();
+    if (text.endsWith(";") && !text.toUpperCase().endsWith("END;")) text = text.substring(0, text.length() - 1).strip();
+    return text;
   }
 
   private abstract static class ConsoleAction extends DumbAwareAction {
@@ -177,6 +195,14 @@ public final class ConsoleRun {
     @Override
     void perform(Project project, Editor editor, VirtualFile file) {
       toCase(project, editor, false);
+    }
+  }
+
+  /** 「실행 계획」 Ctrl+Shift+E. */
+  public static final class Explain extends ConsoleAction {
+    @Override
+    void perform(Project project, Editor editor, VirtualFile file) {
+      ExplainPlan.run(project, editor, file);
     }
   }
 

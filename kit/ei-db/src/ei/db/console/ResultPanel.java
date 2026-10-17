@@ -64,8 +64,23 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Timestamp;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
+import com.intellij.openapi.actionSystem.CommonShortcuts;
+import com.intellij.openapi.project.DumbAwareAction;
+import com.intellij.openapi.ui.DialogBuilder;
+import com.intellij.ui.DocumentAdapter;
+import com.intellij.ui.JBColor;
+import com.intellij.ui.SearchTextField;
+import ei.db.SqlRunner;
+import org.jetbrains.annotations.NotNull;
+import javax.swing.DefaultCellEditor;
+import javax.swing.RowFilter;
+import javax.swing.event.DocumentEvent;
+import java.awt.Color;
 
 /** 결과 탭 하나의 내용: 조회면 도구줄 + 표, 변경이면 한 줄 요약, 오류면 붉은 글. */
 final class ResultPanel extends JPanel {
@@ -76,14 +91,35 @@ final class ResultPanel extends JPanel {
   /** 엑셀이 UTF-8 로 읽게 하는 표식. */
   private static final String BOM = "﻿";
 
+  /** 검색칸 너비 · 반영 미리보기 크기(px, 배율 전). */
+  private static final int SEARCH_WIDTH = 180;
+  private static final int PREVIEW_WIDTH = 640;
+  private static final int PREVIEW_HEIGHT = 360;
+  /** 고쳤지만 아직 반영하지 않은 칸의 바탕. */
+  private static final Color EDITED_BACKGROUND = new JBColor(new Color(0xFFF1C2), new Color(0x4D4421));
+
   private final Project project;
+  private final DbConfig config;
   private final QueryResult result;
   private final String table;
   private JBTable grid;
+  private TableRowSorter<Model> sorter;
+  private JBLabel count;
+  private SearchTextField searchBox;
+  private JButton applyButton;
+  private JButton revertButton;
+  /** 고친 값: 모델 행 → (결과 칼럼 번호 → 새 값). 반영 전까지 화면에만 있다. */
+  private final Map<Integer, Map<Integer, Object>> edits = new TreeMap<>();
+  /** 결과 칼럼마다 PK 여부. null 이면 아직 표 정의를 읽지 않았다. */
+  private boolean[] pkColumns;
+  /** 고치기를 막는 이유. null 이면 막지 않거나 아직 모른다. */
+  private String editBlocked;
+  private boolean loadingEdit;
 
   ResultPanel(Project project, DbConfig c, QueryResult result, String table) {
     super(new BorderLayout());
     this.project = project;
+    this.config = c;
     this.result = result;
     this.table = table;
     if (result.isQuery()) buildQuery(c);
@@ -135,13 +171,14 @@ final class ResultPanel extends JPanel {
       }
     };
     grid.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
-    TableRowSorter<Model> sorter = new TableRowSorter<>(model) {
+    sorter = new TableRowSorter<>(model) {
       // 머리 한 번 누름은 칼럼 고르기라 정렬하지 않는다. 정렬은 머리 두 번 누름 · 우클릭 메뉴로 setSortKeys 를 부른다.
       @Override public void toggleSortOrder(int column) { }
     };
     for (int i = 0; i < model.getColumnCount(); i++) sorter.setComparator(i, ResultPanel::compareValues);
     grid.setRowSorter(sorter);
     grid.setDefaultRenderer(Object.class, new CellRenderer());
+    grid.setDefaultEditor(Object.class, new ValueEditor());
     grid.getTableHeader().setReorderingAllowed(false);
     // 칸 단위로 고를 수 있게 한다(Ctrl+C 는 고른 칸만 복사). 머리를 누르면 그 칼럼 전체를 고른다.
     grid.setCellSelectionEnabled(true);
@@ -158,7 +195,7 @@ final class ResultPanel extends JPanel {
     JPanel bar = new JPanel();
     bar.setLayout(new BoxLayout(bar, BoxLayout.X_AXIS));
     bar.setBorder(JBUI.Borders.compound(JBUI.Borders.customLineBottom(JBUI.CurrentTheme.ToolWindow.borderColor()), JBUI.Borders.empty(3, 8)));
-    JBLabel count = new JBLabel(result.rows().size() + "건");
+    count = new JBLabel(result.rows().size() + "건");
     count.setForeground(UiColors.SUCCESS);
     JBLabel millis = new JBLabel(" · " + result.millis() + " ms");
     millis.setForeground(UIUtil.getContextHelpForeground());
@@ -179,15 +216,61 @@ final class ResultPanel extends JPanel {
       bar.add(new JBLabel(" 건 "));
       bar.add(button("조회", null, byInput));
     }
+    bar.add(Box.createHorizontalStrut(JBUI.scale(8)));
+    bar.add(searchField());
     bar.add(Box.createHorizontalGlue());
+    applyButton = button("반영", AllIcons.Actions.Commit, "고친 값을 UPDATE 문으로 실행합니다(실행 전 문장 확인)", this::applyEdits);
+    revertButton = button("되돌리기", AllIcons.Actions.Rollback, "고친 값을 모두 처음 값으로 돌립니다", this::revertEdits);
+    bar.add(applyButton);
+    bar.add(revertButton);
+    updateEditButtons();
     bar.add(button("복사", AllIcons.Actions.Copy, this::copyTsv));
-    bar.add(button("CSV 내보내기", AllIcons.Actions.Download, this::exportCsv));
-    bar.add(button("INSERT 문으로", null, this::copyInserts));
-    bar.add(button("UPDATE 문으로", null, () -> copyUpdates(c)));
-    bar.add(button("DTO 만들기", null, () -> DtoDialog.show(project, c, result)));
+    bar.add(button("CSV", AllIcons.Actions.Download, "CSV 파일로 내보내기", this::exportCsv));
+    bar.add(button("엑셀", AllIcons.Actions.Download, "엑셀(.xlsx) 파일로 내보내기", this::exportXlsx));
+    bar.add(button("INSERT", null, "고른 행(없으면 보이는 행 전체)을 INSERT 문으로 복사", this::copyInserts));
+    bar.add(button("UPDATE", null, "고른 행(없으면 보이는 행 전체)을 UPDATE 문으로 복사", () -> copyUpdates(c)));
+    bar.add(button("DTO", null, "DTO 만들기", () -> DtoDialog.show(project, c, result)));
 
     add(bar, BorderLayout.NORTH);
     add(new JBScrollPane(grid), BorderLayout.CENTER);
+    // 결과 창 안에서 Ctrl+F(찾기 단축키)는 IDE 찾기 대신 검색칸으로 간다.
+    DumbAwareAction.create(e -> searchBox.getTextEditor().requestFocusInWindow()).registerCustomShortcutSet(CommonShortcuts.getFind(), this);
+  }
+
+  /** 결과 안에서 찾기: 글자가 든 칸이 하나라도 있는 행만 보인다(대소문자 무시, null 칸 · 행 번호 제외). */
+  private JComponent searchField() {
+    searchBox = new SearchTextField(false);
+    searchBox.getTextEditor().getEmptyText().setText("결과에서 찾기");
+    searchBox.setToolTipText("결과에서 찾기 (Ctrl+F)");
+    Dimension size = new Dimension(JBUI.scale(SEARCH_WIDTH), searchBox.getPreferredSize().height);
+    searchBox.setPreferredSize(size);
+    searchBox.setMaximumSize(size);
+    searchBox.addDocumentListener(new DocumentAdapter() {
+      @Override protected void textChanged(@NotNull DocumentEvent e) { filter(searchBox.getText()); }
+    });
+    return searchBox;
+  }
+
+  private void filter(String text) {
+    String needle = text.toLowerCase(Locale.ROOT);
+    sorter.setRowFilter(needle.isEmpty() ? null : new Contains(needle));
+    int total = result.rows().size();
+    count.setText(needle.isEmpty() ? total + "건" : grid.getRowCount() + " / 전체 " + total + "건");
+  }
+
+  private static final class Contains extends RowFilter<Model, Integer> {
+    private final String needle;
+
+    Contains(String needle) { this.needle = needle; }
+
+    @Override
+    public boolean include(Entry<? extends Model, ? extends Integer> entry) {
+      for (int i = 1; i < entry.getValueCount(); i++) {
+        Object v = entry.getValue(i);
+        if (v != null && text(v).toLowerCase(Locale.ROOT).contains(needle)) return true;
+      }
+      return false;
+    }
   }
 
   /**
@@ -205,17 +288,11 @@ final class ResultPanel extends JPanel {
     });
   }
 
-  /** 직접 쓴 건수(쉼표 · 「건」 허용)로 다시 읽는다. 1 이상 정수가 아니면 알리고 읽지 않는다. */
+  /** 직접 쓴 건수(쉼표 · 「건」 허용)로 다시 읽는다. 1 ~ MAX_ROW_LIMIT 가 아니면 알리고 읽지 않는다. */
   private void readWanted(DbConfig c, String text) {
-    String t = text.replace(",", "").replace("건", "").strip();
-    int n;
-    try {
-      n = Integer.parseInt(t);
-    } catch (NumberFormatException e) {
-      n = 0;
-    }
-    if (n < 1) {
-      Notify.error(project, "읽을 건수는 1 이상 숫자로 써 주세요: " + text);
+    int n = DbSessions.parseRowCount(text);
+    if (n == 0) {
+      Notify.error(project, "읽을 건수는 1 ~ " + DbSessions.MAX_ROW_LIMIT + " 사이 숫자로 써 주세요: " + text);
       return;
     }
     readMore(c, n);
@@ -233,6 +310,12 @@ final class ResultPanel extends JPanel {
   private static JButton button(String text, javax.swing.Icon icon, Runnable action) {
     JButton b = new JButton(text, icon);
     b.addActionListener(e -> action.run());
+    return b;
+  }
+
+  private static JButton button(String text, javax.swing.Icon icon, String tooltip, Runnable action) {
+    JButton b = button(text, icon, action);
+    b.setToolTipText(tooltip);
     return b;
   }
 
@@ -301,6 +384,12 @@ final class ResultPanel extends JPanel {
 
   /** 칸 오른쪽 누름: 값 · 칼럼 · 행 복사 메뉴. 누른 칸이 골라져 있지 않으면 그 칸만 고른다. */
   private void onCell(MouseEvent e) {
+    if (e.getID() == MouseEvent.MOUSE_PRESSED && SwingUtilities.isLeftMouseButton(e) && e.getClickCount() == 2) {
+      int row = grid.rowAtPoint(e.getPoint());
+      int view = grid.columnAtPoint(e.getPoint());
+      if (row >= 0 && view >= 0) beginEdit(row, view);
+      return;
+    }
     if (!e.isPopupTrigger()) return;
     int row = grid.rowAtPoint(e.getPoint());
     int view = grid.columnAtPoint(e.getPoint());
@@ -375,15 +464,27 @@ final class ResultPanel extends JPanel {
     Notify.info(project, chosenRows().length + "행을 복사했습니다.");
   }
 
-  private void exportCsv() {
-    FileSaverDescriptor descriptor = new FileSaverDescriptor("CSV 내보내기", "결과를 CSV 파일로 저장합니다", "csv");
+  /** 저장할 파일을 묻는다. 취소하면 null. */
+  private Path askSavePath(String title, String description, String extension) {
+    FileSaverDescriptor descriptor = new FileSaverDescriptor(title, description, extension);
     VirtualFileWrapper target = FileChooserFactory.getInstance().createSaveFileDialog(descriptor, project)
-        .save((table == null ? "result" : table) + ".csv");
-    if (target == null) return;
-    Path path = target.getFile().toPath();
+        .save((table == null ? "result" : table) + "." + extension);
+    return target == null ? null : target.getFile().toPath();
+  }
+
+  /** 화면에 보이는(거르고 정렬된) 행을 보이는 순서대로. 값은 처음 읽은 값(반영 전 고친 값 제외). */
+  private List<List<Object>> visibleRows() {
+    List<List<Object>> rows = new ArrayList<>();
+    for (int i = 0; i < grid.getRowCount(); i++) rows.add(result.rows().get(grid.convertRowIndexToModel(i)));
+    return rows;
+  }
+
+  private void exportCsv() {
+    Path path = askSavePath("CSV 내보내기", "결과를 CSV 파일로 저장합니다", "csv");
+    if (path == null) return;
     StringBuilder sb = new StringBuilder(BOM);
     appendCsvLine(sb, List.copyOf(result.columns()));
-    for (int i = 0; i < grid.getRowCount(); i++) appendCsvLine(sb, result.rows().get(grid.convertRowIndexToModel(i)));
+    for (List<Object> row : visibleRows()) appendCsvLine(sb, row);
     String csv = sb.toString();
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       try {
@@ -393,6 +494,35 @@ final class ResultPanel extends JPanel {
         Notify.error(project, "CSV 저장 실패: " + e.getMessage());
       }
     });
+  }
+
+  private void exportXlsx() {
+    Path path = askSavePath("엑셀 내보내기", "결과를 엑셀 파일로 저장합니다", "xlsx");
+    if (path == null) return;
+    List<List<Object>> rows = visibleRows();
+    List<String> comments = commentRow();
+    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+      try {
+        XlsxWriter.write(path, result.columns(), comments, rows);
+        Notify.info(project, "엑셀로 저장했습니다: " + path);
+      } catch (IOException e) {
+        Notify.error(project, "엑셀 저장 실패: " + e.getMessage());
+      }
+    });
+  }
+
+  /** 칼럼 순서대로 한글 주석(없으면 빈 글자). 주석이 하나도 없으면 null. */
+  private List<String> commentRow() {
+    Map<String, String> comments = result.comments();
+    if (comments == null) return null;
+    List<String> out = new ArrayList<>();
+    boolean any = false;
+    for (String name : result.columns()) {
+      String comment = comments.getOrDefault(name, "");
+      out.add(comment == null ? "" : comment);
+      any |= comment != null && !comment.isBlank();
+    }
+    return any ? out : null;
   }
 
   private static void appendCsvLine(StringBuilder sb, List<?> values) {
@@ -414,20 +544,10 @@ final class ResultPanel extends JPanel {
       if (target == null || target.isBlank()) return;
       target = target.strip();
     }
-    String head = "INSERT INTO " + target + " (" + String.join(", ", result.columns()) + ") VALUES (";
-    StringBuilder sb = new StringBuilder();
-    int[] rows = chosenRows();
-    for (int row : rows) {
-      sb.append(head);
-      List<Object> values = result.rows().get(row);
-      for (int i = 0; i < values.size(); i++) {
-        if (i > 0) sb.append(", ");
-        sb.append(literal(values.get(i)));
-      }
-      sb.append(");\n");
-    }
-    CopyPasteManager.getInstance().setContents(new StringSelection(sb.toString()));
-    Notify.info(project, "INSERT 문 " + rows.length + "개를 복사했습니다.");
+    List<List<Object>> rows = new ArrayList<>();
+    for (int row : chosenRows()) rows.add(result.rows().get(row));
+    CopyPasteManager.getInstance().setContents(new StringSelection(SqlText.inserts(target, result.columns(), rows)));
+    Notify.info(project, "INSERT 문 " + rows.size() + "개를 복사했습니다.");
   }
 
   /** 고른 행(없으면 전체)을 UPDATE 문으로 복사. PK 는 접속해서 표 정의로 찾으므로 뒤에서 읽은 뒤 복사한다. */
@@ -444,15 +564,9 @@ final class ResultPanel extends JPanel {
     for (int row : rowIndexes) rows.add(result.rows().get(row));
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       Set<String> pks = new HashSet<>();
-      String bare = name.substring(name.lastIndexOf('.') + 1).replace("\"", "");
       try {
-        Connection conn = DbSessions.get(project).connection(c);
-        // Oracle 은 대문자, PostgreSQL 은 소문자로 저장되므로 그대로 · 대문자 · 소문자 순서로 찾는다.
-        for (String candidate : new String[]{bare, bare.toUpperCase(Locale.ROOT), bare.toLowerCase(Locale.ROOT)}) {
-          for (Meta.Column col : Meta.columns(conn, c, Meta.schemaOf(c), candidate)) {
-            if (col.pk()) pks.add(col.name().toUpperCase(Locale.ROOT));
-          }
-          if (!pks.isEmpty()) break;
+        for (Meta.Column col : tableColumns(c, name)) {
+          if (col.pk()) pks.add(col.name().toUpperCase(Locale.ROOT));
         }
       } catch (Exception e) {
         // PK 를 못 읽어도 첫 칼럼 조건 + 확인 주석으로 만든다(SqlText.updates).
@@ -465,6 +579,193 @@ final class ResultPanel extends JPanel {
     });
   }
 
+  /**
+   * 표 정의 칼럼(스키마 · 따옴표를 뗀 이름으로, 접속 스키마에서). Oracle 은 대문자, PostgreSQL 은 소문자로 저장되므로
+   * 쓴 그대로 · 대문자 · 소문자 순서로 찾는다. 못 찾으면 빈 목록. 화면 스레드에서 부르지 않는다.
+   */
+  private List<Meta.Column> tableColumns(DbConfig c, String name) throws Exception {
+    String bare = name.substring(name.lastIndexOf('.') + 1).replace("\"", "");
+    Connection conn = DbSessions.get(project).connection(c);
+    for (String candidate : new String[]{bare, bare.toUpperCase(Locale.ROOT), bare.toLowerCase(Locale.ROOT)}) {
+      List<Meta.Column> columns = Meta.columns(conn, c, Meta.schemaOf(c), candidate);
+      if (!columns.isEmpty()) return columns;
+    }
+    return List.of();
+  }
+
+  /**
+   * 칸 두 번 누름: 고치기 시작. 처음엔 표 정의를 뒤에서 읽어 PK 를 찾고, 고칠 수 없으면 이유를 알린다.
+   * 고칠 수 있는 칸이면 JTable 이 이미 편집을 시작했으므로 그대로 둔다.
+   */
+  private void beginEdit(int viewRow, int viewColumn) {
+    int col = grid.convertColumnIndexToModel(viewColumn) - 1;
+    if (col < 0 || grid.isEditing()) return;
+    if (table == null) {
+      Notify.error(project, "표 하나를 조회한 결과만 고칠 수 있습니다.");
+      return;
+    }
+    if (pkColumns == null && editBlocked == null) {
+      loadEditInfo(viewRow, viewColumn);
+      return;
+    }
+    String reason = editBlocked != null ? editBlocked : cellBlocked(col);
+    if (reason != null) {
+      Notify.error(project, reason);
+      return;
+    }
+    if (viewRow < grid.getRowCount()) grid.editCellAt(viewRow, viewColumn);
+  }
+
+  private void loadEditInfo(int viewRow, int viewColumn) {
+    String early = config.readOnly ? "읽기 전용 접속이라 결과를 고칠 수 없습니다." : SqlText.notEditable(result.sql());
+    if (early != null) {
+      editBlocked = early;
+      Notify.error(project, early);
+      return;
+    }
+    if (loadingEdit) return;
+    loadingEdit = true;
+    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+      try {
+        List<Meta.Column> defs = tableColumns(config, table);
+        ApplicationManager.getApplication().invokeLater(() -> {
+          loadingEdit = false;
+          boolean[] keys = new boolean[result.columns().size()];
+          editBlocked = editBlockReason(defs, keys);
+          pkColumns = keys;
+          beginEdit(viewRow, viewColumn);
+        }, project.getDisposed());
+      } catch (Exception e) {
+        // 다음 두 번 누름에서 다시 읽게 상태를 두지 않는다.
+        ApplicationManager.getApplication().invokeLater(() -> loadingEdit = false);
+        Notify.error(project, "표 정의를 읽지 못해 고칠 수 없습니다: " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()));
+      }
+    });
+  }
+
+  /** 결과 칼럼이 모두 이 표의 칼럼이고 PK 칼럼이 모두 결과에 있어야 고칠 수 있다. keys 에 결과 칼럼마다 PK 여부를 채운다. */
+  private String editBlockReason(List<Meta.Column> defs, boolean[] keys) {
+    if (defs.isEmpty()) return "표 " + table + " 의 정의를 찾지 못해 고칠 수 없습니다.";
+    Map<String, Boolean> pkByName = new HashMap<>();
+    for (Meta.Column d : defs) pkByName.put(d.name().toUpperCase(Locale.ROOT), d.pk());
+    if (!pkByName.containsValue(true)) return "표 " + table + " 에 PK 가 없어 고칠 행을 정확히 가리킬 수 없습니다.";
+    for (int i = 0; i < keys.length; i++) {
+      Boolean pk = pkByName.get(result.columns().get(i).toUpperCase(Locale.ROOT));
+      if (pk == null) return "칼럼 " + result.columns().get(i) + " 은 표 " + table + " 에 없어(별칭 · 식) 결과를 고칠 수 없습니다.";
+      keys[i] = pk;
+    }
+    Set<String> shown = new HashSet<>();
+    for (String name : result.columns()) shown.add(name.toUpperCase(Locale.ROOT));
+    for (Meta.Column d : defs) {
+      if (d.pk() && !shown.contains(d.name().toUpperCase(Locale.ROOT))) return "PK 칼럼 " + d.name() + " 이 결과에 없어 고칠 수 없습니다.";
+    }
+    return null;
+  }
+
+  /** 이 칼럼(결과 칼럼 번호)만 고칠 수 없는 이유. 고칠 수 있으면 null. */
+  private String cellBlocked(int col) {
+    String name = result.columns().get(col);
+    if (pkColumns[col]) return "PK 칼럼(" + name + ")은 고칠 수 없습니다.";
+    if (SqlText.isUneditableType(typeOf(col))) return "LOB · 이진 칼럼(" + name + ")은 고칠 수 없습니다.";
+    return null;
+  }
+
+  private String typeOf(int col) {
+    return col < result.columnTypes().size() ? result.columnTypes().get(col) : "";
+  }
+
+  private boolean isEditable(int col) {
+    return pkColumns != null && editBlocked == null && cellBlocked(col) == null;
+  }
+
+  /** 편집기에서 받은 글을 칼럼 형식 값으로 바꿔 둔다. 처음 값과 같아지면 고친 표시를 지운다. 형식이 틀리면 알리고 두지 않는다. */
+  private void edit(int row, int col, String text) {
+    Object value;
+    try {
+      value = SqlText.parseEdit(text, typeOf(col));
+    } catch (IllegalArgumentException e) {
+      Notify.error(project, result.columns().get(col) + ": " + e.getMessage());
+      return;
+    }
+    Map<Integer, Object> changed = edits.computeIfAbsent(row, k -> new TreeMap<>());
+    if (literal(value).equals(literal(result.rows().get(row).get(col)))) changed.remove(col);
+    else changed.put(col, value);
+    if (changed.isEmpty()) edits.remove(row);
+    updateEditButtons();
+  }
+
+  private void updateEditButtons() {
+    applyButton.setText("반영 (" + edits.size() + ")");
+    applyButton.setVisible(!edits.isEmpty());
+    revertButton.setVisible(!edits.isEmpty());
+    applyButton.getParent().revalidate();
+  }
+
+  private void revertEdits() {
+    if (grid.isEditing()) grid.getCellEditor().cancelCellEditing();
+    edits.clear();
+    updateEditButtons();
+    grid.repaint();
+  }
+
+  /**
+   * 고친 행마다 UPDATE 문(SET 은 고친 칼럼, WHERE 는 PK 처음 값)을 만들어 미리보기로 확인받고 SqlRunner 로 차례로 실행한다.
+   * 실행은 ? 자리 + binds 로 하고(값 이스케이프를 드라이버에 맡김) 미리보기에만 리터럴 문장을 보인다.
+   * 운영 접속 확인 · 읽기 전용 거절은 SqlRunner 가 한다. 실행에 넘긴 뒤 화면 값은 고친 값으로 둔다.
+   */
+  private void applyEdits() {
+    if (grid.isEditing() && !grid.getCellEditor().stopCellEditing()) return;
+    if (edits.isEmpty()) return;
+    List<SqlText.Update> statements = new ArrayList<>();
+    for (Map.Entry<Integer, Map<Integer, Object>> e : edits.entrySet()) statements.add(updateStatement(e.getKey(), e.getValue()));
+    if (!confirmApply(statements)) return;
+    for (SqlText.Update u : statements) SqlRunner.run(project, config, u.sql(), u.binds());
+    for (Map.Entry<Integer, Map<Integer, Object>> e : edits.entrySet()) {
+      for (Map.Entry<Integer, Object> v : e.getValue().entrySet()) result.rows().get(e.getKey()).set(v.getKey(), v.getValue());
+    }
+    edits.clear();
+    updateEditButtons();
+    grid.repaint();
+    Notify.info(project, "UPDATE 문 " + statements.size() + "개를 실행했습니다. 실패 · 취소한 문장이 있으면 다시 조회해 값을 확인하세요.");
+  }
+
+  private SqlText.Update updateStatement(int row, Map<Integer, Object> changed) {
+    List<String> names = new ArrayList<>();
+    List<Object> values = new ArrayList<>();
+    for (Map.Entry<Integer, Object> v : changed.entrySet()) {
+      names.add(result.columns().get(v.getKey()));
+      values.add(v.getValue());
+    }
+    int setCount = names.size();
+    for (int i = 0; i < pkColumns.length; i++) {
+      if (!pkColumns[i]) continue;
+      names.add(result.columns().get(i));
+      values.add(result.rows().get(row).get(i));
+    }
+    boolean[] key = new boolean[names.size()];
+    Arrays.fill(key, setCount, key.length, true);
+    return SqlText.updateWithBinds(table, names, values, key);
+  }
+
+  private boolean confirmApply(List<SqlText.Update> statements) {
+    List<String> previews = new ArrayList<>();
+    for (SqlText.Update u : statements) previews.add(u.preview());
+    JBTextArea text = new JBTextArea(String.join("\n", previews));
+    text.setEditable(false);
+    text.setFont(monoFont());
+    JBScrollPane scroll = new JBScrollPane(text);
+    scroll.setPreferredSize(new Dimension(JBUI.scale(PREVIEW_WIDTH), JBUI.scale(PREVIEW_HEIGHT)));
+    JBLabel note = new JBLabel(config.name + " 에서 아래 문장을 차례로 실행합니다." + (config.autoCommit ? "" : " 자동 커밋이 꺼져 있어 커밋해야 반영됩니다."));
+    note.setBorder(JBUI.Borders.emptyBottom(8));
+    DialogBuilder dialog = new DialogBuilder(project);
+    dialog.setTitle("고친 값 반영 · UPDATE 문 " + statements.size() + "개");
+    dialog.setNorthPanel(note);
+    dialog.setCenterPanel(scroll);
+    dialog.addOkAction().setText("실행");
+    dialog.addCancelAction();
+    return dialog.showAndGet();
+  }
+
   /** ANSI 표기(TIMESTAMP · DATE 글자)라 Oracle · MySQL · PostgreSQL 에서 같이 쓴다. */
   static String literal(Object v) {
     return SqlText.literal(v);
@@ -474,8 +775,8 @@ final class ResultPanel extends JPanel {
     return SqlText.text(v);
   }
 
-  /** 0번 칸은 행 번호. 머리글은 칼럼 이름 + 한글 주석(작고 흐리게) 두 줄. 읽기 전용. */
-  private static final class Model extends AbstractTableModel {
+  /** 0번 칸은 행 번호. 머리글은 칼럼 이름 + 한글 주석(작고 흐리게) 두 줄. 고친 값(edits)이 있으면 그 값을 보인다. */
+  private final class Model extends AbstractTableModel {
     private final QueryResult result;
     private final String[] headers;
 
@@ -501,11 +802,33 @@ final class ResultPanel extends JPanel {
     @Override public int getRowCount() { return result.rows().size(); }
     @Override public int getColumnCount() { return headers.length; }
     @Override public String getColumnName(int column) { return headers[column]; }
-    @Override public boolean isCellEditable(int row, int column) { return false; }
+    @Override public boolean isCellEditable(int row, int column) { return column > 0 && isEditable(column - 1); }
 
     @Override
     public Object getValueAt(int row, int column) {
-      return column == 0 ? new RowNumber(row + 1) : result.rows().get(row).get(column - 1);
+      if (column == 0) return new RowNumber(row + 1);
+      return isEdited(row, column) ? edits.get(row).get(column - 1) : result.rows().get(row).get(column - 1);
+    }
+
+    @Override
+    public void setValueAt(Object value, int row, int column) {
+      edit(row, column - 1, (String) value);
+      fireTableRowsUpdated(row, row);
+    }
+
+    boolean isEdited(int row, int column) {
+      Map<Integer, Object> changed = edits.get(row);
+      return column > 0 && changed != null && changed.containsKey(column - 1);
+    }
+  }
+
+  /** 고칠 때는 보이는 글(숫자는 지수 표기 없이) 그대로 시작하고, null 은 빈 칸으로 시작한다. */
+  private static final class ValueEditor extends DefaultCellEditor {
+    ValueEditor() { super(new JBTextField()); }
+
+    @Override
+    public Component getTableCellEditorComponent(JTable table, Object value, boolean selected, int row, int column) {
+      return super.getTableCellEditorComponent(table, value == null ? "" : text(value), selected, row, column);
     }
   }
 
@@ -517,11 +840,15 @@ final class ResultPanel extends JPanel {
   private static final class CellRenderer extends DefaultTableCellRenderer {
     @Override
     public Component getTableCellRendererComponent(JTable table, Object value, boolean selected, boolean focused, int row, int column) {
+      // setBackground 는 다음 칸에도 남는 바탕색이 되므로 매번 비우고 시작한다(고친 칸 바탕).
+      setBackground(null);
       super.getTableCellRendererComponent(table, value == null ? "null" : text(value), selected, focused, row, column);
       setFont(table.getFont().deriveFont(value == null ? Font.ITALIC : Font.PLAIN));
       boolean muted = value == null || value instanceof RowNumber;
       // DefaultTableCellRenderer 는 지정한 글자색을 다음 칸에도 쓰므로 매번 정한다.
       if (!selected) setForeground(muted ? UIUtil.getContextHelpForeground() : table.getForeground());
+      if (!selected && table.getModel() instanceof Model m
+          && m.isEdited(table.convertRowIndexToModel(row), table.convertColumnIndexToModel(column))) setBackground(EDITED_BACKGROUND);
       setHorizontalAlignment(value instanceof Number || value instanceof RowNumber ? SwingConstants.RIGHT : SwingConstants.LEFT);
       return this;
     }

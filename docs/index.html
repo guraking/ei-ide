@@ -147,7 +147,7 @@ table.grid tr.sel td{background:var(--sel)}
 .tabs span{padding:6px 12px; color:var(--muted); white-space:nowrap; display:inline-flex; align-items:center; gap:6px}
 .tabs span.on{color:var(--fg); box-shadow:inset 0 -2px 0 var(--info)}
 .tabs span .x{opacity:.7}
-.tabs span.mark{padding:0; display:inline-grid}
+.tabs span.mark{padding:0; display:inline-grid; flex:none; width:20px; height:20px; margin-left:6px}
 pre.sql{margin:0; padding:10px 0; font:12.5px/1.7 var(--f-mono); counter-reset:ln; overflow:hidden}
 pre.sql span.ln{display:block; padding-left:46px; position:relative; white-space:pre}
 pre.sql span.ln::before{counter-increment:ln; content:counter(ln); position:absolute; left:0; width:32px; text-align:right; color:var(--muted); opacity:.6}
@@ -438,6 +438,7 @@ footer{padding:56px 0 40px; color:var(--muted); font-size:13px}
         <li><span class="mark">1</span><div><b>여러 줄 한꺼번에</b> <span class="t">Ctrl 로 여러 서버를 고르고 시작 · 디버그 · 재시작 · 중지. 디버그로 시작하면 디버거가 자동으로 붙습니다.</span></div></li>
         <li><span class="mark">2</span><div><b>서버 복제 · WAS 추가</b> <span class="t">같은 모듈을 다른 프로필 · 포트로 하나 더. WAS 는 Tomcat · JBoss/WildFly · WebLogic · JEUS, 설치 폴더는 건드리지 않습니다.</span></div></li>
         <li><span class="mark">3</span><div><b>포트를 누르면 브라우저</b> <span class="t">콘솔 출력에서 포트를 찾아 보여 줍니다.</span></div></li>
+        <li><span class="mark">L</span><div><b>로그 거르기</b> <span class="t">실행 · 서버 콘솔 우클릭 「로그 거르기」 → ERROR · WARN · INFO · DEBUG 와 글자로 거른 줄 목록. 스택 줄은 앞 오류에 붙여 함께, 「따라가기」면 새 로그도 반영, 두 번 누르면 콘솔의 그 줄로.</span></div></li>
         <li><span class="mark">4</span><div><b>오른쪽 칸에서 바로 고치기</b> <span class="t">프로필 · VM 옵션 · 포트를 고치고 「적용」. 프로젝트 트리의 모듈 옆에도 상태 · 포트가 나오고 우클릭으로 시작 · 중지할 수 있습니다.</span></div></li>
       </ol>
     </div>
@@ -589,7 +590,7 @@ footer{padding:56px 0 40px; color:var(--muted); font-size:13px}
         <div class="scroll">
           <div class="ide rel" style="min-height:330px; min-width:560px">
             <div class="title"><span class="dots"><i></i><i></i><i></i></span>데이터베이스</div>
-            <div class="bar"><span class="mark">1</span><span class="btn">＋ 접속 추가</span><span class="mark">3</span><span class="btn">새 콘솔</span><span class="btn">새로고침</span></div>
+            <div class="bar"><span class="mark">1</span><span class="btn">＋ 접속 추가</span><span class="mark">3</span><span class="btn">새 콘솔</span><span class="btn">새로고침</span><span class="mark">4</span><span class="btn">⌕ 찾기</span><span class="btn">⋯</span></div>
             <div class="treeview">
               <div>▾ <span class="dot up"></span>dev · APP</div>
               <div class="l1">▾ APP</div>
@@ -618,6 +619,7 @@ footer{padding:56px 0 40px; color:var(--muted); font-size:13px}
         <li><span class="mark">1</span><div><b>접속 추가</b> <span class="t">종류 · 주소 · 계정 · 스키마. 비밀번호는 IDE 암호 저장소에 둡니다. 운영 · 읽기 전용 표시도 여기서 켭니다.</span></div></li>
         <li><span class="mark">D</span><div><b>드라이버는 알아서</b> <span class="t"><code>~/.m2</code> 에서 JDBC jar 를 찾고, 없으면 Maven 저장소(사내 mirror 가 있으면 그쪽)에서 받아 둡니다. 접속 창의 「내려받기」로 미리 받아도 됩니다.</span></div></li>
         <li><span class="mark">2</span><div><b>표 우클릭</b> <span class="t">데이터 보기(더블클릭과 같음), SELECT · INSERT · UPDATE 문 만들기, 매퍼 뼈대, ERD.</span></div></li>
+        <li><span class="mark">4</span><div><b>찾기 · ⋯</b> <span class="t">「찾기」는 칼럼 이름 · 한글 주석 · 표 이름 · 표 주석으로 표와 칼럼을 찾습니다(최대 500건, 두 번 누르면 그 표로). 「⋯」 에는 접속 내보내기 · 가져오기(JSON, 비밀번호 빼고).</span></div></li>
         <li><span class="mark">J</span><div><b>표 여러 개 → 조인 SELECT</b> <span class="t">Ctrl 로 표를 여러 개 고르고 우클릭 「SELECT 문 만들기 (표 N개 조인)」. FK 로 조건을 만들고, FK 가 없으면 PK 와 이름이 같은 칼럼으로 추정합니다(줄 끝에 「추정」 주석). 못 이은 표는 직접 쓰라는 줄을 남깁니다.</span></div></li>
         <li><span class="mark">3</span><div><b>새 콘솔</b> <span class="t">누를 때마다 새 탭(<code>콘솔 · dev.sql</code>, <code>콘솔 · dev (2).sql</code>). 같은 접속의 콘솔은 연결 하나를 같이 씁니다.</span></div></li>
       </ol>
@@ -634,11 +636,13 @@ footer{padding:56px 0 40px; color:var(--muted); font-size:13px}
               <span class="sepv"></span>
               <span class="mark">2</span><span class="btn">≡ 정렬</span><span class="btn">대문자</span><span class="btn">소문자</span>
               <span class="sepv"></span>
+              <span class="mark">5</span><span class="btn dim">■</span><span class="btn">계획</span><span class="btn">기록</span>
+              <span class="sepv"></span>
               <span class="mark">3</span><span class="combo">dev · APP</span><span class="combo mono">500</span>
               <span class="sepv"></span>
               <span class="mark">4</span><span class="check">자동 커밋</span><span class="btn dim">커밋</span><span class="btn dim">롤백</span>
             </div>
-<pre class="sql"><span class="ln"><span class="kw">SELECT</span> t.ORDER_NO,    <span class="cm">-- 주문번호</span></span><span class="ln">       t.ORDER_DT,    <span class="cm">-- 주문일자</span></span><span class="ln">       t.CUST_NM,     <span class="cm">-- 고객명</span></span><span class="ln">       p.PRODUCT_NM   <span class="cm">-- 상품명</span></span><span class="ln">  <span class="kw">FROM</span> APP.ORDERS t, APP.ORDER_ITEM i, APP.PRODUCT p</span><span class="ln"> <span class="kw">WHERE</span> t.ORDER_NO = i.ORDER_NO</span><span class="ln">   <span class="kw">AND</span> i.PRODUCT_ID = p.PRODUCT_ID(+)</span><span class="ln">   <span class="kw">AND</span> t.ORDER_DT <span class="kw">BETWEEN</span> <span class="st">'20260101'</span> <span class="kw">AND</span> <span class="st">'20261231'</span></span><span class="ln"> <span class="kw">ORDER BY</span> t.ORDER_DT <span class="kw">DESC</span></span></pre>
+<pre class="sql"><span class="ln"><span class="kw">SELECT</span></span><span class="ln">       t.ORDER_NO     <span class="cm">-- 주문번호</span></span><span class="ln">     , t.ORDER_DT     <span class="cm">-- 주문일자</span></span><span class="ln">     , t.CUST_NM      <span class="cm">-- 고객명</span></span><span class="ln">     , p.PRODUCT_NM   <span class="cm">-- 상품명</span></span><span class="ln">  <span class="kw">FROM</span> APP.ORDERS t, APP.ORDER_ITEM i, APP.PRODUCT p</span><span class="ln"> <span class="kw">WHERE</span> t.ORDER_NO = i.ORDER_NO</span><span class="ln">   <span class="kw">AND</span> i.PRODUCT_ID = p.PRODUCT_ID(+)</span><span class="ln">   <span class="kw">AND</span> t.ORDER_DT <span class="kw">BETWEEN</span> :fromDt <span class="kw">AND</span> :toDt</span><span class="ln"> <span class="kw">ORDER BY</span> t.ORDER_DT <span class="kw">DESC</span></span></pre>
           </div>
         </div>
         <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
@@ -648,6 +652,9 @@ footer{padding:56px 0 40px; color:var(--muted); font-size:13px}
         <li><span class="mark">2</span><div><b>정렬 · 대소문자</b> <span class="t">선택 영역에만, 없으면 전체에. 정렬 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd>, 대문자 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd>, 소문자 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Y</kbd>. 문자열 · 주석 · <code>#{}</code> 는 그대로. <kbd>Ctrl</kbd>+<kbd>Z</kbd> 로 되돌림.</span></div></li>
         <li><span class="mark">3</span><div><b>접속 · 조회 건수</b> <span class="t">콘솔마다 접속을 바꿀 수 있습니다. 건수는 500 · 1000 · 5000 · 10000 을 고르거나 숫자를 쓰고 Enter.</span></div></li>
         <li><span class="mark">4</span><div><b>자동 커밋 · 커밋 · 롤백</b> <span class="t">자동 커밋은 기본 꺼짐. 변경을 실행하면 「미반영 변경 N건」이 뜨고 커밋 · 롤백이 켜집니다.</span></div></li>
+        <li><span class="mark">5</span><div><b>중지 · 실행 계획 · 기록</b> <span class="t">■ 는 실행 중인 쿼리를 끊습니다. 「계획」(<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd>)은 문장을 실행하지 않고 실행 계획만 보입니다. 「기록」은 최근 500개 실행 목록 — 고르면 콘솔에 붙이고 두 번 누르면 다시 실행.</span></div></li>
+        <li><span class="mark">B</span><div><b>바인드 변수</b> <span class="t">문장에 <code>:name</code> · <code>#{name}</code> 이 있으면 실행 전에 값을 묻습니다. 비우면 NULL, 따옴표는 문자열, 숫자는 숫자. 마지막 값을 기억합니다.</span></div></li>
+        <li><span class="mark">S</span><div><b>자동 저장</b> <span class="t">콘솔에 쓴 SQL 은 저절로 저장돼 IDE 를 다시 켜도 그대로 있습니다.</span></div></li>
         <li><span class="mark">+</span><div><b>자동완성</b> <span class="t">표 이름과 칼럼, 한글 주석을 함께 보여 줍니다. <code>t.</code> 를 치면 그 별칭 표의 칼럼만. 소문자로 치면 소문자로 넣습니다.</span></div></li>
       </ol>
     </div>
@@ -692,13 +699,14 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
     <div class="figure wide">
       <div>
         <div class="scroll">
-          <div class="ide rel" style="min-width:980px; min-height:500px">
+          <div class="ide rel" style="min-width:980px; min-height:560px">
             <div class="tabs"><span>결과 1 · ORDERS <span class="x">✕</span></span><span class="on">결과 2 · PRODUCT <span class="x">✕</span></span><span class="mark" style="align-self:center">1</span></div>
             <div class="statusline">
               <span class="ok">500건</span><span class="m">· 357 ms</span><span class="w">· 500건에서 자름</span>
               <span class="mark">2</span><span class="btn">500건 더</span><span class="input">1000</span><span>건</span><span class="btn">조회</span>
               <span class="gap"></span>
-              <span class="mark">3</span><span class="btn">복사</span><span class="btn">CSV 내보내기</span><span class="btn">INSERT 문으로</span><span class="btn">UPDATE 문으로</span><span class="btn">DTO 만들기</span>
+              <span class="mark">6</span><span class="input" style="text-align:left; min-width:90px">⌕ 키보</span><span class="m">1 / 500건</span>
+              <span class="mark">3</span><span class="btn">복사</span><span class="btn">CSV</span><span class="btn">엑셀</span><span class="btn">INSERT</span><span class="btn">UPDATE</span><span class="btn">DTO</span>
             </div>
             <table class="grid">
               <tr><th>PRODUCT_ID<small>상품 ID</small></th><th>PRODUCT_NM <span class="mark">4</span><small>상품명</small></th><th>UNIT_PRICE<small>단가</small></th><th>USE_YN<small>사용 여부</small></th><th>CREATED_AT<small>등록일시</small></th></tr>
@@ -706,7 +714,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
               <tr><td>P0002</td><td style="background:var(--sel)">마우스</td><td>18000</td><td>Y</td><td>2026-03-02 09:15:41</td></tr>
               <tr><td>P0003</td><td style="background:var(--sel)">모니터 받침</td><td>45000</td><td>N</td><td>2026-04-11 14:03:27</td></tr>
             </table>
-            <div class="menu" style="left:330px; top:200px">
+            <div class="menu" style="left:330px; top:250px">
               <div>값 복사</div>
               <div>고른 행 복사</div>
               <hr>
@@ -726,9 +734,11 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       <ol class="legend" style="grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:14px">
         <li><span class="mark">1</span><div><b>결과 탭</b> <span class="t">실행마다 하나씩, 10개가 넘으면 오래된 것부터 닫힙니다. 탭의 ✕, 가운데 단추, 우클릭 「다른 탭 닫기 · 모든 탭 닫기」.</span></div></li>
         <li><span class="mark">2</span><div><b>더 보기</b> <span class="t">잘렸을 때만 나옵니다. 「500건 더」 또는 건수를 쓰고 「조회」(Enter). 같은 문장을 처음부터 다시 읽어 이 탭을 바꿉니다.</span></div></li>
-        <li><span class="mark">3</span><div><b>꺼내 쓰기</b> <span class="t">탭 구분 복사 · CSV · INSERT 문 · UPDATE 문(PK 를 표 정의에서 찾아 WHERE) · DTO.</span></div></li>
+        <li><span class="mark">3</span><div><b>꺼내 쓰기</b> <span class="t">탭 구분 복사 · CSV · 엑셀(.xlsx, 머리 굵게 · 틀 고정 · 한글 주석 행) · INSERT · UPDATE(앞 쉼표, PK 로 WHERE) · DTO.</span></div></li>
         <li><span class="mark">4</span><div><b>칼럼 단위로</b> <span class="t">머리를 누르면 칼럼 전체 선택(Ctrl 로 더하기), 머리 아래 한글 주석. 우클릭으로 칼럼 값 · IN 목록 · 칼럼 이름 복사.</span></div></li>
         <li><span class="mark">5</span><div><b>정렬</b> <span class="t">머리를 두 번 누르면 오름 · 내림차순이 번갈아 바뀝니다. 우클릭 「오름차순 · 내림차순 정렬 · 정렬 풀기」. 복사 · CSV 는 정렬된 순서로.</span></div></li>
+        <li><span class="mark">6</span><div><b>찾기 · 거르기</b> <span class="t">검색칸(결과 창에서 <kbd>Ctrl</kbd>+<kbd>F</kbd>)에 글자를 넣으면 그 글자가 든 행만 보입니다. 복사 · 내보내기도 보이는 행만.</span></div></li>
+        <li><span class="mark">E</span><div><b>칸 바로 고치기</b> <span class="t">표 하나만 읽은 단순 조회에서 칸을 두 번 눌러 고치면 노란색 → 「반영 (N)」 → 문장 미리보기 확인 → PK 조건 UPDATE 실행(운영 보호 그대로). 별칭 · 조인 · UNION · 하위 조회 결과는 고칠 수 없습니다.</span></div></li>
       </ol>
     </div>
 
@@ -749,6 +759,15 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
         <li><span class="mark">!</span><div><b>운영 접속 띠</b> <span class="t">운영으로 표시한 접속의 콘솔은 위에 붉은 띠 「운영 접속 · 변경은 매번 확인합니다」가 붙습니다.</span></div></li>
         <li><span class="mark">!</span><div><b>읽기 전용 접속</b> <span class="t">변경 문장은 실행하지 않고 알림만 띄웁니다.</span></div></li>
       </ul>
+    </div>
+
+    <h3>MyBatis 인터페이스 ↔ XML</h3>
+    <div class="flow" style="margin-bottom:8px">
+      <div class="box"><b>인터페이스 메서드</b><span>옆 아이콘이나 <kbd>Ctrl</kbd>+클릭 → 같은 namespace XML 의 같은 id 문장으로.</span></div>
+      <div class="arrow">⇄</div>
+      <div class="box"><b>XML 문장</b><span>옆 아이콘 → 인터페이스 메서드로. ▶ 실행 아이콘과 따로 붙습니다.</span></div>
+      <div class="arrow">·</div>
+      <div class="box"><b>#{필드} 검사</b><span>parameterType DTO 에 없는 필드면 경고: 「ProductDto 에 productNm 필드가 없습니다」.</span></div>
     </div>
 
     <h3>⑤ MyBatis 바로 실행 <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Enter</kbd></h3>
@@ -790,6 +809,8 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd></td><td>모든 문장 차례로 실행</td><td class="where">SQL 콘솔</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></td><td>SQL 정렬 (콘솔 밖에서는 원래 기능)</td><td class="where">SQL 콘솔</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> · <kbd>Y</kbd></td><td>대문자 · 소문자</td><td class="where">SQL 콘솔</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd></td><td>실행 계획 (실행하지 않음)</td><td class="where">SQL 콘솔</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+클릭</td><td>매퍼 인터페이스 → XML 문장</td><td class="where">자바 매퍼</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Enter</kbd></td><td>커서가 있는 MyBatis 문장 실행</td><td class="where">매퍼 XML</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>C</kbd></td><td>MyBatis 로그를 값 채운 SQL 로 복사</td><td class="where">서버 콘솔</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td><td>콘솔 출력 검색</td><td class="where">실행 · 서버 콘솔</td></tr>

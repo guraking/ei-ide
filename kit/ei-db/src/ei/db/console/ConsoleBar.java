@@ -22,6 +22,7 @@ import ei.db.DbConfig;
 import ei.db.DbSessions;
 import ei.db.DbSettings;
 import ei.db.Notify;
+import ei.db.SqlRunner;
 import org.jetbrains.annotations.NotNull;
 
 import javax.swing.Box;
@@ -42,7 +43,7 @@ import java.sql.SQLException;
 import java.util.function.Function;
 
 /**
- * 콘솔 편집기 위의 띠: 운영 경고(운영 접속일 때) + 도구줄(실행 · 전체 실행 · 정렬 · 대문자 · 소문자 · 접속 · 자동 커밋 · 미반영 배지 · 커밋 · 롤백).
+ * 콘솔 편집기 위의 띠: 운영 경고(운영 접속일 때) + 도구줄(실행 · 전체 실행 · 중지 · 실행 계획 · 실행 기록 · 정렬 · 대문자 · 소문자 · 접속 · 자동 커밋 · 미반영 배지 · 커밋 · 롤백).
  * 편집기 하나에 하나만 만들고 편집기가 닫힐 때 리스너도 풀린다.
  */
 final class ConsoleBar extends JPanel {
@@ -65,6 +66,8 @@ final class ConsoleBar extends JPanel {
   private final JBLabel badge = new JBLabel();
   private final JButton commit = new JButton("커밋", AllIcons.Actions.Commit);
   private final JButton rollback = new JButton("롤백", AllIcons.Actions.Rollback);
+  /** 이 콘솔 접속에서 실행 중일 때만 켠다. */
+  private final JButton stop = iconButton(AllIcons.Actions.Suspend, "실행 중지");
   /** 화면을 값에 맞추는 중이면 콤보 · 체크 상자의 변경 처리를 건너뛴다. */
   private boolean updating;
 
@@ -111,6 +114,12 @@ final class ConsoleBar extends JPanel {
     runAll.setToolTipText(allKey.isEmpty() ? "모든 문장을 차례로 실행" : "모든 문장을 차례로 실행 (" + allKey + ")");
     runAll.addActionListener(e -> ConsoleRun.runAll(project, editor, file));
 
+    stop.addActionListener(e -> cancelRun());
+    JButton plan = iconButton(AllIcons.Toolwindows.ToolWindowHierarchy, "실행 계획 · 커서가 있는 문장 또는 선택 영역");
+    plan.addActionListener(e -> ExplainPlan.run(project, editor, file));
+    JButton history = iconButton(AllIcons.Vcs.History, "실행 기록 · 고르면 콘솔에 넣고, 두 번 누르면 바로 실행");
+    history.addActionListener(e -> HistoryDialog.open(project));
+
     JButton format = textButton("정렬", AllIcons.Actions.ReformatCode, "선택 영역(없으면 전체) SQL 정렬", FORMAT_ACTION);
     format.addActionListener(e -> ConsoleRun.format(project, editor));
     JButton upper = textButton("대문자", null, "선택 영역(없으면 전체) 대문자로 · 문자열 · 주석은 그대로", UPPER_ACTION);
@@ -143,6 +152,12 @@ final class ConsoleBar extends JPanel {
     bar.add(runKey);
     bar.add(Box.createHorizontalStrut(JBUI.scale(8)));
     bar.add(runAll);
+    bar.add(Box.createHorizontalStrut(JBUI.scale(4)));
+    bar.add(stop);
+    bar.add(Box.createHorizontalStrut(JBUI.scale(4)));
+    bar.add(plan);
+    bar.add(Box.createHorizontalStrut(JBUI.scale(4)));
+    bar.add(history);
     bar.add(separator());
     bar.add(format);
     bar.add(Box.createHorizontalStrut(JBUI.scale(4)));
@@ -182,6 +197,14 @@ final class ConsoleBar extends JPanel {
     return b;
   }
 
+  /** 도구줄이 넘치지 않게 글 없이 아이콘만 둔다. 뜻은 툴팁 · 접근성 이름으로. */
+  private static JButton iconButton(Icon icon, String tip) {
+    JButton b = new JButton(icon);
+    b.setToolTipText(tip);
+    b.getAccessibleContext().setAccessibleName(tip);
+    return b;
+  }
+
   private static JComponent separator() {
     JSeparator s = new JSeparator(SwingConstants.VERTICAL);
     s.setMaximumSize(new Dimension(JBUI.scale(1), JBUI.scale(18)));
@@ -218,6 +241,7 @@ final class ConsoleBar extends JPanel {
     try {
       band.setVisible(c != null && c.production);
       rows.setSelectedItem(DbSessions.get(project).maxRows());
+      stop.setEnabled(c != null && DbSessions.get(project).isRunning(c.id));
       if (c == null) {
         autoCommit.setEnabled(false);
         badge.setText("접속이 지워졌습니다");
@@ -247,15 +271,10 @@ final class ConsoleBar extends JPanel {
   private void changeRows() {
     if (updating) return;
     Object v = rows.getSelectedItem();
-    String text = v == null ? "" : v.toString().replace(",", "").replace("건", "").strip();
-    int n;
-    try {
-      n = Integer.parseInt(text);
-    } catch (NumberFormatException e) {
-      n = 0;
-    }
-    if (n < 1) {
-      Notify.error(project, "조회 건수는 1 이상 숫자로 써 주세요: " + text);
+    String text = v == null ? "" : v.toString();
+    int n = DbSessions.parseRowCount(text);
+    if (n == 0) {
+      Notify.error(project, "조회 건수는 1 ~ " + DbSessions.MAX_ROW_LIMIT + " 사이 숫자로 써 주세요: " + text);
       refresh();
       return;
     }
@@ -297,6 +316,12 @@ final class ConsoleBar extends JPanel {
       }
       ApplicationManager.getApplication().invokeLater(this::refresh);
     });
+  }
+
+  private void cancelRun() {
+    DbConfig c = ConsoleOpener.config(file);
+    if (c == null) return;
+    ApplicationManager.getApplication().executeOnPooledThread(() -> SqlRunner.cancel(project, c));
   }
 
   private void endTransaction(boolean doCommit) {

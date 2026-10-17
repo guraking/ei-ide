@@ -17,13 +17,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.BooleanSupplier;
 import java.util.regex.Pattern;
 
 /**
  * 프로젝트마다 접속 id 하나에 JDBC 접속 하나를 열어 둔다. 자동 커밋이 꺼진 접속은 변경 문장 수를 세어 두고
- * 커밋 · 롤백 때 0 으로 돌린다. 상태가 바뀌면 리스너를 부른다(탐색기 점 색, 콘솔 배지, 상태줄).
+ * 커밋 · 롤백 때 0 으로 돌린다. 실행 중인 문장을 접속 id 별로 기억해 cancel 로 멈출 수 있다.
+ * 상태(접속 · 미반영 변경 · 실행 중)가 바뀌면 리스너를 부른다(탐색기 점 색, 콘솔 배지 · 중지 단추, 상태줄).
  * 메서드는 화면 스레드가 아닌 곳에서 부른다(접속 · 실행이 막힐 수 있다).
  */
 @Service(Service.Level.PROJECT)
@@ -33,12 +36,29 @@ public final class DbSessions implements Disposable {
   public static final int MAX_ROWS = 500;
   /** 조회 건수 0 은 끝까지 읽는다. */
   public static final int ALL_ROWS = 0;
+  /** 직접 쓰는 조회 건수의 상한. 읽을 때 limit + 1 을 쓰므로 int 끝값을 받으면 넘친다. */
+  public static final int MAX_ROW_LIMIT = 1_000_000;
+
+  /** 쉼표 · 「건」 을 허용해 읽은 건수. 1 ~ MAX_ROW_LIMIT 가 아니거나 숫자가 아니면 0. */
+  public static int parseRowCount(String text) {
+    String t = text == null ? "" : text.replace(",", "").replace("건", "").strip();
+    try {
+      int n = Integer.parseInt(t);
+      return n >= 1 && n <= MAX_ROW_LIMIT ? n : 0;
+    } catch (NumberFormatException e) {
+      return 0; // 숫자가 아니면 호출부가 알림을 띄운다.
+    }
+  }
   private static final int CLOB_LIMIT = 4000;
   private static final Pattern IDENT = Pattern.compile("[A-Za-z_][\\w$#]*");
 
   private final Map<String, Connection> open = new ConcurrentHashMap<>();
   private final Map<String, Integer> pending = new ConcurrentHashMap<>();
   private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
+  /** 접속 id → 지금 실행 중인 문장. 같은 접속에서 겹쳐 돌면 나중 것만 남는다. */
+  private final Map<String, Statement> running = new ConcurrentHashMap<>();
+  /** cancel 을 보낸 문장. 그 문장의 실패를 CancelledException 으로 바꾸는 데 쓴다. */
+  private final Set<Statement> cancelled = ConcurrentHashMap.newKeySet();
   /** 이 프로젝트의 조회 건수(콘솔 도구줄에서 고른다). 저장하지 않으며 IDE 를 다시 열면 MAX_ROWS. */
   private volatile int maxRows = MAX_ROWS;
 
@@ -58,6 +78,24 @@ public final class DbSessions implements Disposable {
   public boolean isOpen(String id) { return open.containsKey(id); }
 
   public int pending(String id) { return pending.getOrDefault(id, 0); }
+
+  public boolean isRunning(String id) { return running.containsKey(id); }
+
+  /** cancel 로 멈춘 실행. 실행하던 쪽(run)이 받는다. */
+  public static final class CancelledException extends SQLException {
+    CancelledException(SQLException cause) {
+      super("취소했습니다", cause);
+    }
+  }
+
+  /** 그 접속에서 실행 중인 문장에 Statement.cancel() 을 보낸다. 실행 중이 아니면 아무것도 하지 않는다. 보냈으면 참. */
+  public boolean cancel(String id) throws SQLException {
+    Statement st = running.get(id);
+    if (st == null) return false;
+    cancelled.add(st);
+    st.cancel();
+    return true;
+  }
 
   public int maxRows() { return maxRows; }
 
@@ -122,13 +160,32 @@ public final class DbSessions implements Disposable {
     return run(c, sql, binds, maxRows);
   }
 
+  /**
+   * run 과 같되, 문장을 등록한 뒤 실행 직전에 stop 을 본다. 참이면 실행하지 않고 CancelledException.
+   * 접속을 여는 중에 들어온 취소(cancel 할 문장이 아직 없음)를 놓치지 않으려는 것이다.
+   */
+  public QueryResult run(DbConfig c, String sql, List<Object> binds, BooleanSupplier stop) throws SQLException {
+    return run(c, sql, binds, maxRows, stop);
+  }
+
   /** limit 건까지 읽는다(ALL_ROWS 면 끝까지). 「더 보기」가 건수를 늘려 다시 부른다. */
   public QueryResult run(DbConfig c, String sql, List<Object> binds, int limit) throws SQLException {
+    return run(c, sql, binds, limit, () -> false);
+  }
+
+  private QueryResult run(DbConfig c, String sql, List<Object> binds, int limit, BooleanSupplier stop) throws SQLException {
     Connection conn = connection(c);
     String text = sql.strip();
     if (text.endsWith(";") && !text.toUpperCase().endsWith("END;")) text = text.substring(0, text.length() - 1).strip();
     long start = System.currentTimeMillis();
-    try (PreparedStatement ps = conn.prepareStatement(text)) {
+    PreparedStatement ps = conn.prepareStatement(text);
+    running.put(c.id, ps);
+    fire();
+    try (ps) {
+      if (stop.getAsBoolean()) {
+        cancelled.add(ps);
+        throw new SQLException("실행 전에 취소했습니다");
+      }
       // limit + 1 건을 받아 보고 넘치면 잘렸다고 알린다.
       if (limit != ALL_ROWS) ps.setMaxRows(limit + 1);
       for (int i = 0; binds != null && i < binds.size(); i++) ps.setObject(i + 1, binds.get(i));
@@ -160,6 +217,13 @@ public final class DbSessions implements Disposable {
         long millis = System.currentTimeMillis() - start;
         return new QueryResult(text, cols, types, rows, -1, millis, truncated, Comments.forQuery(conn, c, text, cols), bindList(binds));
       }
+    } catch (SQLException e) {
+      if (cancelled.contains(ps)) throw new CancelledException(e);
+      throw e;
+    } finally {
+      running.remove(c.id, ps);
+      cancelled.remove(ps);
+      fire();
     }
   }
 

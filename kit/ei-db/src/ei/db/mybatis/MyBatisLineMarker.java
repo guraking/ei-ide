@@ -20,16 +20,21 @@ public final class MyBatisLineMarker implements LineMarkerProvider {
 
   @Override
   public @Nullable LineMarkerInfo<?> getLineMarkerInfo(@NotNull PsiElement element) {
-    if (element.getFirstChild() != null || !MapperDoc.STATEMENT_TAGS.contains(element.getText())) return null;
-    if (!"XML_NAME".equals(typeName(element))) return null;
-    PsiElement prev = element.getPrevSibling();
-    if (prev == null || !"XML_START_TAG_START".equals(typeName(prev))) return null;
-    PsiFile file = element.getContainingFile();
-    if (file == null || !StringUtil.contains(file.getViewProvider().getContents(), "<mapper")) return null;
+    if (!isStatementTagName(element)) return null;
     return new LineMarkerInfo<>(element, element.getTextRange(), AllIcons.RunConfigurations.TestState.Run,
         e -> TOOLTIP,
         (mouse, e) -> MyBatisRunDialog.openAt(e.getProject(), e.getContainingFile().getViewProvider().getContents(), e.getTextOffset()),
         GutterIconRenderer.Alignment.CENTER, () -> TOOLTIP);
+  }
+
+  /** 매퍼 XML 안 select · insert · update · delete 여는 태그의 이름 토큰이면 true. */
+  static boolean isStatementTagName(PsiElement element) {
+    if (element.getFirstChild() != null || !MapperDoc.STATEMENT_TAGS.contains(element.getText())) return false;
+    if (!"XML_NAME".equals(typeName(element))) return false;
+    PsiElement prev = element.getPrevSibling();
+    if (prev == null || !"XML_START_TAG_START".equals(typeName(prev))) return false;
+    PsiFile file = element.getContainingFile();
+    return file != null && StringUtil.contains(file.getViewProvider().getContents(), "<mapper");
   }
 
   private static String typeName(PsiElement e) {

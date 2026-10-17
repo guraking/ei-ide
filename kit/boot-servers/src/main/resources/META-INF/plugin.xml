@@ -57,5 +57,9 @@
         <action id="KingGura.ConsoleFind" class="local.bootservers.ConsoleFindAction" text="콘솔에서 찾기" icon="AllIcons.Actions.Find">
             <keyboard-shortcut keymap="$default" first-keystroke="control F"/>
         </action>
+        <!-- 콘솔 우클릭 메뉴: 지금 콘솔 글을 레벨 · 검색어로 거르는 창을 연다. -->
+        <action id="KingGura.LogFilter" class="local.bootservers.LogFilterAction" text="로그 거르기" icon="AllIcons.General.Filter">
+            <add-to-group group-id="ConsoleEditorPopupMenu" anchor="first"/>
+        </action>
     </actions>
 </idea-plugin>
