@@ -29,6 +29,8 @@
 
     <projectListeners>
         <listener class="local.bootservers.ServerStatusRefresher" topic="com.intellij.execution.ExecutionListener"/>
+        <!-- 아래쪽 창을 닫으면 그 창이 가렸던 직전 창을 다시 연다 -->
+        <listener class="local.bootservers.ReopenPreviousToolWindow" topic="com.intellij.openapi.wm.ex.ToolWindowManagerListener"/>
     </projectListeners>
 
     <actions>
