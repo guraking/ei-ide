@@ -8,3 +8,5 @@ tmpjars/
 plugins/*.jar
 bundled-plugins/lombok/
 build-number.txt
+intellij-community-new/
+__pycache__/
