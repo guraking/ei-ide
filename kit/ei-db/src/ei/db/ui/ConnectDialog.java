@@ -179,7 +179,7 @@ public final class ConnectDialog extends DialogWrapper {
         .addLabeledComponent("JDBC 주소", url)
         .addLabeledComponent("안전", safety)
         .getPanel();
-    form.setPreferredSize(JBUI.size(520, -1).withHeight(form.getPreferredSize().height));
+    form.setPreferredSize(JBUI.size(600, -1).withHeight(form.getPreferredSize().height));
     return form;
   }
 
@@ -244,7 +244,8 @@ public final class ConnectDialog extends DialogWrapper {
     DbConfig probe = current();
     driverName.setText("찾는 중…");
     driverStatus.setText("");
-    ModalityState modality = ModalityState.current();
+    // 창이 뜨기 전(init)에도 불리므로 current() 를 쓰면 바깥 상태가 잡혀 창이 닫힐 때까지 갱신이 밀린다. 글자만 바꾸므로 any() 로 둔다.
+    ModalityState modality = ModalityState.any();
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       Path jar = Drivers.jarFor(probe);
       ApplicationManager.getApplication().invokeLater(() -> {
@@ -268,7 +269,8 @@ public final class ConnectDialog extends DialogWrapper {
   }
 
   private void loadPassword(DbConfig existing) {
-    ModalityState modality = ModalityState.current();
+    // 창이 뜨기 전(init)에도 불리므로 current() 를 쓰면 바깥 상태가 잡혀 창이 닫힐 때까지 갱신이 밀린다. 글자만 바꾸므로 any() 로 둔다.
+    ModalityState modality = ModalityState.any();
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       String stored = Passwords.get(existing);
       if (stored == null) return;
@@ -284,7 +286,8 @@ public final class ConnectDialog extends DialogWrapper {
     testResult.setForeground(UIUtil.getContextHelpForeground());
     testResult.setToolTipText(null);
     testResult.setText("시험 중…");
-    ModalityState modality = ModalityState.current();
+    // 창이 뜨기 전(init)에도 불리므로 current() 를 쓰면 바깥 상태가 잡혀 창이 닫힐 때까지 갱신이 밀린다. 글자만 바꾸므로 any() 로 둔다.
+    ModalityState modality = ModalityState.any();
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       long start = System.currentTimeMillis();
       String text;
