@@ -18,7 +18,7 @@
     <actionPromoter implementation="ei.db.console.ConsoleRun$Promoter"/>
     <completion.contributor language="any" implementationClass="ei.db.console.SqlCompletion"/>
     <typedHandler implementation="ei.db.console.DotAutoPopup"/>
-    <toolWindow id="EI Database Result" anchor="bottom" icon="AllIcons.Nodes.DataTables" doNotActivateOnStart="true"
+    <toolWindow id="EI Database Result" anchor="bottom" icon="AllIcons.Nodes.DataTables" doNotActivateOnStart="true" canCloseContents="true"
                 factoryClass="ei.db.console.ResultView$Factory"/>
     <!-- MyBatis: 매퍼 XML 의 문장 옆 실행 아이콘 -->
     <codeInsight.lineMarkerProvider language="XML" implementationClass="ei.db.mybatis.MyBatisLineMarker"/>
