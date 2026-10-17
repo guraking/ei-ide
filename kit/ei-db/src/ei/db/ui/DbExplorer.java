@@ -165,7 +165,7 @@ final class DbExplorer extends SimpleToolWindowPanel {
     JPanel top = new JPanel(new BorderLayout());
     top.setBorder(JBUI.Borders.empty(6));
     top.add(search, BorderLayout.CENTER);
-    JBLabel hint = new JBLabel("<html>표 더블클릭 → 데이터 " + DbSessions.MAX_ROWS + "건 보기<br>우클릭 → SELECT · INSERT · UPDATE 문 만들기</html>",
+    JBLabel hint = new JBLabel("<html>표 더블클릭 → 데이터 보기<br>우클릭 → SELECT · INSERT · UPDATE 문 만들기</html>",
                                UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER);
     hint.setBorder(JBUI.Borders.empty(6, 8));
     JPanel body = new JPanel(new BorderLayout());

@@ -29,13 +29,18 @@ import java.util.regex.Pattern;
 @Service(Service.Level.PROJECT)
 public final class DbSessions implements Disposable {
 
+  /** 조회 건수 기본값이자 「더 보기」 한 번에 더 읽는 건수. */
   public static final int MAX_ROWS = 500;
+  /** 조회 건수 0 은 끝까지 읽는다. */
+  public static final int ALL_ROWS = 0;
   private static final int CLOB_LIMIT = 4000;
   private static final Pattern IDENT = Pattern.compile("[A-Za-z_][\\w$#]*");
 
   private final Map<String, Connection> open = new ConcurrentHashMap<>();
   private final Map<String, Integer> pending = new ConcurrentHashMap<>();
   private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
+  /** 이 프로젝트의 조회 건수(콘솔 도구줄에서 고른다). 저장하지 않으며 IDE 를 다시 열면 MAX_ROWS. */
+  private volatile int maxRows = MAX_ROWS;
 
   public static DbSessions get(Project project) {
     return project.getService(DbSessions.class);
@@ -53,6 +58,15 @@ public final class DbSessions implements Disposable {
   public boolean isOpen(String id) { return open.containsKey(id); }
 
   public int pending(String id) { return pending.getOrDefault(id, 0); }
+
+  public int maxRows() { return maxRows; }
+
+  /** 음수는 받지 않는다. 바꾸면 리스너를 불러 다른 콘솔 도구줄도 맞춘다. */
+  public void setMaxRows(int rows) {
+    if (rows < 0) throw new IllegalArgumentException("조회 건수는 0(전부) 이상이어야 합니다: " + rows);
+    maxRows = rows;
+    fire();
+  }
 
   public Connection connection(DbConfig c) throws SQLException {
     Connection conn = open.get(c.id);
@@ -102,15 +116,21 @@ public final class DbSessions implements Disposable {
 
   /**
    * 한 문장을 실행한다. binds 는 ? 자리 값(순서대로). 끝의 ; 는 떼되 PL/SQL 블록(END;)은 그대로 둔다.
-   * SELECT 는 MAX_ROWS 까지만 읽는다.
+   * SELECT 는 이 프로젝트의 조회 건수까지만 읽는다.
    */
   public QueryResult run(DbConfig c, String sql, List<Object> binds) throws SQLException {
+    return run(c, sql, binds, maxRows);
+  }
+
+  /** limit 건까지 읽는다(ALL_ROWS 면 끝까지). 「더 보기」가 건수를 늘려 다시 부른다. */
+  public QueryResult run(DbConfig c, String sql, List<Object> binds, int limit) throws SQLException {
     Connection conn = connection(c);
     String text = sql.strip();
     if (text.endsWith(";") && !text.toUpperCase().endsWith("END;")) text = text.substring(0, text.length() - 1).strip();
     long start = System.currentTimeMillis();
     try (PreparedStatement ps = conn.prepareStatement(text)) {
-      ps.setMaxRows(MAX_ROWS + 1);
+      // limit + 1 건을 받아 보고 넘치면 잘렸다고 알린다.
+      if (limit != ALL_ROWS) ps.setMaxRows(limit + 1);
       for (int i = 0; binds != null && i < binds.size(); i++) ps.setObject(i + 1, binds.get(i));
       boolean isQuery = ps.execute();
       if (!isQuery) {
@@ -119,7 +139,7 @@ public final class DbSessions implements Disposable {
           pending.merge(c.id, 1, Integer::sum);
           fire();
         }
-        return new QueryResult(text, List.of(), List.of(), List.of(), count, System.currentTimeMillis() - start, false, Map.of());
+        return new QueryResult(text, List.of(), List.of(), List.of(), count, System.currentTimeMillis() - start, false, Map.of(), bindList(binds));
       }
       try (ResultSet rs = ps.getResultSet()) {
         ResultSetMetaData md = rs.getMetaData();
@@ -132,15 +152,19 @@ public final class DbSessions implements Disposable {
         List<List<Object>> rows = new ArrayList<>();
         boolean truncated = false;
         while (rs.next()) {
-          if (rows.size() == MAX_ROWS) { truncated = true; break; }
+          if (limit != ALL_ROWS && rows.size() == limit) { truncated = true; break; }
           List<Object> row = new ArrayList<>(cols.size());
           for (int i = 1; i <= cols.size(); i++) row.add(readValue(rs.getObject(i)));
           rows.add(row);
         }
         long millis = System.currentTimeMillis() - start;
-        return new QueryResult(text, cols, types, rows, -1, millis, truncated, Comments.forQuery(conn, c, text, cols));
+        return new QueryResult(text, cols, types, rows, -1, millis, truncated, Comments.forQuery(conn, c, text, cols), bindList(binds));
       }
     }
+  }
+
+  private static List<Object> bindList(List<Object> binds) {
+    return binds == null ? List.of() : new ArrayList<>(binds);
   }
 
   private static Object readValue(Object v) throws SQLException {

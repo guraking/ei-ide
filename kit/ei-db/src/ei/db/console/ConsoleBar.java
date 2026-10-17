@@ -60,6 +60,8 @@ final class ConsoleBar extends JPanel {
   private final JBLabel bandTarget = new JBLabel();
   private final ComboBox<DbConfig> combo = new ComboBox<>();
   private final JBCheckBox autoCommit = new JBCheckBox("자동 커밋");
+  /** 조회 건수. ALL_ROWS 는 「전부」. 프로젝트의 모든 콘솔 · 표 데이터 보기에 같이 적용된다. */
+  private final ComboBox<Integer> rows = new ComboBox<>(new Integer[] {DbSessions.MAX_ROWS, 1000, 5000, 10000, DbSessions.ALL_ROWS});
   private final JBLabel badge = new JBLabel();
   private final JButton commit = new JButton("커밋", AllIcons.Actions.Commit);
   private final JButton rollback = new JButton("롤백", AllIcons.Actions.Rollback);
@@ -123,6 +125,12 @@ final class ConsoleBar extends JPanel {
       @Override public void popupMenuCanceled(PopupMenuEvent e) { }
     });
     combo.addActionListener(e -> switchConnection());
+    rows.setRenderer(SimpleListCellRenderer.create("", n -> n == DbSessions.ALL_ROWS ? "전부" : n + "건"));
+    rows.setToolTipText("조회할 건수 · 다음 실행부터 · 「전부」는 큰 표에서 느리고 메모리를 많이 씁니다");
+    rows.setMaximumSize(rows.getPreferredSize());
+    rows.addActionListener(e -> {
+      if (!updating && rows.getSelectedItem() instanceof Integer n) DbSessions.get(project).setMaxRows(n);
+    });
     autoCommit.addActionListener(e -> toggleAutoCommit());
     badge.setForeground(UiColors.WARNING);
     commit.addActionListener(e -> endTransaction(true));
@@ -144,6 +152,8 @@ final class ConsoleBar extends JPanel {
     bar.add(lower);
     bar.add(separator());
     bar.add(combo);
+    bar.add(Box.createHorizontalStrut(JBUI.scale(4)));
+    bar.add(rows);
     bar.add(separator());
     bar.add(autoCommit);
     bar.add(Box.createHorizontalStrut(JBUI.scale(8)));
@@ -208,6 +218,7 @@ final class ConsoleBar extends JPanel {
     updating = true;
     try {
       band.setVisible(c != null && c.production);
+      rows.setSelectedItem(DbSessions.get(project).maxRows());
       if (c == null) {
         autoCommit.setEnabled(false);
         badge.setText("접속이 지워졌습니다");

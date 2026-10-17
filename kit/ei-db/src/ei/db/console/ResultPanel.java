@@ -23,6 +23,9 @@ import ei.db.DbSessions;
 import ei.db.Notify;
 import ei.db.QueryResult;
 import ei.db.gen.DtoDialog;
+import com.intellij.openapi.wm.ToolWindow;
+import com.intellij.openapi.wm.ToolWindowManager;
+import com.intellij.ui.content.Content;
 
 import javax.swing.Box;
 import javax.swing.BoxLayout;
@@ -151,9 +154,11 @@ final class ResultPanel extends JPanel {
     bar.add(count);
     bar.add(millis);
     if (result.truncated()) {
-      JBLabel cut = new JBLabel(" · " + DbSessions.MAX_ROWS + "건에서 자름");
+      JBLabel cut = new JBLabel(" · " + result.rows().size() + "건에서 자름  ");
       cut.setForeground(UiColors.WARNING);
       bar.add(cut);
+      bar.add(button(DbSessions.MAX_ROWS + "건 더", null, () -> readMore(c, result.rows().size() + DbSessions.MAX_ROWS)));
+      bar.add(button("전부", null, () -> readMore(c, DbSessions.ALL_ROWS)));
     }
     bar.add(Box.createHorizontalGlue());
     bar.add(button("복사", AllIcons.Actions.Copy, this::copyTsv));
@@ -164,6 +169,30 @@ final class ResultPanel extends JPanel {
 
     add(bar, BorderLayout.NORTH);
     add(new JBScrollPane(grid), BorderLayout.CENTER);
+  }
+
+  /**
+   * 같은 문장을 limit 건까지 다시 읽어 이 탭을 바꾼다. 처음부터 다시 실행하므로 그 사이 바뀐 데이터나 ORDER BY 없는 순서는 달라질 수 있다.
+   * 이미 실행된 조회 문장이라 위험 문장 확인은 다시 하지 않는다.
+   */
+  private void readMore(DbConfig c, int limit) {
+    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+      try {
+        QueryResult more = DbSessions.get(project).run(c, result.sql(), result.binds(), limit);
+        ApplicationManager.getApplication().invokeLater(() -> replaceWith(new ResultPanel(project, c, more, table)));
+      } catch (Exception e) {
+        Notify.error(project, c.name + " 더 읽기 실패: " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()));
+      }
+    });
+  }
+
+  /** 이 패널이 든 결과 탭의 내용을 바꾼다. 그 사이 탭을 닫았으면 아무것도 하지 않는다. */
+  private void replaceWith(ResultPanel next) {
+    if (project.isDisposed()) return;
+    ToolWindow window = ToolWindowManager.getInstance(project).getToolWindow(ResultView.TOOL_WINDOW_ID);
+    if (window == null) return;
+    Content content = window.getContentManager().getContent(this);
+    if (content != null) content.setComponent(next);
   }
 
   private static JButton button(String text, javax.swing.Icon icon, Runnable action) {
