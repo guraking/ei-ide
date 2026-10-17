@@ -154,7 +154,7 @@ final class DbExplorer extends SimpleToolWindowPanel {
     DefaultActionGroup bar = new DefaultActionGroup();
     bar.add(new Act("접속 추가", AllIcons.General.Add, () -> true, this::addConnection));
     bar.add(new Act("새로고침", AllIcons.Actions.Refresh, () -> true, this::refreshSelected));
-    bar.add(new Act("새 콘솔", AllIcons.Nodes.Console, () -> selectedConfig() != null, () -> ConsoleOpener.open(project, selectedConfig(), null)));
+    bar.add(new Act("새 콘솔", AllIcons.Nodes.Console, () -> selectedConfig() != null, () -> ConsoleOpener.openNew(project, selectedConfig())));
     bar.add(new Act("접속 끊기", AllIcons.Actions.Suspend, this::selectedIsOpen, () -> disconnect(selectedConfig())));
     bar.add(new Act("편집", AllIcons.Actions.Edit, () -> selectedConfig() != null, () -> edit(selectedConfig())));
     bar.add(new Act("삭제", AllIcons.General.Remove, () -> selectedConfig() != null, () -> delete(selectedConfig())));
@@ -397,7 +397,7 @@ final class DbExplorer extends SimpleToolWindowPanel {
       } else {
         g.add(new Act("연결", AllIcons.Actions.Execute, () -> true, () -> connect(c)));
       }
-      g.add(new Act("새 콘솔", AllIcons.Nodes.Console, () -> true, () -> ConsoleOpener.open(project, c, null)));
+      g.add(new Act("새 콘솔", AllIcons.Nodes.Console, () -> true, () -> ConsoleOpener.openNew(project, c)));
       g.addSeparator();
       g.add(new Act("편집", AllIcons.Actions.Edit, () -> true, () -> edit(c)));
       g.add(new Act("삭제", AllIcons.General.Remove, () -> true, () -> delete(c)));

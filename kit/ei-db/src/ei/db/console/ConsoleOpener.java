@@ -17,7 +17,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * SQL 콘솔 = 메모리 파일(LightVirtualFile, 이름 끝 .sql 이라 SQL 색칠이 붙는다). 접속 하나에 콘솔 하나.
+ * SQL 콘솔 = 메모리 파일(LightVirtualFile, 이름 끝 .sql 이라 SQL 색칠이 붙는다). 한 접속에 콘솔을 여러 개 열 수 있고,
+ * 같은 접속의 콘솔은 연결 하나(미반영 변경 · 커밋 · 롤백)를 같이 쓴다.
  * 파일 사용자 데이터에 접속 id 와 이 세션에서만 쓰는 자동 커밋 값을 둔다. 탭을 닫아도 파일(내용)은 프로젝트가 닫힐 때까지 남는다.
  */
 public final class ConsoleOpener {
@@ -26,18 +27,36 @@ public final class ConsoleOpener {
   static final Key<String> CONFIG_ID = Key.create("ei.db.console.configId");
   /** 콘솔에서 바꾼 자동 커밋. null 이면 접속 설정 값. 설정 파일에는 저장하지 않는다. */
   static final Key<Boolean> AUTO_COMMIT = Key.create("ei.db.console.autoCommit");
-  /** 접속 id → 콘솔 파일. */
+  /** 접속 id → 그 접속에서 마지막으로 연 콘솔. SQL 을 보내는 곳. */
   private static final Key<Map<String, LightVirtualFile>> CONSOLES = Key.create("ei.db.console.files");
+  /** 접속 id → 지금까지 연 콘솔 수. 두 번째부터 탭 이름에 번호를 붙인다. */
+  private static final Key<Map<String, Integer>> COUNTS = Key.create("ei.db.console.counts");
 
-  /** 그 접속의 SQL 콘솔 탭을 열고(있으면 앞으로) initialSql 이 null 이 아니면 끝에 덧붙인다. */
+  /** 그 접속에서 마지막으로 연 콘솔 탭을 열고(없으면 만든다) initialSql 이 null 이 아니면 끝에 덧붙인다. */
   public static void open(Project project, DbConfig c, String initialSql) {
-    Map<String, LightVirtualFile> consoles = consoles(project);
-    LightVirtualFile file = consoles.get(c.id);
-    if (file == null) {
-      file = new LightVirtualFile(fileName(c), "");
-      file.putUserData(CONFIG_ID, c.id);
-      consoles.put(c.id, file);
+    LightVirtualFile file = consoles(project).get(c.id);
+    show(project, c, file == null ? create(project, c) : file, initialSql);
+  }
+
+  /** 「새 콘솔」: 늘 빈 콘솔을 새 탭으로 연다. 이후 open 은 이 콘솔로 보낸다. */
+  public static void openNew(Project project, DbConfig c) {
+    show(project, c, create(project, c), null);
+  }
+
+  private static LightVirtualFile create(Project project, DbConfig c) {
+    Map<String, Integer> counts = project.getUserData(COUNTS);
+    if (counts == null) {
+      counts = new HashMap<>();
+      project.putUserData(COUNTS, counts);
     }
+    int n = counts.merge(c.id, 1, Integer::sum);
+    LightVirtualFile file = new LightVirtualFile(n == 1 ? fileName(c) : "콘솔 · " + c.name + " (" + n + ").sql", "");
+    file.putUserData(CONFIG_ID, c.id);
+    consoles(project).put(c.id, file);
+    return file;
+  }
+
+  private static void show(Project project, DbConfig c, LightVirtualFile file, String initialSql) {
     Document doc = FileDocumentManager.getInstance().getDocument(file);
     if (doc == null) {
       Notify.error(project, "콘솔 문서를 만들지 못했습니다: " + c.name);
