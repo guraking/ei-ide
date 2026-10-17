@@ -51,6 +51,9 @@ import javax.swing.SwingConstants;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableColumn;
+import javax.swing.table.TableRowSorter;
+import javax.swing.RowSorter;
+import javax.swing.SortOrder;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Font;
@@ -116,7 +119,8 @@ final class ResultPanel extends JPanel {
 
   private void buildQuery(DbConfig c) {
     boolean twoLineHeader = !result.comments().isEmpty();
-    grid = new JBTable(new Model(result)) {
+    Model model = new Model(result);
+    grid = new JBTable(model) {
       @Override
       protected JTableHeader createDefaultTableHeader() {
         return new JBTableHeader() {
@@ -131,6 +135,12 @@ final class ResultPanel extends JPanel {
       }
     };
     grid.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+    TableRowSorter<Model> sorter = new TableRowSorter<>(model) {
+      // 머리 한 번 누름은 칼럼 고르기라 정렬하지 않는다. 정렬은 머리 두 번 누름 · 우클릭 메뉴로 setSortKeys 를 부른다.
+      @Override public void toggleSortOrder(int column) { }
+    };
+    for (int i = 0; i < model.getColumnCount(); i++) sorter.setComparator(i, ResultPanel::compareValues);
+    grid.setRowSorter(sorter);
     grid.setDefaultRenderer(Object.class, new CellRenderer());
     grid.getTableHeader().setReorderingAllowed(false);
     // 칸 단위로 고를 수 있게 한다(Ctrl+C 는 고른 칸만 복사). 머리를 누르면 그 칼럼 전체를 고른다.
@@ -240,16 +250,40 @@ final class ResultPanel extends JPanel {
     }
   }
 
-  /** 고른 행(없으면 전체)의 모델 행 번호. */
+  /** 고른 행(없으면 전체)의 모델 행 번호. 정렬돼 있으면 화면에 보이는 순서대로. */
   private int[] chosenRows() {
     int[] selected = grid.getSelectedRows();
-    if (selected.length > 0) return selected;
-    int[] all = new int[result.rows().size()];
-    for (int i = 0; i < all.length; i++) all[i] = i;
-    return all;
+    int n = selected.length > 0 ? selected.length : grid.getRowCount();
+    int[] out = new int[n];
+    for (int i = 0; i < n; i++) out[i] = grid.convertRowIndexToModel(selected.length > 0 ? selected[i] : i);
+    return out;
   }
 
-  /** 머리 왼쪽 누름: 칼럼 고르기(Ctrl 은 더하기). 오른쪽 누름: 칼럼 복사 메뉴. 0번(행 번호) 칼럼은 건너뛴다. */
+  /**
+   * 정렬 비교. 같은 형식이면 그 형식의 순서(숫자 · 날짜 · 글자), 형식이 다른 숫자끼리는 값 크기, 나머지는 보이는 글자 순서.
+   * null 은 RowSorter 가 따로 맨 앞(오름차순)으로 보낸다.
+   */
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  private static int compareValues(Object a, Object b) {
+    if (a instanceof RowNumber x && b instanceof RowNumber y) return Integer.compare(x.value(), y.value());
+    if (a instanceof Comparable ca && a.getClass() == b.getClass()) return ca.compareTo(b);
+    if (a instanceof Number x && b instanceof Number y) return Double.compare(x.doubleValue(), y.doubleValue());
+    return text(a).compareTo(text(b));
+  }
+
+  /** order 가 null 이면 정렬을 풀어 처음 읽은 순서로 돌린다. modelColumn 은 행 번호 칸을 포함한 번호. */
+  private void sortBy(int modelColumn, SortOrder order) {
+    grid.getRowSorter().setSortKeys(order == null ? null : List.of(new RowSorter.SortKey(modelColumn, order)));
+  }
+
+  /** 머리 두 번 누름: 그 칼럼이 오름차순이면 내림차순, 아니면 오름차순. */
+  private void toggleSort(int modelColumn) {
+    List<? extends RowSorter.SortKey> keys = grid.getRowSorter().getSortKeys();
+    boolean ascending = !keys.isEmpty() && keys.get(0).getColumn() == modelColumn && keys.get(0).getSortOrder() == SortOrder.ASCENDING;
+    sortBy(modelColumn, ascending ? SortOrder.DESCENDING : SortOrder.ASCENDING);
+  }
+
+  /** 머리 왼쪽 누름: 칼럼 고르기(Ctrl 은 더하기), 두 번 누르면 정렬. 오른쪽 누름: 칼럼 복사 · 정렬 메뉴. 0번(행 번호) 칼럼은 건너뛴다. */
   private void onHeader(MouseEvent e) {
     int view = grid.getTableHeader().columnAtPoint(e.getPoint());
     if (view < 0) return;
@@ -259,6 +293,7 @@ final class ResultPanel extends JPanel {
       return;
     }
     if (e.getID() != MouseEvent.MOUSE_PRESSED || !SwingUtilities.isLeftMouseButton(e) || grid.getRowCount() == 0) return;
+    if (e.getClickCount() == 2) toggleSort(col);
     if (e.isControlDown()) grid.addColumnSelectionInterval(view, view);
     else grid.setColumnSelectionInterval(view, view);
     grid.setRowSelectionInterval(0, grid.getRowCount() - 1);
@@ -297,6 +332,10 @@ final class ResultPanel extends JPanel {
       for (String v : columnValues(index)) quoted.add("'" + v.replace("'", "''") + "'");
       copy("(" + String.join(", ", quoted) + ")", quoted.size() + "개 값을 IN 목록으로 복사했습니다.");
     }));
+    menu.addSeparator();
+    menu.add(item("오름차순 정렬", () -> sortBy(index + 1, SortOrder.ASCENDING)));
+    menu.add(item("내림차순 정렬", () -> sortBy(index + 1, SortOrder.DESCENDING)));
+    menu.add(item("정렬 풀기", () -> sortBy(index + 1, null)));
     return menu;
   }
 
@@ -344,7 +383,7 @@ final class ResultPanel extends JPanel {
     Path path = target.getFile().toPath();
     StringBuilder sb = new StringBuilder(BOM);
     appendCsvLine(sb, List.copyOf(result.columns()));
-    for (List<Object> row : result.rows()) appendCsvLine(sb, row);
+    for (int i = 0; i < grid.getRowCount(); i++) appendCsvLine(sb, result.rows().get(grid.convertRowIndexToModel(i)));
     String csv = sb.toString();
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       try {
