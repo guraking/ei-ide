@@ -10,6 +10,7 @@ import org.cef.browser.CefBrowser;
 import org.cef.browser.CefFrame;
 import org.cef.callback.CefCallback;
 import org.cef.callback.CefResourceReadCallback;
+import org.cef.handler.CefLifeSpanHandlerAdapter;
 import org.cef.handler.CefRequestHandlerAdapter;
 import org.cef.handler.CefResourceHandler;
 import org.cef.handler.CefResourceHandlerAdapter;
@@ -69,6 +70,7 @@ final class SwaggerView implements Disposable {
     private final JComponent component;
     private volatile String origin;
     private volatile String specJson = "{}";
+    private volatile String lastUrl;
     private int loads;
 
     SwaggerView(Disposable parent) {
@@ -94,6 +96,16 @@ final class SwaggerView implements Disposable {
                 };
             }
         }, browser.getCefBrowser());
+        // 내장 브라우저는 창이 처음 보일 때 만들어진다. 그 전에 연 주소는 가로채기 전에 빈 화면으로 끝날 수 있어, 만들어진 뒤 마지막 주소를 다시 연다.
+        browser.getJBCefClient().addLifeSpanHandler(new CefLifeSpanHandlerAdapter() {
+            @Override
+            public void onAfterCreated(CefBrowser b) {
+                String url = lastUrl;
+                if (url != null) {
+                    b.loadURL(url);
+                }
+            }
+        }, browser.getCefBrowser());
         component = browser.getComponent();
     }
 
@@ -117,6 +129,7 @@ final class SwaggerView implements Disposable {
         }
         // 매번 다른 주소로 열어 브라우저가 앞 사양을 다시 쓰지 않게 한다.
         String url = origin + PREFIX + INDEX + "?v=" + (++loads) + (anchor == null ? "" : "#/" + anchor);
+        lastUrl = url;
         browser.loadURL(url);
     }
 
