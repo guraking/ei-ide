@@ -42,6 +42,7 @@
         <notificationGroup id="웹 언어 지원" displayType="BALLOON"/>
         <notificationGroup id="AI" displayType="BALLOON"/>
         <platform.lsp.serverSupportProvider implementation="local.bootservers.web.WebLspSupport"/>
+        <platform.lsp.serverSupportProvider implementation="local.bootservers.web.VueLspSupport"/>
     </extensions>
 
     <applicationListeners>

@@ -32,8 +32,8 @@ final class VueServerDescriptor extends ProjectWideLspServerDescriptor {
     private static final Logger LOG = Logger.getInstance(VueServerDescriptor.class);
     /** 첫 요청은 tsserver 가 프로젝트를 읽는 동안 기다리므로 기본(10초)보다 넉넉히. */
     private static final int TSSERVER_TIMEOUT_MS = 30_000;
-    /** Vue 서버가 vtsls 보다 먼저 뜨면 vtsls 가 준비될 때까지 기다리는 횟수 · 간격. */
-    private static final int WAIT_ATTEMPTS = 50;
+    /** Vue 서버가 vtsls 보다 먼저 뜨면 vtsls 가 준비될 때까지 기다리는 횟수 · 간격(최대 2분, 큰 프로젝트는 vtsls 준비에 1분 넘게 걸린다). */
+    private static final int WAIT_ATTEMPTS = 600;
     private static final long WAIT_INTERVAL_MS = 200;
 
     private final Path node;

@@ -5,6 +5,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.platform.lsp.api.LspServer;
 import com.intellij.platform.lsp.api.LspServerManager;
 import com.intellij.platform.lsp.api.LspServerState;
+import com.intellij.platform.lsp.api.LspServerSupportProvider;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.charset.StandardCharsets;
@@ -27,9 +28,12 @@ final class WebServers {
 
     /** 이 프로젝트에서 돌고 있는, 주어진 설명 종류의 서버. */
     static @Nullable LspServer running(Project project, Class<?> descriptorClass) {
-        for (LspServer server : LspServerManager.getInstance(project).getServersForProvider(WebLspSupport.class)) {
-            if (descriptorClass.isInstance(server.getDescriptor()) && server.getState() == LspServerState.Running) {
-                return server;
+        LspServerManager manager = LspServerManager.getInstance(project);
+        for (Class<? extends LspServerSupportProvider> provider : List.of(WebLspSupport.class, VueLspSupport.class)) {
+            for (LspServer server : manager.getServersForProvider(provider)) {
+                if (descriptorClass.isInstance(server.getDescriptor()) && server.getState() == LspServerState.Running) {
+                    return server;
+                }
             }
         }
         return null;
