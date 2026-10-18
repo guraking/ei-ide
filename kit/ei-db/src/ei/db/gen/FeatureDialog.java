@@ -29,6 +29,8 @@ import javax.swing.BoxLayout;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.JTable;
+import javax.swing.Scrollable;
+import javax.swing.SwingConstants;
 import javax.swing.Timer;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
@@ -36,6 +38,7 @@ import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.awt.Rectangle;
 import java.io.IOException;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
@@ -64,9 +67,12 @@ public final class FeatureDialog extends DialogWrapper {
   private static final String SERVICE_PACKAGE = "service";
   private static final String IMPL_PACKAGE = "impl";
   private static final String CONTROLLER_PACKAGE = "controller";
-  private static final int LEFT_WIDTH = 560;
-  private static final int PREVIEW_WIDTH = 760;
+  private static final int LEFT_WIDTH = 620;
+  private static final int PREVIEW_WIDTH = 900;
   private static final int HEIGHT = 820;
+  /** 칼럼 표가 위 칸들에 밀려 사라지지 않도록 잡아 두는 높이. 넘치면 왼쪽 전체가 스크롤된다. */
+  private static final int COLUMN_TABLE_HEIGHT = 260;
+  private static final int SCROLL_UNIT = 16;
   private static final int REFRESH_DELAY_MS = 300;
   private static final int COL_SEARCH = 0;
   private static final int COL_TAG = 1;
@@ -229,7 +235,11 @@ public final class FeatureDialog extends DialogWrapper {
         .addLabeledComponentFillVertically(table + " 칼럼  " + cols.size() + "개  ·  검색 칸 = 목록 조건", columnTable())
         .getPanel();
     left.setBorder(JBUI.Borders.emptyRight(12));
-    left.setPreferredSize(new Dimension(JBUI.scale(LEFT_WIDTH), JBUI.scale(HEIGHT)));
+    WidthTracking leftBody = new WidthTracking();
+    leftBody.add(left, BorderLayout.CENTER);
+    JBScrollPane leftScroll = new JBScrollPane(leftBody, JBScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JBScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+    leftScroll.setBorder(BorderFactory.createEmptyBorder());
+    leftScroll.setPreferredSize(new Dimension(JBUI.scale(LEFT_WIDTH), JBUI.scale(HEIGHT)));
 
     JPanel head = new JPanel(new FlowLayout(FlowLayout.RIGHT, JBUI.scale(8), 0));
     fileLabel.setFont(Ui.mono());
@@ -245,7 +255,7 @@ public final class FeatureDialog extends DialogWrapper {
     right.setBorder(JBUI.Borders.emptyLeft(12));
 
     JPanel root = new JPanel(new BorderLayout());
-    root.add(left, BorderLayout.WEST);
+    root.add(leftScroll, BorderLayout.WEST);
     root.add(right, BorderLayout.CENTER);
     return root;
   }
@@ -325,6 +335,8 @@ public final class FeatureDialog extends DialogWrapper {
     });
     JBScrollPane sp = new JBScrollPane(t);
     sp.setBorder(BorderFactory.createEmptyBorder());
+    sp.setPreferredSize(new Dimension(JBUI.scale(LEFT_WIDTH), JBUI.scale(COLUMN_TABLE_HEIGHT)));
+    sp.setMinimumSize(sp.getPreferredSize());
     return sp;
   }
 
@@ -546,5 +558,27 @@ public final class FeatureDialog extends DialogWrapper {
     super.doOKAction();
     Targets.open(project, path(FeatureGen.Out.CONTROLLER));
     Notify.info(project, String.join("\n", report));
+  }
+
+  /** 스크롤 안에서 폭은 창에 맞추고 높이만 넘치면 세로로 스크롤되는 판. */
+  private static final class WidthTracking extends JPanel implements Scrollable {
+    WidthTracking() { super(new BorderLayout()); }
+
+    @Override
+    public Dimension getPreferredScrollableViewportSize() { return getPreferredSize(); }
+
+    @Override
+    public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction) { return JBUI.scale(SCROLL_UNIT); }
+
+    @Override
+    public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction) {
+      return orientation == SwingConstants.VERTICAL ? visible.height : visible.width;
+    }
+
+    @Override
+    public boolean getScrollableTracksViewportWidth() { return true; }
+
+    @Override
+    public boolean getScrollableTracksViewportHeight() { return getParent() != null && getParent().getHeight() > getPreferredSize().height; }
   }
 }
