@@ -10,6 +10,7 @@
   10) AI 에이전트 연결 · 플러그인 개발용 실행 도구 플러그인 제외.
   11) SVN 플러그인 번들 추가.
   15) 설치 화면 「설치 옵션」 칸을 모두 체크한 채로 띄운다.
+  16) properties 파일의 「투명한 native-to-ascii 변환」을 기본으로 켠다.
 고치기 전 원본은 <intellij-community>/../backup/<시각>-before/ 에 같은 상대경로로 남긴다.
 모든 원문을 먼저 찾아 본 뒤에 쓴다. 하나라도 못 찾으면 아무 파일도 바꾸지 않는다. 줄끝(LF · CRLF)은 파일마다 원래대로 둔다.
 두 번 실행해도 같은 결과가 된다.
@@ -137,7 +138,24 @@ EDITS = [
     "Right=215\nTop=95\nBottom=105",
     "Right=258\nTop=95\nBottom=105",
     "Right=301\nTop=95\nBottom=105",
-)]
+)] + [
+    # 16) properties 파일의 「투명한 native-to-ascii 변환」을 기본으로 켠다(messages_ko.properties 의 \uXXXX 를 한글로 보인다).
+    #     encodings.xml 에 값이 없는 새 프로젝트 · 기존 프로젝트 모두 켜짐으로 읽고, 끈 경우에만 false 를 남긴다.
+    #     문자 집합은 그대로 둔다(기본 UTF-8, UTF-8 이 아닌 바이트가 있으면 ISO-8859-1 · 저장은 \uXXXX 이스케이프).
+    ("platform/platform-impl/src/com/intellij/openapi/vfs/encoding/EncodingProjectManagerImpl.java",
+     "  private boolean myNative2AsciiForPropertiesFiles;\n",
+     "  private boolean myNative2AsciiForPropertiesFiles = true;  // EI IDE: properties 의 유니코드 이스케이프를 글자로 보인다\n"),
+    ("platform/platform-impl/src/com/intellij/openapi/vfs/encoding/EncodingProjectManagerImpl.java",
+     '    if (myNative2AsciiForPropertiesFiles) {\n'
+     '      element.setAttribute("native2AsciiForPropertiesFiles", Boolean.toString(true));\n'
+     '    }\n',
+     '    if (!myNative2AsciiForPropertiesFiles) {\n'
+     '      element.setAttribute("native2AsciiForPropertiesFiles", Boolean.toString(false));  // EI IDE: 기본이 켜짐이므로 끈 것만 남긴다\n'
+     '    }\n'),
+    ("platform/platform-impl/src/com/intellij/openapi/vfs/encoding/EncodingProjectManagerImpl.java",
+     '    myNative2AsciiForPropertiesFiles = Boolean.parseBoolean(element.getAttributeValue("native2AsciiForPropertiesFiles"));\n',
+     '    myNative2AsciiForPropertiesFiles = !Boolean.toString(false).equalsIgnoreCase(element.getAttributeValue("native2AsciiForPropertiesFiles"));  // EI IDE: 값이 없으면 켜짐\n'),
+]
 
 
 def read_source(path):

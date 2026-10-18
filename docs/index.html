@@ -312,6 +312,7 @@ footer{padding:56px 0 40px; color:var(--muted); font-size:13px}
       <div class="card"><h4>콘솔 검색</h4><p>실행 창 콘솔에서 <kbd>Ctrl</kbd>+<kbd>F</kbd>.</p><span class="was">이클립스 단축키에서는 없음</span></div>
       <div class="card"><h4>편집기</h4><p>오른쪽 「세로로 분할」 단추, 120자 여백선 숨김, 커밋 뒤 메시지 비움.</p><span class="was">분할 단추 없음, 여백선 보임</span></div>
       <div class="card"><h4>업데이트 확인 끔</h4><p>IDE · 플러그인 모두. 새 판은 GitHub 릴리스로만 알립니다.</p><span class="was">JetBrains 서버에 자동 확인</span></div>
+      <div class="card"><h4>properties 한글 그대로</h4><p><code>messages_ko.properties</code> 의 <code>\uXXXX</code> 를 한글로 보여 주고, 저장할 때 다시 바꿔 씁니다.</p><span class="was">\uXXXX 그대로</span></div>
       <div class="card"><h4>설치 옵션 모두 체크</h4><p>설치 화면에서 바탕화면 바로가기 · PATH · 「폴더를 프로젝트로 열기」 · 파일 연결(.java · .gradle · .groovy · .kt · .kts · .pom)이 체크된 채로 뜹니다.</p><span class="was">모두 빈 칸</span></div>
     </div>
   </div>
@@ -440,6 +441,10 @@ footer{padding:56px 0 40px; color:var(--muted); font-size:13px}
         <li><span class="mark">2</span><div><b>서버 복제 · WAS 추가</b> <span class="t">같은 모듈을 다른 프로필 · 포트로 하나 더. WAS 는 Tomcat · JBoss/WildFly · WebLogic · JEUS, 설치 폴더는 건드리지 않습니다.</span></div></li>
         <li><span class="mark">3</span><div><b>포트를 누르면 브라우저</b> <span class="t">콘솔 출력에서 포트를 찾아 보여 줍니다.</span></div></li>
         <li><span class="mark">L</span><div><b>로그 거르기</b> <span class="t">실행 · 서버 콘솔 우클릭 「로그 거르기」 → ERROR · WARN · INFO · DEBUG 와 글자로 거른 줄 목록. 스택 줄은 앞 오류에 붙여 함께, 「따라가기」면 새 로그도 반영, 두 번 누르면 콘솔의 그 줄로.</span></div></li>
+        <li><span class="mark">U</span><div><b>URL 찾기</b> <span class="t">Navigate 또는 Search → 「URL 찾기…」(<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>U</kbd>). 스프링 <code>@RequestMapping</code> · <code>@GetMapping</code> … 을 모두 모아 HTTP 방식 · URL · 클래스.메서드로 보입니다. <code>/api/order/123</code> 처럼 실제 주소를 쳐도 <code>/api/order/{id}</code> 가 걸리고, Enter 로 그 메서드로 갑니다.</span></div></li>
+        <li><span class="mark">H</span><div><b>HTTP 요청</b> <span class="t">URL 찾기의 「요청 보내기」(또는 Run → 「HTTP 요청…」). 방식 · 주소(실행 중인 서버 포트 · context-path 자동) · 헤더 · JSON 본문을 채워 보내고, 상태 · 걸린 시간 · 응답(JSON 정렬)을 봅니다. 「인증」 칸(없음 · Bearer · Basic)과 토큰을 넣으면 Authorization 헤더가 붙고, 토큰은 프로젝트마다 기억합니다. 최근 20개는 IDE 를 끌 때까지 기억합니다.</span></div></li>
+        <li><span class="mark">N</span><div><b>뷰 · 설정 이동</b> <span class="t">컨트롤러의 <code>return "order/list"</code> 를 <kbd>Ctrl</kbd>+클릭하면 그 JSP 로(prefix · suffix 는 설정에서, 없으면 <code>/WEB-INF/views/ … .jsp</code>). JSP 우클릭 「컨트롤러로 이동」은 반대로. <code>${db.url}</code> 을 <kbd>Ctrl</kbd>+클릭하면 application*.yml · properties 의 그 키로(프로필 파일마다 따로).</span></div></li>
+        <li><span class="mark">X</span><div><b>프로그램 목록 엑셀</b> <span class="t">Project 메뉴 또는 프로젝트 트리 우클릭 「프로그램 목록 엑셀로 내보내기…」. 소스 · 리소스 · 웹 폴더의 전체 파일(구분 · 경로 · 클래스 · 설명 · 줄 수 · 수정일)과 URL 목록을 시트 두 장으로 저장합니다.</span></div></li>
         <li><span class="mark">4</span><div><b>오른쪽 칸에서 바로 고치기</b> <span class="t">프로필 · VM 옵션 · 포트를 고치고 「적용」. 프로젝트 트리의 모듈 옆에도 상태 · 포트가 나오고 우클릭으로 시작 · 중지할 수 있습니다.</span></div></li>
       </ol>
     </div>
@@ -622,6 +627,8 @@ footer{padding:56px 0 40px; color:var(--muted); font-size:13px}
         <li><span class="mark">2</span><div><b>표 우클릭</b> <span class="t">데이터 보기(더블클릭과 같음), SELECT · INSERT · UPDATE 문 만들기, 매퍼 뼈대, ERD.</span></div></li>
         <li><span class="mark">4</span><div><b>찾기 · ⋯</b> <span class="t">「찾기」는 칼럼 이름 · 한글 주석 · 표 이름 · 표 주석으로 표와 칼럼을 찾습니다(최대 500건, 두 번 누르면 그 표로). 「⋯」 에는 접속 내보내기 · 가져오기(JSON, 비밀번호 빼고).</span></div></li>
         <li><span class="mark">J</span><div><b>표 여러 개 → 조인 SELECT</b> <span class="t">Ctrl 로 표를 여러 개 고르고 우클릭 「SELECT 문 만들기 (표 N개 조인)」. FK 로 조건을 만들고, FK 가 없으면 PK 와 이름이 같은 칼럼으로 추정합니다(줄 끝에 「추정」 주석). 못 이은 표는 직접 쓰라는 줄을 남깁니다.</span></div></li>
+        <li><span class="mark">P</span><div><b>Oracle 프로그램</b> <span class="t">스키마 아래 「프로그램」에 패키지 · 프로시저 · 함수(깨진 것은 INVALID 빨간 글씨). 두 번 누르면 소스를 <code>CREATE OR REPLACE … /</code> 로 콘솔에 붙이고, 고쳐 실행하면 컴파일됩니다. 우클릭 「컴파일 오류 보기」로 줄 · 위치 · 오류를 결과 창에.</span></div></li>
+        <li><span class="mark">S</span><div><b>세션 · 잠금 보기</b> <span class="t">접속 우클릭. 잠금 보기는 누가 어떤 표를 잡고 있는지와 끝낼 때 쓸 문장(KILL_SQL)을 함께 보입니다. 끝내기는 콘솔에서 직접 실행합니다. Oracle 은 V$ 뷰 조회 권한이 있어야 합니다.</span></div></li>
         <li><span class="mark">3</span><div><b>새 콘솔</b> <span class="t">누를 때마다 새 탭(<code>콘솔 · dev.sql</code>, <code>콘솔 · dev (2).sql</code>). 같은 접속의 콘솔은 연결 하나를 같이 씁니다.</span></div></li>
       </ol>
     </div>
@@ -740,6 +747,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
         <li><span class="mark">5</span><div><b>정렬</b> <span class="t">머리를 두 번 누르면 오름 · 내림차순이 번갈아 바뀝니다. 우클릭 「오름차순 · 내림차순 정렬 · 정렬 풀기」. 복사 · CSV 는 정렬된 순서로.</span></div></li>
         <li><span class="mark">6</span><div><b>찾기 · 거르기</b> <span class="t">검색칸(결과 창에서 <kbd>Ctrl</kbd>+<kbd>F</kbd>)에 글자를 넣으면 그 글자가 든 행만 보입니다. 복사 · 내보내기도 보이는 행만.</span></div></li>
         <li><span class="mark">E</span><div><b>칸 바로 고치기</b> <span class="t">표 하나만 읽은 단순 조회에서 칸을 두 번 눌러 고치면 노란색 → 「반영 (N)」 → 문장 미리보기 확인 → PK 조건 UPDATE 실행(운영 보호 그대로). 별칭 · 조인 · UNION · 하위 조회 결과는 고칠 수 없습니다.</span></div></li>
+        <li><span class="mark">C</span><div><b>결과 비교</b> <span class="t">탭 우클릭 「다른 결과와 비교…」 → 다른 탭 고르기. 기준 칼럼으로 행을 맞춰 같음 · 다름 · 왼쪽에만 · 오른쪽에만을 세고, 다른 칸은 <code>a → b</code> 로 색칠합니다. 불러온 행만 비교합니다.</span></div></li>
       </ol>
     </div>
 
@@ -768,6 +776,8 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       <div class="box"><b>인터페이스 메서드</b><span>옆 아이콘이나 <kbd>Ctrl</kbd>+클릭 → 같은 namespace XML 의 같은 id 문장으로.</span></div>
       <div class="arrow">⇄</div>
       <div class="box"><b>XML 문장</b><span>옆 아이콘 → 인터페이스 메서드로. ▶ 실행 아이콘과 따로 붙습니다.</span></div>
+      <div class="arrow">·</div>
+      <div class="box"><b>XML 안에서</b><span><code>&lt;include refid&gt;</code> → <code>&lt;sql&gt;</code>, <code>resultMap</code> · <code>extends</code> → <code>&lt;resultMap&gt;</code> 으로 <kbd>Ctrl</kbd>+클릭. 다른 namespace 도 갑니다.</span></div>
       <div class="arrow">·</div>
       <div class="box"><b>#{필드} 검사</b><span>parameterType DTO 에 없는 필드면 경고: 「ProductDto 에 productNm 필드가 없습니다」.</span></div>
     </div>
@@ -816,6 +826,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       <tr><td><kbd>Ctrl</kbd>+클릭</td><td>매퍼 인터페이스 → XML 문장</td><td class="where">자바 매퍼</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Enter</kbd></td><td>커서가 있는 MyBatis 문장 실행</td><td class="where">매퍼 XML</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>C</kbd></td><td>MyBatis 로그를 값 채운 SQL 로 복사</td><td class="where">서버 콘솔</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>U</kbd></td><td>URL 로 스프링 컨트롤러 메서드 찾기</td><td class="where">어디서나</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td><td>콘솔 출력 검색</td><td class="where">실행 · 서버 콘솔</td></tr>
     </table>
   </div>

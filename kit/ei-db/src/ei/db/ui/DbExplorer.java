@@ -34,6 +34,7 @@ import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
 import ei.db.Comments;
 import ei.db.DbConfig;
+import ei.db.DbKind;
 import ei.db.DbSessions;
 import ei.db.DbSettings;
 import ei.db.Meta;
@@ -101,6 +102,9 @@ final class DbExplorer extends SimpleToolWindowPanel {
   private record Conn(DbConfig c) {}
   private record Schema(DbConfig c, String name) {}
   private record Message(String text, boolean error) {}
+  /** Oracle 스키마 아래 「프로그램」 묶음(패키지 · 프로시저 · 함수). 펼칠 때 읽는다. */
+  private record ProgramGroup(DbConfig c, String schema) {}
+  private record Program(DbConfig c, String schema, ProgramSql.Item item) {}
 
   private static final class TableItem {
     final DbConfig c;
@@ -141,6 +145,8 @@ final class DbExplorer extends SimpleToolWindowPanel {
         if (path == null) return false;
         if (node(path).getUserObject() instanceof TableItem t) {
           viewData(t);
+        } else if (node(path).getUserObject() instanceof Program p) {
+          openSource(p);
         } else if (tree.isExpanded(path)) {
           tree.collapsePath(path);
         } else {
@@ -228,6 +234,12 @@ final class DbExplorer extends SimpleToolWindowPanel {
         List<Meta.Table> views = Meta.tables(conn, s.c(), s.name(), VIEW_TYPES);
         return () -> fillSchema(node, s, tables, views);
       });
+    } else if (o instanceof ProgramGroup pg) {
+      DbSessions sessions = DbSessions.get(project);
+      background(node, pg.c(), () -> {
+        List<ProgramSql.Item> items = Programs.list(sessions.connection(pg.c()), pg.schema());
+        return () -> fillPrograms(node, pg, items);
+      });
     } else if (o instanceof TableItem t) {
       withColumns(node, t, cols -> {
         loading.remove(node); // 이미 읽어 둔 칼럼이면 background 를 거치지 않는다.
@@ -291,7 +303,35 @@ final class DbExplorer extends SimpleToolWindowPanel {
     node.add(new DefaultMutableTreeNode(new Group("뷰", items(s, views))));
     String q = query();
     for (int i = 0; i < node.getChildCount(); i++) fillGroup(node(node.getChildAt(i)), q);
+    if (s.c().kind == DbKind.ORACLE) {
+      DefaultMutableTreeNode programs = new DefaultMutableTreeNode(new ProgramGroup(s.c(), s.name()));
+      programs.add(new DefaultMutableTreeNode(LOADING));
+      node.add(programs);
+    }
     model.nodeStructureChanged(node);
+  }
+
+  private void fillPrograms(DefaultMutableTreeNode node, ProgramGroup pg, List<ProgramSql.Item> items) {
+    if (!attached(node)) return;
+    node.removeAllChildren();
+    for (ProgramSql.Item item : items) node.add(new DefaultMutableTreeNode(new Program(pg.c(), pg.schema(), item)));
+    if (items.isEmpty()) node.add(new DefaultMutableTreeNode(new Message("없음", false)));
+    model.nodeStructureChanged(node);
+  }
+
+  /** 소스를 CREATE OR REPLACE 문으로 콘솔에 붙인다. 고친 뒤 콘솔에서 실행하면 컴파일된다. */
+  private void openSource(Program p) {
+    DbSessions sessions = DbSessions.get(project);
+    background(new DefaultMutableTreeNode(), p.c(), () -> {
+      String sql = Programs.source(sessions.connection(p.c()), p.schema(), p.item());
+      return () -> {
+        if (sql.isEmpty()) {
+          Notify.error(project, p.item().name() + " 의 소스를 읽지 못했습니다. 없어졌거나 소스를 볼 권한이 없습니다.");
+        } else {
+          ConsoleOpener.open(project, p.c(), sql);
+        }
+      };
+    });
   }
 
   private static List<TableItem> items(Schema s, List<Meta.Table> tables) {
@@ -419,6 +459,8 @@ final class DbExplorer extends SimpleToolWindowPanel {
         g.add(new Act("연결", AllIcons.Actions.Execute, () -> true, () -> connect(c)));
       }
       g.add(new Act("새 콘솔", AllIcons.Nodes.Console, () -> true, () -> ConsoleOpener.openNew(project, c)));
+      g.add(new Act("세션 보기", null, () -> true, () -> SqlRunner.run(project, c, SessionSql.sessions(c.kind), List.of())));
+      g.add(new Act("잠금 보기", null, () -> true, () -> SqlRunner.run(project, c, SessionSql.locks(c.kind), List.of())));
       g.addSeparator();
       g.add(new Act("편집", AllIcons.Actions.Edit, () -> true, () -> edit(c)));
       g.add(new Act("삭제", AllIcons.General.Remove, () -> true, () -> delete(c)));
@@ -426,6 +468,12 @@ final class DbExplorer extends SimpleToolWindowPanel {
     }
     if (o instanceof Schema s) {
       g.add(new Act("ERD 열기 (전체)", null, () -> true, () -> ErdView.open(project, s.c(), s.name(), null)));
+      return g;
+    }
+    if (o instanceof Program p) {
+      g.add(new Act("소스 열기", AllIcons.Actions.Edit, () -> true, () -> openSource(p)));
+      g.add(new Act("컴파일 오류 보기", null, () -> true,
+          () -> SqlRunner.run(project, p.c(), ProgramSql.ERRORS, List.of(p.schema(), p.item().name()))));
       return g;
     }
     if (o instanceof TableItem t) {
@@ -686,6 +734,14 @@ final class DbExplorer extends SimpleToolWindowPanel {
         append(col.name());
         if (!col.comment().isEmpty()) append("  " + col.comment(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
         append("  " + col.typeLabel(), SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES);
+      } else if (o instanceof ProgramGroup) {
+        append("프로그램");
+        append("  패키지 · 프로시저 · 함수", SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES);
+      } else if (o instanceof Program p) {
+        setIcon(ProgramSql.PACKAGE.equals(p.item().type()) ? AllIcons.Nodes.Package : AllIcons.Nodes.Function);
+        append(p.item().name());
+        append("  " + p.item().type(), SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES);
+        if (p.item().invalid()) append("  " + ProgramSql.INVALID, SimpleTextAttributes.ERROR_ATTRIBUTES);
       } else if (o instanceof Message m) {
         append(m.text(), m.error() ? SimpleTextAttributes.ERROR_ATTRIBUTES : SimpleTextAttributes.GRAYED_ITALIC_ATTRIBUTES);
       }

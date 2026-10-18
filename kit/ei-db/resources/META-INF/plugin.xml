@@ -26,6 +26,8 @@
     <codeInsight.lineMarkerProvider language="JAVA" implementationClass="ei.db.mybatis.MapperNav$JavaMarker"/>
     <codeInsight.lineMarkerProvider language="XML" implementationClass="ei.db.mybatis.MapperNav$XmlMarker"/>
     <gotoDeclarationHandler implementation="ei.db.mybatis.MapperNav$GotoXml"/>
+    <!-- MyBatis: include refid → sql, resultMap · extends → resultMap -->
+    <gotoDeclarationHandler implementation="ei.db.mybatis.MapperRefNav"/>
     <externalAnnotator language="XML" implementationClass="ei.db.mybatis.ParamFieldAnnotator"/>
     <!-- ERD 도구 창은 ErdView 가 처음 열 때 등록한다. -->
   </extensions>
@@ -75,5 +77,9 @@
       <separator/>
       <add-to-group group-id="ConsoleView.PopupMenu" anchor="first"/>
     </group>
+    <action id="ei.db.console.ResultCompare" class="ei.db.console.ResultCompare$OpenAction" text="다른 결과와 비교…"
+            description="이 결과와 다른 결과 탭을 기준 칼럼으로 맞춰 비교합니다" icon="AllIcons.Actions.Diff">
+      <add-to-group group-id="ToolWindowContextMenu" anchor="last"/>
+    </action>
   </actions>
 </idea-plugin>
