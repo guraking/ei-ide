@@ -189,6 +189,27 @@ pre.cmd .cm{color:var(--code-cm)}
 
 footer{padding:56px 0 40px; color:var(--muted); font-size:13px}
 
+/* 새 기능 그림 */
+.verb{display:inline-block; min-width:54px; text-align:center; font:600 11px/18px var(--f-mono); border-radius:4px; color:#fff}
+.verb.get{background:#2f7fd0} .verb.post{background:#1d8a5a} .verb.put{background:#b26b00} .verb.del{background:#c8323f}
+.op{display:flex; align-items:center; gap:10px; padding:6px 10px; border:1px solid var(--line); border-radius:6px; margin:6px 10px; font:12px var(--f-mono); background:var(--panel)}
+.op .d{color:var(--muted); font-family:var(--f-body)}
+.op.open{flex-wrap:wrap}
+.op .body{flex-basis:100%; display:grid; gap:6px; padding-top:6px; border-top:1px dashed var(--line); font-family:var(--f-body)}
+.squig{text-decoration:underline wavy var(--warn); text-underline-offset:3px}
+.chg{background:var(--warn-soft); color:var(--warn)}
+.bad{color:var(--accent)}
+.balloon{margin:10px; max-width:420px; background:var(--panel); border:1px solid var(--line); border-left:3px solid var(--info); border-radius:8px; padding:10px 12px; font-size:12.5px; box-shadow:var(--shadow)}
+.balloon .acts{display:flex; gap:8px; margin-top:8px}
+.sheets{display:flex; gap:2px; padding:0 10px; border-top:1px solid var(--line); font-size:12px}
+.sheets span{padding:4px 12px; color:var(--muted)}
+.sheets span.on{color:var(--fg); background:var(--panel); box-shadow:inset 0 2px 0 var(--ok)}
+.term{margin:0; padding:8px 12px; border-top:1px solid var(--line); font:12px/1.6 var(--f-mono); color:var(--muted); white-space:pre-wrap}
+.cols2{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:14px; align-items:start}
+.check.on::before{content:"✓"; display:grid; place-items:center; font-size:10px; border-color:var(--ok); color:var(--ok)}
+.nolig{font-variant-ligatures:none}
+@media (max-width:1000px){.cols2{grid-template-columns:minmax(0,1fr)}}
+
 @media (max-width:1000px){
   .steps{grid-template-columns:repeat(2,minmax(0,1fr))}
   .step:nth-child(2)::after{display:none}
@@ -451,6 +472,144 @@ footer{padding:56px 0 40px; color:var(--muted); font-size:13px}
       </ol>
     </div>
 
+    <h3>URL 찾기 <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>U</kbd></h3>
+    <div class="figure">
+      <div>
+        <div class="scroll">
+          <div class="ide">
+            <div class="title"><span class="dots"><i></i><i></i><i></i></span>URL 찾기</div>
+            <div class="bar"><span class="mark">1</span><span class="input" style="flex:1; text-align:left">/api/order/123</span></div>
+            <table class="grid">
+              <tr><th>방식</th><th>URL</th><th>클래스.메서드</th></tr>
+              <tr class="sel"><td><span class="verb get">GET</span></td><td class="mono">/api/order/{id}</td><td>OrderController.detail</td></tr>
+              <tr><td><span class="verb put">PUT</span></td><td class="mono">/api/order/{id}</td><td>OrderController.update</td></tr>
+              <tr><td><span class="verb del">DELETE</span></td><td class="mono">/api/order/{id}</td><td>OrderController.delete</td></tr>
+            </table>
+            <div class="statusline"><span class="mark">2</span><span class="btn">요청 보내기</span><span class="m">URL 3개 / 전체 128개</span><span class="gap"></span><span class="btn pri">이동</span><span class="btn">닫기</span></div>
+          </div>
+        </div>
+        <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
+      </div>
+      <ol class="legend">
+        <li><span class="mark">1</span><div><b>실제 주소로 찾기</b> <span class="t">Navigate 또는 Search → 「URL 찾기…」. URL · 클래스 · 메서드 이름 어느 것을 쳐도 걸리고, <code>/api/order/123</code> 같은 실제 주소는 <code>{id}</code> 자리에 맞춰 찾습니다.</span></div></li>
+        <li><span class="mark">2</span><div><b>이동 · 요청 보내기</b> <span class="t">Enter(「이동」)는 그 컨트롤러 메서드로 갑니다. 「요청 보내기」는 아래 「API」 창을 열고 그 API 를 펼쳐 둡니다. 목록 우클릭에도 같은 두 가지가 있습니다.</span></div></li>
+      </ol>
+    </div>
+
+    <h3>API 테스트(Swagger) · Run → 「API 테스트(Swagger)…」</h3>
+    <div class="figure">
+      <div>
+        <div class="scroll">
+          <div class="ide">
+            <div class="title"><span class="dots"><i></i><i></i><i></i></span>API 테스트</div>
+            <div class="bar"><span class="mark">1</span><span class="btn">⟳ 다시 읽기</span><span class="btn">openapi.yaml 로 저장…</span><span class="sepv"></span><span class="mark">2</span><span class="btn pri">Authorize 🔒</span></div>
+            <div style="padding:4px 0 8px">
+              <div style="padding:6px 12px; font-weight:600">OrderController</div>
+              <div class="op"><span class="verb get">GET</span>/api/order<span class="d">목록</span></div>
+              <div class="op open"><span class="verb get">GET</span>/api/order/{id}<span class="d">상세</span><span class="gap" style="flex:1"></span><span class="mark">3</span><span class="btn">Try it out</span>
+                <div class="body">
+                  <div style="display:flex; align-items:center; gap:8px"><span class="mono">id</span><span class="m" style="color:var(--muted)">path · integer</span><span class="input" style="text-align:left">123</span><span class="btn pri">Execute</span></div>
+                  <div class="mono" style="font-size:12px"><span style="color:var(--ok)">200</span> · 38 ms · <span style="color:var(--muted)">{"orderId": 123, "orderName": "주문A", "items": [ … ]}</span></div>
+                </div>
+              </div>
+              <div class="op"><span class="verb post">POST</span>/api/order<span class="d">등록</span></div>
+              <div class="op"><span class="verb del">DELETE</span>/api/order/{id}<span class="d">삭제</span></div>
+            </div>
+          </div>
+        </div>
+        <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
+      </div>
+      <ol class="legend">
+        <li><span class="mark">1</span><div><b>컨트롤러로 만든 API 목록</b> <span class="t"><code>@GetMapping</code> 등과 <code>@PathVariable</code> · <code>@RequestParam</code> · <code>@RequestBody</code> · DTO 필드로 OpenAPI 사양을 만듭니다. 코드를 고쳤으면 「다시 읽기」, 사양 파일이 필요하면 「openapi.yaml 로 저장…」.</span></div></li>
+        <li><span class="mark">2</span><div><b>인증</b> <span class="t">「Authorize」 에 Bearer 토큰이나 Basic 계정을 넣습니다. 창을 다시 열어도 남습니다.</span></div></li>
+        <li><span class="mark">3</span><div><b>실행 중인 서버로 보내기</b> <span class="t">「Try it out」 → 값 넣기 → 「Execute」. 주소는 서버 창에서 띄운 서버의 포트로 갑니다. 인터넷 없이 돕니다.</span></div></li>
+        <li><span class="mark">Y</span><div><b>openapi.yaml 미리보기</b> <span class="t"><code>openapi</code> · <code>swagger</code> 사양 파일(.yaml · .yml · .json)을 열면 편집기 옆에 같은 Swagger 화면이 붙고, 고치면 바로 다시 그립니다. OpenAPI 3.0 · Swagger 2.0 은 자동 완성 · 오류 표시가 됩니다.</span></div></li>
+      </ol>
+    </div>
+
+    <h3>뷰 이름 ↔ JSP · 설정 키 이동 <kbd>Ctrl</kbd>+클릭</h3>
+    <div class="ba">
+      <div class="side"><h5>OrderController.java</h5><pre><span class="kw">@Value</span>(<span class="st">"<u>${db.url}</u>"</span>) String url;
+  <span class="cm">→ application.yml · application-dev.yml 의 db.url 줄</span>
+
+<span class="kw">return</span> <span class="st">"<u>order/list</u>"</span>;
+  <span class="cm">→ /WEB-INF/views/order/list.jsp</span></pre></div>
+      <div class="side"><h5>list.jsp 우클릭 → 컨트롤러로 이동</h5><pre>OrderController.list  —  뷰 이름 order/list
+<span class="cm">이 JSP 를 뷰로 쓰는 메서드가 여럿이면 목록에서 고릅니다.</span></pre></div>
+    </div>
+    <p class="lead" style="margin-top:10px">JSP 위치의 앞 · 뒤(prefix · suffix)는 <code>spring.mvc.view.*</code> 설정에서 읽고, 없으면 <code>/WEB-INF/views/ … .jsp</code> 로 봅니다. 설정 키는 프로필 파일마다 따로 찾아 고르게 합니다.</p>
+
+    <h3>properties 한글 그대로 보기</h3>
+    <div class="ba">
+      <div class="side"><h5>파일에 저장되는 글</h5><pre>msg.hello=\uC548\uB155\uD558\uC138\uC694</pre></div>
+      <div class="side"><h5>편집기에 보이는 글</h5><pre>msg.hello=안녕하세요</pre></div>
+    </div>
+    <p class="lead" style="margin-top:10px">설정 → 편집기 → 파일 인코딩의 「투명한 native-to-ascii 변환」을 처음부터 켜 두었습니다. 한글로 고치고 저장하면 다시 <code>\uXXXX</code> 로 바꿔 씁니다. 이 기본값은 소스 손질 대본(<code>apply_defaults.py</code>)을 다시 돌려 빌드한 판부터 들어갑니다.</p>
+
+    <h3>프로그램 목록 엑셀</h3>
+    <div class="figure">
+      <div>
+        <div class="scroll">
+          <div class="ide" style="min-width:980px">
+            <div class="title"><span class="dots"><i></i><i></i><i></i></span>myapp-프로그램목록-20261018.xlsx</div>
+            <table class="grid">
+              <tr><th>번호</th><th>모듈</th><th>구분</th><th>경로</th><th>클래스명</th><th>설명</th><th>줄 수</th><th>마지막 수정일</th></tr>
+              <tr><td>1</td><td>api</td><td>Controller</td><td class="mono">src/main/java/…/OrderController.java</td><td>OrderController</td><td>주문 화면 API</td><td>142</td><td>2026-10-17</td></tr>
+              <tr><td>2</td><td>api</td><td>Service</td><td class="mono">src/main/java/…/OrderService.java</td><td>OrderService</td><td>주문 처리</td><td>96</td><td>2026-10-16</td></tr>
+              <tr><td>3</td><td>api</td><td>Mapper XML</td><td class="mono">src/main/resources/mapper/OrderMapper.xml</td><td>–</td><td>–</td><td>210</td><td>2026-10-16</td></tr>
+              <tr><td>4</td><td>web</td><td>JSP</td><td class="mono">src/main/webapp/WEB-INF/views/order/list.jsp</td><td>–</td><td>–</td><td>88</td><td>2026-10-12</td></tr>
+            </table>
+            <div class="sheets"><span class="mark">1</span><span class="on">프로그램 목록</span><span>URL 목록</span></div>
+          </div>
+        </div>
+        <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
+      </div>
+      <ol class="legend">
+        <li><span class="mark">X</span><div><b>어디서</b> <span class="t">Project 메뉴 또는 프로젝트 트리 우클릭 「프로그램 목록 엑셀로 내보내기…」 → 저장 위치 고르기. 다 되면 알림의 「열기」 · 「폴더 열기」.</span></div></li>
+        <li><span class="mark">1</span><div><b>시트 두 장</b> <span class="t">「프로그램 목록」은 소스 · 리소스 · 웹 폴더의 전체 파일(구분 · 경로 · 패키지 · 클래스 · 설명 · 줄 수 · 수정일), 「URL 목록」은 HTTP 방식 · URL · 클래스 · 메서드 · 설명. 프로그램 사양서 바탕으로 씁니다.</span></div></li>
+      </ol>
+    </div>
+
+    <h3>JavaScript · TypeScript · Vue 언어 서버</h3>
+    <div class="figure">
+      <div>
+        <div class="scroll">
+          <div class="ide">
+            <div class="title"><span class="dots"><i></i><i></i><i></i></span>OrderList.vue</div>
+            <pre class="sql"><span class="ln"><span class="kw">import</span> { fetchOrders } <span class="kw">from</span> <span class="st">'@/api/order'</span></span><span class="ln"><span class="kw">const</span> orders = ref([])</span></pre>
+            <div class="balloon"><span class="mark">1</span> JavaScript · TypeScript · Vue 언어 서버가 설치되어 있지 않습니다.<div class="acts"><span class="btn pri">언어 서버 받기</span></div></div>
+          </div>
+        </div>
+        <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
+      </div>
+      <ol class="legend">
+        <li><span class="mark">1</span><div><b>처음 한 번 받기</b> <span class="t">.js · .jsx · .ts · .tsx · .vue 를 처음 열면 알림이 뜹니다. Node 가 없으면 「Node.js 받기」(공식 파일 SHA256 확인), 다음에 「언어 서버 받기」(npm). 받은 것은 사용자 폴더 <code>.ei-web</code> 에 둡니다.</span></div></li>
+        <li><span class="mark">2</span><div><b>그 다음부터</b> <span class="t">자동 완성 · 정의로 이동(import 경로 <kbd>Ctrl</kbd>+클릭) · 사용처 찾기 · 이름 바꾸기 · 오류 표시 · 빠른 수정. .vue 는 TypeScript 서버와 Vue 서버가 함께 뜹니다.</span></div></li>
+        <li><span class="mark">!</span><div><b>사내망 · 오프라인</b> <span class="t">사내망은 npm 미러를 쓰므로 「언어 서버 받기」 가 그대로 됩니다. 인터넷이 아예 막힌 PC 는 release 폴더의 <code>ei-web-offline.zip</code>(Node + 언어 서버)을 씁니다.</span></div></li>
+      </ol>
+    </div>
+
+    <h3>AI 우클릭 메뉴 (Claude Code)</h3>
+    <div class="figure">
+      <div>
+        <div class="scroll">
+          <div class="ide rel" style="min-height:300px">
+            <div class="title"><span class="dots"><i></i><i></i><i></i></span>OrderService.java</div>
+            <pre class="sql"><span class="ln"><span class="kw">public</span> List&lt;OrderDto&gt; list(OrderDto cond) {</span><span class="ln" style="background:var(--sel)">    <span class="kw">return</span> orderMapper.selectOrderList(cond);</span><span class="ln">}</span></pre>
+            <div class="menu" style="left:250px; top:84px"><div>잘라내기</div><div>복사</div><hr><div class="on"><span class="mark">1</span> AI ▸</div><div>리팩터링 ▸</div></div>
+            <div class="menu" style="left:452px; top:138px; min-width:150px"><div>설명해 줘</div><div>고쳐 줘</div><div>질문하기…</div></div>
+            <pre class="term" style="position:absolute; left:0; right:0; bottom:0"><span class="mark">2</span> 터미널 · claude  아래 코드가 무엇을 하는지 한국어로 설명해 줘. 위치: OrderService.java:2</pre>
+          </div>
+        </div>
+        <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
+      </div>
+      <ol class="legend">
+        <li><span class="mark">1</span><div><b>편집기 우클릭 「AI」</b> <span class="t">「설명해 줘」 · 「고쳐 줘」 · 「질문하기…」. 고른 코드(없으면 커서 줄)와 파일 위치를 넘깁니다.</span></div></li>
+        <li><span class="mark">C</span><div><b>콘솔 오류</b> <span class="t">실행 · 서버 콘솔에서 오류 글을 골라 우클릭 「AI」 → 「이 오류 원인 찾기」.</span></div></li>
+        <li><span class="mark">2</span><div><b>아래 터미널의 Claude Code</b> <span class="t">요청이 터미널에서 도는 Claude Code 로 들어갑니다. PC 에 Claude Code(<code>claude</code>)가 설치돼 있어야 합니다.</span></div></li>
+      </ol>
+    </div>
+
     <h3>스프링 부트 서버 설정</h3>
     <p class="lead" style="margin-bottom:14px">「시작」을 처음 누르면 실행 설정을 하나 만들고, 그다음부터는 그 설정을 계속 씁니다. 오른쪽 칸에서 고친 값도 이 실행 설정에 적힙니다.</p>
     <div class="flow">
@@ -635,6 +794,42 @@ footer{padding:56px 0 40px; color:var(--muted); font-size:13px}
       </ol>
     </div>
 
+    <h3>Oracle 프로그램 · 세션 · 잠금 보기</h3>
+    <div class="figure wide">
+      <div>
+        <div class="scroll">
+          <div class="ide" style="min-width:1000px">
+            <div class="title"><span class="dots"><i></i><i></i><i></i></span>데이터베이스 · 결과</div>
+            <div class="split" style="grid-template-columns:300px minmax(0,1fr)">
+              <div class="treeview rel" style="min-height:240px">
+                <div>▾ dev (Oracle)</div>
+                <div class="l1">▾ APP</div>
+                <div class="l2 muted">▸ 표 · 뷰</div>
+                <div class="l2">▾ 프로그램 <span class="mark">1</span></div>
+                <div class="l3">PKG_ORDER <span class="tag">패키지</span></div>
+                <div class="l3 sel">PRC_CLOSE_DAY <span class="tag">프로시저</span> <span class="bad">INVALID</span></div>
+                <div class="l3">FN_TAX <span class="tag">함수</span></div>
+                <div class="menu" style="left:150px; top:196px"><div class="on">컴파일 오류 보기</div></div>
+              </div>
+              <div>
+                <div class="tabs"><span class="on">잠금 보기</span><span class="mark" style="align-self:center; color:#fff">2</span><span>세션 보기</span></div>
+                <table class="grid">
+                  <tr><th>SID</th><th>USERNAME</th><th>OBJECT_NAME</th><th>LOCKED_MODE</th><th>KILL_SQL</th></tr>
+                  <tr><td>142</td><td>APP</td><td>ORDERS</td><td>ROW EXCLUSIVE</td><td class="mono">ALTER SYSTEM KILL SESSION '142,3381' IMMEDIATE</td></tr>
+                  <tr><td>187</td><td>BATCH</td><td>ORDER_LOG</td><td>EXCLUSIVE</td><td class="mono">ALTER SYSTEM KILL SESSION '187,902' IMMEDIATE</td></tr>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
+      </div>
+      <ol class="legend" style="grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:14px">
+        <li><span class="mark">1</span><div><b>프로그램</b> <span class="t">두 번 누르면 소스를 <code>CREATE OR REPLACE … /</code> 로 콘솔에 붙입니다. 고쳐서 실행하면 컴파일되고, 깨진 것은 INVALID 로 보입니다. 우클릭 「컴파일 오류 보기」는 줄 · 위치 · 오류를 결과 창에.</span></div></li>
+        <li><span class="mark">2</span><div><b>잠금 · 세션</b> <span class="t">접속 우클릭 「잠금 보기」 · 「세션 보기」. KILL_SQL 을 복사해 콘솔에서 직접 실행합니다. Oracle 은 V$ 뷰 조회 권한이 필요하고, PostgreSQL · MySQL 도 됩니다.</span></div></li>
+      </ol>
+    </div>
+
     <h3>② SQL 콘솔</h3>
     <div class="figure wide">
       <div>
@@ -753,6 +948,35 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       </ol>
     </div>
 
+    <h3>결과 두 개 비교 · 탭 우클릭 「다른 결과와 비교…」</h3>
+    <div class="figure">
+      <div>
+        <div class="scroll">
+          <div class="ide">
+            <div class="title"><span class="dots"><i></i><i></i><i></i></span>결과 비교</div>
+            <div class="statusline"><span class="m">왼쪽: 결과 1 (dev)   ·   오른쪽: 결과 2 (운영)</span></div>
+            <div class="split" style="grid-template-columns:150px minmax(0,1fr)">
+              <div class="form"><span><span class="mark">1</span> 기준 칼럼</span><span class="check" style="color:var(--fg)">☑ ORDER_NO</span><span class="check">ST</span><span class="check">AMT</span><span class="check" style="margin-top:8px">같은 행도 보기</span></div>
+              <div>
+                <div class="statusline"><span class="mark">2</span><span>같음 12 · 다름 2 · 왼쪽에만 1 · 오른쪽에만 0</span></div>
+                <table class="grid">
+                  <tr><th>구분</th><th>ORDER_NO</th><th>ST</th><th>AMT</th></tr>
+                  <tr><td>다름</td><td>O100</td><td class="chg">A → C</td><td>12000</td></tr>
+                  <tr><td>다름</td><td>O104</td><td>A</td><td class="chg">5000 → 5500</td></tr>
+                  <tr><td>왼쪽에만</td><td>O107</td><td>R</td><td>800</td></tr>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
+      </div>
+      <ol class="legend">
+        <li><span class="mark">1</span><div><b>기준 칼럼</b> <span class="t">체크한 칼럼으로 두 결과의 행을 맞춥니다. 하나도 고르지 않으면 행 순서로 비교합니다.</span></div></li>
+        <li><span class="mark">2</span><div><b>다른 칸만 색</b> <span class="t">다른 칸은 <code>a → b</code> 로 칠하고, 같은 행은 「같은 행도 보기」를 켤 때만 보입니다. 불러온 행만 비교하므로 잘린 결과는 「더 보기」로 먼저 읽습니다.</span></div></li>
+      </ol>
+    </div>
+
     <h3>④ 운영 보호</h3>
     <div class="figure">
       <div class="dialog">
@@ -813,6 +1037,102 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       <div class="card"><h4>서비스 자동 완성 · 계층 이동</h4><p>서비스에서 매퍼 문장 이름을 치면 메서드 통째로. 컨트롤러 · 서비스 옆 아이콘 → 서비스 → 매퍼 → XML. 빠진 짝은 노란 밑줄.</p></div>
       <div class="card"><h4>ERD</h4><p>표 카드(한글 주석) + FK 선. 끌어 옮기기 · 확대 · PNG 저장, 카드 더블클릭 → 데이터 보기.</p></div>
     </div>
+
+    <h3>기능 한 벌 만들기 · 표 우클릭</h3>
+    <div class="figure wide">
+      <div>
+        <div class="scroll">
+          <div class="ide" style="min-width:820px">
+            <div class="title"><span class="dots"><i></i><i></i><i></i></span>기능 한 벌 만들기 — ORDERS</div>
+            <div class="split" style="grid-template-columns:minmax(0,1fr) minmax(0,1.3fr)">
+              <div class="form">
+                <label><span><span class="mark">1</span> 매퍼 인터페이스</span><span class="f">com.app.order.mapper.OrderMapper</span></label>
+                <label>XML 위치<span class="f">src/main/resources/mapper/OrderMapper.xml</span></label>
+                <label>DTO<span class="f">com.app.order.dto.OrderDto</span></label>
+                <label>서비스<span class="f">com.app.order.service.OrderService</span></label>
+                <span class="check">인터페이스 + Impl 로 나누기</span>
+                <label>컨트롤러<span class="f">com.app.order.web.OrderController</span></label>
+                <label>기본 URL<span class="f">/api/order</span></label>
+                <div><span class="mark">2</span> 만들 문장 <span class="check on">GET 목록</span> <span class="check on">GET 상세</span> <span class="check on">POST 등록</span> <span class="check on">PUT 수정</span> <span class="check on">DELETE 삭제</span></div>
+                <table class="grid" style="border:1px solid var(--line)">
+                  <tr><th>칼럼 <span class="mark">3</span></th><th>주석</th><th>검색 칸</th></tr>
+                  <tr><td>ORDER_NO</td><td>주문번호</td><td>☑</td></tr>
+                  <tr><td>ORDER_NM</td><td>주문명</td><td>☑</td></tr>
+                  <tr><td>ST</td><td>상태</td><td></td></tr>
+                </table>
+              </div>
+              <div>
+                <div class="tabs" style="align-items:center"><span class="mark" style="color:#fff">4</span><span class="on">XML</span><span>인터페이스</span><span>DTO</span><span>서비스</span><span>서비스 Impl</span><span>컨트롤러</span></div>
+                <pre class="sql nolig"><span class="ln">&lt;<span class="kw">select</span> id=<span class="st">"selectOrderList"</span> resultMap=<span class="st">"orderMap"</span>&gt;</span><span class="ln">    <span class="kw">SELECT</span></span><span class="ln">           tgo.ORDER_NO</span><span class="ln">         , tgo.ORDER_NM</span><span class="ln">      <span class="kw">FROM</span> ORDERS tgo</span><span class="ln">     <span class="kw">WHERE</span> 1 = 1</span><span class="ln">    &lt;<span class="kw">if</span> test=<span class="st">"orderNo != null and orderNo != ''"</span>&gt;</span><span class="ln">       <span class="kw">AND</span> tgo.ORDER_NO = #{orderNo}</span><span class="ln">    &lt;/<span class="kw">if</span>&gt;</span><span class="ln">     <span class="kw">ORDER BY</span> tgo.ORDER_NO</span><span class="ln">&lt;/<span class="kw">select</span>&gt;</span><span class="ln">&nbsp;</span><span class="ln">&lt;<span class="kw">select</span> id=<span class="st">"selectOrderDetail"</span> resultMap=<span class="st">"orderMap"</span>&gt;</span><span class="ln">    <span class="kw">SELECT</span></span><span class="ln">           tgo.ORDER_NO</span><span class="ln">      …</span></pre>
+                <div class="statusline" style="border-top:1px solid var(--line); border-bottom:0"><span class="m">이미 있는 파일은 덮어쓰지 않고 끝에 덧붙이거나 건너뜁니다</span><span class="gap"></span><span class="btn">취소</span><span class="btn pri">만들기</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
+      </div>
+      <ol class="legend" style="grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:14px">
+        <li><span class="mark">1</span><div><b>만들 위치</b> <span class="t">표 이름으로 패키지 · 클래스 이름을 채워 둡니다. 서비스는 「인터페이스 + Impl 로 나누기」, 컨트롤러는 화면용 <code>@Controller</code> 를 고를 수 있습니다(기본은 <code>@RestController</code>). Source 메뉴에서도 엽니다.</span></div></li>
+        <li><span class="mark">2</span><div><b>만들 문장 · 스타일</b> <span class="t">목록 · 상세 · 등록 · 수정 · 삭제 중 필요한 것만. 스타일은 구식 조인 · 부등호 CDATA · <code>WHERE 1 = 1</code> · 칼럼 주석을 SQL 주석으로.</span></div></li>
+        <li><span class="mark">3</span><div><b>검색 칸</b> <span class="t">체크한 칼럼이 목록 문장의 <code>&lt;if&gt;</code> 조건이 됩니다. 칼럼이 많으면 왼쪽이 세로로 스크롤됩니다.</span></div></li>
+        <li><span class="mark">4</span><div><b>미리 보고 한 번에</b> <span class="t">여섯 파일을 탭으로 보고 「만들기」. 있는 파일에는 빠진 메서드만 덧붙입니다.</span></div></li>
+      </ol>
+    </div>
+
+    <h3>계층 코드 만들기 · 매퍼 문장 우클릭</h3>
+    <div class="cols2">
+      <div class="scroll">
+        <div class="ide" style="min-width:560px">
+          <div class="title"><span class="dots"><i></i><i></i><i></i></span>계층 코드 만들기 — selectOrderList</div>
+          <div class="tabs"><span class="on">계층 코드</span><span>부모-자식</span></div>
+          <div class="form">
+            <label>HTTP 방식<span class="f">GET  /api/order</span></label>
+            <label>컨트롤러 메서드<span class="f">@GetMapping public List&lt;OrderDto&gt; list(OrderDto cond) { … }</span></label>
+            <label>서비스 인터페이스 선언<span class="f">List&lt;OrderDto&gt; selectOrderList(OrderDto cond);</span></label>
+            <label>서비스 구현 메서드<span class="f">return orderMapper.selectOrderList(cond);</span></label>
+            <label>매퍼 인터페이스 메서드<span class="f">List&lt;OrderDto&gt; selectOrderList(OrderDto cond);</span></label>
+            <div style="display:flex; gap:6px"><span class="btn">복사</span><span class="btn pri">이 클래스에 넣기…</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="scroll">
+        <div class="ide" style="min-width:560px">
+          <div class="title"><span class="dots"><i></i><i></i><i></i></span>계층 코드 만들기 — 부모-자식</div>
+          <div class="tabs"><span>계층 코드</span><span class="on">부모-자식</span></div>
+          <div class="form">
+            <label>부모 selectOrderList · 자식 문장(select)<span class="f">selectOrderItemList   (다른 매퍼에서…)</span></label>
+            <label>연결 키<span class="f">ORDER_ID → orderId</span></label>
+            <label>자식 목록 이름<span class="f">items</span></label>
+            <label>부모-자식 서비스 메서드<span class="f">for (OrderDto p : list) p.setItems(byParent.get(p.getOrderId()));</span></label>
+            <label>부모 DTO 에 더할 필드 · getter · setter<span class="f">private List&lt;OrderItemDto&gt; items = new ArrayList&lt;&gt;();</span></label>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="lead" style="margin-top:10px">매퍼 XML 문장이나 매퍼 인터페이스 메서드에서 우클릭합니다. 코드는 고쳐서 「복사」하거나 「이 클래스에 넣기…」로 고른 클래스에 넣습니다. 「부모-자식」은 자식 목록을 부모마다 채워 JSON 이 <code>{"orderId": 1, "items": [ … ]}</code> 모양으로 나가게 하고, 자식이 없는 부모는 빈 목록 <code>[]</code> 입니다.</p>
+
+    <h3>서비스 자동 완성 · 계층 이동 · 빠진 짝</h3>
+    <div class="cols2">
+      <div class="scroll">
+        <div class="ide rel" style="min-width:560px; min-height:180px">
+          <div class="title"><span class="dots"><i></i><i></i><i></i></span>OrderServiceImpl.java</div>
+          <pre class="sql"><span class="ln"><span class="kw">private final</span> OrderMapper orderMapper;</span><span class="ln">&nbsp;</span><span class="ln">selectOrd<span style="border-left:2px solid var(--fg)"></span></span></pre>
+          <div class="menu" style="left:70px; top:104px; min-width:0"><div class="on"><span class="mark">1</span> selectOrderList  <span style="color:var(--muted)">서비스 메서드 → OrderMapper</span></div><div>selectOrderDetail  <span style="color:var(--muted)">서비스 메서드 → OrderMapper</span></div></div>
+        </div>
+      </div>
+      <div class="scroll">
+        <div class="ide" style="min-width:560px">
+          <div class="title"><span class="dots"><i></i><i></i><i></i></span>OrderMapper.xml</div>
+          <pre class="sql"><span class="ln"><span class="mark">2</span> &lt;<span class="kw">select</span> id=<span class="st">"selectOrderList"</span>&gt; …</span><span class="ln">&lt;<span class="kw">delete</span> id=<span class="st squig">"deleteOrderAll"</span>&gt; …</span></pre>
+          <div class="balloon" style="border-left-color:var(--warn)"><span class="mark">3</span> 매퍼 인터페이스 OrderMapper 에 deleteOrderAll 메서드가 없습니다</div>
+        </div>
+      </div>
+    </div>
+    <ol class="legend" style="grid-template-columns:repeat(3,minmax(0,1fr)); margin-top:14px">
+      <li><span class="mark">1</span><div><b>서비스 자동 완성</b> <span class="t">매퍼 필드를 가진 클래스에서 메서드 이름을 치면, 서비스에 아직 없는 매퍼 문장이 후보로 뜹니다. 고르면 서비스 메서드가 통째로 들어갑니다.</span></div></li>
+      <li><span class="mark">2</span><div><b>계층 이동</b> <span class="t">컨트롤러 · 서비스 메서드 옆 아이콘을 누르면 그 메서드가 부르는 서비스 → 매퍼 → XML 문장으로 갑니다.</span></div></li>
+      <li><span class="mark">3</span><div><b>빠진 짝</b> <span class="t">XML 문장에 인터페이스 메서드가 없거나 그 반대면 노란 밑줄. 설정 → 검사 → MyBatis 에서 끌 수 있습니다.</span></div></li>
+    </ol>
   </div>
 </section>
 
