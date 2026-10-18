@@ -29,6 +29,16 @@
     <!-- MyBatis: include refid → sql, resultMap · extends → resultMap -->
     <gotoDeclarationHandler implementation="ei.db.mybatis.MapperRefNav"/>
     <externalAnnotator language="XML" implementationClass="ei.db.mybatis.ParamFieldAnnotator"/>
+    <!-- MyBatis: 컨트롤러 · 서비스 메서드 → 서비스 → 매퍼 → XML 계층 이동, 매퍼 인터페이스 ↔ XML 빠진 짝 -->
+    <codeInsight.lineMarkerProvider language="JAVA" implementationClass="ei.db.mybatis.LayerNav"/>
+    <localInspection language="XML" shortName="EiMapperXmlMissingMethod" displayName="매퍼 XML 문장에 인터페이스 메서드가 없음"
+                     groupName="MyBatis" enabledByDefault="true" level="WEAK WARNING"
+                     implementationClass="ei.db.mybatis.MapperPairInspection$Xml"/>
+    <localInspection language="JAVA" shortName="EiMapperMissingStatement" displayName="매퍼 인터페이스 메서드에 XML 문장이 없음"
+                     groupName="MyBatis" enabledByDefault="true" level="WEAK WARNING"
+                     implementationClass="ei.db.mybatis.MapperPairInspection$Java"/>
+    <!-- MyBatis: 매퍼 필드를 가진 클래스에서 서비스 메서드 자동 완성 -->
+    <completion.contributor language="JAVA" implementationClass="ei.db.mybatis.ServiceMethodCompletion"/>
     <!-- ERD 도구 창은 ErdView 가 처음 열 때 등록한다. -->
   </extensions>
 
@@ -67,6 +77,10 @@
       <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt ENTER"/>
       <add-to-group group-id="EditorPopupMenu" anchor="first"/>
     </action>
+    <action id="EiDb.MyBatis.LayerCode" class="ei.db.mybatis.LayerCodeAction" text="계층 코드 만들기…"
+            description="이 매퍼 문장의 컨트롤러 · 서비스 · 매퍼 메서드 코드를 만듭니다" icon="AllIcons.Actions.Lightning">
+      <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EiDb.MyBatis.Run"/>
+    </action>
     <group id="EiDb.MyBatis.LogGroup">
       <action id="EiDb.MyBatis.LogCopy" class="ei.db.mybatis.LogActions$Copy" text="SQL 로 바꿔 복사">
         <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt C"/>
@@ -80,6 +94,10 @@
     <action id="ei.db.console.ResultCompare" class="ei.db.console.ResultCompare$OpenAction" text="다른 결과와 비교…"
             description="이 결과와 다른 결과 탭을 기준 칼럼으로 맞춰 비교합니다" icon="AllIcons.Actions.Diff">
       <add-to-group group-id="ToolWindowContextMenu" anchor="last"/>
+    </action>
+    <action id="ei.db.gen.Feature" class="ei.db.gen.FeatureAction" text="기능 한 벌 만들기…"
+            description="데이터베이스 탐색기에서 고른 표로 DTO · 매퍼 XML · 매퍼 인터페이스 · 서비스 · 컨트롤러를 한 번에 만듭니다">
+      <add-to-group group-id="KG.SourceMenu" anchor="last"/>
     </action>
   </actions>
 </idea-plugin>

@@ -43,6 +43,7 @@ import ei.db.Passwords;
 import ei.db.SqlRunner;
 import ei.db.console.ConsoleOpener;
 import ei.db.gen.ErdView;
+import ei.db.gen.FeatureDialog;
 import ei.db.gen.MapperDialog;
 import ei.db.gen.Names;
 import org.jetbrains.annotations.NotNull;
@@ -490,6 +491,7 @@ final class DbExplorer extends SimpleToolWindowPanel {
       g.add(new Act("UPDATE 문 만들기", null, () -> true, () -> withColumns(n, t,
           cols -> ConsoleOpener.open(project, t.c, SelectSql.update(t.c.kind, t.schema, t.table.name(), cols)))));
       g.add(new Act("매퍼 뼈대 만들기", null, () -> true, () -> MapperDialog.show(project, t.c, t.schema, t.table.name())));
+      g.add(new Act("기능 한 벌 만들기…", null, () -> true, () -> FeatureDialog.show(project, t.c, t.schema, t.table.name())));
       g.addSeparator();
       g.add(new Act("ERD 열기", null, () -> true, () -> ErdView.open(project, t.c, t.schema, picked)));
       return g;
