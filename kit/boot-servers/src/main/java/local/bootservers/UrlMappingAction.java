@@ -107,7 +107,7 @@ public final class UrlMappingAction extends DumbAwareAction {
     }
 
     /** 읽기 동작 안에서 부른다. 스프링 매핑 주석 클래스가 하나도 없으면 null. */
-    private static List<Endpoint> collect(Project project) {
+    static List<Endpoint> collect(Project project) {
         JavaPsiFacade facade = JavaPsiFacade.getInstance(project);
         GlobalSearchScope libraries = GlobalSearchScope.allScope(project);
         GlobalSearchScope sources = GlobalSearchScope.projectScope(project);

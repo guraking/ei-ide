@@ -77,5 +77,9 @@
       <separator/>
       <add-to-group group-id="ConsoleView.PopupMenu" anchor="first"/>
     </group>
+    <action id="ei.db.console.ResultCompare" class="ei.db.console.ResultCompare$OpenAction" text="다른 결과와 비교…"
+            description="이 결과와 다른 결과 탭을 기준 칼럼으로 맞춰 비교합니다" icon="AllIcons.Actions.Diff">
+      <add-to-group group-id="ToolWindowContextMenu" anchor="last"/>
+    </action>
   </actions>
 </idea-plugin>

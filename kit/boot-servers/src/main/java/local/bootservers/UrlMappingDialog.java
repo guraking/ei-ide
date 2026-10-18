@@ -10,22 +10,29 @@ import com.intellij.ui.CollectionListModel;
 import com.intellij.ui.ColoredListCellRenderer;
 import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.JBColor;
+import com.intellij.ui.PopupHandler;
 import com.intellij.ui.ScrollingUtil;
 import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBList;
+import com.intellij.openapi.ui.JBMenuItem;
+import com.intellij.openapi.ui.JBPopupMenu;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.components.JBTextField;
 import com.intellij.util.ui.JBUI;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import javax.swing.AbstractAction;
 import javax.swing.Action;
 import javax.swing.JComponent;
 import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.event.DocumentEvent;
 import java.awt.BorderLayout;
+import java.awt.Component;
+import java.awt.Point;
+import java.awt.event.ActionEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
@@ -33,13 +40,14 @@ import java.util.List;
 
 /**
  * 스프링 요청 매핑 목록 창. 검색 창에 적는 대로 거른다(글 포함, 또는 /api/order/123 같은 실제 URL 이 매핑 경로에 맞음).
- * Enter · 두 번 누르기로 그 메서드로 가고 창을 닫는다.
+ * Enter · 두 번 누르기로 그 메서드로 가고 창을 닫는다. 「요청 보내기」(버튼 · 우클릭)는 고른 URL 로 HTTP 요청 창을 연다.
  */
 final class UrlMappingDialog extends DialogWrapper {
 
     /** HTTP 방식 칸 너비(글자 수). 「DELETE」 와 여러 방식을 이은 것의 앞부분이 들어갈 만큼. */
     private static final int METHOD_COLUMN_CHARS = 8;
     private static final String COLUMN_GAP = "  ";
+    private static final String SEND_TEXT = "요청 보내기";
 
     private final Project project;
     private final List<UrlMappingAction.Endpoint> all;
@@ -81,6 +89,24 @@ final class UrlMappingDialog extends DialogWrapper {
                 }
             }
         });
+        list.addMouseListener(new PopupHandler() {
+            @Override
+            public void invokePopup(Component comp, int x, int y) {
+                int row = list.locationToIndex(new Point(x, y));
+                if (row < 0) {
+                    return;
+                }
+                list.setSelectedIndex(row);
+                JBPopupMenu menu = new JBPopupMenu();
+                JBMenuItem go = new JBMenuItem("메서드로 이동");
+                go.addActionListener(event -> doOKAction());
+                JBMenuItem send = new JBMenuItem(SEND_TEXT);
+                send.addActionListener(event -> sendRequest());
+                menu.add(go);
+                menu.add(send);
+                menu.show(comp, x, y);
+            }
+        });
 
         JPanel north = new JPanel(new BorderLayout(0, JBUI.scale(4)));
         north.add(queryField, BorderLayout.NORTH);
@@ -104,13 +130,37 @@ final class UrlMappingDialog extends DialogWrapper {
         return queryField;
     }
 
-    /** 고른 줄(없으면 첫 줄)의 메서드로 간다. 코드가 바뀌어 메서드가 사라졌으면 알리고 창은 둔다. */
     @Override
-    protected void doOKAction() {
+    protected Action @NotNull [] createLeftSideActions() {
+        return new Action[]{new AbstractAction(SEND_TEXT) {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                sendRequest();
+            }
+        }};
+    }
+
+    /** 고른 줄(없으면 첫 줄)의 방식 · URL 로 HTTP 요청 창을 연다. 이 창은 그대로 둔다. */
+    private void sendRequest() {
+        UrlMappingAction.Endpoint chosen = chosen();
+        if (chosen != null) {
+            HttpRequestDialog.open(project, chosen.target(), HttpText.firstMethod(chosen.httpMethod()), chosen.url());
+        }
+    }
+
+    /** 고른 줄, 없으면 첫 줄, 목록이 비었으면 null. */
+    private @Nullable UrlMappingAction.Endpoint chosen() {
         UrlMappingAction.Endpoint chosen = list.getSelectedValue();
         if (chosen == null && list.getModel().getSize() > 0) {
             chosen = list.getModel().getElementAt(0);
         }
+        return chosen;
+    }
+
+    /** 고른 줄(없으면 첫 줄)의 메서드로 간다. 코드가 바뀌어 메서드가 사라졌으면 알리고 창은 둔다. */
+    @Override
+    protected void doOKAction() {
+        UrlMappingAction.Endpoint chosen = chosen();
         if (chosen == null) {
             return;
         }

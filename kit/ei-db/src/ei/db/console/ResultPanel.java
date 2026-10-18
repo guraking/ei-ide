@@ -126,6 +126,14 @@ final class ResultPanel extends JPanel {
     else buildUpdate(c);
   }
 
+  /** 결과 비교(ResultCompare)가 읽는 값. */
+  QueryResult result() { return result; }
+
+  DbConfig config() { return config; }
+
+  /** 결과 칼럼마다 PK 여부. 고치기를 시작해 표 정의를 읽었고 고칠 수 있는 결과일 때만 있고, 아니면 null. */
+  boolean[] knownPkColumns() { return editBlocked == null ? pkColumns : null; }
+
   static JComponent error(String sql, String message) {
     JBTextArea text = new JBTextArea(message + "\n\n" + sql);
     text.setEditable(false);
