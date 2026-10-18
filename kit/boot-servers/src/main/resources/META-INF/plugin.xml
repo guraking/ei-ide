@@ -11,6 +11,7 @@
     <depends>com.intellij.java</depends>
     <depends>Git4Idea</depends>
     <depends>com.intellij.modules.json</depends>
+    <depends>com.intellij.modules.lsp</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <projectViewNodeDecorator implementation="local.bootservers.ServerStatusDecorator"/>
@@ -31,6 +32,12 @@
 
     <extensions defaultExtensionNs="JavaScript">
         <JsonSchema.ProviderFactory implementation="local.bootservers.OpenApiSchemas"/>
+    </extensions>
+
+    <!-- JavaScript · TypeScript · Vue: vtsls · Vue 언어 서버(LSP). Node · 서버는 사용자 폴더의 .ei-web 아래 -->
+    <extensions defaultExtensionNs="com.intellij">
+        <notificationGroup id="웹 언어 지원" displayType="BALLOON"/>
+        <platform.lsp.serverSupportProvider implementation="local.bootservers.web.WebLspSupport"/>
     </extensions>
 
     <applicationListeners>
