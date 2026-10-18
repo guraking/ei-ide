@@ -81,5 +81,9 @@
             description="이 결과와 다른 결과 탭을 기준 칼럼으로 맞춰 비교합니다" icon="AllIcons.Actions.Diff">
       <add-to-group group-id="ToolWindowContextMenu" anchor="last"/>
     </action>
+    <action id="ei.db.gen.Feature" class="ei.db.gen.FeatureAction" text="기능 한 벌 만들기…"
+            description="데이터베이스 탐색기에서 고른 표로 DTO · 매퍼 XML · 매퍼 인터페이스 · 서비스 · 컨트롤러를 한 번에 만듭니다">
+      <add-to-group group-id="KG.SourceMenu" anchor="last"/>
+    </action>
   </actions>
 </idea-plugin>
