@@ -64,9 +64,9 @@ public final class FeatureDialog extends DialogWrapper {
   private static final String SERVICE_PACKAGE = "service";
   private static final String IMPL_PACKAGE = "impl";
   private static final String CONTROLLER_PACKAGE = "controller";
-  private static final int LEFT_WIDTH = 460;
-  private static final int PREVIEW_WIDTH = 660;
-  private static final int HEIGHT = 720;
+  private static final int LEFT_WIDTH = 560;
+  private static final int PREVIEW_WIDTH = 760;
+  private static final int HEIGHT = 820;
   private static final int REFRESH_DELAY_MS = 300;
   private static final int COL_SEARCH = 0;
   private static final int COL_TAG = 1;

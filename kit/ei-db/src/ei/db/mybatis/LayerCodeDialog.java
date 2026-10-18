@@ -58,12 +58,12 @@ final class LayerCodeDialog extends DialogWrapper {
   private static final String LOADING_CHILD = "자식 문장 읽는 중";
   private static final String LOADING_LIST = "매퍼 문장 목록 읽는 중";
   private static final String NONE = "(없음 — 넣을 때 고릅니다)";
-  private static final int CODE_WIDTH = 760;
-  private static final int CODE_HEIGHT = 130;
-  private static final int JOIN_HEIGHT = 230;
-  private static final int URL_COLUMNS = 24;
-  private static final int LIST_NAME_COLUMNS = 16;
-  private static final int SCROLL_HEIGHT = 560;
+  private static final int CODE_WIDTH = 1000;
+  private static final int CODE_HEIGHT = 180;
+  private static final int JOIN_HEIGHT = 300;
+  private static final int URL_COLUMNS = 40;
+  private static final int LIST_NAME_COLUMNS = 32;
+  private static final int SCROLL_HEIGHT = 700;
   private static final JBColor ERROR = JBColor.RED;
 
   /** 창이 쓰는 값. 클래스들은 찾지 못하면 null. */
