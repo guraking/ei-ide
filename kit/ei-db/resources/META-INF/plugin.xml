@@ -29,6 +29,14 @@
     <!-- MyBatis: include refid → sql, resultMap · extends → resultMap -->
     <gotoDeclarationHandler implementation="ei.db.mybatis.MapperRefNav"/>
     <externalAnnotator language="XML" implementationClass="ei.db.mybatis.ParamFieldAnnotator"/>
+    <!-- MyBatis: 컨트롤러 · 서비스 메서드 → 서비스 → 매퍼 → XML 계층 이동, 매퍼 인터페이스 ↔ XML 빠진 짝 -->
+    <codeInsight.lineMarkerProvider language="JAVA" implementationClass="ei.db.mybatis.LayerNav"/>
+    <localInspection language="XML" shortName="EiMapperXmlMissingMethod" displayName="매퍼 XML 문장에 인터페이스 메서드가 없음"
+                     groupName="MyBatis" enabledByDefault="true" level="WEAK WARNING"
+                     implementationClass="ei.db.mybatis.MapperPairInspection$Xml"/>
+    <localInspection language="JAVA" shortName="EiMapperMissingStatement" displayName="매퍼 인터페이스 메서드에 XML 문장이 없음"
+                     groupName="MyBatis" enabledByDefault="true" level="WEAK WARNING"
+                     implementationClass="ei.db.mybatis.MapperPairInspection$Java"/>
     <!-- ERD 도구 창은 ErdView 가 처음 열 때 등록한다. -->
   </extensions>
 
