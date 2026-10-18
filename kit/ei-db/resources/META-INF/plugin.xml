@@ -26,6 +26,8 @@
     <codeInsight.lineMarkerProvider language="JAVA" implementationClass="ei.db.mybatis.MapperNav$JavaMarker"/>
     <codeInsight.lineMarkerProvider language="XML" implementationClass="ei.db.mybatis.MapperNav$XmlMarker"/>
     <gotoDeclarationHandler implementation="ei.db.mybatis.MapperNav$GotoXml"/>
+    <!-- MyBatis: include refid → sql, resultMap · extends → resultMap -->
+    <gotoDeclarationHandler implementation="ei.db.mybatis.MapperRefNav"/>
     <externalAnnotator language="XML" implementationClass="ei.db.mybatis.ParamFieldAnnotator"/>
     <!-- ERD 도구 창은 ErdView 가 처음 열 때 등록한다. -->
   </extensions>
