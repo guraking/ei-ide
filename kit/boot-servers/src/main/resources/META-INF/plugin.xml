@@ -84,10 +84,6 @@
             <add-to-group group-id="GoToMenu" anchor="first"/>
             <add-to-group group-id="KG.SearchMenu" anchor="last"/>
         </action>
-        <!-- Run 메뉴: 가벼운 HTTP 요청 창(실행 중인 서버의 주소가 기본). URL 찾기 창의 「요청 보내기」 도 같은 창을 연다. -->
-        <action id="KingGura.HttpRequest" class="local.bootservers.HttpRequestAction" text="HTTP 요청…" icon="AllIcons.Nodes.PpWeb">
-            <add-to-group group-id="RunMenu" anchor="last"/>
-        </action>
         <!-- Run 메뉴: 아래쪽 「API」 창을 열어 컨트롤러 API 를 Swagger UI 로 시험한다. -->
         <action id="KingGura.ApiTest" class="local.bootservers.SwaggerToolWindow$OpenAction" text="API 테스트(Swagger)…" icon="AllIcons.Nodes.PpWeb">
             <add-to-group group-id="RunMenu" anchor="last"/>
