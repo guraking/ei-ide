@@ -65,10 +65,11 @@
         <action id="KingGura.LogFilter" class="local.bootservers.LogFilterAction" text="로그 거르기" icon="AllIcons.General.Filter">
             <add-to-group group-id="ConsoleEditorPopupMenu" anchor="first"/>
         </action>
-        <!-- Navigate 메뉴: 스프링 요청 매핑 목록에서 URL 로 컨트롤러 메서드를 찾는다. 이클립스 키맵은 $default 를 물려받는다. -->
+        <!-- Navigate · Search 메뉴: 스프링 요청 매핑 목록에서 URL 로 컨트롤러 메서드를 찾는다. 이클립스 키맵은 $default 를 물려받는다. -->
         <action id="KingGura.FindUrlMapping" class="local.bootservers.UrlMappingAction" text="URL 찾기…" icon="AllIcons.Nodes.PpWeb">
             <keyboard-shortcut keymap="$default" first-keystroke="control alt shift U"/>
             <add-to-group group-id="GoToMenu" anchor="first"/>
+            <add-to-group group-id="KG.SearchMenu" anchor="last"/>
         </action>
     </actions>
 </idea-plugin>
