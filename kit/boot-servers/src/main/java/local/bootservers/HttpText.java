@@ -74,6 +74,41 @@ final class HttpText {
         return result;
     }
 
+    /** 인증 칸의 방식. 첫 값은 인증 헤더를 넣지 않음. */
+    static final String AUTH_NONE = "없음";
+    static final String AUTH_BEARER = "Bearer";
+    static final String AUTH_BASIC = "Basic";
+    static final String[] AUTH_SCHEMES = {AUTH_NONE, AUTH_BEARER, AUTH_BASIC};
+    static final String AUTHORIZATION = "Authorization";
+
+    /**
+     * 인증 칸 값으로 만든 Authorization 헤더 값. Bearer 는 토큰 그대로, Basic 은 「아이디:비밀번호」 를 UTF-8 Base64 로.
+     * 없음 · 빈 토큰이면 null. Basic 에 「:」 가 없으면 IllegalArgumentException.
+     */
+    static String authorization(String scheme, String token) {
+        String t = token == null ? "" : token.strip();
+        if (t.isEmpty() || AUTH_NONE.equals(scheme)) {
+            return null;
+        }
+        if (AUTH_BASIC.equals(scheme)) {
+            if (!t.contains(HEADER_SEPARATOR)) {
+                throw new IllegalArgumentException("Basic 인증은 「아이디:비밀번호」 꼴로 적어야 합니다.");
+            }
+            return AUTH_BASIC + " " + java.util.Base64.getEncoder().encodeToString(t.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        }
+        return AUTH_BEARER + " " + t;
+    }
+
+    /** 헤더 목록에 그 이름(대소문자 무시)이 있는가. 헤더 칸에 직접 쓴 값이 인증 칸보다 앞선다. */
+    static boolean hasHeader(List<Map.Entry<String, String>> headers, String name) {
+        for (Map.Entry<String, String> h : headers) {
+            if (h.getKey().equalsIgnoreCase(name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** http://localhost:포트 + 컨텍스트 경로(앞 / 붙임 · 끝 / 뗌, 「/」 하나면 없음). */
     static String baseUrl(int port, String contextPath) {
         String path = contextPath == null ? "" : contextPath.strip();

@@ -9,6 +9,7 @@ public final class HttpCheck {
     public static void main(String[] args) {
         methods();
         headers();
+        auth();
         urls();
         config();
         json();
@@ -34,6 +35,24 @@ public final class HttpCheck {
         fails("A: 1\nno colon", "2째 줄", "콜론 없음");
         fails(": v", "1째 줄", "이름 없음");
         fails("Bad Name: v", "1째 줄", "이름에 공백");
+    }
+
+    private static void auth() {
+        eq(null, HttpText.authorization(HttpText.AUTH_NONE, "abc"), "없음");
+        eq(null, HttpText.authorization(HttpText.AUTH_BEARER, "  "), "빈 토큰");
+        eq(null, HttpText.authorization(HttpText.AUTH_BEARER, null), "null 토큰");
+        eq("Bearer abc.def", HttpText.authorization(HttpText.AUTH_BEARER, " abc.def "), "Bearer · 공백 뗌");
+        // RFC 7617 예: Aladdin:open sesame
+        eq("Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==", HttpText.authorization(HttpText.AUTH_BASIC, "Aladdin:open sesame"), "Basic");
+        eq("Basic 7ZWcOmI=", HttpText.authorization(HttpText.AUTH_BASIC, "한:b"), "Basic UTF-8");
+        try {
+            HttpText.authorization(HttpText.AUTH_BASIC, "nocolon");
+            throw new AssertionError("Basic 콜론 없음이 통과함");
+        } catch (IllegalArgumentException expected) {
+            // 기대한 실패
+        }
+        yes(HttpText.hasHeader(HttpText.parseHeaders("authorization: x"), HttpText.AUTHORIZATION), "대소문자 무시");
+        yes(!HttpText.hasHeader(HttpText.parseHeaders("Content-Type: a"), HttpText.AUTHORIZATION), "없음");
     }
 
     private static void urls() {

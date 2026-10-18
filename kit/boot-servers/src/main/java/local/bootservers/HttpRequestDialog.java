@@ -4,6 +4,10 @@ import com.intellij.execution.RunManager;
 import com.intellij.execution.RunnerAndConfigurationSettings;
 import com.intellij.execution.application.ApplicationConfiguration;
 import com.intellij.execution.application.ApplicationConfigurationType;
+import com.intellij.credentialStore.CredentialAttributes;
+import com.intellij.credentialStore.CredentialAttributesKt;
+import com.intellij.credentialStore.Credentials;
+import com.intellij.ide.passwordSafe.PasswordSafe;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.application.ReadAction;
@@ -26,6 +30,7 @@ import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.ui.JBColor;
 import com.intellij.ui.JBSplitter;
 import com.intellij.ui.components.JBLabel;
+import com.intellij.ui.components.JBPasswordField;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.components.JBTextArea;
 import com.intellij.ui.components.JBTextField;
@@ -64,6 +69,7 @@ import java.util.regex.Pattern;
 /**
  * 가벼운 HTTP 요청 창(비모달). 방식 · URL · 헤더(한 줄에 「이름: 값」) · 본문을 적어 보내고
  * 상태 코드 · 걸린 시간 · 응답 헤더 · 본문(JSON 이면 줄맞춤)을 보여 준다. 보낸 요청은 「최근」 에서 다시 고른다.
+ * 「인증」 칸의 방식 · 토큰은 프로젝트마다 IDE 비밀번호 저장소에 두고, 최근 목록 · 로그에는 남기지 않는다.
  * 요청 · 응답 내용은 IDE 로그에 남기지 않는다.
  */
 final class HttpRequestDialog extends DialogWrapper {
@@ -84,6 +90,8 @@ final class HttpRequestDialog extends DialogWrapper {
     private static final String[] CONFIG_FILES = {"application.properties", "application.yml", "application.yaml"};
     private static final float REQUEST_RESPONSE_SPLIT = 0.4f;
     private static final float HEADERS_BODY_SPLIT = 0.35f;
+    /** 비밀번호 저장소의 서비스 이름 앞부분. 뒤에 프로젝트 위치 해시가 붙는다. */
+    private static final String AUTH_SERVICE = "EI IDE HTTP 요청 인증";
 
     private static final HttpClient CLIENT = HttpClient.newBuilder()
             .connectTimeout(CONNECT_TIMEOUT)
@@ -96,6 +104,11 @@ final class HttpRequestDialog extends DialogWrapper {
     private final ComboBox<HttpHistory.Request> recent = new ComboBox<>();
     private final ComboBox<String> methodBox = new ComboBox<>(HttpText.METHODS);
     private final JBTextField urlField = new JBTextField();
+    private final ComboBox<String> authBox = new ComboBox<>(HttpText.AUTH_SCHEMES);
+    private final JBPasswordField tokenField = new JBPasswordField();
+    /** 저장소에 마지막으로 둔 방식 · 토큰. 바뀌었을 때만 다시 쓴다. */
+    private String savedScheme;
+    private String savedToken;
     private final JBTextArea headersArea = new JBTextArea();
     private final JBTextArea bodyArea = new JBTextArea();
     private final JBLabel statusLabel = new JBLabel(" ");
@@ -107,16 +120,25 @@ final class HttpRequestDialog extends DialogWrapper {
     /**
      * 기본 주소를 백그라운드에서 정한 뒤 창을 연다. anchor 는 컨트롤러 메서드처럼 어느 모듈의 요청인지 알려 주는 요소(없으면 null).
      * 기본 주소: 실행 중인 서버의 포트(anchor 모듈을 실행하는 서버 우선) → 설정 파일 server.port → 8080, 여기에 컨텍스트 경로.
+     * 저장해 둔 인증 값도 같은 백그라운드에서 읽는다(비밀번호 저장소는 EDT 에서 읽지 않는다).
      */
     static void open(Project project, @Nullable SmartPsiElementPointer<? extends PsiElement> anchor, String method, String path) {
         ReadAction.nonBlocking(() -> {
                     PsiElement element = anchor == null ? null : anchor.getElement();
                     Module module = element == null ? null : ModuleUtilCore.findModuleForPsiElement(element);
-                    return HttpText.fullUrl(resolveBase(project, module), path);
+                    String url = HttpText.fullUrl(resolveBase(project, module), path);
+                    return new Start(url, PasswordSafe.getInstance().get(authKey(project)));
                 })
                 .expireWith(project)
-                .finishOnUiThread(ModalityState.defaultModalityState(), url -> new HttpRequestDialog(project, method, url).show())
+                .finishOnUiThread(ModalityState.defaultModalityState(), start -> new HttpRequestDialog(project, method, start).show())
                 .submit(AppExecutorUtil.getAppExecutorService());
+    }
+
+    private record Start(String url, @Nullable Credentials auth) {
+    }
+
+    private static CredentialAttributes authKey(Project project) {
+        return new CredentialAttributes(CredentialAttributesKt.generateServiceName(AUTH_SERVICE, project.getLocationHash()));
     }
 
     /** 읽기 동작 안에서 부른다. */
@@ -198,7 +220,7 @@ final class HttpRequestDialog extends DialogWrapper {
         return null;
     }
 
-    private HttpRequestDialog(Project project, String method, String url) {
+    private HttpRequestDialog(Project project, String method, Start start) {
         super(project, false);
         this.project = project;
         setModal(false);
@@ -206,8 +228,19 @@ final class HttpRequestDialog extends DialogWrapper {
         setOKButtonText("보내기");
         getCancelAction().putValue(Action.NAME, "닫기");
         methodBox.setSelectedItem(method);
-        urlField.setText(url);
+        urlField.setText(start.url());
+        savedScheme = start.auth() == null ? null : start.auth().getUserName();
+        savedToken = start.auth() == null ? null : start.auth().getPasswordAsString();
+        // 저장된 방식이 없거나 모르는 값이면 Bearer.
+        authBox.setSelectedItem(HttpText.AUTH_BEARER);
+        for (String scheme : HttpText.AUTH_SCHEMES) {
+            if (scheme.equals(savedScheme)) {
+                authBox.setSelectedItem(scheme);
+            }
+        }
+        tokenField.setText(savedToken);
         init();
+        applyAuthHint();
         applyDefaultHeaders();
         reloadRecent();
     }
@@ -226,6 +259,7 @@ final class HttpRequestDialog extends DialogWrapper {
         urlField.getEmptyText().setText("http://localhost:8080/api/...");
         methodBox.addActionListener(e -> applyDefaultHeaders());
         recent.addActionListener(e -> fillFromRecent());
+        authBox.addActionListener(e -> applyAuthHint());
 
         JPanel recentRow = new JPanel(new BorderLayout(JBUI.scale(6), 0));
         recentRow.add(new JBLabel("최근"), BorderLayout.WEST);
@@ -235,7 +269,14 @@ final class HttpRequestDialog extends DialogWrapper {
         requestRow.add(urlField, BorderLayout.CENTER);
         JPanel north = new JPanel(new BorderLayout(0, JBUI.scale(6)));
         north.add(recentRow, BorderLayout.NORTH);
-        north.add(requestRow, BorderLayout.SOUTH);
+        north.add(requestRow, BorderLayout.CENTER);
+        JPanel authRow = new JPanel(new BorderLayout(JBUI.scale(6), 0));
+        authRow.add(new JBLabel("인증"), BorderLayout.WEST);
+        JPanel authInput = new JPanel(new BorderLayout(JBUI.scale(6), 0));
+        authInput.add(authBox, BorderLayout.WEST);
+        authInput.add(tokenField, BorderLayout.CENTER);
+        authRow.add(authInput, BorderLayout.CENTER);
+        north.add(authRow, BorderLayout.SOUTH);
         north.setBorder(JBUI.Borders.emptyBottom(6));
 
         JBSplitter request = new JBSplitter(false, HEADERS_BODY_SPLIT);
@@ -283,6 +324,21 @@ final class HttpRequestDialog extends DialogWrapper {
         }
     }
 
+    /** 방식에 맞춰 토큰 칸 안내 글을 바꾸고, 「없음」 이면 토큰 칸을 끈다. */
+    private void applyAuthHint() {
+        String scheme = selectedScheme();
+        tokenField.setEnabled(!HttpText.AUTH_NONE.equals(scheme));
+        tokenField.getEmptyText().setText(HttpText.AUTH_BASIC.equals(scheme)
+                ? "아이디:비밀번호"
+                : "토큰(헤더 칸에 Authorization 을 적으면 그 값이 앞섭니다)");
+        tokenField.repaint();
+    }
+
+    private String selectedScheme() {
+        Object s = authBox.getSelectedItem();
+        return s == null ? HttpText.AUTH_NONE : s.toString();
+    }
+
     private String selectedMethod() {
         Object m = methodBox.getSelectedItem();
         return m == null ? HttpText.METHODS[0] : m.toString();
@@ -327,11 +383,24 @@ final class HttpRequestDialog extends DialogWrapper {
             showError("URL 은 http:// 또는 https:// 로 시작해야 합니다.");
             return;
         }
+        String scheme = selectedScheme();
+        String token = new String(tokenField.getPassword());
+        String authorization;
+        try {
+            authorization = HttpText.authorization(scheme, token);
+        } catch (IllegalArgumentException e) {
+            showError(e.getMessage());
+            return;
+        }
         HttpRequest request;
         try {
             HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url)).timeout(REQUEST_TIMEOUT);
-            for (Map.Entry<String, String> header : HttpText.parseHeaders(headers)) {
+            List<Map.Entry<String, String>> headerList = HttpText.parseHeaders(headers);
+            for (Map.Entry<String, String> header : headerList) {
                 builder.header(header.getKey(), header.getValue());
+            }
+            if (authorization != null && !HttpText.hasHeader(headerList, HttpText.AUTHORIZATION)) {
+                builder.header(HttpText.AUTHORIZATION, authorization);
             }
             builder.method(method, body.isEmpty()
                     ? HttpRequest.BodyPublishers.noBody()
@@ -341,6 +410,7 @@ final class HttpRequestDialog extends DialogWrapper {
             showError(buildErrorMessage(e));
             return;
         }
+        saveAuth(scheme, token);
         HttpHistory.getInstance(project).add(new HttpHistory.Request(method, url, headers, body));
         reloadRecent();
         statusLabel.setText("보내는 중… (" + REQUEST_TIMEOUT.toSeconds() + "초 뒤 시간 초과)");
@@ -355,6 +425,18 @@ final class HttpRequestDialog extends DialogWrapper {
             long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
             ApplicationManager.getApplication().invokeLater(() -> finish(future, response, error, elapsedMs), ModalityState.any());
         });
+    }
+
+    /** 방식 · 토큰이 저장된 값과 다르면 백그라운드에서 비밀번호 저장소에 쓴다. 빈 토큰이면 지운다. */
+    private void saveAuth(String scheme, String token) {
+        if (scheme.equals(savedScheme) && token.equals(savedToken == null ? "" : savedToken)) {
+            return;
+        }
+        savedScheme = scheme;
+        savedToken = token;
+        CredentialAttributes key = authKey(project);
+        Credentials value = token.isEmpty() ? null : new Credentials(scheme, token);
+        ApplicationManager.getApplication().executeOnPooledThread(() -> PasswordSafe.getInstance().set(key, value));
     }
 
     private void finish(CompletableFuture<HttpResponse<String>> future, HttpResponse<String> response, Throwable error, long elapsedMs) {
