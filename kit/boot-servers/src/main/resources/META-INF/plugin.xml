@@ -11,7 +11,10 @@
     <depends>com.intellij.java</depends>
     <depends>Git4Idea</depends>
     <depends>com.intellij.modules.json</depends>
+    <!-- 262 부터 내장 브라우저(JCEF)는 따로 된 플러그인이다. Swagger 화면이 쓴다. -->
+    <depends>com.intellij.modules.jcef</depends>
     <depends>com.intellij.modules.lsp</depends>
+    <depends>org.jetbrains.plugins.terminal</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <projectViewNodeDecorator implementation="local.bootservers.ServerStatusDecorator"/>
@@ -37,6 +40,7 @@
     <!-- JavaScript · TypeScript · Vue: vtsls · Vue 언어 서버(LSP). Node · 서버는 사용자 폴더의 .ei-web 아래 -->
     <extensions defaultExtensionNs="com.intellij">
         <notificationGroup id="웹 언어 지원" displayType="BALLOON"/>
+        <notificationGroup id="AI" displayType="BALLOON"/>
         <platform.lsp.serverSupportProvider implementation="local.bootservers.web.WebLspSupport"/>
     </extensions>
 
@@ -104,5 +108,16 @@
         <action id="KingGura.GoToController" class="local.bootservers.GoToControllerAction" text="컨트롤러로 이동" icon="AllIcons.Nodes.Class">
             <add-to-group group-id="EditorPopupMenu" anchor="first"/>
         </action>
+        <!-- 편집기 · 콘솔 우클릭 「AI」: 고른 코드 · 로그를 프롬프트 파일로 만들어 터미널 새 탭에서 Claude Code 를 시작한다 -->
+        <group id="KingGura.AiEditor" text="AI" popup="true" icon="AllIcons.Toolwindows.ToolWindowAskAI">
+            <action id="KingGura.AiExplain" class="local.bootservers.ai.AiActions$Explain" text="설명해 줘"/>
+            <action id="KingGura.AiFix" class="local.bootservers.ai.AiActions$Fix" text="고쳐 줘"/>
+            <action id="KingGura.AiAsk" class="local.bootservers.ai.AiActions$Ask" text="질문하기…"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </group>
+        <group id="KingGura.AiConsole" text="AI" popup="true" icon="AllIcons.Toolwindows.ToolWindowAskAI">
+            <action id="KingGura.AiConsoleError" class="local.bootservers.ai.AiActions$ConsoleError" text="이 오류 원인 찾기"/>
+            <add-to-group group-id="ConsoleView.PopupMenu" anchor="last"/>
+        </group>
     </actions>
 </idea-plugin>
