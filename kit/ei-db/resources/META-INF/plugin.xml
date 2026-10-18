@@ -29,6 +29,8 @@
     <!-- MyBatis: include refid → sql, resultMap · extends → resultMap -->
     <gotoDeclarationHandler implementation="ei.db.mybatis.MapperRefNav"/>
     <externalAnnotator language="XML" implementationClass="ei.db.mybatis.ParamFieldAnnotator"/>
+    <!-- MyBatis: 매퍼 필드를 가진 클래스에서 서비스 메서드 자동 완성 -->
+    <completion.contributor language="JAVA" implementationClass="ei.db.mybatis.ServiceMethodCompletion"/>
     <!-- ERD 도구 창은 ErdView 가 처음 열 때 등록한다. -->
   </extensions>
 
@@ -66,6 +68,10 @@
     <action id="EiDb.MyBatis.Run" class="ei.db.mybatis.RunStatementAction" text="MyBatis 쿼리 실행" icon="AllIcons.Actions.Execute">
       <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt ENTER"/>
       <add-to-group group-id="EditorPopupMenu" anchor="first"/>
+    </action>
+    <action id="EiDb.MyBatis.LayerCode" class="ei.db.mybatis.LayerCodeAction" text="계층 코드 만들기…"
+            description="이 매퍼 문장의 컨트롤러 · 서비스 · 매퍼 메서드 코드를 만듭니다" icon="AllIcons.Actions.Lightning">
+      <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EiDb.MyBatis.Run"/>
     </action>
     <group id="EiDb.MyBatis.LogGroup">
       <action id="EiDb.MyBatis.LogCopy" class="ei.db.mybatis.LogActions$Copy" text="SQL 로 바꿔 복사">
