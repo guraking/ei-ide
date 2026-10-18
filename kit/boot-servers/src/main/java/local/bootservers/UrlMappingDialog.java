@@ -40,7 +40,7 @@ import java.util.List;
 
 /**
  * 스프링 요청 매핑 목록 창. 검색 창에 적는 대로 거른다(글 포함, 또는 /api/order/123 같은 실제 URL 이 매핑 경로에 맞음).
- * Enter · 두 번 누르기로 그 메서드로 가고 창을 닫는다. 「요청 보내기」(버튼 · 우클릭)는 고른 URL 로 HTTP 요청 창을 연다.
+ * Enter · 두 번 누르기로 그 메서드로 가고 창을 닫는다. 「요청 보내기」(버튼 · 우클릭)는 아래쪽 「API」 창(Swagger)에서 고른 API 를 펼쳐 연다.
  */
 final class UrlMappingDialog extends DialogWrapper {
 
@@ -144,7 +144,9 @@ final class UrlMappingDialog extends DialogWrapper {
     private void sendRequest() {
         UrlMappingAction.Endpoint chosen = chosen();
         if (chosen != null) {
-            HttpRequestDialog.open(project, chosen.target(), HttpText.firstMethod(chosen.httpMethod()), chosen.url());
+            // 펼칠 API 는 OpenApiCollector 가 붙이는 「컨트롤러 클래스/메서드」(태그/operationId).
+            close(OK_EXIT_CODE);
+            SwaggerToolWindow.open(project, chosen.owner().replace('.', '/'), chosen.target());
         }
     }
 

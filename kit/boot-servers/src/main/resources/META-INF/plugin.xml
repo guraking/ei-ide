@@ -10,6 +10,11 @@
 
     <depends>com.intellij.java</depends>
     <depends>Git4Idea</depends>
+    <depends>com.intellij.modules.json</depends>
+    <!-- 262 부터 내장 브라우저(JCEF)는 따로 된 플러그인이다. Swagger 화면이 쓴다. -->
+    <depends>com.intellij.modules.jcef</depends>
+    <depends>com.intellij.modules.lsp</depends>
+    <depends>org.jetbrains.plugins.terminal</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <projectViewNodeDecorator implementation="local.bootservers.ServerStatusDecorator"/>
@@ -22,6 +27,21 @@
         <!-- @Controller 뷰 이름 글 Ctrl+클릭 → JSP, 주석 속성 ${키} Ctrl+클릭 → application*.yml · properties 의 키 줄 -->
         <gotoDeclarationHandler implementation="local.bootservers.ViewNameGotoHandler"/>
         <gotoDeclarationHandler implementation="local.bootservers.ConfigKeyGotoHandler"/>
+        <!-- OpenAPI: 아래쪽 「API」 창(컨트롤러로 만든 사양의 Swagger UI), 사양 파일 옆 미리보기, 사양 파일 자동 완성 · 오류 표시 -->
+        <toolWindow id="API" anchor="bottom" icon="AllIcons.Nodes.PpWeb" doNotActivateOnStart="true"
+                    factoryClass="local.bootservers.SwaggerToolWindow"/>
+        <fileEditorProvider implementation="local.bootservers.OpenApiEditorProvider"/>
+    </extensions>
+
+    <extensions defaultExtensionNs="JavaScript">
+        <JsonSchema.ProviderFactory implementation="local.bootservers.OpenApiSchemas"/>
+    </extensions>
+
+    <!-- JavaScript · TypeScript · Vue: vtsls · Vue 언어 서버(LSP). Node · 서버는 사용자 폴더의 .ei-web 아래 -->
+    <extensions defaultExtensionNs="com.intellij">
+        <notificationGroup id="웹 언어 지원" displayType="BALLOON"/>
+        <notificationGroup id="AI" displayType="BALLOON"/>
+        <platform.lsp.serverSupportProvider implementation="local.bootservers.web.WebLspSupport"/>
     </extensions>
 
     <applicationListeners>
@@ -75,8 +95,8 @@
             <add-to-group group-id="GoToMenu" anchor="first"/>
             <add-to-group group-id="KG.SearchMenu" anchor="last"/>
         </action>
-        <!-- Run 메뉴: 가벼운 HTTP 요청 창(실행 중인 서버의 주소가 기본). URL 찾기 창의 「요청 보내기」 도 같은 창을 연다. -->
-        <action id="KingGura.HttpRequest" class="local.bootservers.HttpRequestAction" text="HTTP 요청…" icon="AllIcons.Nodes.PpWeb">
+        <!-- Run 메뉴: 아래쪽 「API」 창을 열어 컨트롤러 API 를 Swagger UI 로 시험한다. -->
+        <action id="KingGura.ApiTest" class="local.bootservers.SwaggerToolWindow$OpenAction" text="API 테스트(Swagger)…" icon="AllIcons.Nodes.PpWeb">
             <add-to-group group-id="RunMenu" anchor="last"/>
         </action>
         <!-- Project 메뉴 · 프로젝트 창 우클릭: 소스 · 리소스 · 웹 폴더의 전체 파일과 URL 매핑을 엑셀 한 파일로 저장한다(프로그램 사양서용). -->
@@ -88,5 +108,16 @@
         <action id="KingGura.GoToController" class="local.bootservers.GoToControllerAction" text="컨트롤러로 이동" icon="AllIcons.Nodes.Class">
             <add-to-group group-id="EditorPopupMenu" anchor="first"/>
         </action>
+        <!-- 편집기 · 콘솔 우클릭 「AI」: 고른 코드 · 로그를 프롬프트 파일로 만들어 터미널 새 탭에서 Claude Code 를 시작한다 -->
+        <group id="KingGura.AiEditor" text="AI" popup="true" icon="AllIcons.Toolwindows.ToolWindowAskAI">
+            <action id="KingGura.AiExplain" class="local.bootservers.ai.AiActions$Explain" text="설명해 줘"/>
+            <action id="KingGura.AiFix" class="local.bootservers.ai.AiActions$Fix" text="고쳐 줘"/>
+            <action id="KingGura.AiAsk" class="local.bootservers.ai.AiActions$Ask" text="질문하기…"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </group>
+        <group id="KingGura.AiConsole" text="AI" popup="true" icon="AllIcons.Toolwindows.ToolWindowAskAI">
+            <action id="KingGura.AiConsoleError" class="local.bootservers.ai.AiActions$ConsoleError" text="이 오류 원인 찾기"/>
+            <add-to-group group-id="ConsoleView.PopupMenu" anchor="last"/>
+        </group>
     </actions>
 </idea-plugin>
