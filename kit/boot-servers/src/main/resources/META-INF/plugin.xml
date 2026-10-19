@@ -31,7 +31,7 @@
         <toolWindow id="API" anchor="bottom" icon="AllIcons.Nodes.PpWeb" doNotActivateOnStart="true"
                     factoryClass="local.bootservers.SwaggerToolWindow"/>
         <fileEditorProvider implementation="local.bootservers.OpenApiEditorProvider"/>
-        <!-- JDK 24 이상 실행에 --sun-misc-unsafe-memory-access=allow 를 더해 Unsafe 경고를 끈다 -->
+        <!-- JDK 24 이상 실행에 sun-misc-unsafe-memory-access=allow 옵션을 더해 Unsafe 경고를 끈다 -->
         <java.programPatcher implementation="local.bootservers.UnsafeWarningPatcher"/>
     </extensions>
 
