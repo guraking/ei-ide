@@ -126,6 +126,7 @@ final class SyncPanel extends JPanel {
   private final JLabel title = new JLabel("동기화");
   private final JLabel status = new JLabel(" ");
   private final JButton refreshButton = new JButton("새로고침");
+  private final JButton refreshSelectedButton = new JButton("고른 저장소만");
   private final Map<String, JToggleButton> modeButtons = new LinkedHashMap<>();
 
   private volatile List<Repo> repos = List.of();
@@ -140,6 +141,7 @@ final class SyncPanel extends JPanel {
     JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
     top.add(title);
     top.add(refreshButton);
+    top.add(refreshSelectedButton);
     ButtonGroup group = new ButtonGroup();
     addMode(top, group, "전체", null);
     addMode(top, group, "들어올", Kind.INCOMING);
@@ -179,6 +181,7 @@ final class SyncPanel extends JPanel {
       @Override public void mouseReleased(MouseEvent e) { showPopup(e); }
     });
     refreshButton.addActionListener(e -> refresh());
+    refreshSelectedButton.addActionListener(e -> refreshSelected());
 
     // 커밋 · Push · Pull · 브랜치 전환으로 Git 상태가 바뀌면 fetch 없이 다시 비교한다.
     // SVN 은 저장소 알림이 없으므로 IDE 의 변경 목록이 갱신될 때(커밋 · 업데이트 뒤) 다시 비교한다.
@@ -543,7 +546,8 @@ final class SyncPanel extends JPanel {
       }
       // 동작이 꺼져 있으면(예: 충돌 해결은 git 이 실제 충돌 상태인 파일이 있을 때만) 아무 일도 없이 끝나므로 이유를 상태줄에 적는다.
       DataContext context = DataManager.getInstance().getDataContext(this);
-      VirtualFile repoRoot = forSelectedRepo ? selectedRepoRoot() : null;
+      Repo selected = forSelectedRepo ? selectedRepo() : null;
+      VirtualFile repoRoot = selected == null ? null : LocalFileSystem.getInstance().findFileByIoFile(selected.root());
       if (repoRoot != null) {
         context = SimpleDataContext.builder().setParent(context)
           .add(CommonDataKeys.VIRTUAL_FILE, repoRoot)
@@ -569,14 +573,14 @@ final class SyncPanel extends JPanel {
     return value instanceof Change c && c.kind() == Kind.CONFLICT;
   }
 
-  /** 트리에서 고른 줄(저장소 줄 · 묶음 줄 · 파일 줄)이 속한 저장소의 루트. 고른 줄이 없거나 VFS 에 없으면 null. */
-  private VirtualFile selectedRepoRoot() {
+  /** 트리에서 고른 줄(저장소 줄 · 묶음 줄 · 파일 줄)이 속한 저장소. 고른 줄이 없거나 저장소를 알 수 없는 줄이면 null. */
+  private Repo selectedRepo() {
     TreePath path = tree.getSelectionPath();
     if (path == null) return null;
     for (Object part : path.getPath()) {
       Object value = ((DefaultMutableTreeNode) part).getUserObject();
-      File root = value instanceof Repo r ? r.root() : value instanceof Change c ? c.repo().root() : null;
-      if (root != null) return LocalFileSystem.getInstance().findFileByIoFile(root);
+      if (value instanceof Repo r) return r;
+      if (value instanceof Change c) return c.repo();
     }
     return null;
   }
@@ -608,6 +612,7 @@ final class SyncPanel extends JPanel {
       return;
     }
     refreshButton.setEnabled(false);
+    refreshSelectedButton.setEnabled(false);
     status.setText("비교 중…");
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       List<String> errors = new ArrayList<>();
@@ -665,7 +670,72 @@ final class SyncPanel extends JPanel {
         changes = finalResult;
         status.setText(finalMessage);
         refreshButton.setEnabled(true);
+        refreshSelectedButton.setEnabled(true);
         rebuildTree();
+      });
+    });
+  }
+
+  /**
+   * 트리에서 고른 저장소 하나만 원격을 받아 와(fetch · svn status -u) 다시 비교하고, 목록에서 그 저장소 줄만 바꾼다.
+   * 저장소가 하나뿐이면 고르지 않아도 그 저장소를 쓴다. 실패하면 그 저장소의 이전 목록을 그대로 두고 오류를 상태 줄에 보인다.
+   */
+  private void refreshSelected() {
+    Repo selected = selectedRepo();
+    if (selected == null && repos.size() == 1) selected = repos.get(0);
+    if (selected == null) {
+      status.setText("새로고침할 저장소를 트리에서 고르세요.");
+      return;
+    }
+    Repo target = selected;
+    String name = target.root().getName();
+    refreshButton.setEnabled(false);
+    refreshSelectedButton.setEnabled(false);
+    status.setText(name + " 원격 변경을 받아 오는 중…");
+    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+      Repo updated = null;
+      List<Change> fresh = List.of();
+      String error = null;
+      try {
+        // 브랜치를 바꿨을 수 있어 저장소 정보부터 다시 읽는다.
+        updated = target.vcs() == Vcs.GIT ? gitRepo(target.root()) : svnRepo(target.root());
+        if (updated.vcs() == Vcs.GIT) {
+          git(updated.root(), "fetch", "--quiet");
+          fresh = compare(updated);
+        }
+        else {
+          fresh = compareSvn(updated, true);
+        }
+      }
+      catch (IOException e) {
+        error = name + ": " + e.getMessage();
+      }
+      catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        error = name + ": 중단됨";
+      }
+      Repo finalRepo = updated;
+      List<Change> finalFresh = fresh;
+      String finalError = error;
+      SwingUtilities.invokeLater(() -> {
+        refreshButton.setEnabled(true);
+        refreshSelectedButton.setEnabled(true);
+        if (finalError != null) {
+          status.setText(finalError);
+          return;
+        }
+        List<Repo> nextRepos = new ArrayList<>();
+        for (Repo r : repos) nextRepos.add(r.root().equals(target.root()) ? finalRepo : r);
+        repos = List.copyOf(nextRepos);
+        List<Change> next = new ArrayList<>();
+        for (Change c : changes) {
+          if (!c.repo().root().equals(target.root())) next.add(c);
+        }
+        next.addAll(finalFresh);
+        changes = next;
+        if (repos.size() == 1) title.setText(finalRepo.label());
+        rebuildTree();
+        status.setText(summary(next) + " — " + name + " 원격 확인 끝");
       });
     });
   }
