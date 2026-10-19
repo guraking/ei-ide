@@ -627,6 +627,7 @@ footer{padding:56px 0 40px; color:var(--muted); font-size:13px}
       <tr><td>이름</td><td>실행 설정 이름</td><td class="where"><code>api-server-dev</code></td></tr>
       <tr><td>프로필</td><td>VM 옵션의 <code>-Dspring.profiles.active=</code></td><td class="where">local · dev · prod 또는 직접 입력. 비우면 application 설정 값</td></tr>
       <tr><td>VM 옵션</td><td>실행 설정의 VM 옵션 그대로</td><td class="where"><code>-Xmx1g -Dfile.encoding=UTF-8</code></td></tr>
+      <tr><td>Unsafe 경고</td><td>JDK 24 이상이면 <code>--sun-misc-unsafe-memory-access=allow</code> 를 더함</td><td class="where">VM 옵션에 직접 넣으면 그 값을 따름</td></tr>
       <tr><td>포트</td><td>VM 옵션의 <code>-Dserver.port=</code></td><td class="where">1 ~ 65535. 비우면 application 설정 값</td></tr>
     </table>
     <div class="notes">
