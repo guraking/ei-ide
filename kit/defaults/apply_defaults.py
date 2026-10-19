@@ -11,6 +11,7 @@
   11) SVN 플러그인 번들 추가.
   15) 설치 화면 「설치 옵션」 칸을 모두 체크한 채로 띄운다.
   16) properties 파일의 「투명한 native-to-ascii 변환」을 기본으로 켠다.
+  17) 커밋 전 「Analyze code」(코드 분석) 검사를 기본으로 끈다.
 고치기 전 원본은 <intellij-community>/../backup/<시각>-before/ 에 같은 상대경로로 남긴다.
 모든 원문을 먼저 찾아 본 뒤에 쓴다. 하나라도 못 찾으면 아무 파일도 바꾸지 않는다. 줄끝(LF · CRLF)은 파일마다 원래대로 둔다.
 두 번 실행해도 같은 결과가 된다.
@@ -33,6 +34,11 @@ EDITS = [
     ("platform/vcs-api/shared/src/com/intellij/openapi/vcs/VcsConfiguration.java",
      "public boolean CLEAR_INITIAL_COMMIT_MESSAGE = false;",
      "public boolean CLEAR_INITIAL_COMMIT_MESSAGE = true;"),
+    # 17) 커밋 전 코드 분석은 경고가 하나만 있어도 커밋 · 푸시를 멈추고 확인을 기다리므로 기본으로 끈다(커밋 창 톱니에서 다시 켤 수 있음).
+    ("platform/vcs-api/shared/src/com/intellij/openapi/vcs/VcsConfiguration.java",
+     "public boolean CHECK_CODE_SMELLS_BEFORE_PROJECT_COMMIT =\n"
+     "    !PlatformUtils.isPyCharm() && !PlatformUtils.isRubyMine() && !PlatformUtils.isCLion();",
+     "public boolean CHECK_CODE_SMELLS_BEFORE_PROJECT_COMMIT = false;"),
     # 4) 윈도우 첫 실행 단축키를 이클립스로 한다(intellij.keymap.eclipse 는 번들에 남아 있음).
     ("platform/platform-impl/src/com/intellij/openapi/keymap/impl/DefaultKeymap.kt",
      "else -> KeymapManager.DEFAULT_IDEA_KEYMAP",
