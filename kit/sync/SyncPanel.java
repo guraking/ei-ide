@@ -10,6 +10,9 @@ import com.intellij.openapi.actionSystem.ActionManager;
 import com.intellij.ide.DataManager;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
+import com.intellij.openapi.actionSystem.CommonDataKeys;
+import com.intellij.openapi.actionSystem.DataContext;
+import com.intellij.openapi.actionSystem.impl.SimpleDataContext;
 import com.intellij.openapi.actionSystem.ex.ActionUtil;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.fileTypes.FileType;
@@ -19,6 +22,8 @@ import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.vcs.ProjectLevelVcsManager;
 import com.intellij.openapi.vcs.VcsRoot;
 import com.intellij.openapi.vcs.changes.ChangeListListener;
+import com.intellij.openapi.vfs.LocalFileSystem;
+import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.ui.JBSplitter;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.treeStructure.Tree;
@@ -147,10 +152,10 @@ final class SyncPanel extends JPanel {
     add(splitter, BorderLayout.CENTER);
 
     JPanel bottom = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
-    bottom.add(actionButton("받기(Pull)", "Git.Pull"));
-    bottom.add(actionButton("커밋…", "CheckinProject"));
-    bottom.add(actionButton("올리기(Push)", "Vcs.Push"));
-    bottom.add(actionButton("충돌 해결", "Git.ResolveConflicts"));
+    bottom.add(actionButton("받기(Pull)", "Git.Pull", true));
+    bottom.add(actionButton("커밋…", "CheckinProject", false));
+    bottom.add(actionButton("올리기(Push)", "Vcs.Push", true));
+    bottom.add(actionButton("충돌 해결", "Git.ResolveConflicts", false));
     add(bottom, BorderLayout.SOUTH);
 
     tree.setRootVisible(false);
@@ -510,7 +515,12 @@ final class SyncPanel extends JPanel {
     top.add(button);
   }
 
-  private JButton actionButton(String text, String actionId) {
+  /**
+   * IDE 동작을 부르는 단추. forSelectedRepo 면 트리에서 고른 저장소의 루트를 VIRTUAL_FILE(_ARRAY) 로 넘겨
+   * 받기 · 올리기 창이 그 저장소로 열리게 한다(DvcsUtil.guessRepositoryForOperation 이 VIRTUAL_FILE 을 먼저 본다).
+   * 고른 저장소가 없으면 IDE 기본(마지막 편집 파일의 저장소)을 따른다.
+   */
+  private JButton actionButton(String text, String actionId, boolean forSelectedRepo) {
     JButton button = new JButton(text);
     button.addActionListener(e -> {
       AnAction action = ActionManager.getInstance().getAction(actionId);
@@ -519,7 +529,15 @@ final class SyncPanel extends JPanel {
         return;
       }
       // 동작이 꺼져 있으면(예: 충돌 해결은 git 이 실제 충돌 상태인 파일이 있을 때만) 아무 일도 없이 끝나므로 이유를 상태줄에 적는다.
-      AnActionEvent event = AnActionEvent.createFromAnAction(action, null, "KingGuraSynchronize", DataManager.getInstance().getDataContext(this));
+      DataContext context = DataManager.getInstance().getDataContext(this);
+      VirtualFile repoRoot = forSelectedRepo ? selectedRepoRoot() : null;
+      if (repoRoot != null) {
+        context = SimpleDataContext.builder().setParent(context)
+          .add(CommonDataKeys.VIRTUAL_FILE, repoRoot)
+          .add(CommonDataKeys.VIRTUAL_FILE_ARRAY, new VirtualFile[]{repoRoot})
+          .build();
+      }
+      AnActionEvent event = AnActionEvent.createFromAnAction(action, null, "KingGuraSynchronize", context);
       ActionUtil.updateAction(action, event);
       if (!event.getPresentation().isEnabled()) {
         status.setText(text + ": 지금은 할 수 없습니다" + ("Git.ResolveConflicts".equals(actionId)
@@ -529,6 +547,18 @@ final class SyncPanel extends JPanel {
       ActionUtil.performActionDumbAwareWithCallbacks(action, event);
     });
     return button;
+  }
+
+  /** 트리에서 고른 줄(저장소 줄 · 묶음 줄 · 파일 줄)이 속한 저장소의 루트. 고른 줄이 없거나 VFS 에 없으면 null. */
+  private VirtualFile selectedRepoRoot() {
+    TreePath path = tree.getSelectionPath();
+    if (path == null) return null;
+    for (Object part : path.getPath()) {
+      Object value = ((DefaultMutableTreeNode) part).getUserObject();
+      File root = value instanceof Repo r ? r.root() : value instanceof Change c ? c.repo().root() : null;
+      if (root != null) return LocalFileSystem.getInstance().findFileByIoFile(root);
+    }
+    return null;
   }
 
   /** 프로젝트에 등록된 VCS 루트(Git · SVN). 하나도 없으면 프로젝트 폴더를 Git 저장소로 본다(등록 전 프로젝트도 쓸 수 있게). */
