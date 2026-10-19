@@ -21,10 +21,13 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.vcs.ProjectLevelVcsManager;
 import com.intellij.openapi.vcs.VcsRoot;
+import com.intellij.openapi.vcs.FileStatus;
 import com.intellij.openapi.vcs.changes.ChangeListListener;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.ui.ColoredTreeCellRenderer;
 import com.intellij.ui.JBSplitter;
+import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.treeStructure.Tree;
 import git4idea.repo.GitRepository;
@@ -159,6 +162,16 @@ final class SyncPanel extends JPanel {
     add(bottom, BorderLayout.SOUTH);
 
     tree.setRootVisible(false);
+    // 충돌 묶음과 그 파일 줄은 IDE 의 충돌 파일 색(테마를 따름)으로 그린다.
+    tree.setCellRenderer(new ColoredTreeCellRenderer() {
+      @Override
+      public void customizeCellRenderer(JTree t, Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus) {
+        DefaultMutableTreeNode node = (DefaultMutableTreeNode) value;
+        append(Objects.toString(node.getUserObject(), ""), isConflictRow(node)
+          ? new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, FileStatus.MERGED_WITH_CONFLICTS.getColor())
+          : SimpleTextAttributes.REGULAR_ATTRIBUTES);
+      }
+    });
     tree.getSelectionModel().setSelectionMode(TreeSelectionModel.DISCONTIGUOUS_TREE_SELECTION);
     tree.addTreeSelectionListener(e -> showSelectedDiff());
     tree.addMouseListener(new MouseAdapter() {
@@ -547,6 +560,13 @@ final class SyncPanel extends JPanel {
       ActionUtil.performActionDumbAwareWithCallbacks(action, event);
     });
     return button;
+  }
+
+  /** 충돌 파일 줄이거나, 첫 자식이 충돌 파일인 묶음 줄(「충돌 N」). 묶음은 같은 종류 파일만 담는다. */
+  private static boolean isConflictRow(DefaultMutableTreeNode node) {
+    Object value = node.getUserObject();
+    if (!(value instanceof Change) && node.getChildCount() > 0) value = ((DefaultMutableTreeNode) node.getFirstChild()).getUserObject();
+    return value instanceof Change c && c.kind() == Kind.CONFLICT;
   }
 
   /** 트리에서 고른 줄(저장소 줄 · 묶음 줄 · 파일 줄)이 속한 저장소의 루트. 고른 줄이 없거나 VFS 에 없으면 null. */
