@@ -198,6 +198,17 @@ public class MyBatisCheck {
        List.of("", 1L, Timestamp.valueOf("2026-10-10 13:31:18"), true, new BigDecimal("1.5")));
     eq(MyBatisLog.parameters("2026-10-10(LocalDate), 2026-10-10T01:02:03(LocalDateTime)").toString(), "[2026-10-10, 2026-10-10T01:02:03]");
     eq(MyBatisLog.parse("nothing here"), null);
+    List<MyBatisLog.Entry> all = MyBatisLog.parseAll(List.of(log.split("\n")), 10);
+    eq(all.size(), 1);
+    eq(all.get(0).line, 1);
+    eq(all.get(0).values, e.values);
+    List<String> two = List.of("[a] x.M.first : ==>  Preparing: select ? from dual", "[b] x.M.second : ==>  Preparing: select 2 from dual",
+                               "[a] x.M.first : ==> Parameters: 7(Long)", "[b] x.M.second : ==> Parameters: ");
+    List<MyBatisLog.Entry> both = MyBatisLog.parseAll(two, 10);
+    eq(both.size(), 2);
+    eq(both.get(0).runnableSql() + " / " + both.get(1).statementId(), "select 7 from dual / second");
+    eq(MyBatisLog.parseAll(two, 1).get(0).line, 1);
+    eq(MyBatisLog.parseAll(List.of("nothing"), 10), List.of());
     MyBatisLog.Entry plain = MyBatisLog.parse("DEBUG [main] - ==>  Preparing: select 1 from dual\nDEBUG [main] - ==> Parameters: ");
     eq(plain.logger, null);
     eq(plain.runnableSql(), "select 1 from dual");

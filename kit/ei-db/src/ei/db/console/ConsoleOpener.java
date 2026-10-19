@@ -4,6 +4,7 @@ import com.intellij.ide.util.PsiNavigationSupport;
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
+import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -14,7 +15,9 @@ import ei.db.DbSettings;
 import ei.db.Notify;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -44,6 +47,31 @@ public final class ConsoleOpener {
   /** 「새 콘솔」: 다음 번호의 콘솔을 새 탭으로 연다(그 번호로 저장된 글이 있으면 되살리고, 없으면 빈 콘솔). 이후 open 은 이 콘솔로 보낸다. */
   public static void openNew(Project project, DbConfig c) {
     show(project, c, create(project, c), null);
+  }
+
+  /** 지금 편집기 탭으로 열린 콘솔들(탭 순서). */
+  public static List<VirtualFile> openConsoles(Project project) {
+    List<VirtualFile> out = new ArrayList<>();
+    for (VirtualFile f : FileEditorManager.getInstance(project).getOpenFiles()) {
+      if (isConsole(f) && f instanceof LightVirtualFile) out.add(f);
+    }
+    return out;
+  }
+
+  /** 그 콘솔이 쓰는 접속(자동 커밋 덮어쓰기를 얹은 사본). 접속이 지워졌으면 null. */
+  public static DbConfig connection(Project project, VirtualFile file) {
+    return config(project, file);
+  }
+
+  /** 고른 콘솔 탭을 열고 sql 을 끝에 덧붙인다. 접속이 지워졌으면 알리고 false. */
+  public static boolean append(Project project, VirtualFile file, String sql) {
+    DbConfig c = config(file);
+    if (c == null || !(file instanceof LightVirtualFile light)) {
+      Notify.error(project, "이 콘솔의 접속이 지워졌습니다: " + file.getName());
+      return false;
+    }
+    show(project, c, light, sql);
+    return true;
   }
 
   private static LightVirtualFile create(Project project, DbConfig c) {
