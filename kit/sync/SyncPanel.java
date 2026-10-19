@@ -21,6 +21,8 @@ import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.vcs.ProjectLevelVcsManager;
+import com.intellij.openapi.vcs.FilePath;
+import com.intellij.openapi.vcs.VcsDataKeys;
 import com.intellij.openapi.vcs.VcsRoot;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vcs.FileStatus;
@@ -32,6 +34,7 @@ import com.intellij.ui.JBSplitter;
 import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.treeStructure.Tree;
+import com.intellij.vcsUtil.VcsUtil;
 import git4idea.repo.GitRepository;
 import git4idea.repo.GitRepositoryChangeListener;
 import org.w3c.dom.Element;
@@ -162,7 +165,7 @@ final class SyncPanel extends JPanel {
 
     JPanel bottom = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
     bottom.add(actionButton("받기(Pull)", "Git.Pull", true));
-    bottom.add(actionButton("커밋…", "CheckinProject", false));
+    bottom.add(commitButton());
     bottom.add(actionButton("올리기(Push)", "Vcs.Push", true));
     bottom.add(actionButton("충돌 해결", "Git.ResolveConflicts", false));
     add(bottom, BorderLayout.SOUTH);
@@ -537,38 +540,97 @@ final class SyncPanel extends JPanel {
   }
 
   /**
-   * IDE 동작을 부르는 단추. forSelectedRepo 면 트리에서 고른 저장소의 루트를 VIRTUAL_FILE(_ARRAY) 로 넘겨
-   * 받기 · 올리기 창이 그 저장소로 열리게 한다(DvcsUtil.guessRepositoryForOperation 이 VIRTUAL_FILE 을 먼저 본다).
+   * IDE 동작을 부르는 단추. forSelectedRepo 면 트리에서 고른 저장소들의 루트를 VIRTUAL_FILE(_ARRAY) 로 넘겨
+   * 받기 창은 첫 저장소로 열리고(DvcsUtil.guessRepositoryForOperation 이 VIRTUAL_FILE 을 먼저 본다)
+   * 올리기 창은 고른 저장소만 체크된다(VcsPushAction 이 VIRTUAL_FILE_ARRAY 의 저장소를 미리 고른다).
    * 고른 저장소가 없으면 IDE 기본(마지막 편집 파일의 저장소)을 따른다.
    */
   private JButton actionButton(String text, String actionId, boolean forSelectedRepo) {
     JButton button = new JButton(text);
     button.addActionListener(e -> {
-      AnAction action = ActionManager.getInstance().getAction(actionId);
-      if (action == null) {
-        status.setText(text + " 동작을 찾을 수 없습니다(" + actionId + ").");
-        return;
-      }
-      // 동작이 꺼져 있으면(예: 충돌 해결은 git 이 실제 충돌 상태인 파일이 있을 때만) 아무 일도 없이 끝나므로 이유를 상태줄에 적는다.
       DataContext context = DataManager.getInstance().getDataContext(this);
-      Repo selected = forSelectedRepo ? selectedRepo() : null;
-      VirtualFile repoRoot = selected == null ? null : LocalFileSystem.getInstance().findFileByIoFile(selected.root());
-      if (repoRoot != null) {
+      List<VirtualFile> roots = new ArrayList<>();
+      if (forSelectedRepo) {
+        for (Repo repo : selectedRepos()) {
+          VirtualFile root = LocalFileSystem.getInstance().findFileByIoFile(repo.root());
+          if (root != null) roots.add(root);
+        }
+      }
+      if (!roots.isEmpty()) {
         context = SimpleDataContext.builder().setParent(context)
-          .add(CommonDataKeys.VIRTUAL_FILE, repoRoot)
-          .add(CommonDataKeys.VIRTUAL_FILE_ARRAY, new VirtualFile[]{repoRoot})
+          .add(CommonDataKeys.VIRTUAL_FILE, roots.get(0))
+          .add(CommonDataKeys.VIRTUAL_FILE_ARRAY, roots.toArray(VirtualFile[]::new))
           .build();
       }
-      AnActionEvent event = AnActionEvent.createFromAnAction(action, null, "KingGuraSynchronize", context);
-      ActionUtil.updateAction(action, event);
-      if (!event.getPresentation().isEnabled()) {
-        status.setText(text + ": 지금은 할 수 없습니다" + ("Git.ResolveConflicts".equals(actionId)
-          ? " — git 에 충돌 상태인 파일이 없습니다. 받기 뒤 충돌이 나면 이 단추로 해결합니다." : "."));
-        return;
-      }
-      ActionUtil.performActionDumbAwareWithCallbacks(action, event);
+      runAction(text, actionId, context);
     });
     return button;
+  }
+
+  /**
+   * 「커밋…」 단추. 트리에서 고른 것이 있으면 그것만 커밋 창에 체크해 연다(CheckinFiles 에 FILE_PATHS 를 넘김).
+   * 아무것도 고르지 않았으면 예전처럼 프로젝트 전체 커밋(CheckinProject).
+   */
+  private JButton commitButton() {
+    String text = "커밋…";
+    JButton button = new JButton(text);
+    button.addActionListener(e -> {
+      DataContext context = DataManager.getInstance().getDataContext(this);
+      if (tree.getSelectionCount() == 0) {
+        runAction(text, "CheckinProject", context);
+        return;
+      }
+      List<FilePath> paths = commitPaths();
+      if (paths.isEmpty()) {
+        status.setText(text + ": 고른 줄에 커밋할 내 변경이 없습니다(들어올 변경 · 모른 척 중은 커밋 대상이 아닙니다).");
+        return;
+      }
+      runAction(text, "CheckinFiles", SimpleDataContext.builder().setParent(context).add(VcsDataKeys.FILE_PATHS, paths).build());
+    });
+    return button;
+  }
+
+  /**
+   * 커밋할 경로. 파일 줄은 그 파일, 묶음 줄은 그 안의 파일, 저장소 줄은 저장소 폴더.
+   * 들어올 변경 · 모른 척 중은 내 작업본 변경이 아니어서 뺀다(나갈 변경 · 충돌만).
+   */
+  private List<FilePath> commitPaths() {
+    Set<FilePath> result = new LinkedHashSet<>();
+    TreePath[] paths = tree.getSelectionPaths();
+    if (paths == null) return new ArrayList<>(result);
+    for (TreePath path : paths) {
+      DefaultMutableTreeNode node = (DefaultMutableTreeNode) path.getLastPathComponent();
+      if (node.getUserObject() instanceof Repo repo) {
+        result.add(VcsUtil.getFilePath(repo.root(), true));
+        continue;
+      }
+      List<Object> values = new ArrayList<>();
+      if (node.getUserObject() instanceof Change) values.add(node.getUserObject());
+      for (int i = 0; i < node.getChildCount(); i++) values.add(((DefaultMutableTreeNode) node.getChildAt(i)).getUserObject());
+      for (Object value : values) {
+        if (value instanceof Change c && (c.kind() == Kind.OUTGOING || c.kind() == Kind.CONFLICT)) {
+          result.add(VcsUtil.getFilePath(new File(c.repo().root(), c.path()), false));
+        }
+      }
+    }
+    return new ArrayList<>(result);
+  }
+
+  /** IDE 동작 하나를 context 로 부른다. 동작이 꺼져 있으면(예: 충돌 해결은 git 이 실제 충돌 상태인 파일이 있을 때만) 아무 일도 없이 끝나므로 이유를 상태줄에 적는다. */
+  private void runAction(String text, String actionId, DataContext context) {
+    AnAction action = ActionManager.getInstance().getAction(actionId);
+    if (action == null) {
+      status.setText(text + " 동작을 찾을 수 없습니다(" + actionId + ").");
+      return;
+    }
+    AnActionEvent event = AnActionEvent.createFromAnAction(action, null, "KingGuraSynchronize", context);
+    ActionUtil.updateAction(action, event);
+    if (!event.getPresentation().isEnabled()) {
+      status.setText(text + ": 지금은 할 수 없습니다" + ("Git.ResolveConflicts".equals(actionId)
+        ? " — git 에 충돌 상태인 파일이 없습니다. 받기 뒤 충돌이 나면 이 단추로 해결합니다." : "."));
+      return;
+    }
+    ActionUtil.performActionDumbAwareWithCallbacks(action, event);
   }
 
   /** 파일 줄이면 그 종류, 묶음 줄이면 첫 자식 파일의 종류(묶음은 같은 종류 파일만 담는다). 저장소 줄은 null. */
@@ -589,10 +651,26 @@ final class SyncPanel extends JPanel {
     };
   }
 
+  /** 트리에서 고른 모든 줄이 속한 저장소(겹치지 않게, 고른 순서). */
+  private List<Repo> selectedRepos() {
+    Set<Repo> result = new LinkedHashSet<>();
+    TreePath[] paths = tree.getSelectionPaths();
+    if (paths == null) return new ArrayList<>(result);
+    for (TreePath path : paths) {
+      Repo repo = repoOf(path);
+      if (repo != null) result.add(repo);
+    }
+    return new ArrayList<>(result);
+  }
+
   /** 트리에서 고른 줄(저장소 줄 · 묶음 줄 · 파일 줄)이 속한 저장소. 고른 줄이 없거나 저장소를 알 수 없는 줄이면 null. */
   private Repo selectedRepo() {
     TreePath path = tree.getSelectionPath();
-    if (path == null) return null;
+    return path == null ? null : repoOf(path);
+  }
+
+  /** 줄 하나가 속한 저장소. 저장소가 하나뿐이라 저장소 줄이 없는 트리에서는 파일 줄에서만 알 수 있다. */
+  private static Repo repoOf(TreePath path) {
     for (Object part : path.getPath()) {
       Object value = ((DefaultMutableTreeNode) part).getUserObject();
       if (value instanceof Repo r) return r;
