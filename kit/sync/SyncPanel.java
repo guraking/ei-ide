@@ -165,14 +165,15 @@ final class SyncPanel extends JPanel {
     add(bottom, BorderLayout.SOUTH);
 
     tree.setRootVisible(false);
-    // 충돌 묶음과 그 파일 줄은 IDE 의 충돌 파일 색(테마를 따름)으로 그린다.
+    // 묶음 줄과 파일 줄은 종류별로 IDE 의 파일 상태 색(테마를 따름)으로 그린다. 충돌 빨강 · 들어올 파랑(수정됨) · 나갈 초록(추가됨).
     tree.setCellRenderer(new ColoredTreeCellRenderer() {
       @Override
       public void customizeCellRenderer(JTree t, Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus) {
         DefaultMutableTreeNode node = (DefaultMutableTreeNode) value;
-        append(Objects.toString(node.getUserObject(), ""), isConflictRow(node)
-          ? new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, FileStatus.MERGED_WITH_CONFLICTS.getColor())
-          : SimpleTextAttributes.REGULAR_ATTRIBUTES);
+        FileStatus color = statusColorOf(kindOf(node));
+        append(Objects.toString(node.getUserObject(), ""), color == null
+          ? SimpleTextAttributes.REGULAR_ATTRIBUTES
+          : new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, color.getColor()));
       }
     });
     tree.getSelectionModel().setSelectionMode(TreeSelectionModel.DISCONTIGUOUS_TREE_SELECTION);
@@ -567,11 +568,22 @@ final class SyncPanel extends JPanel {
     return button;
   }
 
-  /** 충돌 파일 줄이거나, 첫 자식이 충돌 파일인 묶음 줄(「충돌 N」). 묶음은 같은 종류 파일만 담는다. */
-  private static boolean isConflictRow(DefaultMutableTreeNode node) {
+  /** 파일 줄이면 그 종류, 묶음 줄이면 첫 자식 파일의 종류(묶음은 같은 종류 파일만 담는다). 저장소 줄은 null. */
+  private static Kind kindOf(DefaultMutableTreeNode node) {
     Object value = node.getUserObject();
     if (!(value instanceof Change) && node.getChildCount() > 0) value = ((DefaultMutableTreeNode) node.getFirstChild()).getUserObject();
-    return value instanceof Change c && c.kind() == Kind.CONFLICT;
+    return value instanceof Change c ? c.kind() : null;
+  }
+
+  /** 종류별 글자색으로 쓸 IDE 파일 상태. 모른 척 중 · 저장소 줄은 기본 글자색(null). */
+  private static FileStatus statusColorOf(Kind kind) {
+    if (kind == null) return null;
+    return switch (kind) {
+      case CONFLICT -> FileStatus.MERGED_WITH_CONFLICTS;
+      case INCOMING -> FileStatus.MODIFIED;
+      case OUTGOING -> FileStatus.ADDED;
+      case ASSUMED -> null;
+    };
   }
 
   /** 트리에서 고른 줄(저장소 줄 · 묶음 줄 · 파일 줄)이 속한 저장소. 고른 줄이 없거나 저장소를 알 수 없는 줄이면 null. */
