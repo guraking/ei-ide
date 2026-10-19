@@ -13,6 +13,7 @@
   16) properties 파일의 「투명한 native-to-ascii 변환」을 기본으로 켠다.
   17) 커밋 전 「Analyze code」(코드 분석) · 「Check TODO」 검사를 기본으로 끈다.
   18) 다른 프로젝트를 열 때 기본으로 새 창에 연다.
+  19) SVN 실행 파일 기본 경로를 설치본에 같이 넣은 svn.exe(plugins/kinggura-sync/svn/bin)로 한다.
 고치기 전 원본은 <intellij-community>/../backup/<시각>-before/ 에 같은 상대경로로 남긴다.
 모든 원문을 먼저 찾아 본 뒤에 쓴다. 하나라도 못 찾으면 아무 파일도 바꾸지 않는다. 줄끝(LF · CRLF)은 파일마다 원래대로 둔다.
 두 번 실행해도 같은 결과가 된다.
@@ -170,6 +171,20 @@ EDITS = [
     ("platform/ide-core/src/com/intellij/ide/GeneralSettings.kt",
      "    fun defaultConfirmNewProject(): Int = OPEN_PROJECT_ASK\n",
      "    fun defaultConfirmNewProject(): Int = OPEN_PROJECT_NEW_WINDOW  // EI IDE: 다른 프로젝트는 새 창에 연다\n"),
+    # 19) 2026.2 의 SVN 기능은 svn 명령줄 도구를 불러 쓴다. 설치본 plugins/kinggura-sync/svn 에 같이 넣은
+    #     VisualSVN 명령줄 도구가 있으면 그 svn.exe 를 기본 경로로 한다. 없으면 원래대로 PATH 의 svn 이다.
+    #     설정 → Version Control → Subversion 에서 고른 경로가 other.xml 에 남아 있으면 그 값을 따른다.
+    ("plugins/svn4idea/src/org/jetbrains/idea/svn/SvnApplicationSettings.java",
+     '    public @NlsSafe String mySvnCommandLine = "svn";\n',
+     '    public @NlsSafe String mySvnCommandLine = defaultSvnCommandLine();\n'
+     '\n'
+     '    // EI IDE: 설치본에 같이 넣은 svn.exe 가 있으면 그것을, 없으면 PATH 의 svn 을 쓴다.\n'
+     '    private static final String BUNDLED_SVN = "plugins/kinggura-sync/svn/bin/svn.exe";\n'
+     '\n'
+     '    private static String defaultSvnCommandLine() {\n'
+     '      File bundled = new File(PathManager.getHomePath(), BUNDLED_SVN);\n'
+     '      return bundled.isFile() ? bundled.getPath() : "svn";\n'
+     '    }\n'),
 ]
 
 

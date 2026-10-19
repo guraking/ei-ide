@@ -15,6 +15,7 @@ import com.intellij.openapi.actionSystem.DataContext;
 import com.intellij.openapi.actionSystem.impl.SimpleDataContext;
 import com.intellij.openapi.actionSystem.ex.ActionUtil;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.fileTypes.FileType;
 import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.project.Project;
@@ -102,6 +103,8 @@ final class SyncPanel extends JPanel {
   // ProjectLevelVcsManager 가 주는 AbstractVcs.getName() 값. GitVcs.NAME · SvnVcs.VCS_NAME 과 같다.
   private static final String VCS_NAME_GIT = "Git";
   private static final String VCS_NAME_SVN = "svn";
+  // 설치본에 같이 넣은 VisualSVN 명령줄 도구(apply_defaults 19 의 SVN 기본 경로와 같은 곳).
+  private static final String BUNDLED_SVN = "plugins/kinggura-sync/svn/bin/svn.exe";
   // svn status --xml 의 item 값 가운데 변경으로 볼 것. 서버 쪽(repos-status)은 작업본에만 있는 값이 올 수 없다.
   private static final Set<String> SVN_CHANGED = Set.of("modified", "added", "deleted", "replaced");
   private static final Set<String> SVN_LOCAL_CHANGED = Set.of("modified", "added", "deleted", "replaced", "unversioned", "missing");
@@ -1013,6 +1016,12 @@ final class SyncPanel extends JPanel {
     return run(dir, "git", full.toArray(String[]::new));
   }
 
+  /** 설치본에 같이 넣은 svn.exe 가 있으면 그 경로, 없으면 PATH 에서 찾을 「svn」. */
+  static String svnExecutable() {
+    File bundled = new File(PathManager.getHomePath(), BUNDLED_SVN);
+    return bundled.isFile() ? bundled.getPath() : VCS_NAME_SVN;
+  }
+
   /**
    * 명령을 실행해 표준 출력(UTF-8)을 돌려준다. 0 이 아닌 종료 코드 · 시간 초과는 오류 메시지를 담은 IOException 으로 바꾼다.
    * 출력 · 오류를 모두 파일로 받아 버퍼가 차서 멈추지 않게 하고, 그래서 waitFor 의 시간 제한이 실제로 걸린다.
@@ -1020,7 +1029,7 @@ final class SyncPanel extends JPanel {
    * 오류 출력은 git 은 UTF-8, svn 은 운영체제 문자셋으로 읽는다. svn 의 표준 출력이 필요한 곳은 --xml(UTF-8)로 받는다.
    */
   static String run(File dir, String exe, String... args) throws IOException, InterruptedException {
-    List<String> command = new ArrayList<>(List.of(exe));
+    List<String> command = new ArrayList<>(List.of(VCS_NAME_SVN.equals(exe) ? svnExecutable() : exe));
     command.addAll(List.of(args));
     String label = exe + " " + verb(args);
     File outFile = File.createTempFile("kinggura-sync", ".out");
