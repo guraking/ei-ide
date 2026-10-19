@@ -12,6 +12,7 @@
   15) 설치 화면 「설치 옵션」 칸을 모두 체크한 채로 띄운다.
   16) properties 파일의 「투명한 native-to-ascii 변환」을 기본으로 켠다.
   17) 커밋 전 「Analyze code」(코드 분석) · 「Check TODO」 검사를 기본으로 끈다.
+  18) 다른 프로젝트를 열 때 기본으로 새 창에 연다.
 고치기 전 원본은 <intellij-community>/../backup/<시각>-before/ 에 같은 상대경로로 남긴다.
 모든 원문을 먼저 찾아 본 뒤에 쓴다. 하나라도 못 찾으면 아무 파일도 바꾸지 않는다. 줄끝(LF · CRLF)은 파일마다 원래대로 둔다.
 두 번 실행해도 같은 결과가 된다.
@@ -164,6 +165,11 @@ EDITS = [
     ("platform/platform-impl/src/com/intellij/openapi/vfs/encoding/EncodingProjectManagerImpl.java",
      '    myNative2AsciiForPropertiesFiles = Boolean.parseBoolean(element.getAttributeValue("native2AsciiForPropertiesFiles"));\n',
      '    myNative2AsciiForPropertiesFiles = !Boolean.toString(false).equalsIgnoreCase(element.getAttributeValue("native2AsciiForPropertiesFiles"));  // EI IDE: 값이 없으면 켜짐\n'),
+    # 18) 다른 프로젝트를 열 때 지금 창을 닫지 않고 새 창에 연다. 설정 → 시스템 설정 「Open project in」의 기본값이다.
+    #     사용자가 고른 값이 ide.general.xml 에 남아 있으면 그 값을 따른다.
+    ("platform/ide-core/src/com/intellij/ide/GeneralSettings.kt",
+     "    fun defaultConfirmNewProject(): Int = OPEN_PROJECT_ASK\n",
+     "    fun defaultConfirmNewProject(): Int = OPEN_PROJECT_NEW_WINDOW  // EI IDE: 다른 프로젝트는 새 창에 연다\n"),
 ]
 
 
