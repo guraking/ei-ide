@@ -72,7 +72,7 @@ import java.util.concurrent.TimeUnit;
  * shortcut: Git 설정 화면의 git 경로를 따르지 않는다, PATH 에 git 이 없는 PC 를 지원해야 할 때 Git4Idea 의 실행 파일 관리자로 바꾼다.
  */
 final class SyncPanel extends JPanel {
-  /** ASSUMED 는 변경이 아니라 skip-worktree(예전 판은 assume-unchanged)로 모른 척 중인 Git 파일이다. 「전체」 보기에서만 맨 아래 묶음으로 보인다. */
+  /** ASSUMED 는 변경이 아니라 skip-worktree(예전 판은 assume-unchanged)로 모른 척 중인 Git 파일이다. 「모두 보기」에서만 맨 아래 묶음으로 보인다. */
   enum Kind { CONFLICT("충돌"), INCOMING("들어올 변경"), OUTGOING("나갈 변경"), ASSUMED("모른 척 중");
     final String label;
     Kind(String label) { this.label = label; }
@@ -143,11 +143,11 @@ final class SyncPanel extends JPanel {
     top.add(refreshButton);
     top.add(refreshSelectedButton);
     ButtonGroup group = new ButtonGroup();
-    addMode(top, group, "전체", null);
+    addMode(top, group, "모두 보기", null);
     addMode(top, group, "들어올", Kind.INCOMING);
     addMode(top, group, "나갈", Kind.OUTGOING);
     addMode(top, group, "충돌", Kind.CONFLICT);
-    modeButtons.get("전체").setSelected(true);
+    modeButtons.get("모두 보기").setSelected(true);
     top.add(status);
     add(top, BorderLayout.NORTH);
 
