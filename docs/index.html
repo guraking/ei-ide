@@ -1022,13 +1022,13 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       <div class="box"><b>실행</b><span>결과 창으로. resultType DTO 와 SELECT 칼럼이 안 맞으면 경고.</span></div>
     </div>
 
-    <h3>⑥ SQL 로그 → 실행 SQL <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>C</kbd></h3>
+    <h3>⑥ SQL 로그 → 실행 SQL</h3>
     <div class="ba">
       <div class="side"><h5>서버 콘솔 로그 (우클릭)</h5><pre>==&gt;  Preparing: SELECT * FROM ORDERS WHERE ORDER_NO = ? AND ST = ?
 ==&gt; Parameters: O100(String), A(String)</pre></div>
       <div class="side"><h5>값을 채운 SQL</h5><pre><span class="kw">SELECT</span> * <span class="kw">FROM</span> ORDERS <span class="kw">WHERE</span> ORDER_NO = <span class="st">'O100'</span> <span class="kw">AND</span> ST = <span class="st">'A'</span></pre></div>
     </div>
-    <p class="lead" style="margin-top:10px">우클릭 메뉴: 「SQL 로 바꿔 복사」 · 「데이터베이스 콘솔에서 실행」 · 「MyBatis 실행 창으로 열기」.</p>
+    <p class="lead" style="margin-top:10px">우클릭 메뉴: 「데이터베이스 콘솔에서 실행」 · 「쿼리 콘솔로 보내기」.</p>
     <p class="lead">「쿼리 콘솔로 보내기」는 실행하지 않고 콘솔에 붙입니다. 로그가 아닌 선택 글도 그대로 보냅니다.</p>
     <p class="lead">로그에 쿼리가 여럿이면 보낼 쿼리를 목록에서 고르고, 이어서 보낼 콘솔 탭(또는 「새 콘솔…」)을 고릅니다. 실행도 고른 콘솔에서 합니다.</p>
 
