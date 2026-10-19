@@ -28,6 +28,7 @@
 | 프론트 파일 색 | JS · JSX(React) · TS · TSX · HTML · CSS · SCSS · LESS · JSON · **Vue · Svelte · Astro** (TextMate 문법, 색·괄호·접기까지) | Vue · Svelte · Astro 없음 |
 | Gradle 빌드 · 실행 | IDE가 직접 (이클립스와 같음) | Gradle에 위임 |
 | 다른 프로젝트 열기 | 새 창에 열기 (지금 창은 그대로) | 매번 묻기 |
+| 콘솔에 남는 글 양 (서버 로그) | 10 MB | 1 MB |
 | 편집기 여백선 | 숨김 (120자 세로선) | 보임 |
 | properties 한글 | `\uXXXX` 를 한글로 보이고 저장할 때 다시 바꿈(투명한 native-to-ascii) | `\uXXXX` 그대로 |
 | 설치 화면 「설치 옵션」 | 바로가기 · PATH · 「폴더를 프로젝트로 열기」 · 파일 연결 모두 체크 | 모두 빈 칸 |
