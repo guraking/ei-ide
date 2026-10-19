@@ -21,6 +21,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.vcs.ProjectLevelVcsManager;
 import com.intellij.openapi.vcs.VcsRoot;
+import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vcs.FileStatus;
 import com.intellij.openapi.vcs.changes.ChangeListListener;
 import com.intellij.openapi.vfs.LocalFileSystem;
@@ -687,8 +688,26 @@ final class SyncPanel extends JPanel {
       status.setText("새로고침할 저장소를 트리에서 고르세요.");
       return;
     }
-    Repo target = selected;
-    String name = target.root().getName();
+    refreshRepo(selected.root(), selected.vcs());
+  }
+
+  /** file 이 속한 VCS 루트 하나만 비교한다(프로젝트 트리 우클릭으로 창을 열 때). 가장 안쪽 루트를 고르고, 없으면 전체를 비교한다. */
+  void refreshFor(VirtualFile file) {
+    File target = new File(file.getPath());
+    Map.Entry<File, Vcs> best = null;
+    for (Map.Entry<File, Vcs> entry : vcsRoots()) {
+      if (FileUtil.isAncestor(entry.getKey(), target, false)
+          && (best == null || entry.getKey().getPath().length() > best.getKey().getPath().length())) {
+        best = entry;
+      }
+    }
+    if (best == null) refresh();
+    else refreshRepo(best.getKey(), best.getValue());
+  }
+
+  /** 저장소 하나만 원격을 받아 와 다시 비교하고 목록에서 그 저장소 것만 바꾼다. 목록에 없던 저장소면 더한다. */
+  private void refreshRepo(File root, Vcs vcs) {
+    String name = root.getName();
     refreshButton.setEnabled(false);
     refreshSelectedButton.setEnabled(false);
     status.setText(name + " 원격 변경을 받아 오는 중…");
@@ -698,7 +717,7 @@ final class SyncPanel extends JPanel {
       String error = null;
       try {
         // 브랜치를 바꿨을 수 있어 저장소 정보부터 다시 읽는다.
-        updated = target.vcs() == Vcs.GIT ? gitRepo(target.root()) : svnRepo(target.root());
+        updated = vcs == Vcs.GIT ? gitRepo(root) : svnRepo(root);
         if (updated.vcs() == Vcs.GIT) {
           git(updated.root(), "fetch", "--quiet");
           fresh = compare(updated);
@@ -725,15 +744,21 @@ final class SyncPanel extends JPanel {
           return;
         }
         List<Repo> nextRepos = new ArrayList<>();
-        for (Repo r : repos) nextRepos.add(r.root().equals(target.root()) ? finalRepo : r);
+        boolean known = false;
+        for (Repo r : repos) {
+          boolean same = r.root().equals(finalRepo.root());
+          known |= same;
+          nextRepos.add(same ? finalRepo : r);
+        }
+        if (!known) nextRepos.add(finalRepo);
         repos = List.copyOf(nextRepos);
         List<Change> next = new ArrayList<>();
         for (Change c : changes) {
-          if (!c.repo().root().equals(target.root())) next.add(c);
+          if (!c.repo().root().equals(finalRepo.root())) next.add(c);
         }
         next.addAll(finalFresh);
         changes = next;
-        if (repos.size() == 1) title.setText(finalRepo.label());
+        title.setText(repos.size() == 1 ? finalRepo.label() : "저장소 " + repos.size() + "개");
         rebuildTree();
         status.setText(summary(next) + " — " + name + " 원격 확인 끝");
       });
