@@ -43,6 +43,8 @@ public final class MyBatisLog {
     public String logger;
     /** Parameters 줄을 찾았는지. ? 가 없는 문장이면 없어도 된다. */
     public boolean hasParameters;
+    /** Preparing 이 있던 줄 번호(0부터). parseAll 이 채우고, 그 밖에는 -1. */
+    public int line = -1;
 
     public String runnableSql() { return SqlValues.inline(sql, values); }
 
@@ -98,6 +100,21 @@ public final class MyBatisLog {
       }
     }
     return e;
+  }
+
+  /** 마지막 Preparing 부터 위로 최대 max 개를 줄 순서대로 읽는다. 각 Parameters 는 parse 와 같은 규칙으로 찾는다. */
+  public static List<Entry> parseAll(List<String> lines, int max) {
+    List<Integer> found = new ArrayList<>();
+    for (int k = lines.size() - 1; k >= 0 && found.size() < max; k--) {
+      if (isLine(lines.get(k), PREPARING)) found.add(0, k);
+    }
+    List<Entry> out = new ArrayList<>();
+    for (int k : found) {
+      Entry e = parse(lines, k);
+      e.line = k;
+      out.add(e);
+    }
+    return out;
   }
 
   private static boolean sameSource(Entry e, String thread, String line) {

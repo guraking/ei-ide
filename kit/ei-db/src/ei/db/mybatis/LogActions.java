@@ -35,6 +35,7 @@ import javax.swing.event.HyperlinkEvent;
 import java.awt.datatransfer.StringSelection;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -48,6 +49,10 @@ public final class LogActions {
   /** 커서 위로 Preparing 을 찾는 줄 수와, 그 아래로 Parameters 를 찾는 줄 수. */
   private static final int LOOK_BACK = 200;
   private static final int LOOK_AHEAD = 20;
+  /** 쿼리 목록에 띄울 최대 수(최근 것부터)와 목록 한 줄에 보일 SQL 글자 수. */
+  private static final int MAX_PICK = 50;
+  private static final int LABEL_SQL_LENGTH = 80;
+  private static final String NEW_CONSOLE = "새 콘솔…";
 
   static Editor editor(AnActionEvent e) {
     Editor editor = e.getData(CommonDataKeys.EDITOR);
@@ -95,6 +100,85 @@ public final class LogActions {
         .setTitle("실행할 접속")
         .setRenderer(com.intellij.ui.SimpleListCellRenderer.create("", MyBatisRunDialog::connectionLabel))
         .setItemChosenCallback(then::accept)
+        .createPopup()
+        .showInBestPositionFor(editor);
+  }
+
+  /**
+   * 보낼 쿼리를 고른다. 선택 글이 있으면 그것을 읽고, 없으면 콘솔에 찍힌 쿼리 목록(최근 것이 위, 커서 위 가장 가까운 것을 미리 고름)을 띄운다.
+   * 하나뿐이면 묻지 않는다. 쿼리가 없으면 then 을 부르지 않는다.
+   */
+  static void chooseEntry(Editor editor, Consumer<MyBatisLog.Entry> then) {
+    String selected = editor.getSelectionModel().getSelectedText();
+    if (selected != null && !selected.isBlank()) {
+      MyBatisLog.Entry entry = MyBatisLog.parse(selected);
+      if (entry != null) then.accept(entry);
+      return;
+    }
+    Document doc = editor.getDocument();
+    List<MyBatisLog.Entry> found = new ArrayList<>(MyBatisLog.parseAll(List.of(doc.getText().split("\n", -1)), MAX_PICK));
+    if (found.isEmpty()) return;
+    if (found.size() == 1) {
+      then.accept(found.get(0));
+      return;
+    }
+    Collections.reverse(found);
+    int caretLine = doc.getLineNumber(Math.min(editor.getCaretModel().getOffset(), doc.getTextLength()));
+    MyBatisLog.Entry near = found.get(0);
+    for (MyBatisLog.Entry entry : found) {
+      if (entry.line <= caretLine) {
+        near = entry;
+        break;
+      }
+    }
+    JBPopupFactory.getInstance().createPopupChooserBuilder(found)
+        .setTitle("보낼 쿼리")
+        .setRenderer(com.intellij.ui.SimpleListCellRenderer.create("", LogActions::entryLabel))
+        .setSelectedValue(near, true)
+        .setItemChosenCallback(then::accept)
+        .createPopup()
+        .showInBestPositionFor(editor);
+  }
+
+  /** 「매퍼.문장id · SQL 앞부분」. 로거가 없으면 SQL 만. */
+  private static String entryLabel(MyBatisLog.Entry entry) {
+    String sql = StringUtil.shortenTextWithEllipsis(entry.sql.replaceAll("\\s+", " "), LABEL_SQL_LENGTH, 0);
+    return entry.statementId() == null ? sql : entry.mapperName() + "." + entry.statementId() + " · " + sql;
+  }
+
+  /** 보낼 곳. file 이 있으면 그 콘솔, 없으면 그 접속의 마지막 콘솔(없으면 새로), fresh 면 그 접속의 새 콘솔. */
+  record Target(DbConfig config, VirtualFile file, boolean fresh) {
+    void append(Project project, String sql) {
+      PropertiesComponent.getInstance(project).setValue(MyBatisRunDialog.CONNECTION_KEY, config.id);
+      if (file != null) {
+        ConsoleOpener.append(project, file, sql);
+        return;
+      }
+      if (fresh) ConsoleOpener.openNew(project, config);
+      ConsoleOpener.open(project, config, sql);
+    }
+  }
+
+  /** 보낼 콘솔을 고른다. 열린 콘솔 탭 끝에 「새 콘솔…」(접속을 고른다)을 둔다. 열린 콘솔이 없으면 접속만 고른다. */
+  static void chooseConsole(Project project, Editor editor, Consumer<Target> then) {
+    List<Object> items = new ArrayList<>(ConsoleOpener.openConsoles(project));
+    if (items.isEmpty()) {
+      chooseConnection(project, editor, c -> then.accept(new Target(c, null, false)));
+      return;
+    }
+    items.add(NEW_CONSOLE);
+    JBPopupFactory.getInstance().createPopupChooserBuilder(items)
+        .setTitle("보낼 콘솔")
+        .setRenderer(com.intellij.ui.SimpleListCellRenderer.create("", v -> v instanceof VirtualFile f ? f.getNameWithoutExtension() : NEW_CONSOLE))
+        .setItemChosenCallback(v -> {
+          if (!(v instanceof VirtualFile f)) {
+            chooseConnection(project, editor, c -> then.accept(new Target(c, null, true)));
+            return;
+          }
+          DbConfig c = ConsoleOpener.connection(project, f);
+          if (c == null) Notify.error(project, "이 콘솔의 접속이 지워졌습니다: " + f.getName());
+          else then.accept(new Target(c, f, false));
+        })
         .createPopup()
         .showInBestPositionFor(editor);
   }
@@ -149,21 +233,23 @@ public final class LogActions {
     }
   }
 
-  /** 「데이터베이스 콘솔에서 실행」. */
+  /** 「데이터베이스 콘솔에서 실행」: 쿼리 · 콘솔을 골라 그 콘솔 끝에 붙이고 그 접속으로 실행한다. */
   public static final class Run extends LogAction {
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
       Project project = e.getProject();
-      MyBatisLog.Entry entry = find(e);
       Editor editor = editor(e);
-      if (project == null || entry == null || editor == null) return;
-      chooseConnection(project, editor, c -> runInConsole(project, c, entry));
+      if (project == null || editor == null) return;
+      chooseEntry(editor, entry -> chooseConsole(project, editor, t -> {
+        t.append(project, SqlValues.inline(entry.sql, entry.values, t.config().kind));
+        SqlRunner.run(project, t.config(), entry.sql, new ArrayList<>(entry.values));
+      }));
     }
   }
 
   /**
-   * 「쿼리 콘솔로 보내기」: 실행하지 않고 고른 접속에서 마지막으로 연 콘솔(없으면 새로) 끝에 SQL 을 붙인다.
-   * MyBatis 로그(선택 글 또는 커서 근처)면 ? 를 로그 값으로 채운 SQL, 아니면 선택한 글 그대로. 둘 다 없으면 보이지 않는다.
+   * 「쿼리 콘솔로 보내기」: 실행하지 않고 고른 콘솔 끝에 SQL 을 붙인다(chooseConsole).
+   * MyBatis 로그(선택 글, 없으면 고른 쿼리)면 ? 를 로그 값으로 채운 SQL, 아니면 선택한 글 그대로. 둘 다 없으면 보이지 않는다.
    */
   public static final class Send extends AnAction {
     @Override
@@ -179,13 +265,12 @@ public final class LogActions {
       Project project = e.getProject();
       Editor editor = editor(e);
       if (project == null || editor == null) return;
-      MyBatisLog.Entry entry = find(e);
       String selected = selected(e);
-      if (entry == null && selected == null) return;
-      chooseConnection(project, editor, c -> {
-        PropertiesComponent.getInstance(project).setValue(MyBatisRunDialog.CONNECTION_KEY, c.id);
-        ConsoleOpener.open(project, c, entry != null ? SqlValues.inline(entry.sql, entry.values, c.kind) : selected);
-      });
+      if (selected != null && MyBatisLog.parse(selected) == null) {
+        chooseConsole(project, editor, t -> t.append(project, selected));
+        return;
+      }
+      chooseEntry(editor, entry -> chooseConsole(project, editor, t -> t.append(project, SqlValues.inline(entry.sql, entry.values, t.config().kind))));
     }
 
     /** 공백이 아닌 선택 글. 없으면 null. */
