@@ -168,7 +168,7 @@ final class SyncPanel extends JPanel {
     add(bottom, BorderLayout.SOUTH);
 
     tree.setRootVisible(false);
-    // 묶음 줄과 파일 줄은 종류별로 IDE 의 파일 상태 색(테마를 따름)으로 그린다. 충돌 빨강 · 들어올 파랑(수정됨) · 나갈 초록(추가됨).
+    // 묶음 줄과 파일 줄은 종류별로 IDE 의 파일 상태 색(테마를 따름)으로 그린다. 충돌 빨강 · 들어올 파랑(수정됨) · 나갈 보라(병합됨).
     tree.setCellRenderer(new ColoredTreeCellRenderer() {
       @Override
       public void customizeCellRenderer(JTree t, Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus) {
@@ -584,7 +584,7 @@ final class SyncPanel extends JPanel {
     return switch (kind) {
       case CONFLICT -> FileStatus.MERGED_WITH_CONFLICTS;
       case INCOMING -> FileStatus.MODIFIED;
-      case OUTGOING -> FileStatus.ADDED;
+      case OUTGOING -> FileStatus.MERGE;
       case ASSUMED -> null;
     };
   }

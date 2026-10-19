@@ -1,0 +1,7 @@
+<idea-plugin>
+  <actions>
+    <reference ref="KingGura.SynchronizeWorkspace">
+      <add-to-group group-id="SubversionGroup" anchor="first"/>
+    </reference>
+  </actions>
+</idea-plugin>

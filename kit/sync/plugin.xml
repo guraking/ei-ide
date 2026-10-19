@@ -10,6 +10,8 @@
   <depends>com.intellij.modules.vcs</depends>
   <!-- Git 은 저장소 변경 알림(GIT_REPO_CHANGE)을 받으려 플러그인이 필요하다. SVN 은 svn 명령줄만 쓰므로 svn4idea 없이도 된다. -->
   <depends>Git4Idea</depends>
+  <!-- SVN 플러그인이 있으면 트리 우클릭 Subversion 묶음에도 「작업 공간 동기화」를 넣는다. -->
+  <depends optional="true" config-file="kinggura-sync-svn.xml">Subversion</depends>
 
   <extensions defaultExtensionNs="com.intellij">
     <toolWindow id="Synchronize" anchor="bottom" icon="AllIcons.Actions.Refresh"
