@@ -125,7 +125,7 @@ final class SyncPanel extends JPanel {
   private final DiffRequestPanel diffPanel;
   private final JLabel title = new JLabel("동기화");
   private final JLabel status = new JLabel(" ");
-  private final JButton refreshButton = new JButton("새로고침");
+  private final JButton refreshButton = new JButton("전체 새로고침");
   private final JButton refreshSelectedButton = new JButton("고른 저장소만");
   private final Map<String, JToggleButton> modeButtons = new LinkedHashMap<>();
 
