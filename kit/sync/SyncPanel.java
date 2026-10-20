@@ -111,6 +111,8 @@ final class SyncPanel extends JPanel {
   private static final String VCS_NAME_SVN = "svn";
   private static final String ACTION_PULL = "Git.Pull";
   private static final String ACTION_PUSH = "Vcs.Push";
+  // IDE 의 「Update Project」(Ctrl+T). 프로젝트의 모든 VCS 루트를 받는다(Git 은 받기 방식을 묻고, SVN 은 svn update).
+  private static final String ACTION_UPDATE_ALL = "Vcs.UpdateProject";
   // 설치본에 같이 넣은 VisualSVN 명령줄 도구(apply_defaults 19 의 SVN 기본 경로와 같은 곳).
   private static final String BUNDLED_SVN = "plugins/kinggura-sync/svn/bin/svn.exe";
   // svn status --xml 의 item 값 가운데 변경으로 볼 것. 서버 쪽(repos-status)은 작업본에만 있는 값이 올 수 없다.
@@ -172,6 +174,7 @@ final class SyncPanel extends JPanel {
 
     JPanel bottom = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
     bottom.add(actionButton("받기(Pull)", ACTION_PULL, true));
+    bottom.add(actionButton("전체 받기", ACTION_UPDATE_ALL, false));
     bottom.add(commitButton());
     bottom.add(actionButton("올리기(Push)", ACTION_PUSH, true));
     bottom.add(actionButton("충돌 해결", "Git.ResolveConflicts", false));
