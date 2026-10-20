@@ -173,8 +173,8 @@ final class SyncPanel extends JPanel {
     add(splitter, BorderLayout.CENTER);
 
     JPanel bottom = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
-    bottom.add(actionButton("받기(Pull)", ACTION_PULL, true));
     bottom.add(actionButton("전체 받기", ACTION_UPDATE_ALL, false));
+    bottom.add(actionButton("받기(Pull)", ACTION_PULL, true));
     bottom.add(commitButton());
     bottom.add(actionButton("올리기(Push)", ACTION_PUSH, true));
     bottom.add(actionButton("충돌 해결", "Git.ResolveConflicts", false));
