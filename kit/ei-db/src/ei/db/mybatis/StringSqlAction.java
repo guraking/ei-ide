@@ -32,6 +32,7 @@ import com.intellij.psi.PsiType;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.psi.util.PsiUtil;
 import ei.db.Notify;
+import ei.db.console.SqlFormatter;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -87,9 +88,9 @@ public final class StringSqlAction extends AnAction {
     String raw = SqlConcat.sql(found.pieces());
     String sql;
     try {
-      sql = SqlConcat.format(raw);
-    } catch (IllegalStateException ex) {
-      Notify.warning(project, ex.getMessage() + " 정렬하지 않은 SQL 을 보여 줍니다.");
+      sql = SqlFormatter.format(raw);
+    } catch (RuntimeException ex) {
+      Notify.warning(project, "SQL 정렬에 실패했습니다(" + ex + "). 정렬하지 않은 SQL 을 보여 줍니다.");
       sql = raw.strip();
     }
     new StringSqlDialog(project, sql, SqlConcat.xml(sql, found.methodName())).show();

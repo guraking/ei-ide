@@ -2,8 +2,6 @@ package ei.db.mybatis;
 
 import ei.db.gen.Names;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
@@ -29,7 +27,6 @@ final class SqlConcat {
   private static final String UPDATE = "update";
   private static final List<String> STATEMENTS = List.of(SELECT, "insert", UPDATE, "delete");
   private static final String BODY_INDENT = "    ";
-  private static final String FORMATTER = "ei.db.console.SqlFormatter";
   /** 끝이 .getXxx() · .isXxx() 인 식(받는 쪽이 없어도 된다). */
   private static final Pattern GETTER = Pattern.compile("(?:^|\\.)\\s*(?:get|is)([A-Z][\\w$]*)\\s*\\(\\s*\\)\\s*$");
   private static final Pattern IDENT = Pattern.compile("[A-Za-z_$][\\w$]*");
@@ -99,21 +96,5 @@ final class SqlConcat {
       if (!line.isBlank()) b.append(BODY_INDENT).append(line.stripTrailing());
     }
     return b.toString();
-  }
-
-  /**
-   * 콘솔의 SQL 정렬(ei.db.console.SqlFormatter.format)로 정렬한다.
-   * shortcut: SqlFormatter 가 console 패키지 전용이라 리플렉션으로 부른다. SqlFormatter · format 을 public 으로 열면 바로 부른다.
-   */
-  static String format(String sql) {
-    try {
-      Method m = Class.forName(FORMATTER).getDeclaredMethod("format", String.class);
-      m.setAccessible(true);
-      return (String) m.invoke(null, sql);
-    } catch (InvocationTargetException e) {
-      throw new IllegalStateException("SQL 정렬에 실패했습니다: " + e.getCause(), e.getCause());
-    } catch (ReflectiveOperationException e) {
-      throw new IllegalStateException("SQL 정렬 기능(" + FORMATTER + ")을 찾지 못했습니다: " + e, e);
-    }
   }
 }

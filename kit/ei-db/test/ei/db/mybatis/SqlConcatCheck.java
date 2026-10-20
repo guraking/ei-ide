@@ -1,5 +1,6 @@
 package ei.db.mybatis;
 
+import ei.db.console.SqlFormatter;
 import java.io.StringReader;
 import java.util.List;
 import java.util.Objects;
@@ -35,7 +36,7 @@ public class SqlConcatCheck {
         SqlConcat.Piece.literal(" and a.USE_YN = 'Y'")));
     eq(sql, "select a.USER_ID, a.USER_NM from TB_USER a, TB_DEPT b where a.DEPT_CD = b.DEPT_CD(+) and a.USER_ID = #{userId} and a.AGE >= #{age} and a.USE_YN = 'Y'");
 
-    String formatted = SqlConcat.format(sql);
+    String formatted = SqlFormatter.format(sql);
     if (args.length > 0) System.out.println(formatted);
     eq(formatted, """
         SELECT
