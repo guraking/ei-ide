@@ -82,12 +82,8 @@
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EiDb.MyBatis.Run"/>
     </action>
     <group id="EiDb.MyBatis.LogGroup">
-      <action id="EiDb.MyBatis.LogCopy" class="ei.db.mybatis.LogActions$Copy" text="SQL 로 바꿔 복사">
-        <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt C"/>
-      </action>
       <action id="EiDb.MyBatis.LogRun" class="ei.db.mybatis.LogActions$Run" text="데이터베이스 콘솔에서 실행"/>
       <action id="EiDb.MyBatis.LogSend" class="ei.db.mybatis.LogActions$Send" text="쿼리 콘솔로 보내기"/>
-      <action id="EiDb.MyBatis.LogOpen" class="ei.db.mybatis.LogActions$Open" text="MyBatis 실행 창으로 열기"/>
       <separator/>
       <add-to-group group-id="ConsoleView.PopupMenu" anchor="first"/>
     </group>
