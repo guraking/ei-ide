@@ -1403,6 +1403,193 @@ build-windows.bat
       <tr><td>호출 코드 복사<br>매퍼 XML 문장 안</td><td>그 문장을 부르는 서비스 쪽 코드(매개변수 객체 채우기 + 호출 줄)를 클립보드에 복사합니다.</td></tr>
       <tr><td>칼럼 이름 바꾸기…<br>매퍼 XML 우클릭 · Source 메뉴</td><td>모든 매퍼 XML 에서 옛 칼럼 이름을 찾아 미리보기에서 골라 바꾸고, 짝인 DTO 필드 · getter · setter 와 <code>#{}</code> · property 도 함께 바꿉니다. <code>&lt;if test&gt;</code> 안 이름은 바꾸지 않습니다.</td></tr>
     </table>
+
+    <h3>옮겨 담기 코드 만들기 · 자바 우클릭</h3>
+    <div class="cols2">
+      <div class="scroll">
+        <div class="ide" style="min-width:560px">
+          <div class="title"><span class="dots"><i></i><i></i><i></i></span>옮겨 담기 코드 만들기</div>
+          <div class="form">
+            <label><span><span class="mark">1</span> 꺼낼 객체</span><span class="f">src : UserForm</span></label>
+            <label>담을 객체<span class="f">dst : UserDto</span></label>
+            <div style="display:flex; gap:6px"><span class="btn">취소</span><span class="btn pri">넣기</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="scroll">
+        <div class="ide" style="min-width:560px">
+          <div class="title"><span class="dots"><i></i><i></i><i></i></span>UserService.java</div>
+          <pre class="sql nolig"><span class="ln">dst.setName(src.getName());</span><span class="ln">dst.setActive(src.isActive());</span><span class="ln"><span class="mark">2</span> <span class="cm">// 형 다름: dst.setId(src.getId()); // Long ← String</span></span><span class="ln"><span class="cm">// 짝 없음: dst.setMemo(...);</span></span></pre>
+        </div>
+      </div>
+    </div>
+    <ol class="legend" style="grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:14px">
+      <li><span class="mark">1</span><div><b>두 객체 고르기</b> <span class="t">메서드 안의 지역 변수 · 매개변수 · 필드 중에서 고릅니다. 줄은 커서 줄 다음에 들어갑니다.</span></div></li>
+      <li><span class="mark">2</span><div><b>그대로 못 옮기는 필드</b> <span class="t">형이 다르거나 꺼낼 쪽에 getter 가 없으면 주석 줄로 남겨, 손으로 마저 채울 곳이 보이게 합니다.</span></div></li>
+    </ol>
+
+    <h3>요청 값을 DTO 로 묶기 · 컨트롤러 메서드 안</h3>
+    <div class="cols2">
+      <div class="scroll">
+        <div class="ide" style="min-width:560px">
+          <div class="title"><span class="dots"><i></i><i></i><i></i></span>전 — UserController.java</div>
+          <pre class="sql nolig"><span class="ln">@GetMapping(<span class="st">"/list"</span>)</span><span class="ln"><span class="kw">public</span> List&lt;UserDto&gt; list(</span><span class="ln">    @RequestParam(<span class="st">"user_id"</span>) String id,</span><span class="ln">    @RequestParam(defaultValue = <span class="st">"1"</span>) <span class="kw">int</span> page) {</span><span class="ln">  <span class="kw">return</span> service.list(id, page);</span><span class="ln">}</span></pre>
+        </div>
+      </div>
+      <div class="scroll">
+        <div class="ide" style="min-width:560px">
+          <div class="title"><span class="dots"><i></i><i></i><i></i></span>후 — UserController.java · ListRequest.java</div>
+          <pre class="sql nolig"><span class="ln"><span class="kw">public</span> List&lt;UserDto&gt; list(@ModelAttribute ListRequest req) {</span><span class="ln">  <span class="kw">return</span> service.list(req.getUserId(), req.getPage());</span><span class="ln">}</span><span class="ln">&nbsp;</span><span class="ln"><span class="kw">public class</span> ListRequest {</span><span class="ln">    <span class="kw">private</span> String userId;</span><span class="ln">    <span class="kw">private int</span> page = 1;</span><span class="ln">    …</span></pre>
+        </div>
+      </div>
+    </div>
+    <p class="lead" style="margin-top:10px">창에서 클래스 이름(기본 <code>메서드이름Request</code>)과 묶을 매개변수 · 필드 이름을 고릅니다. 요청 이름 <code>user_id</code> · <code>user-name</code> 은 필드 이름 <code>userId</code> · <code>userName</code> 으로 바꾸고, 바뀐 이름은 창에 따로 알려 줍니다(요청 쪽 이름도 맞춰야 하므로). <code>defaultValue</code> 는 필드 초깃값이 됩니다.</p>
+
+    <h3>입력 검증 붙이기 · DTO 안</h3>
+    <div class="cols2">
+      <div class="scroll">
+        <div class="ide" style="min-width:560px">
+          <div class="title"><span class="dots"><i></i><i></i><i></i></span>입력 검증 붙이기 — OrderItemDto</div>
+          <div class="form">
+            <label>접속<span class="f">개발 DB</span></label>
+            <label>스키마<span class="f">APP</span></label>
+            <label>표 이름<span class="f">ORDER_ITEM  (클래스 이름에서 짐작)</span></label>
+          </div>
+          <table class="grid" style="border-top:1px solid var(--line)">
+            <tr><th>미리보기 · 칼럼</th><th>형 · NULL</th><th>붙일 주석</th></tr>
+            <tr><td>ITEM_ID</td><td>VARCHAR2(20) PK</td><td>@NotBlank @Size(max = 20)</td></tr>
+            <tr><td>PRICE</td><td>NUMBER(12,2) NOT NULL</td><td>@NotNull @Digits(integer = 10, fraction = 2)</td></tr>
+            <tr><td>MEMO</td><td>VARCHAR2(100)</td><td>@Size(max = 100)</td></tr>
+          </table>
+          <div class="statusline" style="border-top:1px solid var(--line); border-bottom:0"><span class="m">표를 고른 뒤 붙일 주석을 미리 보여 줍니다</span><span class="gap"></span><span class="btn">취소</span><span class="btn pri">붙이기</span></div>
+        </div>
+      </div>
+      <div class="scroll">
+        <div class="ide" style="min-width:560px">
+          <div class="title"><span class="dots"><i></i><i></i><i></i></span>OrderItemDto.java</div>
+          <pre class="sql nolig"><span class="ln">@NotBlank</span><span class="ln">@Size(max = 20)</span><span class="ln"><span class="kw">private</span> String itemId;</span><span class="ln">&nbsp;</span><span class="ln">@NotNull</span><span class="ln">@Digits(integer = 10, fraction = 2)</span><span class="ln"><span class="kw">private</span> BigDecimal price;</span></pre>
+        </div>
+      </div>
+    </div>
+    <p class="lead" style="margin-top:10px">필드 이름을 칼럼 이름(<code>itemId</code> ↔ <code>ITEM_ID</code>)으로 맞춥니다. 날짜 칼럼은 <code>@NotNull</code> 만, <code>double</code> 필드에는 자릿수를 걸지 않습니다. 이미 붙어 있는 주석은 건너뜁니다. jakarta · javax 는 프로젝트에 있는 쪽을 씁니다.</p>
+
+    <h3>빈 catch · printStackTrace · System.out 검사</h3>
+    <div class="scroll">
+      <div class="ide rel" style="min-width:560px">
+        <div class="title"><span class="dots"><i></i><i></i><i></i></span>UserService.java</div>
+        <pre class="sql nolig"><span class="ln"><span class="kw">try</span> {</span><span class="ln">  mapper.save(user);</span><span class="ln">} <span class="kw">catch</span> (Exception e) { <span class="squig">}</span></span><span class="ln"><span class="squig">System.out.println(user);</span></span></pre>
+        <div class="balloon" style="border-left-color:var(--warn)">빈 catch 블록입니다 — <kbd>Alt</kbd>+<kbd>Enter</kbd> 「로그 넣기: <code>log.error("save 실패", e);</code>」</div>
+        <div class="balloon" style="border-left-color:var(--warn)">System.out 출력 대신 로거를 쓰세요 — <kbd>Alt</kbd>+<kbd>Enter</kbd> 「로거로 바꾸기: <code>log.info("{}", user);</code>」</div>
+      </div>
+    </div>
+    <p class="lead" style="margin-top:10px">로거가 없는 클래스는 노란 줄만 보이고 바꾸기는 뜨지 않습니다. 끄려면 설정 → 검사에서 「EiLogUsage」를 찾습니다.</p>
+
+    <h3>테스트 뼈대 만들기 · 자바 · 트리 우클릭</h3>
+    <div class="scroll">
+      <div class="ide" style="min-width:560px">
+        <div class="title"><span class="dots"><i></i><i></i><i></i></span>src/test/java/…/UserServiceTest.java</div>
+        <pre class="sql nolig"><span class="ln">@ExtendWith(MockitoExtension.<span class="kw">class</span>)</span><span class="ln"><span class="kw">class</span> UserServiceTest {</span><span class="ln">    @Mock <span class="kw">private</span> UserMapper userMapper;</span><span class="ln">    @InjectMocks <span class="kw">private</span> UserService target;</span><span class="ln">&nbsp;</span><span class="ln">    @Test</span><span class="ln">    <span class="kw">void</span> find() {</span><span class="ln">        <span class="cm">// given</span></span><span class="ln">        <span class="cm">// when</span></span><span class="ln">        target.find((String) <span class="kw">null</span>);</span><span class="ln">        <span class="cm">// then</span></span><span class="ln">    }</span></pre>
+      </div>
+    </div>
+    <p class="lead" style="margin-top:10px">서비스 클래스는 위처럼 Mockito, 매퍼 인터페이스는 <code>@MybatisTest</code> 로 만듭니다. 이름이 같은 메서드는 <code>find_2</code> 처럼 번호를 붙이고, 테스트 파일이 이미 있으면 빠진 테스트만 끝에 더합니다.</p>
+
+    <h3>enum 만들기 · 결과 창 「enum」 단추</h3>
+    <div class="cols2">
+      <div class="scroll">
+        <div class="ide" style="min-width:560px">
+          <div class="title"><span class="dots"><i></i><i></i><i></i></span>결과 — SELECT CD, NM FROM CODE_DETAIL WHERE GRP = 'USE_YN'</div>
+          <div class="statusline"><span class="btn pri">enum</span><span class="m">코드 칼럼 CD · 이름 칼럼 NM</span></div>
+          <table class="grid">
+            <tr><th>CD</th><th>NM</th></tr>
+            <tr><td>Y</td><td>사용</td></tr>
+            <tr><td>N</td><td>미사용</td></tr>
+          </table>
+        </div>
+      </div>
+      <div class="scroll">
+        <div class="ide" style="min-width:560px">
+          <div class="title"><span class="dots"><i></i><i></i><i></i></span>UseYn.java</div>
+          <pre class="sql nolig"><span class="ln"><span class="cm">/**</span></span><span class="ln"><span class="cm"> * @ei-sql SELECT CD, NM FROM CODE_DETAIL …</span></span><span class="ln"><span class="cm"> * @ei-connection 개발 DB</span></span><span class="ln"><span class="cm"> */</span></span><span class="ln"><span class="kw">public enum</span> UseYn {</span><span class="ln">    Y(<span class="st">"Y"</span>, <span class="st">"사용"</span>),</span><span class="ln">    N(<span class="st">"N"</span>, <span class="st">"미사용"</span>)</span><span class="ln">    ;</span><span class="ln">    <span class="kw">public static</span> UseYn of(String code) { … }</span></pre>
+        </div>
+      </div>
+    </div>
+    <p class="lead" style="margin-top:10px">코드가 숫자로 시작하면 <code>C01</code> 처럼 앞에 C 를 붙이고, 겹치는 이름은 <code>_2</code> 를 붙입니다. 표의 코드가 바뀌면 enum 안에서 우클릭 → 「enum 다시 맞추기」: Javadoc 의 SQL 을 그 접속으로 다시 돌려 상수를 새로 씁니다.</p>
+
+    <h3>JSON 으로 DTO 만들기 · 트리 우클릭</h3>
+    <div class="cols2">
+      <div class="scroll">
+        <div class="ide" style="min-width:560px">
+          <div class="title"><span class="dots"><i></i><i></i><i></i></span>JSON 으로 DTO 만들기</div>
+          <pre class="sql nolig"><span class="ln">{</span><span class="ln">  <span class="st">"user_id"</span>: 10,</span><span class="ln">  <span class="st">"name"</span>: <span class="st">"홍길동"</span>,</span><span class="ln">  <span class="st">"orders"</span>: [ { <span class="st">"order_no"</span>: <span class="st">"A1"</span> } ]</span><span class="ln">}</span></pre>
+        </div>
+      </div>
+      <div class="scroll">
+        <div class="ide" style="min-width:560px">
+          <div class="title"><span class="dots"><i></i><i></i><i></i></span>ResponseDto.java</div>
+          <pre class="sql nolig"><span class="ln"><span class="kw">public class</span> ResponseDto {</span><span class="ln">    @JsonProperty(<span class="st">"user_id"</span>)</span><span class="ln">    <span class="kw">private</span> Long userId;</span><span class="ln">    <span class="kw">private</span> String name;</span><span class="ln">    <span class="kw">private</span> List&lt;Orders&gt; orders;</span><span class="ln">&nbsp;</span><span class="ln">    <span class="kw">public static class</span> Orders {</span><span class="ln">        @JsonProperty(<span class="st">"order_no"</span>)</span><span class="ln">        <span class="kw">private</span> String orderNo;</span><span class="ln">    }</span><span class="ln">}</span></pre>
+        </div>
+      </div>
+    </div>
+
+    <h3>문자열 SQL 정리 · 자바 우클릭</h3>
+    <div class="cols2">
+      <div class="scroll">
+        <div class="ide" style="min-width:560px">
+          <div class="title"><span class="dots"><i></i><i></i><i></i></span>전 — UserDao.java</div>
+          <pre class="sql nolig"><span class="ln">String sql = <span class="st">"select a.USER_ID, a.USER_NM from TB_USER a "</span></span><span class="ln">           + <span class="st">"where a.USER_ID = "</span> + dto.getUserId()</span><span class="ln">           + <span class="st">" and a.AGE &gt;= "</span> + age;</span></pre>
+        </div>
+      </div>
+      <div class="scroll">
+        <div class="ide" style="min-width:560px">
+          <div class="title"><span class="dots"><i></i><i></i><i></i></span>후 — 복사되는 매퍼 문장</div>
+          <pre class="sql nolig"><span class="ln">&lt;<span class="kw">select</span> id=<span class="st">"selectUser"</span>&gt;</span><span class="ln">    &lt;![CDATA[</span><span class="ln">    <span class="kw">SELECT</span></span><span class="ln">           a.USER_ID</span><span class="ln">         , a.USER_NM</span><span class="ln">      <span class="kw">FROM</span> TB_USER a</span><span class="ln">     <span class="kw">WHERE</span> a.USER_ID = #{userId}</span><span class="ln">       <span class="kw">AND</span> a.AGE &gt;= #{age}</span><span class="ln">    ]]&gt;</span><span class="ln">&lt;/<span class="kw">select</span>&gt;</span></pre>
+        </div>
+      </div>
+    </div>
+    <p class="lead" style="margin-top:10px">커서를 SQL 문자열 위에 두고 우클릭합니다. <code>dto.getUserId()</code> 는 <code>#{userId}</code> 로 바꾸고, 문장 종류(select · insert · update · delete)는 SQL 첫 낱말로 정합니다. 부등호가 있으면 CDATA 로 감쌉니다. 자바 코드는 바꾸지 않고 창에서 보여 주고 복사만 합니다.</p>
+
+    <h3>동적 조건 · 페이징 · 호출 코드 · 매퍼 XML 문장 안</h3>
+    <div class="cols2">
+      <div class="scroll">
+        <div class="ide" style="min-width:560px">
+          <div class="title"><span class="dots"><i></i><i></i><i></i></span><span class="mark">1</span> 동적 조건 만들기 — 넣은 결과</div>
+          <pre class="sql nolig"><span class="ln">&lt;<span class="kw">where</span>&gt;</span><span class="ln">  &lt;<span class="kw">if</span> test=<span class="st">"userName != null and userName != ''"</span>&gt;</span><span class="ln">    <span class="kw">AND</span> u.USER_NAME <span class="kw">LIKE</span> '%' || #{userName} || '%'</span><span class="ln">  &lt;/<span class="kw">if</span>&gt;</span><span class="ln">  &lt;<span class="kw">if</span> test=<span class="st">"amt != null"</span>&gt;</span><span class="ln">    <span class="kw">AND</span> u.AMT &lt;![CDATA[ &gt;= ]]&gt; #{amt}</span><span class="ln">  &lt;/<span class="kw">if</span>&gt;</span><span class="ln">&lt;/<span class="kw">where</span>&gt;</span></pre>
+        </div>
+      </div>
+      <div class="scroll">
+        <div class="ide" style="min-width:560px">
+          <div class="title"><span class="dots"><i></i><i></i><i></i></span><span class="mark">2</span> 페이징 쿼리 만들기 — selectUserListPage</div>
+          <pre class="sql nolig"><span class="ln"><span class="kw">SELECT</span></span><span class="ln">       *</span><span class="ln">  <span class="kw">FROM</span> (</span><span class="ln">        <span class="kw">SELECT</span></span><span class="ln">               ROWNUM <span class="kw">AS</span> RNUM</span><span class="ln">             , a.*</span><span class="ln">          <span class="kw">FROM</span> ( <span class="cm">원래 select</span> ) a</span><span class="ln">         <span class="kw">WHERE</span> ROWNUM &lt;![CDATA[&lt;=]]&gt; #{endRow}</span><span class="ln">       )</span><span class="ln"> <span class="kw">WHERE</span> RNUM &lt;![CDATA[&gt;]]&gt; #{startRow}</span></pre>
+        </div>
+      </div>
+    </div>
+    <div class="scroll" style="margin-top:14px">
+      <div class="ide" style="min-width:560px">
+        <div class="title"><span class="dots"><i></i><i></i><i></i></span><span class="mark">3</span> 호출 코드 복사 — selectUserList</div>
+        <pre class="sql nolig"><span class="ln">UserDto param = <span class="kw">new</span> UserDto();</span><span class="ln">param.setUserId(<span class="kw">null</span>);</span><span class="ln">param.setUserNm(<span class="kw">null</span>);</span><span class="ln">List&lt;UserDto&gt; list = userMapper.selectUserList(param);</span></pre>
+      </div>
+    </div>
+    <ol class="legend" style="grid-template-columns:repeat(3,minmax(0,1fr)); margin-top:14px">
+      <li><span class="mark">1</span><div><b>동적 조건</b> <span class="t">parameterType 의 DTO 필드를 고르고 비교(= · LIKE · &gt;= · &lt;=)를 정합니다. 칼럼 이름은 필드 이름을 대문자 밑줄로, 별칭은 FROM 에서 짐작합니다. <code>&lt;where&gt;</code> 가 있으면 그 안에 더합니다.</span></div></li>
+      <li><span class="mark">2</span><div><b>페이징</b> <span class="t">select 아래에 <code>…Page</code> · <code>…Count</code> 두 문장을 더합니다. 건수 문장은 원래 select 에서 맨 바깥 <code>ORDER BY</code> 만 뺍니다. 같은 id 가 있으면 만들지 않습니다.</span></div></li>
+      <li><span class="mark">3</span><div><b>호출 코드</b> <span class="t">문장 안의 <code>#{}</code> 이름으로 매개변수를 채우는 줄을 만들어 클립보드에 넣습니다. map 이면 <code>param.put(…)</code>, 단건 값이면 변수 하나입니다.</span></div></li>
+    </ol>
+
+    <h3>칼럼 이름 바꾸기 · 매퍼 XML 우클릭</h3>
+    <div class="scroll">
+      <div class="ide" style="min-width:560px">
+        <div class="title"><span class="dots"><i></i><i></i><i></i></span>칼럼 이름 바꾸기 — 미리보기 · USER_NM → USER_NAME · 4곳</div>
+        <table class="grid">
+          <tr><th>바꿈</th><th>파일</th><th>줄</th><th>내용</th></tr>
+          <tr><td>☑</td><td>UserMapper.xml</td><td>12</td><td>&lt;result column="USER_NM" property="userNm"/&gt;</td></tr>
+          <tr><td>☑</td><td>UserMapper.xml</td><td>31</td><td>AND u.USER_NM = #{userNm}</td></tr>
+          <tr><td>☑</td><td>UserDto.java</td><td>9</td><td>private String userNm;</td></tr>
+          <tr><td>☑</td><td>UserDto.java</td><td>20</td><td>getUserNm · setUserNm</td></tr>
+        </table>
+        <div class="statusline" style="border-top:1px solid var(--line); border-bottom:0"><span class="m">&lt;if test&gt; 안의 이름은 바꾸지 않습니다</span><span class="gap"></span><span class="btn">취소</span><span class="btn pri">바꾸기</span></div>
+      </div>
+    </div>
+    <p class="lead" style="margin-top:10px">먼저 옛 칼럼 이름 · 새 칼럼 이름 · 표 이름(비우면 모든 매퍼)을 넣고, 「DTO 필드도 바꾸기」를 끄면 XML 만 바꿉니다. 미리보기에서 체크를 푼 줄은 그대로 둡니다.</p>
   </div>
 </section>
 
