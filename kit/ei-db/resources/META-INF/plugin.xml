@@ -81,6 +81,27 @@
             description="이 매퍼 문장의 컨트롤러 · 서비스 · 매퍼 메서드 코드를 만듭니다" icon="AllIcons.Actions.Lightning">
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EiDb.MyBatis.Run"/>
     </action>
+    <action id="EiDb.MyBatis.ServiceCall" class="ei.db.mybatis.ServiceCallAction" text="호출 코드 복사"
+            description="이 매퍼 문장을 부르는 서비스 쪽 코드(매개변수 준비 + 호출 줄)를 클립보드에 복사합니다" icon="AllIcons.Actions.Copy">
+      <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EiDb.MyBatis.LayerCode"/>
+    </action>
+    <action id="EiDb.MyBatis.ColumnRename" class="ei.db.mybatis.ColumnRenameAction" text="칼럼 이름 바꾸기…"
+            description="모든 매퍼 XML 의 칼럼 이름을 미리보기로 골라 바꾸고, 짝인 DTO 필드 · getter · setter 도 바꿉니다">
+      <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EiDb.MyBatis.ServiceCall"/>
+      <add-to-group group-id="KG.SourceMenu" anchor="last"/>
+    </action>
+    <action id="EiDb.MyBatis.DynamicWhere" class="ei.db.mybatis.DynamicWhereAction" text="동적 조건 만들기…"
+            description="DTO 필드로 이 문장의 &lt;where&gt; · &lt;if&gt; 조건을 만들어 넣습니다">
+      <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EiDb.MyBatis.ColumnRename"/>
+    </action>
+    <action id="EiDb.MyBatis.Paging" class="ei.db.mybatis.PagingAction" text="페이징 쿼리 만들기"
+            description="이 select 아래에 Oracle ROWNUM 페이징 문장과 건수 문장을 더합니다">
+      <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EiDb.MyBatis.DynamicWhere"/>
+    </action>
+    <action id="EiDb.MyBatis.StringSql" class="ei.db.mybatis.StringSqlAction" text="문자열 SQL 정리…"
+            description="+ 로 이은 문자열 · StringBuilder · += 로 만든 SQL 을 정리하고 매퍼 XML 문장으로 보여 줍니다" icon="AllIcons.Actions.ReformatCode">
+      <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EiDb.MyBatis.Paging"/>
+    </action>
     <group id="EiDb.MyBatis.LogGroup">
       <action id="EiDb.MyBatis.LogRun" class="ei.db.mybatis.LogActions$Run" text="데이터베이스 콘솔에서 실행"/>
       <action id="EiDb.MyBatis.LogSend" class="ei.db.mybatis.LogActions$Send" text="쿼리 콘솔로 보내기"/>
@@ -94,6 +115,20 @@
     <action id="ei.db.gen.Feature" class="ei.db.gen.FeatureAction" text="기능 한 벌 만들기…"
             description="데이터베이스 탐색기에서 고른 표로 DTO · 매퍼 XML · 매퍼 인터페이스 · 서비스 · 컨트롤러를 한 번에 만듭니다">
       <add-to-group group-id="KG.SourceMenu" anchor="last"/>
+    </action>
+    <action id="ei.db.gen.JsonDto" class="ei.db.gen.JsonDtoAction" text="JSON 으로 DTO 만들기…"
+            description="붙여 넣은 JSON 으로 DTO 클래스(중첩 객체는 안쪽 static 클래스)를 만듭니다">
+      <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+      <add-to-group group-id="KG.SourceMenu" anchor="last"/>
+    </action>
+    <action id="ei.db.gen.Validation" class="ei.db.gen.ValidationAction" text="입력 검증 붙이기…"
+            description="커서가 있는 클래스의 필드에 표 칼럼 메타로 @NotBlank · @NotNull · @Size · @Digits 를 붙입니다">
+      <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+      <add-to-group group-id="KG.SourceMenu" anchor="last"/>
+    </action>
+    <action id="ei.db.gen.EnumSync" class="ei.db.gen.EnumSyncAction" text="enum 다시 맞추기"
+            description="Javadoc 의 @ei-sql 을 그 접속에서 다시 실행해 enum 상수를 새로 만듭니다">
+      <add-to-group group-id="EditorPopupMenu" anchor="last"/>
     </action>
   </actions>
 </idea-plugin>

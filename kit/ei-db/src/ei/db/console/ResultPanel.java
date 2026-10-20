@@ -24,6 +24,7 @@ import ei.db.DbSessions;
 import ei.db.Notify;
 import ei.db.QueryResult;
 import ei.db.gen.DtoDialog;
+import ei.db.gen.EnumDialog;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.ui.content.Content;
@@ -242,6 +243,7 @@ final class ResultPanel extends JPanel {
     bar.add(button("INSERT", null, "고른 행(없으면 보이는 행 전체)을 INSERT 문으로 복사", this::copyInserts));
     bar.add(button("UPDATE", null, "고른 행(없으면 보이는 행 전체)을 UPDATE 문으로 복사", () -> copyUpdates(c)));
     bar.add(button("DTO", null, "DTO 만들기", () -> DtoDialog.show(project, c, result)));
+    bar.add(button("enum", null, "앞 두 칼럼(코드 · 이름)으로 enum 만들기", () -> EnumDialog.show(project, c, result)));
 
     add(bar, BorderLayout.NORTH);
     add(new JBScrollPane(grid), BorderLayout.CENTER);

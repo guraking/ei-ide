@@ -263,6 +263,7 @@ footer{padding:56px 0 40px; color:var(--muted); font-size:13px}
     <a href="#plugins">플러그인</a>
     <a href="#settings">설정</a>
     <a href="#trouble">막혔을 때</a>
+    <a href="#code">코드 도구</a>
     <span class="sp"></span>
     <button id="theme" type="button" aria-label="밝게 · 어둡게 바꾸기">밝게 · 어둡게</button>
   </div>
@@ -1310,6 +1311,7 @@ build-windows.bat
       <tr><td>데이터베이스 탐색기 우클릭</td><td>표: SELECT · INSERT · UPDATE 문, 매퍼 뼈대, 기능 한 벌, ERD, 테이블 정의서 엑셀. 접속: 세션 · 잠금 보기. 프로그램: 컴파일 오류 보기</td></tr>
       <tr><td>결과 탭 우클릭</td><td>다른 결과와 비교…, 다른 탭 닫기 · 모든 탭 닫기</td></tr>
       <tr><td>커밋 창 파일 우클릭</td><td>Assume Unchanged</td></tr>
+      <tr><td>코드 도구(편집기 우클릭 · Source 메뉴)</td><td>옮겨 담기 코드 · 테스트 뼈대 · 요청 값을 DTO 로 묶기 · 입력 검증 붙이기 · enum 다시 맞추기 · JSON 으로 DTO(트리 우클릭도) · 칼럼 이름 바꾸기. 매퍼 XML 우클릭: 호출 코드 복사 · 동적 조건 · 페이징 쿼리. 자바 우클릭: 문자열 SQL 정리. 결과 창: enum 단추. 자세한 것은 13 절</td></tr>
     </table>
   </div>
 </section>
@@ -1377,6 +1379,29 @@ build-windows.bat
       <tr><td>JS · Vue 자동 완성이 없음</td><td>알림의 「Node.js 받기」 · 「언어 서버 받기」를 한 번 눌렀는지 봅니다.</td></tr>
       <tr><td>AI 메뉴를 눌러도 Claude 탭에서 오류</td><td>터미널에서 <code>claude</code> 가 실행되는지(PATH) 봅니다.</td></tr>
       <tr><td>우리 메뉴가 안 보임</td><td>설정 → Plugins 에서 서버 창 · EI Synchronize · EI Database 가 켜져 있는지, 시험용 jar 가 두 판 겹쳐 있지 않은지 봅니다.</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- 13. 코드 도구 -->
+<section id="code">
+  <div class="wrap">
+    <h2><span class="no">13</span>코드 도구</h2>
+    <p class="lead">자바 · 매퍼 XML 을 쓰면서 손으로 치던 코드를 만들어 주거나 바꿔 주는 기능입니다. 모두 편집기 우클릭에 있고, 대부분 Source 메뉴에도 있습니다.</p>
+    <table class="keys">
+      <tr><th>기능 · 자리</th><th>하는 일</th></tr>
+      <tr><td>옮겨 담기 코드 만들기…<br>자바 우클릭</td><td>꺼낼 객체 · 담을 객체를 고르면 <code>to.setX(from.getX());</code> 줄을 커서 줄 다음에 넣습니다. 형이 다르거나 짝이 없는 필드는 주석 줄로 남깁니다.</td></tr>
+      <tr><td>빈 catch · printStackTrace · System.out 검사</td><td>세 가지를 노란 줄로 표시합니다. 클래스에 로거 필드나 <code>@Slf4j</code> 가 있으면 <kbd>Alt</kbd>+<kbd>Enter</kbd> 로 <code>log.error(…)</code> · <code>log.info(…)</code> 로 바꿉니다. 테스트 폴더 · main 메서드는 건너뜁니다.</td></tr>
+      <tr><td>테스트 뼈대 만들기<br>자바 · 트리 우클릭</td><td>서비스는 Mockito(<code>@Mock</code> · <code>@InjectMocks</code>), 매퍼는 <code>@MybatisTest</code> 로 메서드마다 테스트 틀을 모듈의 테스트 폴더에 만듭니다. 파일이 있으면 없는 테스트만 더합니다.</td></tr>
+      <tr><td>요청 값을 DTO 로 묶기…<br>컨트롤러 메서드 안</td><td><code>@RequestParam</code> 여러 개를 <code>@ModelAttribute</code> DTO 하나로 묶고, 본문의 참조를 <code>req.getX()</code> 로 바꿉니다.</td></tr>
+      <tr><td>입력 검증 붙이기…<br>DTO 안</td><td>접속 · 표를 고르면 칼럼의 NULL · 길이 · 자릿수로 <code>@NotBlank</code> · <code>@NotNull</code> · <code>@Size</code> · <code>@Digits</code> 를 필드에 붙입니다. 이미 있는 주석은 그대로 둡니다.</td></tr>
+      <tr><td>enum 만들기 · 다시 맞추기<br>결과 창 「enum」 단추, enum 안 우클릭</td><td>코드 표 조회 결과의 두 칼럼(코드 · 이름)으로 enum 을 만듭니다. SQL 과 접속 이름을 Javadoc 에 남겨 두어, 표가 바뀌면 「enum 다시 맞추기」로 상수를 새로 만듭니다(손으로 더한 메서드는 사라짐).</td></tr>
+      <tr><td>JSON 으로 DTO 만들기…<br>트리 우클릭 · Source 메뉴</td><td>붙여 넣은 JSON 으로 DTO 를 만듭니다. 중첩 객체는 안쪽 static 클래스, 배열은 List, 이름이 다른 키는 <code>@JsonProperty</code>.</td></tr>
+      <tr><td>문자열 SQL 정리…<br>자바 우클릭</td><td><code>+</code> · <code>StringBuilder</code> · <code>+=</code> 로 이어 붙인 SQL 을 정렬해 보여 주고, 변수는 <code>#{이름}</code> 으로 바꾼 매퍼 XML 문장을 복사합니다.</td></tr>
+      <tr><td>동적 조건 만들기…<br>매퍼 XML 문장 안</td><td>DTO 필드를 고르면 <code>&lt;where&gt;</code> · <code>&lt;if test="x != null and x != ''"&gt;</code> 조건을 넣습니다. 비교는 = · LIKE · &gt;= · &lt;=(CDATA).</td></tr>
+      <tr><td>페이징 쿼리 만들기<br>매퍼 XML select 안</td><td>그 select 아래에 Oracle ROWNUM 페이징 문장(<code>…Page</code>, startRow · endRow)과 건수 문장(<code>…Count</code>)을 더하고, 매퍼 인터페이스에 메서드 두 줄을 더합니다.</td></tr>
+      <tr><td>호출 코드 복사<br>매퍼 XML 문장 안</td><td>그 문장을 부르는 서비스 쪽 코드(매개변수 객체 채우기 + 호출 줄)를 클립보드에 복사합니다.</td></tr>
+      <tr><td>칼럼 이름 바꾸기…<br>매퍼 XML 우클릭 · Source 메뉴</td><td>모든 매퍼 XML 에서 옛 칼럼 이름을 찾아 미리보기에서 골라 바꾸고, 짝인 DTO 필드 · getter · setter 와 <code>#{}</code> · property 도 함께 바꿉니다. <code>&lt;if test&gt;</code> 안 이름은 바꾸지 않습니다.</td></tr>
     </table>
   </div>
 </section>

@@ -13,7 +13,7 @@ import java.util.Set;
  * 그 밖의 괄호(함수 · IN 목록 · (+))는 한 줄로 둔다. 키워드만 대문자로 바꾸고 이름 · 문자열 · 주석은 그대로 둔다.
  * 구문 분석기가 아니라 낱말 단위로 보므로 처음 보는 문법은 낱말 사이 공백만 정리된다.
  */
-final class SqlFormatter {
+public final class SqlFormatter {
   private SqlFormatter() {}
 
   private static final int RIVER = 6;
@@ -66,7 +66,7 @@ final class SqlFormatter {
     boolean is(String word) { return kind == Kind.WORD && upper().equals(word); }
   }
 
-  static String format(String sql) {
+  public static String format(String sql) {
     List<Tok> toks = lex(sql);
     StringBuilder out = new StringBuilder();
     int start = 0;
