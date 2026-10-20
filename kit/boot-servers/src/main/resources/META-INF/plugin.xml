@@ -43,6 +43,12 @@
     <extensions defaultExtensionNs="com.intellij">
         <notificationGroup id="웹 언어 지원" displayType="BALLOON"/>
         <notificationGroup id="AI" displayType="BALLOON"/>
+        <!-- 코드 도구(local.bootservers.code) -->
+        <notificationGroup id="테스트 뼈대" displayType="BALLOON"/>
+        <notificationGroup id="요청 값 묶기" displayType="BALLOON"/>
+        <localInspection language="JAVA" shortName="EiLogUsage" displayName="빈 catch · printStackTrace · System.out 사용"
+                         groupName="EI 코드" enabledByDefault="true" level="WARNING"
+                         implementationClass="local.bootservers.code.LogUsageInspection"/>
         <platform.lsp.serverSupportProvider implementation="local.bootservers.web.WebLspSupport"/>
         <platform.lsp.serverSupportProvider implementation="local.bootservers.web.VueLspSupport"/>
     </extensions>
@@ -130,5 +136,20 @@
             <action id="KingGura.AiConsoleError" class="local.bootservers.ai.AiActions$ConsoleError" text="이 오류 원인 찾기"/>
             <add-to-group group-id="ConsoleView.PopupMenu" anchor="last"/>
         </group>
+        <!-- 코드 도구: 옮겨 담기 · 테스트 뼈대 · 요청 값 묶기 -->
+        <action id="KingGura.BeanCopy" class="local.bootservers.code.BeanCopyAction" text="옮겨 담기 코드 만들기…"
+                description="꺼낼 객체의 getter 로 담을 객체의 setter 를 부르는 줄을 커서 줄 다음에 넣습니다">
+            <add-to-group group-id="KG.SourceMenu" anchor="last"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </action>
+        <action id="KingGura.TestSkeleton" class="local.bootservers.code.TestSkeletonAction" text="테스트 뼈대 만들기" icon="AllIcons.Nodes.Test">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <add-to-group group-id="ProjectViewPopupMenu" relative-to-action="KingGura.ExportProgramList" anchor="after"/>
+            <add-to-group group-id="KG.SourceMenu" anchor="last"/>
+        </action>
+        <action id="KingGura.BundleRequestParams" class="local.bootservers.code.ParamBundleAction" text="요청 값을 DTO 로 묶기…" icon="AllIcons.Nodes.Class">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <add-to-group group-id="KG.SourceMenu" anchor="last"/>
+        </action>
     </actions>
 </idea-plugin>
