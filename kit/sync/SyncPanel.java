@@ -60,7 +60,10 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * 이클립스 Team › Synchronize Workspace 와 같은 창.
@@ -140,6 +143,8 @@ final class SyncPanel extends JPanel {
 
   private volatile List<Repo> repos = List.of();
   private List<Change> changes = List.of();
+  // 비교를 시작할 때마다 하나 올린다(EDT 에서만). 늦게 끝난 옛 비교가 새 결과를 덮지 않게 끝날 때 이 값과 맞춰 본다.
+  private int compareSeq;
   private Kind modeFilter;  // null 이면 전체
 
   SyncPanel(Project project, Disposable parent) {
@@ -495,37 +500,74 @@ final class SyncPanel extends JPanel {
     return result;
   }
 
+  /** 저장소 하나를 처음 읽은 결과. */
+  private record Scanned(Repo repo, List<Change> changes) {}
+
+  /** 저장소 하나에 할 일. 결과는 입력 순서대로 모인다. */
+  private interface RepoWork<T, R> {
+    R run(T item) throws IOException, InterruptedException;
+  }
+
+  /**
+   * items 마다 work 를 작업 스레드에서 동시에 돌리고 입력 순서대로 결과를 돌려준다(저장소가 많아도 가장 느린 하나만큼 걸린다).
+   * 하나가 실패하면 그 예외를 그대로 던지고, 아직 도는 나머지는 중단한다.
+   */
+  private static <T, R> List<R> inParallel(List<T> items, RepoWork<T, R> work) throws IOException, InterruptedException {
+    List<Future<R>> futures = new ArrayList<>();
+    for (T item : items) {
+      futures.add(ApplicationManager.getApplication().executeOnPooledThread(() -> work.run(item)));
+    }
+    List<R> results = new ArrayList<>();
+    try {
+      for (Future<R> future : futures) {
+        try {
+          results.add(future.get());
+        }
+        catch (ExecutionException e) {
+          if (e.getCause() instanceof IOException io) throw io;
+          if (e.getCause() instanceof InterruptedException ie) throw ie;
+          throw new IOException(e.getCause());
+        }
+      }
+    }
+    finally {
+      for (Future<R> future : futures) future.cancel(true);
+    }
+    return results;
+  }
+
   /** fetch 없이 지금 상태로만 다시 비교한다(무시 · 되돌리기 · 커밋 직후). SVN 은 서버에 닿지 못하면 작업본만 비교한다. */
   private void recompare() {
     List<Repo> targets = repos;
     if (targets.isEmpty()) return;
+    int seq = ++compareSeq;
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       List<Change> result = new ArrayList<>();
-      String error = null;
+      AtomicReference<String> error = new AtomicReference<>();
       try {
-        for (Repo repo : targets) {
-          if (repo.vcs() == Vcs.GIT) {
-            result.addAll(compare(repo));
-            continue;
-          }
+        for (List<Change> part : inParallel(targets, repo -> {
+          if (repo.vcs() == Vcs.GIT) return compare(repo);
           try {
-            result.addAll(compareSvn(repo, true));
+            return compareSvn(repo, true);
           }
           catch (IOException offline) {
-            error = offline.getMessage();
-            result.addAll(compareSvn(repo, false));
+            error.set(offline.getMessage());
+            return compareSvn(repo, false);
           }
+        })) {
+          result.addAll(part);
         }
       }
       catch (IOException ex) {
-        error = ex.getMessage();
+        error.set(ex.getMessage());
       }
       catch (InterruptedException ex) {
         Thread.currentThread().interrupt();
         return;
       }
-      String message = error;
+      String message = error.get();
       SwingUtilities.invokeLater(() -> {
+        if (seq != compareSeq) return;
         changes = result;
         rebuildTree();
         if (message != null) status.setText(message);
@@ -756,44 +798,50 @@ final class SyncPanel extends JPanel {
     refreshButton.setEnabled(false);
     refreshSelectedButton.setEnabled(false);
     status.setText("비교 중…");
+    int seq = ++compareSeq;
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
-      List<String> errors = new ArrayList<>();
+      List<String> errors = Collections.synchronizedList(new ArrayList<>());
       List<Repo> found = new ArrayList<>();
       List<Change> result = new ArrayList<>();
       try {
-        for (Map.Entry<File, Vcs> entry : roots) {
+        for (Scanned scanned : inParallel(roots, entry -> {
           try {
             Repo repo = entry.getValue() == Vcs.GIT ? gitRepo(entry.getKey()) : svnRepo(entry.getKey());
-            found.add(repo);
-            result.addAll(repo.vcs() == Vcs.GIT ? compare(repo) : compareSvn(repo, false));
+            return new Scanned(repo, repo.vcs() == Vcs.GIT ? compare(repo) : compareSvn(repo, false));
           }
           catch (IOException e) {
             errors.add(e.getMessage());
+            return null;
           }
+        })) {
+          if (scanned == null) continue;
+          found.add(scanned.repo());
+          result.addAll(scanned.changes());
         }
         repos = List.copyOf(found);
         List<Change> local = List.copyOf(result);
         SwingUtilities.invokeLater(() -> {
           title.setText(found.size() == 1 ? found.get(0).label() : "저장소 " + found.size() + "개");
+          if (seq != compareSeq) return;
           changes = local;
           rebuildTree();
           status.setText(summary(local) + " — 원격 변경을 받아 오는 중…");
         });
         List<Change> fetched = new ArrayList<>();
-        for (Repo repo : found) {
+        for (List<Change> part : inParallel(found, repo -> {
           try {
             if (repo.vcs() == Vcs.GIT) {
               git(repo.root(), "fetch", "--quiet");
-              fetched.addAll(compare(repo));
+              return compare(repo);
             }
-            else {
-              fetched.addAll(compareSvn(repo, true));
-            }
+            return compareSvn(repo, true);
           }
           catch (IOException e) {
             errors.add(e.getMessage());
-            fetched.addAll(repo.vcs() == Vcs.GIT ? compare(repo) : compareSvn(repo, false));  // 원격 실패 시 지금 비교 결과는 남긴다.
+            return repo.vcs() == Vcs.GIT ? compare(repo) : compareSvn(repo, false);  // 원격 실패 시 지금 비교 결과는 남긴다.
           }
+        })) {
+          fetched.addAll(part);
         }
         result = fetched;
       }
@@ -809,10 +857,11 @@ final class SyncPanel extends JPanel {
       if (!errors.isEmpty()) message = String.join(" / ", errors);
       String finalMessage = message;
       SwingUtilities.invokeLater(() -> {
-        changes = finalResult;
-        status.setText(finalMessage);
         refreshButton.setEnabled(true);
         refreshSelectedButton.setEnabled(true);
+        if (seq != compareSeq) return;
+        changes = finalResult;
+        status.setText(finalMessage);
         rebuildTree();
       });
     });
