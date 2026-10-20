@@ -24,6 +24,7 @@ import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.application.WriteIntentReadAction;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
@@ -556,7 +557,8 @@ final class ServersPanel extends SimpleToolWindowPanel {
         bootTitle.setFont(JBUI.Fonts.label().asBold());
         bootStatus.setForeground(JBColor.GRAY);
         JButton apply = new JButton("적용");
-        apply.addActionListener(e -> applyBoot());
+        // 2026.2 는 버튼 클릭을 읽기 잠금 없이 처리한다. 설정이 없으면 PSI 로 메인 클래스를 찾으므로 잠금 안에서 돌린다.
+        apply.addActionListener(e -> WriteIntentReadAction.run(() -> applyBoot()));
         JPanel p = FormBuilder.createFormBuilder()
                 .addComponent(bootTitle)
                 .addComponent(bootStatus)
