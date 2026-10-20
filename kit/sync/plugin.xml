@@ -19,8 +19,9 @@
   </extensions>
 
   <projectListeners>
-    <!-- 저장소 목록이 잡힐 때마다 .git/info/exclude 에 *.iml · .idea/ 를 넣는다. -->
-    <listener class="kinggura.sync.ExcludeIdeFiles" topic="com.intellij.openapi.vcs.VcsListener"/>
+    <!-- 저장소 목록이 잡힐 때마다 .git/info/exclude 에 IDE · 이클립스 파일 줄을 넣는다.
+         topic 은 VCS_CONFIGURATION_CHANGED 가 쓰는 VcsMappingListener 여야 한다(VcsListener 이름으로는 알림이 오지 않는다). -->
+    <listener class="kinggura.sync.ExcludeIdeFiles" topic="com.intellij.openapi.vcs.VcsMappingListener"/>
   </projectListeners>
 
   <actions>
