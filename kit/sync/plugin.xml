@@ -24,15 +24,15 @@
   </projectListeners>
 
   <actions>
-    <!-- 커밋 창 · 변경 목록 우클릭에도 동기화 창과 같은 「변경 모른 척하기」 를 둔다. -->
-    <action id="KingGura.AssumeUnchanged" class="kinggura.sync.AssumeUnchangedAction" text="변경 모른 척하기">
+    <!-- 커밋 창 · 변경 목록 우클릭에도 동기화 창과 같은 「Assume Unchanged」 를 둔다. -->
+    <action id="KingGura.AssumeUnchanged" class="kinggura.sync.AssumeUnchangedAction" text="Assume Unchanged">
       <add-to-group group-id="ChangesViewPopupMenu" anchor="last"/>
     </action>
     <!-- 프로젝트 트리에서 고른 파일에도 모른 척하기 · 풀기. 모른 척 중인 파일은 변경 목록에 안 뜨므로 풀기는 여기와 동기화 창에 둔다. -->
     <group id="KingGura.AssumeGroup">
       <separator/>
       <reference ref="KingGura.AssumeUnchanged"/>
-      <action id="KingGura.AssumeUnchanged.Undo" class="kinggura.sync.AssumeUnchangedAction$Undo" text="모른 척 풀기"/>
+      <action id="KingGura.AssumeUnchanged.Undo" class="kinggura.sync.AssumeUnchangedAction$Undo" text="No Assume Unchanged"/>
       <separator/>
       <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
     </group>

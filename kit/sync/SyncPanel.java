@@ -81,7 +81,7 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 final class SyncPanel extends JPanel {
   /** ASSUMED 는 변경이 아니라 skip-worktree(예전 판은 assume-unchanged)로 모른 척 중인 Git 파일이다. 「모두 보기」에서만 맨 아래 묶음으로 보인다. */
-  enum Kind { CONFLICT("충돌"), INCOMING("들어올 변경"), OUTGOING("나갈 변경"), ASSUMED("모른 척 중");
+  enum Kind { CONFLICT("충돌"), INCOMING("들어올 변경"), OUTGOING("나갈 변경"), ASSUMED("Assume Unchanged");
     final String label;
     Kind(String label) { this.label = label; }
   }
@@ -130,7 +130,7 @@ final class SyncPanel extends JPanel {
   private static final char SKIP_WORKTREE_TAG = 'S';
   // svn 은 오류 문구를 운영체제 문자셋(한국어 윈도우는 CP949)으로 낸다. Java 18 부터 기본 문자셋은 UTF-8 이라 native.encoding 을 쓴다.
   private static final Charset NATIVE_CHARSET = Charset.forName(System.getProperty("native.encoding", Charset.defaultCharset().name()));
-  static final String UNASSUME_HINT = "풀려면 동기화 창의 「모른 척 중」 묶음에서 우클릭 → 모른 척 풀기";
+  static final String UNASSUME_HINT = "풀려면 동기화 창의 「Assume Unchanged」 묶음에서 우클릭 → No Assume Unchanged";
 
   private final Project project;
   private final Tree tree = new Tree(new DefaultTreeModel(new DefaultMutableTreeNode()));
@@ -221,7 +221,7 @@ final class SyncPanel extends JPanel {
     // 모른 척 중인 파일은 변경이 아니므로 무시 · 되돌리기 대신 풀기만 둔다.
     List<Change> assumed = all.stream().filter(c -> c.kind() == Kind.ASSUMED).toList();
     if (!assumed.isEmpty()) {
-      JMenuItem unassume = new JMenuItem("모른 척 풀기 (" + assumed.size() + "개 파일)");
+      JMenuItem unassume = new JMenuItem("No Assume Unchanged (" + assumed.size() + "개 파일)");
       unassume.addActionListener(a -> assumeUnchanged(assumed, false));
       menu.add(unassume);
     }
@@ -265,7 +265,7 @@ final class SyncPanel extends JPanel {
     // 내 작업본에만 적용된다. SVN 에는 대응 기능이 없다.
     List<Change> assumable = revertable.stream().filter(c -> c.repo().vcs() == Vcs.GIT).toList();
     if (!assumable.isEmpty()) {
-      JMenuItem assume = new JMenuItem("변경 모른 척하기 (" + assumable.size() + "개 파일)");
+      JMenuItem assume = new JMenuItem("Assume Unchanged (" + assumable.size() + "개 파일)");
       assume.addActionListener(a -> assumeUnchanged(assumable, true));
       menu.add(assume);
     }
@@ -450,8 +450,8 @@ final class SyncPanel extends JPanel {
 
   /** 모른 척하기 · 풀기 뒤 알림 문구. 프로젝트 트리 메뉴(AssumeUnchangedAction)와 같이 쓴다. */
   static String hideMessage(int count, boolean on) {
-    return on ? count + "개 파일의 변경을 모른 척합니다. 원격에서 이 파일이 바뀌면 받기(Pull)가 멈추니 그때는 먼저 모른 척을 푸세요. " + UNASSUME_HINT
-              : count + "개 파일의 모른 척을 풀었습니다. 내 변경이 다시 보입니다.";
+    return on ? count + "개 파일을 Assume Unchanged 로 두어 변경을 모른 척합니다. 원격에서 이 파일이 바뀌면 받기(Pull)가 멈추니 그때는 먼저 No Assume Unchanged 로 푸세요. " + UNASSUME_HINT
+              : count + "개 파일의 Assume Unchanged 를 풀었습니다. 내 변경이 다시 보입니다.";
   }
 
   /**
@@ -672,7 +672,7 @@ final class SyncPanel extends JPanel {
       }
       List<FilePath> paths = commitPaths();
       if (paths.isEmpty()) {
-        status.setText(text + ": 고른 줄에 커밋할 내 변경이 없습니다(들어올 변경 · 모른 척 중은 커밋 대상이 아닙니다).");
+        status.setText(text + ": 고른 줄에 커밋할 내 변경이 없습니다(들어올 변경 · Assume Unchanged 는 커밋 대상이 아닙니다).");
         return;
       }
       runAction(text, "CheckinFiles", SimpleDataContext.builder().setParent(context).add(VcsDataKeys.FILE_PATHS, paths).build());
@@ -994,7 +994,7 @@ final class SyncPanel extends JPanel {
     List<Change> result = merge(repo, incoming, outgoing, unmerged);
     // 부분 체크아웃(sparse checkout)이 밖으로 뺀 파일도 skip-worktree 지만 디스크에 없으므로, 디스크에 있는 것만 모른 척 중으로 본다.
     for (String path : parseAssumed(git(root, "ls-files", "-v"), p -> new File(root, p).exists())) {
-      result.add(new Change(Kind.ASSUMED, "모른 척", path, repo));
+      result.add(new Change(Kind.ASSUMED, "Assume Unchanged", path, repo));
     }
     return result;
   }
@@ -1106,7 +1106,7 @@ final class SyncPanel extends JPanel {
     Map<Kind, Integer> count = new EnumMap<>(Kind.class);
     for (Change c : changes) count.merge(c.kind(), 1, Integer::sum);
     int assumed = count.getOrDefault(Kind.ASSUMED, 0);
-    String tail = assumed > 0 ? " · 모른 척 " + assumed : "";
+    String tail = assumed > 0 ? " · Assume Unchanged " + assumed : "";
     if (changes.size() == assumed) return "원격과 같습니다" + tail;
     return "들어올 " + count.getOrDefault(Kind.INCOMING, 0) + " · 나갈 " + count.getOrDefault(Kind.OUTGOING, 0)
            + " · 충돌 " + count.getOrDefault(Kind.CONFLICT, 0) + tail;
