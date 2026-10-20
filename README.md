@@ -46,7 +46,7 @@
 
 - Java · Maven · Gradle · Git · GitHub · GitLab · SVN · Lombok · JUnit · Markdown · YAML · 터미널
 - JavaScript · TypeScript · Vue 언어 서버, AI 우클릭 메뉴(Claude Code)
-- Full Line · Rainbow Brackets Lite · SonarQube for IDE · POJO to JSON · Grep Console · JPA Buddy
+- Full Line · Rainbow Brackets Lite · POJO to JSON · Grep Console · JPA Buddy
 - 설치 뒤 `플러그인설치.bat` 이 한국어 팩 · Claude Code · One Dark 테마를 넣습니다
 
 ## 설치
