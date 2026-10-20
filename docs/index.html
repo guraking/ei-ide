@@ -259,6 +259,10 @@ footer{padding:56px 0 40px; color:var(--muted); font-size:13px}
     <a href="#db">데이터베이스</a>
     <a href="#keys">단축키</a>
     <a href="#build">빌드</a>
+    <a href="#menus">메뉴 지도</a>
+    <a href="#plugins">플러그인</a>
+    <a href="#settings">설정</a>
+    <a href="#trouble">막혔을 때</a>
     <span class="sp"></span>
     <button id="theme" type="button" aria-label="밝게 · 어둡게 바꾸기">밝게 · 어둡게</button>
   </div>
@@ -1161,10 +1165,100 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd></td><td>실행 계획 (실행하지 않음)</td><td class="where">SQL 콘솔</td></tr>
       <tr><td><kbd>Ctrl</kbd>+클릭</td><td>매퍼 인터페이스 → XML 문장</td><td class="where">자바 매퍼</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Enter</kbd></td><td>커서가 있는 MyBatis 문장 실행</td><td class="where">매퍼 XML</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>C</kbd></td><td>MyBatis 로그를 값 채운 SQL 로 복사</td><td class="where">서버 콘솔</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>U</kbd></td><td>URL 로 스프링 컨트롤러 메서드 찾기</td><td class="where">어디서나</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td><td>콘솔 출력 검색</td><td class="where">실행 · 서버 콘솔</td></tr>
     </table>
+
+    <h3>이클립스 기본 단축키</h3>
+    <p class="lead">위 표 말고는 IntelliJ 에 들어 있는 Eclipse 키맵 그대로입니다. 아래는 그 키맵(<code>Eclipse.xml</code>)에서 자주 쓰는 것을 모았습니다. † 표시는 Eclipse 키맵이 건드리지 않아 IntelliJ 기본 키가 그대로 남은 것입니다.</p>
+    <h3>찾기 · 이동</h3>
+    <table class="keys">
+      <tr><th>키</th><th>하는 일</th></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd></td><td>파일 열기 (Open Resource)</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd></td><td>클래스 열기 (Open Type)</td></tr>
+      <tr><td>Shift 두 번</td><td>어디서나 찾기 (파일 · 클래스 · 메뉴 · 설정) †</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd></td><td>동작 이름으로 찾아 실행 (메뉴 위치를 모를 때) †</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>E</kbd></td><td>최근 파일 †</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>O</kbd> · <kbd>Ctrl</kbd>+<kbd>F3</kbd></td><td>파일 구조 (Quick Outline)</td></tr>
+      <tr><td><kbd>F3</kbd> · <kbd>Ctrl</kbd>+클릭</td><td>선언으로 이동</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>T</kbd> · <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>B</kbd></td><td>구현으로 이동</td></tr>
+      <tr><td><kbd>F4</kbd></td><td>타입 계층</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>G</kbd> · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd></td><td>사용처 찾기 · 이 파일 안에서 사용처</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>O</kbd></td><td>이 파일에서 사용처 강조</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>H</kbd></td><td>경로에서 찾기 (Search)</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td><td>편집기에서 찾기 · 바꾸기</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>K</kbd> · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>K</kbd></td><td>다음 · 이전 찾기</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>J</kbd></td><td>치면서 찾기 (Incremental Find)</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>L</kbd></td><td>줄 번호로 이동</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Q</kbd></td><td>마지막으로 고친 곳</td></tr>
+      <tr><td><kbd>Alt</kbd>+<kbd>←</kbd> · <kbd>Alt</kbd>+<kbd>→</kbd></td><td>뒤로 · 앞으로 (마우스 뒤로 · 앞으로 단추도)</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>↑</kbd> · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>↓</kbd></td><td>이전 · 다음 메서드</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd></td><td>짝 괄호로</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>F1</kbd></td><td>이전 오류로</td></tr>
+      <tr><td><kbd>F2</kbd> · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd></td><td>빠른 문서 보기</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>F2</kbd></td><td>외부 Javadoc</td></tr>
+    </table>
+    <h3>편집</h3>
+    <table class="keys">
+      <tr><th>키</th><th>하는 일</th></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Space</kbd></td><td>자동 완성 †</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>Space</kbd></td><td>타입 맞춤 자동 완성</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>1</kbd> · <kbd>Alt</kbd>+<kbd>Enter</kbd></td><td>빠른 수정 (Quick Fix)</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>줄 지우기</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>↓</kbd></td><td>줄 복제</td></tr>
+      <tr><td><kbd>Alt</kbd>+<kbd>↑</kbd> · <kbd>Alt</kbd>+<kbd>↓</kbd></td><td>줄 · 문장 옮기기</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>/</kbd></td><td>줄 주석 †</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>/</kbd></td><td>블록 주석</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd> · <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>L</kbd></td><td>서식 맞추기 (SQL 콘솔 안에서는 SQL 정렬)</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>I</kbd></td><td>들여쓰기 맞추기</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd></td><td>import 정리</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>↑</kbd> · <kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>↓</kbd></td><td>선택 넓히기 · 줄이기</td></tr>
+      <tr><td><kbd>Alt</kbd>+<kbd>Y</kbd> · <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Y</kbd></td><td>같은 글 다음 것 · 모두 함께 고르기 (여러 커서)</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Y</kbd></td><td>대소문자 바꾸기</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Delete</kbd></td><td>줄 끝까지 지우기</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>Z</kbd></td><td>감싸기 (try · if …)</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>J</kbd></td><td>라이브 템플릿 넣기</td></tr>
+      <tr><td><kbd>Alt</kbd>+<kbd>Insert</kbd></td><td>생성 (getter · setter · 생성자) †</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>P</kbd></td><td>메서드 구현</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> · <kbd>Ctrl</kbd>+<kbd>Y</kbd></td><td>되돌리기 · 다시</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>-</kbd> · <kbd>Ctrl</kbd>+<kbd>=</kbd></td><td>글자 작게 · 크게</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>W</kbd> · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>W</kbd></td><td>탭 닫기 · 모두 닫기</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>PgDn</kbd> · <kbd>Ctrl</kbd>+<kbd>PgUp</kbd></td><td>다음 · 이전 탭 (Ctrl+F6 도)</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F11</kbd></td><td>북마크</td></tr>
+    </table>
+    <h3>리팩터</h3>
+    <table class="keys">
+      <tr><th>키</th><th>하는 일</th></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>R</kbd></td><td>이름 바꾸기 (사용처까지)</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>M</kbd></td><td>메서드로 빼기</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>L</kbd></td><td>변수로 빼기</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>I</kbd></td><td>인라인</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>V</kbd></td><td>옮기기</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>C</kbd></td><td>메서드 시그니처 바꾸기</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd> · <kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>T</kbd></td><td>우클릭 메뉴 열기</td></tr>
+    </table>
+    <h3>실행 · 디버그</h3>
+    <table class="keys">
+      <tr><th>키</th><th>하는 일</th></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>X</kbd> · <kbd>Shift</kbd>+<kbd>F10</kbd></td><td>실행</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>D</kbd> · <kbd>Shift</kbd>+<kbd>F9</kbd></td><td>디버그</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>F11</kbd></td><td>마지막 실행 다시</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>G</kbd></td><td>테스트 다시 실행</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>B</kbd> · <kbd>Ctrl</kbd>+<kbd>F9</kbd></td><td>빌드 (바뀐 것만)</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd> · <kbd>Ctrl</kbd>+<kbd>F8</kbd></td><td>중단점 켜기 · 끄기</td></tr>
+      <tr><td><kbd>F5</kbd> · <kbd>F6</kbd> · <kbd>F7</kbd></td><td>안으로 · 다음 줄 · 밖으로</td></tr>
+      <tr><td><kbd>F8</kbd></td><td>계속</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>R</kbd></td><td>커서까지 실행</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>F5</kbd></td><td>골라서 안으로</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>U</kbd> · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd></td><td>식 계산 · 값 보기</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>H</kbd></td><td>서비스 창</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd></td><td>설정 열기 †</td></tr>
+    </table>
+    <div class="notes">
+      <div class="note warn"><b>커밋 · Update Project 키는 없음</b>Eclipse 키맵은 이 둘의 키를 지웁니다. <kbd>Ctrl</kbd>+<kbd>K</kbd> 는 다음 찾기, <kbd>Ctrl</kbd>+<kbd>T</kbd> 는 구현으로 이동입니다. 커밋 · 전체 받기는 Git 메뉴나 동기화 창 단추로 합니다.</div>
+      <div class="note"><b>키를 바꾸려면</b>설정(<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd>) → Keymap 에서 Eclipse 를 복제한 뒤 동작 이름(예: Commit)에 키를 붙입니다.</div>
+      <div class="note ok"><b>Full Line 제안 받기</b>편집기에 회색으로 뜬 한 줄은 <kbd>Tab</kbd> 으로 받습니다.</div>
+    </div>
   </div>
 </section>
 
@@ -1194,6 +1288,97 @@ build-windows.bat
       <div class="note warn"><b>N 은 1000 부터</b>바탕 판(.63)보다 작으면 JetBrains 마켓의 Java · Gradle 등 번들 플러그인을 새 판으로 보고 내려받아 본체를 덮어 버립니다.</div>
       <div class="note ok"><b>플러그인만 고쳤을 때</b>빌드 없이 jar 를 <code>release\plugins</code> 에 넣고 설치 3번만 다시 돌리면 됩니다.</div>
     </div>
+  </div>
+</section>
+
+<!-- 09. 메뉴 · 우클릭 지도 -->
+<section id="menus">
+  <div class="wrap">
+    <h2><span class="no">09</span>메뉴 · 우클릭 지도</h2>
+    <p class="lead">EI IDE 기능이 어느 메뉴에 붙어 있는지 모았습니다.</p>
+    <table class="keys">
+      <tr><th>자리</th><th>들어 있는 것</th></tr>
+      <tr><td>Source 메뉴</td><td>기능 한 벌 만들기…</td></tr>
+      <tr><td>Navigate · Search 메뉴</td><td>URL 찾기…</td></tr>
+      <tr><td>Project 메뉴</td><td>프로그램 목록 엑셀로 내보내기…</td></tr>
+      <tr><td>Run 메뉴</td><td>API 테스트(Swagger)…</td></tr>
+      <tr><td>Git 메뉴 · Git · Subversion 우클릭</td><td>작업 공간 동기화 (맨 위)</td></tr>
+      <tr><td>프로젝트 트리 우클릭</td><td>맨 위 Maven 다시 읽기 · Gradle 다시 읽기, 스프링 부트 서버(시작 · 디버그 · 재시작 · 중지), 작업공간(Module from Existing Sources · Get from VCS · Create Git Repository · Manage Remotes), 프로그램 목록 엑셀, Assume Unchanged · No Assume Unchanged</td></tr>
+      <tr><td>편집기 우클릭</td><td>맨 위 MyBatis 쿼리 실행 · 계층 코드 만들기… · 컨트롤러로 이동(JSP), SQL 콘솔이면 실행 · 전체 실행 · 정렬 · 실행 계획 · 대문자 · 소문자. 맨 아래 표기법 바꾸기, AI(설명해 줘 · 고쳐 줘 · 질문하기…)</td></tr>
+      <tr><td>실행 · 서버 콘솔 우클릭</td><td>맨 위 데이터베이스 콘솔에서 실행 · 쿼리 콘솔로 보내기 · 로그 거르기, 맨 아래 AI → 이 오류 원인 찾기</td></tr>
+      <tr><td>서버 창 우클릭</td><td>시작 · 디버그 · 재시작 · 중지, 서버 묶음, WAS 줄은 반영(다시 빌드) · 로그 파일 보기…</td></tr>
+      <tr><td>데이터베이스 탐색기 우클릭</td><td>표: SELECT · INSERT · UPDATE 문, 매퍼 뼈대, 기능 한 벌, ERD, 테이블 정의서 엑셀. 접속: 세션 · 잠금 보기. 프로그램: 컴파일 오류 보기</td></tr>
+      <tr><td>결과 탭 우클릭</td><td>다른 결과와 비교…, 다른 탭 닫기 · 모든 탭 닫기</td></tr>
+      <tr><td>커밋 창 파일 우클릭</td><td>Assume Unchanged</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- 10. 함께 넣은 플러그인 -->
+<section id="plugins">
+  <div class="wrap">
+    <h2><span class="no">10</span>함께 넣은 플러그인</h2>
+    <p class="lead">본체에 들어가는 외부 플러그인과, 설치 3번 bat 이 넣는 플러그인입니다.</p>
+    <table class="keys">
+      <tr><th>플러그인</th><th>쓰는 법 · 설정</th></tr>
+      <tr><td>Full Line Code Completion</td><td>치는 중에 한 줄 전체를 회색으로 제안하고 <kbd>Tab</kbd> 으로 받습니다. PC 안 모델이라 코드를 밖으로 보내지 않습니다. 설정 → Editor → General → Inline Completion.</td></tr>
+      <tr><td>Rainbow Brackets Lite</td><td>짝 괄호를 깊이마다 다른 색으로 보여 줍니다(무료 공개판).</td></tr>
+      <tr><td>SonarQube for IDE</td><td>편집 중인 파일의 버그 · 취약점 · 냄새를 밑줄로, 아래 「SonarQube for IDE」 창에 목록. 검사는 PC 안에서 하고, 사용 통계 보내기는 설정에서 끕니다.</td></tr>
+      <tr><td>POJO to JSON</td><td>클래스 이름 우클릭 → 「Copy JSON」 으로 필드 구조를 JSON 으로 복사합니다. API 테스트의 요청 본문 만들 때 씁니다.</td></tr>
+      <tr><td>Grep Console</td><td>콘솔 줄을 글자 · 정규식으로 색칠하고 거릅니다. 우리 「로그 거르기」와 함께 씁니다.</td></tr>
+      <tr><td>JPA Buddy (+ Jakarta EE: JPA Model)</td><td>JPA 엔티티 · 스프링 데이터 리포지토리 · DTO 를 화면에서 만듭니다. DB 와 비교하는 기능은 유료 Database 플러그인이 있어야 해서 안 보일 수 있습니다.</td></tr>
+      <tr><td>한국어 언어 팩 (bat)</td><td>설정 → Language and Region → Korean.</td></tr>
+      <tr><td>Claude Code (bat)</td><td>터미널의 <code>claude</code> 와 연결합니다. 우리 AI 우클릭 메뉴도 이것을 씁니다.</td></tr>
+      <tr><td>One Dark 테마 (bat)</td><td>설정 → Appearance 의 Theme, Editor → Color Scheme 에서 One Dark.</td></tr>
+    </table>
+    <div class="notes">
+      <div class="note"><b>넣지 않은 것</b>Codota(지원 끝) · DTO generator(2022.3 까지) · Styled Components(유료 JavaScript 플러그인 필요).</div>
+    </div>
+  </div>
+</section>
+
+<!-- 11. 설정 바꾸는 곳 -->
+<section id="settings">
+  <div class="wrap">
+    <h2><span class="no">11</span>설정 바꾸는 곳</h2>
+    <p class="lead">설정 창은 <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd>. 설정 창 검색칸에 이름을 치면 바로 찾아갑니다. 설정 파일은 <code>%APPDATA%\JetBrains\EIIDE2026.2</code> 에 있어 다시 설치해도 남습니다.</p>
+    <table class="keys">
+      <tr><th>바꾸고 싶은 것</th><th>위치</th></tr>
+      <tr><td>단축키</td><td>Keymap (Eclipse 를 복제한 뒤 고치기)</td></tr>
+      <tr><td>언어</td><td>Appearance &amp; Behavior → System Settings → Language and Region</td></tr>
+      <tr><td>테마 · UI 글꼴</td><td>Appearance &amp; Behavior → Appearance</td></tr>
+      <tr><td>편집기 글꼴</td><td>Editor → Font (JetBrainsMonoHangul)</td></tr>
+      <tr><td>여백선(120자)</td><td>Editor → General → Appearance 「시각적 안내선 표시」</td></tr>
+      <tr><td>콘솔에 남는 글 양</td><td>Editor → General → Console 「Override console cycle buffer size」 (51200 KB)</td></tr>
+      <tr><td>저장할 때 import 정리 · 서식</td><td>Tools → Actions on Save</td></tr>
+      <tr><td>자동 빌드</td><td>Build, Execution, Deployment → Compiler 「Build project automatically」</td></tr>
+      <tr><td>Maven · Gradle</td><td>Build, Execution, Deployment → Build Tools → Maven · Gradle (위 03)</td></tr>
+      <tr><td>다른 프로젝트 여는 창</td><td>Appearance &amp; Behavior → System Settings 「Open project in」</td></tr>
+      <tr><td>커밋 전 검사 (Analyze code · Check TODO)</td><td>커밋 창 톱니</td></tr>
+      <tr><td>svn 경로</td><td>Version Control → Subversion</td></tr>
+      <tr><td>properties 한글</td><td>Editor → File Encodings 「Transparent native-to-ascii conversion」</td></tr>
+      <tr><td>JDK 등록</td><td>File → Project Structure → SDKs (<code>~\.jdks</code> 의 Temurin 은 자동 등록)</td></tr>
+      <tr><td>Full Line 켜기 · 끄기</td><td>Editor → General → Inline Completion</td></tr>
+      <tr><td>도구 창 배치 저장</td><td>Window → Layout → 현재 레이아웃에 변경 저장</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- 12. 그 밖에 막혔을 때 -->
+<section id="trouble">
+  <div class="wrap">
+    <h2><span class="no">12</span>그 밖에 막혔을 때</h2>
+    <p class="lead">Maven · Gradle 은 03 의 「막혔을 때」, 서버 시작은 04 의 「시작이 안 될 때 뜨는 말」을 먼저 봅니다.</p>
+    <table class="keys">
+      <tr><th>이런 글 · 증상</th><th>먼저 볼 것</th></tr>
+      <tr><td>Lombok 오류로 컴파일 실패</td><td>프로젝트 JDK 를 17 · 21 로 둡니다(Lombok 1.18.30 은 24 이상에서 깨짐).</td></tr>
+      <tr><td>SVN 이 「svn cleanup 하라」</td><td>트리 우클릭 Subversion → Cleanup 뒤 다시 받습니다.</td></tr>
+      <tr><td>받기가 Assume Unchanged 파일 때문에 멈춤</td><td>동기화 창에서 그 파일을 No Assume Unchanged → 받기 → 다시 Assume Unchanged.</td></tr>
+      <tr><td>Swagger 창이 빈 화면</td><td>창을 닫았다 다시 엽니다. Try it out 은 서버가 떠 있어야 됩니다.</td></tr>
+      <tr><td>JS · Vue 자동 완성이 없음</td><td>알림의 「Node.js 받기」 · 「언어 서버 받기」를 한 번 눌렀는지 봅니다.</td></tr>
+      <tr><td>AI 메뉴를 눌러도 Claude 탭에서 오류</td><td>터미널에서 <code>claude</code> 가 실행되는지(PATH) 봅니다.</td></tr>
+      <tr><td>우리 메뉴가 안 보임</td><td>설정 → Plugins 에서 서버 창 · EI Synchronize · EI Database 가 켜져 있는지, 시험용 jar 가 두 판 겹쳐 있지 않은지 봅니다.</td></tr>
+    </table>
   </div>
 </section>
 
