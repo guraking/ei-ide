@@ -13,14 +13,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Git 저장소마다 .git/info/exclude 에 IDE 파일 무시 줄을 넣어 변경 목록에 .iml · .idea 가 뜨지 않게 한다.
+ * Git 저장소마다 .git/info/exclude 에 IDE 파일 무시 줄을 넣어 변경 목록에 .iml · .idea 와 이클립스의 .project · .classpath · .settings 가 뜨지 않게 한다.
  * exclude 는 저장소 안에 있지만 git 이 추적하지 않으므로 팀 .gitignore 와 서버에는 아무 영향이 없다.
  * 이미 추적 중인 파일에는 효과가 없다(그건 git rm --cached 로 빼야 한다). .git 이 폴더가 아닌 저장소(worktree · submodule)는 건너뛴다.
  */
 public final class ExcludeIdeFiles implements VcsListener {
 
     private static final Logger LOG = Logger.getInstance(ExcludeIdeFiles.class);
-    private static final List<String> LINES = List.of("*.iml", ".idea/");
+    private static final List<String> LINES = List.of("*.iml", ".idea/", ".project", ".classpath", ".settings/");
 
     private final Project project;
 

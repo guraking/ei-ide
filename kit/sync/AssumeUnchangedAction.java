@@ -22,13 +22,13 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 커밋 창 · 변경 목록 · 프로젝트 트리 우클릭 메뉴의 「변경 모른 척하기」. 고른 파일을 Git 저장소별로 묶어 git update-index --skip-worktree 를 돌린다.
- * 「모른 척 풀기」(Undo)는 같은 파일의 skip-worktree 와 예전 방식 assume-unchanged 표시를 모두 푼다. 모른 척 중이 아닌 파일에 풀기를 해도 아무 일도 없다.
+ * 커밋 창 · 변경 목록 · 프로젝트 트리 우클릭 메뉴의 「Assume Unchanged」. 고른 파일을 Git 저장소별로 묶어 git update-index --skip-worktree 를 돌린다.
+ * 「No Assume Unchanged」(Undo)는 같은 파일의 skip-worktree 와 예전 방식 assume-unchanged 표시를 모두 푼다. 모른 척 중이 아닌 파일에 풀기를 해도 아무 일도 없다.
  * 폴더 · Git 저장소 밖 파일은 건너뛴다. 동기화 창의 같은 메뉴와 동작이 같다(SyncPanel.setHidden).
  */
 public class AssumeUnchangedAction extends AnAction implements DumbAware {
 
-  /** 프로젝트 트리 우클릭의 「모른 척 풀기」. */
+  /** 프로젝트 트리 우클릭의 「No Assume Unchanged」. */
   public static final class Undo extends AssumeUnchangedAction {
     @Override boolean on() { return false; }
   }
@@ -68,7 +68,7 @@ public class AssumeUnchangedAction extends AnAction implements DumbAware {
       String m = message;
       ApplicationManager.getApplication().invokeLater(() -> {
         VcsDirtyScopeManager.getInstance(project).markEverythingDirty();
-        Messages.showInfoMessage(project, m, on() ? "변경 모른 척하기" : "모른 척 풀기");
+        Messages.showInfoMessage(project, m, on() ? "Assume Unchanged" : "No Assume Unchanged");
       });
     });
   }

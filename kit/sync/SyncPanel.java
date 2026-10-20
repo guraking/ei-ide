@@ -21,6 +21,8 @@ import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.vcs.ProjectLevelVcsManager;
+import com.intellij.openapi.vcs.FilePath;
+import com.intellij.openapi.vcs.VcsDataKeys;
 import com.intellij.openapi.vcs.VcsRoot;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vcs.FileStatus;
@@ -32,6 +34,7 @@ import com.intellij.ui.JBSplitter;
 import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.treeStructure.Tree;
+import com.intellij.vcsUtil.VcsUtil;
 import git4idea.repo.GitRepository;
 import git4idea.repo.GitRepositoryChangeListener;
 import org.w3c.dom.Element;
@@ -57,7 +60,10 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * 이클립스 Team › Synchronize Workspace 와 같은 창.
@@ -75,7 +81,7 @@ import java.util.concurrent.TimeUnit;
  */
 final class SyncPanel extends JPanel {
   /** ASSUMED 는 변경이 아니라 skip-worktree(예전 판은 assume-unchanged)로 모른 척 중인 Git 파일이다. 「모두 보기」에서만 맨 아래 묶음으로 보인다. */
-  enum Kind { CONFLICT("충돌"), INCOMING("들어올 변경"), OUTGOING("나갈 변경"), ASSUMED("모른 척 중");
+  enum Kind { CONFLICT("충돌"), INCOMING("들어올 변경"), OUTGOING("나갈 변경"), ASSUMED("Assume Unchanged");
     final String label;
     Kind(String label) { this.label = label; }
   }
@@ -103,6 +109,10 @@ final class SyncPanel extends JPanel {
   // ProjectLevelVcsManager 가 주는 AbstractVcs.getName() 값. GitVcs.NAME · SvnVcs.VCS_NAME 과 같다.
   private static final String VCS_NAME_GIT = "Git";
   private static final String VCS_NAME_SVN = "svn";
+  private static final String ACTION_PULL = "Git.Pull";
+  private static final String ACTION_PUSH = "Vcs.Push";
+  // IDE 의 「Update Project」(Ctrl+T). 프로젝트의 모든 VCS 루트를 받는다(Git 은 받기 방식을 묻고, SVN 은 svn update).
+  private static final String ACTION_UPDATE_ALL = "Vcs.UpdateProject";
   // 설치본에 같이 넣은 VisualSVN 명령줄 도구(apply_defaults 19 의 SVN 기본 경로와 같은 곳).
   private static final String BUNDLED_SVN = "plugins/kinggura-sync/svn/bin/svn.exe";
   // svn status --xml 의 item 값 가운데 변경으로 볼 것. 서버 쪽(repos-status)은 작업본에만 있는 값이 올 수 없다.
@@ -122,7 +132,7 @@ final class SyncPanel extends JPanel {
   private static final char SKIP_WORKTREE_TAG = 'S';
   // svn 은 오류 문구를 운영체제 문자셋(한국어 윈도우는 CP949)으로 낸다. Java 18 부터 기본 문자셋은 UTF-8 이라 native.encoding 을 쓴다.
   private static final Charset NATIVE_CHARSET = Charset.forName(System.getProperty("native.encoding", Charset.defaultCharset().name()));
-  static final String UNASSUME_HINT = "풀려면 동기화 창의 「모른 척 중」 묶음에서 우클릭 → 모른 척 풀기";
+  static final String UNASSUME_HINT = "풀려면 동기화 창의 「Assume Unchanged」 묶음에서 우클릭 → No Assume Unchanged";
 
   private final Project project;
   private final Tree tree = new Tree(new DefaultTreeModel(new DefaultMutableTreeNode()));
@@ -135,6 +145,8 @@ final class SyncPanel extends JPanel {
 
   private volatile List<Repo> repos = List.of();
   private List<Change> changes = List.of();
+  // 비교를 시작할 때마다 하나 올린다(EDT 에서만). 늦게 끝난 옛 비교가 새 결과를 덮지 않게 끝날 때 이 값과 맞춰 본다.
+  private int compareSeq;
   private Kind modeFilter;  // null 이면 전체
 
   SyncPanel(Project project, Disposable parent) {
@@ -161,13 +173,15 @@ final class SyncPanel extends JPanel {
     add(splitter, BorderLayout.CENTER);
 
     JPanel bottom = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
-    bottom.add(actionButton("받기(Pull)", "Git.Pull", true));
-    bottom.add(actionButton("커밋…", "CheckinProject", false));
-    bottom.add(actionButton("올리기(Push)", "Vcs.Push", true));
+    bottom.add(actionButton("전체 받기", ACTION_UPDATE_ALL, false));
+    bottom.add(actionButton("받기(Pull)", ACTION_PULL, true));
+    bottom.add(commitButton());
+    bottom.add(actionButton("올리기(Push)", ACTION_PUSH, true));
     bottom.add(actionButton("충돌 해결", "Git.ResolveConflicts", false));
     add(bottom, BorderLayout.SOUTH);
 
     tree.setRootVisible(false);
+    tree.getEmptyText().setText("변경 없음");
     // 묶음 줄과 파일 줄은 종류별로 IDE 의 파일 상태 색(테마를 따름)으로 그린다. 충돌 빨강 · 들어올 파랑(수정됨) · 나갈 보라(병합됨).
     tree.setCellRenderer(new ColoredTreeCellRenderer() {
       @Override
@@ -211,7 +225,7 @@ final class SyncPanel extends JPanel {
     // 모른 척 중인 파일은 변경이 아니므로 무시 · 되돌리기 대신 풀기만 둔다.
     List<Change> assumed = all.stream().filter(c -> c.kind() == Kind.ASSUMED).toList();
     if (!assumed.isEmpty()) {
-      JMenuItem unassume = new JMenuItem("모른 척 풀기 (" + assumed.size() + "개 파일)");
+      JMenuItem unassume = new JMenuItem("No Assume Unchanged (" + assumed.size() + "개 파일)");
       unassume.addActionListener(a -> assumeUnchanged(assumed, false));
       menu.add(unassume);
     }
@@ -255,7 +269,7 @@ final class SyncPanel extends JPanel {
     // 내 작업본에만 적용된다. SVN 에는 대응 기능이 없다.
     List<Change> assumable = revertable.stream().filter(c -> c.repo().vcs() == Vcs.GIT).toList();
     if (!assumable.isEmpty()) {
-      JMenuItem assume = new JMenuItem("변경 모른 척하기 (" + assumable.size() + "개 파일)");
+      JMenuItem assume = new JMenuItem("Assume Unchanged (" + assumable.size() + "개 파일)");
       assume.addActionListener(a -> assumeUnchanged(assumable, true));
       menu.add(assume);
     }
@@ -440,8 +454,8 @@ final class SyncPanel extends JPanel {
 
   /** 모른 척하기 · 풀기 뒤 알림 문구. 프로젝트 트리 메뉴(AssumeUnchangedAction)와 같이 쓴다. */
   static String hideMessage(int count, boolean on) {
-    return on ? count + "개 파일의 변경을 모른 척합니다. 원격에서 이 파일이 바뀌면 받기(Pull)가 멈추니 그때는 먼저 모른 척을 푸세요. " + UNASSUME_HINT
-              : count + "개 파일의 모른 척을 풀었습니다. 내 변경이 다시 보입니다.";
+    return on ? count + "개 파일을 Assume Unchanged 로 두어 변경을 모른 척합니다. 원격에서 이 파일이 바뀌면 받기(Pull)가 멈추니 그때는 먼저 No Assume Unchanged 로 푸세요. " + UNASSUME_HINT
+              : count + "개 파일의 Assume Unchanged 를 풀었습니다. 내 변경이 다시 보입니다.";
   }
 
   /**
@@ -490,37 +504,74 @@ final class SyncPanel extends JPanel {
     return result;
   }
 
+  /** 저장소 하나를 처음 읽은 결과. */
+  private record Scanned(Repo repo, List<Change> changes) {}
+
+  /** 저장소 하나에 할 일. 결과는 입력 순서대로 모인다. */
+  private interface RepoWork<T, R> {
+    R run(T item) throws IOException, InterruptedException;
+  }
+
+  /**
+   * items 마다 work 를 작업 스레드에서 동시에 돌리고 입력 순서대로 결과를 돌려준다(저장소가 많아도 가장 느린 하나만큼 걸린다).
+   * 하나가 실패하면 그 예외를 그대로 던지고, 아직 도는 나머지는 중단한다.
+   */
+  private static <T, R> List<R> inParallel(List<T> items, RepoWork<T, R> work) throws IOException, InterruptedException {
+    List<Future<R>> futures = new ArrayList<>();
+    for (T item : items) {
+      futures.add(ApplicationManager.getApplication().executeOnPooledThread(() -> work.run(item)));
+    }
+    List<R> results = new ArrayList<>();
+    try {
+      for (Future<R> future : futures) {
+        try {
+          results.add(future.get());
+        }
+        catch (ExecutionException e) {
+          if (e.getCause() instanceof IOException io) throw io;
+          if (e.getCause() instanceof InterruptedException ie) throw ie;
+          throw new IOException(e.getCause());
+        }
+      }
+    }
+    finally {
+      for (Future<R> future : futures) future.cancel(true);
+    }
+    return results;
+  }
+
   /** fetch 없이 지금 상태로만 다시 비교한다(무시 · 되돌리기 · 커밋 직후). SVN 은 서버에 닿지 못하면 작업본만 비교한다. */
   private void recompare() {
     List<Repo> targets = repos;
     if (targets.isEmpty()) return;
+    int seq = ++compareSeq;
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       List<Change> result = new ArrayList<>();
-      String error = null;
+      AtomicReference<String> error = new AtomicReference<>();
       try {
-        for (Repo repo : targets) {
-          if (repo.vcs() == Vcs.GIT) {
-            result.addAll(compare(repo));
-            continue;
-          }
+        for (List<Change> part : inParallel(targets, repo -> {
+          if (repo.vcs() == Vcs.GIT) return compare(repo);
           try {
-            result.addAll(compareSvn(repo, true));
+            return compareSvn(repo, true);
           }
           catch (IOException offline) {
-            error = offline.getMessage();
-            result.addAll(compareSvn(repo, false));
+            error.set(offline.getMessage());
+            return compareSvn(repo, false);
           }
+        })) {
+          result.addAll(part);
         }
       }
       catch (IOException ex) {
-        error = ex.getMessage();
+        error.set(ex.getMessage());
       }
       catch (InterruptedException ex) {
         Thread.currentThread().interrupt();
         return;
       }
-      String message = error;
+      String message = error.get();
       SwingUtilities.invokeLater(() -> {
+        if (seq != compareSeq) return;
         changes = result;
         rebuildTree();
         if (message != null) status.setText(message);
@@ -537,38 +588,143 @@ final class SyncPanel extends JPanel {
   }
 
   /**
-   * IDE 동작을 부르는 단추. forSelectedRepo 면 트리에서 고른 저장소의 루트를 VIRTUAL_FILE(_ARRAY) 로 넘겨
-   * 받기 · 올리기 창이 그 저장소로 열리게 한다(DvcsUtil.guessRepositoryForOperation 이 VIRTUAL_FILE 을 먼저 본다).
+   * IDE 동작을 부르는 단추. forSelectedRepo 면 트리에서 고른 저장소들의 루트를 VIRTUAL_FILE(_ARRAY) 로 넘겨
+   * 받기 창은 첫 저장소로 열리고(DvcsUtil.guessRepositoryForOperation 이 VIRTUAL_FILE 을 먼저 본다)
+   * 올리기 창은 고른 저장소만 체크된다(VcsPushAction 이 VIRTUAL_FILE_ARRAY 의 저장소를 미리 고른다).
    * 고른 저장소가 없으면 IDE 기본(마지막 편집 파일의 저장소)을 따른다.
    */
   private JButton actionButton(String text, String actionId, boolean forSelectedRepo) {
     JButton button = new JButton(text);
     button.addActionListener(e -> {
-      AnAction action = ActionManager.getInstance().getAction(actionId);
-      if (action == null) {
-        status.setText(text + " 동작을 찾을 수 없습니다(" + actionId + ").");
+      // Git.Pull · Vcs.Push 는 Git 전용이라 SVN 저장소에서는 꺼져 있다. SVN 은 svn update 로 받고, 올리기는 커밋이 대신한다.
+      List<Repo> svnRepos = forSelectedRepo ? svnOnlyTargets() : List.of();
+      if (!svnRepos.isEmpty() && ACTION_PULL.equals(actionId)) {
+        svnUpdate(text, svnRepos);
         return;
       }
-      // 동작이 꺼져 있으면(예: 충돌 해결은 git 이 실제 충돌 상태인 파일이 있을 때만) 아무 일도 없이 끝나므로 이유를 상태줄에 적는다.
+      if (!svnRepos.isEmpty() && ACTION_PUSH.equals(actionId)) {
+        status.setText(text + ": SVN 은 따로 올리기가 없습니다. 「커밋…」 이 바로 서버에 올립니다.");
+        return;
+      }
       DataContext context = DataManager.getInstance().getDataContext(this);
-      Repo selected = forSelectedRepo ? selectedRepo() : null;
-      VirtualFile repoRoot = selected == null ? null : LocalFileSystem.getInstance().findFileByIoFile(selected.root());
-      if (repoRoot != null) {
+      List<VirtualFile> roots = new ArrayList<>();
+      if (forSelectedRepo) {
+        for (Repo repo : selectedRepos()) {
+          VirtualFile root = LocalFileSystem.getInstance().findFileByIoFile(repo.root());
+          if (root != null) roots.add(root);
+        }
+      }
+      if (!roots.isEmpty()) {
         context = SimpleDataContext.builder().setParent(context)
-          .add(CommonDataKeys.VIRTUAL_FILE, repoRoot)
-          .add(CommonDataKeys.VIRTUAL_FILE_ARRAY, new VirtualFile[]{repoRoot})
+          .add(CommonDataKeys.VIRTUAL_FILE, roots.get(0))
+          .add(CommonDataKeys.VIRTUAL_FILE_ARRAY, roots.toArray(VirtualFile[]::new))
           .build();
       }
-      AnActionEvent event = AnActionEvent.createFromAnAction(action, null, "KingGuraSynchronize", context);
-      ActionUtil.updateAction(action, event);
-      if (!event.getPresentation().isEnabled()) {
-        status.setText(text + ": 지금은 할 수 없습니다" + ("Git.ResolveConflicts".equals(actionId)
-          ? " — git 에 충돌 상태인 파일이 없습니다. 받기 뒤 충돌이 나면 이 단추로 해결합니다." : "."));
-        return;
-      }
-      ActionUtil.performActionDumbAwareWithCallbacks(action, event);
+      runAction(text, actionId, context);
     });
     return button;
+  }
+
+  /** 단추가 다룰 저장소(고른 것, 없으면 전부)가 모두 SVN 이면 그 목록, Git 이 하나라도 섞였거나 비었으면 빈 목록. */
+  private List<Repo> svnOnlyTargets() {
+    List<Repo> targets = selectedRepos();
+    if (targets.isEmpty()) targets = repos;
+    for (Repo repo : targets) {
+      if (repo.vcs() != Vcs.SVN) return List.of();
+    }
+    return targets;
+  }
+
+  /** SVN 저장소마다 svn update 를 작업 스레드에서 돌리고, 파일 보기를 새로 읽은 뒤 다시 비교한다. 실패하면 그 오류를 상태 줄에 적는다. */
+  private void svnUpdate(String text, List<Repo> targets) {
+    status.setText(text + ": svn update 중…");
+    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+      String message = text + ": " + targets.size() + "개 저장소를 최신으로 받았습니다.";
+      List<File> roots = new ArrayList<>();
+      try {
+        for (Repo repo : targets) {
+          roots.add(repo.root());
+          run(repo.root(), "svn", "update", "--non-interactive");
+        }
+      }
+      catch (IOException ex) {
+        message = ex.getMessage();
+      }
+      catch (InterruptedException ex) {
+        Thread.currentThread().interrupt();
+        return;
+      }
+      // 일부만 받고 실패했어도 바뀐 파일이 있을 수 있어 받은 저장소는 모두 새로 읽는다.
+      LocalFileSystem.getInstance().refreshIoFiles(roots, true, true, null);
+      String m = message;
+      SwingUtilities.invokeLater(() -> { status.setText(m); recompare(); });
+    });
+  }
+
+  /**
+   * 「커밋…」 단추. 트리에서 고른 것이 있으면 그것만 커밋 창에 체크해 연다(CheckinFiles 에 FILE_PATHS 를 넘김).
+   * 아무것도 고르지 않았으면 예전처럼 프로젝트 전체 커밋(CheckinProject).
+   */
+  private JButton commitButton() {
+    String text = "커밋…";
+    JButton button = new JButton(text);
+    button.addActionListener(e -> {
+      DataContext context = DataManager.getInstance().getDataContext(this);
+      if (tree.getSelectionCount() == 0) {
+        runAction(text, "CheckinProject", context);
+        return;
+      }
+      List<FilePath> paths = commitPaths();
+      if (paths.isEmpty()) {
+        status.setText(text + ": 고른 줄에 커밋할 내 변경이 없습니다(들어올 변경 · Assume Unchanged 는 커밋 대상이 아닙니다).");
+        return;
+      }
+      runAction(text, "CheckinFiles", SimpleDataContext.builder().setParent(context).add(VcsDataKeys.FILE_PATHS, paths).build());
+    });
+    return button;
+  }
+
+  /**
+   * 커밋할 경로. 파일 줄은 그 파일, 묶음 줄은 그 안의 파일, 저장소 줄은 저장소 폴더.
+   * 들어올 변경 · 모른 척 중은 내 작업본 변경이 아니어서 뺀다(나갈 변경 · 충돌만).
+   */
+  private List<FilePath> commitPaths() {
+    Set<FilePath> result = new LinkedHashSet<>();
+    TreePath[] paths = tree.getSelectionPaths();
+    if (paths == null) return new ArrayList<>(result);
+    for (TreePath path : paths) {
+      DefaultMutableTreeNode node = (DefaultMutableTreeNode) path.getLastPathComponent();
+      if (node.getUserObject() instanceof Repo repo) {
+        result.add(VcsUtil.getFilePath(repo.root(), true));
+        continue;
+      }
+      List<Object> values = new ArrayList<>();
+      if (node.getUserObject() instanceof Change) values.add(node.getUserObject());
+      for (int i = 0; i < node.getChildCount(); i++) values.add(((DefaultMutableTreeNode) node.getChildAt(i)).getUserObject());
+      for (Object value : values) {
+        if (value instanceof Change c && (c.kind() == Kind.OUTGOING || c.kind() == Kind.CONFLICT)) {
+          result.add(VcsUtil.getFilePath(new File(c.repo().root(), c.path()), false));
+        }
+      }
+    }
+    return new ArrayList<>(result);
+  }
+
+  /** IDE 동작 하나를 context 로 부른다. 동작이 꺼져 있으면(예: 충돌 해결은 git 이 실제 충돌 상태인 파일이 있을 때만) 아무 일도 없이 끝나므로 이유를 상태줄에 적는다. */
+  private void runAction(String text, String actionId, DataContext context) {
+    AnAction action = ActionManager.getInstance().getAction(actionId);
+    if (action == null) {
+      status.setText(text + " 동작을 찾을 수 없습니다(" + actionId + ").");
+      return;
+    }
+    AnActionEvent event = AnActionEvent.createFromAnAction(action, null, "KingGuraSynchronize", context);
+    ActionUtil.updateAction(action, event);
+    if (!event.getPresentation().isEnabled()) {
+      status.setText(text + ": 지금은 할 수 없습니다" + ("Git.ResolveConflicts".equals(actionId)
+        ? " — git 에 충돌 상태인 파일이 없습니다. 받기 뒤 충돌이 나면 이 단추로 해결합니다." : "."));
+      return;
+    }
+    ActionUtil.performActionDumbAwareWithCallbacks(action, event);
   }
 
   /** 파일 줄이면 그 종류, 묶음 줄이면 첫 자식 파일의 종류(묶음은 같은 종류 파일만 담는다). 저장소 줄은 null. */
@@ -589,10 +745,26 @@ final class SyncPanel extends JPanel {
     };
   }
 
+  /** 트리에서 고른 모든 줄이 속한 저장소(겹치지 않게, 고른 순서). */
+  private List<Repo> selectedRepos() {
+    Set<Repo> result = new LinkedHashSet<>();
+    TreePath[] paths = tree.getSelectionPaths();
+    if (paths == null) return new ArrayList<>(result);
+    for (TreePath path : paths) {
+      Repo repo = repoOf(path);
+      if (repo != null) result.add(repo);
+    }
+    return new ArrayList<>(result);
+  }
+
   /** 트리에서 고른 줄(저장소 줄 · 묶음 줄 · 파일 줄)이 속한 저장소. 고른 줄이 없거나 저장소를 알 수 없는 줄이면 null. */
   private Repo selectedRepo() {
     TreePath path = tree.getSelectionPath();
-    if (path == null) return null;
+    return path == null ? null : repoOf(path);
+  }
+
+  /** 줄 하나가 속한 저장소. 저장소가 하나뿐이라 저장소 줄이 없는 트리에서는 파일 줄에서만 알 수 있다. */
+  private static Repo repoOf(TreePath path) {
     for (Object part : path.getPath()) {
       Object value = ((DefaultMutableTreeNode) part).getUserObject();
       if (value instanceof Repo r) return r;
@@ -630,44 +802,50 @@ final class SyncPanel extends JPanel {
     refreshButton.setEnabled(false);
     refreshSelectedButton.setEnabled(false);
     status.setText("비교 중…");
+    int seq = ++compareSeq;
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
-      List<String> errors = new ArrayList<>();
+      List<String> errors = Collections.synchronizedList(new ArrayList<>());
       List<Repo> found = new ArrayList<>();
       List<Change> result = new ArrayList<>();
       try {
-        for (Map.Entry<File, Vcs> entry : roots) {
+        for (Scanned scanned : inParallel(roots, entry -> {
           try {
             Repo repo = entry.getValue() == Vcs.GIT ? gitRepo(entry.getKey()) : svnRepo(entry.getKey());
-            found.add(repo);
-            result.addAll(repo.vcs() == Vcs.GIT ? compare(repo) : compareSvn(repo, false));
+            return new Scanned(repo, repo.vcs() == Vcs.GIT ? compare(repo) : compareSvn(repo, false));
           }
           catch (IOException e) {
             errors.add(e.getMessage());
+            return null;
           }
+        })) {
+          if (scanned == null) continue;
+          found.add(scanned.repo());
+          result.addAll(scanned.changes());
         }
         repos = List.copyOf(found);
         List<Change> local = List.copyOf(result);
         SwingUtilities.invokeLater(() -> {
           title.setText(found.size() == 1 ? found.get(0).label() : "저장소 " + found.size() + "개");
+          if (seq != compareSeq) return;
           changes = local;
           rebuildTree();
           status.setText(summary(local) + " — 원격 변경을 받아 오는 중…");
         });
         List<Change> fetched = new ArrayList<>();
-        for (Repo repo : found) {
+        for (List<Change> part : inParallel(found, repo -> {
           try {
             if (repo.vcs() == Vcs.GIT) {
               git(repo.root(), "fetch", "--quiet");
-              fetched.addAll(compare(repo));
+              return compare(repo);
             }
-            else {
-              fetched.addAll(compareSvn(repo, true));
-            }
+            return compareSvn(repo, true);
           }
           catch (IOException e) {
             errors.add(e.getMessage());
-            fetched.addAll(repo.vcs() == Vcs.GIT ? compare(repo) : compareSvn(repo, false));  // 원격 실패 시 지금 비교 결과는 남긴다.
+            return repo.vcs() == Vcs.GIT ? compare(repo) : compareSvn(repo, false);  // 원격 실패 시 지금 비교 결과는 남긴다.
           }
+        })) {
+          fetched.addAll(part);
         }
         result = fetched;
       }
@@ -683,10 +861,11 @@ final class SyncPanel extends JPanel {
       if (!errors.isEmpty()) message = String.join(" / ", errors);
       String finalMessage = message;
       SwingUtilities.invokeLater(() -> {
-        changes = finalResult;
-        status.setText(finalMessage);
         refreshButton.setEnabled(true);
         refreshSelectedButton.setEnabled(true);
+        if (seq != compareSeq) return;
+        changes = finalResult;
+        status.setText(finalMessage);
         rebuildTree();
       });
     });
@@ -819,7 +998,7 @@ final class SyncPanel extends JPanel {
     List<Change> result = merge(repo, incoming, outgoing, unmerged);
     // 부분 체크아웃(sparse checkout)이 밖으로 뺀 파일도 skip-worktree 지만 디스크에 없으므로, 디스크에 있는 것만 모른 척 중으로 본다.
     for (String path : parseAssumed(git(root, "ls-files", "-v"), p -> new File(root, p).exists())) {
-      result.add(new Change(Kind.ASSUMED, "모른 척", path, repo));
+      result.add(new Change(Kind.ASSUMED, "Assume Unchanged", path, repo));
     }
     return result;
   }
@@ -931,7 +1110,7 @@ final class SyncPanel extends JPanel {
     Map<Kind, Integer> count = new EnumMap<>(Kind.class);
     for (Change c : changes) count.merge(c.kind(), 1, Integer::sum);
     int assumed = count.getOrDefault(Kind.ASSUMED, 0);
-    String tail = assumed > 0 ? " · 모른 척 " + assumed : "";
+    String tail = assumed > 0 ? " · Assume Unchanged " + assumed : "";
     if (changes.size() == assumed) return "원격과 같습니다" + tail;
     return "들어올 " + count.getOrDefault(Kind.INCOMING, 0) + " · 나갈 " + count.getOrDefault(Kind.OUTGOING, 0)
            + " · 충돌 " + count.getOrDefault(Kind.CONFLICT, 0) + tail;
