@@ -181,6 +181,7 @@ final class SyncPanel extends JPanel {
     add(bottom, BorderLayout.SOUTH);
 
     tree.setRootVisible(false);
+    tree.getEmptyText().setText("변경 없음");
     // 묶음 줄과 파일 줄은 종류별로 IDE 의 파일 상태 색(테마를 따름)으로 그린다. 충돌 빨강 · 들어올 파랑(수정됨) · 나갈 보라(병합됨).
     tree.setCellRenderer(new ColoredTreeCellRenderer() {
       @Override
