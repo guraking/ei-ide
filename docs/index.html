@@ -329,7 +329,7 @@ footer{padding:56px 0 40px; color:var(--muted); font-size:13px}
       <div class="card"><h4>한글 폭이 맞는 글꼴</h4><p>JetBrainsMonoHangul 내장. 한글이 영문 두 칸에 딱 맞아 열이 어긋나지 않습니다.</p><span class="was">JetBrains Mono, 한글 폭 어긋남</span></div>
       <div class="card"><h4>실행 설정 창</h4><p>VM 옵션 칸이 처음부터 보입니다.</p><span class="was">「Modify options」로 꺼내야 함</span></div>
       <div class="card"><h4>프론트 파일 색</h4><p>JS · JSX · TS · TSX · HTML · CSS · SCSS · LESS · JSON · Vue · Svelte · Astro</p><span class="was">Vue · Svelte · Astro 없음</span></div>
-      <div class="card"><h4>형상 관리</h4><p>Git · GitHub · GitLab · SVN. IDE 파일(<code>*.iml</code> · <code>.idea/</code>)은 변경 목록에 안 뜸. 커밋 전 코드 분석 · TODO 검사 끔.</p><span class="was">SVN 없음, 커밋 전 검사 켬</span></div>
+      <div class="card"><h4>형상 관리</h4><p>Git · GitHub · GitLab · SVN. IDE 파일(<code>*.iml</code> · <code>.idea/</code> · <code>.project</code> · <code>.classpath</code> · <code>.settings/</code>)은 변경 목록에 안 뜸. 커밋 전 코드 분석 · TODO 검사 끔.</p><span class="was">SVN 없음, 커밋 전 검사 켬</span></div>
       <div class="card"><h4>콘솔 검색</h4><p>실행 창 콘솔에서 <kbd>Ctrl</kbd>+<kbd>F</kbd>.</p><span class="was">이클립스 단축키에서는 없음</span></div>
       <div class="card"><h4>편집기</h4><p>오른쪽 「세로로 분할」 단추, 120자 여백선 숨김, 커밋 뒤 메시지 비움.</p><span class="was">분할 단추 없음, 여백선 보임</span></div>
       <div class="card"><h4>다른 프로젝트는 새 창</h4><p>Recent Projects · Open… 으로 고른 프로젝트를 지금 창은 둔 채 새 창에 엽니다.</p><span class="was">매번 묻기</span></div>
@@ -741,7 +741,7 @@ footer{padding:56px 0 40px; color:var(--muted); font-size:13px}
         <li><span class="mark">2</span><div><b>파일 우클릭</b> <span class="t">무시 목록에 추가 · 내 변경 되돌리기 · Assume Unchanged. 새로 추가 · 이름 바꿈 · 복사한 파일은 지워지지 않게 되돌리기에서 빠지고 「스테이징만 풀기」로 갑니다.</span></div></li>
         <li><span class="mark">3</span><div><b>Assume Unchanged</b> <span class="t"><code>application-local.yml</code> 처럼 내 PC 에서만 고친 파일이 커밋 목록에 계속 뜰 때 씁니다. 커밋 창 · 프로젝트 트리의 파일 우클릭에도 있습니다(프로젝트 트리에는 「No Assume Unchanged」도). 원격에서 그 파일이 바뀌면 받기(Pull)가 멈추니 그때는 먼저 No Assume Unchanged 로 푸세요.</span></div></li>
         <li><span class="mark">4</span><div><b>Assume Unchanged · 풀기</b> <span class="t">Assume Unchanged 로 둔 파일은 「모두 보기」 맨 아래 「Assume Unchanged」 묶음에 모입니다. 우클릭 「No Assume Unchanged」로 되돌리면 내 변경이 다시 나갈 변경으로 보입니다. 파일 내용은 그대로입니다.</span></div></li>
-        <li><span class="mark">+</span><div><b>IDE 파일은 처음부터 안 뜸</b> <span class="t">프로젝트를 열면 저장소마다 <code>.git/info/exclude</code> 에 <code>*.iml</code> · <code>.idea/</code> 를 넣습니다. 팀 <code>.gitignore</code> 와 서버에는 영향이 없습니다.</span></div></li>
+        <li><span class="mark">+</span><div><b>IDE 파일은 처음부터 안 뜸</b> <span class="t">프로젝트를 열면 저장소마다 <code>.git/info/exclude</code> 에 <code>*.iml</code> · <code>.idea/</code> · <code>.project</code> · <code>.classpath</code> · <code>.settings/</code> 를 넣습니다. 팀 <code>.gitignore</code> 와 서버에는 영향이 없습니다.</span></div></li>
       </ol>
     </div>
     <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note"><b>SVN</b>svn 명령줄 도구(VisualSVN)가 본체에 같이 들어 있어 따로 설치하지 않아도 SVN 저장소가 함께 보입니다.</div></div>
