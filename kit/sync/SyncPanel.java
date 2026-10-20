@@ -106,6 +106,8 @@ final class SyncPanel extends JPanel {
   // ProjectLevelVcsManager 가 주는 AbstractVcs.getName() 값. GitVcs.NAME · SvnVcs.VCS_NAME 과 같다.
   private static final String VCS_NAME_GIT = "Git";
   private static final String VCS_NAME_SVN = "svn";
+  private static final String ACTION_PULL = "Git.Pull";
+  private static final String ACTION_PUSH = "Vcs.Push";
   // 설치본에 같이 넣은 VisualSVN 명령줄 도구(apply_defaults 19 의 SVN 기본 경로와 같은 곳).
   private static final String BUNDLED_SVN = "plugins/kinggura-sync/svn/bin/svn.exe";
   // svn status --xml 의 item 값 가운데 변경으로 볼 것. 서버 쪽(repos-status)은 작업본에만 있는 값이 올 수 없다.
@@ -164,9 +166,9 @@ final class SyncPanel extends JPanel {
     add(splitter, BorderLayout.CENTER);
 
     JPanel bottom = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
-    bottom.add(actionButton("받기(Pull)", "Git.Pull", true));
+    bottom.add(actionButton("받기(Pull)", ACTION_PULL, true));
     bottom.add(commitButton());
-    bottom.add(actionButton("올리기(Push)", "Vcs.Push", true));
+    bottom.add(actionButton("올리기(Push)", ACTION_PUSH, true));
     bottom.add(actionButton("충돌 해결", "Git.ResolveConflicts", false));
     add(bottom, BorderLayout.SOUTH);
 
@@ -548,6 +550,16 @@ final class SyncPanel extends JPanel {
   private JButton actionButton(String text, String actionId, boolean forSelectedRepo) {
     JButton button = new JButton(text);
     button.addActionListener(e -> {
+      // Git.Pull · Vcs.Push 는 Git 전용이라 SVN 저장소에서는 꺼져 있다. SVN 은 svn update 로 받고, 올리기는 커밋이 대신한다.
+      List<Repo> svnRepos = forSelectedRepo ? svnOnlyTargets() : List.of();
+      if (!svnRepos.isEmpty() && ACTION_PULL.equals(actionId)) {
+        svnUpdate(text, svnRepos);
+        return;
+      }
+      if (!svnRepos.isEmpty() && ACTION_PUSH.equals(actionId)) {
+        status.setText(text + ": SVN 은 따로 올리기가 없습니다. 「커밋…」 이 바로 서버에 올립니다.");
+        return;
+      }
       DataContext context = DataManager.getInstance().getDataContext(this);
       List<VirtualFile> roots = new ArrayList<>();
       if (forSelectedRepo) {
@@ -565,6 +577,42 @@ final class SyncPanel extends JPanel {
       runAction(text, actionId, context);
     });
     return button;
+  }
+
+  /** 단추가 다룰 저장소(고른 것, 없으면 전부)가 모두 SVN 이면 그 목록, Git 이 하나라도 섞였거나 비었으면 빈 목록. */
+  private List<Repo> svnOnlyTargets() {
+    List<Repo> targets = selectedRepos();
+    if (targets.isEmpty()) targets = repos;
+    for (Repo repo : targets) {
+      if (repo.vcs() != Vcs.SVN) return List.of();
+    }
+    return targets;
+  }
+
+  /** SVN 저장소마다 svn update 를 작업 스레드에서 돌리고, 파일 보기를 새로 읽은 뒤 다시 비교한다. 실패하면 그 오류를 상태 줄에 적는다. */
+  private void svnUpdate(String text, List<Repo> targets) {
+    status.setText(text + ": svn update 중…");
+    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+      String message = text + ": " + targets.size() + "개 저장소를 최신으로 받았습니다.";
+      List<File> roots = new ArrayList<>();
+      try {
+        for (Repo repo : targets) {
+          roots.add(repo.root());
+          run(repo.root(), "svn", "update", "--non-interactive");
+        }
+      }
+      catch (IOException ex) {
+        message = ex.getMessage();
+      }
+      catch (InterruptedException ex) {
+        Thread.currentThread().interrupt();
+        return;
+      }
+      // 일부만 받고 실패했어도 바뀐 파일이 있을 수 있어 받은 저장소는 모두 새로 읽는다.
+      LocalFileSystem.getInstance().refreshIoFiles(roots, true, true, null);
+      String m = message;
+      SwingUtilities.invokeLater(() -> { status.setText(m); recompare(); });
+    });
   }
 
   /**
