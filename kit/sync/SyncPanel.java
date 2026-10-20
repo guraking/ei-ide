@@ -103,6 +103,8 @@ final class SyncPanel extends JPanel {
   enum Undo { REVERT, UNSTAGE, NONE }
 
   private static final long CMD_TIMEOUT_SEC = 120;
+  // svn update 는 받을 양에 따라 오래 걸린다. 중간에 끊으면 작업본이 잠겨(E155037) svn cleanup 이 필요하므로 따로 길게 둔다.
+  private static final long SVN_UPDATE_TIMEOUT_SEC = TimeUnit.MINUTES.toSeconds(30);
   private static final int PATH_LIST_MAX = 10;
   private static final int REPO_CHANGE_DELAY_MS = 500;
   private static final Set<String> UNMERGED = Set.of("DD", "AU", "UD", "UA", "DU", "AA", "UU");
@@ -597,12 +599,18 @@ final class SyncPanel extends JPanel {
     JButton button = new JButton(text);
     button.addActionListener(e -> {
       // Git.Pull · Vcs.Push 는 Git 전용이라 SVN 저장소에서는 꺼져 있다. SVN 은 svn update 로 받고, 올리기는 커밋이 대신한다.
-      List<Repo> svnRepos = forSelectedRepo ? svnOnlyTargets() : List.of();
-      if (!svnRepos.isEmpty() && ACTION_PULL.equals(actionId)) {
-        svnUpdate(text, svnRepos);
-        return;
+      // Git 과 SVN 이 섞여 있으면 받기는 SVN 저장소를 svn update 로 받고 Git 저장소는 Git.Pull 로 이어 받는다.
+      List<Repo> targets = forSelectedRepo ? buttonTargets() : List.of();
+      List<Repo> svnRepos = new ArrayList<>();
+      for (Repo repo : targets) {
+        if (repo.vcs() == Vcs.SVN) svnRepos.add(repo);
       }
-      if (!svnRepos.isEmpty() && ACTION_PUSH.equals(actionId)) {
+      boolean svnOnly = !svnRepos.isEmpty() && svnRepos.size() == targets.size();
+      if (!svnRepos.isEmpty() && ACTION_PULL.equals(actionId)) {
+        svnUpdate(button, svnRepos);
+        if (svnOnly) return;
+      }
+      if (svnOnly && ACTION_PUSH.equals(actionId)) {
         status.setText(text + ": SVN 은 따로 올리기가 없습니다. 「커밋…」 이 바로 서버에 올립니다.");
         return;
       }
@@ -610,6 +618,8 @@ final class SyncPanel extends JPanel {
       List<VirtualFile> roots = new ArrayList<>();
       if (forSelectedRepo) {
         for (Repo repo : selectedRepos()) {
+          // Git 동작에 SVN 루트를 넘기면 첫 루트가 SVN 일 때 받기 창이 저장소를 고르지 못한다.
+          if (repo.vcs() != Vcs.GIT) continue;
           VirtualFile root = LocalFileSystem.getInstance().findFileByIoFile(repo.root());
           if (root != null) roots.add(root);
         }
@@ -625,39 +635,45 @@ final class SyncPanel extends JPanel {
     return button;
   }
 
-  /** 단추가 다룰 저장소(고른 것, 없으면 전부)가 모두 SVN 이면 그 목록, Git 이 하나라도 섞였거나 비었으면 빈 목록. */
-  private List<Repo> svnOnlyTargets() {
+  /** 단추가 다룰 저장소: 트리에서 고른 것, 없으면 전부. */
+  private List<Repo> buttonTargets() {
     List<Repo> targets = selectedRepos();
-    if (targets.isEmpty()) targets = repos;
-    for (Repo repo : targets) {
-      if (repo.vcs() != Vcs.SVN) return List.of();
-    }
-    return targets;
+    return targets.isEmpty() ? repos : targets;
   }
 
-  /** SVN 저장소마다 svn update 를 작업 스레드에서 돌리고, 파일 보기를 새로 읽은 뒤 다시 비교한다. 실패하면 그 오류를 상태 줄에 적는다. */
-  private void svnUpdate(String text, List<Repo> targets) {
+  /**
+   * SVN 저장소마다 svn update 를 작업 스레드에서 돌리고, 파일 보기를 새로 읽은 뒤 다시 비교한다. 실패하면 그 오류를 상태 줄에 적는다.
+   * 같은 작업본에 update 가 겹쳐 돌면 잠금 오류가 나므로 끝날 때까지(실패 · 중단 포함) 단추를 꺼 둔다.
+   */
+  private void svnUpdate(JButton button, List<Repo> targets) {
+    String text = button.getText();
+    button.setEnabled(false);
     status.setText(text + ": svn update 중…");
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
-      String message = text + ": " + targets.size() + "개 저장소를 최신으로 받았습니다.";
-      List<File> roots = new ArrayList<>();
       try {
-        for (Repo repo : targets) {
-          roots.add(repo.root());
-          run(repo.root(), "svn", "update", "--non-interactive");
+        String message = text + ": " + targets.size() + "개 저장소를 최신으로 받았습니다.";
+        List<File> roots = new ArrayList<>();
+        try {
+          for (Repo repo : targets) {
+            roots.add(repo.root());
+            run(repo.root(), SVN_UPDATE_TIMEOUT_SEC, "svn", "update", "--non-interactive");
+          }
         }
+        catch (IOException ex) {
+          message = ex.getMessage();
+        }
+        catch (InterruptedException ex) {
+          Thread.currentThread().interrupt();
+          return;
+        }
+        // 일부만 받고 실패했어도 바뀐 파일이 있을 수 있어 받은 저장소는 모두 새로 읽는다.
+        LocalFileSystem.getInstance().refreshIoFiles(roots, true, true, null);
+        String m = message;
+        SwingUtilities.invokeLater(() -> { status.setText(m); recompare(); });
       }
-      catch (IOException ex) {
-        message = ex.getMessage();
+      finally {
+        SwingUtilities.invokeLater(() -> button.setEnabled(true));
       }
-      catch (InterruptedException ex) {
-        Thread.currentThread().interrupt();
-        return;
-      }
-      // 일부만 받고 실패했어도 바뀐 파일이 있을 수 있어 받은 저장소는 모두 새로 읽는다.
-      LocalFileSystem.getInstance().refreshIoFiles(roots, true, true, null);
-      String m = message;
-      SwingUtilities.invokeLater(() -> { status.setText(m); recompare(); });
     });
   }
 
@@ -863,9 +879,10 @@ final class SyncPanel extends JPanel {
       SwingUtilities.invokeLater(() -> {
         refreshButton.setEnabled(true);
         refreshSelectedButton.setEnabled(true);
+        // 그사이 다시 비교(recompare)가 시작됐으면 목록은 그쪽 결과를 따르고, 원격 확인 결과 · 오류는 그대로 알린다.
+        status.setText(finalMessage);
         if (seq != compareSeq) return;
         changes = finalResult;
-        status.setText(finalMessage);
         rebuildTree();
       });
     });
@@ -1208,6 +1225,11 @@ final class SyncPanel extends JPanel {
    * 오류 출력은 git 은 UTF-8, svn 은 운영체제 문자셋으로 읽는다. svn 의 표준 출력이 필요한 곳은 --xml(UTF-8)로 받는다.
    */
   static String run(File dir, String exe, String... args) throws IOException, InterruptedException {
+    return run(dir, CMD_TIMEOUT_SEC, exe, args);
+  }
+
+  /** run 과 같고 시간 제한(초)만 따로 준다. */
+  static String run(File dir, long timeoutSec, String exe, String... args) throws IOException, InterruptedException {
     List<String> command = new ArrayList<>(List.of(VCS_NAME_SVN.equals(exe) ? svnExecutable() : exe));
     command.addAll(List.of(args));
     String label = exe + " " + verb(args);
@@ -1216,9 +1238,9 @@ final class SyncPanel extends JPanel {
     try {
       Process process = new ProcessBuilder(command).directory(dir).redirectOutput(outFile).redirectError(errFile).start();
       try {
-        if (!process.waitFor(CMD_TIMEOUT_SEC, TimeUnit.SECONDS)) {
+        if (!process.waitFor(timeoutSec, TimeUnit.SECONDS)) {
           kill(process);
-          throw new IOException(label + " 이(가) " + CMD_TIMEOUT_SEC + "초 안에 끝나지 않아 멈췄습니다.");
+          throw new IOException(label + " 이(가) " + timeoutSec + "초 안에 끝나지 않아 멈췄습니다.");
         }
       }
       catch (InterruptedException e) {

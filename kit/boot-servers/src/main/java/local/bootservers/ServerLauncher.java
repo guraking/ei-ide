@@ -108,11 +108,12 @@ final class ServerLauncher {
      * 서버를 시작한다. 실행 설정이 없으면 모듈 안의 @SpringBootApplication 클래스로 새로 만든다.
      * 색인 중이거나 메인 클래스를 하나로 정할 수 없으면 알림만 띄우고 시작하지 않는다.
      */
-    static void start(Module module, Executor executor) {
+    static boolean start(Module module, Executor executor) {
         RunnerAndConfigurationSettings settings = ensureSettings(module);
         if (settings != null) {
             start(settings, executor);
         }
+        return settings != null;
     }
 
     static void start(RunnerAndConfigurationSettings settings, Executor executor) {

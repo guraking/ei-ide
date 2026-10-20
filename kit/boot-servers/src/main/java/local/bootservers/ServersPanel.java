@@ -15,7 +15,10 @@ import com.intellij.icons.AllIcons;
 import com.intellij.ide.BrowserUtil;
 import com.intellij.ide.projectView.ProjectView;
 import com.intellij.openapi.Disposable;
+import com.intellij.notification.NotificationGroupManager;
+import com.intellij.notification.NotificationType;
 import com.intellij.openapi.actionSystem.ActionManager;
+import com.intellij.openapi.actionSystem.ActionGroup;
 import com.intellij.openapi.actionSystem.ActionToolbar;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
@@ -27,11 +30,17 @@ import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.application.WriteIntentReadAction;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.project.DumbService;
+import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.ui.SimpleToolWindowPanel;
+import com.intellij.openapi.ui.popup.JBPopupFactory;
 import com.intellij.openapi.util.Disposer;
+import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.wm.ToolWindow;
+import com.intellij.task.ProjectTaskContext;
+import com.intellij.task.ProjectTaskListener;
+import com.intellij.task.ProjectTaskManager;
 import com.intellij.openapi.wm.ToolWindowId;
 import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.ui.ColoredTableCellRenderer;
@@ -40,6 +49,7 @@ import com.intellij.ui.OnePixelSplitter;
 import com.intellij.ui.PopupHandler;
 import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.SimpleTextAttributes;
+import com.intellij.ui.ColoredListCellRenderer;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBTextField;
 import com.intellij.ui.table.JBTable;
@@ -48,12 +58,15 @@ import com.intellij.util.execution.ParametersListUtil;
 import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.JBUI;
 import local.bootservers.was.WasSettings;
+import local.bootservers.was.WasLogFiles;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import javax.swing.Icon;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
+import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JTable;
 import javax.swing.ListSelectionModel;
@@ -62,12 +75,17 @@ import javax.swing.table.AbstractTableModel;
 import java.awt.CardLayout;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.io.IOException;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 아래쪽 「서버」 창. 스프링 부트 실행 설정과 추가한 WAS 를 한 목록에 보인다.
@@ -141,9 +159,12 @@ final class ServersPanel extends SimpleToolWindowPanel {
             @Override
             public void mouseClicked(MouseEvent e) {
                 if (e.getClickCount() == 2) {
-                    for (Object target : targets()) {
-                        showConsoleOrStart(target);
-                    }
+                    // 2026.2 는 마우스 이벤트를 읽기 잠금 없이 처리한다. 설정이 없는 부트 줄은 PSI 로 메인 클래스를 찾으므로 잠금 안에서 돌린다.
+                    WriteIntentReadAction.run(() -> {
+                        for (Object target : targets()) {
+                            showConsoleOrStart(target);
+                        }
+                    });
                 }
             }
         });
@@ -166,6 +187,8 @@ final class ServersPanel extends SimpleToolWindowPanel {
         Timer timer = new Timer(TICK_MILLIS, e -> tick());
         timer.start();
         Disposer.register(parent, timer::stop);
+        Disposer.register(parent, this::cancelGroupRun);
+        watchBuilds();
         // Gradle · Maven 가져오기가 끝나면 색인이 다시 돌므로, 색인이 끝날 때마다 서버 목록을 다시 찾는다.
         project.getMessageBus().connect(parent).subscribe(DumbService.DUMB_MODE, new DumbService.DumbModeListener() {
             @Override
@@ -308,21 +331,20 @@ final class ServersPanel extends SimpleToolWindowPanel {
         return new ArrayList<>(result);
     }
 
-    private void start(Object target, boolean debug) {
+    /** @return 시작(빌드 · 실행)을 넘겼으면 true, 알림 · 오류 창만 띄우고 그만뒀으면 false */
+    private boolean start(Object target, boolean debug) {
         Executor executor = debug ? DefaultDebugExecutor.getDebugExecutorInstance() : DefaultRunExecutor.getRunExecutorInstance();
         if (target instanceof Boot b) {
             if (b.settings() != null) {
                 ServerLauncher.start(b.settings(), executor);
+                return true;
             }
-            else {
-                // 자리 줄: 모듈 이름으로 실행 설정이 만들어지므로 줄을 다시 맞춘다.
-                ServerLauncher.start(b.module(), executor);
-                rebuildRows();
-            }
+            // 자리 줄: 모듈 이름으로 실행 설정이 만들어지므로 줄을 다시 맞춘다.
+            boolean began = ServerLauncher.start(b.module(), executor);
+            rebuildRows();
+            return began;
         }
-        else {
-            WasRunner.getInstance(project).start((WasSettings.Server) target, debug);
-        }
+        return WasRunner.getInstance(project).start((WasSettings.Server) target, debug);
     }
 
     private void stop(Object target) {
@@ -395,6 +417,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
                 return ActionUpdateThread.EDT;
             }
         });
+        g.add(groupMenu());
         g.addSeparator();
         g.add(action("서버 복제", AllIcons.Actions.Copy, t -> t instanceof Boot b && b.settings() != null, this::duplicate));
         g.add(action("반영 (다시 빌드)", AllIcons.Actions.Compile, t -> t instanceof WasSettings.Server && isLive(stateOf(t)), this::publish));
@@ -402,6 +425,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
         g.add(action("콘솔 보기", AllIcons.Debugger.Console, t -> isLive(stateOf(t)), this::showConsoleOrStart));
         g.add(action("설정 편집…", AllIcons.Actions.EditSource, t -> true, this::editSettings));
         g.add(action("WAS 삭제", AllIcons.General.Remove, t -> t instanceof WasSettings.Server && !isLive(stateOf(t)), this::removeWas));
+        g.add(action("로그 파일 보기…", AllIcons.FileTypes.Text, t -> t instanceof WasSettings.Server, this::showLogFiles));
         g.addSeparator();
         g.add(new AnAction("서버 목록 새로 찾기", null, AllIcons.Actions.Refresh) {
             @Override
@@ -539,6 +563,316 @@ final class ServersPanel extends SimpleToolWindowPanel {
     private Object selectedRow() {
         int[] sel = table.getSelectedRows();
         return sel.length == 0 || sel[sel.length - 1] >= rows.size() ? null : rows.get(sel[sel.length - 1]);
+    }
+
+    // ---- 서버 묶음: 정한 순서대로 하나씩, 앞 서버가 실행 중이 된 뒤 다음 서버를 시작한다 ----
+
+    private static final String GROUP_TITLE = "서버 묶음";
+    // 서버 하나가 실행 중이 되기까지 기다리는 한도. WAS 는 시작 전 빌드까지 하므로 넉넉히 둔다.
+    private static final long GROUP_START_TIMEOUT_MILLIS = 5 * 60 * 1000;
+    // plugin.xml 의 알림 묶음 id.
+    private static final String NOTIFICATION_GROUP = "서버 실행";
+    private static final String BOOT_KEY_PREFIX = "boot:";
+    // 시작을 지시한 뒤 빌드 · 실행 준비도 프로세스도 보이지 않으면 시작이 일어나지 않은 것(오류 창을 띄우고 그만둠)으로 보는 한도.
+    // 빌드가 끝난 뒤 실행 창이 뜨기까지의 틈(화면 스레드 한두 차례 · 실행 전 작업 준비)보다 넉넉해야 한다.
+    private static final long GROUP_START_GRACE_MILLIS = 15_000;
+
+    private GroupSequence groupRun;
+    private String groupRunName;
+    private Timer groupTimer;
+    // 도는 중인 프로젝트 빌드 수. 서버 시작 전 빌드(WAS 시작 · 실행 설정의 실행 전 빌드)도 여기에 잡힌다.
+    private final AtomicInteger buildsRunning = new AtomicInteger();
+    // start() 를 부르는 동안의 줄 키. 그 안의 모달 창(JEUS 비밀번호 등)이 떠 있는 동안 묶음 타이머가 돌아도 준비 중으로 본다.
+    private String groupStartingKey;
+
+    private void watchBuilds() {
+        project.getMessageBus().connect(parent).subscribe(ProjectTaskListener.TOPIC, new ProjectTaskListener() {
+            @Override
+            public void started(@NotNull ProjectTaskContext context) {
+                buildsRunning.incrementAndGet();
+            }
+
+            @Override
+            public void finished(@NotNull ProjectTaskManager.Result result) {
+                buildsRunning.updateAndGet(n -> Math.max(0, n - 1));
+            }
+        });
+    }
+
+    /** 묶음 안에 적는 줄 키. 올린 프로젝트 줄은 묶음에 넣지 않으므로 null. */
+    private static String rowKey(Object row) {
+        if (row instanceof Boot b) {
+            return BOOT_KEY_PREFIX + b.name();
+        }
+        return row instanceof WasSettings.Server s ? WasRunner.registryKey(s) : null;
+    }
+
+    private Object rowByKey(String key) {
+        for (Object row : rows) {
+            if (key.equals(rowKey(row)) && !(row instanceof Boot b && b.module().isDisposed())) {
+                return row;
+            }
+        }
+        return null;
+    }
+
+    /** 줄 키 → 보일 이름. 서버 창 줄 순서. */
+    private Map<String, String> rowLabels() {
+        Map<String, String> labels = new LinkedHashMap<>();
+        for (Object row : rows) {
+            String key = rowKey(row);
+            if (key != null) {
+                labels.put(key, row instanceof Boot b ? b.name() : ((WasSettings.Server) row).name + "  [" + ((WasSettings.Server) row).kind().label + "]");
+            }
+        }
+        return labels;
+    }
+
+    private String labelOf(String key) {
+        Object row = rowByKey(key);
+        if (row instanceof Boot b) {
+            return b.name();
+        }
+        if (row instanceof WasSettings.Server s) {
+            return s.name;
+        }
+        return key.startsWith(BOOT_KEY_PREFIX) ? key.substring(BOOT_KEY_PREFIX.length()) : key;
+    }
+
+    /** 도구 모음 · 우클릭의 「서버 묶음」: 새 묶음, 묶음마다 시작 · 중지 · 편집 · 삭제. */
+    private ActionGroup groupMenu() {
+        ActionGroup menu = new ActionGroup(GROUP_TITLE, "정한 순서대로 서버를 하나씩 시작합니다", AllIcons.Nodes.Folder) {
+            @Override
+            public AnAction @NotNull [] getChildren(@Nullable AnActionEvent e) {
+                List<AnAction> children = new ArrayList<>();
+                children.add(DumbAwareAction.create("새 묶음… (고른 줄로 시작)", ev -> newGroup()));
+                for (ServerGroups.Group group : ServerGroups.getInstance(project).groups()) {
+                    DefaultActionGroup sub = DefaultActionGroup.createPopupGroup(() -> group.name);
+                    sub.add(DumbAwareAction.create("묶음 시작", ev -> startGroup(group)));
+                    sub.add(DumbAwareAction.create("묶음 중지 (거꾸로)", ev -> stopGroup(group)));
+                    sub.add(DumbAwareAction.create("편집…", ev -> editGroup(group)));
+                    sub.add(DumbAwareAction.create("삭제", ev -> deleteGroup(group)));
+                    children.add(sub);
+                }
+                return children.toArray(AnAction[]::new);
+            }
+
+            @Override
+            public @NotNull ActionUpdateThread getActionUpdateThread() {
+                return ActionUpdateThread.EDT;
+            }
+        };
+        menu.setPopup(true);
+        return menu;
+    }
+
+    private void newGroup() {
+        List<String> initial = new ArrayList<>();
+        for (Object t : targets()) {
+            String key = rowKey(t);
+            if (key != null) {
+                initial.add(key);
+            }
+        }
+        ServerGroupDialog dialog = new ServerGroupDialog(project, null, initial, rowLabels(), groupNames(null));
+        if (dialog.showAndGet()) {
+            ServerGroups.getInstance(project).groups().add(dialog.result());
+        }
+    }
+
+    private void editGroup(ServerGroups.Group group) {
+        ServerGroupDialog dialog = new ServerGroupDialog(project, group, group.members, rowLabels(), groupNames(group));
+        if (dialog.showAndGet()) {
+            List<ServerGroups.Group> groups = ServerGroups.getInstance(project).groups();
+            int i = groups.indexOf(group);
+            if (i >= 0) {
+                groups.set(i, dialog.result());
+            }
+        }
+    }
+
+    private void deleteGroup(ServerGroups.Group group) {
+        if (Messages.showYesNoDialog(project, "「" + group.name + "」 묶음을 지울까요? 서버는 그대로 둡니다.", GROUP_TITLE,
+                Messages.getQuestionIcon()) == Messages.YES) {
+            ServerGroups.getInstance(project).groups().remove(group);
+        }
+    }
+
+    /** except 를 뺀 묶음 이름들(이름 겹침 검사용). */
+    private List<String> groupNames(ServerGroups.Group except) {
+        List<String> names = new ArrayList<>();
+        for (ServerGroups.Group g : ServerGroups.getInstance(project).groups()) {
+            if (g != except) {
+                names.add(g.name);
+            }
+        }
+        return names;
+    }
+
+    /** 서버 창에 없는 서버가 묶음에 있으면 시작하지 않고 알린다. 다른 묶음이 시작 중이면 그 진행은 멈춘다. */
+    private void startGroup(ServerGroups.Group group) {
+        List<String> missing = new ArrayList<>();
+        for (String key : group.members) {
+            if (rowByKey(key) == null) {
+                missing.add(labelOf(key));
+            }
+        }
+        if (group.members.isEmpty() || !missing.isEmpty()) {
+            Messages.showErrorDialog(project, group.members.isEmpty()
+                    ? "「" + group.name + "」 묶음에 서버가 없습니다. 편집에서 넣으세요."
+                    : "「" + group.name + "」 묶음의 서버를 서버 창에서 찾지 못했습니다: " + String.join(", ", missing)
+                      + "\n편집에서 빼거나 다시 넣으세요.", GROUP_TITLE);
+            return;
+        }
+        cancelGroupRun();
+        groupRun = new GroupSequence(group.members, GROUP_START_TIMEOUT_MILLIS, GROUP_START_GRACE_MILLIS);
+        groupRunName = group.name;
+        groupTimer = new Timer(TICK_MILLIS, e -> groupTick());
+        groupTimer.start();
+        groupTick();
+    }
+
+    /** 시작 중인 같은 묶음 진행을 멈추고, 묶음의 서버를 거꾸로 중지한다. */
+    private void stopGroup(ServerGroups.Group group) {
+        if (group.name.equals(groupRunName)) {
+            cancelGroupRun();
+        }
+        for (int i = group.members.size() - 1; i >= 0; i--) {
+            Object row = rowByKey(group.members.get(i));
+            if (row != null && isLive(stateOf(row))) {
+                stop(row);
+            }
+        }
+    }
+
+    private void cancelGroupRun() {
+        if (groupTimer != null) {
+            groupTimer.stop();
+        }
+        groupTimer = null;
+        groupRun = null;
+        groupRunName = null;
+    }
+
+    private GroupSequence.Status groupStatus(String key) {
+        Object row = rowByKey(key);
+        if (row == null) {
+            return GroupSequence.Status.FAILED;
+        }
+        ServerLauncher.State state = stateOf(row);
+        if (isStartable(state) && (key.equals(groupStartingKey) || buildsRunning.get() > 0
+                || row instanceof WasSettings.Server s && WasRunner.getInstance(project).isLaunching(s))) {
+            return GroupSequence.Status.PREPARING;
+        }
+        return switch (state) {
+            case RUNNING -> GroupSequence.Status.RUNNING;
+            case STARTING -> GroupSequence.Status.STARTING;
+            case FAILED -> GroupSequence.Status.FAILED;
+            case STOPPED -> GroupSequence.Status.STOPPED;
+        };
+    }
+
+    private void groupTick() {
+        if (groupRun == null) {
+            return;
+        }
+        String name = groupRunName;
+        GroupSequence run = groupRun;
+        GroupSequence.Step step = run.step(System.currentTimeMillis(), this::groupStatus);
+        String order = run.position() + "/" + run.size() + "번째 「" + (step.member() == null ? "" : labelOf(step.member())) + "」";
+        switch (step.kind()) {
+            case WAIT -> {
+            }
+            case START -> {
+                Object row = rowByKey(step.member());
+                if (row == null) {
+                    cancelGroupRun();
+                    notifyGroup("「" + name + "」 묶음 시작을 멈췄습니다. " + order + " 이(가) 서버 창에서 사라졌습니다.", NotificationType.ERROR);
+                    return;
+                }
+                // 스윙 타이머는 잠금 없이 돌고, 실행 설정이 없는 부트 줄은 PSI 로 메인 클래스를 찾으므로 잠금 안에서 부른다.
+                groupStartingKey = step.member();
+                boolean[] began = {false};
+                try {
+                    WriteIntentReadAction.run(() -> began[0] = start(row, false));
+                }
+                finally {
+                    groupStartingKey = null;
+                }
+                if (!began[0]) {
+                    cancelGroupRun();
+                    notifyGroup("「" + name + "」 묶음 시작을 멈췄습니다. " + order + " 이(가) 시작되지 않았습니다. 띄운 오류 창의 내용을 확인하세요.", NotificationType.ERROR);
+                }
+            }
+            case DONE -> {
+                cancelGroupRun();
+                notifyGroup("「" + name + "」 묶음의 서버 " + run.size() + "개를 모두 시작했습니다.", NotificationType.INFORMATION);
+            }
+            case FAILED -> {
+                cancelGroupRun();
+                notifyGroup("「" + name + "」 묶음 시작을 멈췄습니다. " + order + " 이(가) 시작하지 못했습니다. 콘솔을 확인하세요.", NotificationType.ERROR);
+            }
+            case NOT_STARTED -> {
+                cancelGroupRun();
+                notifyGroup("「" + name + "」 묶음 시작을 멈췄습니다. " + order + " 이(가) 시작되지 않았습니다. 띄운 오류 창의 내용을 확인하세요.", NotificationType.ERROR);
+            }
+            case TIMEOUT -> {
+                cancelGroupRun();
+                notifyGroup("「" + name + "」 묶음 시작을 멈췄습니다. " + order + " 이(가) " + GROUP_START_TIMEOUT_MILLIS / 60_000
+                        + "분 안에 실행 중이 되지 않았습니다.", NotificationType.ERROR);
+            }
+        }
+    }
+
+    private void notifyGroup(String text, NotificationType type) {
+        NotificationGroupManager.getInstance().getNotificationGroup(NOTIFICATION_GROUP)
+                .createNotification(GROUP_TITLE, text, type)
+                .notify(project);
+    }
+
+    // ---- WAS 로그 파일 보기 ----
+
+    // 로그 파일 고르기 창에서 로그 폴더 기준 하위 폴더를 보일 최대 글자 수. 넘으면 가운데를 줄인다(전체 경로는 풍선 도움말).
+    private static final int LOG_FOLDER_MAX_CHARS = 40;
+
+    /** WAS 의 로그 파일 목록을 띄우고, 고른 파일을 실행 창 콘솔 탭에서 끝을 따라가며 보인다. */
+    private void showLogFiles(Object target) {
+        WasSettings.Server s = (WasSettings.Server) target;
+        String title = "로그 파일 보기";
+        List<Path> roots;
+        List<Path> files;
+        try {
+            roots = WasLogFiles.roots(s.kind(), WasRunner.getInstance(project).runDir(s), Path.of(s.home), s.jeusDomain, s.jeusServer);
+            files = WasLogFiles.find(roots);
+        }
+        catch (IOException | InvalidPathException e) {
+            Messages.showErrorDialog(project, s.name + " 의 로그 폴더를 읽지 못했습니다: " + e.getMessage(), title);
+            return;
+        }
+        if (files.isEmpty()) {
+            StringBuilder where = new StringBuilder();
+            for (Path root : roots) {
+                where.append("\n· ").append(root);
+            }
+            Messages.showInfoMessage(project, s.name + " 의 로그 파일이 없습니다. 서버를 한 번 시작하면 생깁니다.\n찾아본 곳:" + where, title);
+            return;
+        }
+        JBPopupFactory.getInstance().createPopupChooserBuilder(files)
+                .setTitle(s.name + " 로그 파일 (최근 순)")
+                .setRenderer(new ColoredListCellRenderer<>() {
+                    @Override
+                    protected void customizeCellRenderer(@NotNull JList<? extends Path> list, Path p, int index, boolean selected, boolean hasFocus) {
+                        append(p.getFileName().toString());
+                        String folder = WasLogFiles.folderLabel(roots, p);
+                        if (!folder.isEmpty()) {
+                            append("   " + StringUtil.shortenPathWithEllipsis(folder, LOG_FOLDER_MAX_CHARS), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+                        }
+                        setToolTipText(p.toString());
+                    }
+                })
+                .setItemChosenCallback(p -> LogFileView.open(project, s.name, p))
+                .createPopup()
+                .showInFocusCenter();
     }
 
     // ---- 오른쪽 칸 ----

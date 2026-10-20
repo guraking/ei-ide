@@ -157,6 +157,16 @@ public final class WasRunner {
         return PathManager.getSystemDir().resolve("kinggura-was").resolve(server.id);
     }
 
+    /** 서버 전용 실행 폴더. 서버 창의 「로그 파일 보기」 가 로그 폴더를 찾을 때 쓴다. */
+    Path runDir(WasSettings.Server server) {
+        return baseDir(server);
+    }
+
+    /** 포트 점검 · 실행 폴더 꾸미기 중이라 프로세스가 아직 없는지. 서버 묶음이 시작을 기다릴 때 쓴다. */
+    boolean isLaunching(WasSettings.Server server) {
+        return launching.contains(server.id);
+    }
+
     ServerLauncher.State state(WasSettings.Server server) {
         ServerRegistry.Run run = ServerRegistry.getInstance(project).get(registryKey(server));
         ProcessHandler handler = running.get(server.id);
@@ -171,29 +181,32 @@ public final class WasRunner {
         return s == ServerLauncher.State.RUNNING || s == ServerLauncher.State.STARTING;
     }
 
-    /** 화면 스레드에서 부른다. 올릴 모듈을 빌드하고, 성공하면 이어서 띄운다. */
-    void start(WasSettings.Server server, boolean debug) {
+    /**
+     * 화면 스레드에서 부른다. 올릴 모듈을 빌드하고, 성공하면 이어서 띄운다.
+     * @return 빌드나 띄우기를 시작했으면 true. 이미 실행 중이거나 알림만 띄우고 그만뒀으면 false.
+     */
+    boolean start(WasSettings.Server server, boolean debug) {
         if (isLive(server)) {
-            return;
+            return false;
         }
         if (!server.kind().supported) {
             Messages.showInfoMessage(project, server.kind().label + " 실행은 아직 준비 중입니다.", TITLE);
-            return;
+            return false;
         }
         if (detectVersion(server.kind(), Path.of(server.home)) == null) {
             Messages.showErrorDialog(project, server.kind().label + " 설치 폴더가 아닙니다: " + server.home, TITLE);
-            return;
+            return false;
         }
         if (server.kind() == WasSettings.Kind.JEUS && jeusPassword(server, true) == null) {
-            return;
+            return false;
         }
         List<Module> modules = deployedModules(server, true);
         if (modules == null) {
-            return;
+            return false;
         }
         if (modules.isEmpty()) {
             launch(server, debug);
-            return;
+            return true;
         }
         ProjectTaskManager.getInstance(project).build(modules.toArray(Module[]::new)).onSuccess(result ->
                 ApplicationManager.getApplication().invokeLater(() -> {
@@ -204,6 +217,7 @@ public final class WasRunner {
                         launch(server, debug);
                     }
                 }));
+        return true;
     }
 
     /** 올린 모듈의 컴파일 결과 모듈 목록. 프로젝트에 없는 모듈은 report 면 알리고 null, 아니면 건너뛴다. */

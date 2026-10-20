@@ -13,6 +13,8 @@ import com.intellij.openapi.fileChooser.FileChooser;
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory;
 import com.intellij.openapi.fileChooser.FileChooserFactory;
 import com.intellij.openapi.fileChooser.FileSaverDescriptor;
+import com.intellij.openapi.progress.ProgressIndicator;
+import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
@@ -42,6 +44,7 @@ import ei.db.Notify;
 import ei.db.Passwords;
 import ei.db.SqlRunner;
 import ei.db.console.ConsoleOpener;
+import ei.db.console.XlsxExport;
 import ei.db.gen.ErdView;
 import ei.db.gen.FeatureDialog;
 import ei.db.gen.MapperDialog;
@@ -70,6 +73,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
@@ -469,6 +473,7 @@ final class DbExplorer extends SimpleToolWindowPanel {
     }
     if (o instanceof Schema s) {
       g.add(new Act("ERD 열기 (전체)", null, () -> true, () -> ErdView.open(project, s.c(), s.name(), null)));
+      g.add(new Act("테이블 정의서 엑셀…", AllIcons.ToolbarDecorator.Export, () -> true, () -> exportSpec(s.c(), s.name(), null)));
       return g;
     }
     if (o instanceof Program p) {
@@ -494,6 +499,7 @@ final class DbExplorer extends SimpleToolWindowPanel {
       g.add(new Act("기능 한 벌 만들기…", null, () -> true, () -> FeatureDialog.show(project, t.c, t.schema, t.table.name())));
       g.addSeparator();
       g.add(new Act("ERD 열기", null, () -> true, () -> ErdView.open(project, t.c, t.schema, picked)));
+      g.add(new Act("테이블 정의서 엑셀…", AllIcons.ToolbarDecorator.Export, () -> true, () -> exportSpec(t.c, t.schema, picked)));
       return g;
     }
     return null;
@@ -517,6 +523,58 @@ final class DbExplorer extends SimpleToolWindowPanel {
 
   private void viewData(TableItem t) {
     SqlRunner.run(project, t.c, "SELECT * FROM " + Names.sql(t.c.kind, t.schema, t.table.name()), List.of());
+  }
+
+  // ---- 테이블 정의서 ----
+
+  private static final String XLSX = "xlsx";
+  private static final String SPEC_FILE_SUFFIX = "_테이블정의서";
+
+  /** 표 · 뷰 정의를 엑셀 한 장으로. picked 가 null 이면 스키마의 모든 표 · 뷰, 아니면 그 이름의 것만(DB 가 돌려준 순서). */
+  private void exportSpec(DbConfig c, String schema, List<String> picked) {
+    String base = picked != null && picked.size() == 1 ? picked.get(0) : schema;
+    FileSaverDescriptor desc = new FileSaverDescriptor("테이블 정의서 엑셀", "표 정의를 엑셀 파일로 저장합니다", XLSX);
+    VirtualFileWrapper target = FileChooserFactory.getInstance().createSaveFileDialog(desc, project).save(base + SPEC_FILE_SUFFIX + "." + XLSX);
+    if (target == null) return;
+    Path path = target.getFile().toPath();
+    // 큰 스키마는 오래 걸려 탐색기의 metaQueue 를 막지 않도록 따로 진행 창(취소 가능)에서 읽는다.
+    new Task.Backgroundable(project, "테이블 정의서 · " + schema + " 읽는 중", true) {
+      @Override
+      public void run(@NotNull ProgressIndicator indicator) {
+        List<TableSpec.Table> specs = new ArrayList<>();
+        try {
+          Connection conn = DbSessions.get(project).connection(c);
+          List<Meta.Table> targets = new ArrayList<>();
+          for (Meta.Table t : Meta.tables(conn, c, schema, TableSpec.TYPES)) {
+            if (picked == null || picked.contains(t.name())) targets.add(t);
+          }
+          indicator.setIndeterminate(false);
+          for (int i = 0; i < targets.size(); i++) {
+            indicator.checkCanceled();
+            Meta.Table t = targets.get(i);
+            indicator.setText2("표 " + (i + 1) + "/" + targets.size() + " · " + t.name());
+            indicator.setFraction((double) i / targets.size());
+            specs.add(TableSpec.read(conn, c, schema, t));
+          }
+        } catch (SQLException e) {
+          Notify.error(project, "테이블 정의서 읽기 실패: " + e.getMessage());
+          return;
+        }
+        List<TableSpec.Table> filled = TableSpec.filled(specs);
+        if (filled.isEmpty()) {
+          Notify.warning(project, schema + " 에서 칼럼을 읽은 표가 없어 정의서를 저장하지 않았습니다.");
+          return;
+        }
+        indicator.checkCanceled();
+        try {
+          XlsxExport.write(path, TableSpec.HEADER, null, TableSpec.rows(filled));
+        } catch (IOException e) {
+          Notify.error(project, "테이블 정의서 저장 실패: " + e.getMessage());
+          return;
+        }
+        Notify.info(project, "표 " + filled.size() + "개의 정의서를 저장했습니다: " + path);
+      }
+    }.queue();
   }
 
   // ---- 표 · 칼럼 찾기 ----
