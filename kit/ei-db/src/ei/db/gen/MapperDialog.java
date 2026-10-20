@@ -54,9 +54,9 @@ public final class MapperDialog extends DialogWrapper {
 
   private static final Pattern FQN = Pattern.compile("[A-Za-z_$][\\w$]*(\\.[A-Za-z_$][\\w$]*)*");
   private static final String DTO_PACKAGE = "dto";
-  private static final int LEFT_WIDTH = 440;
-  private static final int PREVIEW_WIDTH = 640;
-  private static final int HEIGHT = 640;
+  private static final int LEFT_WIDTH = 620;
+  private static final int PREVIEW_WIDTH = 900;
+  private static final int HEIGHT = 820;
   /** 입력이 멈춘 뒤 이만큼 지나서 미리보기를 다시 만든다(글자마다 디스크를 읽지 않게). */
   private static final int REFRESH_DELAY_MS = 300;
   private static final String BAD_PATH = "경로가 올바르지 않습니다";

@@ -170,23 +170,14 @@ public final class LogActions {
         .showInBestPositionFor(editor);
   }
 
-  static void runInConsole(Project project, DbConfig c, MyBatisLog.Entry entry) {
-    PropertiesComponent.getInstance(project).setValue(MyBatisRunDialog.CONNECTION_KEY, c.id);
-    ConsoleOpener.open(project, c, SqlValues.inline(entry.sql, entry.values, c.kind));
-    SqlRunner.run(project, c, entry.sql, new ArrayList<>(entry.values));
-  }
-
   private abstract static class LogAction extends AnAction {
     @Override
     public @NotNull ActionUpdateThread getActionUpdateThread() { return ActionUpdateThread.BGT; }
 
     @Override
     public void update(@NotNull AnActionEvent e) {
-      MyBatisLog.Entry entry = e.getProject() == null ? null : find(e);
-      e.getPresentation().setEnabledAndVisible(entry != null && visible(e, entry));
+      e.getPresentation().setEnabledAndVisible(e.getProject() != null && find(e) != null);
     }
-
-    boolean visible(AnActionEvent e, MyBatisLog.Entry entry) { return true; }
   }
 
   /** 「데이터베이스 콘솔에서 실행」: 쿼리 · 콘솔을 골라 그 콘솔 끝에 붙이고 그 접속으로 실행한다. */
