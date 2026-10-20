@@ -53,9 +53,9 @@ public final class DtoDialog extends DialogWrapper {
   private static final int COL_FIELD = 1;
   private static final int COL_TYPE = 2;
   private static final int COL_COMMENT = 3;
-  private static final int TABLE_WIDTH = 560;
-  private static final int PREVIEW_WIDTH = 520;
-  private static final int HEIGHT = 560;
+  private static final int TABLE_WIDTH = 620;
+  private static final int PREVIEW_WIDTH = 900;
+  private static final int HEIGHT = 820;
 
   private final Project project;
   private final QueryResult result;
