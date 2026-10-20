@@ -37,12 +37,14 @@ PLATFORM_ZIP_URL = ("https://www.jetbrains.com/intellij-repository/releases/"
 BUILD_RE = re.compile(r"^\d+\.\d+\.\d+$")
 TAG_IN_GET_SOURCE = re.compile(r'set "TAG=idea/([0-9.]+)"')
 JAVA_RELEASE = "21"
-# 우리 플러그인 소스(kit 기준). sync 는 한 폴더에 소스 · 점검이 섞여 있어 *Check.java 를 뺀다.
+# 우리 플러그인 소스(kit 기준).
 PLUGIN_SOURCES = {
     "ei-db": "ei-db/src",
     "boot-servers": "boot-servers/src/main/java",
     "kinggura-sync": "sync",
 }
+# 한 폴더에 소스 · 점검이 섞인 플러그인. 이 플러그인에서만 *Check.java 를 뺀다(boot-servers 의 UpdateCheck.java 는 실제 코드).
+MIXED_CHECK_SOURCES = {"kinggura-sync"}
 # 판 번호가 박혀 있을 수 있는 파일 종류와, 찾지 않을 폴더.
 SCAN_SUFFIXES = {".bat", ".py", ".sh", ".java", ".xml", ".kt"}
 SCAN_SKIP = {".git", "intellij-community", "intellij-community-new", "backup", "logs", "tmpjars", "plugins",
@@ -160,7 +162,8 @@ def compile_plugins(jar_dir, javac, work):
     jars = sorted(jar_dir.rglob("*.jar"))
     results = []
     for name, rel in PLUGIN_SOURCES.items():
-        sources = [p for p in (KIT / rel).rglob("*.java") if not p.name.endswith("Check.java")]
+        sources = [p for p in (KIT / rel).rglob("*.java")
+                   if name not in MIXED_CHECK_SOURCES or not p.name.endswith("Check.java")]
         if not sources:
             results.append((name, False, f"소스가 없습니다: kit/{rel}"))
             continue

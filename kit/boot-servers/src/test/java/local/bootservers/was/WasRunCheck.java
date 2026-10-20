@@ -4,6 +4,9 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.AclEntry;
+import java.nio.file.attribute.AclFileAttributeView;
+import java.nio.file.attribute.PosixFileAttributeView;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.List;
 import java.util.Map;
@@ -86,7 +89,14 @@ public final class WasRunCheck {
         Path file = Files.createTempDirectory("jeus-check").resolve("sub/jeus-password");
         JeusBase.writePasswordFile(file, "비밀 1");
         check(Files.readString(file).equals("비밀 1"), "비밀번호 내용");
-        check(PosixFilePermissions.toString(Files.getPosixFilePermissions(file)).equals("rw-------"), "사용자만 읽고 씀");
+        // POSIX 를 지원하지 않는 파일 시스템(윈도우 NTFS)에서는 ACL 항목이 소유자 하나뿐인지 본다.
+        if (Files.getFileStore(file).supportsFileAttributeView(PosixFileAttributeView.class)) {
+            check(PosixFilePermissions.toString(Files.getPosixFilePermissions(file)).equals("rw-------"), "사용자만 읽고 씀");
+        }
+        else {
+            List<AclEntry> acl = Files.getFileAttributeView(file, AclFileAttributeView.class).getAcl();
+            check(acl.size() == 1 && acl.get(0).principal().equals(Files.getOwner(file)), "소유자만 접근: " + acl);
+        }
         JeusBase.writePasswordFile(file, "새것");
         check(Files.readString(file).equals("새것"), "다시 쓰면 새 내용");
     }
