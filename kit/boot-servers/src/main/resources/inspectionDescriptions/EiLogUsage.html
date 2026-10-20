@@ -1,0 +1,10 @@
+<html>
+<body>
+문장이 하나도 없는 catch 블록(주석만 있어도 빈 것으로 봅니다), 인자 없는 <code>e.printStackTrace()</code>,
+<code>System.out.print*</code> · <code>System.err.print*</code> 를 알립니다.
+catch 매개변수 이름이 ignored · ignore · expected 로 시작하면, 테스트 소스 폴더 파일과 main 메서드 안은 건너뜁니다.
+<p>클래스에 <code>org.slf4j.Logger</code> 필드나 <code>@Slf4j</code> 가 있으면 빠른 수정으로
+<code>log.error("메서드 실패", e);</code> · <code>log.info(...)</code> · <code>log.error(...)</code> 로 바꿉니다.
+로거가 없으면 문제만 표시하고 「로거 필드나 @Slf4j 가 없어 자동 수정이 없습니다」라고 알립니다.</p>
+</body>
+</html>
