@@ -14,6 +14,7 @@
   17) 커밋 전 「Analyze code」(코드 분석) · 「Check TODO」 검사를 기본으로 끈다.
   18) 다른 프로젝트를 열 때 기본으로 새 창에 연다.
   19) SVN 실행 파일 기본 경로를 설치본에 같이 넣은 svn.exe(plugins/kinggura-sync/svn/bin)로 한다.
+  20) 콘솔에 남기는 글 양(cycle buffer)을 기본 1 MB 에서 50 MB 로 늘린다.
 고치기 전 원본은 <intellij-community>/../backup/<시각>-before/ 에 같은 상대경로로 남긴다.
 모든 원문을 먼저 찾아 본 뒤에 쓴다. 하나라도 못 찾으면 아무 파일도 바꾸지 않는다. 줄끝(LF · CRLF)은 파일마다 원래대로 둔다.
 두 번 실행해도 같은 결과가 된다.
@@ -185,6 +186,15 @@ EDITS = [
      '      File bundled = new File(PathManager.getHomePath(), BUNDLED_SVN);\n'
      '      return bundled.isFile() ? bundled.getPath() : "svn";\n'
      '    }\n'),
+    # 20) 콘솔은 앞부분을 버려 cycle buffer 크기(원래 1024 KB)만 남긴다. 서버 로그가 금방 잘리므로
+    #     Settings > Editor > General > Console 의 「Override console cycle buffer size」를 켠 채 51200 KB(50 MB)로 둔다.
+    #     설정값은 기본값과 다를 때만 저장되므로, 이 칸을 건드린 적 없는 기존 설정에도 그대로 적용된다.
+    ("platform/editor-ui-api/src/com/intellij/ide/ui/UISettingsState.kt",
+     "var overrideConsoleCycleBufferSize: Boolean by property(false)",
+     "var overrideConsoleCycleBufferSize: Boolean by property(true)"),
+    ("platform/editor-ui-api/src/com/intellij/ide/ui/UISettingsState.kt",
+     "var consoleCycleBufferSizeKb: Int by property(1024)",
+     "var consoleCycleBufferSizeKb: Int by property(51200)"),
 ]
 
 
