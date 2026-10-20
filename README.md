@@ -9,6 +9,7 @@
 - 바탕: IntelliJ IDEA Community 2026.2.3 (태그 `idea/262.10968.63`, Apache 2.0)
 - 목표: 이클립스의 익숙한 흐름(서버 창 · Synchronize · 화면 묶음 · 우클릭 메뉴)은 가져오고, 무거운 것과 쓰지 않는 것은 덜어 낸다
 - 남긴 것: Java · Maven · Gradle · Groovy · Git · GitHub · GitLab · Markdown · YAML · Properties · Lombok · JUnit · 터미널 · 이클립스 단축키
+- 함께 넣은 플러그인: Full Line(PC 안에서 도는 한 줄 자동 완성) · Rainbow Brackets Lite(괄호 색) · SonarQube for IDE(코드 검사) · POJO to JSON · Grep Console(콘솔 줄 색 · 거르기)
 - 뺀 것: Kotlin · Android · Compose · AI 기능 · MCP 서버 · 기능 안내 · 성능 시험 · 맞춤법 · TestNG · TOML · WebP · Mermaid · 다른 단축키 묶음
 
 ## 기본값 (처음 켤 때부터)

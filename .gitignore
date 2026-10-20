@@ -10,3 +10,8 @@ bundled-plugins/lombok/
 build-number.txt
 intellij-community-new/
 __pycache__/
+bundled-plugins/GrepConsole/
+bundled-plugins/intellij-rainbow-brackets-lite/
+bundled-plugins/pojo2json/
+bundled-plugins/sonarlint-intellij/
+bundled-plugins/fullLine/
