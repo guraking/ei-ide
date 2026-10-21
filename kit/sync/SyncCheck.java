@@ -42,12 +42,25 @@ public class SyncCheck {
       // 덮어쓰지 않도록 예외가 나야 맞다.
     }
 
+    checkUnmappedVcs();
     checkRun();
     System.out.println("SyncCheck 통과");
   }
 
   private static SyncPanel.Change out(String status, SyncPanel.Repo repo) {
     return new SyncPanel.Change(SyncPanel.Kind.OUTGOING, status, "p", repo);
+  }
+
+  /** 루트 미등록 폴더: 가장 가까운 .svn · .git 을 따르고, 폴더 이름의 "git" 은 보지 않는다. */
+  private static void checkUnmappedVcs() throws IOException {
+    java.nio.file.Path tmp = java.nio.file.Files.createTempDirectory("unmapped");
+    File svnTop = tmp.resolve("svnwc").toFile();
+    File svnInner = new File(svnTop, "git/dxplm");
+    eq(svnInner.mkdirs() && new File(svnTop, ".svn").mkdir(), true);
+    eq(SyncPanel.unmappedVcs(svnInner), SyncPanel.Vcs.SVN);
+    File gitInSvn = new File(svnTop, "sub");
+    eq(new File(gitInSvn, ".git").mkdirs(), true);
+    eq(SyncPanel.unmappedVcs(gitInSvn), SyncPanel.Vcs.GIT);
   }
 
   /** run: 출력 · 실패 · 중단 시 프로세스 종료. */
