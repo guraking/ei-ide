@@ -789,7 +789,7 @@ final class SyncPanel extends JPanel {
     return null;
   }
 
-  /** 프로젝트에 등록된 VCS 루트(Git · SVN). 하나도 없으면 프로젝트 폴더를 Git 저장소로 본다(등록 전 프로젝트도 쓸 수 있게). */
+  /** 프로젝트에 등록된 VCS 루트(Git · SVN). 하나도 없으면 프로젝트 폴더를 unmappedVcs 가 고른 종류로 본다(등록 전 프로젝트도 쓸 수 있게). */
   private List<Map.Entry<File, Vcs>> vcsRoots() {
     List<Map.Entry<File, Vcs>> result = new ArrayList<>();
     for (VcsRoot root : ProjectLevelVcsManager.getInstance(project).getAllVcsRoots()) {
@@ -799,8 +799,23 @@ final class SyncPanel extends JPanel {
       if (VCS_NAME_GIT.equals(name)) result.add(Map.entry(dir, Vcs.GIT));
       else if (VCS_NAME_SVN.equals(name)) result.add(Map.entry(dir, Vcs.SVN));
     }
-    if (result.isEmpty() && project.getBasePath() != null) result.add(Map.entry(new File(project.getBasePath()), Vcs.GIT));
+    if (result.isEmpty() && project.getBasePath() != null) {
+      File base = new File(project.getBasePath());
+      result.add(Map.entry(base, unmappedVcs(base)));
+    }
     return result;
+  }
+
+  /**
+   * VCS 루트가 등록되지 않은 폴더의 종류. dir 부터 위로 올라가며 가장 가까운 .svn 또는 .git 을 따른다.
+   * SVN 1.7 부터는 작업본 맨 위에만 .svn 이 있어 프로젝트 폴더가 작업본 안쪽이면 위에서 찾아야 한다. 둘 다 없으면 Git.
+   */
+  static Vcs unmappedVcs(File dir) {
+    for (File d = dir.getAbsoluteFile(); d != null; d = d.getParentFile()) {
+      if (new File(d, ".svn").isDirectory()) return Vcs.SVN;
+      if (new File(d, ".git").exists()) return Vcs.GIT;
+    }
+    return Vcs.GIT;
   }
 
   /**

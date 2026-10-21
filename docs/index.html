@@ -1374,6 +1374,7 @@ build-windows.bat
       <tr><th>이런 글 · 증상</th><th>먼저 볼 것</th></tr>
       <tr><td>Lombok 오류로 컴파일 실패</td><td>프로젝트 JDK 를 17 · 21 로 둡니다(Lombok 1.18.30 은 24 이상에서 깨짐).</td></tr>
       <tr><td>SVN 이 「svn cleanup 하라」</td><td>트리 우클릭 Subversion → Cleanup 뒤 다시 받습니다.</td></tr>
+      <tr><td>SVN 프로젝트인데 동기화 창에 「git rev-parse 실패」</td><td>디렉터리 매핑이 비어 Git 으로 본 것. 다음 빌드부터는 .svn 을 찾아 SVN 으로 봄. 그 전 빌드는 설정 → 버전 관리 → 디렉터리 매핑에 프로젝트 폴더를 Subversion 으로 추가.</td></tr>
       <tr><td>받기가 Assume Unchanged 파일 때문에 멈춤</td><td>동기화 창에서 그 파일을 No Assume Unchanged → 받기 → 다시 Assume Unchanged.</td></tr>
       <tr><td>Swagger 창이 빈 화면</td><td>창을 닫았다 다시 엽니다. Try it out 은 서버가 떠 있어야 됩니다.</td></tr>
       <tr><td>JS · Vue 자동 완성이 없음</td><td>알림의 「Node.js 받기」 · 「언어 서버 받기」를 한 번 눌렀는지 봅니다.</td></tr>
