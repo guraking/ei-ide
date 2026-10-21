@@ -21,8 +21,6 @@ import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.vcs.ProjectLevelVcsManager;
-import com.intellij.openapi.vcs.FilePath;
-import com.intellij.openapi.vcs.VcsDataKeys;
 import com.intellij.openapi.vcs.VcsRoot;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vcs.FileStatus;
@@ -34,7 +32,6 @@ import com.intellij.ui.JBSplitter;
 import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.treeStructure.Tree;
-import com.intellij.vcsUtil.VcsUtil;
 import git4idea.repo.GitRepository;
 import git4idea.repo.GitRepositoryChangeListener;
 import org.w3c.dom.Element;
@@ -112,7 +109,6 @@ final class SyncPanel extends JPanel {
   private static final String VCS_NAME_GIT = "Git";
   private static final String VCS_NAME_SVN = "svn";
   private static final String ACTION_PULL = "Git.Pull";
-  private static final String ACTION_PUSH = "Vcs.Push";
   // IDE 의 「Update Project」(Ctrl+T). 프로젝트의 모든 VCS 루트를 받는다(Git 은 받기 방식을 묻고, SVN 은 svn update).
   private static final String ACTION_UPDATE_ALL = "Vcs.UpdateProject";
   // 설치본에 같이 넣은 VisualSVN 명령줄 도구(apply_defaults 19 의 SVN 기본 경로와 같은 곳).
@@ -177,8 +173,6 @@ final class SyncPanel extends JPanel {
     JPanel bottom = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
     bottom.add(actionButton("전체 받기", ACTION_UPDATE_ALL, false));
     bottom.add(actionButton("받기(Pull)", ACTION_PULL, true));
-    bottom.add(commitButton());
-    bottom.add(actionButton("올리기(Push)", ACTION_PUSH, true));
     bottom.add(actionButton("충돌 해결", "Git.ResolveConflicts", false));
     add(bottom, BorderLayout.SOUTH);
 
@@ -591,14 +585,13 @@ final class SyncPanel extends JPanel {
 
   /**
    * IDE 동작을 부르는 단추. forSelectedRepo 면 트리에서 고른 저장소들의 루트를 VIRTUAL_FILE(_ARRAY) 로 넘겨
-   * 받기 창은 첫 저장소로 열리고(DvcsUtil.guessRepositoryForOperation 이 VIRTUAL_FILE 을 먼저 본다)
-   * 올리기 창은 고른 저장소만 체크된다(VcsPushAction 이 VIRTUAL_FILE_ARRAY 의 저장소를 미리 고른다).
+   * 받기 창은 첫 저장소로 열린다(DvcsUtil.guessRepositoryForOperation 이 VIRTUAL_FILE 을 먼저 본다).
    * 고른 저장소가 없으면 IDE 기본(마지막 편집 파일의 저장소)을 따른다.
    */
   private JButton actionButton(String text, String actionId, boolean forSelectedRepo) {
     JButton button = new JButton(text);
     button.addActionListener(e -> {
-      // Git.Pull · Vcs.Push 는 Git 전용이라 SVN 저장소에서는 꺼져 있다. SVN 은 svn update 로 받고, 올리기는 커밋이 대신한다.
+      // Git.Pull 은 Git 전용이라 SVN 저장소에서는 꺼져 있다. SVN 은 svn update 로 받는다.
       // Git 과 SVN 이 섞여 있으면 받기는 SVN 저장소를 svn update 로 받고 Git 저장소는 Git.Pull 로 이어 받는다.
       List<Repo> targets = forSelectedRepo ? buttonTargets() : List.of();
       List<Repo> svnRepos = new ArrayList<>();
@@ -609,10 +602,6 @@ final class SyncPanel extends JPanel {
       if (!svnRepos.isEmpty() && ACTION_PULL.equals(actionId)) {
         svnUpdate(button, svnRepos);
         if (svnOnly) return;
-      }
-      if (svnOnly && ACTION_PUSH.equals(actionId)) {
-        status.setText(text + ": SVN 은 따로 올리기가 없습니다. 「커밋…」 이 바로 서버에 올립니다.");
-        return;
       }
       DataContext context = DataManager.getInstance().getDataContext(this);
       List<VirtualFile> roots = new ArrayList<>();
@@ -675,55 +664,6 @@ final class SyncPanel extends JPanel {
         SwingUtilities.invokeLater(() -> button.setEnabled(true));
       }
     });
-  }
-
-  /**
-   * 「커밋…」 단추. 트리에서 고른 것이 있으면 그것만 커밋 창에 체크해 연다(CheckinFiles 에 FILE_PATHS 를 넘김).
-   * 아무것도 고르지 않았으면 예전처럼 프로젝트 전체 커밋(CheckinProject).
-   */
-  private JButton commitButton() {
-    String text = "커밋…";
-    JButton button = new JButton(text);
-    button.addActionListener(e -> {
-      DataContext context = DataManager.getInstance().getDataContext(this);
-      if (tree.getSelectionCount() == 0) {
-        runAction(text, "CheckinProject", context);
-        return;
-      }
-      List<FilePath> paths = commitPaths();
-      if (paths.isEmpty()) {
-        status.setText(text + ": 고른 줄에 커밋할 내 변경이 없습니다(들어올 변경 · Assume Unchanged 는 커밋 대상이 아닙니다).");
-        return;
-      }
-      runAction(text, "CheckinFiles", SimpleDataContext.builder().setParent(context).add(VcsDataKeys.FILE_PATHS, paths).build());
-    });
-    return button;
-  }
-
-  /**
-   * 커밋할 경로. 파일 줄은 그 파일, 묶음 줄은 그 안의 파일, 저장소 줄은 저장소 폴더.
-   * 들어올 변경 · 모른 척 중은 내 작업본 변경이 아니어서 뺀다(나갈 변경 · 충돌만).
-   */
-  private List<FilePath> commitPaths() {
-    Set<FilePath> result = new LinkedHashSet<>();
-    TreePath[] paths = tree.getSelectionPaths();
-    if (paths == null) return new ArrayList<>(result);
-    for (TreePath path : paths) {
-      DefaultMutableTreeNode node = (DefaultMutableTreeNode) path.getLastPathComponent();
-      if (node.getUserObject() instanceof Repo repo) {
-        result.add(VcsUtil.getFilePath(repo.root(), true));
-        continue;
-      }
-      List<Object> values = new ArrayList<>();
-      if (node.getUserObject() instanceof Change) values.add(node.getUserObject());
-      for (int i = 0; i < node.getChildCount(); i++) values.add(((DefaultMutableTreeNode) node.getChildAt(i)).getUserObject());
-      for (Object value : values) {
-        if (value instanceof Change c && (c.kind() == Kind.OUTGOING || c.kind() == Kind.CONFLICT)) {
-          result.add(VcsUtil.getFilePath(new File(c.repo().root(), c.path()), false));
-        }
-      }
-    }
-    return new ArrayList<>(result);
   }
 
   /** IDE 동작 하나를 context 로 부른다. 동작이 꺼져 있으면(예: 충돌 해결은 git 이 실제 충돌 상태인 파일이 있을 때만) 아무 일도 없이 끝나므로 이유를 상태줄에 적는다. */
