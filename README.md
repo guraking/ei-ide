@@ -1,5 +1,7 @@
 # EI IDE
 
+![EI IDE](docs/img/banner.png)
+
 이클립스에 익숙한 사람을 위한 자바 개발 도구입니다. IntelliJ IDEA Community 2026.2.3 을 바탕으로, 이클립스의 서버 창 · Synchronize · 단축키 흐름을 얹고 쓰지 않는 기능은 덜어 냈습니다. 개인 학습용 프로젝트입니다.
 
 **[사용 설명서](https://raw.githack.com/guraking/ei-ide/main/docs/index.html)** · **[수정 내역](수정내역.md)** · **[내려받기](https://github.com/guraking/ei-ide/releases)**
