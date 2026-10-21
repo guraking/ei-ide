@@ -44,7 +44,7 @@ public final class DynamicWhereAction extends AnAction {
 
   @Override
   public void update(@NotNull AnActionEvent e) {
-    e.getPresentation().setEnabledAndVisible(statementAt(e.getData(CommonDataKeys.EDITOR)) != null && e.getProject() != null);
+    e.getPresentation().setEnabledAndVisible(e.getProject() != null && statementAt(e.getProject(), e.getData(CommonDataKeys.EDITOR)) != null);
   }
 
   @Override
@@ -107,11 +107,11 @@ public final class DynamicWhereAction extends AnAction {
   }
 
   /** 매퍼 XML 의 select · update · delete 문장. 아니면 null. */
-  private static @Nullable MapperDoc.Node statementAt(@Nullable Editor editor) {
+  private static @Nullable MapperDoc.Node statementAt(Project project, @Nullable Editor editor) {
     if (editor == null) return null;
     CharSequence text = editor.getDocument().getCharsSequence();
     if (!StringUtil.contains(text, "<mapper")) return null;
-    MapperDoc.Node s = MapperDoc.parse(text).statementAt(editor.getCaretModel().getOffset());
+    MapperDoc.Node s = MapperDocs.of(project, editor).statementAt(editor.getCaretModel().getOffset());
     return s != null && TAGS.contains(s.name) ? s : null;
   }
 

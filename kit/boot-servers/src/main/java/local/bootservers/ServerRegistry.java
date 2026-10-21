@@ -55,6 +55,16 @@ public final class ServerRegistry {
         return runs.get(name);
     }
 
+    /** 실패한 실행 기록이 하나라도 있는가. */
+    boolean anyFailed() {
+        for (Run run : runs.values()) {
+            if (run.failed()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** 새 실행을 기록하고 출력에서 포트 · 시작 완료 · 실패 이유를 읽는다. 같은 이름의 이전 기록은 바꾼다. */
     void track(String name, ProcessHandler handler) {
         Run run = new Run();

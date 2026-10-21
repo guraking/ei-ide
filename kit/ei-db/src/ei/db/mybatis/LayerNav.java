@@ -78,7 +78,20 @@ public final class LayerNav implements LineMarkerProvider {
   }
 
   @Override
-  public @Nullable LineMarkerInfo<?> getLineMarkerInfo(@NotNull PsiElement element) {
+  public @Nullable LineMarkerInfo<?> getLineMarkerInfo(@NotNull PsiElement element) { return null; }
+
+  /** 본문 호출 훑기가 있어 빠른 단계가 아닌 느린 단계에서 단다. */
+  @Override
+  public void collectSlowLineMarkers(@NotNull List<? extends PsiElement> elements,
+                                     @NotNull Collection<? super LineMarkerInfo<?>> result) {
+    for (PsiElement element : elements) {
+      ProgressManager.checkCanceled();
+      LineMarkerInfo<?> info = marker(element);
+      if (info != null) result.add(info);
+    }
+  }
+
+  private static @Nullable LineMarkerInfo<?> marker(PsiElement element) {
     PsiMethod m = methodOfName(element);
     if (m == null || m.getBody() == null) return null;
     PsiClass c = m.getContainingClass();

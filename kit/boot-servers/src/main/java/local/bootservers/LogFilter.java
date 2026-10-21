@@ -19,6 +19,18 @@ public final class LogFilter {
     /** number 는 문서 줄 번호(0부터), level 은 줄이 속한 묶음의 레벨(첫 레벨 줄 앞의 글은 null). */
     public record Line(int number, String text, Level level) {}
 
+    /**
+     * 이어 거르기 지점: 마지막 완성된 줄이 속한 묶음의 첫 줄 번호 · 그 줄의 첫 글자 위치, 그 앞 묶음의 레벨.
+     * 글이 뒤에만 붙었으면, 앞 결과에서 이 줄 앞의 줄만 남기고 이 지점부터 거른 결과를 이으면 전체를 거른 것과 같다.
+     * 끝의 덜 쓴 줄(줄바꿈 없는 끝)은 뒤에 이어 쓰이며 묶음이 바뀔 수 있으므로 지점을 그 줄로 옮기지 않는다.
+     */
+    public record Resume(int line, int offset, Level before) {
+        public static final Resume START = new Resume(0, 0, null);
+    }
+
+    /** 거른 줄과 다음 이어 거르기 지점. */
+    public record Result(List<Line> lines, Resume resume) {}
+
     /** 대문자 레벨 낱말. 앞뒤가 글자 · 숫자 · 밑줄이 아니어야 한다(「 ERROR 」, 「[ERROR]」, 「ERROR:」). */
     private static final Pattern LEVEL = Pattern.compile(
             "(?<![A-Za-z0-9_])(FATAL|SEVERE|ERROR|WARNING|WARN|INFO|DEBUG|TRACE)(?![A-Za-z0-9_])");
@@ -61,12 +73,23 @@ public final class LogFilter {
      * @throws java.util.regex.PatternSyntaxException regex 가 참이고 query 가 잘못된 정규식일 때
      */
     public static List<Line> filter(CharSequence text, Set<Level> levels, String query, boolean regex) {
+        return filterFrom(text, Resume.START, levels, query, regex).lines();
+    }
+
+    /**
+     * from 지점부터 끝까지 거른다(from 앞의 줄은 내지 않는다). from 은 같은 글 앞부분을 같은 조건으로 거른 결과의 resume 이거나 Resume.START.
+     *
+     * @throws java.util.regex.PatternSyntaxException regex 가 참이고 query 가 잘못된 정규식일 때
+     */
+    public static Result filterFrom(CharSequence text, Resume from, Set<Level> levels, String query, boolean regex) {
         Pattern pattern = query.isEmpty() || !regex ? null : Pattern.compile(query, Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
         String needle = query.toLowerCase(Locale.ROOT);
         List<Line> out = new ArrayList<>();
         List<Line> group = new ArrayList<>();
-        Level groupLevel = null;
-        String[] lines = text.toString().split("\n", -1);
+        Level groupLevel = from.before();
+        Resume resume = from;
+        String[] lines = text.subSequence(from.offset(), text.length()).toString().split("\n", -1);
+        int offset = from.offset();
         for (int i = 0; i < lines.length; i++) {
             String line = lines[i];
             Level own = levelOf(line);
@@ -74,12 +97,16 @@ public final class LogFilter {
             if (own != null || next != groupLevel) {
                 emit(group, groupLevel, levels, needle, pattern, out);
                 group.clear();
+                if (i < lines.length - 1) {
+                    resume = new Resume(from.line() + i, offset, groupLevel);
+                }
                 groupLevel = next;
             }
-            group.add(new Line(i, line, groupLevel));
+            group.add(new Line(from.line() + i, line, groupLevel));
+            offset += line.length() + 1;
         }
         emit(group, groupLevel, levels, needle, pattern, out);
-        return out;
+        return new Result(out, resume);
     }
 
     /**

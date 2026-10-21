@@ -1,6 +1,7 @@
 package local.bootservers;
 
 import com.intellij.ide.AppLifecycleListener;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import org.jetbrains.annotations.NotNull;
 
@@ -17,23 +18,32 @@ import java.util.List;
 public final class BundledFonts implements AppLifecycleListener {
 
     private static final Logger LOG = Logger.getInstance(BundledFonts.class);
-    private static final List<String> FILES = List.of(
-            "JetBrainsMonoHangul-Regular.ttf", "JetBrainsMonoHangul-Bold.ttf",
-            "JetBrainsMonoHangul-Italic.ttf", "JetBrainsMonoHangul-BoldItalic.ttf");
+    // 편집기 기본 글꼴이 쓰는 보통 굵기. 첫 창 전에 등록한다.
+    private static final String REGULAR = "JetBrainsMonoHangul-Regular.ttf";
+    // 굵게 · 기울임. 쓰일 때까지 시간이 있으므로 풀 스레드에서 등록한다.
+    private static final List<String> OTHER_FILES = List.of(
+            "JetBrainsMonoHangul-Bold.ttf", "JetBrainsMonoHangul-Italic.ttf", "JetBrainsMonoHangul-BoldItalic.ttf");
 
     @Override
     public void appFrameCreated(@NotNull List<String> commandLineArgs) {
-        GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
-        for (String file : FILES) {
-            try (InputStream in = BundledFonts.class.getResourceAsStream("/fonts/" + file)) {
-                if (in == null) {
-                    LOG.warn("글꼴 자원이 없음: " + file);
-                    continue;
-                }
-                ge.registerFont(Font.createFont(Font.TRUETYPE_FONT, in));
-            } catch (Exception e) {
-                LOG.warn("글꼴 등록 실패: " + file, e);
+        register(REGULAR);
+        ApplicationManager.getApplication().executeOnPooledThread(() -> {
+            for (String file : OTHER_FILES) {
+                register(file);
             }
+        });
+    }
+
+    /** jar 의 /fonts/file 을 등록한다. 실패하면 기록만 남긴다. */
+    private static void register(String file) {
+        try (InputStream in = BundledFonts.class.getResourceAsStream("/fonts/" + file)) {
+            if (in == null) {
+                LOG.warn("글꼴 자원이 없음: " + file);
+                return;
+            }
+            GraphicsEnvironment.getLocalGraphicsEnvironment().registerFont(Font.createFont(Font.TRUETYPE_FONT, in));
+        } catch (Exception e) {
+            LOG.warn("글꼴 등록 실패: " + file, e);
         }
     }
 }

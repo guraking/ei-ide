@@ -11,6 +11,9 @@ import com.intellij.execution.impl.ExecutionManagerImpl;
 import com.intellij.execution.process.ProcessHandler;
 import com.intellij.execution.runners.ExecutionUtil;
 import com.intellij.execution.ui.RunContentDescriptor;
+import com.intellij.openapi.application.ModalityState;
+import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.application.WriteIntentReadAction;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.module.ModuleUtilCore;
@@ -111,14 +114,41 @@ final class ServerLauncher {
 
     /**
      * 서버를 시작한다. 실행 설정이 없으면 모듈 안의 @SpringBootApplication 클래스로 새로 만든다.
-     * 색인 중이거나 메인 클래스를 하나로 정할 수 없으면 알림만 띄우고 시작하지 않는다.
+     * 클래스 찾기는 화면 스레드 밖에서 하고, 찾은 뒤 화면 스레드에서 실행 설정을 만들어 시작한다.
+     * 색인 중이거나 스프링 부트 의존성이 없으면 알림만 띄우고 false. 메인 클래스를 하나로 정할 수 없으면 찾은 뒤 알림만 띄운다.
+     *
+     * @return 시작(또는 클래스 찾기)을 넘겼으면 true
      */
     static boolean start(Module module, Executor executor) {
-        RunnerAndConfigurationSettings settings = ensureSettings(module);
+        RunnerAndConfigurationSettings settings = findSettings(module);
         if (settings != null) {
             start(settings, executor);
+            return true;
         }
-        return settings != null;
+        PsiClass annotation = bootAnnotation(module.getProject());
+        if (annotation == null) {
+            return false;
+        }
+        ReadAction.nonBlocking(() -> mainClasses(module, annotation))
+                .inSmartMode(module.getProject())
+                .expireWhen(module::isDisposed)
+                .finishOnUiThread(ModalityState.defaultModalityState(),
+                        found -> WriteIntentReadAction.run(() -> startFound(module, found, executor)))
+                .submit(AppExecutorUtil.getAppExecutorService());
+        return true;
+    }
+
+    /** 찾은 메인 클래스로 실행 설정을 만들어 시작한다. 찾는 사이에 모듈 이름의 실행 설정이 생겼으면 그것으로 시작한다. */
+    private static void startFound(Module module, Collection<PsiClass> found, Executor executor) {
+        RunnerAndConfigurationSettings existing = findSettings(module);
+        if (existing != null) {
+            start(existing, executor);
+            return;
+        }
+        PsiClass mainClass = pickMainClass(module, found);
+        if (mainClass != null) {
+            start(createSettings(module, mainClass), executor);
+        }
     }
 
     static void start(RunnerAndConfigurationSettings settings, Executor executor) {
@@ -182,7 +212,12 @@ final class ServerLauncher {
      * 정확히 하나일 때만 돌려주고, 없거나 여럿이면 사유를 알리고 null 을 돌려준다.
      */
     private static PsiClass findMainClass(Module module) {
-        Project project = module.getProject();
+        PsiClass annotation = bootAnnotation(module.getProject());
+        return annotation == null ? null : pickMainClass(module, mainClasses(module, annotation));
+    }
+
+    /** @SpringBootApplication 주석 클래스. 색인 중이거나 스프링 부트 의존성이 없으면 사유를 알리고 null. 화면 스레드에서 부른다. */
+    private static PsiClass bootAnnotation(Project project) {
         if (DumbService.isDumb(project)) {
             Messages.showWarningDialog(project, "색인이 끝난 뒤 다시 시도하세요.", TITLE);
             return null;
@@ -192,8 +227,13 @@ final class ServerLauncher {
         if (annotation == null) {
             Messages.showErrorDialog(project,
                     "프로젝트에 스프링 부트 의존성이 없습니다. Gradle · Maven 프로젝트로 연결됐는지 확인하세요.", TITLE);
-            return null;
         }
+        return annotation;
+    }
+
+    /** 모듈 폴더 아래 본 소스의 @SpringBootApplication 클래스들. 읽기 동작 안에서 부른다(화면 스레드 밖 가능). */
+    private static Collection<PsiClass> mainClasses(Module module, PsiClass annotation) {
+        Project project = module.getProject();
         VirtualFile[] roots = ModuleRootManager.getInstance(module).getContentRoots();
         ProjectFileIndex index = ProjectFileIndex.getInstance(project);
         Collection<PsiClass> found = new ArrayList<>();
@@ -203,6 +243,12 @@ final class ServerLauncher {
                 found.add(c);
             }
         }
+        return found;
+    }
+
+    /** 정확히 하나면 그 클래스. 없거나 여럿이면 사유를 알리고 null. 화면 스레드에서 부른다. */
+    private static PsiClass pickMainClass(Module module, Collection<PsiClass> found) {
+        Project project = module.getProject();
         if (found.isEmpty()) {
             Messages.showErrorDialog(project, "'" + module.getName() + "' 모듈에 @SpringBootApplication 클래스가 없습니다.", TITLE);
             return null;

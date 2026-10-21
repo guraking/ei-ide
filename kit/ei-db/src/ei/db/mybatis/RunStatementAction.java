@@ -19,7 +19,7 @@ public final class RunStatementAction extends AnAction {
     boolean ok = false;
     if (editor != null && e.getProject() != null) {
       CharSequence text = editor.getDocument().getCharsSequence();
-      ok = StringUtil.contains(text, "<mapper") && MapperDoc.parse(text).statementAt(editor.getCaretModel().getOffset()) != null;
+      ok = StringUtil.contains(text, "<mapper") && MapperDocs.of(e.getProject(), editor).statementAt(editor.getCaretModel().getOffset()) != null;
     }
     e.getPresentation().setEnabledAndVisible(ok);
   }

@@ -37,7 +37,7 @@ import java.util.Set;
 /**
  * 매퍼 인터페이스(같은 namespace 의 매퍼 XML 이 있는) 형식 필드를 가진 자바 클래스에서, 멤버 선언이 시작될 자리의 자동 완성에
  * 그 매퍼의 문장 · 메서드 가운데 이 클래스에 아직 같은 이름 메서드가 없는 것을 낸다. 고르면 서비스 메서드 전체를 넣는다.
- * 후보를 고를 때는 필드 형식 · 매퍼 메서드 이름 · MapperIndex 의 id 만 보고, XML 을 읽는 일은 넣을 때 한다.
+ * 넣을 메서드 모양(필요하면 XML 읽기 포함)은 후보를 만들 때(읽기 동작, EDT 밖) 구해 두고, 넣을 때는 그 값만 쓴다.
  */
 public final class ServiceMethodCompletion extends CompletionContributor {
   /** 앞 글자가 이것이면 멤버 선언이 시작될 자리다(클래스 여는 괄호, 앞 멤버의 끝). */
@@ -68,7 +68,7 @@ public final class ServiceMethodCompletion extends CompletionContributor {
             .withIcon(AllIcons.Nodes.Method)
             .withTailText(TAIL_PREFIX + f.getName(), true)
             .withTypeText(mapper.getName())
-            .withInsertHandler(new Insert(f.getName(), mapper.getQualifiedName(), id)));
+            .withInsertHandler(new Insert(f.getName(), id, sig(project, mapper.getQualifiedName(), id))));
       }
     }
   }
@@ -87,12 +87,19 @@ public final class ServiceMethodCompletion extends CompletionContributor {
     return i >= 0 && MEMBER_START_CHARS.indexOf(text.charAt(i)) >= 0 ? cls : null;
   }
 
-  /** 고른 이름을 서비스 메서드 전체로 바꾼다. 쓰기 동작 안에서 불린다. */
-  private record Insert(String mapperField, String namespace, String id) implements InsertHandler<LookupElement> {
+  /** 매퍼 인터페이스 메서드가 있으면 그 모양, 없으면 XML 로 짐작. 둘 다 없으면 null. */
+  private static @Nullable ServiceCode.Sig sig(Project project, String namespace, String id) {
+    PsiMethod m = LayerCode.mapperMethod(project, namespace, id);
+    if (m != null) return LayerCode.sigOf(m);
+    LayerCode.Located at = LayerCode.locate(project, namespace, id);
+    return at == null ? null : LayerCode.sigFor(project, at.doc(), at.statement());
+  }
+
+  /** 고른 이름을 서비스 메서드 전체로 바꾼다. 쓰기 동작 안에서 불린다. sig 는 후보를 만들 때 구한 것(못 찾았으면 null). */
+  private record Insert(String mapperField, String id, @Nullable ServiceCode.Sig sig) implements InsertHandler<LookupElement> {
     @Override
     public void handleInsert(@NotNull InsertionContext ctx, @NotNull LookupElement item) {
       Project project = ctx.getProject();
-      ServiceCode.Sig sig = sig(project);
       if (sig == null) {
         Notify.warning(project, id + " 문장을 매퍼 인터페이스 · XML 에서 찾지 못해 이름만 넣었습니다.");
         return;
@@ -114,14 +121,6 @@ public final class ServiceMethodCompletion extends CompletionContributor {
       } finally {
         range.dispose();
       }
-    }
-
-    /** 매퍼 인터페이스 메서드가 있으면 그 모양, 없으면 XML 로 짐작. 둘 다 없으면 null. */
-    private @Nullable ServiceCode.Sig sig(Project project) {
-      PsiMethod m = LayerCode.mapperMethod(project, namespace, id);
-      if (m != null) return LayerCode.sigOf(m);
-      LayerCode.Located at = LayerCode.locate(project, namespace, id);
-      return at == null ? null : LayerCode.sigFor(project, at.doc(), at.statement());
     }
   }
 }

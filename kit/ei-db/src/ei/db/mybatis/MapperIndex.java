@@ -23,8 +23,8 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 프로젝트의 매퍼 XML 을 namespace 로 찾는다. namespace 표는 프로젝트마다 한 번 만들어 두고 VFS 나 PSI 가
- * 바뀐 뒤에만 다시 만든다. 다시 만들 때도 파일마다 수정 표시(열린 문서면 문서의 것)를 보고 바뀐 파일만 다시 읽는다.
+ * 프로젝트의 매퍼 XML 을 namespace 로 찾는다. namespace 표는 프로젝트마다 한 번 만들어 두고 파일 구조나 XML 이
+ * 바뀐 뒤에만 다시 만든다(다른 언어 파일의 편집으로는 다시 만들지 않는다). 다시 만들 때도 파일마다 수정 표시(열린 문서면 문서의 것)를 보고 바뀐 파일만 다시 읽는다.
  * 파일별 결과도 표에 딸려 프로젝트 사용자 데이터에 있어 프로젝트를 닫으면 함께 사라지고, 다시 만들 때 지금 없는 파일은 빠진다.
  * 읽기 접근 안에서 부른다. 색인 중이면 빈 결과.
  */
@@ -32,11 +32,15 @@ final class MapperIndex {
   private MapperIndex() {}
 
   private static final String XML_EXT = "xml";
+  /** XML 언어 id. XMLLanguage 클래스에 기대지 않으려고 id 로 고른다. */
+  private static final String XML_LANGUAGE_ID = "XML";
+  /** 표를 다시 만드는 일은 한 번에 하나만 한다(여러 데몬 스레드가 같은 변경을 두고 동시에 다시 읽지 않게). */
+  private static final Object REBUILD = new Object();
 
   /** 매퍼 XML 하나. ids 는 문장 id → 여는 태그 위치(문서 순서). 매퍼가 아니면 namespace 가 null. */
   record Entry(VirtualFile file, long stamp, String namespace, Map<String, Integer> ids) {}
 
-  /** namespace → 매퍼 XML 들. version 은 만들 때의 VFS 수정 수 + PSI 수정 수. files 는 파일별 결과(매퍼 아닌 XML 포함). */
+  /** namespace → 매퍼 XML 들. version 은 만들 때의 {@link #version} 값. files 는 파일별 결과(매퍼 아닌 XML 포함). */
   private record Table(long version, Map<String, List<Entry>> byNamespace, Map<VirtualFile, Entry> files) {}
 
   private static final Key<Table> TABLE = Key.create("ei.db.mybatis.MapperIndex.table");
@@ -55,24 +59,36 @@ final class MapperIndex {
     return out;
   }
 
+  /**
+   * 파일 생성 · 삭제 · 이동 · 이름 바꿈(VFS 구조 수정 수)과 XML PSI 수정 수의 합.
+   * 열리지 않은(PSI 를 읽지 않은) 파일이 디스크에서 바뀌면 PSI 가 모든 언어 수정 수를 올리므로 여기에도 잡힌다.
+   */
+  private static long version(Project project) {
+    return VirtualFileManager.VFS_STRUCTURE_MODIFICATIONS.getModificationCount()
+        + PsiModificationTracker.getInstance(project).forLanguages(l -> l.isKindOf(XML_LANGUAGE_ID)).getModificationCount();
+  }
+
   private static Table table(Project project) {
-    long version = VirtualFileManager.getInstance().getModificationCount()
-        + PsiModificationTracker.getInstance(project).getModificationCount();
     Table t = project.getUserData(TABLE);
-    if (t != null && t.version() == version) return t;
-    Map<VirtualFile, Entry> old = t == null ? Map.of() : t.files();
-    Map<String, List<Entry>> byNamespace = new HashMap<>();
-    Map<VirtualFile, Entry> files = new ConcurrentHashMap<>();
-    for (VirtualFile f : FilenameIndex.getAllFilesByExt(project, XML_EXT, GlobalSearchScope.projectScope(project))) {
-      ProgressManager.checkCanceled();
-      Entry e = entry(old, f);
-      if (e == null) continue;
-      files.put(f, e);
-      if (e.namespace() != null) byNamespace.computeIfAbsent(e.namespace(), k -> new ArrayList<>()).add(e);
+    if (t != null && t.version() == version(project)) return t;
+    synchronized (REBUILD) {
+      long version = version(project);
+      t = project.getUserData(TABLE);
+      if (t != null && t.version() == version) return t;
+      Map<VirtualFile, Entry> old = t == null ? Map.of() : t.files();
+      Map<String, List<Entry>> byNamespace = new HashMap<>();
+      Map<VirtualFile, Entry> files = new ConcurrentHashMap<>();
+      for (VirtualFile f : FilenameIndex.getAllFilesByExt(project, XML_EXT, GlobalSearchScope.projectScope(project))) {
+        ProgressManager.checkCanceled();
+        Entry e = entry(old, f);
+        if (e == null) continue;
+        files.put(f, e);
+        if (e.namespace() != null) byNamespace.computeIfAbsent(e.namespace(), k -> new ArrayList<>()).add(e);
+      }
+      t = new Table(version, byNamespace, files);
+      project.putUserData(TABLE, t);
+      return t;
     }
-    t = new Table(version, byNamespace, files);
-    project.putUserData(TABLE, t);
-    return t;
   }
 
   /** 파일 하나의 최신 결과. 읽지 못하면 null. 색인 중이 아닐 때 부른다. */

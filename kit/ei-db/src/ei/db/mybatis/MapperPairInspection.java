@@ -46,7 +46,7 @@ final class MapperPairInspection {
       if (!StringUtil.contains(text, MAPPER_TAG)) return null;
       Project project = file.getProject();
       if (DumbService.isDumb(project)) return null;
-      MapperDoc doc = MapperDoc.parse(text);
+      MapperDoc doc = MapperDocs.of(file);
       if (doc.namespace == null || doc.statements.isEmpty()) return null;
       PsiClass mapper = JavaPsiFacade.getInstance(project).findClass(doc.namespace, GlobalSearchScope.allScope(project));
       if (mapper == null || !mapper.isInterface()) return null;

@@ -73,6 +73,7 @@ import javax.swing.ListSelectionModel;
 import javax.swing.Timer;
 import javax.swing.table.AbstractTableModel;
 import java.awt.CardLayout;
+import java.awt.event.HierarchyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
@@ -120,6 +121,8 @@ final class ServersPanel extends SimpleToolWindowPanel {
     private Map<Module, Set<String>> bootModules = Map.of();
     private List<Object> rows = List.of();
     private final Map<Object, ServerLauncher.State> lastStates = new HashMap<>();
+    // 마지막 tick 에서 구한 줄별 상태. 표 칸은 여기서 읽고, 없는 줄(tick 전에 생긴 줄)만 그 자리에서 구한다.
+    private Map<Object, ServerLauncher.State> shownStates = Map.of();
 
     private final Model model = new Model();
     private final JBTable table = new JBTable(model);
@@ -184,8 +187,20 @@ final class ServersPanel extends SimpleToolWindowPanel {
         setContent(splitter);
 
         // 실행 시간 · 상태를 1초마다 다시 그린다. 상태가 바뀐 줄이 있으면 프로젝트 트리 표시도 맞춘다.
+        // 창이 보이는 동안만 돌고, 보이게 되는 순간 한 번 바로 맞춘다.
         Timer timer = new Timer(TICK_MILLIS, e -> tick());
-        timer.start();
+        addHierarchyListener(e -> {
+            if ((e.getChangeFlags() & HierarchyEvent.SHOWING_CHANGED) == 0) {
+                return;
+            }
+            if (isShowing()) {
+                tick();
+                timer.start();
+            }
+            else {
+                timer.stop();
+            }
+        });
         Disposer.register(parent, timer::stop);
         Disposer.register(parent, this::cancelGroupRun);
         watchBuilds();
@@ -284,12 +299,15 @@ final class ServersPanel extends SimpleToolWindowPanel {
             return;
         }
         boolean changed = false;
+        Map<Object, ServerLauncher.State> states = new HashMap<>();
         for (Object row : rows) {
-            if (row instanceof Boot b) {
-                ServerLauncher.State state = stateOf(b);
+            ServerLauncher.State state = stateOf(row);
+            states.put(row, state);
+            if (row instanceof Boot) {
                 changed |= lastStates.put(row, state) != state;
             }
         }
+        shownStates = states;
         model.fireTableRowsUpdated(0, rows.size() - 1);
         updateStatus();
         if (changed) {
@@ -305,6 +323,11 @@ final class ServersPanel extends SimpleToolWindowPanel {
         }
         WasSettings.Server s = row instanceof Deploy d ? d.server() : (WasSettings.Server) row;
         return WasRunner.getInstance(project).state(s);
+    }
+
+    private ServerLauncher.State shownState(Object row) {
+        ServerLauncher.State state = shownStates.get(row);
+        return state != null ? state : stateOf(row);
     }
 
     private static boolean isLive(ServerLauncher.State s) {
@@ -834,27 +857,46 @@ final class ServersPanel extends SimpleToolWindowPanel {
 
     // 로그 파일 고르기 창에서 로그 폴더 기준 하위 폴더를 보일 최대 글자 수. 넘으면 가운데를 줄인다(전체 경로는 풍선 도움말).
     private static final int LOG_FOLDER_MAX_CHARS = 40;
+    private static final String LOG_FILES_TITLE = "로그 파일 보기";
 
-    /** WAS 의 로그 파일 목록을 띄우고, 고른 파일을 실행 창 콘솔 탭에서 끝을 따라가며 보인다. */
+    /** WAS 의 로그 파일 목록을 띄우고, 고른 파일을 실행 창 콘솔 탭에서 끝을 따라가며 보인다. 폴더 읽기는 풀 스레드에서 한다. */
     private void showLogFiles(Object target) {
         WasSettings.Server s = (WasSettings.Server) target;
-        String title = "로그 파일 보기";
         List<Path> roots;
-        List<Path> files;
         try {
             roots = WasLogFiles.roots(s.kind(), WasRunner.getInstance(project).runDir(s), Path.of(s.home), s.jeusDomain, s.jeusServer);
+        }
+        catch (InvalidPathException e) {
+            showLogFolderError(s, e);
+            return;
+        }
+        ApplicationManager.getApplication().executeOnPooledThread(() -> findLogFiles(s, roots));
+    }
+
+    /** 풀 스레드에서 로그 파일을 찾아 화면 스레드에서 목록을 띄운다. */
+    private void findLogFiles(WasSettings.Server s, List<Path> roots) {
+        List<Path> files;
+        try {
             files = WasLogFiles.find(roots);
         }
         catch (IOException | InvalidPathException e) {
-            Messages.showErrorDialog(project, s.name + " 의 로그 폴더를 읽지 못했습니다: " + e.getMessage(), title);
+            ApplicationManager.getApplication().invokeLater(() -> showLogFolderError(s, e), project.getDisposed());
             return;
         }
+        ApplicationManager.getApplication().invokeLater(() -> chooseLogFile(s, roots, files), project.getDisposed());
+    }
+
+    private void showLogFolderError(WasSettings.Server s, Exception e) {
+        Messages.showErrorDialog(project, s.name + " 의 로그 폴더를 읽지 못했습니다: " + e.getMessage(), LOG_FILES_TITLE);
+    }
+
+    private void chooseLogFile(WasSettings.Server s, List<Path> roots, List<Path> files) {
         if (files.isEmpty()) {
             StringBuilder where = new StringBuilder();
             for (Path root : roots) {
                 where.append("\n· ").append(root);
             }
-            Messages.showInfoMessage(project, s.name + " 의 로그 파일이 없습니다. 서버를 한 번 시작하면 생깁니다.\n찾아본 곳:" + where, title);
+            Messages.showInfoMessage(project, s.name + " 의 로그 파일이 없습니다. 서버를 한 번 시작하면 생깁니다.\n찾아본 곳:" + where, LOG_FILES_TITLE);
             return;
         }
         JBPopupFactory.getInstance().createPopupChooserBuilder(files)
@@ -1106,13 +1148,13 @@ final class ServersPanel extends SimpleToolWindowPanel {
             if (r instanceof Deploy d) {
                 return switch (column) {
                     case 0 -> "    └ " + d.deployment().module;
-                    case 1 -> stateOf(d) == ServerLauncher.State.RUNNING ? "올라감" : "-";
+                    case 1 -> shownState(d) == ServerLauncher.State.RUNNING ? "올라감" : "-";
                     case 3 -> d.deployment().contextPath;
                     default -> "";
                 };
             }
             WasSettings.Server s = (WasSettings.Server) r;
-            ServerLauncher.State state = stateOf(s);
+            ServerLauncher.State state = shownState(s);
             ServerRegistry.Run run = ServerRegistry.getInstance(project).get(WasRunner.registryKey(s));
             return switch (column) {
                 case 0 -> s.name + "  [" + s.kind().label + "]";
@@ -1124,7 +1166,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
         }
 
         private Object bootCell(Boot b, int column) {
-            ServerLauncher.State state = stateOf(b);
+            ServerLauncher.State state = shownState(b);
             ServerRegistry.Run run = ServerRegistry.getInstance(project).get(b.name());
             String vm = vmOf(b);
             return switch (column) {

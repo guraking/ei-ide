@@ -49,7 +49,7 @@ public final class PagingAction extends AnAction {
     if (editor != null && e.getProject() != null) {
       CharSequence text = editor.getDocument().getCharsSequence();
       if (StringUtil.contains(text, "<mapper")) {
-        MapperDoc.Node s = MapperDoc.parse(text).statementAt(editor.getCaretModel().getOffset());
+        MapperDoc.Node s = MapperDocs.of(e.getProject(), editor).statementAt(editor.getCaretModel().getOffset());
         ok = s != null && SELECT.equals(s.name);
       }
     }
