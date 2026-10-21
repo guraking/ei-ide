@@ -25,6 +25,9 @@ import com.intellij.openapi.vcs.VcsRoot;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vcs.FileStatus;
 import com.intellij.openapi.vcs.changes.ChangeListListener;
+import com.intellij.openapi.vcs.changes.ChangeListManager;
+import com.intellij.openapi.vcs.changes.ContentRevision;
+import com.intellij.openapi.vcs.FilePath;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.ui.ColoredTreeCellRenderer;
@@ -146,6 +149,12 @@ final class SyncPanel extends JPanel {
   // 비교를 시작할 때마다 하나 올린다(EDT 에서만). 늦게 끝난 옛 비교가 새 결과를 덮지 않게 끝날 때 이 값과 맞춰 본다.
   private int compareSeq;
   private Kind modeFilter;  // null 이면 전체
+  // 알림을 모아 두었다가 다시 비교할 저장소(EDT 에서만). Git 알림이 온 루트, 변경 목록에서 경로가 달라진 곳, SVN 은 변경 목록 알림마다.
+  private final Set<File> pendingRoots = new HashSet<>();
+  private final Set<String> pendingPaths = new HashSet<>();
+  private boolean pendingSvn;
+  // 지난 변경 목록 알림 때 IDE 가 알던 작업본 변경 · 새 파일 경로. 다음 알림과 비교해 달라진 경로만 본다(알림 스레드에서만).
+  private volatile Set<String> lastLocalPaths = Set.of();
 
   SyncPanel(Project project, Disposable parent) {
     super(new BorderLayout());
@@ -198,15 +207,28 @@ final class SyncPanel extends JPanel {
     refreshButton.addActionListener(e -> refresh());
     refreshSelectedButton.addActionListener(e -> refreshSelected());
 
-    // 커밋 · Push · Pull · 브랜치 전환으로 Git 상태가 바뀌면 fetch 없이 다시 비교한다.
-    // SVN 은 저장소 알림이 없으므로 IDE 의 변경 목록이 갱신될 때(커밋 · 업데이트 뒤) 다시 비교한다.
+    // 커밋 · Push · Pull · 브랜치 전환으로 Git 상태가 바뀌면 그 저장소만 fetch 없이 다시 비교한다.
+    // 변경 목록이 갱신되면(편집 · 저장마다 온다) 변경 · 새 파일 경로가 달라진 Git 저장소만 다시 비교한다.
+    // SVN 은 저장소 알림이 없으므로 변경 목록이 갱신될 때마다(커밋 · 업데이트 뒤) 다시 비교한다.
     // 한 동작에 알림이 여러 번 오므로 마지막 알림 뒤 잠깐 기다렸다가 한 번만 비교한다.
-    javax.swing.Timer debounce = new javax.swing.Timer(REPO_CHANGE_DELAY_MS, e -> recompare());
+    javax.swing.Timer debounce = new javax.swing.Timer(REPO_CHANGE_DELAY_MS, e -> recomparePending());
     debounce.setRepeats(false);
     project.getMessageBus().connect(parent).subscribe(GitRepository.GIT_REPO_CHANGE,
-      (GitRepositoryChangeListener) repository -> SwingUtilities.invokeLater(debounce::restart));
+      (GitRepositoryChangeListener) repository -> {
+        File root = new File(repository.getRoot().getPath());
+        SwingUtilities.invokeLater(() -> { pendingRoots.add(root); debounce.restart(); });
+      });
     project.getMessageBus().connect(parent).subscribe(ChangeListListener.TOPIC, new ChangeListListener() {
-      @Override public void changeListUpdateDone() { SwingUtilities.invokeLater(debounce::restart); }
+      @Override public void changeListUpdateDone() {
+        Set<String> now = localChangePaths();
+        Set<String> moved = new HashSet<>(now);
+        moved.removeAll(lastLocalPaths);
+        for (String path : lastLocalPaths) {
+          if (!now.contains(path)) moved.add(path);
+        }
+        lastLocalPaths = now;
+        SwingUtilities.invokeLater(() -> { pendingPaths.addAll(moved); pendingSvn = true; debounce.restart(); });
+      }
     });
   }
 
@@ -536,11 +558,52 @@ final class SyncPanel extends JPanel {
     return results;
   }
 
-  /** fetch 없이 지금 상태로만 다시 비교한다(무시 · 되돌리기 · 커밋 직후). SVN 은 서버에 닿지 못하면 작업본만 비교한다. */
+  /** IDE 가 아는 작업본 변경(변경 목록)과 새 파일의 절대 경로. */
+  private Set<String> localChangePaths() {
+    ChangeListManager manager = ChangeListManager.getInstance(project);
+    Set<String> result = new HashSet<>();
+    for (com.intellij.openapi.vcs.changes.Change change : manager.getAllChanges()) {
+      ContentRevision revision = change.getAfterRevision() != null ? change.getAfterRevision() : change.getBeforeRevision();
+      if (revision != null) result.add(revision.getFile().getPath());
+    }
+    for (FilePath path : manager.getUnversionedFilesPaths()) result.add(path.getPath());
+    return result;
+  }
+
+  /** 모아 둔 알림에 해당하는 저장소만 다시 비교하고 모은 것을 비운다. */
+  private void recomparePending() {
+    List<Repo> targets = new ArrayList<>();
+    for (Repo repo : repos) {
+      boolean hit = repo.vcs() == Vcs.SVN ? pendingSvn : pendingRoots.contains(repo.root());
+      if (!hit && repo.vcs() == Vcs.GIT) {
+        for (String path : pendingPaths) {
+          if (FileUtil.isAncestor(repo.root(), new File(path), false)) {
+            hit = true;
+            break;
+          }
+        }
+      }
+      if (hit) targets.add(repo);
+    }
+    pendingRoots.clear();
+    pendingPaths.clear();
+    pendingSvn = false;
+    recompare(targets, false);
+  }
+
+  /** fetch 없이 지금 상태로만 모든 저장소를 다시 비교한다(무시 · 되돌리기 · 커밋 직후). */
   private void recompare() {
-    List<Repo> targets = repos;
+    recompare(repos, true);
+  }
+
+  /**
+   * fetch 없이 targets 만 다시 비교하고 목록에서 그 저장소 것만 바꾼다. SVN 은 서버에 닿지 못하면 작업본만 비교한다.
+   * full 이면 새 비교 차례를 잡아 그보다 늦게 끝난 옛 비교를 버린다. 아니면 차례를 잡지 않아 저장소별 비교끼리 서로 버리지 않고,
+   * 도중에 전체 비교가 새로 시작됐을 때만 결과를 버린다.
+   */
+  private void recompare(List<Repo> targets, boolean full) {
     if (targets.isEmpty()) return;
-    int seq = ++compareSeq;
+    int seq = full ? ++compareSeq : compareSeq;
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       List<Change> result = new ArrayList<>();
       AtomicReference<String> error = new AtomicReference<>();
@@ -566,9 +629,16 @@ final class SyncPanel extends JPanel {
         return;
       }
       String message = error.get();
+      Set<File> roots = new HashSet<>();
+      for (Repo repo : targets) roots.add(repo.root());
       SwingUtilities.invokeLater(() -> {
         if (seq != compareSeq) return;
-        changes = result;
+        List<Change> next = new ArrayList<>();
+        for (Change c : changes) {
+          if (!roots.contains(c.repo().root())) next.add(c);
+        }
+        next.addAll(result);
+        changes = next;
         rebuildTree();
         if (message != null) status.setText(message);
       });
@@ -933,6 +1003,14 @@ final class SyncPanel extends JPanel {
 
   /** Git 루트의 실제 최상위 폴더 · 브랜치 · 원격 추적 브랜치를 알아낸다. 추적 브랜치가 없으면 비교할 수 없으므로 오류. */
   static Repo gitRepo(File dir) throws IOException, InterruptedException {
+    // 보통은 한 번에 읽는다(최상위 폴더 · 브랜치 · 추적 브랜치 세 줄). 실패하면 어느 것이 없는지 가리려고 하나씩 읽는다.
+    try {
+      String[] lines = git(dir, "rev-parse", "--show-toplevel", "--abbrev-ref", "HEAD", "@{u}").trim().split("\n");
+      if (lines.length == 3) return new Repo(new File(lines[0].trim()), Vcs.GIT, lines[1].trim(), lines[2].trim());
+    }
+    catch (IOException oneShotFailed) {
+      // 아래에서 하나씩 다시 읽어 알맞은 오류를 낸다.
+    }
     File root = new File(git(dir, "rev-parse", "--show-toplevel").trim());
     String branch = git(root, "rev-parse", "--abbrev-ref", "HEAD").trim();
     try {
@@ -951,12 +1029,18 @@ final class SyncPanel extends JPanel {
   /** 들어올 · 나갈 · 충돌로 나눈다. 같은 경로가 양쪽에 있으면 충돌로만 보인다. */
   static List<Change> compare(Repo repo) throws IOException, InterruptedException {
     File root = repo.root();
-    Map<String, String> incoming = parseNameStatus(git(root, "diff", "--name-status", "HEAD...@{u}"));
-    Map<String, String> outgoing = parseNameStatus(git(root, "diff", "--name-status", "@{u}...HEAD"));
+    // 네 명령은 서로 기다릴 필요가 없어 동시에 돌린다. 윈도우는 git 을 띄우는 비용이 커서 차례로 돌리면 그만큼 늦다.
+    List<String> out = inParallel(List.of(
+      new String[]{"diff", "--name-status", "HEAD...@{u}"},
+      new String[]{"diff", "--name-status", "@{u}...HEAD"},
+      new String[]{"-c", "core.untrackedCache=true", "status", "--porcelain=v1", "-unormal"},
+      new String[]{"ls-files", "-v"}), args -> git(root, args));
+    Map<String, String> incoming = parseNameStatus(out.get(0));
+    Map<String, String> outgoing = parseNameStatus(out.get(1));
     Set<String> unmerged = new TreeSet<>();
     // 새 파일은 폴더 단위로만 받는다(-unormal). 무시되지 않은 큰 폴더 속을 다 훑으면 느려진다.
     // 폴더는 ".idea/" 처럼 끝이 / 인 한 줄로 나오며, 그대로 .gitignore 에 넣을 수 있다.
-    for (String line : git(root, "-c", "core.untrackedCache=true", "status", "--porcelain=v1", "-unormal").split("\n")) {
+    for (String line : out.get(2).split("\n")) {
       if (line.length() < 4) continue;
       String xy = line.substring(0, 2);
       String path = line.substring(3);
@@ -969,7 +1053,7 @@ final class SyncPanel extends JPanel {
     }
     List<Change> result = merge(repo, incoming, outgoing, unmerged);
     // 부분 체크아웃(sparse checkout)이 밖으로 뺀 파일도 skip-worktree 지만 디스크에 없으므로, 디스크에 있는 것만 모른 척 중으로 본다.
-    for (String path : parseAssumed(git(root, "ls-files", "-v"), p -> new File(root, p).exists())) {
+    for (String path : parseAssumed(out.get(3), p -> new File(root, p).exists())) {
       result.add(new Change(Kind.ASSUMED, "Assume Unchanged", path, repo));
     }
     return result;
