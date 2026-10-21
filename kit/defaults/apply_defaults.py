@@ -17,6 +17,7 @@
   20) 콘솔에 남기는 글 양(cycle buffer)을 기본 1 MB 에서 30 MB 로 늘린다.
   21) 프로젝트 창에서 바뀐 파일 · 새 파일이 든 폴더 · 패키지 이름도 그 색으로 보인다.
   22) 첫 실행 기본 어두운 테마를 EI Glass(boot-servers 플러그인)로 한다.
+  23) EI Glass 테마가 켜는 유리 그리기: 창 전체 빛 배경, 트리 · 목록 선택 테두리, 툴바 알약, 열린 툴 창 단추 색.
 고치기 전 원본은 <intellij-community>/../backup/<시각>-before/ 에 같은 상대경로로 남긴다.
 모든 원문을 먼저 찾아 본 뒤에 쓴다. 하나라도 못 찾으면 아무 파일도 바꾸지 않는다. 줄끝(LF · CRLF)은 파일마다 원래대로 둔다.
 두 번 실행해도 같은 결과가 된다.
@@ -210,6 +211,70 @@ EDITS = [
      '  <icon-eap svg="/idea-ce-eap.svg" svg-small="/idea-ce-eap_16.svg"/>\n',
      '  <icon-eap svg="/idea-ce-eap.svg" svg-small="/idea-ce-eap_16.svg"/>\n'
      '  <default-laf dark="EI Glass"/>\n'),
+    # 23) EI Glass 유리 그리기. 모두 테마 키가 있을 때만 그리므로, 키를 두지 않은 다른 테마는 원래 모습 그대로다.
+    #     키는 boot-servers 의 themes/EIGlass.theme.json 에 둔다.
+    #  23-1) 창 전체 빛 배경: Island.colorGradient 가 참이면 레지스트리 idea.islands.color.gradient.enabled 를 켠 것과 같이
+    #        창 바탕 · 툴바 · 옆줄 · 상태 줄에 ProjectGradients 색을 깐다. 테마를 바꾼 뒤에는 IDE 를 다시 켜야 툴 창 바탕까지 맞는다.
+    ("platform/platform-impl/src/com/intellij/openapi/application/impl/islands/IslandsGradientPainter.kt",
+     'internal fun isColorIslandGradient(): Boolean = Registry.`is`("idea.islands.color.gradient.enabled", false)',
+     'internal fun isColorIslandGradient(): Boolean =\n'
+     '  Registry.`is`("idea.islands.color.gradient.enabled", false) || javax.swing.UIManager.getBoolean("Island.colorGradient")'),
+    #  23-2) Island.colorGradient.mirrored 가 참이면 대각선 색과 둥근 빛을 좌우로 뒤집는다(Color1 · 둥근 빛이 오른쪽 위, Color4 가 왼쪽 아래).
+    ("platform/platform-impl/src/com/intellij/openapi/application/impl/islands/IslandsGradientPainter.kt",
+     "  g.paint = LinearGradientPaint(0f, 0f, width.toFloat(), height.toFloat(),",
+     '  val mirrored = javax.swing.UIManager.getBoolean("Island.colorGradient.mirrored")\n'
+     "  g.paint = LinearGradientPaint(if (mirrored) width.toFloat() else 0f, 0f, if (mirrored) 0f else width.toFloat(), height.toFloat(),"),
+    ("platform/platform-impl/src/com/intellij/openapi/application/impl/islands/IslandsGradientPainter.kt",
+     "  val ovalCenterX = width * 0.2f",
+     "  val ovalCenterX = width * (if (mirrored) 0.8f else 0.2f)"),
+    #  23-3) 트리 선택 줄 테두리: Tree.Selection.borderColor. 하나만 선택된 줄(위아래로 이어진 선택이 아닌 줄)에만 그린다. 마우스만 올린 줄은 그리지 않는다.
+    ("platform/platform-impl/src/com/intellij/ui/tree/ui/DefaultTreeUI.java",
+     "                int arc = JBUI.CurrentTheme.Tree.ARC.get();\n"
+     "                FILL.paint((Graphics2D)g, left, bounds.y, right - left, bounds.height, arc);\n",
+     "                int arc = JBUI.CurrentTheme.Tree.ARC.get();\n"
+     "                FILL.paint((Graphics2D)g, left, bounds.y, right - left, bounds.height, arc);\n"
+     '                Color selectionBorder = selected && !shouldPaintTop && !shouldPaintBottom ? UIManager.getColor("Tree.Selection.borderColor") : null;\n'
+     "                if (selectionBorder != null) {\n"
+     "                  g.setColor(selectionBorder);\n"
+     "                  DRAW.paint((Graphics2D)g, left, bounds.y, right - left, bounds.height, arc);\n"
+     "                  g.setColor(background);\n"
+     "                }\n"),
+    #  23-4) 팝업 목록 · Search Everywhere · 자동 완성의 선택 줄 테두리: List.Selection.borderColor. 네 모서리가 모두 둥근 선택에만 그린다.
+    ("platform/platform-api/src/com/intellij/ui/popup/list/SelectablePanel.kt",
+     "      if (selectionArc == 0 || selectionArcCorners == SelectionArcCorners.ALL) {\n"
+     "        g2.fillRoundRect(rectX, rectY, rectWidth, rectHeight, selectionArc, selectionArc)\n",
+     "      if (selectionArc == 0 || selectionArcCorners == SelectionArcCorners.ALL) {\n"
+     "        g2.fillRoundRect(rectX, rectY, rectWidth, rectHeight, selectionArc, selectionArc)\n"
+     '        javax.swing.UIManager.getColor("List.Selection.borderColor")?.let {\n'
+     "          g2.color = it\n"
+     "          g2.drawRoundRect(rectX, rectY, rectWidth - 1, rectHeight - 1, selectionArc, selectionArc)\n"
+     "        }\n"),
+    #  23-5) 툴바의 프로젝트 · 브랜치 칸을 늘 알약으로 그린다: MainToolbar.Dropdown.pillBackground(바탕) · pillBorderColor(1px 테두리).
+    #        모양은 MainToolbar.Dropdown.arc 를 따른다. 프로젝트 색 강조 · 마우스 올림은 그 위에 그대로 그린다.
+    ("platform/platform-impl/src/com/intellij/ide/ui/laf/darcula/ui/ToolbarComboButtonUI.kt",
+     "      combo.highlightBackground?.let(innerRectPainter)",
+     '      javax.swing.UIManager.getColor("MainToolbar.Dropdown.pillBackground")?.let(innerRectPainter)\n'
+     '      javax.swing.UIManager.getColor("MainToolbar.Dropdown.pillBorderColor")?.let {\n'
+     "        DarculaNewUIUtil.drawRoundedRectangle(g2, innerRect, it, arc.toFloat(), JBUI.scale(1).toFloat())\n"
+     "      }\n"
+     "      combo.highlightBackground?.let(innerRectPainter)"),
+    #  23-6) 실행 설정 칸도 같은 키로 알약을 그린다.
+    ("platform/execution-impl/src/com/intellij/execution/ui/RedesignedRunWidget.kt",
+     "  override fun getMargins(): Insets = JBInsets(0, 10, 0, 6)",
+     "  override fun getMargins(): Insets = JBInsets(0, 10, 0, 6)\n"
+     "\n"
+     "  override fun paintComponent(g: Graphics) {\n"
+     "    val rect = Rectangle(size).also { JBInsets.removeFrom(it, insets) }\n"
+     "    val arc = JBUI.CurrentTheme.MainToolbar.Dropdown.hoverArc().float\n"
+     '    javax.swing.UIManager.getColor("MainToolbar.Dropdown.pillBackground")?.let { com.intellij.ide.ui.laf.darcula.DarculaNewUIUtil.fillRoundedRectangle(g, rect, it, arc) }\n'
+     '    javax.swing.UIManager.getColor("MainToolbar.Dropdown.pillBorderColor")?.let { com.intellij.ide.ui.laf.darcula.DarculaNewUIUtil.drawRoundedRectangle(g, rect, it, arc, JBUIScale.scale(1f)) }\n'
+     "    super.paintComponent(g)\n"
+     "  }"),
+    #  23-7) 열려 있지만 초점이 없는 툴 창의 옆줄 단추 바탕: ToolWindow.Button.visibleBackground(없으면 원래 눌림 색).
+    ("platform/platform-impl/src/com/intellij/openapi/wm/impl/SquareStripeButtonLook.kt",
+     '      if (button.isFocused()) return UIManager.getColor("ToolWindow.Button.selectedBackground")?: color',
+     '      if (button.isFocused()) return UIManager.getColor("ToolWindow.Button.selectedBackground")?: color\n'
+     '      if (button.toolWindow.isVisible) return UIManager.getColor("ToolWindow.Button.visibleBackground") ?: color'),
 ]
 
 
