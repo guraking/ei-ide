@@ -275,10 +275,10 @@
       }
     },
     "MainToolbar": {
-      "Button.arc": 100,
-      "Button.arc.compact": 100,
+      "Button.arc": 28,
+      "Button.arc.compact": 24,
       "Dropdown": {
-        "arc": 100,
+        "arc": 28,
         "pillBackground": "#FFFFFF0D",
         "pillBorderColor": "#FFFFFF1F"
       }
