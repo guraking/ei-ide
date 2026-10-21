@@ -11,14 +11,17 @@ import com.intellij.openapi.actionSystem.LangDataKeys;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.ui.popup.JBPopup;
 import com.intellij.openapi.ui.popup.JBPopupFactory;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.util.ui.JBUI;
 import ei.db.DbConfig;
 import ei.db.DbSettings;
 import ei.db.Notify;
 import ei.db.SqlRunner;
 import ei.db.console.ConsoleOpener;
+import ei.db.console.SqlFormatter;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -39,6 +42,8 @@ public final class LogActions {
   /** 쿼리 목록에 띄울 최대 수(최근 것부터)와 목록 한 줄에 보일 SQL 글자 수. */
   private static final int MAX_PICK = 50;
   private static final int LABEL_SQL_LENGTH = 80;
+  /** 고르기 창 강조 테두리 두께(px). */
+  private static final int POPUP_BORDER = 2;
   private static final String NEW_CONSOLE = "새 콘솔…";
 
   static Editor editor(AnActionEvent e) {
@@ -61,7 +66,11 @@ public final class LogActions {
     CharSequence text = doc.getImmutableCharSequence();
     List<String> lines = new ArrayList<>();
     for (int k = from; k <= to; k++) lines.add(text.subSequence(doc.getLineStartOffset(k), doc.getLineEndOffset(k)).toString());
-    return MyBatisLog.parse(lines, caretLine - from);
+    MyBatisLog.Entry entry = MyBatisLog.parse(lines, caretLine - from);
+    if (entry != null) return entry;
+    // MyBatis 로그가 없으면 log4jdbc sqltiming 로그(값이 채워진 SQL)를 찾는다.
+    List<MyBatisLog.Entry> timing = MyBatisLog.parseAll(lines, 1);
+    return timing.isEmpty() ? null : timing.get(0);
   }
 
   /** 마지막에 쓴 접속을 앞에 둔 목록. */
@@ -83,12 +92,11 @@ public final class LogActions {
       then.accept(list.get(0));
       return;
     }
-    JBPopupFactory.getInstance().createPopupChooserBuilder(list)
+    showCentered(JBPopupFactory.getInstance().createPopupChooserBuilder(list)
         .setTitle("실행할 접속")
         .setRenderer(com.intellij.ui.SimpleListCellRenderer.create("", MyBatisRunDialog::connectionLabel))
         .setItemChosenCallback(then::accept)
-        .createPopup()
-        .showInBestPositionFor(editor);
+        .createPopup(), project);
   }
 
   /**
@@ -118,13 +126,12 @@ public final class LogActions {
         break;
       }
     }
-    JBPopupFactory.getInstance().createPopupChooserBuilder(found)
+    showCentered(JBPopupFactory.getInstance().createPopupChooserBuilder(found)
         .setTitle("보낼 쿼리")
         .setRenderer(com.intellij.ui.SimpleListCellRenderer.create("", LogActions::entryLabel))
         .setSelectedValue(near, true)
         .setItemChosenCallback(then::accept)
-        .createPopup()
-        .showInBestPositionFor(editor);
+        .createPopup(), editor.getProject());
   }
 
   /** 「매퍼.문장id · SQL 앞부분」. 로거가 없으면 SQL 만. */
@@ -133,9 +140,23 @@ public final class LogActions {
     return entry.statementId() == null ? sql : entry.mapperName() + "." + entry.statementId() + " · " + sql;
   }
 
+  /** 고르기 창은 로그 글과 섞이지 않게 IDE 창 가운데에, 강조색 테두리를 둘러 띄운다. */
+  private static void showCentered(JBPopup popup, Project project) {
+    popup.getContent().setBorder(JBUI.Borders.customLine(JBUI.CurrentTheme.Focus.focusColor(), POPUP_BORDER));
+    popup.showCenteredInCurrentWindow(project);
+  }
+
   /** 보낼 곳. file 이 있으면 그 콘솔, 없으면 그 접속의 마지막 콘솔(없으면 새로), fresh 면 그 접속의 새 콘솔. */
   record Target(DbConfig config, VirtualFile file, boolean fresh) {
-    void append(Project project, String sql) {
+    /** sql 은 콘솔 「정렬」과 같은 SqlFormatter 로 정렬해 붙인다. 정렬에 실패하면 알리고 받은 그대로 붙인다. */
+    void append(Project project, String raw) {
+      String sql;
+      try {
+        sql = SqlFormatter.format(raw);
+      } catch (RuntimeException ex) {
+        Notify.warning(project, "SQL 정렬에 실패했습니다(" + ex + "). 정렬하지 않은 SQL 을 붙입니다.");
+        sql = raw;
+      }
       PropertiesComponent.getInstance(project).setValue(MyBatisRunDialog.CONNECTION_KEY, config.id);
       if (file != null) {
         ConsoleOpener.append(project, file, sql);
@@ -154,7 +175,7 @@ public final class LogActions {
       return;
     }
     items.add(NEW_CONSOLE);
-    JBPopupFactory.getInstance().createPopupChooserBuilder(items)
+    showCentered(JBPopupFactory.getInstance().createPopupChooserBuilder(items)
         .setTitle("보낼 콘솔")
         .setRenderer(com.intellij.ui.SimpleListCellRenderer.create("", v -> v instanceof VirtualFile f ? f.getNameWithoutExtension() : NEW_CONSOLE))
         .setItemChosenCallback(v -> {
@@ -166,8 +187,7 @@ public final class LogActions {
           if (c == null) Notify.error(project, "이 콘솔의 접속이 지워졌습니다: " + f.getName());
           else then.accept(new Target(c, f, false));
         })
-        .createPopup()
-        .showInBestPositionFor(editor);
+        .createPopup(), project);
   }
 
   private abstract static class LogAction extends AnAction {

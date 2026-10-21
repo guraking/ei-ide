@@ -9,7 +9,7 @@ import java.util.Set;
 
 /**
  * 콘솔 글을 문장으로 나눈다. 순수 자바(플랫폼 의존 없음).
- * 경계: 따옴표 · 주석 밖의 ; (문장에 포함), 빈 줄, / 만 있는 줄(문장에서 뺀다).
+ * 경계: 따옴표 · 주석 밖의 ; (문장에 포함), 괄호 밖의 빈 줄, / 만 있는 줄(문장에서 뺀다).
  * PL/SQL 블록(BEGIN · DECLARE · CREATE [OR REPLACE] PROCEDURE/FUNCTION/PACKAGE [BODY]/TRIGGER/TYPE BODY)은 빈 줄로 나누지 않고
  * 여는 쪽(BEGIN · CASE · DECLARE · 하위 프로그램 머리의 IS/AS)과 END 의 짝이 모두 맞은 뒤의 ; 에서만 끝난다.
  * 하위 프로그램(지역 함수 · 패키지 · 타입 메서드)의 IS/AS 가 연 겹은 그 BEGIN 이 이어받아 END 하나로 닫힌다.
@@ -48,7 +48,7 @@ public final class SqlSplitter {
       if (ch == '\n') {
         int lineStart = text.lastIndexOf('\n', i - 1) + 1;
         String line = text.substring(lineStart, i).strip();
-        if (line.equals("/") || (line.isEmpty() && !seg.block)) {
+        if (line.equals("/") || (line.isEmpty() && !seg.block && seg.depth == 0)) {
           seg.flush(text, out, lineStart);
           seg = new Seg();
         }
@@ -169,6 +169,8 @@ public final class SqlSplitter {
     boolean block;
     boolean decided;
     boolean dollar;
+    /** 닫히지 않은 ( 의 수. 괄호 안의 빈 줄은 문장 경계가 아니다. */
+    int depth;
     /** 블록 판정용 앞 낱말들. ; 는 ";" 로 들어간다. */
     final List<String> words = new ArrayList<>();
     /** 열린 겹: BEGIN · CASE · DECL. */
@@ -224,6 +226,8 @@ public final class SqlSplitter {
 
     /** 낱말이 아닌 글(; · 따옴표 · 기호). */
     void other(char ch) {
+      if (ch == '(') depth++;
+      if (ch == ')' && depth > 0) depth--;
       if (!block) return;
       if (pendingEnd) afterEnd(null);
       if (ch != '.') expectName = false;
