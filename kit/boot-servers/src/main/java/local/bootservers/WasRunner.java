@@ -10,6 +10,7 @@ import com.intellij.execution.RunnerAndConfigurationSettings;
 import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.execution.executors.DefaultDebugExecutor;
 import com.intellij.execution.process.CapturingProcessHandler;
+import com.intellij.execution.KillableProcess;
 import com.intellij.execution.process.KillableColoredProcessHandler;
 import com.intellij.execution.process.ProcessEvent;
 import com.intellij.execution.process.ProcessHandler;
@@ -87,7 +88,7 @@ public final class WasRunner {
     private static final String TITLE = "WAS";
     private static final String LISTENING = "Listening for transport dt_socket at address";
     // 정상 종료 명령이 먹히지 않을 때 프로세스를 강제로 끝내기까지 기다리는 시간.
-    private static final int STOP_GRACE_SECONDS = 15;
+    private static final int STOP_GRACE_SECONDS = 10;
     // JEUS 배포 명령 하나를 기다리는 한도. 비밀번호 입력 등을 기다리며 멈춘 명령이 작업 스레드를 붙잡지 않게 한다.
     private static final int DEPLOY_TIMEOUT_SECONDS = 180;
     // 비밀번호 저장소에서 이 플러그인의 항목을 구분하는 이름.
@@ -597,8 +598,9 @@ public final class WasRunner {
     }
 
     /**
-     * 정상 종료 명령(Tomcat: catalina stop, WildFly: 관리 포트로 :shutdown)을 보내고, 안 끝나면 강제로 끝낸다.
-     * WebLogic 의 stopWebLogic 은 관리자 계정을 물을 수 있어 쓰지 않고 바로 프로세스를 끝낸다.
+     * 정상 종료 명령(Tomcat: catalina stop, WildFly: 관리 포트로 :shutdown)을 보내고,
+     * 명령을 띄운 때부터 STOP_GRACE_SECONDS 안에 끝나지 않으면 강제로 끝낸다.
+     * WebLogic 의 stopWebLogic 은 관리자 계정을 물을 수 있어 쓰지 않고 바로 프로세스 종료를 요청한다.
      * JEUS 는 중지 명령 틀(기본: stopServer)을 쓴다.
      */
     void stop(WasSettings.Server server) {
@@ -607,14 +609,19 @@ public final class WasRunner {
             return;
         }
         ServerRegistry.getInstance(project).markStopped(registryKey(server));
-        if (server.kind() == WasSettings.Kind.WEBLOGIC) {
-            handler.destroyProcess();
-            return;
-        }
         AppExecutorUtil.getAppExecutorService().execute(() -> {
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(STOP_GRACE_SECONDS);
             try {
-                runDiscardingOutput(stopCommand(server));
-                handler.waitFor(TimeUnit.SECONDS.toMillis(STOP_GRACE_SECONDS));
+                if (server.kind() == WasSettings.Kind.WEBLOGIC) {
+                    handler.destroyProcess();
+                }
+                else {
+                    runDiscardingOutput(stopCommand(server));
+                }
+                long leftMillis = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime());
+                if (leftMillis > 0) {
+                    handler.waitFor(leftMillis);
+                }
             }
             catch (ExecutionException | IOException e) {
                 LOG.info("정상 종료 명령을 띄우지 못해 강제로 끝냅니다: " + e.getMessage());
@@ -624,6 +631,10 @@ public final class WasRunner {
             }
             if (!handler.isProcessTerminated()) {
                 handler.destroyProcess();
+                // destroyProcess 는 정상 종료 신호일 수 있으므로 프로세스 트리를 강제로 끝낸다.
+                if (handler instanceof KillableProcess killable && killable.canKillProcess()) {
+                    killable.killProcess();
+                }
             }
         });
     }
