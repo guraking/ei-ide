@@ -19,6 +19,7 @@ import ei.db.DbSettings;
 import ei.db.Notify;
 import ei.db.SqlRunner;
 import ei.db.console.ConsoleOpener;
+import ei.db.console.SqlFormatter;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -135,7 +136,15 @@ public final class LogActions {
 
   /** 보낼 곳. file 이 있으면 그 콘솔, 없으면 그 접속의 마지막 콘솔(없으면 새로), fresh 면 그 접속의 새 콘솔. */
   record Target(DbConfig config, VirtualFile file, boolean fresh) {
-    void append(Project project, String sql) {
+    /** sql 은 콘솔 「정렬」과 같은 SqlFormatter 로 정렬해 붙인다. 정렬에 실패하면 알리고 받은 그대로 붙인다. */
+    void append(Project project, String raw) {
+      String sql;
+      try {
+        sql = SqlFormatter.format(raw);
+      } catch (RuntimeException ex) {
+        Notify.warning(project, "SQL 정렬에 실패했습니다(" + ex + "). 정렬하지 않은 SQL 을 붙입니다.");
+        sql = raw;
+      }
       PropertiesComponent.getInstance(project).setValue(MyBatisRunDialog.CONNECTION_KEY, config.id);
       if (file != null) {
         ConsoleOpener.append(project, file, sql);
