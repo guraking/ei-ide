@@ -20,6 +20,7 @@ import java.util.regex.Pattern;
 
 /**
  * 콘솔에 찍힌 MyBatis 로그(==&gt;  Preparing: … / ==&gt; Parameters: …)를 실행 가능한 SQL 로 바꾼다.
+ * log4jdbc 의 sqltiming 로그도 parseAll 이 읽는다(sqlTiming).
  * Preparing 은 마지막 것을 쓰고, Parameters 는 그 뒤에서 같은 스레드([…])의 첫 줄을 쓴다(스레드가 안 보이면 바로 다음 것).
  */
 public final class MyBatisLog {
@@ -29,6 +30,11 @@ public final class MyBatisLog {
   /** value(Type) 의 끝: 닫는 괄호 뒤에 ", " 또는 줄 끝이 와야 한다. */
   private static final Pattern TYPE_END = Pattern.compile("\\(([A-Za-z_$][\\w.$]*)\\)(?=, |$)");
   private static final Pattern THREAD = Pattern.compile("\\[([^\\]]+)]");
+  /** log4jdbc 로거 이름 끝(jdbc.sqltiming · j.sqltiming)과 SQL 끝의 실행 시간 표시. */
+  private static final String SQL_TIMING = "sqltiming";
+  private static final Pattern EXECUTED = Pattern.compile("\\{executed in \\d+ msec}\\s*$");
+  /** sqltiming 뒤의 구분자와 연결 번호. */
+  private static final Pattern TIMING_HEAD = Pattern.compile("^\\s*[:\\-]?\\s*(\\d+\\.\\s+)?");
   private static final String JAVA_DATE_FORMAT = "EEE MMM dd HH:mm:ss zzz yyyy";
   private static final int MAX_INCLUDE_DEPTH = 16;
   private static final Set<String> SQL_WORDS = Set.of("AND", "OR", "NOT", "IN", "LIKE", "BETWEEN", "IS", "VALUES",
@@ -43,7 +49,7 @@ public final class MyBatisLog {
     public String logger;
     /** Parameters 줄을 찾았는지. ? 가 없는 문장이면 없어도 된다. */
     public boolean hasParameters;
-    /** Preparing 이 있던 줄 번호(0부터). parseAll 이 채우고, 그 밖에는 -1. */
+    /** Preparing(또는 sqltiming 머리) 줄 번호(0부터). parseAll 이 채우고, 그 밖에는 -1. */
     public int line = -1;
 
     public String runnableSql() { return SqlValues.inline(sql, values); }
@@ -102,19 +108,45 @@ public final class MyBatisLog {
     return e;
   }
 
-  /** 마지막 Preparing 부터 위로 최대 max 개를 줄 순서대로 읽는다. 각 Parameters 는 parse 와 같은 규칙으로 찾는다. */
+  /**
+   * 마지막 쿼리부터 위로 최대 max 개를 줄 순서대로 읽는다. 각 Parameters 는 parse 와 같은 규칙으로 찾는다.
+   * log4jdbc 의 jdbc.sqltiming 로그(머리 줄부터 {executed in N msec} 줄까지, 값이 이미 채워진 SQL)도 쿼리 하나로 읽는다.
+   */
   public static List<Entry> parseAll(List<String> lines, int max) {
-    List<Integer> found = new ArrayList<>();
-    for (int k = lines.size() - 1; k >= 0 && found.size() < max; k--) {
-      if (isLine(lines.get(k), PREPARING)) found.add(0, k);
-    }
     List<Entry> out = new ArrayList<>();
-    for (int k : found) {
-      Entry e = parse(lines, k);
-      e.line = k;
-      out.add(e);
+    for (int k = lines.size() - 1; k >= 0 && out.size() < max; k--) {
+      Entry e = isLine(lines.get(k), PREPARING) ? parse(lines, k) : sqlTiming(lines, k);
+      if (e == null) continue;
+      if (e.line < 0) e.line = k;
+      k = e.line;
+      out.add(0, e);
     }
     return out;
+  }
+
+  /**
+   * lines[end] 가 {executed in N msec} 로 끝나면, 그 위로 가장 가까운 sqltiming 머리 줄부터 end 까지의 SQL.
+   * 머리 줄의 로거 뒤 「 : 」 · 「 - 」 와 log4jdbc 의 연결 번호(「1. 」)는 뗀다. 아니면 null.
+   */
+  static Entry sqlTiming(List<String> lines, int end) {
+    Matcher m = EXECUTED.matcher(lines.get(end));
+    if (!m.find()) return null;
+    int head = end;
+    while (head >= 0 && lines.get(head).indexOf(SQL_TIMING) < 0) head--;
+    if (head < 0) return null;
+    StringBuilder sql = new StringBuilder();
+    for (int k = head; k <= end; k++) {
+      String l = lines.get(k);
+      if (k == end) l = l.substring(0, m.start());
+      if (k == head) l = TIMING_HEAD.matcher(l.substring(l.indexOf(SQL_TIMING) + SQL_TIMING.length())).replaceFirst("");
+      sql.append(l).append('\n');
+    }
+    String text = sql.toString().strip();
+    if (text.isEmpty()) return null;
+    Entry e = new Entry();
+    e.sql = text;
+    e.line = head;
+    return e;
   }
 
   private static boolean sameSource(Entry e, String thread, String line) {

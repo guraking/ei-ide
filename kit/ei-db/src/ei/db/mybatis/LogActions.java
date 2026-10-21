@@ -66,7 +66,11 @@ public final class LogActions {
     CharSequence text = doc.getImmutableCharSequence();
     List<String> lines = new ArrayList<>();
     for (int k = from; k <= to; k++) lines.add(text.subSequence(doc.getLineStartOffset(k), doc.getLineEndOffset(k)).toString());
-    return MyBatisLog.parse(lines, caretLine - from);
+    MyBatisLog.Entry entry = MyBatisLog.parse(lines, caretLine - from);
+    if (entry != null) return entry;
+    // MyBatis 로그가 없으면 log4jdbc sqltiming 로그(값이 채워진 SQL)를 찾는다.
+    List<MyBatisLog.Entry> timing = MyBatisLog.parseAll(lines, 1);
+    return timing.isEmpty() ? null : timing.get(0);
   }
 
   /** 마지막에 쓴 접속을 앞에 둔 목록. */
