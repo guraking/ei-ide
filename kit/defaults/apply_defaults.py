@@ -16,6 +16,7 @@
   19) SVN 실행 파일 기본 경로를 설치본에 같이 넣은 svn.exe(plugins/kinggura-sync/svn/bin)로 한다.
   20) 콘솔에 남기는 글 양(cycle buffer)을 기본 1 MB 에서 30 MB 로 늘린다.
   21) 프로젝트 창에서 바뀐 파일 · 새 파일이 든 폴더 · 패키지 이름도 그 색으로 보인다.
+  22) 첫 실행 기본 어두운 테마를 EI Glass(boot-servers 플러그인)로 한다.
 고치기 전 원본은 <intellij-community>/../backup/<시각>-before/ 에 같은 상대경로로 남긴다.
 모든 원문을 먼저 찾아 본 뒤에 쓴다. 하나라도 못 찾으면 아무 파일도 바꾸지 않는다. 줄끝(LF · CRLF)은 파일마다 원래대로 둔다.
 두 번 실행해도 같은 결과가 된다.
@@ -202,6 +203,13 @@ EDITS = [
     ("platform/vcs-api/shared/src/com/intellij/openapi/vcs/VcsConfiguration.java",
      "public boolean SHOW_DIRTY_RECURSIVELY = false;",
      "public boolean SHOW_DIRTY_RECURSIVELY = true;"),
+    # 22) 새 UI 의 기본 어두운 테마는 제품 정보의 default-laf dark 값이다(없으면 Islands Dark). EI Glass 는 boot-servers 의
+    #     themeProvider 로 들어온다. 그 테마를 못 찾으면 IDE 가 오류를 남기고 Islands Dark 로 연다.
+    #     이미 고른 테마가 laf.xml 에 남아 있는 설정 폴더는 그 테마를 따른다.
+    ("community-resources/resources/idea/IdeaApplicationInfo.xml",
+     '  <icon-eap svg="/idea-ce-eap.svg" svg-small="/idea-ce-eap_16.svg"/>\n',
+     '  <icon-eap svg="/idea-ce-eap.svg" svg-small="/idea-ce-eap_16.svg"/>\n'
+     '  <default-laf dark="EI Glass"/>\n'),
 ]
 
 

@@ -1,0 +1,44 @@
+{
+  "name": "EI Glass",
+  "dark": true,
+  "author": "EI IDE",
+  "parentTheme": "Islands Dark",
+  "editorScheme": "EI Glass",
+
+  "colors": {
+    "glass-bg": "#161618",
+    "glass-island": "#1E1E22",
+    "glass-island-inline": "#232327",
+    "glass-island-border": "#2C2C31",
+    "glass-popup": "#26262A",
+    "glass-popup-border": "#38383E",
+    "glass-raised": "#303035",
+    "glass-raised-border": "#404046",
+    "glass-accent": "#FF375F",
+    "glass-accent-soft": "#FF6482",
+    "glass-accent-30": "#5D2533",
+    "glass-accent-20": "#46222D",
+    "glass-accent-40": "#73293C",
+
+    "layer-0-bg": "glass-island",
+    "layer-0-bg-inline": "glass-island-inline",
+    "layer-0-border": "glass-island-border",
+    "layer-0-border-inline": "glass-island-border",
+    "layer-1-bg": "glass-popup",
+    "layer-1-border": "glass-popup-border",
+    "layer-1-bg-inline": "glass-raised",
+    "layer-1-border-inline": "glass-raised-border",
+    "layer-2-bg": "glass-raised",
+    "layer-2-border": "glass-raised-border",
+    "main-window-bg": "glass-bg",
+
+    "control-brand-border": "glass-accent",
+    "selection-bg-active": "glass-accent-30",
+    "selection-bg-active-muted": "glass-accent-20",
+    "toolbar-selected-bg": "glass-accent-30",
+    "toolbar-selected-bg-hovered": "glass-accent-40",
+    "tab-selected-bg-active": "#FFFFFF17",
+    "tab-selected-border-active": "glass-accent",
+    "popup-completion-match-text": "glass-accent-soft"
+  }
+}
