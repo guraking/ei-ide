@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <style>
 /* 배치: 머리 → 위 목차(고정) → 설치 → 기본값 → 서버 창 → Synchronize → 데이터베이스 → 단축키 → 빌드 */
 :root{
@@ -231,6 +232,56 @@ footer{padding:56px 0 40px; color:var(--muted); font-size:13px}
   table.keys td.where{display:none}
   table.keys th.where{display:none}
 }
+/* 유리 디자인: GPM 로드맵 유리 시안의 색 · 모양을 따른다. 위 규칙의 색 변수와 겉모양만 덮고 배치는 그대로 둔다.
+   어둡게 = 잿빛 바탕 + 반투명 판(시안 기본 Ash), 밝게 = 같은 모양의 흰 유리. 흐림은 위에 겹치는 목차 · 메뉴에만 준다(긴 쪽에서 스크롤이 느려지지 않게). */
+:root{
+  --wall:radial-gradient(60% 50% at 85% 0%,#ffe3ea,transparent 70%),radial-gradient(55% 45% at 0% 35%,#e3ecff,transparent 70%),#f2f2f5;
+  --bg:#f2f2f5; --panel:rgba(255,255,255,.72); --panel-2:rgba(0,0,0,.045); --line:rgba(0,0,0,.09); --fg:#1d1d1f; --muted:#5f5f66;
+  --accent:#d70f45; --accent-soft:rgba(255,55,95,.12); --ok:#1f7a36; --ok-soft:rgba(48,209,88,.14); --info:#0062c4; --info-soft:rgba(10,132,255,.11);
+  --warn:#a14a00; --warn-soft:rgba(255,159,10,.15);
+  --ide:rgba(255,255,255,.8); --ide-bar:rgba(0,0,0,.04); --sel:rgba(10,132,255,.14);
+  --shadow:0 1px 0 rgba(255,255,255,.7) inset,0 12px 30px -12px rgba(30,30,40,.22);
+  --blur:blur(22px) saturate(1.6);
+  --f-body:"Pretendard","IBM Plex Sans KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --wall:radial-gradient(70% 60% at 80% 0%,#2a2a2e,transparent 70%),radial-gradient(45% 40% at 50% 45%,rgba(255,55,95,.07),transparent 70%),#161618;
+  --bg:#161618; --panel:rgba(30,30,34,.62); --panel-2:rgba(255,255,255,.06); --line:rgba(255,255,255,.09); --fg:#f5f5f7; --muted:#9a9aa1;
+  --accent:#ff375f; --accent-soft:rgba(255,55,95,.16); --ok:#5fe08a; --ok-soft:rgba(48,209,88,.16); --info:#5eb1ff; --info-soft:rgba(10,132,255,.18);
+  --warn:#ffb340; --warn-soft:rgba(255,159,10,.16);
+  --ide:rgba(28,28,31,.78); --ide-bar:rgba(255,255,255,.05); --sel:rgba(10,132,255,.24);
+  --shadow:0 1px 0 rgba(255,255,255,.06) inset,0 12px 30px -10px rgba(0,0,0,.6) }}
+:root[data-theme="dark"]{
+  --wall:radial-gradient(70% 60% at 80% 0%,#2a2a2e,transparent 70%),radial-gradient(45% 40% at 50% 45%,rgba(255,55,95,.07),transparent 70%),#161618;
+  --bg:#161618; --panel:rgba(30,30,34,.62); --panel-2:rgba(255,255,255,.06); --line:rgba(255,255,255,.09); --fg:#f5f5f7; --muted:#9a9aa1;
+  --accent:#ff375f; --accent-soft:rgba(255,55,95,.16); --ok:#5fe08a; --ok-soft:rgba(48,209,88,.16); --info:#5eb1ff; --info-soft:rgba(10,132,255,.18);
+  --warn:#ffb340; --warn-soft:rgba(255,159,10,.16);
+  --ide:rgba(28,28,31,.78); --ide-bar:rgba(255,255,255,.05); --sel:rgba(10,132,255,.24);
+  --shadow:0 1px 0 rgba(255,255,255,.06) inset,0 12px 30px -10px rgba(0,0,0,.6) }
+html{scroll-padding-top:80px}
+body{background:var(--wall); background-attachment:fixed}
+header.top h1{font-weight:800; letter-spacing:-.02em}
+section > .wrap > h2{font-weight:800; letter-spacing:-.02em}
+h2 .no{display:inline-flex; align-items:center; gap:7px; font-size:.5em; color:var(--muted)}
+h2 .no::before{content:""; width:9px; height:9px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 3px var(--accent-soft)}
+.chip,#theme,.btn,.combo{border-radius:999px}
+.chip{background:var(--panel); border-color:var(--line)}
+nav.toc{top:10px; margin:0 auto; max-width:1180px; background:transparent; border:0; backdrop-filter:none}
+nav.toc .wrap{height:48px; margin:0 16px; padding:0 6px; border:1px solid var(--line); border-radius:999px; background:var(--panel); -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur); box-shadow:var(--shadow)}
+nav.toc a{border-radius:999px; padding:5px 12px}
+nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
+#theme{background:var(--panel-2); border-color:transparent}
+.step,.tree,.scroll,.ide,.dialog,table.keys,pre.cmd,.ba .side{border-radius:22px}
+.step{box-shadow:var(--shadow)}
+.card,.flow .box{border-radius:18px; box-shadow:var(--shadow)}
+.step .file,code,kbd{border-radius:8px}
+.note,.note.warn,.note.ok{border:0; border-radius:16px; box-shadow:0 0 0 1px var(--line) inset}
+.note b::before{content:""; display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:7px; vertical-align:1px; background:var(--info)}
+.note.warn b::before{background:var(--warn)} .note.ok b::before{background:var(--ok)}
+.balloon{border-left:1px solid var(--line); border-radius:16px}
+.menu{border-radius:14px; -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur)}
+.ide .title{background:transparent}
+.tag{border-radius:999px; padding:0 7px}
 </style>
 </head>
 <body>
