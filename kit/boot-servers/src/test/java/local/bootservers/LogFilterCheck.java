@@ -36,6 +36,7 @@ public final class LogFilterCheck {
         stackLine();
         grouping();
         query();
+        resume();
         System.out.println("LogFilterCheck 통과");
     }
 
@@ -85,6 +86,28 @@ public final class LogFilterCheck {
             throw new AssertionError("잘못된 정규식이 통과함");
         } catch (PatternSyntaxException expected) {
             // 창이 이 예외를 받아 상태 줄에 알린다.
+        }
+    }
+
+    /** 글을 어디서 잘라 앞부분을 거른 뒤 이어 거르든, 전체를 한 번에 거른 것과 같아야 한다. */
+    private static void resume() {
+        List<Set<Level>> levelSets = List.of(ALL, EnumSet.of(Level.ERROR), EnumSet.of(Level.INFO));
+        List<String> queries = List.of("", "tb_a", "ioexception");
+        for (Set<Level> levels : levelSets) {
+            for (String query : queries) {
+                List<LogFilter.Line> whole = LogFilter.filter(LOG, levels, query, false);
+                for (int cut = 0; cut <= LOG.length(); cut++) {
+                    LogFilter.Result first = LogFilter.filterFrom(LOG.substring(0, cut), LogFilter.Resume.START, levels, query, false);
+                    List<LogFilter.Line> joined = new ArrayList<>();
+                    for (LogFilter.Line l : first.lines()) {
+                        if (l.number() < first.resume().line()) {
+                            joined.add(l);
+                        }
+                    }
+                    joined.addAll(LogFilter.filterFrom(LOG, first.resume(), levels, query, false).lines());
+                    eq(whole, joined, "이어 거르기 levels=" + levels + " query=" + query + " cut=" + cut);
+                }
+            }
         }
     }
 

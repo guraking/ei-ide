@@ -11,7 +11,12 @@ import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.vcs.ProjectLevelVcsManager;
 import com.intellij.openapi.vcs.VcsRoot;
 import com.intellij.openapi.vcs.changes.VcsDirtyScopeManager;
+import com.intellij.openapi.vcs.FilePath;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.openapi.wm.ToolWindow;
+import com.intellij.openapi.wm.ToolWindowManager;
+import com.intellij.ui.content.Content;
+import com.intellij.vcsUtil.VcsUtil;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
@@ -67,7 +72,15 @@ public class AssumeUnchangedAction extends AnAction implements DumbAware {
       }
       String m = message;
       ApplicationManager.getApplication().invokeLater(() -> {
-        VcsDirtyScopeManager.getInstance(project).markEverythingDirty();
+        // 변경 목록은 바꾼 파일만 다시 읽는다. 동기화 창은 변경 목록 알림으로는 모른 척 목록을 다시 읽지 않으므로 따로 부른다.
+        List<FilePath> touched = new ArrayList<>();
+        for (Map.Entry<File, List<String>> entry : byRoot.entrySet()) {
+          for (String rel : entry.getValue()) touched.add(VcsUtil.getFilePath(new File(entry.getKey(), rel), false));
+        }
+        VcsDirtyScopeManager.getInstance(project).filePathsDirty(touched, List.of());
+        ToolWindow window = ToolWindowManager.getInstance(project).getToolWindow(SyncToolWindowFactory.ID);
+        Content content = window == null ? null : window.getContentManager().getContent(0);
+        if (content != null && content.getComponent() instanceof SyncPanel panel) panel.recompareAssumed();
         Messages.showInfoMessage(project, m, on() ? "Assume Unchanged" : "No Assume Unchanged");
       });
     });

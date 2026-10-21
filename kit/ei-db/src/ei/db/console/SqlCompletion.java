@@ -27,7 +27,8 @@ public final class SqlCompletion extends CompletionContributor {
   @Override
   public void fillCompletionVariants(@NotNull CompletionParameters parameters, @NotNull CompletionResultSet result) {
     VirtualFile file = parameters.getOriginalFile().getVirtualFile();
-    DbConfig c = file == null ? null : ConsoleOpener.config(file);
+    if (file == null || file.getUserData(ConsoleOpener.CONFIG_ID) == null) return;
+    DbConfig c = ConsoleOpener.config(file);
     if (c == null) return;
     Project project = parameters.getPosition().getProject();
     String text = parameters.getEditor().getDocument().getCharsSequence().toString();

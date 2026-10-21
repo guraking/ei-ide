@@ -13,7 +13,9 @@ import com.intellij.psi.PsiFile;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +25,9 @@ import java.util.Map;
  * 클래스를 찾지 못하거나 Map · 기본형 · parameterType 없음이면 그 문장은 검사하지 않는다.
  */
 public final class ParamFieldAnnotator extends ExternalAnnotator<PsiFile, List<MapperParams.Miss>> {
+  /** 찾지 못한 형식 표시. 같은 인스턴스인지로만 가린다. */
+  private static final Collection<String> UNRESOLVED = Collections.unmodifiableList(new ArrayList<>());
+
   @Override
   public @Nullable PsiFile collectInformation(@NotNull PsiFile file) {
     return StringUtil.contains(file.getViewProvider().getContents(), "<mapper") ? file : null;
@@ -47,15 +52,17 @@ public final class ParamFieldAnnotator extends ExternalAnnotator<PsiFile, List<M
   private static List<MapperParams.Miss> check(PsiFile file) {
     Project project = file.getProject();
     Map<String, Collection<String>> props = new HashMap<>();
-    return MapperParams.check(file.getText(), type -> propertiesOf(project, type, props));
+    // 외부 주석기는 커밋된 문서에서 돌므로 파일 글과 MapperDocs 가 읽은 글이 같다.
+    return MapperParams.check(file.getViewProvider().getContents(), MapperDocs.of(file), type -> propertiesOf(project, type, props));
   }
 
-  /** 검사할 문장마다 한 번 불리므로 여기서 취소를 확인한다. 찾지 못한 형식은 담지 않아 문장마다 다시 찾는다. */
+  /** 검사할 문장마다 한 번 불리므로 여기서 취소를 확인한다. 찾지 못한 형식은 UNRESOLVED 로 담아 한 번만 찾는다. */
   private static Collection<String> propertiesOf(Project project, String type, Map<String, Collection<String>> cache) {
     ProgressManager.checkCanceled();
-    return cache.computeIfAbsent(type, t -> {
+    Collection<String> props = cache.computeIfAbsent(type, t -> {
       PsiClass c = DtoFields.find(project, t);
-      return c == null ? null : DtoFields.properties(c);
+      return c == null ? UNRESOLVED : DtoFields.properties(c);
     });
+    return props == UNRESOLVED ? null : props;
   }
 }

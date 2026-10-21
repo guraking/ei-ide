@@ -6,6 +6,7 @@ import com.intellij.notification.NotificationType;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.Document;
@@ -178,8 +179,16 @@ public final class AiActions {
         return new Snippet(text, doc.getLineNumber(start) + 1, doc.getLineNumber(last) + 1);
     }
 
-    /** 프롬프트 파일을 만들고 터미널 새 탭에서 Claude Code 를 시작한다. 프롬프트 글은 기록에 남기지 않는다. */
+    /**
+     * 프롬프트 파일을 만들고 터미널 새 탭에서 Claude Code 를 시작한다. 프롬프트 글은 기록에 남기지 않는다.
+     * PATH 확인 · 파일 쓰기는 풀 스레드에서, 터미널 탭은 화면 스레드에서 연다.
+     */
     private static void start(Project project, String prompt) {
+        ApplicationManager.getApplication().executeOnPooledThread(() -> writePromptAndOpen(project, prompt));
+    }
+
+    /** 풀 스레드에서 부른다. 시작할 수 없으면 알림만 띄운다. */
+    private static void writePromptAndOpen(Project project, String prompt) {
         if (!AiText.claudeOnPath(System.getenv("PATH"), File.pathSeparator)) {
             notify(project, "Claude Code 를 찾지 못했습니다",
                     "PATH 에 claude 가 없습니다. Claude Code 를 설치한 뒤 IDE 를 다시 시작하세요.", NotificationType.WARNING);
@@ -198,6 +207,11 @@ public final class AiActions {
             notify(project, "Claude Code 를 시작하지 못했습니다", ex.getMessage(), NotificationType.ERROR);
             return;
         }
+        ApplicationManager.getApplication().invokeLater(() -> openTerminal(project, command), project.getDisposed());
+    }
+
+    /** 터미널 새 탭을 열고 command 를 실행한다. 화면 스레드에서 부른다. */
+    private static void openTerminal(Project project, String command) {
         TerminalToolWindowTabsManager.getInstance(project).createTabBuilder()
                 .workingDirectory(project.getBasePath())
                 .tabName(TAB_NAME)

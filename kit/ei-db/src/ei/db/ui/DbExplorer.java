@@ -31,6 +31,7 @@ import com.intellij.ui.SearchTextField;
 import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.treeStructure.Tree;
+import com.intellij.util.Alarm;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
@@ -103,6 +104,8 @@ final class DbExplorer extends SimpleToolWindowPanel {
   private static final Color KEY_TAG = JBColor.namedColor("EiDatabase.keyTag", new JBColor(0xB07400, 0xE0A64F));
   private static final int DOT_SIZE = 8;
   private static final int DOT_BOX = 16;
+  /** 찾기 칸 입력이 이만큼 멈춘 뒤에 나무를 다시 거른다(글자마다 전체를 다시 그리지 않게). */
+  private static final int FILTER_DELAY_MS = 200;
 
   private record Conn(DbConfig c) {}
   private record Schema(DbConfig c, String name) {}
@@ -128,6 +131,7 @@ final class DbExplorer extends SimpleToolWindowPanel {
   private final DefaultTreeModel model = new DefaultTreeModel(root);
   private final Tree tree = new Tree(model);
   private final SearchTextField search = new SearchTextField(false);
+  private final Alarm filterAlarm;
   private final Set<DefaultMutableTreeNode> loading = Collections.newSetFromMap(new IdentityHashMap<>());
   private final ExecutorService metaQueue = AppExecutorUtil.createBoundedApplicationPoolExecutor("EI Database 탐색기", 1);
 
@@ -172,8 +176,12 @@ final class DbExplorer extends SimpleToolWindowPanel {
     });
 
     search.getTextEditor().getEmptyText().setText("표 · 칼럼 찾기");
+    filterAlarm = new Alarm(Alarm.ThreadToUse.SWING_THREAD, parent);
     search.addDocumentListener(new DocumentAdapter() {
-      @Override protected void textChanged(@NotNull DocumentEvent e) { applyFilter(); }
+      @Override protected void textChanged(@NotNull DocumentEvent e) {
+        filterAlarm.cancelAllRequests();
+        filterAlarm.addRequest(DbExplorer.this::applyFilter, FILTER_DELAY_MS);
+      }
     });
 
     DefaultActionGroup bar = new DefaultActionGroup();

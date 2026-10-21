@@ -42,7 +42,7 @@ public final class LayerCodeAction extends AnAction {
       CharSequence text = editor.getDocument().getCharsSequence();
       int offset = editor.getCaretModel().getOffset();
       if (StringUtil.contains(text, "<mapper")) {
-        ok = MapperDoc.parse(text).statementAt(offset) != null;
+        ok = MapperDocs.of(project, editor).statementAt(offset) != null;
       } else if (!DumbService.isDumb(project)) {
         PsiMethod m = mapperMethodAt(e.getData(CommonDataKeys.PSI_FILE), offset);
         ok = m != null && hasStatement(project, m);

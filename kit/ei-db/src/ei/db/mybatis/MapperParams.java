@@ -57,8 +57,13 @@ final class MapperParams {
    * 문서 전체를 검사한다. propsOfType 은 형식 이름 → 필드 · 속성 이름들(찾지 못하면 null, 그 문장은 건너뛴다).
    */
   static List<Miss> check(CharSequence text, Function<String, Collection<String>> propsOfType) {
+    return check(text, MapperDoc.parse(text), propsOfType);
+  }
+
+  /** 이미 읽은 doc 으로 검사한다. doc 은 text 를 읽은 것이어야 한다. */
+  static List<Miss> check(CharSequence text, MapperDoc doc, Function<String, Collection<String>> propsOfType) {
     List<Miss> out = new ArrayList<>();
-    for (Node s : MapperDoc.parse(text).statements) {
+    for (Node s : doc.statements) {
       String type = checkedType(s);
       if (type == null) continue;
       Collection<String> props = propsOfType.apply(type);

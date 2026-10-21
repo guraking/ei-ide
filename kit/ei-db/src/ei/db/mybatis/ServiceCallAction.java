@@ -32,7 +32,7 @@ public final class ServiceCallAction extends AnAction {
     boolean ok = false;
     if (editor != null && e.getProject() != null) {
       CharSequence text = editor.getDocument().getCharsSequence();
-      ok = StringUtil.contains(text, MAPPER_MARK) && MapperDoc.parse(text).statementAt(editor.getCaretModel().getOffset()) != null;
+      ok = StringUtil.contains(text, MAPPER_MARK) && MapperDocs.of(e.getProject(), editor).statementAt(editor.getCaretModel().getOffset()) != null;
     }
     e.getPresentation().setEnabledAndVisible(ok);
   }

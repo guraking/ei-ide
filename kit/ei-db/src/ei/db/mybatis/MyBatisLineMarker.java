@@ -5,7 +5,6 @@ import com.intellij.codeInsight.daemon.LineMarkerProvider;
 import com.intellij.icons.AllIcons;
 import com.intellij.lang.ASTNode;
 import com.intellij.openapi.editor.markup.GutterIconRenderer;
-import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import org.jetbrains.annotations.NotNull;
@@ -34,7 +33,7 @@ public final class MyBatisLineMarker implements LineMarkerProvider {
     PsiElement prev = element.getPrevSibling();
     if (prev == null || !"XML_START_TAG_START".equals(typeName(prev))) return false;
     PsiFile file = element.getContainingFile();
-    return file != null && StringUtil.contains(file.getViewProvider().getContents(), "<mapper");
+    return file != null && MapperDocs.isMapper(file);
   }
 
   private static String typeName(PsiElement e) {

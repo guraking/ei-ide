@@ -6,6 +6,7 @@ import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.editor.ScrollType;
 import com.intellij.openapi.editor.colors.EditorFontType;
+import com.intellij.openapi.editor.event.DocumentListener;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.ui.CollectionListModel;
@@ -34,6 +35,7 @@ import java.awt.Color;
 import java.awt.FlowLayout;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.List;
@@ -45,6 +47,7 @@ import java.util.regex.PatternSyntaxException;
  * 콘솔 한 개의 글을 레벨 · 검색어로 거른 줄 목록을 보이는 비모달 창.
  * 거르기는 풀 스레드에서 하고, 한 번에 하나만 돈다(도는 중에 조건이 바뀌면 끝난 뒤 한 번 더 돈다).
  * 「따라가기」 가 켜져 있으면 FOLLOW_INTERVAL_MS 마다 콘솔 글이 바뀌었는지 보고 다시 거른다.
+ * 지난 거르기 뒤 콘솔 글이 끝에 붙기만 했으면 마지막 묶음부터만 거르고, 앞이 잘리거나 지워졌거나 조건이 바뀌면 전체를 거른다.
  */
 final class LogFilterDialog extends DialogWrapper {
 
@@ -69,6 +72,13 @@ final class LogFilterDialog extends DialogWrapper {
     private long shownStamp = -1;
     private boolean running;
     private boolean pending;
+    // 기다리는 거르기 가운데 전체 거르기(조건 변경)가 있었는지.
+    private boolean pendingFull;
+    // 지금 보이는 거른 줄과 그 다음 이어 거르기 지점. 이어 걸러도 되지 않는 상태면 resume 이 null.
+    private List<LogFilter.Line> shownLines = List.of();
+    private LogFilter.Resume resume;
+    // 마지막으로 글을 떠 온 뒤 콘솔 글이 끝에 붙기만 했는지. 화면 스레드에서만 읽고 쓴다.
+    private boolean appendedOnly;
 
     LogFilterDialog(Project project, Editor editor) {
         super(project, false);
@@ -77,6 +87,14 @@ final class LogFilterDialog extends DialogWrapper {
         setTitle("로그 거르기");
         getCancelAction().putValue(Action.NAME, "닫기");
         timer = new Timer(FOLLOW_INTERVAL_MS, e -> followTick());
+        editor.getDocument().addDocumentListener(new DocumentListener() {
+            @Override
+            public void documentChanged(@NotNull com.intellij.openapi.editor.event.DocumentEvent event) {
+                if (event.getOldLength() != 0 || event.getOffset() + event.getNewLength() != event.getDocument().getTextLength()) {
+                    appendedOnly = false;
+                }
+            }
+        }, getDisposable());
         init();
         refresh();
         timer.start();
@@ -153,12 +171,17 @@ final class LogFilterDialog extends DialogWrapper {
 
     private void followTick() {
         if (followBox.isSelected() && !editor.isDisposed() && editor.getDocument().getModificationStamp() != shownStamp) {
-            refresh();
+            refresh(true);
         }
     }
 
-    /** 지금 조건으로 다시 거른다. 화면 스레드에서 부른다. */
+    /** 지금 조건으로 전체를 다시 거른다. 화면 스레드에서 부른다. */
     private void refresh() {
+        refresh(false);
+    }
+
+    /** tail 이 참이면 콘솔 글이 끝에 붙기만 했을 때 마지막 묶음부터만 거른다. 화면 스레드에서 부른다. */
+    private void refresh(boolean tail) {
         if (editor.isDisposed()) {
             status.setText("콘솔이 닫혔습니다");
             timer.stop();
@@ -166,42 +189,58 @@ final class LogFilterDialog extends DialogWrapper {
         }
         if (running) {
             pending = true;
+            pendingFull |= !tail;
             return;
         }
         running = true;
+        boolean full = !tail || pendingFull;
         pending = false;
+        pendingFull = false;
         Document doc = editor.getDocument();
         long stamp = doc.getModificationStamp();
         CharSequence text = doc.getImmutableCharSequence();
+        LogFilter.Resume from = !full && appendedOnly && resume != null ? resume : LogFilter.Resume.START;
+        List<LogFilter.Line> head = new ArrayList<>();
+        for (LogFilter.Line line : shownLines) {
+            if (line.number() < from.line()) {
+                head.add(line);
+            }
+        }
+        appendedOnly = true;
         Set<LogFilter.Level> levels = selectedLevels();
         String query = queryField.getText();
         boolean regex = regexBox.isSelected();
-        ApplicationManager.getApplication().executeOnPooledThread(() -> filterInBackground(text, levels, query, regex, stamp));
+        ApplicationManager.getApplication().executeOnPooledThread(() -> filterInBackground(text, from, head, levels, query, regex, stamp));
     }
 
-    private void filterInBackground(CharSequence text, Set<LogFilter.Level> levels, String query, boolean regex, long stamp) {
-        List<LogFilter.Line> lines = null;
+    /** head(from 앞의 거른 줄) 뒤에 from 부터 거른 줄을 잇는다. */
+    private void filterInBackground(CharSequence text, LogFilter.Resume from, List<LogFilter.Line> head,
+                                    Set<LogFilter.Level> levels, String query, boolean regex, long stamp) {
+        LogFilter.Result result = null;
         String error = null;
         try {
-            lines = LogFilter.filter(text, levels, query, regex);
+            result = LogFilter.filterFrom(text, from, levels, query, regex);
+            head.addAll(result.lines());
         } catch (PatternSyntaxException ex) {
             error = "정규식이 잘못되었습니다: " + ex.getDescription();
         }
-        List<LogFilter.Line> result = lines;
+        LogFilter.Resume next = result == null ? null : result.resume();
         String message = error;
-        ApplicationManager.getApplication().invokeLater(() -> applyResult(result, message, stamp), ModalityState.any());
+        ApplicationManager.getApplication().invokeLater(() -> applyResult(head, next, message, stamp), ModalityState.any());
     }
 
-    private void applyResult(List<LogFilter.Line> lines, String error, long stamp) {
+    private void applyResult(List<LogFilter.Line> lines, LogFilter.Resume next, String error, long stamp) {
         running = false;
         if (isDisposed()) {
             return;
         }
         shownStamp = stamp;
+        resume = next;
         if (error != null) {
             status.setText(error);
             status.setForeground(ERROR_COLOR);
         } else {
+            shownLines = lines;
             status.setText("맞는 줄 " + lines.size() + "개");
             status.setForeground(JBColor.foreground());
             list.setModel(new CollectionListModel<>(lines));
@@ -210,7 +249,7 @@ final class LogFilterDialog extends DialogWrapper {
             }
         }
         if (pending) {
-            refresh();
+            refresh(true);
         }
     }
 

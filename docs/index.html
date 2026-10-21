@@ -280,7 +280,7 @@ footer{padding:56px 0 40px; color:var(--muted); font-size:13px}
         <div class="n">1</div>
         <h4>설치 파일 실행</h4>
         <p>서버 창 · Synchronize · 데이터베이스 · Lombok · SVN 은 본체에 들어 있습니다.</p>
-        <p>Full Line · Rainbow Brackets Lite · POJO to JSON · Grep Console · JPA Buddy 도 본체에 들어 있습니다.</p>
+        <p>Full Line · Rainbow Brackets Lite · POJO to JSON · Grep Console 도 본체에 들어 있습니다.</p>
         <div class="file">eiide-262.10968.N.exe</div>
       </div>
       <div class="step">
@@ -557,7 +557,7 @@ footer{padding:56px 0 40px; color:var(--muted); font-size:13px}
     <p class="lead" style="margin-top:10px">설정 → 편집기 → 파일 인코딩의 「투명한 native-to-ascii 변환」을 처음부터 켜 두었습니다. 한글로 고치고 저장하면 다시 <code>\uXXXX</code> 로 바꿔 씁니다. 이 기본값은 소스 손질 대본(<code>apply_defaults.py</code>)을 다시 돌려 빌드한 판부터 들어갑니다.</p>
 
     <h3>서버 콘솔에 남는 로그</h3>
-    <p class="lead">콘솔은 글이 일정 양을 넘으면 앞부분을 버립니다. 그 양을 1 MB 에서 50 MB 로 늘려 두었습니다. 더 늘리려면 Settings → Editor → General → Console 의 「Override console cycle buffer size」 칸에 KB 로 적습니다.</p>
+    <p class="lead">콘솔은 글이 일정 양을 넘으면 앞부분을 버립니다. 그 양을 1 MB 에서 30 MB 로 늘려 두었습니다. 더 늘리려면 Settings → Editor → General → Console 의 「Override console cycle buffer size」 칸에 KB 로 적습니다.</p>
 
     <h3>프로그램 목록 엑셀</h3>
     <div class="figure">
@@ -1328,7 +1328,6 @@ build-windows.bat
       <tr><td>Rainbow Brackets Lite</td><td>짝 괄호를 깊이마다 다른 색으로 보여 줍니다(무료 공개판).</td></tr>
       <tr><td>POJO to JSON</td><td>클래스 이름 우클릭 → 「Copy JSON」 으로 필드 구조를 JSON 으로 복사합니다. API 테스트의 요청 본문 만들 때 씁니다.</td></tr>
       <tr><td>Grep Console</td><td>콘솔 줄을 글자 · 정규식으로 색칠하고 거릅니다. 우리 「로그 거르기」와 함께 씁니다.</td></tr>
-      <tr><td>JPA Buddy (+ Jakarta EE: JPA Model)</td><td>JPA 엔티티 · 스프링 데이터 리포지토리 · DTO 를 화면에서 만듭니다. DB 와 비교하는 기능은 유료 Database 플러그인이 있어야 해서 안 보일 수 있습니다.</td></tr>
       <tr><td>한국어 언어 팩 (bat)</td><td>설정 → Language and Region → Korean.</td></tr>
       <tr><td>Claude Code (bat)</td><td>터미널의 <code>claude</code> 와 연결합니다. 우리 AI 우클릭 메뉴도 이것을 씁니다.</td></tr>
       <tr><td>One Dark 테마 (bat)</td><td>설정 → Appearance 의 Theme, Editor → Color Scheme 에서 One Dark.</td></tr>
@@ -1351,7 +1350,7 @@ build-windows.bat
       <tr><td>테마 · UI 글꼴</td><td>Appearance &amp; Behavior → Appearance</td></tr>
       <tr><td>편집기 글꼴</td><td>Editor → Font (JetBrainsMonoHangul)</td></tr>
       <tr><td>여백선(120자)</td><td>Editor → General → Appearance 「시각적 안내선 표시」</td></tr>
-      <tr><td>콘솔에 남는 글 양</td><td>Editor → General → Console 「Override console cycle buffer size」 (51200 KB)</td></tr>
+      <tr><td>콘솔에 남는 글 양</td><td>Editor → General → Console 「Override console cycle buffer size」 (30720 KB)</td></tr>
       <tr><td>저장할 때 import 정리 · 서식</td><td>Tools → Actions on Save</td></tr>
       <tr><td>자동 빌드</td><td>Build, Execution, Deployment → Compiler 「Build project automatically」</td></tr>
       <tr><td>Maven · Gradle</td><td>Build, Execution, Deployment → Build Tools → Maven · Gradle (위 03)</td></tr>

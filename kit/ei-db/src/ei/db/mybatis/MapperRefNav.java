@@ -28,7 +28,7 @@ public final class MapperRefNav implements GotoDeclarationHandler {
     if (!StringUtil.contains(text, MAPPER_MARK)) return null;
     MapperRefs.Ref ref = MapperRefs.refAt(text, offset);
     if (ref == null) return null;
-    MapperDoc doc = MapperDoc.parse(text);
+    MapperDoc doc = MapperDocs.of(file);
     if (ref.namespace() == null || ref.namespace().equals(doc.namespace)) {
       PsiElement at = targetIn(file, doc, ref);
       return at == null ? null : new PsiElement[] {at};
@@ -38,7 +38,7 @@ public final class MapperRefNav implements GotoDeclarationHandler {
     for (MapperIndex.Entry e : MapperIndex.find(project, ref.namespace())) {
       PsiFile other = PsiManager.getInstance(project).findFile(e.file());
       if (other == null) continue;
-      PsiElement at = targetIn(other, MapperDoc.parse(other.getViewProvider().getContents()), ref);
+      PsiElement at = targetIn(other, MapperDocs.of(other), ref);
       if (at != null) found.add(at);
     }
     return found.isEmpty() ? null : found.toArray(PsiElement[]::new);

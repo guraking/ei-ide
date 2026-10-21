@@ -20,6 +20,7 @@ import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.UserDataHolderBase;
+import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.util.Alarm;
 import com.intellij.util.concurrency.AppExecutorUtil;
@@ -50,16 +51,22 @@ public final class OpenApiEditorProvider implements FileEditorProvider, DumbAwar
 
     /** 확장자가 맞고 앞부분에 최상위 openapi · swagger 판이 적힌 파일인가. 읽을 수 없으면 아님. */
     static boolean isSpec(VirtualFile file) {
+        return specVersion(file) != null;
+    }
+
+    /**
+     * 사양 파일이면 그 판(OpenApiFiles.SWAGGER_2 · OPENAPI_30 · OPENAPI_31), 아니거나 읽을 수 없으면 null.
+     * 파일 앞 OpenApiFiles.HEAD_CHARS 바이트만 읽는다.
+     */
+    static String specVersion(VirtualFile file) {
         String ext = file.getExtension();
         if (file.isDirectory() || ext == null || !EXTENSIONS.contains(ext.toLowerCase())) {
-            return false;
+            return null;
         }
         try {
-            byte[] bytes = file.contentsToByteArray();
-            int n = Math.min(bytes.length, OpenApiFiles.HEAD_CHARS);
-            return OpenApiFiles.version(new String(bytes, 0, n, StandardCharsets.UTF_8)) != null;
+            return OpenApiFiles.version(new String(VfsUtilCore.loadNBytes(file, OpenApiFiles.HEAD_CHARS), StandardCharsets.UTF_8));
         } catch (IOException e) {
-            return false;
+            return null;
         }
     }
 
@@ -109,23 +116,30 @@ public final class OpenApiEditorProvider implements FileEditorProvider, DumbAwar
                 return;
             }
             String text = document.getText();
-            ReadAction.nonBlocking(() -> ServerBase.resolve(project, ModuleUtilCore.findModuleForFile(file, project)))
+            ReadAction.nonBlocking(() -> convert(ServerBase.resolve(project, ModuleUtilCore.findModuleForFile(file, project)), text))
                     .inSmartMode(project)
                     .expireWith(lifetime)
-                    .finishOnUiThread(ModalityState.defaultModalityState(), base -> show(base, text))
+                    .finishOnUiThread(ModalityState.defaultModalityState(), shown -> {
+                        if (shown != null) {
+                            view.show(shown.base(), shown.json(), null);
+                        }
+                    })
                     .submit(AppExecutorUtil.getAppExecutorService());
         }
 
-        private void show(String base, String text) {
-            String json;
+        /** 미리보기에 넘길 개발 서버 기본 주소와 Swagger UI 용 JSON. */
+        private record Shown(String base, String json) {
+        }
+
+        /** 사양 글을 Swagger UI 용 JSON 으로 바꾼다. 읽을 수 없는 글이면 null. 화면 스레드 밖에서 부른다. */
+        private static Shown convert(String base, String text) {
             try {
-                json = OpenApiFiles.toJson(text, base);
+                return new Shown(base, OpenApiFiles.toJson(text, base));
             } catch (IllegalArgumentException e) {
                 // 고치는 중의 깨진 글은 앞 미리보기를 그대로 둔다. 오류 위치는 편집기의 스키마 검사가 보인다.
                 LOG.debug(e);
-                return;
+                return null;
             }
-            view.show(base, json, null);
         }
 
         @Override

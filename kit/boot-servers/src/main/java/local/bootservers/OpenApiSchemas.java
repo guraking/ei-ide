@@ -8,8 +8,6 @@ import com.jetbrains.jsonSchema.extension.JsonSchemaProviderFactory;
 import com.jetbrains.jsonSchema.extension.SchemaType;
 import org.jetbrains.annotations.NotNull;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
@@ -30,16 +28,7 @@ public final class OpenApiSchemas implements JsonSchemaProviderFactory, DumbAwar
 
         @Override
         public boolean isAvailable(@NotNull VirtualFile file) {
-            if (!OpenApiEditorProvider.isSpec(file)) {
-                return false;
-            }
-            try {
-                byte[] bytes = file.contentsToByteArray();
-                int n = Math.min(bytes.length, OpenApiFiles.HEAD_CHARS);
-                return version.equals(OpenApiFiles.version(new String(bytes, 0, n, StandardCharsets.UTF_8)));
-            } catch (IOException e) {
-                return false;
-            }
+            return version.equals(OpenApiEditorProvider.specVersion(file));
         }
 
         @Override

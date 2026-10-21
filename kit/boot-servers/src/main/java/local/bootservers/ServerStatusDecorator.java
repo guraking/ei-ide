@@ -1,5 +1,7 @@
 package local.bootservers;
 
+import com.intellij.execution.ExecutionManager;
+import com.intellij.execution.process.ProcessHandler;
 import com.intellij.ide.projectView.PresentationData;
 import com.intellij.ide.projectView.ProjectViewNode;
 import com.intellij.ide.projectView.ProjectViewNodeDecorator;
@@ -19,7 +21,7 @@ public final class ServerStatusDecorator implements ProjectViewNodeDecorator {
     public void decorate(ProjectViewNode<?> node, PresentationData data) {
         Project project = node.getProject();
         VirtualFile file = node.getVirtualFile();
-        if (project == null || file == null || !ProjectRootsUtil.isModuleContentRoot(file, project)) {
+        if (project == null || file == null || !anyShown(project) || !ProjectRootsUtil.isModuleContentRoot(file, project)) {
             return;
         }
         Module module = ModuleUtilCore.findModuleForFile(file, project);
@@ -37,5 +39,15 @@ public final class ServerStatusDecorator implements ProjectViewNodeDecorator {
         }
         String location = data.getLocationString();
         data.setLocationString(location == null || location.isEmpty() ? text : location + " · " + text);
+    }
+
+    /** 붙일 상태가 있을 수 있는가: 살아 있는 실행 프로세스나 실패한 실행 기록이 하나라도 있으면 참. 없으면 모든 모듈이 중지됨이다. */
+    private static boolean anyShown(Project project) {
+        for (ProcessHandler handler : ExecutionManager.getInstance(project).getRunningProcesses()) {
+            if (!handler.isProcessTerminated()) {
+                return true;
+            }
+        }
+        return ServerRegistry.getInstance(project).anyFailed();
     }
 }
