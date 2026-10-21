@@ -35,6 +35,9 @@
         <fileEditorProvider implementation="local.bootservers.OpenApiEditorProvider"/>
         <!-- JDK 24 이상 실행에 sun-misc-unsafe-memory-access=allow 옵션을 더해 Unsafe 경고를 끈다 -->
         <java.programPatcher implementation="local.bootservers.UnsafeWarningPatcher"/>
+        <!-- EI Glass: Islands Dark 위에 숯색 판 · 분홍 강조색을 얹은 테마와 그 에디터 색. 첫 실행 기본 테마는 apply_defaults 22번 -->
+        <themeProvider id="EI Glass" path="/themes/EIGlass.theme.json" targetUi="islands"/>
+        <bundledColorScheme id="EI Glass" path="/themes/EIGlass.xml"/>
     </extensions>
 
     <extensions defaultExtensionNs="JavaScript">

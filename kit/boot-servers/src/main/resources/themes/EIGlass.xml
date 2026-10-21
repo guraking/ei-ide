@@ -1,0 +1,78 @@
+<scheme name="EI Glass" version="142" parent_scheme="Islands Dark">
+    <!-- EI Glass 테마의 에디터 색. 적지 않은 항목은 Islands Dark 를 따른다. 글꼴은 적지 않아 IDE 글꼴 설정을 쓴다. -->
+    <colors>
+        <option name="CARET_COLOR" value="FF375F" />
+        <option name="CARET_ROW_COLOR" value="242428" />
+        <option name="CONSOLE_BACKGROUND_KEY" value="1E1E22" />
+        <option name="INDENT_GUIDE" value="2C2C31" />
+        <option name="LINE_NUMBERS_COLOR" value="5C5C63" />
+        <option name="LINE_NUMBER_ON_CARET_ROW_COLOR" value="FF6482" />
+        <option name="LOOKUP_COLOR" value="26262A" />
+        <option name="RIGHT_MARGIN_COLOR" value="2C2C31" />
+        <option name="SELECTION_BACKGROUND" value="5D2533" />
+        <option name="SELECTED_INDENT_GUIDE" value="5C5C63" />
+        <option name="VISUAL_INDENT_GUIDE" value="2C2C31" />
+    </colors>
+    <attributes>
+        <option name="TEXT">
+            <value>
+                <option name="FOREGROUND" value="D1D1D6" />
+                <option name="BACKGROUND" value="1E1E22" />
+            </value>
+        </option>
+        <option name="DEFAULT_KEYWORD">
+            <value>
+                <option name="FOREGROUND" value="FF7AB2" />
+                <option name="FONT_TYPE" value="1" />
+            </value>
+        </option>
+        <option name="DEFAULT_STRING">
+            <value>
+                <option name="FOREGROUND" value="FC8A7C" />
+            </value>
+        </option>
+        <option name="DEFAULT_NUMBER">
+            <value>
+                <option name="FOREGROUND" value="D9C97C" />
+            </value>
+        </option>
+        <option name="DEFAULT_METADATA">
+            <value>
+                <option name="FOREGROUND" value="FFB340" />
+            </value>
+        </option>
+        <option name="DEFAULT_CLASS_REFERENCE">
+            <value>
+                <option name="FOREGROUND" value="5DD8FF" />
+            </value>
+        </option>
+        <option name="DEFAULT_FUNCTION_DECLARATION">
+            <value>
+                <option name="FOREGROUND" value="67D3B4" />
+            </value>
+        </option>
+        <option name="DEFAULT_INSTANCE_METHOD">
+            <value>
+                <option name="FOREGROUND" value="67D3B4" />
+            </value>
+        </option>
+        <option name="DEFAULT_LINE_COMMENT">
+            <value>
+                <option name="FOREGROUND" value="7F8C98" />
+                <option name="FONT_TYPE" value="2" />
+            </value>
+        </option>
+        <option name="DEFAULT_BLOCK_COMMENT">
+            <value>
+                <option name="FOREGROUND" value="7F8C98" />
+                <option name="FONT_TYPE" value="2" />
+            </value>
+        </option>
+        <option name="DEFAULT_DOC_COMMENT">
+            <value>
+                <option name="FOREGROUND" value="7F8C98" />
+                <option name="FONT_TYPE" value="2" />
+            </value>
+        </option>
+    </attributes>
+</scheme>
