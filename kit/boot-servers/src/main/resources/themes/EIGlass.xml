@@ -862,5 +862,9 @@
                 <option name="FOREGROUND" value="d5b778" />
             </value>
         </option>
+        <option name="ABSTRACT_CLASS_NAME_ATTRIBUTES" baseAttributes="DEFAULT_CLASS_REFERENCE" />
+        <option name="CLASS_NAME_ATTRIBUTES" baseAttributes="DEFAULT_CLASS_REFERENCE" />
+        <option name="ENUM_NAME_ATTRIBUTES" baseAttributes="DEFAULT_CLASS_REFERENCE" />
+        <option name="INTERFACE_NAME_ATTRIBUTES" baseAttributes="DEFAULT_CLASS_REFERENCE" />
     </attributes>
 </scheme>
