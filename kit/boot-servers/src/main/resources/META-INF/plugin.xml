@@ -18,6 +18,8 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <projectViewNodeDecorator implementation="local.bootservers.ServerStatusDecorator"/>
+        <!-- 바뀐 파일 · 새 파일이 아래에 있는 폴더 · 패키지 아이콘을 그 색으로 칠한다 -->
+        <projectViewNodeDecorator implementation="local.bootservers.ChangedFolderIconDecorator"/>
         <toolWindow id="Servers" anchor="bottom" icon="AllIcons.Nodes.Services"
                     factoryClass="local.bootservers.ServersToolWindowFactory"/>
         <defaultToolWindowLayout implementation="local.bootservers.ToolWindowOrder" order="last"/>
