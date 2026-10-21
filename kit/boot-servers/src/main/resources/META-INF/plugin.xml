@@ -18,6 +18,8 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <projectViewNodeDecorator implementation="local.bootservers.ServerStatusDecorator"/>
+        <!-- 바뀐 파일 · 새 파일이 아래에 있는 폴더 · 패키지 아이콘을 그 색으로 칠한다 -->
+        <projectViewNodeDecorator implementation="local.bootservers.ChangedFolderIconDecorator"/>
         <toolWindow id="Servers" anchor="bottom" icon="AllIcons.Nodes.Services"
                     factoryClass="local.bootservers.ServersToolWindowFactory"/>
         <defaultToolWindowLayout implementation="local.bootservers.ToolWindowOrder" order="last"/>
@@ -93,6 +95,10 @@
         <!-- 이클립스 키맵은 Ctrl+F 를 「바꾸기」 에 주므로, 콘솔에서만 켜지는 찾기를 Ctrl+F 에 따로 건다. 이클립스 키맵은 $default 를 물려받는다. -->
         <action id="KingGura.ConsoleFind" class="local.bootservers.ConsoleFindAction" text="콘솔에서 찾기" icon="AllIcons.Actions.Find">
             <keyboard-shortcut keymap="$default" first-keystroke="control F"/>
+        </action>
+        <!-- 이클립스처럼 프로젝트 창에서 F5 로 디스크에서 다시 읽기. 이클립스 키맵의 F5(Step Into)는 프로젝트 창 밖에서 그대로다. -->
+        <action id="KingGura.ProjectViewRefresh" class="local.bootservers.ProjectViewRefreshAction" text="디스크에서 다시 읽기" icon="AllIcons.Actions.Refresh">
+            <keyboard-shortcut keymap="Eclipse" first-keystroke="F5"/>
         </action>
         <!-- 콘솔 우클릭 메뉴: 지금 콘솔 글을 레벨 · 검색어로 거르는 창을 연다. -->
         <action id="KingGura.LogFilter" class="local.bootservers.LogFilterAction" text="로그 거르기" icon="AllIcons.General.Filter">

@@ -21,12 +21,13 @@ import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.vcs.ProjectLevelVcsManager;
-import com.intellij.openapi.vcs.FilePath;
-import com.intellij.openapi.vcs.VcsDataKeys;
 import com.intellij.openapi.vcs.VcsRoot;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vcs.FileStatus;
 import com.intellij.openapi.vcs.changes.ChangeListListener;
+import com.intellij.openapi.vcs.changes.ChangeListManager;
+import com.intellij.openapi.vcs.changes.ContentRevision;
+import com.intellij.openapi.vcs.FilePath;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.ui.ColoredTreeCellRenderer;
@@ -34,7 +35,6 @@ import com.intellij.ui.JBSplitter;
 import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.treeStructure.Tree;
-import com.intellij.vcsUtil.VcsUtil;
 import git4idea.repo.GitRepository;
 import git4idea.repo.GitRepositoryChangeListener;
 import org.w3c.dom.Element;
@@ -112,7 +112,6 @@ final class SyncPanel extends JPanel {
   private static final String VCS_NAME_GIT = "Git";
   private static final String VCS_NAME_SVN = "svn";
   private static final String ACTION_PULL = "Git.Pull";
-  private static final String ACTION_PUSH = "Vcs.Push";
   // IDE 의 「Update Project」(Ctrl+T). 프로젝트의 모든 VCS 루트를 받는다(Git 은 받기 방식을 묻고, SVN 은 svn update).
   private static final String ACTION_UPDATE_ALL = "Vcs.UpdateProject";
   // 설치본에 같이 넣은 VisualSVN 명령줄 도구(apply_defaults 19 의 SVN 기본 경로와 같은 곳).
@@ -150,6 +149,12 @@ final class SyncPanel extends JPanel {
   // 비교를 시작할 때마다 하나 올린다(EDT 에서만). 늦게 끝난 옛 비교가 새 결과를 덮지 않게 끝날 때 이 값과 맞춰 본다.
   private int compareSeq;
   private Kind modeFilter;  // null 이면 전체
+  // 알림을 모아 두었다가 다시 비교할 저장소(EDT 에서만). Git 알림이 온 루트, 변경 목록에서 경로가 달라진 곳, SVN 은 변경 목록 알림마다.
+  private final Set<File> pendingRoots = new HashSet<>();
+  private final Set<String> pendingPaths = new HashSet<>();
+  private boolean pendingSvn;
+  // 지난 변경 목록 알림 때 IDE 가 알던 작업본 변경 · 새 파일 경로. 다음 알림과 비교해 달라진 경로만 본다(알림 스레드에서만).
+  private volatile Set<String> lastLocalPaths = Set.of();
 
   SyncPanel(Project project, Disposable parent) {
     super(new BorderLayout());
@@ -177,8 +182,6 @@ final class SyncPanel extends JPanel {
     JPanel bottom = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
     bottom.add(actionButton("전체 받기", ACTION_UPDATE_ALL, false));
     bottom.add(actionButton("받기(Pull)", ACTION_PULL, true));
-    bottom.add(commitButton());
-    bottom.add(actionButton("올리기(Push)", ACTION_PUSH, true));
     bottom.add(actionButton("충돌 해결", "Git.ResolveConflicts", false));
     add(bottom, BorderLayout.SOUTH);
 
@@ -204,15 +207,28 @@ final class SyncPanel extends JPanel {
     refreshButton.addActionListener(e -> refresh());
     refreshSelectedButton.addActionListener(e -> refreshSelected());
 
-    // 커밋 · Push · Pull · 브랜치 전환으로 Git 상태가 바뀌면 fetch 없이 다시 비교한다.
-    // SVN 은 저장소 알림이 없으므로 IDE 의 변경 목록이 갱신될 때(커밋 · 업데이트 뒤) 다시 비교한다.
+    // 커밋 · Push · Pull · 브랜치 전환으로 Git 상태가 바뀌면 그 저장소만 fetch 없이 다시 비교한다.
+    // 변경 목록이 갱신되면(편집 · 저장마다 온다) 변경 · 새 파일 경로가 달라진 Git 저장소만 다시 비교한다.
+    // SVN 은 저장소 알림이 없으므로 변경 목록이 갱신될 때마다(커밋 · 업데이트 뒤) 다시 비교한다.
     // 한 동작에 알림이 여러 번 오므로 마지막 알림 뒤 잠깐 기다렸다가 한 번만 비교한다.
-    javax.swing.Timer debounce = new javax.swing.Timer(REPO_CHANGE_DELAY_MS, e -> recompare());
+    javax.swing.Timer debounce = new javax.swing.Timer(REPO_CHANGE_DELAY_MS, e -> recomparePending());
     debounce.setRepeats(false);
     project.getMessageBus().connect(parent).subscribe(GitRepository.GIT_REPO_CHANGE,
-      (GitRepositoryChangeListener) repository -> SwingUtilities.invokeLater(debounce::restart));
+      (GitRepositoryChangeListener) repository -> {
+        File root = new File(repository.getRoot().getPath());
+        SwingUtilities.invokeLater(() -> { pendingRoots.add(root); debounce.restart(); });
+      });
     project.getMessageBus().connect(parent).subscribe(ChangeListListener.TOPIC, new ChangeListListener() {
-      @Override public void changeListUpdateDone() { SwingUtilities.invokeLater(debounce::restart); }
+      @Override public void changeListUpdateDone() {
+        Set<String> now = localChangePaths();
+        Set<String> moved = new HashSet<>(now);
+        moved.removeAll(lastLocalPaths);
+        for (String path : lastLocalPaths) {
+          if (!now.contains(path)) moved.add(path);
+        }
+        lastLocalPaths = now;
+        SwingUtilities.invokeLater(() -> { pendingPaths.addAll(moved); pendingSvn = true; debounce.restart(); });
+      }
     });
   }
 
@@ -506,8 +522,8 @@ final class SyncPanel extends JPanel {
     return result;
   }
 
-  /** 저장소 하나를 처음 읽은 결과. */
-  private record Scanned(Repo repo, List<Change> changes) {}
+  /** 저장소 하나를 처음 읽은 결과. remote 는 같이 출발시킨 원격 확인(fetch · svn status -u 뒤 비교)이다. */
+  private record Scanned(Repo repo, List<Change> changes, Future<List<Change>> remote) {}
 
   /** 저장소 하나에 할 일. 결과는 입력 순서대로 모인다. */
   private interface RepoWork<T, R> {
@@ -525,16 +541,7 @@ final class SyncPanel extends JPanel {
     }
     List<R> results = new ArrayList<>();
     try {
-      for (Future<R> future : futures) {
-        try {
-          results.add(future.get());
-        }
-        catch (ExecutionException e) {
-          if (e.getCause() instanceof IOException io) throw io;
-          if (e.getCause() instanceof InterruptedException ie) throw ie;
-          throw new IOException(e.getCause());
-        }
-      }
+      for (Future<R> future : futures) results.add(await(future));
     }
     finally {
       for (Future<R> future : futures) future.cancel(true);
@@ -542,11 +549,64 @@ final class SyncPanel extends JPanel {
     return results;
   }
 
-  /** fetch 없이 지금 상태로만 다시 비교한다(무시 · 되돌리기 · 커밋 직후). SVN 은 서버에 닿지 못하면 작업본만 비교한다. */
+  /** IDE 가 아는 작업본 변경(변경 목록)과 새 파일의 절대 경로. */
+  private Set<String> localChangePaths() {
+    ChangeListManager manager = ChangeListManager.getInstance(project);
+    Set<String> result = new HashSet<>();
+    for (com.intellij.openapi.vcs.changes.Change change : manager.getAllChanges()) {
+      ContentRevision revision = change.getAfterRevision() != null ? change.getAfterRevision() : change.getBeforeRevision();
+      if (revision != null) result.add(revision.getFile().getPath());
+    }
+    for (FilePath path : manager.getUnversionedFilesPaths()) result.add(path.getPath());
+    return result;
+  }
+
+  /** 모아 둔 알림에 해당하는 저장소만 다시 비교하고 모은 것을 비운다. */
+  private void recomparePending() {
+    List<Repo> targets = new ArrayList<>();
+    for (Repo repo : repos) {
+      boolean hit = repo.vcs() == Vcs.SVN ? pendingSvn : pendingRoots.contains(repo.root());
+      if (!hit && repo.vcs() == Vcs.GIT) {
+        for (String path : pendingPaths) {
+          if (FileUtil.isAncestor(repo.root(), new File(path), false)) {
+            hit = true;
+            break;
+          }
+        }
+      }
+      if (hit) targets.add(repo);
+    }
+    pendingRoots.clear();
+    pendingPaths.clear();
+    pendingSvn = false;
+    recompare(targets, false);
+  }
+
+  /** 작업 스레드의 결과를 기다린다. 작업이 던진 IOException · InterruptedException 은 그대로 다시 던진다. */
+  private static <R> R await(Future<R> future) throws IOException, InterruptedException {
+    try {
+      return future.get();
+    }
+    catch (ExecutionException e) {
+      if (e.getCause() instanceof IOException io) throw io;
+      if (e.getCause() instanceof InterruptedException ie) throw ie;
+      throw new IOException(e.getCause());
+    }
+  }
+
+  /** fetch 없이 지금 상태로만 모든 저장소를 다시 비교한다(무시 · 되돌리기 · 커밋 직후). */
   private void recompare() {
-    List<Repo> targets = repos;
+    recompare(repos, true);
+  }
+
+  /**
+   * fetch 없이 targets 만 다시 비교하고 목록에서 그 저장소 것만 바꾼다. SVN 은 서버에 닿지 못하면 작업본만 비교한다.
+   * full 이면 새 비교 차례를 잡아 그보다 늦게 끝난 옛 비교를 버린다. 아니면 차례를 잡지 않아 저장소별 비교끼리 서로 버리지 않고,
+   * 도중에 전체 비교가 새로 시작됐을 때만 결과를 버린다.
+   */
+  private void recompare(List<Repo> targets, boolean full) {
     if (targets.isEmpty()) return;
-    int seq = ++compareSeq;
+    int seq = full ? ++compareSeq : compareSeq;
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       List<Change> result = new ArrayList<>();
       AtomicReference<String> error = new AtomicReference<>();
@@ -572,9 +632,16 @@ final class SyncPanel extends JPanel {
         return;
       }
       String message = error.get();
+      Set<File> roots = new HashSet<>();
+      for (Repo repo : targets) roots.add(repo.root());
       SwingUtilities.invokeLater(() -> {
         if (seq != compareSeq) return;
-        changes = result;
+        List<Change> next = new ArrayList<>();
+        for (Change c : changes) {
+          if (!roots.contains(c.repo().root())) next.add(c);
+        }
+        next.addAll(result);
+        changes = next;
         rebuildTree();
         if (message != null) status.setText(message);
       });
@@ -591,14 +658,13 @@ final class SyncPanel extends JPanel {
 
   /**
    * IDE 동작을 부르는 단추. forSelectedRepo 면 트리에서 고른 저장소들의 루트를 VIRTUAL_FILE(_ARRAY) 로 넘겨
-   * 받기 창은 첫 저장소로 열리고(DvcsUtil.guessRepositoryForOperation 이 VIRTUAL_FILE 을 먼저 본다)
-   * 올리기 창은 고른 저장소만 체크된다(VcsPushAction 이 VIRTUAL_FILE_ARRAY 의 저장소를 미리 고른다).
+   * 받기 창은 첫 저장소로 열린다(DvcsUtil.guessRepositoryForOperation 이 VIRTUAL_FILE 을 먼저 본다).
    * 고른 저장소가 없으면 IDE 기본(마지막 편집 파일의 저장소)을 따른다.
    */
   private JButton actionButton(String text, String actionId, boolean forSelectedRepo) {
     JButton button = new JButton(text);
     button.addActionListener(e -> {
-      // Git.Pull · Vcs.Push 는 Git 전용이라 SVN 저장소에서는 꺼져 있다. SVN 은 svn update 로 받고, 올리기는 커밋이 대신한다.
+      // Git.Pull 은 Git 전용이라 SVN 저장소에서는 꺼져 있다. SVN 은 svn update 로 받는다.
       // Git 과 SVN 이 섞여 있으면 받기는 SVN 저장소를 svn update 로 받고 Git 저장소는 Git.Pull 로 이어 받는다.
       List<Repo> targets = forSelectedRepo ? buttonTargets() : List.of();
       List<Repo> svnRepos = new ArrayList<>();
@@ -609,10 +675,6 @@ final class SyncPanel extends JPanel {
       if (!svnRepos.isEmpty() && ACTION_PULL.equals(actionId)) {
         svnUpdate(button, svnRepos);
         if (svnOnly) return;
-      }
-      if (svnOnly && ACTION_PUSH.equals(actionId)) {
-        status.setText(text + ": SVN 은 따로 올리기가 없습니다. 「커밋…」 이 바로 서버에 올립니다.");
-        return;
       }
       DataContext context = DataManager.getInstance().getDataContext(this);
       List<VirtualFile> roots = new ArrayList<>();
@@ -675,55 +737,6 @@ final class SyncPanel extends JPanel {
         SwingUtilities.invokeLater(() -> button.setEnabled(true));
       }
     });
-  }
-
-  /**
-   * 「커밋…」 단추. 트리에서 고른 것이 있으면 그것만 커밋 창에 체크해 연다(CheckinFiles 에 FILE_PATHS 를 넘김).
-   * 아무것도 고르지 않았으면 예전처럼 프로젝트 전체 커밋(CheckinProject).
-   */
-  private JButton commitButton() {
-    String text = "커밋…";
-    JButton button = new JButton(text);
-    button.addActionListener(e -> {
-      DataContext context = DataManager.getInstance().getDataContext(this);
-      if (tree.getSelectionCount() == 0) {
-        runAction(text, "CheckinProject", context);
-        return;
-      }
-      List<FilePath> paths = commitPaths();
-      if (paths.isEmpty()) {
-        status.setText(text + ": 고른 줄에 커밋할 내 변경이 없습니다(들어올 변경 · Assume Unchanged 는 커밋 대상이 아닙니다).");
-        return;
-      }
-      runAction(text, "CheckinFiles", SimpleDataContext.builder().setParent(context).add(VcsDataKeys.FILE_PATHS, paths).build());
-    });
-    return button;
-  }
-
-  /**
-   * 커밋할 경로. 파일 줄은 그 파일, 묶음 줄은 그 안의 파일, 저장소 줄은 저장소 폴더.
-   * 들어올 변경 · 모른 척 중은 내 작업본 변경이 아니어서 뺀다(나갈 변경 · 충돌만).
-   */
-  private List<FilePath> commitPaths() {
-    Set<FilePath> result = new LinkedHashSet<>();
-    TreePath[] paths = tree.getSelectionPaths();
-    if (paths == null) return new ArrayList<>(result);
-    for (TreePath path : paths) {
-      DefaultMutableTreeNode node = (DefaultMutableTreeNode) path.getLastPathComponent();
-      if (node.getUserObject() instanceof Repo repo) {
-        result.add(VcsUtil.getFilePath(repo.root(), true));
-        continue;
-      }
-      List<Object> values = new ArrayList<>();
-      if (node.getUserObject() instanceof Change) values.add(node.getUserObject());
-      for (int i = 0; i < node.getChildCount(); i++) values.add(((DefaultMutableTreeNode) node.getChildAt(i)).getUserObject());
-      for (Object value : values) {
-        if (value instanceof Change c && (c.kind() == Kind.OUTGOING || c.kind() == Kind.CONFLICT)) {
-          result.add(VcsUtil.getFilePath(new File(c.repo().root(), c.path()), false));
-        }
-      }
-    }
-    return new ArrayList<>(result);
   }
 
   /** IDE 동작 하나를 context 로 부른다. 동작이 꺼져 있으면(예: 충돌 해결은 git 이 실제 충돌 상태인 파일이 있을 때만) 아무 일도 없이 끝나므로 이유를 상태줄에 적는다. */
@@ -789,7 +802,7 @@ final class SyncPanel extends JPanel {
     return null;
   }
 
-  /** 프로젝트에 등록된 VCS 루트(Git · SVN). 하나도 없으면 프로젝트 폴더를 Git 저장소로 본다(등록 전 프로젝트도 쓸 수 있게). */
+  /** 프로젝트에 등록된 VCS 루트(Git · SVN). 하나도 없으면 프로젝트 폴더를 unmappedVcs 가 고른 종류로 본다(등록 전 프로젝트도 쓸 수 있게). */
   private List<Map.Entry<File, Vcs>> vcsRoots() {
     List<Map.Entry<File, Vcs>> result = new ArrayList<>();
     for (VcsRoot root : ProjectLevelVcsManager.getInstance(project).getAllVcsRoots()) {
@@ -799,13 +812,29 @@ final class SyncPanel extends JPanel {
       if (VCS_NAME_GIT.equals(name)) result.add(Map.entry(dir, Vcs.GIT));
       else if (VCS_NAME_SVN.equals(name)) result.add(Map.entry(dir, Vcs.SVN));
     }
-    if (result.isEmpty() && project.getBasePath() != null) result.add(Map.entry(new File(project.getBasePath()), Vcs.GIT));
+    if (result.isEmpty() && project.getBasePath() != null) {
+      File base = new File(project.getBasePath());
+      result.add(Map.entry(base, unmappedVcs(base)));
+    }
     return result;
   }
 
   /**
+   * VCS 루트가 등록되지 않은 폴더의 종류. dir 부터 위로 올라가며 가장 가까운 .svn 또는 .git 을 따른다.
+   * SVN 1.7 부터는 작업본 맨 위에만 .svn 이 있어 프로젝트 폴더가 작업본 안쪽이면 위에서 찾아야 한다. 둘 다 없으면 Git.
+   */
+  static Vcs unmappedVcs(File dir) {
+    for (File d = dir.getAbsoluteFile(); d != null; d = d.getParentFile()) {
+      if (new File(d, ".svn").isDirectory()) return Vcs.SVN;
+      if (new File(d, ".git").exists()) return Vcs.GIT;
+    }
+    return Vcs.GIT;
+  }
+
+  /**
    * 비교 결과를 다시 만든다. git · svn 은 백그라운드에서 돈다.
-   * 먼저 마지막으로 받아 둔 원격 상태로 바로 비교해 보여 주고, 그다음 원격을 받아 와(fetch · svn status -u) 한 번 더 비교한다.
+   * 마지막으로 받아 둔 원격 상태로 바로 비교해 보여 주고, 원격을 받아 와(fetch · svn status -u) 한 번 더 비교한다.
+   * 원격 확인은 저장소 정보를 읽자마자 따로 출발시켜 지금 상태 비교와 동시에 돈다(다른 저장소의 지금 상태 비교를 기다리지 않는다).
    * 원격 작업은 네트워크에 따라 오래 걸릴 수 있어 그동안 목록을 비워 두지 않는다.
    * 저장소 하나가 실패해도(원격 추적 브랜치 없음 · 서버 연결 불가) 나머지는 계속 비교하고 오류는 상태 줄에 모아 보인다.
    */
@@ -823,11 +852,15 @@ final class SyncPanel extends JPanel {
       List<String> errors = Collections.synchronizedList(new ArrayList<>());
       List<Repo> found = new ArrayList<>();
       List<Change> result = new ArrayList<>();
+      List<Scanned> scannedAll = new ArrayList<>();
+      List<Future<List<Change>>> remotes = Collections.synchronizedList(new ArrayList<>());
       try {
         for (Scanned scanned : inParallel(roots, entry -> {
           try {
             Repo repo = entry.getValue() == Vcs.GIT ? gitRepo(entry.getKey()) : svnRepo(entry.getKey());
-            return new Scanned(repo, repo.vcs() == Vcs.GIT ? compare(repo) : compareSvn(repo, false));
+            Future<List<Change>> remote = ApplicationManager.getApplication().executeOnPooledThread(() -> remoteCompare(repo, errors));
+            remotes.add(remote);
+            return new Scanned(repo, repo.vcs() == Vcs.GIT ? compare(repo) : compareSvn(repo, false), remote);
           }
           catch (IOException e) {
             errors.add(e.getMessage());
@@ -835,6 +868,7 @@ final class SyncPanel extends JPanel {
           }
         })) {
           if (scanned == null) continue;
+          scannedAll.add(scanned);
           found.add(scanned.repo());
           result.addAll(scanned.changes());
         }
@@ -848,21 +882,7 @@ final class SyncPanel extends JPanel {
           status.setText(summary(local) + " — 원격 변경을 받아 오는 중…");
         });
         List<Change> fetched = new ArrayList<>();
-        for (List<Change> part : inParallel(found, repo -> {
-          try {
-            if (repo.vcs() == Vcs.GIT) {
-              git(repo.root(), "fetch", "--quiet");
-              return compare(repo);
-            }
-            return compareSvn(repo, true);
-          }
-          catch (IOException e) {
-            errors.add(e.getMessage());
-            return repo.vcs() == Vcs.GIT ? compare(repo) : compareSvn(repo, false);  // 원격 실패 시 지금 비교 결과는 남긴다.
-          }
-        })) {
-          fetched.addAll(part);
-        }
+        for (Scanned scanned : scannedAll) fetched.addAll(await(scanned.remote()));
         result = fetched;
       }
       catch (IOException e) {
@@ -871,6 +891,8 @@ final class SyncPanel extends JPanel {
       catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         errors.add("중단됨");
+        // 새로고침 자체가 중단될 때만 원격 확인을 멈춘다. 그 밖에는 끝까지 둔다. 도중에 죽인 git fetch 는 .lock 파일을 남겨 다음 fetch 를 막을 수 있다.
+        for (Future<List<Change>> remote : remotes) remote.cancel(true);
       }
       List<Change> finalResult = result;
       String message = summary(finalResult) + " — 마지막 원격 확인 " + LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"));
@@ -976,8 +998,31 @@ final class SyncPanel extends JPanel {
     });
   }
 
+  /** 원격을 받아 와 다시 비교한다. 원격 실패는 errors 에 적고 지금 상태 비교 결과를 돌려준다. */
+  private static List<Change> remoteCompare(Repo repo, List<String> errors) throws IOException, InterruptedException {
+    try {
+      if (repo.vcs() == Vcs.GIT) {
+        git(repo.root(), "fetch", "--quiet");
+        return compare(repo);
+      }
+      return compareSvn(repo, true);
+    }
+    catch (IOException e) {
+      errors.add(e.getMessage());
+      return repo.vcs() == Vcs.GIT ? compare(repo) : compareSvn(repo, false);
+    }
+  }
+
   /** Git 루트의 실제 최상위 폴더 · 브랜치 · 원격 추적 브랜치를 알아낸다. 추적 브랜치가 없으면 비교할 수 없으므로 오류. */
   static Repo gitRepo(File dir) throws IOException, InterruptedException {
+    // 보통은 한 번에 읽는다(최상위 폴더 · 브랜치 · 추적 브랜치 세 줄). 실패하면 어느 것이 없는지 가리려고 하나씩 읽는다.
+    try {
+      String[] lines = git(dir, "rev-parse", "--show-toplevel", "--abbrev-ref", "HEAD", "@{u}").trim().split("\n");
+      if (lines.length == 3) return new Repo(new File(lines[0].trim()), Vcs.GIT, lines[1].trim(), lines[2].trim());
+    }
+    catch (IOException oneShotFailed) {
+      // 아래에서 하나씩 다시 읽어 알맞은 오류를 낸다.
+    }
     File root = new File(git(dir, "rev-parse", "--show-toplevel").trim());
     String branch = git(root, "rev-parse", "--abbrev-ref", "HEAD").trim();
     try {
@@ -996,12 +1041,18 @@ final class SyncPanel extends JPanel {
   /** 들어올 · 나갈 · 충돌로 나눈다. 같은 경로가 양쪽에 있으면 충돌로만 보인다. */
   static List<Change> compare(Repo repo) throws IOException, InterruptedException {
     File root = repo.root();
-    Map<String, String> incoming = parseNameStatus(git(root, "diff", "--name-status", "HEAD...@{u}"));
-    Map<String, String> outgoing = parseNameStatus(git(root, "diff", "--name-status", "@{u}...HEAD"));
+    // 네 명령은 서로 기다릴 필요가 없어 동시에 돌린다. 윈도우는 git 을 띄우는 비용이 커서 차례로 돌리면 그만큼 늦다.
+    List<String> out = inParallel(List.of(
+      new String[]{"diff", "--name-status", "HEAD...@{u}"},
+      new String[]{"diff", "--name-status", "@{u}...HEAD"},
+      new String[]{"-c", "core.untrackedCache=true", "status", "--porcelain=v1", "-unormal"},
+      new String[]{"ls-files", "-v"}), args -> git(root, args));
+    Map<String, String> incoming = parseNameStatus(out.get(0));
+    Map<String, String> outgoing = parseNameStatus(out.get(1));
     Set<String> unmerged = new TreeSet<>();
     // 새 파일은 폴더 단위로만 받는다(-unormal). 무시되지 않은 큰 폴더 속을 다 훑으면 느려진다.
     // 폴더는 ".idea/" 처럼 끝이 / 인 한 줄로 나오며, 그대로 .gitignore 에 넣을 수 있다.
-    for (String line : git(root, "-c", "core.untrackedCache=true", "status", "--porcelain=v1", "-unormal").split("\n")) {
+    for (String line : out.get(2).split("\n")) {
       if (line.length() < 4) continue;
       String xy = line.substring(0, 2);
       String path = line.substring(3);
@@ -1014,7 +1065,7 @@ final class SyncPanel extends JPanel {
     }
     List<Change> result = merge(repo, incoming, outgoing, unmerged);
     // 부분 체크아웃(sparse checkout)이 밖으로 뺀 파일도 skip-worktree 지만 디스크에 없으므로, 디스크에 있는 것만 모른 척 중으로 본다.
-    for (String path : parseAssumed(git(root, "ls-files", "-v"), p -> new File(root, p).exists())) {
+    for (String path : parseAssumed(out.get(3), p -> new File(root, p).exists())) {
       result.add(new Change(Kind.ASSUMED, "Assume Unchanged", path, repo));
     }
     return result;

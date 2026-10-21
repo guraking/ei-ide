@@ -21,6 +21,9 @@ public class SqlSplitterCheck {
     // 따옴표 · 주석 안의 ; 와 빈 줄은 무시.
     eq(texts("SELECT 'a;\n\nb' FROM t /* ; */;\nSELECT \"x;\" FROM t;"), List.of("SELECT 'a;\n\nb' FROM t /* ; */;", "SELECT \"x;\" FROM t;"));
     eq(texts("SELECT 'it''s;' FROM t;"), List.of("SELECT 'it''s;' FROM t;"));
+    // 괄호 안의 빈 줄은 경계가 아니다(인라인 뷰 · EXISTS).
+    String inline = "SELECT a\n  FROM (\n\n    SELECT 1 AS a FROM dual\n\n  ) v\n WHERE EXISTS (\n\n  SELECT 1 FROM dual)";
+    eq(texts(inline + "\n\nSELECT 2 FROM dual"), List.of(inline, "SELECT 2 FROM dual"));
     String myProc = "CREATE PROCEDURE p() BEGIN DECLARE x INT; DECLARE CONTINUE HANDLER FOR NOT FOUND SET x = 0; SET x = 1; END;";
     eq(texts(myProc + " SELECT 1; SELECT 2;"), List.of(myProc, "SELECT 1;", "SELECT 2;"));
     String nested = "BEGIN DECLARE v NUMBER; BEGIN v := 1; END; END;";

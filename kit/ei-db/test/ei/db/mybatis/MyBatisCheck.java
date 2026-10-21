@@ -209,6 +209,29 @@ public class MyBatisCheck {
     eq(both.get(0).runnableSql() + " / " + both.get(1).statementId(), "select 7 from dual / second");
     eq(MyBatisLog.parseAll(two, 1).get(0).line, 1);
     eq(MyBatisLog.parseAll(List.of("nothing"), 10), List.of());
+    // log4jdbc sqltiming: 머리 줄부터 {executed …} 줄까지 한 쿼리. MyBatis 로그와 줄 순서대로 섞인다.
+    List<String> mixed = List.of(
+        "10/21 19:41:24.039 DEBUG [exec-8] c.m.UserMapper.readOne : ==>  Preparing: SELECT ? FROM dual",
+        "10/21 19:41:24.039 DEBUG [exec-8] c.m.UserMapper.readOne : ==> Parameters: 1(Integer)",
+        "10/21 19:41:24.051  INFO [exec-8] j.sqltiming : ",
+        "        SELECT",
+        "              tgp.PART_NUMBER AS PART_NUMBER",
+        "          FROM (",
+        "",
+        "            SELECT 'GM000N4000' AS PART_NUMBER FROM DUAL",
+        "",
+        "          ) tgp",
+        " {executed in 5 msec}",
+        "10/21 19:41:24.060  INFO [exec-8] j.resultsettable : ",
+        "10/21 19:41:25.000  INFO [exec-9] jdbc.sqltiming - 1. SELECT 2 FROM dual {executed in 12 msec}");
+    List<MyBatisLog.Entry> logs = MyBatisLog.parseAll(mixed, 10);
+    eq(logs.size(), 3);
+    eq(logs.get(0).runnableSql(), "SELECT 1 FROM dual");
+    eq(logs.get(1).line, 2);
+    eq(logs.get(1).sql, "SELECT\n              tgp.PART_NUMBER AS PART_NUMBER\n          FROM (\n\n            SELECT 'GM000N4000' AS PART_NUMBER FROM DUAL\n\n          ) tgp");
+    eq(logs.get(1).statementId(), null);
+    eq(logs.get(2).sql, "SELECT 2 FROM dual");
+    eq(MyBatisLog.parseAll(mixed, 1).get(0).line, 12);
     MyBatisLog.Entry plain = MyBatisLog.parse("DEBUG [main] - ==>  Preparing: select 1 from dual\nDEBUG [main] - ==> Parameters: ");
     eq(plain.logger, null);
     eq(plain.runnableSql(), "select 1 from dual");
