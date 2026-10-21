@@ -4,7 +4,6 @@
   "author": "EI IDE",
   "parentTheme": "Islands Dark",
   "editorScheme": "EI Glass",
-
   "colors": {
     "glass-bg": "#161618",
     "glass-island": "#1E1E22",
@@ -19,7 +18,6 @@
     "glass-accent-30": "#5D2533",
     "glass-accent-20": "#46222D",
     "glass-accent-40": "#73293C",
-
     "layer-0-bg": "glass-island",
     "layer-0-bg-inline": "glass-island-inline",
     "layer-0-border": "glass-island-border",
@@ -31,14 +29,275 @@
     "layer-2-bg": "glass-raised",
     "layer-2-border": "glass-raised-border",
     "main-window-bg": "glass-bg",
-
     "control-brand-border": "glass-accent",
     "selection-bg-active": "glass-accent-30",
     "selection-bg-active-muted": "glass-accent-20",
     "toolbar-selected-bg": "glass-accent-30",
     "toolbar-selected-bg-hovered": "glass-accent-40",
-    "tab-selected-bg-active": "#FFFFFF17",
+    "tab-selected-bg-active": "glass-accent-22",
     "tab-selected-border-active": "glass-accent",
-    "popup-completion-match-text": "glass-accent-soft"
+    "popup-completion-match-text": "glass-accent-soft",
+    "glass-accent-22": "#FF375F38",
+    "glass-accent-12": "#FF375F1F",
+    "glass-accent-border-muted": "#FF375F66",
+    "glass-glow-tr": "#3A1A25",
+    "glass-glow-mid": "#1E1719",
+    "glass-glow-bl": "#151B28",
+    "glass-glow": "#FF375F38",
+    "glass-glow-0": "#FF375F00",
+    "glass-veil-0": "#16161800",
+    "glass-veil-b": "#16161833",
+    "tab-selected-bg-inactive": "glass-accent-12",
+    "tab-selected-border-inactive": "glass-accent-border-muted"
+  },
+  "ui": {
+    "Island": {
+      "colorGradient": true,
+      "colorGradient.mirrored": true,
+      "toolWindowAlpha": 0.15
+    },
+    "ProjectGradients": {
+      "Group1": {
+        "DiagonalGradient": {
+          "Color1": "glass-glow-tr",
+          "Color2": "glass-glow-mid",
+          "Color3": "glass-bg",
+          "Color4": "glass-glow-bl",
+          "Fraction1": 0.0,
+          "Fraction2": 0.25,
+          "Fraction3": 0.6,
+          "Fraction4": 1.0
+        },
+        "RadialGradient": {
+          "Color1": "glass-glow",
+          "Color2": "glass-glow-0"
+        },
+        "HorizontalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-0"
+        },
+        "VerticalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-b"
+        }
+      },
+      "Group2": {
+        "DiagonalGradient": {
+          "Color1": "glass-glow-tr",
+          "Color2": "glass-glow-mid",
+          "Color3": "glass-bg",
+          "Color4": "glass-glow-bl",
+          "Fraction1": 0.0,
+          "Fraction2": 0.25,
+          "Fraction3": 0.6,
+          "Fraction4": 1.0
+        },
+        "RadialGradient": {
+          "Color1": "glass-glow",
+          "Color2": "glass-glow-0"
+        },
+        "HorizontalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-0"
+        },
+        "VerticalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-b"
+        }
+      },
+      "Group3": {
+        "DiagonalGradient": {
+          "Color1": "glass-glow-tr",
+          "Color2": "glass-glow-mid",
+          "Color3": "glass-bg",
+          "Color4": "glass-glow-bl",
+          "Fraction1": 0.0,
+          "Fraction2": 0.25,
+          "Fraction3": 0.6,
+          "Fraction4": 1.0
+        },
+        "RadialGradient": {
+          "Color1": "glass-glow",
+          "Color2": "glass-glow-0"
+        },
+        "HorizontalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-0"
+        },
+        "VerticalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-b"
+        }
+      },
+      "Group4": {
+        "DiagonalGradient": {
+          "Color1": "glass-glow-tr",
+          "Color2": "glass-glow-mid",
+          "Color3": "glass-bg",
+          "Color4": "glass-glow-bl",
+          "Fraction1": 0.0,
+          "Fraction2": 0.25,
+          "Fraction3": 0.6,
+          "Fraction4": 1.0
+        },
+        "RadialGradient": {
+          "Color1": "glass-glow",
+          "Color2": "glass-glow-0"
+        },
+        "HorizontalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-0"
+        },
+        "VerticalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-b"
+        }
+      },
+      "Group5": {
+        "DiagonalGradient": {
+          "Color1": "glass-glow-tr",
+          "Color2": "glass-glow-mid",
+          "Color3": "glass-bg",
+          "Color4": "glass-glow-bl",
+          "Fraction1": 0.0,
+          "Fraction2": 0.25,
+          "Fraction3": 0.6,
+          "Fraction4": 1.0
+        },
+        "RadialGradient": {
+          "Color1": "glass-glow",
+          "Color2": "glass-glow-0"
+        },
+        "HorizontalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-0"
+        },
+        "VerticalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-b"
+        }
+      },
+      "Group6": {
+        "DiagonalGradient": {
+          "Color1": "glass-glow-tr",
+          "Color2": "glass-glow-mid",
+          "Color3": "glass-bg",
+          "Color4": "glass-glow-bl",
+          "Fraction1": 0.0,
+          "Fraction2": 0.25,
+          "Fraction3": 0.6,
+          "Fraction4": 1.0
+        },
+        "RadialGradient": {
+          "Color1": "glass-glow",
+          "Color2": "glass-glow-0"
+        },
+        "HorizontalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-0"
+        },
+        "VerticalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-b"
+        }
+      },
+      "Group7": {
+        "DiagonalGradient": {
+          "Color1": "glass-glow-tr",
+          "Color2": "glass-glow-mid",
+          "Color3": "glass-bg",
+          "Color4": "glass-glow-bl",
+          "Fraction1": 0.0,
+          "Fraction2": 0.25,
+          "Fraction3": 0.6,
+          "Fraction4": 1.0
+        },
+        "RadialGradient": {
+          "Color1": "glass-glow",
+          "Color2": "glass-glow-0"
+        },
+        "HorizontalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-0"
+        },
+        "VerticalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-b"
+        }
+      },
+      "Group8": {
+        "DiagonalGradient": {
+          "Color1": "glass-glow-tr",
+          "Color2": "glass-glow-mid",
+          "Color3": "glass-bg",
+          "Color4": "glass-glow-bl",
+          "Fraction1": 0.0,
+          "Fraction2": 0.25,
+          "Fraction3": 0.6,
+          "Fraction4": 1.0
+        },
+        "RadialGradient": {
+          "Color1": "glass-glow",
+          "Color2": "glass-glow-0"
+        },
+        "HorizontalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-0"
+        },
+        "VerticalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-b"
+        }
+      },
+      "Group9": {
+        "DiagonalGradient": {
+          "Color1": "glass-glow-tr",
+          "Color2": "glass-glow-mid",
+          "Color3": "glass-bg",
+          "Color4": "glass-glow-bl",
+          "Fraction1": 0.0,
+          "Fraction2": 0.25,
+          "Fraction3": 0.6,
+          "Fraction4": 1.0
+        },
+        "RadialGradient": {
+          "Color1": "glass-glow",
+          "Color2": "glass-glow-0"
+        },
+        "HorizontalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-0"
+        },
+        "VerticalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-b"
+        }
+      }
+    },
+    "MainToolbar": {
+      "Button.arc": 100,
+      "Button.arc.compact": 100,
+      "Dropdown": {
+        "arc": 100,
+        "pillBackground": "#FFFFFF0D",
+        "pillBorderColor": "#FFFFFF1F"
+      }
+    },
+    "ToolWindow": {
+      "Button": {
+        "selectedBackground": "#FF375F40",
+        "visibleBackground": "#FF375F24"
+      }
+    },
+    "Tree": {
+      "Selection": {
+        "borderColor": "glass-accent"
+      }
+    },
+    "List": {
+      "Selection": {
+        "borderColor": "#FF375F99"
+      }
+    }
   }
 }
