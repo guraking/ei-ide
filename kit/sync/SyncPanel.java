@@ -891,9 +891,7 @@ final class SyncPanel extends JPanel {
       catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         errors.add("중단됨");
-      }
-      finally {
-        // 지금 상태 비교가 실패 · 중단돼 기다리지 않게 된 원격 확인은 멈춘다(끝난 것에는 영향 없음).
+        // 새로고침 자체가 중단될 때만 원격 확인을 멈춘다. 그 밖에는 끝까지 둔다. 도중에 죽인 git fetch 는 .lock 파일을 남겨 다음 fetch 를 막을 수 있다.
         for (Future<List<Change>> remote : remotes) remote.cancel(true);
       }
       List<Change> finalResult = result;
