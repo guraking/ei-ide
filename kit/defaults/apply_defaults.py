@@ -15,6 +15,7 @@
   18) 다른 프로젝트를 열 때 기본으로 새 창에 연다.
   19) SVN 실행 파일 기본 경로를 설치본에 같이 넣은 svn.exe(plugins/kinggura-sync/svn/bin)로 한다.
   20) 콘솔에 남기는 글 양(cycle buffer)을 기본 1 MB 에서 50 MB 로 늘린다.
+  21) 프로젝트 창에서 바뀐 파일 · 새 파일이 든 폴더 · 패키지 이름도 그 색으로 보인다.
 고치기 전 원본은 <intellij-community>/../backup/<시각>-before/ 에 같은 상대경로로 남긴다.
 모든 원문을 먼저 찾아 본 뒤에 쓴다. 하나라도 못 찾으면 아무 파일도 바꾸지 않는다. 줄끝(LF · CRLF)은 파일마다 원래대로 둔다.
 두 번 실행해도 같은 결과가 된다.
@@ -195,6 +196,12 @@ EDITS = [
     ("platform/editor-ui-api/src/com/intellij/ide/ui/UISettingsState.kt",
      "var consoleCycleBufferSizeKb: Int by property(1024)",
      "var consoleCycleBufferSizeKb: Int by property(51200)"),
+    # 21) 프로젝트 창에서 바뀐 파일 · 새 파일이 아래에 있는 폴더 · 패키지 이름을 그 상태 색으로 칠한다(이클립스의 상위 폴더 변경 표시).
+    #     ChangeListManager 의 상태를 쓰므로 Git · SVN 모두 된다. 설정 → Version Control 「Show directories with changed descendants」 의 기본값이다.
+    #     VcsConfiguration 은 기본값과 다른 값만 workspace.xml 에 남기므로, 이 칸을 건드린 적 없는 기존 프로젝트에도 적용된다.
+    ("platform/vcs-api/shared/src/com/intellij/openapi/vcs/VcsConfiguration.java",
+     "public boolean SHOW_DIRTY_RECURSIVELY = false;",
+     "public boolean SHOW_DIRTY_RECURSIVELY = true;"),
 ]
 
 
