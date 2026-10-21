@@ -522,8 +522,8 @@ final class SyncPanel extends JPanel {
     return result;
   }
 
-  /** 저장소 하나를 처음 읽은 결과. */
-  private record Scanned(Repo repo, List<Change> changes) {}
+  /** 저장소 하나를 처음 읽은 결과. remote 는 같이 출발시킨 원격 확인(fetch · svn status -u 뒤 비교)이다. */
+  private record Scanned(Repo repo, List<Change> changes, Future<List<Change>> remote) {}
 
   /** 저장소 하나에 할 일. 결과는 입력 순서대로 모인다. */
   private interface RepoWork<T, R> {
@@ -541,16 +541,7 @@ final class SyncPanel extends JPanel {
     }
     List<R> results = new ArrayList<>();
     try {
-      for (Future<R> future : futures) {
-        try {
-          results.add(future.get());
-        }
-        catch (ExecutionException e) {
-          if (e.getCause() instanceof IOException io) throw io;
-          if (e.getCause() instanceof InterruptedException ie) throw ie;
-          throw new IOException(e.getCause());
-        }
-      }
+      for (Future<R> future : futures) results.add(await(future));
     }
     finally {
       for (Future<R> future : futures) future.cancel(true);
@@ -589,6 +580,18 @@ final class SyncPanel extends JPanel {
     pendingPaths.clear();
     pendingSvn = false;
     recompare(targets, false);
+  }
+
+  /** 작업 스레드의 결과를 기다린다. 작업이 던진 IOException · InterruptedException 은 그대로 다시 던진다. */
+  private static <R> R await(Future<R> future) throws IOException, InterruptedException {
+    try {
+      return future.get();
+    }
+    catch (ExecutionException e) {
+      if (e.getCause() instanceof IOException io) throw io;
+      if (e.getCause() instanceof InterruptedException ie) throw ie;
+      throw new IOException(e.getCause());
+    }
   }
 
   /** fetch 없이 지금 상태로만 모든 저장소를 다시 비교한다(무시 · 되돌리기 · 커밋 직후). */
@@ -830,7 +833,8 @@ final class SyncPanel extends JPanel {
 
   /**
    * 비교 결과를 다시 만든다. git · svn 은 백그라운드에서 돈다.
-   * 먼저 마지막으로 받아 둔 원격 상태로 바로 비교해 보여 주고, 그다음 원격을 받아 와(fetch · svn status -u) 한 번 더 비교한다.
+   * 마지막으로 받아 둔 원격 상태로 바로 비교해 보여 주고, 원격을 받아 와(fetch · svn status -u) 한 번 더 비교한다.
+   * 원격 확인은 저장소 정보를 읽자마자 따로 출발시켜 지금 상태 비교와 동시에 돈다(다른 저장소의 지금 상태 비교를 기다리지 않는다).
    * 원격 작업은 네트워크에 따라 오래 걸릴 수 있어 그동안 목록을 비워 두지 않는다.
    * 저장소 하나가 실패해도(원격 추적 브랜치 없음 · 서버 연결 불가) 나머지는 계속 비교하고 오류는 상태 줄에 모아 보인다.
    */
@@ -848,11 +852,15 @@ final class SyncPanel extends JPanel {
       List<String> errors = Collections.synchronizedList(new ArrayList<>());
       List<Repo> found = new ArrayList<>();
       List<Change> result = new ArrayList<>();
+      List<Scanned> scannedAll = new ArrayList<>();
+      List<Future<List<Change>>> remotes = Collections.synchronizedList(new ArrayList<>());
       try {
         for (Scanned scanned : inParallel(roots, entry -> {
           try {
             Repo repo = entry.getValue() == Vcs.GIT ? gitRepo(entry.getKey()) : svnRepo(entry.getKey());
-            return new Scanned(repo, repo.vcs() == Vcs.GIT ? compare(repo) : compareSvn(repo, false));
+            Future<List<Change>> remote = ApplicationManager.getApplication().executeOnPooledThread(() -> remoteCompare(repo, errors));
+            remotes.add(remote);
+            return new Scanned(repo, repo.vcs() == Vcs.GIT ? compare(repo) : compareSvn(repo, false), remote);
           }
           catch (IOException e) {
             errors.add(e.getMessage());
@@ -860,6 +868,7 @@ final class SyncPanel extends JPanel {
           }
         })) {
           if (scanned == null) continue;
+          scannedAll.add(scanned);
           found.add(scanned.repo());
           result.addAll(scanned.changes());
         }
@@ -873,21 +882,7 @@ final class SyncPanel extends JPanel {
           status.setText(summary(local) + " — 원격 변경을 받아 오는 중…");
         });
         List<Change> fetched = new ArrayList<>();
-        for (List<Change> part : inParallel(found, repo -> {
-          try {
-            if (repo.vcs() == Vcs.GIT) {
-              git(repo.root(), "fetch", "--quiet");
-              return compare(repo);
-            }
-            return compareSvn(repo, true);
-          }
-          catch (IOException e) {
-            errors.add(e.getMessage());
-            return repo.vcs() == Vcs.GIT ? compare(repo) : compareSvn(repo, false);  // 원격 실패 시 지금 비교 결과는 남긴다.
-          }
-        })) {
-          fetched.addAll(part);
-        }
+        for (Scanned scanned : scannedAll) fetched.addAll(await(scanned.remote()));
         result = fetched;
       }
       catch (IOException e) {
@@ -896,6 +891,10 @@ final class SyncPanel extends JPanel {
       catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         errors.add("중단됨");
+      }
+      finally {
+        // 지금 상태 비교가 실패 · 중단돼 기다리지 않게 된 원격 확인은 멈춘다(끝난 것에는 영향 없음).
+        for (Future<List<Change>> remote : remotes) remote.cancel(true);
       }
       List<Change> finalResult = result;
       String message = summary(finalResult) + " — 마지막 원격 확인 " + LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"));
@@ -999,6 +998,21 @@ final class SyncPanel extends JPanel {
         status.setText(summary(next) + " — " + name + " 원격 확인 끝");
       });
     });
+  }
+
+  /** 원격을 받아 와 다시 비교한다. 원격 실패는 errors 에 적고 지금 상태 비교 결과를 돌려준다. */
+  private static List<Change> remoteCompare(Repo repo, List<String> errors) throws IOException, InterruptedException {
+    try {
+      if (repo.vcs() == Vcs.GIT) {
+        git(repo.root(), "fetch", "--quiet");
+        return compare(repo);
+      }
+      return compareSvn(repo, true);
+    }
+    catch (IOException e) {
+      errors.add(e.getMessage());
+      return repo.vcs() == Vcs.GIT ? compare(repo) : compareSvn(repo, false);
+    }
   }
 
   /** Git 루트의 실제 최상위 폴더 · 브랜치 · 원격 추적 브랜치를 알아낸다. 추적 브랜치가 없으면 비교할 수 없으므로 오류. */
