@@ -1,19 +1,24 @@
 package local.bootservers.memo;
 
+import com.intellij.markdown.utils.MarkdownToHtmlConverterKt;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
+import com.intellij.ui.BrowserHyperlinkListener;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBPasswordField;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.components.JBTextArea;
 import com.intellij.util.ui.FormBuilder;
+import com.intellij.util.ui.HTMLEditorKitBuilder;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
 
 import javax.swing.JButton;
+import javax.swing.JEditorPane;
 import javax.swing.JPanel;
+import javax.swing.JToggleButton;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.FlowLayout;
@@ -36,6 +41,8 @@ final class SecureMemoPanel extends JPanel implements Disposable {
     private static final String FILE_NAME = "ei-secure-memo.bin";
     private static final String LOCKED = "locked";
     private static final String OPEN = "open";
+    private static final String EDIT = "edit";
+    private static final String PREVIEW = "preview";
     private static final int FIELD_COLUMNS = 20;
 
     private final Project project;
@@ -49,6 +56,11 @@ final class SecureMemoPanel extends JPanel implements Disposable {
     private final JButton resetButton = new JButton("초기화…");
 
     private final JBTextArea area = new JBTextArea();
+    // 메모 글을 Markdown(GFM)으로 그려 보여 주는 읽기 전용 칸. 저장 형식은 글 그대로다.
+    private final CardLayout bodyCards = new CardLayout();
+    private final JPanel body = new JPanel(bodyCards);
+    private final JEditorPane preview = new JEditorPane();
+    private final JToggleButton previewButton = new JToggleButton("미리보기");
     private char[] password;
     private String saved;
 
@@ -93,9 +105,16 @@ final class SecureMemoPanel extends JPanel implements Disposable {
         buttons.add(save);
         buttons.add(lock);
         buttons.add(change);
+        previewButton.addActionListener(e -> showPreview(previewButton.isSelected()));
+        buttons.add(previewButton);
+        preview.setEditorKit(HTMLEditorKitBuilder.simple());
+        preview.setEditable(false);
+        preview.addHyperlinkListener(BrowserHyperlinkListener.INSTANCE);
+        body.add(new JBScrollPane(area), EDIT);
+        body.add(new JBScrollPane(preview), PREVIEW);
         JPanel view = new JPanel(new BorderLayout());
         view.add(buttons, BorderLayout.NORTH);
-        view.add(new JBScrollPane(area), BorderLayout.CENTER);
+        view.add(body, BorderLayout.CENTER);
         return view;
     }
 
@@ -119,6 +138,7 @@ final class SecureMemoPanel extends JPanel implements Disposable {
         this.saved = text;
         area.setText(text);
         area.setCaretPosition(0);
+        showPreview(false);
         cards.show(this, OPEN);
         area.requestFocusInWindow();
     }
@@ -207,6 +227,18 @@ final class SecureMemoPanel extends JPanel implements Disposable {
         password = null;
         saved = null;
         area.setText("");
+        preview.setText("");
+    }
+
+    /** 켜면 지금 글을 Markdown 으로 그려 보여 주고, 끄면 편집 칸으로 돌아간다. */
+    private void showPreview(boolean on) {
+        previewButton.setSelected(on);
+        if (on) {
+            preview.setText(MarkdownToHtmlConverterKt.convertMarkdownToHtml(area.getText()));
+            preview.setCaretPosition(0);
+        }
+        bodyCards.show(body, on ? PREVIEW : EDIT);
+        (on ? preview : area).requestFocusInWindow();
     }
 
     @Override
