@@ -160,5 +160,10 @@
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
             <add-to-group group-id="KG.SourceMenu" anchor="last"/>
         </action>
+        <!-- Window 메뉴: 비밀번호로 여는 암호화 메모장. 프로젝트 없이도 쓴다. -->
+        <action id="KingGura.SecureMemo" class="local.bootservers.memo.SecureMemoAction" text="보안 메모…" icon="AllIcons.Ide.Readonly"
+                description="내가 정한 비밀번호로만 열리는 메모장을 엽니다">
+            <add-to-group group-id="WindowMenu" anchor="last"/>
+        </action>
     </actions>
 </idea-plugin>
