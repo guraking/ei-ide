@@ -252,6 +252,16 @@ public class MyBatisCheck {
     eq(once.get(1).runnableSql(), "SELECT 5 FROM t");
     eq(once.get(2).line, 11);
     eq(MyBatisLog.distinct(MyBatisLog.parseAll(repeated, 100), 1).get(0).line, 11);
+    // 시각 · 스레드 · 실행 시간, 쿼리 이름(주석 → 로거), 거르기.
+    eq(logs.get(0).time + " " + logs.get(0).thread + " " + logs.get(0).elapsed, "19:41:24.039 exec-8 null");
+    eq(logs.get(1).time + " " + logs.get(1).thread + " " + logs.get(1).elapsed, "19:41:24.051 exec-8 5 msec");
+    eq(MyBatisLog.queryName(once.get(0)), "TermsMapper.readList");
+    eq(MyBatisLog.queryName(once.get(1)), "UserMapper.readOne");
+    eq(MyBatisLog.queryName(once.get(2)), null);
+    eq(MyBatisLog.matches(once.get(0), " termsmapper "), true);
+    eq(MyBatisLog.matches(once.get(1), "from T"), true);
+    eq(MyBatisLog.matches(once.get(1), "dual"), false);
+    eq(MyBatisLog.matches(once.get(2), ""), true);
     MyBatisLog.Entry plain = MyBatisLog.parse("DEBUG [main] - ==>  Preparing: select 1 from dual\nDEBUG [main] - ==> Parameters: ");
     eq(plain.logger, null);
     eq(plain.runnableSql(), "select 1 from dual");

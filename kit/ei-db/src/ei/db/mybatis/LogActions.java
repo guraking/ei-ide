@@ -13,7 +13,6 @@ import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.popup.JBPopup;
 import com.intellij.openapi.ui.popup.JBPopupFactory;
-import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.util.ui.JBUI;
 import ei.db.DbConfig;
@@ -39,11 +38,10 @@ public final class LogActions {
   /** 커서 위로 Preparing 을 찾는 줄 수와, 그 아래로 Parameters 를 찾는 줄 수. */
   private static final int LOOK_BACK = 200;
   private static final int LOOK_AHEAD = 20;
-  /** 쿼리 목록에 띄울 최대 수(최근 것부터)와 목록 한 줄에 보일 SQL 글자 수. */
+  /** 쿼리 목록에 띄울 최대 수(최근 것부터). */
   private static final int MAX_PICK = 50;
   /** 같은 쿼리를 한 줄로 줄이기 전에 콘솔 끝에서부터 읽는 쿼리 로그 수. */
   private static final int MAX_SCAN = 1000;
-  private static final int LABEL_SQL_LENGTH = 80;
   /** 고르기 창 강조 테두리 두께(px). */
   private static final int POPUP_BORDER = 2;
   private static final String NEW_CONSOLE = "새 콘솔…";
@@ -102,21 +100,22 @@ public final class LogActions {
   }
 
   /**
-   * 보낼 쿼리를 고른다. 선택 글이 있으면 그것을 읽고, 없으면 콘솔에 찍힌 쿼리 목록(같은 쿼리는 최근 것 하나, 최근 것이 위, 커서 위 가장 가까운 것을 미리 고름)을 띄운다.
-   * 하나뿐이면 묻지 않는다. 쿼리가 없으면 then 을 부르지 않는다.
+   * 보낼 쿼리를 고른다. 선택 글이 있으면 그것을 읽고, 하나뿐이면 묻지 않고 run 이면 실행, 아니면 콘솔로 보낸다.
+   * 여럿이면 QueryPickDialog(같은 쿼리는 최근 것 하나, 최근 것이 위, 커서 위 가장 가까운 것을 미리 고름)에서
+   * 「콘솔로 보내기」 · 「실행」을 고른다. 쿼리가 없으면 아무것도 하지 않는다.
    */
-  static void chooseEntry(Editor editor, Consumer<MyBatisLog.Entry> then) {
+  static void chooseEntry(Project project, Editor editor, boolean run) {
     String selected = editor.getSelectionModel().getSelectedText();
     if (selected != null && !selected.isBlank()) {
       MyBatisLog.Entry entry = MyBatisLog.parse(selected);
-      if (entry != null) then.accept(entry);
+      if (entry != null) sendOrRun(project, editor, entry, run);
       return;
     }
     Document doc = editor.getDocument();
     List<MyBatisLog.Entry> found = new ArrayList<>(MyBatisLog.distinct(MyBatisLog.parseAll(List.of(doc.getText().split("\n", -1)), MAX_SCAN), MAX_PICK));
     if (found.isEmpty()) return;
     if (found.size() == 1) {
-      then.accept(found.get(0));
+      sendOrRun(project, editor, found.get(0), run);
       return;
     }
     Collections.reverse(found);
@@ -128,21 +127,23 @@ public final class LogActions {
         break;
       }
     }
-    showCentered(JBPopupFactory.getInstance().createPopupChooserBuilder(found)
-        .setTitle("보낼 쿼리")
-        .setRenderer(com.intellij.ui.SimpleListCellRenderer.create("", LogActions::entryLabel))
-        .setSelectedValue(near, true)
-        .setItemChosenCallback(then::accept)
-        .createPopup(), editor.getProject());
+    QueryPickDialog dialog = new QueryPickDialog(project, found, near);
+    dialog.show();
+    MyBatisLog.Entry chosen = dialog.selected();
+    if (chosen == null) return;
+    if (dialog.getExitCode() == QueryPickDialog.OK_EXIT_CODE) sendOrRun(project, editor, chosen, false);
+    else if (dialog.getExitCode() == QueryPickDialog.RUN_EXIT) sendOrRun(project, editor, chosen, true);
   }
 
-  /** 「매퍼.문장id · SQL 앞부분」. 로거가 없으면 SQL 만. */
-  private static String entryLabel(MyBatisLog.Entry entry) {
-    String sql = StringUtil.shortenTextWithEllipsis(entry.sql.replaceAll("\\s+", " "), LABEL_SQL_LENGTH, 0);
-    return entry.statementId() == null ? sql : entry.mapperName() + "." + entry.statementId() + " · " + sql;
+  /** 콘솔을 골라 로그 값을 채운 SQL 을 붙이고, run 이면 그 접속으로 실행까지 한다. */
+  private static void sendOrRun(Project project, Editor editor, MyBatisLog.Entry entry, boolean run) {
+    chooseConsole(project, editor, t -> {
+      t.append(project, SqlValues.inline(entry.sql, entry.values, t.config().kind));
+      if (run) SqlRunner.run(project, t.config(), entry.sql, new ArrayList<>(entry.values));
+    });
   }
 
-  /** 고르기 창은 로그 글과 섞이지 않게 IDE 창 가운데에, 강조색 테두리를 둘러 띄운다. */
+  /** 고르기 창(콘솔 · 접속)은 로그 글과 섞이지 않게 IDE 창 가운데에, 강조색 테두리를 둘러 띄운다. */
   private static void showCentered(JBPopup popup, Project project) {
     popup.getContent().setBorder(JBUI.Borders.customLine(JBUI.CurrentTheme.Focus.focusColor(), POPUP_BORDER));
     popup.showCenteredInCurrentWindow(project);
@@ -209,10 +210,7 @@ public final class LogActions {
       Project project = e.getProject();
       Editor editor = editor(e);
       if (project == null || editor == null) return;
-      chooseEntry(editor, entry -> chooseConsole(project, editor, t -> {
-        t.append(project, SqlValues.inline(entry.sql, entry.values, t.config().kind));
-        SqlRunner.run(project, t.config(), entry.sql, new ArrayList<>(entry.values));
-      }));
+      chooseEntry(project, editor, true);
     }
   }
 
@@ -239,7 +237,7 @@ public final class LogActions {
         chooseConsole(project, editor, t -> t.append(project, selected));
         return;
       }
-      chooseEntry(editor, entry -> chooseConsole(project, editor, t -> t.append(project, SqlValues.inline(entry.sql, entry.values, t.config().kind))));
+      chooseEntry(project, editor, false);
     }
 
     /** 공백이 아닌 선택 글. 없으면 null. */

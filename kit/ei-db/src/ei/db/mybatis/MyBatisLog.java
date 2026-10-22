@@ -33,8 +33,9 @@ public final class MyBatisLog {
   private static final Pattern THREAD = Pattern.compile("\\[([^\\]]+)]");
   /** log4jdbc 로거 이름 끝(jdbc.sqltiming · j.sqltiming)과 SQL 끝의 실행 시간 표시. */
   private static final String SQL_TIMING = "sqltiming";
-  private static final Pattern EXECUTED = Pattern.compile("\\{executed in \\d+ msec}\\s*$");
+  private static final Pattern EXECUTED = Pattern.compile("\\{executed in (\\d+) msec}\\s*$");
   /** sqltiming 뒤의 구분자와 연결 번호. */
+  private static final Pattern TIME = Pattern.compile("\\b\\d{1,2}:\\d{2}:\\d{2}(?:[.,]\\d{1,3})?\\b");
   /** SQL 맨 앞 블록 주석 안의 이름(MyBatis 문장 표시, 예: 매퍼.문장id). */
   private static final Pattern HEAD_COMMENT = Pattern.compile("^\\s*/\\*\\s*(\\S+)\\s*\\*/");
   private static final Pattern TIMING_HEAD = Pattern.compile("^\\s*[:\\-]?\\s*(\\d+\\.\\s+)?");
@@ -54,6 +55,10 @@ public final class MyBatisLog {
     public boolean hasParameters;
     /** Preparing(또는 sqltiming 머리) 줄 번호(0부터). parseAll 이 채우고, 그 밖에는 -1. */
     public int line = -1;
+    /** 로그 머리의 시각(예: 19:41:24.051) · 스레드(대괄호 안) · log4jdbc 실행 시간(예: 5 msec). 없으면 null. */
+    public String time;
+    public String thread;
+    public String elapsed;
 
     public String runnableSql() { return SqlValues.inline(sql, values); }
 
@@ -99,6 +104,8 @@ public final class MyBatisLog {
     e.sql = after(line, PREPARING).trim();
     e.logger = logger(line);
     String thread = thread(line);
+    e.thread = thread;
+    e.time = time(line.substring(0, line.indexOf(ARROW)));
     for (int k = prep + 1; k < lines.size(); k++) {
       String l = lines.get(k);
       if (isLine(l, PREPARING) && sameSource(e, thread, l)) break;
@@ -143,10 +150,30 @@ public final class MyBatisLog {
   }
 
   private static String queryKey(Entry e) {
+    String name = queryName(e);
+    return name != null ? name : e.sql.replaceAll("\\s+", " ").strip();
+  }
+
+  /** 쿼리 이름: SQL 맨 앞 블록 주석 안의 이름, 없으면 로거의 매퍼.문장id. 둘 다 없으면 null. */
+  public static String queryName(Entry e) {
     Matcher m = HEAD_COMMENT.matcher(e.sql);
     if (m.find()) return m.group(1);
-    if (e.statementId() != null) return e.mapperName() + "." + e.statementId();
-    return e.sql.replaceAll("\\s+", " ").strip();
+    return e.statementId() == null ? null : e.mapperName() + "." + e.statementId();
+  }
+
+  /** 거르기: text 가 비었거나, 쿼리 이름 · SQL(공백을 줄인 것)에 대소문자 없이 들어 있으면 참. */
+  public static boolean matches(Entry e, String text) {
+    if (text == null || text.isBlank()) return true;
+    String needle = text.strip().toLowerCase(Locale.ROOT);
+    String name = queryName(e);
+    if (name != null && name.toLowerCase(Locale.ROOT).contains(needle)) return true;
+    return e.sql.replaceAll("\\s+", " ").toLowerCase(Locale.ROOT).contains(needle);
+  }
+
+  /** 로그 머리 글에서 처음 나오는 시각. 없으면 null. */
+  private static String time(String head) {
+    Matcher m = TIME.matcher(head);
+    return m.find() ? m.group() : null;
   }
 
   /**
@@ -169,8 +196,13 @@ public final class MyBatisLog {
     String text = sql.toString().strip();
     if (text.isEmpty()) return null;
     Entry e = new Entry();
+    String prefix = lines.get(head).substring(0, lines.get(head).indexOf(SQL_TIMING));
     e.sql = text;
     e.line = head;
+    e.time = time(prefix);
+    Matcher t = THREAD.matcher(prefix);
+    e.thread = t.find() ? t.group(1).trim() : null;
+    e.elapsed = m.group(1) + " msec";
     return e;
   }
 
