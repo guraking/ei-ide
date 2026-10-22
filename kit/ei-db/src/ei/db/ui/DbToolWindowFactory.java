@@ -22,5 +22,6 @@ public final class DbToolWindowFactory implements ToolWindowFactory, DumbAware {
     DbExplorer explorer = new DbExplorer(project, toolWindow.getDisposable());
     Content content = ContentFactory.getInstance().createContent(explorer, "", false);
     toolWindow.getContentManager().addContent(content);
+    explorer.attach(content);
   }
 }

@@ -1,5 +1,6 @@
 package ei.db.console;
 
+import com.intellij.icons.AllIcons;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Key;
@@ -18,6 +19,7 @@ import org.jetbrains.annotations.NotNull;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.util.ui.JBUI;
 
+import javax.swing.Icon;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import java.awt.BorderLayout;
@@ -48,13 +50,14 @@ public final class ResultView {
 
   public static void show(Project project, DbConfig c, QueryResult result) {
     String title = result.isQuery() ? firstTable(result.sql()) : EiDbBundle.message("result.tab.update");
-    addTab(project, title == null ? EiDbBundle.message("result.tab.query") : title, new ResultPanel(project, c, result, firstTable(result.sql())));
+    Icon icon = result.isQuery() ? AllIcons.Nodes.DataTables : AllIcons.Actions.Commit;
+    addTab(project, title == null ? EiDbBundle.message("result.tab.query") : title, icon, new ResultPanel(project, c, result, firstTable(result.sql())));
     ConsoleRun.finished(project, c, result.sql(), true);
   }
 
   public static void showError(Project project, DbConfig c, String sql, Exception error) {
     String message = message(error);
-    addTab(project, EiDbBundle.message("result.tab.error"), ResultPanel.error(sql, message));
+    addTab(project, EiDbBundle.message("result.tab.error"), AllIcons.General.Error, ResultPanel.error(sql, message));
     Notify.error(project, EiDbBundle.message("result.run.failed", c.name, message));
     ConsoleRun.finished(project, c, sql, false);
   }
@@ -67,7 +70,7 @@ public final class ResultView {
     label.setBorder(JBUI.Borders.empty(10, 12));
     JPanel panel = new JPanel(new BorderLayout());
     panel.add(label, BorderLayout.NORTH);
-    addTab(project, EiDbBundle.message("result.tab.cancelled"), panel);
+    addTab(project, EiDbBundle.message("result.tab.cancelled"), AllIcons.Actions.Suspend, panel);
     ConsoleRun.finished(project, c, sql, false);
   }
 
@@ -84,7 +87,8 @@ public final class ResultView {
     return name.substring(name.lastIndexOf('.') + 1);
   }
 
-  private static void addTab(Project project, String title, JComponent panel) {
+  /** icon 은 탭 종류(조회 · 변경 · 오류 · 취소)를 탭 이름 앞에 보인다. */
+  private static void addTab(Project project, String title, Icon icon, JComponent panel) {
     ToolWindow window = ToolWindowManager.getInstance(project).getToolWindow(TOOL_WINDOW_ID);
     if (window == null) {
       Notify.error(project, EiDbBundle.message("result.window.missing"));
@@ -96,6 +100,8 @@ public final class ResultView {
     ContentManager contents = window.getContentManager();
     Content content = ContentFactory.getInstance().createContent(panel, EiDbBundle.message("result.tab.title", n, title), false);
     content.setCloseable(true);
+    content.setIcon(icon);
+    content.putUserData(ToolWindow.SHOW_CONTENT_ICON, Boolean.TRUE);
     contents.addContent(content);
     while (contents.getContentCount() > MAX_TABS) contents.removeContent(contents.getContent(0), true);
     contents.setSelectedContent(content);

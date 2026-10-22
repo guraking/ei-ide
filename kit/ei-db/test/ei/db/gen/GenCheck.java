@@ -139,6 +139,15 @@ public class GenCheck {
     eq(cols, List.of(List.of("SUPPLIER", "USERS"), List.of("CODE"), List.of("PRODUCT", "ORDERS"), List.of("ORDER_ITEM")));
     List<List<String>> cyc = ErdLayout.columns(List.of("A", "B"), List.of(new String[] {"A", "B"}, new String[] {"B", "A"}), 10);
     eq(cyc.size(), 2);
+    // ERD 머리 색 띠: 접두어를 빼고 다음 토막으로 묶는다.
+    eq(ErdLayout.category("TB_ORDER", 10), ErdLayout.category("TB_ORDER_ITEM", 10));
+    eq(ErdLayout.category("tb_order", 10), ErdLayout.category("TB_ORDER", 10));
+    eq(ErdLayout.category("ORDER_ITEM", 10), ErdLayout.category("ORDER", 10));
+    eq(ErdLayout.category("TB_", 10), ErdLayout.category("TB", 10));
+    for (String n : List.of("", "_", "A", "TB_CUSTOMER", "VERY_LONG_PREFIX_NAME")) {
+      int k = ErdLayout.category(n, 10);
+      ok(k >= 0 && k < 10, "범위 " + n);
+    }
 
     System.out.println("GenCheck 통과");
   }

@@ -3,7 +3,7 @@ package kinggura.sync;
 import com.intellij.diff.DiffContentFactory;
 import com.intellij.diff.DiffManager;
 import com.intellij.diff.DiffRequestPanel;
-import com.intellij.diff.requests.NoDiffRequest;
+import com.intellij.diff.requests.MessageDiffRequest;
 import com.intellij.diff.requests.SimpleDiffRequest;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.actionSystem.ActionManager;
@@ -33,7 +33,10 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.openapi.wm.ex.ToolWindowManagerListener;
+import com.intellij.ide.ui.laf.darcula.ui.DarculaButtonUI;
 import com.intellij.ui.ColoredTreeCellRenderer;
+import com.intellij.ui.RowIcon;
+import com.intellij.ui.SimpleColoredComponent;
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.actionSystem.ActionToolbar;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
@@ -121,6 +124,42 @@ final class SyncPanel extends SimpleToolWindowPanel {
     @Override public String toString() { return "[" + status + "] " + path; }
   }
 
+  /** 트리 묶음 줄: 종류와 그 종류 파일 수. */
+  record Group(Kind kind, int count) {
+    @Override public String toString() { return kind.label() + " " + count; }
+  }
+
+  /** 파일 줄 앞 상태 글자(M · A · ?? 등). 파일 형식 아이콘과 RowIcon 으로 묶어 글자 · 아이콘 · 이름 순으로 보인다. 폭은 width 로 고정해 아이콘을 줄 맞춘다. */
+  static final class StatusIcon implements Icon {
+    private final String text;
+    private final Color color;
+    private final Font font;
+    private final int width;
+    private final int height;
+
+    StatusIcon(String text, Color color, Font font, int width, int height) {
+      this.text = text;
+      this.color = color;
+      this.font = font;
+      this.width = width;
+      this.height = height;
+    }
+
+    @Override
+    public void paintIcon(Component c, Graphics g, int x, int y) {
+      Graphics2D g2 = (Graphics2D) g.create();
+      g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+      g2.setFont(font);
+      g2.setColor(color);
+      FontMetrics fm = g2.getFontMetrics();
+      g2.drawString(text, x, y + (height + fm.getAscent() - fm.getDescent()) / 2);
+      g2.dispose();
+    }
+
+    @Override public int getIconWidth() { return width; }
+    @Override public int getIconHeight() { return height; }
+  }
+
   /** 「내 변경 되돌리기」 메뉴에서 파일 하나에 할 일. UNSTAGE 는 파일 내용은 두고 스테이징만 푼다. */
   enum Undo { REVERT, UNSTAGE, NONE }
 
@@ -132,6 +171,13 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static final String TOOLBAR_PLACE = "KingGuraSynchronizeToolbar";
   // 도구줄 글 사이 · 아래 단추 사이 간격(JBUI.scale 전).
   private static final int GAP = 8;
+  // 파일 줄 앞 상태 글자 칸의 최소 폭(JBUI.scale 전). 「M」 · 「??」 · 「충돌」 뒤 파일 아이콘이 한 줄로 서게 한다.
+  private static final int STATUS_COL_W = 24;
+  // 위쪽 요약에서 종류별 숫자 앞에 붙는 표시.
+  private static final String MARK_INCOMING = "↓";
+  private static final String MARK_OUTGOING = "↑";
+  private static final String MARK_CONFLICT = "⚠";
+  private static final String SUMMARY_SEP = " · ";
   private static final Set<String> UNMERGED = Set.of("DD", "AU", "UD", "UA", "DU", "AA", "UU");
   // ProjectLevelVcsManager 가 주는 AbstractVcs.getName() 값. GitVcs.NAME · SvnVcs.VCS_NAME 과 같다.
   private static final String VCS_NAME_GIT = "Git";
@@ -162,8 +208,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private final Project project;
   private final Tree tree = new Tree(new DefaultTreeModel(new DefaultMutableTreeNode()));
   private final DiffRequestPanel diffPanel;
-  private final JLabel title = new JLabel(SyncBundle.message("sync.title"));
-  private final JLabel status = new JLabel(" ");
+  private final SimpleColoredComponent title = new SimpleColoredComponent();
+  private final SimpleColoredComponent status = new SimpleColoredComponent();
   // 새로고침이 도는 동안 참(EDT 에서만). 도구줄의 새로고침 동작은 이 값이 참이면 꺼진다.
   private boolean busy;
 
@@ -190,6 +236,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     super(true, true);
     this.project = project;
     this.diffPanel = DiffManager.getInstance().createRequestPanel(project, parent, null);
+    diffPanel.setRequest(new MessageDiffRequest(SyncBundle.message("sync.diff.empty")));
 
     // IntelliJ 기본 창처럼 위쪽은 아이콘 도구줄(새로고침 · 보기 거르기), 그 오른쪽에 저장소 이름과 상태 글.
     // 창 머리 아래 선은 IntelliJ 가 그으므로 스크롤 상자는 테두리 없이, 칸막이는 1픽셀로 둔다.
@@ -203,7 +250,9 @@ final class SyncPanel extends SimpleToolWindowPanel {
     actions.add(new ModeAction("sync.mode.conflict", AllIcons.Vcs.Merge, Kind.CONFLICT));
     ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar(TOOLBAR_PLACE, actions, true);
     toolbar.setTargetComponent(this);
-    status.setForeground(SimpleTextAttributes.GRAYED_ATTRIBUTES.getFgColor());
+    title.setOpaque(false);
+    status.setOpaque(false);
+    title.append(SyncBundle.message("sync.title"));
     JPanel labels = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(GAP), 0));
     labels.add(title);
     labels.add(status);
@@ -219,27 +268,55 @@ final class SyncPanel extends SimpleToolWindowPanel {
     // 아래 단추 줄: 위쪽 1픽셀 선으로 목록과 가르고, 단추 사이 · 가장자리는 IntelliJ 기본 간격.
     JPanel bottom = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(GAP), JBUI.scale(GAP / 2)));
     bottom.setBorder(JBUI.Borders.customLineTop(JBColor.border()));
-    bottom.add(actionButton(SyncBundle.message("sync.button.update.all"), ACTION_UPDATE_ALL, false));
-    bottom.add(actionButton(SyncBundle.message("sync.button.pull"), ACTION_PULL, true));
-    bottom.add(actionButton(SyncBundle.message("sync.button.resolve"), "Git.ResolveConflicts", false));
+    // 받기(Pull)는 이 창의 주된 동작이라 기본 단추 모양으로 둔다.
+    JButton pull = actionButton(SyncBundle.message("sync.button.pull"), AllIcons.Actions.CheckOut, ACTION_PULL, true);
+    pull.putClientProperty(DarculaButtonUI.DEFAULT_STYLE_KEY, Boolean.TRUE);
+    bottom.add(actionButton(SyncBundle.message("sync.button.update.all"), AllIcons.Actions.CheckOut, ACTION_UPDATE_ALL, false));
+    bottom.add(pull);
+    bottom.add(actionButton(SyncBundle.message("sync.button.resolve"), AllIcons.Vcs.Merge, "Git.ResolveConflicts", false));
     JPanel content = new JPanel(new BorderLayout());
     content.add(splitter, BorderLayout.CENTER);
     content.add(bottom, BorderLayout.SOUTH);
     setContent(content);
 
     tree.setRootVisible(false);
-    tree.getEmptyText().setText(SyncBundle.message("sync.empty"));
+    tree.getEmptyText().setText(SyncBundle.message("sync.empty"))
+      .appendSecondaryText(SyncBundle.message("sync.empty.link"), SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES, e -> { if (!busy) refresh(); });
     // 묶음 줄과 파일 줄은 종류별로 IDE 의 파일 상태 색(테마를 따름)으로 그린다. 충돌 빨강 · 들어올 파랑(수정됨) · 나갈 보라(병합됨).
+    // 묶음 줄: 종류 아이콘 · 굵은 이름 · 회색 개수. 파일 줄: 회색 상태 글자 · 파일 형식 아이콘 · 이름 · 회색 상위 폴더, 풍선 도움말은 전체 경로.
     tree.setCellRenderer(new ColoredTreeCellRenderer() {
       @Override
       public void customizeCellRenderer(JTree t, Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus) {
         DefaultMutableTreeNode node = (DefaultMutableTreeNode) value;
-        FileStatus color = statusColorOf(kindOf(node));
-        append(Objects.toString(node.getUserObject(), ""), color == null
-          ? SimpleTextAttributes.REGULAR_ATTRIBUTES
-          : new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, color.getColor()));
+        FileStatus fileStatus = statusColorOf(kindOf(node));
+        Color color = fileStatus == null ? null : fileStatus.getColor();
+        Object item = node.getUserObject();
+        setToolTipText(null);
+        if (item instanceof Group group) {
+          setIcon(iconOf(group.kind()));
+          append(group.kind().label(), new SimpleTextAttributes(SimpleTextAttributes.STYLE_BOLD, color));
+          append(" " + group.count(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+        }
+        else if (item instanceof Change change) {
+          String path = change.path();
+          int slash = path.lastIndexOf('/');
+          String name = path.substring(slash + 1);
+          Icon fileIcon = FileTypeManager.getInstance().getFileTypeByFileName(name).getIcon();
+          if (fileIcon == null) fileIcon = AllIcons.FileTypes.Unknown;
+          Font small = JBUI.Fonts.smallFont();
+          int statusWidth = Math.max(JBUI.scale(STATUS_COL_W), getFontMetrics(small).stringWidth(change.status()));
+          setIcon(new RowIcon(new StatusIcon(change.status(), SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES.getFgColor(), small,
+                                             statusWidth, fileIcon.getIconHeight()), fileIcon));
+          append(name, new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, color));
+          if (slash > 0) append("  " + path.substring(0, slash), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+          setToolTipText(path);
+        }
+        else {
+          append(Objects.toString(item, ""));
+        }
       }
     });
+    ToolTipManager.sharedInstance().registerComponent(tree);
     tree.getSelectionModel().setSelectionMode(TreeSelectionModel.DISCONTIGUOUS_TREE_SELECTION);
     tree.addTreeSelectionListener(e -> showSelectedDiff());
     tree.addMouseListener(new MouseAdapter() {
@@ -402,7 +479,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
         return;
       }
       String m = message;
-      SwingUtilities.invokeLater(() -> { status.setText(m); recompare(); });
+      SwingUtilities.invokeLater(() -> { showStatus(m); recompare(); });
     });
   }
 
@@ -522,7 +599,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
         return;
       }
       String m = message;
-      SwingUtilities.invokeLater(() -> { status.setText(m); recompare(); });
+      SwingUtilities.invokeLater(() -> { showStatus(m); recompare(); });
     });
   }
 
@@ -553,7 +630,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
         return;
       }
       String m = message;
-      SwingUtilities.invokeLater(() -> { status.setText(m); recompare(); });
+      SwingUtilities.invokeLater(() -> { showStatus(m); recompare(); });
     });
   }
 
@@ -711,7 +788,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
           if (!roots.contains(c.repo().root()) || (!assumed && c.kind() == Kind.ASSUMED)) next.add(c);
         }
         next.addAll(result);
-        if (message != null) status.setText(message);
+        if (message != null) showStatus(message);
         // 저장소 순서만 달라졌을 뿐 항목이 같으면 트리를 다시 만들지 않는다. 다시 만들면 고른 줄과 비교 화면이 비워진다.
         if (next.size() == changes.size() && new HashSet<>(next).equals(new HashSet<>(changes))) return;
         changes = next;
@@ -760,8 +837,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
    * 받기 창은 첫 저장소로 열린다(DvcsUtil.guessRepositoryForOperation 이 VIRTUAL_FILE 을 먼저 본다).
    * 고른 저장소가 없으면 IDE 기본(마지막 편집 파일의 저장소)을 따른다.
    */
-  private JButton actionButton(String text, String actionId, boolean forSelectedRepo) {
-    JButton button = new JButton(text);
+  private JButton actionButton(String text, Icon icon, String actionId, boolean forSelectedRepo) {
+    JButton button = new JButton(text, icon);
     button.addActionListener(e -> {
       // Git.Pull 은 Git 전용이라 SVN 저장소에서는 꺼져 있다. SVN 은 svn update 로 받는다.
       // Git 과 SVN 이 섞여 있으면 받기는 SVN 저장소를 svn update 로 받고 Git 저장소는 Git.Pull 로 이어 받는다.
@@ -809,7 +886,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private void svnUpdate(JButton button, List<Repo> targets) {
     String text = button.getText();
     button.setEnabled(false);
-    status.setText(SyncBundle.message("sync.svn.updating", text));
+    showStatus(SyncBundle.message("sync.svn.updating", text));
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       try {
         String message = SyncBundle.message("sync.svn.updated", text, targets.size());
@@ -830,7 +907,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
         // 일부만 받고 실패했어도 바뀐 파일이 있을 수 있어 받은 저장소는 모두 새로 읽는다.
         LocalFileSystem.getInstance().refreshIoFiles(roots, true, true, null);
         String m = message;
-        SwingUtilities.invokeLater(() -> { status.setText(m); recompare(); });
+        SwingUtilities.invokeLater(() -> { showStatus(m); recompare(); });
       }
       finally {
         SwingUtilities.invokeLater(() -> button.setEnabled(true));
@@ -842,13 +919,13 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private void runAction(String text, String actionId, DataContext context) {
     AnAction action = ActionManager.getInstance().getAction(actionId);
     if (action == null) {
-      status.setText(SyncBundle.message("sync.action.missing", text, actionId));
+      showStatus(SyncBundle.message("sync.action.missing", text, actionId));
       return;
     }
     AnActionEvent event = AnActionEvent.createFromAnAction(action, null, "KingGuraSynchronize", context);
     ActionUtil.updateAction(action, event);
     if (!event.getPresentation().isEnabled()) {
-      status.setText("Git.ResolveConflicts".equals(actionId)
+      showStatus("Git.ResolveConflicts".equals(actionId)
         ? SyncBundle.message("sync.action.disabled.resolve", text) : SyncBundle.message("sync.action.disabled", text));
       return;
     }
@@ -858,8 +935,64 @@ final class SyncPanel extends SimpleToolWindowPanel {
   /** 파일 줄이면 그 종류, 묶음 줄이면 첫 자식 파일의 종류(묶음은 같은 종류 파일만 담는다). 저장소 줄은 null. */
   private static Kind kindOf(DefaultMutableTreeNode node) {
     Object value = node.getUserObject();
-    if (!(value instanceof Change) && node.getChildCount() > 0) value = ((DefaultMutableTreeNode) node.getFirstChild()).getUserObject();
+    if (value instanceof Group g) return g.kind();
     return value instanceof Change c ? c.kind() : null;
+  }
+
+  /** 위쪽 상태 글: 진행 · 오류 · 알림은 회색 글 한 조각. */
+  private void showStatus(String text) {
+    status.clear();
+    status.setToolTipText(null);
+    status.append(Objects.toString(text, ""), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+  }
+
+  /** 위쪽 상태 글: 종류 색 숫자(↓ 들어올 · ↑ 나갈 · ⚠ 충돌, 0 은 뺀다) 뒤에 회색 tail. 풍선 도움말은 글로 쓴 요약. */
+  private void showSummary(List<Change> list, String tail) {
+    Map<Kind, Integer> count = new EnumMap<>(Kind.class);
+    for (Change c : list) count.merge(c.kind(), 1, Integer::sum);
+    int assumed = count.getOrDefault(Kind.ASSUMED, 0);
+    status.clear();
+    if (list.size() == assumed) {
+      status.append(summary(list), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+    }
+    else {
+      String lead = "";
+      for (Map.Entry<Kind, String> mark : List.of(Map.entry(Kind.INCOMING, MARK_INCOMING), Map.entry(Kind.OUTGOING, MARK_OUTGOING),
+                                                  Map.entry(Kind.CONFLICT, MARK_CONFLICT))) {
+        int n = count.getOrDefault(mark.getKey(), 0);
+        if (n == 0) continue;
+        FileStatus color = statusColorOf(mark.getKey());
+        status.append(lead + mark.getValue() + n, new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, color == null ? null : color.getColor()));
+        lead = " ";
+      }
+      if (assumed > 0) status.append(SUMMARY_SEP + Kind.ASSUMED.label() + " " + assumed, SimpleTextAttributes.GRAYED_ATTRIBUTES);
+    }
+    status.append(SUMMARY_SEP + tail, SimpleTextAttributes.GRAYED_ATTRIBUTES);
+    status.setToolTipText(summary(list));
+  }
+
+  /** 위쪽 저장소 글: Git 저장소 하나면 브랜치 아이콘 · 굵은 브랜치 · 회색 「↔ upstream」, 그 밖에는 글 한 조각. */
+  private void showTitle(List<Repo> list) {
+    title.clear();
+    title.setIcon(null);
+    if (list.size() == 1 && list.get(0).vcs() == Vcs.GIT) {
+      Repo repo = list.get(0);
+      title.setIcon(AllIcons.Vcs.Branch);
+      title.append(repo.branch(), SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES);
+      title.append(" ↔ " + repo.upstream(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+      return;
+    }
+    title.append(list.size() == 1 ? list.get(0).label() : SyncBundle.message("sync.repo.count", list.size()));
+  }
+
+  /** 묶음 줄 아이콘. 도구줄 보기 거르기와 같은 그림을 쓰고, 충돌은 경고 표시. */
+  private static Icon iconOf(Kind kind) {
+    return switch (kind) {
+      case CONFLICT -> AllIcons.General.Warning;
+      case INCOMING -> AllIcons.Actions.CheckOut;
+      case OUTGOING -> AllIcons.Vcs.Push;
+      case ASSUMED -> AllIcons.Actions.Show;
+    };
   }
 
   /** 종류별 글자색으로 쓸 IDE 파일 상태. 모른 척 중 · 저장소 줄은 기본 글자색(null). */
@@ -940,11 +1073,11 @@ final class SyncPanel extends SimpleToolWindowPanel {
   void refresh() {
     List<Map.Entry<File, Vcs>> roots = vcsRoots();
     if (roots.isEmpty()) {
-      status.setText(SyncBundle.message("sync.no.project"));
+      showStatus(SyncBundle.message("sync.no.project"));
       return;
     }
     busy = true;
-    status.setText(SyncBundle.message("sync.comparing"));
+    showStatus(SyncBundle.message("sync.comparing"));
     int seq = ++compareSeq;
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       List<String> errors = Collections.synchronizedList(new ArrayList<>());
@@ -973,11 +1106,11 @@ final class SyncPanel extends SimpleToolWindowPanel {
         repos = List.copyOf(found);
         List<Change> local = List.copyOf(result);
         SwingUtilities.invokeLater(() -> {
-          title.setText(found.size() == 1 ? found.get(0).label() : SyncBundle.message("sync.repo.count", found.size()));
+          showTitle(found);
           if (seq != compareSeq) return;
           changes = local;
           rebuildTree();
-          status.setText(SyncBundle.message("sync.fetching", summary(local)));
+          showSummary(local, SyncBundle.message("sync.fetching.tail"));
         });
         List<Change> fetched = new ArrayList<>();
         for (Scanned scanned : scannedAll) fetched.addAll(await(scanned.remote()));
@@ -993,13 +1126,13 @@ final class SyncPanel extends SimpleToolWindowPanel {
         for (Future<List<Change>> remote : remotes) remote.cancel(true);
       }
       List<Change> finalResult = result;
-      String message = SyncBundle.message("sync.last.check", summary(finalResult), LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm")));
-      if (!errors.isEmpty()) message = String.join(" / ", errors);
-      String finalMessage = message;
+      String checkedTail = SyncBundle.message("sync.last.check.tail", LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm")));
+      String errorText = errors.isEmpty() ? null : String.join(" / ", errors);
       SwingUtilities.invokeLater(() -> {
         busy = false;
         // 그사이 다시 비교(recompare)가 시작됐으면 목록은 그쪽 결과를 따르고, 원격 확인 결과 · 오류는 그대로 알린다.
-        status.setText(finalMessage);
+        if (errorText != null) showStatus(errorText);
+        else showSummary(finalResult, checkedTail);
         if (seq != compareSeq) return;
         changes = finalResult;
         rebuildTree();
@@ -1015,7 +1148,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     Repo selected = selectedRepo();
     if (selected == null && repos.size() == 1) selected = repos.get(0);
     if (selected == null) {
-      status.setText(SyncBundle.message("sync.select.repo"));
+      showStatus(SyncBundle.message("sync.select.repo"));
       return;
     }
     refreshRepo(selected.root(), selected.vcs());
@@ -1039,7 +1172,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private void refreshRepo(File root, Vcs vcs) {
     String name = root.getName();
     busy = true;
-    status.setText(SyncBundle.message("sync.repo.fetching", name));
+    showStatus(SyncBundle.message("sync.repo.fetching", name));
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       Repo updated = null;
       List<Change> fresh = List.of();
@@ -1068,7 +1201,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       SwingUtilities.invokeLater(() -> {
         busy = false;
         if (finalError != null) {
-          status.setText(finalError);
+          showStatus(finalError);
           return;
         }
         List<Repo> nextRepos = new ArrayList<>();
@@ -1086,9 +1219,9 @@ final class SyncPanel extends SimpleToolWindowPanel {
         }
         next.addAll(finalFresh);
         changes = next;
-        title.setText(repos.size() == 1 ? finalRepo.label() : SyncBundle.message("sync.repo.count", repos.size()));
+        showTitle(repos);
         rebuildTree();
-        status.setText(SyncBundle.message("sync.repo.checked", summary(next), name));
+        showSummary(next, SyncBundle.message("sync.repo.checked.tail", name));
       });
     });
   }
@@ -1333,7 +1466,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     tree.setModel(new DefaultTreeModel(root));
     TreeUtil.expandAll(tree);
     // 목록을 새로 만들면 고른 파일이 사라지므로, 지난 비교 내용이 남지 않게 비교 화면도 비운다.
-    diffPanel.setRequest(NoDiffRequest.INSTANCE);
+    diffPanel.setRequest(new MessageDiffRequest(SyncBundle.message("sync.diff.empty")));
   }
 
   private void addKindGroups(DefaultMutableTreeNode parent, List<Change> source) {
@@ -1341,7 +1474,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       if (modeFilter != null && modeFilter != kind) continue;
       List<Change> ofKind = source.stream().filter(c -> c.kind() == kind).toList();
       if (ofKind.isEmpty()) continue;
-      DefaultMutableTreeNode group = new DefaultMutableTreeNode(kind.label() + " " + ofKind.size());
+      DefaultMutableTreeNode group = new DefaultMutableTreeNode(new Group(kind, ofKind.size()));
       for (Change c : ofKind) group.add(new DefaultMutableTreeNode(c));
       parent.add(group);
     }

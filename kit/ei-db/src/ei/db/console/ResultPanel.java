@@ -58,6 +58,7 @@ import javax.swing.table.JTableHeader;
 import javax.swing.SwingConstants;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.TableCellRenderer;
 import javax.swing.table.TableColumn;
 import javax.swing.table.TableRowSorter;
 import javax.swing.RowSorter;
@@ -108,6 +109,11 @@ final class ResultPanel extends SimpleToolWindowPanel {
   private static final String TOOLBAR_PLACE = "EiDbResult";
   /** 고쳤지만 아직 반영하지 않은 칸의 바탕. */
   private static final Color EDITED_BACKGROUND = new JBColor(new Color(0xFFF1C2), new Color(0x4D4421));
+  /** 결과 표 행 높이 · 건수 꼬리표와 실행 시간 사이 · 오류 아이콘과 문구 사이(px, 배율 전). */
+  private static final int ROW_HEIGHT = 26;
+  private static final int MILLIS_GAP = 6;
+  private static final int ERROR_ICON_GAP = 8;
+  private static final String NULL_TEXT = "NULL";
 
   private final Project project;
   private final DbConfig config;
@@ -145,15 +151,34 @@ final class ResultPanel extends SimpleToolWindowPanel {
   /** 결과 칼럼마다 PK 여부. 고치기를 시작해 표 정의를 읽었고 고칠 수 있는 결과일 때만 있고, 아니면 null. */
   boolean[] knownPkColumns() { return editBlocked == null ? pkColumns : null; }
 
+  /** 오류 탭: 위에 오류 아이콘 + 굵은 메시지, 아래에 실행한 SQL(회색 고정폭). 둘 다 골라 복사할 수 있다. */
   static JComponent error(String sql, String message) {
-    JBTextArea text = new JBTextArea(message + "\n\n" + sql);
+    JBTextArea text = readOnlyArea(message);
+    text.setForeground(UiColors.DANGER);
+    text.setFont(text.getFont().deriveFont(Font.BOLD));
+    JBLabel icon = new JBLabel(AllIcons.General.Error);
+    icon.setVerticalAlignment(SwingConstants.TOP);
+    JPanel head = new JPanel(new BorderLayout(JBUI.scale(ERROR_ICON_GAP), 0));
+    head.setBorder(JBUI.Borders.empty(8, 12));
+    head.add(icon, BorderLayout.WEST);
+    head.add(text, BorderLayout.CENTER);
+    JBTextArea code = readOnlyArea(sql);
+    code.setForeground(UIUtil.getContextHelpForeground());
+    code.setFont(monoFont());
+    code.setBorder(JBUI.Borders.empty(0, 12, 8, 12));
+    JPanel panel = new JPanel(new BorderLayout());
+    panel.add(head, BorderLayout.NORTH);
+    panel.add(ScrollPaneFactory.createScrollPane(code, true), BorderLayout.CENTER);
+    return panel;
+  }
+
+  private static JBTextArea readOnlyArea(String value) {
+    JBTextArea text = new JBTextArea(value);
     text.setEditable(false);
     text.setLineWrap(true);
     text.setWrapStyleWord(true);
-    text.setForeground(UiColors.DANGER);
-    text.setFont(monoFont());
-    text.setBorder(JBUI.Borders.empty(8, 12));
-    return ScrollPaneFactory.createScrollPane(text, true);
+    text.setOpaque(false);
+    return text;
   }
 
   private static Font monoFont() {
@@ -189,8 +214,22 @@ final class ResultPanel extends SimpleToolWindowPanel {
           }
         };
       }
+
+      // 줄무늬가 칸 바탕을 덮으므로 고친 칸 · 행 번호 칸 바탕은 그 뒤에 칠한다.
+      @Override
+      public @NotNull Component prepareRenderer(@NotNull TableCellRenderer renderer, int row, int column) {
+        Component c = super.prepareRenderer(renderer, row, column);
+        Color background = isCellSelected(row, column) ? null : cellBackground(this, row, column);
+        if (background != null) c.setBackground(background);
+        return c;
+      }
     };
     grid.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+    grid.setRowHeight(JBUI.scale(ROW_HEIGHT));
+    grid.setStriped(true);
+    grid.setShowVerticalLines(true);
+    grid.setGridColor(JBColor.border());
+    grid.getEmptyText().setText(EiDbBundle.message("result.empty"));
     sorter = new TableRowSorter<>(model) {
       // 머리 한 번 누름은 칼럼 고르기라 정렬하지 않는다. 정렬은 머리 두 번 누름 · 우클릭 메뉴로 setSortKeys 를 부른다.
       @Override public void toggleSortOrder(int column) { }
@@ -215,10 +254,10 @@ final class ResultPanel extends SimpleToolWindowPanel {
     // 도구줄 아래 선은 SimpleToolWindowPanel 이 그린다(새 UI 는 표를 내렸을 때만). 칸 테두리를 따로 두면 선이 겹친다.
     JPanel bar = new JPanel(new HorizontalLayout(0, SwingConstants.CENTER));
     bar.setBorder(JBUI.Borders.emptyLeft(BAR_INSET));
-    count = new JBLabel(EiDbBundle.message("common.rows", result.rows().size()));
-    count.setForeground(UiColors.SUCCESS);
-    JBLabel millis = new JBLabel(" · " + result.millis() + " ms");
-    millis.setForeground(UIUtil.getContextHelpForeground());
+    count = new JBLabel();
+    showCount(EiDbBundle.message("common.rows", result.rows().size()));
+    JBLabel millis = new JBLabel(result.millis() + " ms", UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER);
+    millis.setBorder(JBUI.Borders.emptyLeft(MILLIS_GAP));
     bar.add(count);
     bar.add(millis);
     if (result.truncated()) {
@@ -288,7 +327,13 @@ final class ResultPanel extends SimpleToolWindowPanel {
     String needle = text.toLowerCase(Locale.ROOT);
     sorter.setRowFilter(needle.isEmpty() ? null : new Contains(needle));
     int total = result.rows().size();
-    count.setText(needle.isEmpty() ? EiDbBundle.message("common.rows", total) : EiDbBundle.message("result.filtered", grid.getRowCount(), total));
+    showCount(needle.isEmpty() ? EiDbBundle.message("common.rows", total) : EiDbBundle.message("result.filtered", grid.getRowCount(), total));
+  }
+
+  /** 건수를 초록 꼬리표로 보인다. 화면 읽기 프로그램용으로 접근성 이름에도 둔다. */
+  private void showCount(String text) {
+    count.setIcon(new Badge(text, UiColors.SUCCESS_BG, UiColors.SUCCESS));
+    count.getAccessibleContext().setAccessibleName(text);
   }
 
   private static final class Contains extends RowFilter<Model, Integer> {
@@ -839,12 +884,12 @@ final class ResultPanel extends SimpleToolWindowPanel {
       for (int i = 0; i < result.columns().size(); i++) {
         String name = result.columns().get(i);
         if (!anyComment) {
-          headers[i + 1] = name;
+          headers[i + 1] = "<html><b>" + StringUtil.escapeXmlEntities(name) + "</b></html>";
           continue;
         }
         String comment = comments.get(name);
         String second = comment == null || comment.isBlank() ? "&nbsp;" : StringUtil.escapeXmlEntities(comment);
-        headers[i + 1] = "<html>" + StringUtil.escapeXmlEntities(name) + "<br><font size='-1' color='#" + muted + "'>" + second + "</font></html>";
+        headers[i + 1] = "<html><b>" + StringUtil.escapeXmlEntities(name) + "</b><br><font size='-1' color='#" + muted + "'>" + second + "</font></html>";
       }
     }
 
@@ -885,20 +930,32 @@ final class ResultPanel extends SimpleToolWindowPanel {
     @Override public String toString() { return String.valueOf(value); }
   }
 
-  /** NULL 은 흐린 기울임 「null」, 숫자 · 행 번호는 오른쪽 정렬. */
+  /** 고친 칸이면 고친 칸 바탕, 행 번호 칸이면 머리와 같은 바탕, 아니면 null(표 · 줄무늬 바탕). */
+  private static Color cellBackground(JTable table, int row, int column) {
+    int modelColumn = table.convertColumnIndexToModel(column);
+    if (table.getModel() instanceof Model m && m.isEdited(table.convertRowIndexToModel(row), modelColumn)) return EDITED_BACKGROUND;
+    return modelColumn == 0 ? UIUtil.getPanelBackground() : null;
+  }
+
+  /**
+   * NULL 은 작은 흐린 기울임 「NULL」, 숫자는 고정폭 · 천 단위 쉼표 · 숫자 색, 숫자 · 행 번호는 오른쪽 정렬.
+   * 쉼표는 화면 글(SqlText.display)에만 넣고 칸 값은 그대로라 복사 · 내보내기 · 고치기는 원래 값을 쓴다.
+   */
   private static final class CellRenderer extends DefaultTableCellRenderer {
     @Override
     public Component getTableCellRendererComponent(JTable table, Object value, boolean selected, boolean focused, int row, int column) {
-      // setBackground 는 다음 칸에도 남는 바탕색이 되므로 매번 비우고 시작한다(고친 칸 바탕).
+      // setBackground 는 다음 칸에도 남는 바탕색이 되므로 매번 비우고 시작한다(고친 칸 바탕은 표의 prepareRenderer 가 칠한다).
       setBackground(null);
-      super.getTableCellRendererComponent(table, value == null ? "null" : text(value), selected, focused, row, column);
-      setFont(table.getFont().deriveFont(value == null ? Font.ITALIC : Font.PLAIN));
+      boolean number = value instanceof Number;
+      super.getTableCellRendererComponent(table, value == null ? NULL_TEXT : number ? SqlText.display(value) : text(value), selected, focused, row, column);
+      Font font = table.getFont();
+      if (value == null) font = font.deriveFont(Font.ITALIC, UIUtil.getFontSize(UIUtil.FontSize.SMALL));
+      else if (number) font = monoFont().deriveFont(font.getSize2D());
+      setFont(font);
       boolean muted = value == null || value instanceof RowNumber;
       // DefaultTableCellRenderer 는 지정한 글자색을 다음 칸에도 쓰므로 매번 정한다.
-      if (!selected) setForeground(muted ? UIUtil.getContextHelpForeground() : table.getForeground());
-      if (!selected && table.getModel() instanceof Model m
-          && m.isEdited(table.convertRowIndexToModel(row), table.convertColumnIndexToModel(column))) setBackground(EDITED_BACKGROUND);
-      setHorizontalAlignment(value instanceof Number || value instanceof RowNumber ? SwingConstants.RIGHT : SwingConstants.LEFT);
+      if (!selected) setForeground(muted ? UIUtil.getContextHelpForeground() : number ? UiColors.NUMBER : table.getForeground());
+      setHorizontalAlignment(number || value instanceof RowNumber ? SwingConstants.RIGHT : SwingConstants.LEFT);
       return this;
     }
   }

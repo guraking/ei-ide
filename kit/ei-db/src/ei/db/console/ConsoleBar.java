@@ -13,11 +13,15 @@ import com.intellij.openapi.ui.ComboBox;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.ui.ColoredListCellRenderer;
 import com.intellij.ui.EditorNotificationProvider;
+import com.intellij.ui.SimpleColoredComponent;
 import com.intellij.ui.SimpleListCellRenderer;
+import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.components.JBCheckBox;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.util.ui.JBUI;
+import com.intellij.util.ui.UIUtil;
 import com.intellij.ui.components.panels.HorizontalLayout;
 import ei.db.BarAction;
 import ei.db.DbConfig;
@@ -30,6 +34,7 @@ import org.jetbrains.annotations.NotNull;
 
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.JComponent;
+import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JSeparator;
 import javax.swing.SwingConstants;
@@ -58,11 +63,17 @@ final class ConsoleBar extends JPanel {
   private static final int GAP = 8;
   /** 묶음 사이 세로선 높이(px, 배율 전). 도구줄 아이콘 단추 높이보다 조금 낮게 둔다. */
   private static final int SEPARATOR_HEIGHT = 18;
+  /** 운영 꼬리표: 바탕을 칠한 작은 굵은 글. 글 양옆 빈칸이 바탕 여백이 된다. */
+  private static final SimpleTextAttributes PRODUCTION_TAG = new SimpleTextAttributes(UiColors.PRODUCTION_BG, UiColors.PRODUCTION, null,
+      SimpleTextAttributes.STYLE_OPAQUE | SimpleTextAttributes.STYLE_SMALLER | SimpleTextAttributes.STYLE_BOLD);
+  private static final String TAG_PAD = " ";
+  private static final String SPACE = "  ";
+  private static final String DOT = " · ";
 
   private final Project project;
   private final VirtualFile file;
   private final JPanel band = new JPanel(new BorderLayout());
-  private final JBLabel bandTarget = new JBLabel();
+  private final SimpleColoredComponent bandTarget = new SimpleColoredComponent();
   private final ComboBox<DbConfig> combo = new ComboBox<>();
   private final JBCheckBox autoCommit = new JBCheckBox(EiDbBundle.message("console.autocommit"));
   /** 조회 건수. 목록에서 고르거나 1 이상 숫자를 직접 쓴다. 프로젝트의 모든 콘솔 · 표 데이터 보기에 같이 적용된다. */
@@ -99,7 +110,8 @@ final class ConsoleBar extends JPanel {
     JBLabel warning = new JBLabel(EiDbBundle.message("console.production.warning"), AllIcons.General.Warning, SwingConstants.LEFT);
     warning.setForeground(UiColors.DANGER_TEXT);
     warning.setFont(warning.getFont().deriveFont(Font.BOLD));
-    bandTarget.setForeground(UiColors.DANGER_TEXT);
+    bandTarget.setOpaque(false);
+    bandTarget.setIpad(JBUI.emptyInsets());
     band.setBackground(UiColors.DANGER_BAND);
     band.setBorder(JBUI.Borders.compound(JBUI.Borders.customLine(UiColors.DANGER_LINE, 0, 0, 1, 0),
         JBUI.Borders.customLine(UiColors.DANGER, 0, 4, 0, 0), JBUI.Borders.empty(6, 10)));
@@ -129,7 +141,7 @@ final class ConsoleBar extends JPanel {
         new BarAction(EiDbBundle.message("console.rollback"), null, AllIcons.Actions.Rollback, () -> endTransaction(false))
             .visibleWhen(this::manualCommit).enabledWhen(this::hasPending).withText());
 
-    combo.setRenderer(SimpleListCellRenderer.create("", ConsoleBar::label));
+    combo.setRenderer(new ConnectionRenderer());
     combo.addPopupMenuListener(new PopupMenuListener() {
       @Override public void popupMenuWillBecomeVisible(PopupMenuEvent e) { reloadConnections(); }
       @Override public void popupMenuWillBecomeInvisible(PopupMenuEvent e) { }
@@ -161,8 +173,20 @@ final class ConsoleBar extends JPanel {
     refresh();
   }
 
-  private static String label(DbConfig c) {
-    return c.name + " · " + c.effectiveSchema();
+  /** 접속 콤보 줄: DB 종류 아이콘 + 상태 점 · 굵은 이름 · 회색 스키마 · 운영 꼬리표. */
+  private final class ConnectionRenderer extends ColoredListCellRenderer<DbConfig> {
+    @Override
+    protected void customizeCellRenderer(@NotNull JList<? extends DbConfig> list, DbConfig c, int index, boolean selected, boolean hasFocus) {
+      if (c == null) return;
+      boolean open = DbSessions.get(project).isOpen(c.id);
+      setIcon(new KindIcon(c.kind, open ? UiColors.CONNECTED : UiColors.DISCONNECTED, selected ? null : UIUtil.getListBackground()));
+      append(c.name, SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES);
+      append(SPACE + c.effectiveSchema(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+      if (c.production) {
+        append(SPACE);
+        append(TAG_PAD + EiDbBundle.message("explorer.production") + TAG_PAD, PRODUCTION_TAG);
+      }
+    }
   }
 
   /** 이 콘솔 접속에서 실행 중일 때만 「실행 중지」를 켠다. */
@@ -216,15 +240,22 @@ final class ConsoleBar extends JPanel {
       rows.setSelectedItem(DbSessions.get(project).maxRows());
       if (c == null) {
         autoCommit.setEnabled(false);
+        badge.setIcon(null);
         badge.setText(EiDbBundle.message("console.badge.removed"));
+        badge.setToolTipText(null);
         badge.setVisible(true);
         return;
       }
-      bandTarget.setText(label(c));
+      bandTarget.clear();
+      bandTarget.append(c.name, new SimpleTextAttributes(SimpleTextAttributes.STYLE_BOLD, UiColors.DANGER_TEXT));
+      bandTarget.append(DOT + c.effectiveSchema() + DOT + c.host, new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, UiColors.DANGER_TEXT));
       autoCommit.setEnabled(true);
       autoCommit.setSelected(c.autoCommit);
       int pending = DbSessions.get(project).pending(c.id);
-      badge.setText(EiDbBundle.message("console.badge.pending", pending));
+      // 미반영 건수는 짧은 꼬리표로, 전체 문구는 툴팁으로 보인다.
+      badge.setText(null);
+      badge.setIcon(new Badge(EiDbBundle.message("console.badge.pending.short", pending), UiColors.PENDING_BG, UiColors.PENDING));
+      badge.setToolTipText(EiDbBundle.message("console.badge.pending", pending));
       badge.setVisible(pending > 0);
     } finally {
       updating = false;

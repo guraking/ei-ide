@@ -1,6 +1,7 @@
 package local.bootservers.memo;
 
 import com.intellij.icons.AllIcons;
+import com.intellij.ide.ui.laf.darcula.ui.DarculaButtonUI;
 import com.intellij.markdown.utils.MarkdownToHtmlConverterKt;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.actionSystem.ActionManager;
@@ -9,30 +10,39 @@ import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.application.PathManager;
+import com.intellij.openapi.editor.colors.EditorColorsManager;
+import com.intellij.openapi.editor.colors.EditorFontType;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.DumbAwareToggleAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.ui.SimpleToolWindowPanel;
 import com.intellij.ui.BrowserHyperlinkListener;
+import com.intellij.ui.DocumentAdapter;
+import com.intellij.ui.JBColor;
 import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBPasswordField;
 import com.intellij.ui.components.JBTextArea;
-import com.intellij.util.ui.FormBuilder;
+import com.intellij.ui.components.panels.VerticalLayout;
+import com.intellij.util.IconUtil;
 import com.intellij.util.ui.HTMLEditorKitBuilder;
 import com.intellij.util.ui.JBUI;
+import com.intellij.util.ui.NamedColorUtil;
 import com.intellij.util.ui.UIUtil;
 import local.bootservers.BootServersBundle;
 import org.jetbrains.annotations.NotNull;
 
-import javax.swing.Box;
 import javax.swing.JButton;
 import javax.swing.JEditorPane;
 import javax.swing.JPanel;
+import javax.swing.SwingConstants;
+import javax.swing.event.DocumentEvent;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
-import java.awt.FlowLayout;
+import java.awt.Color;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -57,14 +67,23 @@ final class SecureMemoPanel extends JPanel implements Disposable {
     private static final String OPEN = "open";
     private static final String EDIT = "edit";
     private static final String PREVIEW = "preview";
-    private static final int FIELD_COLUMNS = 20;
     private static final String TOOLBAR_PLACE = "EI.SecureMemo.Toolbar";
+    // 잠긴 면 자물쇠 배율(16px → 32px)과 색
+    private static final float LOCK_ICON_SCALE = 2f;
+    private static final Color LOCK_COLOR = JBColor.namedColor("EIMemo.lockForeground", new JBColor(0xD6264A, 0xFF375F));
+    private static final String DIRTY_DOT = "● ";
 
     private final Project project;
     private final Path file = PathManager.getConfigDir().resolve(FILE_NAME);
     private final CardLayout cards = new CardLayout();
 
-    private final JBLabel prompt = new JBLabel();
+    // 잠긴 면: 굵은 제목 · 회색 설명 두 줄 · 오류 줄
+    private final JBLabel lockTitle = new JBLabel("", SwingConstants.CENTER);
+    private final JBLabel prompt = new JBLabel("", SwingConstants.CENTER);
+    private final JBLabel promptNote = new JBLabel(BootServersBundle.message("memo.locked.note"), SwingConstants.CENTER);
+    private final JBLabel errorLabel = new JBLabel("", AllIcons.General.Error, SwingConstants.CENTER);
+    // 메모 면 아래 저장 상태 줄
+    private final JBLabel saveState = new JBLabel();
     private final JBPasswordField passwordField = new JBPasswordField();
     private final JButton unlockButton = new JButton(BootServersBundle.message("common.open"));
     private final JButton newButton = new JButton(BootServersBundle.message("memo.new.password"));
@@ -82,33 +101,44 @@ final class SecureMemoPanel extends JPanel implements Disposable {
 
     SecureMemoPanel(Project project) {
         this.project = project;
-        prompt.setAllowAutoWrapping(true);
+        errorLabel.setAllowAutoWrapping(true);
         setLayout(cards);
         add(lockedView(), LOCKED);
         add(openView(), OPEN);
         showLocked(null);
     }
 
+    /** 가운데 정렬: 큰 자물쇠 · 굵은 제목 · 회색 설명, 그 아래 창 폭의 비밀번호 칸 · 단추 · 오류 줄. */
     private JPanel lockedView() {
-        passwordField.setColumns(FIELD_COLUMNS);
+        passwordField.getEmptyText().setText(BootServersBundle.message("memo.password.hint"));
         passwordField.addActionListener(e -> unlock());
+        unlockButton.putClientProperty(DarculaButtonUI.DEFAULT_STYLE_KEY, true);
+        newButton.putClientProperty(DarculaButtonUI.DEFAULT_STYLE_KEY, true);
         unlockButton.addActionListener(e -> unlock());
         newButton.addActionListener(e -> startNew());
         resetButton.addActionListener(e -> reset());
-        // 왼쪽 끝은 글 칸과 맞추고 단추 사이만 띄운다.
-        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        buttons.add(unlockButton);
-        buttons.add(newButton);
-        buttons.add(Box.createHorizontalStrut(JBUI.scale(UIUtil.DEFAULT_HGAP)));
-        buttons.add(resetButton);
-        JPanel form = FormBuilder.createFormBuilder()
-                .addComponent(prompt)
-                .addComponent(passwordField)
-                .addComponent(buttons)
-                .getPanel();
-        form.setBorder(JBUI.Borders.empty(UIUtil.DEFAULT_VGAP * 2, UIUtil.DEFAULT_HGAP * 2));
-        JPanel view = new JPanel(new BorderLayout());
-        view.add(form, BorderLayout.NORTH);
+        lockTitle.setFont(JBUI.Fonts.label().asBold());
+        prompt.setForeground(NamedColorUtil.getInactiveTextColor());
+        promptNote.setForeground(NamedColorUtil.getInactiveTextColor());
+        errorLabel.setForeground(UIUtil.getErrorForeground());
+        JBLabel lockIcon = new JBLabel(IconUtil.colorize(IconUtil.scale(AllIcons.Nodes.Padlock, null, LOCK_ICON_SCALE), LOCK_COLOR), SwingConstants.CENTER);
+        JPanel form = new JPanel(new VerticalLayout(UIUtil.DEFAULT_VGAP, VerticalLayout.FILL));
+        form.add(lockIcon);
+        form.add(lockTitle);
+        form.add(prompt);
+        form.add(promptNote);
+        form.add(passwordField);
+        form.add(unlockButton);
+        form.add(newButton);
+        form.add(resetButton);
+        form.add(errorLabel);
+        // 세로 가운데 · 가로는 창 폭(좌우 여백만)
+        JPanel view = new JPanel(new GridBagLayout());
+        GridBagConstraints c = new GridBagConstraints();
+        c.weightx = 1;
+        c.fill = GridBagConstraints.HORIZONTAL;
+        c.insets = JBUI.insets(UIUtil.DEFAULT_VGAP * 2, UIUtil.DEFAULT_HGAP * 2);
+        view.add(form, c);
         return view;
     }
 
@@ -138,6 +168,13 @@ final class SecureMemoPanel extends JPanel implements Disposable {
         preview.setEditable(false);
         preview.addHyperlinkListener(BrowserHyperlinkListener.INSTANCE);
         area.setBorder(JBUI.Borders.empty(UIUtil.DEFAULT_VGAP, UIUtil.DEFAULT_HGAP));
+        area.setFont(EditorColorsManager.getInstance().getGlobalScheme().getFont(EditorFontType.PLAIN));
+        area.getDocument().addDocumentListener(new DocumentAdapter() {
+            @Override
+            protected void textChanged(@NotNull DocumentEvent e) {
+                updateSaveState();
+            }
+        });
         preview.setBorder(JBUI.Borders.empty(UIUtil.DEFAULT_VGAP, UIUtil.DEFAULT_HGAP));
         // 창 머리 선 위에 테두리가 겹치지 않게 테두리 없는 스크롤을 쓴다.
         body.add(ScrollPaneFactory.createScrollPane(area, true), EDIT);
@@ -146,17 +183,36 @@ final class SecureMemoPanel extends JPanel implements Disposable {
         ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar(TOOLBAR_PLACE, group, true);
         toolbar.setTargetComponent(view);
         view.setToolbar(toolbar.getComponent());
-        view.setContent(body);
+        saveState.setFont(JBUI.Fonts.smallFont());
+        saveState.setBorder(JBUI.Borders.empty(UIUtil.DEFAULT_VGAP / 2, UIUtil.DEFAULT_HGAP));
+        JPanel stateRow = new JPanel(new BorderLayout());
+        stateRow.setBorder(JBUI.Borders.customLineTop(JBColor.border()));
+        stateRow.add(saveState, BorderLayout.CENTER);
+        JPanel content = new JPanel(new BorderLayout());
+        content.add(body, BorderLayout.CENTER);
+        content.add(stateRow, BorderLayout.SOUTH);
+        view.setContent(content);
         return view;
+    }
+
+    /** 아래 상태 줄: 저장한 글과 같으면 회색 「저장됨」, 다르면 주황 「바뀐 내용 있음」과 잠글 때 일어나는 일. */
+    private void updateSaveState() {
+        if (saved == null) {
+            saveState.setText("");
+            return;
+        }
+        boolean dirty = !area.getText().equals(saved);
+        saveState.setText(dirty ? DIRTY_DOT + BootServersBundle.message("memo.state.dirty") : BootServersBundle.message("memo.state.saved"));
+        saveState.setForeground(dirty ? JBUI.CurrentTheme.Label.warningForeground() : NamedColorUtil.getInactiveTextColor());
     }
 
     /** @param error 앞서 실패한 까닭. 없으면 null. */
     private void showLocked(String error) {
         boolean exists = Files.exists(file);
-        prompt.setText("<html>" + (!exists ? BootServersBundle.message("memo.prompt.none")
-                : error != null ? BootServersBundle.message("memo.prompt.error", error)
-                : BootServersBundle.message("memo.prompt.enter")) + "</html>");
-        prompt.setForeground(error != null ? UIUtil.getErrorForeground() : UIUtil.getLabelForeground());
+        lockTitle.setText(BootServersBundle.message(exists ? "memo.locked.title" : "memo.locked.none"));
+        prompt.setText(BootServersBundle.message(exists ? "memo.prompt.enter" : "memo.prompt.none"));
+        errorLabel.setText(error != null ? "<html>" + BootServersBundle.message("memo.prompt.error", error) + "</html>" : "");
+        errorLabel.setVisible(error != null);
         passwordField.setText("");
         passwordField.setVisible(exists);
         unlockButton.setVisible(exists);
@@ -169,6 +225,7 @@ final class SecureMemoPanel extends JPanel implements Disposable {
         this.password = password;
         this.saved = text;
         area.setText(text);
+        updateSaveState();
         area.setCaretPosition(0);
         showPreview(false);
         cards.show(this, OPEN);
@@ -247,6 +304,7 @@ final class SecureMemoPanel extends JPanel implements Disposable {
             return false;
         }
         saved = text;
+        updateSaveState();
         return true;
     }
 

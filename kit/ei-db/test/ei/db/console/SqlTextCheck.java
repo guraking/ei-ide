@@ -131,6 +131,18 @@ public class SqlTextCheck {
     eq(SqlText.isRereadable("INSERT INTO t VALUES (1) RETURNING id"), false);
     eq(SqlText.isRereadable("WITH d AS (DELETE FROM t RETURNING *) SELECT * FROM d"), false);
     eq(SqlText.isRereadable("UPDATE t SET a = 1 RETURNING a"), false);
+    // 결과 표 표시용 쉼표: 화면 글만 바뀌고 text(복사 · CSV · INSERT 가 쓰는 값)는 그대로.
+    eq(SqlText.display(128000), "128,000");
+    eq(SqlText.display(999), "999");
+    eq(SqlText.display(-1234567L), "-1,234,567");
+    eq(SqlText.display(new BigDecimal("1234567.8900")), "1,234,567.8900");
+    eq(SqlText.display(new BigDecimal("-100")), "-100");
+    eq(SqlText.display(new BigDecimal("1E+3")), "1,000");
+    eq(SqlText.display(1.0E10), "1.0E10");
+    eq(SqlText.display("1234567"), "1234567");
+    eq(SqlText.display(0), "0");
+    eq(SqlText.text(new BigDecimal("1234567.89")), "1234567.89");
+    eq(SqlText.literal(128000), "128000");
     System.out.println("SqlTextCheck 통과");
   }
 }

@@ -1,11 +1,13 @@
 package ei.db.gen;
 
+import com.intellij.icons.AllIcons;
+import com.intellij.ui.ColorUtil;
 import com.intellij.ui.JBColor;
-import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
 import ei.db.EiDbBundle;
 import ei.db.Meta;
 
+import javax.swing.Icon;
 import javax.swing.JComponent;
 import javax.swing.JViewport;
 import javax.swing.SwingUtilities;
@@ -20,10 +22,12 @@ import java.awt.Point;
 import java.awt.Polygon;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.Shape;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseWheelEvent;
 import java.awt.geom.Path2D;
+import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -70,8 +74,19 @@ final class ErdCanvas extends JComponent {
   private static final int TRACK = 8;       // 같은 틈을 지나는 세로 선끼리의 간격
   private static final int CORNER = 6;      // 꺾이는 곳 둥근 반지름
   private static final int CLEARANCE = 4;   // 선과 남의 카드 사이 최소 여백
-  private static final int LABEL_GAP = 4;   // 「FK:PK」 이름표와 선 사이
-  private static final double ZOOM_STEP = 1.1;
+  private static final int LABEL_PAD = 4;   // 관계 이름표 상자 안 좌우 여백
+  private static final int LABEL_ARC = 6;   // 관계 이름표 상자 모서리
+  private static final int ARC = 8;         // 카드 모서리
+  private static final int STRIPE = 3;      // 표 머리 위 색 띠 두께
+  private static final int ICON_GAP = 6;    // 표 아이콘과 이름 사이
+  private static final int TAG_PAD = 3;     // PK · FK 꼬리표 안 좌우 여백
+  private static final int TAG_ARC = 6;     // PK · FK 꼬리표 모서리
+  private static final int SMALL_STEP = 2;  // 작은 글(이름표 · 칼럼 수)이 기본 글보다 작은 크기
+  private static final int TAG_STEP = 3;    // 꼬리표 글이 기본 글보다 작은 크기
+  private static final int GRID = 20;       // 바탕 점 격자 간격
+  private static final int GRID_DOT = 2;    // 바탕 점 크기
+  private static final double GRID_ALPHA = 0.5;
+  static final double ZOOM_STEP = 1.1;
   private static final double ZOOM_MIN = 0.3;
   private static final double ZOOM_MAX = 2.0;
 
@@ -149,8 +164,10 @@ final class ErdCanvas extends JComponent {
     FontMetrics bold = getFontMetrics(boldFont());
     FontMetrics plain = getFontMetrics(plainFont());
     FontMetrics mono = getFontMetrics(monoFont());
+    FontMetrics small = getFontMetrics(smallFont());
     for (Card c : cards) {
-      int head = PAD + bold.stringWidth(c.table.name()) + GAP + plain.stringWidth(c.table.comment()) + PAD;
+      int head = PAD + tableIcon().getIconWidth() + ICON_GAP + bold.stringWidth(c.table.name()) + GAP + plain.stringWidth(c.table.comment())
+                 + GAP + small.stringWidth(String.valueOf(c.columns.size())) + PAD;
       int rows = 0;
       for (Meta.Column col : visible(c)) {
         rows = Math.max(rows, PAD + TAG_W + mono.stringWidth(col.name()) + GAP + plain.stringWidth(col.comment()) + PAD);
@@ -173,9 +190,21 @@ final class ErdCanvas extends JComponent {
   }
 
   void zoomBy(double factor) {
-    zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoom * factor));
+    setZoom(zoom * factor);
+  }
+
+  /** 배율(1 = 100%). ZOOM_MIN ~ ZOOM_MAX 로 자른다. */
+  void setZoom(double value) {
+    zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, value));
     resize();
   }
+
+  double zoom() { return zoom; }
+
+  int tableCount() { return cards.size(); }
+
+  /** 그려지는 관계(선) 수. 복합키는 하나로 센다. */
+  int relationCount() { return groupedFks().size(); }
 
   // ---- 마우스 ----
 
@@ -237,6 +266,10 @@ final class ErdCanvas extends JComponent {
 
   private Font monoFont() { return Ui.mono(); }
 
+  private Font smallFont() { return plainFont().deriveFont(plainFont().getSize2D() - SMALL_STEP); }
+
+  private static Icon tableIcon() { return AllIcons.Nodes.DataTables; }
+
   @Override
   protected void paintComponent(Graphics g) {
     Graphics2D g2 = (Graphics2D) g.create();
@@ -244,9 +277,22 @@ final class ErdCanvas extends JComponent {
       g2.setColor(UIUtil.getPanelBackground());
       g2.fillRect(0, 0, getWidth(), getHeight());
       g2.scale(zoom, zoom);
+      paintGrid(g2);
       paintDiagram(g2);
     } finally {
       g2.dispose();
+    }
+  }
+
+  /** 화면에만 그리는 바탕 점 격자(PNG 저장에는 넣지 않는다). 보이는 곳만 그린다. */
+  private void paintGrid(Graphics2D g) {
+    Rectangle area = g.getClipBounds();
+    if (area == null) area = new Rectangle(0, 0, (int) (getWidth() / zoom), (int) (getHeight() / zoom));
+    g.setColor(ColorUtil.withAlpha(JBColor.border(), GRID_ALPHA));
+    int startX = Math.floorDiv(area.x, GRID) * GRID;
+    int startY = Math.floorDiv(area.y, GRID) * GRID;
+    for (int y = startY; y <= area.y + area.height; y += GRID) {
+      for (int x = startX; x <= area.x + area.width; x += GRID) g.fillRect(x, y, GRID_DOT, GRID_DOT);
     }
   }
 
@@ -281,7 +327,7 @@ final class ErdCanvas extends JComponent {
     Card child = byName.get(fk.fkTable());
     Card parent = byName.get(fk.pkTable());
     boolean hot = selected != null && (selected == child || selected == parent);
-    g.setColor(hot ? JBUI.CurrentTheme.Focus.focusColor() : Ui.muted());
+    g.setColor(hot ? Ui.SELECTION : Ui.muted());
     g.setStroke(new BasicStroke(hot ? 2f : 1.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
     List<Point> path = route(child, parent, rowY(child, fk.fkColumn()), rowY(parent, fk.pkColumn()), tracks);
     g.draw(rounded(path));
@@ -301,12 +347,25 @@ final class ErdCanvas extends JComponent {
       fkCols.add(f.fkColumn());
       pkCols.add(f.pkColumn());
     }
-    String label = String.join(",", fkCols) + ":" + String.join(",", pkCols);
-    g.setFont(plainFont().deriveFont(plainFont().getSize2D() - 2));
-    int lw = g.getFontMetrics().stringWidth(label);
-    Point start = path.get(0);
-    int lx = path.get(1).x < start.x ? start.x - LABEL_GAP - lw : start.x + LABEL_GAP;
-    g.drawString(label, lx, start.y - LABEL_GAP);
+    // 칼럼 이름이 같으면 하나만, 다르면 「FK:PK」. 가운데 토막의 가운데에 작은 상자로 둔다.
+    String label = fkCols.equals(pkCols) ? String.join(",", fkCols) : String.join(",", fkCols) + ":" + String.join(",", pkCols);
+    g.setFont(smallFont());
+    FontMetrics fm = g.getFontMetrics();
+    int lw = fm.stringWidth(label);
+    int k = (path.size() - 2) / 2;
+    Point a = path.get(k);
+    Point b = path.get(k + 1);
+    int bw = lw + LABEL_PAD * 2;
+    int bh = fm.getHeight();
+    int bx = (a.x + b.x) / 2 - bw / 2;
+    int by = (a.y + b.y) / 2 - bh / 2;
+    g.setColor(UIUtil.getListBackground());
+    g.fillRoundRect(bx, by, bw, bh, LABEL_ARC, LABEL_ARC);
+    g.setStroke(new BasicStroke(1f));
+    g.setColor(hot ? Ui.SELECTION : JBColor.border());
+    g.drawRoundRect(bx, by, bw, bh, LABEL_ARC, LABEL_ARC);
+    g.setColor(hot ? Ui.SELECTION : Ui.muted());
+    g.drawString(label, bx + LABEL_PAD, by + fm.getAscent());
   }
 
   /**
@@ -424,30 +483,42 @@ final class ErdCanvas extends JComponent {
   }
 
   private void paintCard(Graphics2D g, Card c) {
-    Color border = c == selected ? JBUI.CurrentTheme.Focus.focusColor() : JBColor.border();
+    boolean chosen = c == selected;
+    Color border = chosen ? Ui.SELECTION : JBColor.border();
     g.setColor(UIUtil.getListBackground());
-    g.fillRoundRect(c.x, c.y, c.w, c.h, 8, 8);
-    g.setColor(UIUtil.getPanelBackground());
-    g.fillRoundRect(c.x, c.y, c.w, HEAD, 8, 8);
-    g.fillRect(c.x, c.y + HEAD - 8, c.w, 8);
+    g.fillRoundRect(c.x, c.y, c.w, c.h, ARC, ARC);
+    g.setColor(chosen ? Ui.SELECTION_BG : UIUtil.getPanelBackground());
+    g.fillRoundRect(c.x, c.y, c.w, HEAD, ARC, ARC);
+    g.fillRect(c.x, c.y + HEAD - ARC, c.w, ARC);
+    // 머리 위 색 띠: 이름 토막이 같은 표(TB_ORDER · TB_ORDER_ITEM)는 같은 색. 카드 둥근 모서리 안에서만 칠한다.
+    Shape oldClip = g.getClip();
+    g.clip(new RoundRectangle2D.Float(c.x, c.y, c.w, c.h, ARC, ARC));
+    g.setColor(Ui.CATEGORY[ErdLayout.category(c.table.name(), Ui.CATEGORY.length)]);
+    g.fillRect(c.x, c.y, c.w, STRIPE);
+    g.setClip(oldClip);
     g.setColor(border);
-    g.setStroke(new BasicStroke(c == selected ? 2f : 1f));
-    g.drawRoundRect(c.x, c.y, c.w, c.h, 8, 8);
+    g.setStroke(new BasicStroke(chosen ? 2f : 1f));
+    g.drawRoundRect(c.x, c.y, c.w, c.h, ARC, ARC);
     g.setStroke(new BasicStroke(1f));
     g.setColor(JBColor.border());
     g.drawLine(c.x, c.y + HEAD, c.x + c.w, c.y + HEAD);
 
-    java.awt.Shape oldClip = g.getClip();
     g.clipRect(c.x + 1, c.y + 1, c.w - 2, c.h - 2); // 폭은 MAX_CARD_W 까지만 늘어나므로 넘치는 글은 자른다
+    Icon icon = tableIcon();
+    icon.paintIcon(this, g, c.x + PAD, c.y + (HEAD - icon.getIconHeight()) / 2);
+    int nameX = c.x + PAD + icon.getIconWidth() + ICON_GAP;
     g.setFont(boldFont());
     FontMetrics fm = g.getFontMetrics();
     int base = c.y + (HEAD + fm.getAscent() - fm.getDescent()) / 2;
     g.setColor(UIUtil.getLabelForeground());
-    g.drawString(c.table.name(), c.x + PAD, base);
-    int after = c.x + PAD + fm.stringWidth(c.table.name()) + GAP;
+    g.drawString(c.table.name(), nameX, base);
+    int after = nameX + fm.stringWidth(c.table.name()) + GAP;
     g.setFont(plainFont());
     g.setColor(Ui.muted());
     g.drawString(c.table.comment(), after, base);
+    String count = String.valueOf(c.columns.size());
+    g.setFont(smallFont());
+    g.drawString(count, c.x + c.w - PAD - g.getFontMetrics().stringWidth(count), base);
 
     int y = c.y + HEAD;
     List<Meta.Column> cols = visible(c);
@@ -457,9 +528,16 @@ final class ErdCanvas extends JComponent {
     for (Meta.Column col : cols) {
       int b = y + ROW - 6;
       if (col.pk() || col.fk()) {
-        g.setFont(plainFont().deriveFont(Font.BOLD, plainFont().getSize2D() - 3));
+        g.setFont(plainFont().deriveFont(Font.BOLD, plainFont().getSize2D() - TAG_STEP));
+        FontMetrics tm = g.getFontMetrics();
+        String tag = col.pk() ? "PK" : "FK";
+        int tw = tm.stringWidth(tag) + TAG_PAD * 2;
+        int th = tm.getHeight();
+        int ty = y + (ROW - th) / 2;
+        g.setColor(col.pk() ? Ui.PK_BG : Ui.FK_BG);
+        g.fillRoundRect(c.x + PAD, ty, tw, th, TAG_ARC, TAG_ARC);
         g.setColor(col.pk() ? Ui.PK : Ui.FK);
-        g.drawString(col.pk() ? "PK" : "FK", c.x + PAD, b);
+        g.drawString(tag, c.x + PAD + TAG_PAD, ty + tm.getAscent());
       }
       g.setFont(monoFont());
       g.setColor(UIUtil.getLabelForeground());

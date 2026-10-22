@@ -19,10 +19,13 @@ import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowAnchor;
 import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.ui.components.JBLabel;
+import com.intellij.ui.components.panels.HorizontalLayout;
 import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentFactory;
 import com.intellij.util.ui.JBUI;
+import com.intellij.util.ui.UIUtil;
+import ei.db.console.Badge;
 import ei.db.BarAction;
 import ei.db.DbConfig;
 import ei.db.DbSessions;
@@ -34,6 +37,7 @@ import org.jetbrains.annotations.NotNull;
 
 import javax.imageio.ImageIO;
 import javax.swing.JPanel;
+import javax.swing.SwingConstants;
 import java.awt.BorderLayout;
 import java.io.IOException;
 import java.sql.Connection;
@@ -55,6 +59,11 @@ public final class ErdView {
   private static final String TOOLBAR_PLACE = "EiDbErd";
   private static final int MAX_TABLES = 60;
   private static final String[] TABLE_TYPES = {"TABLE"};
+  /** 배율을 백분율 글로 바꿀 때 곱하는 수 · 실제 크기 배율. */
+  private static final int PERCENT = 100;
+  private static final double ACTUAL_ZOOM = 1.0;
+  /** 범례 꼬리표 · 안내 사이 간격(px, 배율 전). */
+  private static final int LEGEND_GAP = 8;
 
   /** tables 가 null 이면 스키마의 모든 표. */
   public static void open(Project project, DbConfig c, String schema, List<String> tables) {
@@ -111,18 +120,34 @@ public final class ErdView {
         new BarAction(EiDbBundle.message("erd.relayout"), null, AllIcons.Graph.Layout, canvas::autoLayout),
         new KeysOnly(canvas),
         Separator.getInstance(),
+        new BarAction(EiDbBundle.message("erd.zoom.in"), null, AllIcons.Graph.ZoomIn, () -> canvas.zoomBy(ErdCanvas.ZOOM_STEP)),
+        new BarAction(EiDbBundle.message("erd.zoom.out"), null, AllIcons.Graph.ZoomOut, () -> canvas.zoomBy(1 / ErdCanvas.ZOOM_STEP)),
+        new ZoomReset(canvas).withText(),
+        Separator.getInstance(),
         new BarAction(EiDbBundle.message("erd.save.png"), EiDbBundle.message("erd.save.png.description"), AllIcons.ToolbarDecorator.Export,
             () -> savePng(project, schema, canvas)));
+    JBLabel summary = new JBLabel(EiDbBundle.message("erd.summary", canvas.tableCount(), canvas.relationCount()),
+                                  UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER);
+    summary.setBorder(JBUI.Borders.emptyRight(LEGEND_GAP));
+    JPanel top = new JPanel(new BorderLayout());
+    top.add(toolbar.getComponent(), BorderLayout.CENTER);
+    top.add(summary, BorderLayout.EAST);
 
-    JBLabel legend = new JBLabel(EiDbBundle.message("erd.legend"));
-    legend.setForeground(Ui.muted());
-    legend.setBorder(JBUI.Borders.empty(4, 8));
+    // 범례: PK · FK 꼬리표 + 짧은 조작 안내. 창이 좁아 잘리면 툴팁으로 전체를 본다.
+    JPanel legend = new JPanel(new HorizontalLayout(LEGEND_GAP, SwingConstants.CENTER));
+    legend.add(new JBLabel(EiDbBundle.message("erd.legend.pk"), Badge.pk(0), SwingConstants.LEFT));
+    legend.add(new JBLabel(EiDbBundle.message("erd.legend.fk"), Badge.fk(0), SwingConstants.LEFT));
+    JBLabel hint = new JBLabel(EiDbBundle.message("erd.legend"));
+    hint.setForeground(Ui.muted());
+    hint.setToolTipText(EiDbBundle.message("erd.legend"));
+    legend.add(hint);
+    legend.setBorder(JBUI.Borders.compound(JBUI.Borders.customLineTop(JBUI.CurrentTheme.ToolWindow.borderColor()), JBUI.Borders.empty(4, 8)));
 
     // 도구줄 아래 선은 SimpleToolWindowPanel 이 그리고, 스크롤 칸은 테두리 없이 둔다(선이 겹치지 않게).
     JPanel body = new JPanel(new BorderLayout());
     body.add(ScrollPaneFactory.createScrollPane(canvas, true), BorderLayout.CENTER);
     body.add(legend, BorderLayout.SOUTH);
-    panel.setToolbar(toolbar.getComponent());
+    panel.setToolbar(top);
     panel.setContent(body);
 
     ToolWindowManager twm = ToolWindowManager.getInstance(project);
@@ -135,6 +160,22 @@ public final class ErdView {
     tw.getContentManager().addContent(content);
     tw.getContentManager().setSelectedContent(content);
     tw.activate(null);
+  }
+
+  /** 실제 크기(100%)로 돌리기. 단추 글은 지금 배율(백분율)이다. */
+  private static final class ZoomReset extends BarAction {
+    private final ErdCanvas canvas;
+
+    ZoomReset(ErdCanvas canvas) {
+      super(EiDbBundle.message("erd.zoom.reset"), EiDbBundle.message("erd.zoom.reset"), AllIcons.Graph.ActualZoom, () -> canvas.setZoom(ACTUAL_ZOOM));
+      this.canvas = canvas;
+    }
+
+    @Override
+    public void update(@NotNull AnActionEvent e) {
+      super.update(e);
+      e.getPresentation().setText(Math.round(canvas.zoom() * PERCENT) + "%");
+    }
   }
 
   /** 「키 칼럼만」 켜고 끄기. 끄면 모든 칼럼을 보인다. */
