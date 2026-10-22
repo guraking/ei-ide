@@ -69,6 +69,8 @@
         <listener class="local.bootservers.ServerStatusRefresher" topic="com.intellij.execution.ExecutionListener"/>
         <!-- 아래쪽 창을 닫으면 그 창이 가렸던 직전 창을 다시 연다 -->
         <listener class="local.bootservers.ReopenPreviousToolWindow" topic="com.intellij.openapi.wm.ex.ToolWindowManagerListener"/>
+        <!-- 새 파일(버전 관리 밖) 위 폴더 목록을 변경 목록 갱신 때마다 만든다(ChangedFolderIconDecorator 가 씀) -->
+        <listener class="local.bootservers.UnversionedDirs" topic="com.intellij.openapi.vcs.changes.ChangeListListener"/>
     </projectListeners>
 
     <actions>

@@ -5,11 +5,8 @@ import com.intellij.ide.projectView.ProjectViewNode;
 import com.intellij.ide.projectView.ProjectViewNodeDecorator;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vcs.FileStatus;
-import com.intellij.openapi.vcs.FilePath;
 import com.intellij.openapi.vcs.VcsConfiguration;
 import com.intellij.openapi.vcs.FileStatusManager;
-import com.intellij.openapi.vcs.changes.ChangeListManager;
-import com.intellij.vcsUtil.VcsUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.util.IconUtil;
 import com.intellij.util.containers.ContainerUtil;
@@ -24,7 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * 상태는 FileStatusManager.getRecursiveStatus 를 쓰므로 Git · SVN 모두 되고, 설정 → Version Control
  * 「Show directories with changed descendants」(apply_defaults 21 이 기본으로 켬)가 꺼져 있으면 칠하지 않는다.
  * 폴더 자체가 새로 추가된 경우처럼 폴더의 상태가 따로 있으면 플랫폼 표시를 그대로 둔다.
- * 버전 관리에 아직 안 넣은 새 파일(빨간 글자)은 플랫폼의 getRecursiveStatus 가 세지 않으므로 따로 찾아,
+ * 버전 관리에 아직 안 넣은 새 파일(빨간 글자)은 플랫폼의 getRecursiveStatus 가 세지 않으므로 UnversionedDirs 로 따로 찾아,
  * 그 위 폴더는 아이콘과 이름을 NOT_CHANGED_RECURSIVE 색으로 칠한다(같은 설정이 꺼져 있으면 칠하지 않는다).
  */
 public final class ChangedFolderIconDecorator implements ProjectViewNodeDecorator {
@@ -45,7 +42,7 @@ public final class ChangedFolderIconDecorator implements ProjectViewNodeDecorato
         FileStatus status = FileStatusManager.getInstance(project).getRecursiveStatus(file);
         boolean unversionedOnly = status == FileStatus.NOT_CHANGED
                 && VcsConfiguration.getInstance(project).SHOW_DIRTY_RECURSIVELY
-                && hasUnversionedUnder(project, file);
+                && UnversionedDirs.contains(project, file.getPath());
         if (unversionedOnly) {
             status = FileStatus.NOT_CHANGED_RECURSIVE;
         } else if (status != FileStatus.NOT_CHANGED_IMMEDIATE && status != FileStatus.NOT_CHANGED_RECURSIVE) {
@@ -59,16 +56,5 @@ public final class ChangedFolderIconDecorator implements ProjectViewNodeDecorato
             data.setIcon(COLORIZED.computeIfAbsent(icon, k -> new ConcurrentHashMap<>())
                     .computeIfAbsent(color.getRGB(), rgb -> IconUtil.colorize(icon, new Color(rgb, true))));
         }
-    }
-
-    // shortcut: 폴더 노드마다 새 파일 목록 전체를 훑는다. 무시 목록에 안 넣은 빌드 산출물이 수천 개면 느려질 수 있으므로 그때 폴더별 캐시로 바꾼다.
-    private static boolean hasUnversionedUnder(Project project, VirtualFile dir) {
-        FilePath dirPath = VcsUtil.getFilePath(dir);
-        for (FilePath path : ChangeListManager.getInstance(project).getUnversionedFilesPaths()) {
-            if (path.isUnder(dirPath, true)) {
-                return true;
-            }
-        }
-        return false;
     }
 }
