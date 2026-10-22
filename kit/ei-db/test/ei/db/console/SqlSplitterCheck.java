@@ -24,6 +24,10 @@ public class SqlSplitterCheck {
     // 괄호 안의 빈 줄은 경계가 아니다(인라인 뷰 · EXISTS).
     String inline = "SELECT a\n  FROM (\n\n    SELECT 1 AS a FROM dual\n\n  ) v\n WHERE EXISTS (\n\n  SELECT 1 FROM dual)";
     eq(texts(inline + "\n\nSELECT 2 FROM dual"), List.of(inline, "SELECT 2 FROM dual"));
+    // 빈 줄 뒤가 이어지는 절(ORDER BY · OFFSET · , 등)이면 끊지 않는다.
+    String paging = "SELECT a\n  FROM t\n WHERE 1 = 1\n\n ORDER BY a DESC\n\n  -- 쪽\n  OFFSET 0 ROWS FETCH NEXT 15 ROWS ONLY";
+    eq(texts(paging + "\n\nSELECT 2 FROM dual"), List.of(paging, "SELECT 2 FROM dual"));
+    eq(texts("SELECT a\n\n     , b\n  FROM t"), List.of("SELECT a\n\n     , b\n  FROM t"));
     String myProc = "CREATE PROCEDURE p() BEGIN DECLARE x INT; DECLARE CONTINUE HANDLER FOR NOT FOUND SET x = 0; SET x = 1; END;";
     eq(texts(myProc + " SELECT 1; SELECT 2;"), List.of(myProc, "SELECT 1;", "SELECT 2;"));
     String nested = "BEGIN DECLARE v NUMBER; BEGIN v := 1; END; END;";
