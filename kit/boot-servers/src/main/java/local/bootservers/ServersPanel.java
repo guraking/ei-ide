@@ -44,7 +44,6 @@ import com.intellij.task.ProjectTaskManager;
 import com.intellij.openapi.wm.ToolWindowId;
 import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.ui.ColoredTableCellRenderer;
-import com.intellij.ui.JBColor;
 import com.intellij.ui.OnePixelSplitter;
 import com.intellij.ui.PopupHandler;
 import com.intellij.ui.ScrollPaneFactory;
@@ -57,6 +56,8 @@ import com.intellij.util.concurrency.AppExecutorUtil;
 import com.intellij.util.execution.ParametersListUtil;
 import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.JBUI;
+import com.intellij.util.ui.NamedColorUtil;
+import com.intellij.util.ui.UIUtil;
 import local.bootservers.was.WasSettings;
 import local.bootservers.was.WasLogFiles;
 import org.jetbrains.annotations.NotNull;
@@ -69,10 +70,12 @@ import javax.swing.JComponent;
 import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JTable;
+import javax.swing.border.Border;
 import javax.swing.ListSelectionModel;
 import javax.swing.Timer;
 import javax.swing.table.AbstractTableModel;
 import java.awt.CardLayout;
+import java.awt.Color;
 import java.awt.event.HierarchyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -915,9 +918,14 @@ final class ServersPanel extends SimpleToolWindowPanel {
 
     // ---- 오른쪽 칸 ----
 
+    /** 오른쪽 칸 안쪽 여백. 플랫폼 표준 간격(UIUtil.DEFAULT_VGAP · DEFAULT_HGAP)으로 맞춘다. */
+    private static Border cardBorder() {
+        return JBUI.Borders.empty(UIUtil.DEFAULT_VGAP * 2, UIUtil.DEFAULT_HGAP);
+    }
+
     private static JComponent emptyCard() {
         JPanel p = FormBuilder.createFormBuilder().addComponent(new JBLabel(BootServersBundle.message("servers.detail.choose"))).addComponentFillVertically(new JPanel(), 0).getPanel();
-        p.setBorder(JBUI.Borders.empty(8, 10));
+        p.setBorder(cardBorder());
         return p;
     }
 
@@ -927,7 +935,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
         vmOptions.getEmptyText().setText(BootServersBundle.message("servers.boot.vm.hint"));
         port.getEmptyText().setText(BootServersBundle.message("servers.boot.port.hint"));
         bootTitle.setFont(JBUI.Fonts.label().asBold());
-        bootStatus.setForeground(JBColor.GRAY);
+        bootStatus.setForeground(NamedColorUtil.getInactiveTextColor());
         JButton apply = new JButton(BootServersBundle.message("servers.boot.apply"));
         // 2026.2 는 버튼 클릭을 읽기 잠금 없이 처리한다. 설정이 없으면 PSI 로 메인 클래스를 찾으므로 잠금 안에서 돌린다.
         apply.addActionListener(e -> WriteIntentReadAction.run(() -> applyBoot()));
@@ -941,13 +949,13 @@ final class ServersPanel extends SimpleToolWindowPanel {
                 .addComponent(apply)
                 .addComponentFillVertically(new JPanel(), 0)
                 .getPanel();
-        p.setBorder(JBUI.Borders.empty(8, 10));
+        p.setBorder(cardBorder());
         return p;
     }
 
     private JComponent wasCard() {
         wasTitle.setFont(JBUI.Fonts.label().asBold());
-        wasStatus.setForeground(JBColor.GRAY);
+        wasStatus.setForeground(NamedColorUtil.getInactiveTextColor());
         wasSummary.setVerticalAlignment(JBLabel.TOP);
         JButton edit = new JButton(BootServersBundle.message("servers.action.edit.settings"));
         edit.addActionListener(e -> {
@@ -962,7 +970,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
                 .addComponent(edit)
                 .addComponentFillVertically(new JPanel(), 0)
                 .getPanel();
-        p.setBorder(JBUI.Borders.empty(8, 10));
+        p.setBorder(cardBorder());
         return p;
     }
 
@@ -1188,9 +1196,6 @@ final class ServersPanel extends SimpleToolWindowPanel {
     }
 
     private static final class StateRenderer extends ColoredTableCellRenderer {
-        private static final JBColor RUN = new JBColor(0x3E9C46, 0x5FB865);
-        private static final JBColor STARTING = new JBColor(0xB7791F, 0xE0A64F);
-        private static final JBColor FAILED = new JBColor(0xC94F4F, 0xE5605A);
 
         @Override
         protected void customizeCellRenderer(@NotNull JTable table, Object value, boolean selected, boolean hasFocus, int row, int column) {
@@ -1199,11 +1204,12 @@ final class ServersPanel extends SimpleToolWindowPanel {
                 append(value == null ? "" : value.toString(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
                 return;
             }
-            JBColor color = switch (state) {
-                case RUNNING -> RUN;
-                case STARTING -> STARTING;
-                case FAILED -> FAILED;
-                case STOPPED -> JBColor.GRAY;
+            // 상태 점 색은 테마의 성공 · 경고 · 오류 · 흐린 글 색을 따른다.
+            Color color = switch (state) {
+                case RUNNING -> UIUtil.getLabelSuccessForeground();
+                case STARTING -> JBUI.CurrentTheme.Label.warningForeground();
+                case FAILED -> JBUI.CurrentTheme.Label.errorForeground();
+                case STOPPED -> NamedColorUtil.getInactiveTextColor();
             };
             append("● ", new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, color));
             append(state.label());

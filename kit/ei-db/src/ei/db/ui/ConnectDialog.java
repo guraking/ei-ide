@@ -52,6 +52,8 @@ public final class ConnectDialog extends DialogWrapper {
   private static final int MIN_PORT = 1;
   private static final int MAX_PORT = 65535;
   private static final int PORT_COLUMNS = 6;
+  /** 입력 칸이 접속 주소 한 줄을 다 보일 만큼의 폼 너비(px, 배율 전). */
+  private static final int FORM_WIDTH = 600;
   /** 연결 시험 오류는 첫 줄만 이만큼 보이고 전체는 풍선 도움말로 둔다. */
   private static final int ERROR_PREVIEW = 80;
   private static final Color OK_COLOR = JBColor.namedColor("EiDatabase.connected", new JBColor(0x3E9B47, 0x5FB865));
@@ -194,7 +196,7 @@ public final class ConnectDialog extends DialogWrapper {
         .addLabeledComponent(EiDbBundle.message("connect.url"), url)
         .addLabeledComponent(EiDbBundle.message("connect.safety"), safety)
         .getPanel();
-    form.setPreferredSize(JBUI.size(600, -1).withHeight(form.getPreferredSize().height));
+    form.setPreferredSize(JBUI.size(FORM_WIDTH, -1).withHeight(form.getPreferredSize().height));
     return form;
   }
 

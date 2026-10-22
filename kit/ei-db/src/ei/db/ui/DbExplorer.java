@@ -144,6 +144,9 @@ final class DbExplorer extends SimpleToolWindowPanel {
     tree.setShowsRootHandles(true);
     tree.setToggleClickCount(0); // 더블클릭은 아래 DoubleClickListener 가 맡는다(표는 실행, 나머지는 펼치기).
     tree.setCellRenderer(new Renderer());
+    // 접속이 하나도 없으면 빈 나무 대신 안내와 「접속 추가」 링크를 보인다.
+    tree.getEmptyText().setText(EiDbBundle.message("explorer.empty"))
+        .appendLine(EiDbBundle.message("connect.title.add"), SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES, e -> addConnection());
     tree.addTreeWillExpandListener(new TreeWillExpandListener() {
       @Override public void treeWillExpand(TreeExpansionEvent e) { loadIfNeeded((DefaultMutableTreeNode) e.getPath().getLastPathComponent()); }
       @Override public void treeWillCollapse(TreeExpansionEvent e) {}

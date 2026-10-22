@@ -25,7 +25,6 @@ import ei.db.Meta;
 import ei.db.Notify;
 import org.jetbrains.annotations.NotNull;
 
-import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
@@ -235,7 +234,7 @@ public final class FeatureDialog extends DialogWrapper {
     WidthTracking leftBody = new WidthTracking();
     leftBody.add(left, BorderLayout.CENTER);
     JBScrollPane leftScroll = new JBScrollPane(leftBody, JBScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JBScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-    leftScroll.setBorder(BorderFactory.createEmptyBorder());
+    leftScroll.setBorder(JBUI.Borders.empty());
     leftScroll.setPreferredSize(new Dimension(JBUI.scale(LEFT_WIDTH), JBUI.scale(HEIGHT)));
 
     JPanel head = new JPanel(new FlowLayout(FlowLayout.RIGHT, JBUI.scale(8), 0));
@@ -331,7 +330,7 @@ public final class FeatureDialog extends DialogWrapper {
       }
     });
     JBScrollPane sp = new JBScrollPane(t);
-    sp.setBorder(BorderFactory.createEmptyBorder());
+    sp.setBorder(JBUI.Borders.empty());
     sp.setPreferredSize(new Dimension(JBUI.scale(LEFT_WIDTH), JBUI.scale(COLUMN_TABLE_HEIGHT)));
     sp.setMinimumSize(sp.getPreferredSize());
     return sp;

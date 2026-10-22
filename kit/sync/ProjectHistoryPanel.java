@@ -18,14 +18,21 @@ import com.intellij.openapi.wm.ToolWindowFactory;
 import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.JBColor;
 import com.intellij.icons.AllIcons;
-import com.intellij.ui.InplaceButton;
+import com.intellij.openapi.actionSystem.ActionManager;
+import com.intellij.openapi.actionSystem.ActionToolbar;
+import com.intellij.openapi.actionSystem.DefaultActionGroup;
+import com.intellij.openapi.project.DumbAwareAction;
+import com.intellij.openapi.vcs.FileStatus;
+import com.intellij.ui.ColoredListCellRenderer;
+import com.intellij.ui.SimpleTextAttributes;
+import com.intellij.ui.components.ActionLink;
+import com.intellij.ui.render.RenderingUtil;
 import com.intellij.ui.OnePixelSplitter;
 import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.SearchTextField;
 import com.intellij.ui.components.JBList;
 import com.intellij.ui.content.ContentFactory;
 import com.intellij.util.ui.JBUI;
-import com.intellij.util.ui.UIUtil;
 import org.jetbrains.annotations.NotNull;
 
 import javax.swing.*;
@@ -75,6 +82,7 @@ final class ProjectHistoryPanel extends JPanel {
   private static final int PILL_H = 18;
   private static final int GAP = 8;
   private static final int SEARCH_COLUMNS = 30;
+  private static final String TOOLBAR_PLACE = "KingGuraGitLogToolbar";
   private static final float LINE_WIDTH = 1.5f;
   // 동그라미 지름 대비 머리글자 크기.
   private static final float AVATAR_FONT_RATIO = 0.4f;
@@ -84,19 +92,19 @@ final class ProjectHistoryPanel extends JPanel {
   private static final Color[] PALETTE = {
     new Color(0xFF375F), new Color(0x0A84FF), new Color(0x30D158), new Color(0xFF9F0A), new Color(0xBF5AF2),
     new Color(0x40C8C0), new Color(0xFFD60A), new Color(0x64D2FF), new Color(0x7D7AFF), new Color(0xFF6482)};
-  private static final Color SELECTED_ROW = new Color(0x30FF375F, true);
+  // 동그라미 글자는 팔레트 바탕 위에 그리므로 테마와 무관하게 어둡게 둔다.
   private static final Color AVATAR_TEXT = new Color(0x111111);
-  private static final Color LOCAL_BRANCH = new Color(0x5FE39B);
-  private static final Color REMOTE_BRANCH = new Color(0x8FB3FF);
-  private static final Color TAG = new Color(0xFFD36B);
-  private static final Color SVN_BADGE = new Color(0x7FA8FF);
-  private static final Color GIT_BADGE = new Color(0xFF8A6A);
+  // 알약 글자색. 밝은 테마(첫 값)에서는 흰 바탕에서 읽히도록 어둡게, 어두운 테마(둘째 값)에서는 밝게.
+  private static final Color LOCAL_BRANCH = new JBColor(0x2A8A4E, 0x5FE39B);
+  private static final Color REMOTE_BRANCH = new JBColor(0x3A6FD8, 0x8FB3FF);
+  private static final Color TAG = new JBColor(0x9A6B00, 0xFFD36B);
   private static final int PILL_FILL_ALPHA = 0x22;
   private static final int PILL_BORDER_ALPHA = 0x66;
   private static final String TAG_PREFIX = "tag: ";
-  private static final Map<String, Color> STATUS_COLORS = Map.of(
-    "M", new Color(0xFFC061), "A", new Color(0x5FE39B), "D", new Color(0xFF7A95), "R", new Color(0x7FB3FF));
-  private static final Color DIM = JBUI.CurrentTheme.ContextHelp.FOREGROUND;
+  // 바뀐 파일 이름 색은 IDE 의 파일 상태 색(테마를 따름). 이름 바꿈(R)은 IntelliJ 변경 목록처럼 수정 색.
+  private static final Map<String, FileStatus> FILE_STATUS = Map.of(
+    "M", FileStatus.MODIFIED, "A", FileStatus.ADDED, "D", FileStatus.DELETED, "R", FileStatus.MODIFIED);
+  private static final Color DIM = SimpleTextAttributes.GRAYED_ATTRIBUTES.getFgColor();
 
   /** 왼쪽 목록 한 줄. dir 은 모듈의 첫 콘텐츠 루트. */
   private record Target(String name, File dir, SyncPanel.Vcs vcs) {
@@ -117,7 +125,7 @@ final class ProjectHistoryPanel extends JPanel {
   private final Pill branch = new Pill();
   private final JLabel status = new JLabel(" ");
   private final JLabel author = new JLabel(" ");
-  private final JButton hash = new JButton();
+  private final ActionLink hash = new ActionLink();
   private final JTextArea message = new JTextArea();
   private final JLabel filesTitle = new JLabel(" ");
   private Loaded loaded;
@@ -129,6 +137,8 @@ final class ProjectHistoryPanel extends JPanel {
     this.project = project;
 
     targets.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+    targets.getEmptyText().setText(SyncBundle.message("history.empty.targets"));
+    commits.getEmptyText().setText(SyncBundle.message("history.empty.commits"));
     targets.setCellRenderer(new TargetRenderer());
     targets.addListSelectionListener(e -> { if (!e.getValueIsAdjusting()) load(); });
     commits.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
@@ -150,14 +160,17 @@ final class ProjectHistoryPanel extends JPanel {
 
     // IntelliJ 기본 창처럼 새로고침은 도구줄 아이콘 단추, 스크롤 상자는 테두리 없이, 칸막이는 1픽셀로 둔다.
     // 창 머리 아래 선은 IntelliJ 가 그으므로 안쪽 칸에 테두리를 더하면 선이 두 겹이 된다.
-    InplaceButton refresh = new InplaceButton(SyncBundle.message("history.refresh"), AllIcons.Actions.Refresh, e -> { reloadTargets(); load(); });
+    DefaultActionGroup actions = new DefaultActionGroup(
+      DumbAwareAction.create(SyncBundle.message("history.refresh"), AllIcons.Actions.Refresh, e -> { reloadTargets(); load(); }));
+    ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar(TOOLBAR_PLACE, actions, true);
+    toolbar.setTargetComponent(this);
     projectName.setFont(JBUI.Fonts.label().biggerOn(2).asBold());
     JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(GAP), JBUI.scale(GAP / 2)));
     top.setBorder(JBUI.Borders.empty(GAP / 2, GAP / 2, 0, GAP));
     top.add(projectName);
     top.add(branch);
     top.add(filter);
-    top.add(refresh);
+    top.add(toolbar.getComponent());
     top.add(status);
     status.setForeground(DIM);
 
@@ -182,14 +195,19 @@ final class ProjectHistoryPanel extends JPanel {
     author.setFont(JBUI.Fonts.label().biggerOn(1).asBold());
     author.setIconTextGap(JBUI.scale(GAP + GAP / 2));
     hash.setToolTipText(SyncBundle.message("history.copy"));
+    hash.setIcon(AllIcons.Actions.Copy);
+    hash.setHorizontalTextPosition(SwingConstants.LEFT);
     message.setEditable(false);
     message.setLineWrap(true);
     message.setWrapStyleWord(true);
     message.setOpaque(false);
-    message.setFont(JBUI.Fonts.label().biggerOn(1));
+    message.setFont(JBUI.Fonts.label());
+    message.setBorder(JBUI.Borders.empty());
     filesTitle.setForeground(DIM);
     JLabel hint = new JLabel(SyncBundle.message("history.hint"));
     hint.setForeground(DIM);
+    hint.setFont(JBUI.Fonts.smallFont());
+    hint.setBorder(JBUI.Borders.emptyTop(GAP));
 
     JPanel head = new JPanel();
     head.setLayout(new BoxLayout(head, BoxLayout.Y_AXIS));
@@ -319,6 +337,7 @@ final class ProjectHistoryPanel extends JPanel {
     message.setText("");
     filesTitle.setText(" ");
     files.setListData(new History.FileChange[0]);
+    files.getEmptyText().setText(SyncBundle.message("history.empty.select"));
   }
 
   private void showDetail() {
@@ -335,6 +354,7 @@ final class ProjectHistoryPanel extends JPanel {
     message.setText(entry.message());
     filesTitle.setText(SyncBundle.message("history.files", entry.files().size()));
     files.setListData(entry.files().toArray(History.FileChange[]::new));
+    files.getEmptyText().setText(SyncBundle.message("history.empty.files"));
   }
 
   /** 고른 파일의 커밋 직전 내용과 커밋 내용을 비교 창으로 연다. 한쪽에 없으면(추가 · 삭제 · 첫 커밋) 빈 내용. */
@@ -503,28 +523,13 @@ final class ProjectHistoryPanel extends JPanel {
     }
   }
 
-  /** 프로젝트 이름과 Git · SVN 표시. */
-  private static final class TargetRenderer extends JPanel implements ListCellRenderer<Target> {
-    private final JLabel name = new JLabel();
-    private final JLabel badge = new JLabel();
-
-    TargetRenderer() {
-      super(new BorderLayout());
-      setBorder(JBUI.Borders.empty(GAP / 2 + 2, GAP + 2));
-      add(name, BorderLayout.CENTER);
-      add(badge, BorderLayout.EAST);
-      badge.setFont(JBUI.Fonts.smallFont());
-    }
-
+  /** 프로젝트(모듈) 아이콘 · 이름, 뒤에 흐린 Git · SVN 표시. */
+  private static final class TargetRenderer extends ColoredListCellRenderer<Target> {
     @Override
-    public Component getListCellRendererComponent(JList<? extends Target> list, Target value, int index, boolean selected, boolean focused) {
-      name.setText(value.name());
-      boolean git = value.vcs() == SyncPanel.Vcs.GIT;
-      badge.setText(git ? "Git" : "SVN");
-      badge.setForeground(git ? GIT_BADGE : SVN_BADGE);
-      setBackground(selected ? SELECTED_ROW : list.getBackground());
-      name.setForeground(list.getForeground());
-      return this;
+    protected void customizeCellRenderer(@NotNull JList<? extends Target> list, Target value, int index, boolean selected, boolean focused) {
+      setIcon(AllIcons.Nodes.Module);
+      append(value.name());
+      append("  " + (value.vcs() == SyncPanel.Vcs.GIT ? "Git" : "SVN"), SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES);
     }
   }
 
@@ -535,6 +540,7 @@ final class ProjectHistoryPanel extends JPanel {
     private int last;
     private boolean selected;
     private Color background;
+    private Color foreground;
 
     @Override
     public Component getListCellRendererComponent(JList<? extends History.Entry> list, History.Entry value, int index,
@@ -543,7 +549,8 @@ final class ProjectHistoryPanel extends JPanel {
       this.index = index;
       this.last = list.getModel().getSize() - 1;
       this.selected = selected;
-      this.background = list.getBackground();
+      this.background = selected ? RenderingUtil.getSelectionBackground(list) : list.getBackground();
+      this.foreground = selected ? RenderingUtil.getSelectionForeground(list) : list.getForeground();
       setFont(list.getFont());
       return this;
     }
@@ -558,7 +565,7 @@ final class ProjectHistoryPanel extends JPanel {
       int w = getWidth();
       int h = getHeight();
       int cy = h / 2;
-      g2.setColor(selected ? SELECTED_ROW : background);
+      g2.setColor(background);
       g2.fillRect(0, 0, w, h);
 
       History.Row row = graph && loaded != null && index < loaded.rows().size() ? loaded.rows().get(index) : null;
@@ -586,10 +593,11 @@ final class ProjectHistoryPanel extends JPanel {
       FontMetrics fm = g2.getFontMetrics();
       int baseline = (h + fm.getAscent() - fm.getDescent()) / 2;
       int gap = JBUI.scale(GAP);
-      // 오른쪽: 굵은 작성자, 그 뒤 날짜 전체. 합치기 커밋은 둘 다 흐리게.
+      // 오른쪽: 굵은 작성자, 그 뒤 날짜 전체. 합치기 커밋은 둘 다 흐리게(고른 줄은 선택 글자색).
+      Color text = entry.merge() && !selected ? DIM : foreground;
       String time = ROW_TIME.format(entry.time().atZone(ZONE));
       int right = w - gap * 2 - fm.stringWidth(time);
-      g2.setColor(entry.merge() ? DIM : UIUtil.getListForeground());
+      g2.setColor(text);
       g2.drawString(time, right, baseline);
       Font bold = getFont().deriveFont(Font.BOLD);
       FontMetrics bm = g2.getFontMetrics(bold);
@@ -601,7 +609,7 @@ final class ProjectHistoryPanel extends JPanel {
       int textX = graphWidth + gap;
       int room = right - gap - textX;
       String subject = fit(entry.subject(), fm, room);
-      g2.setColor(entry.merge() ? DIM : UIUtil.getListForeground());
+      g2.setColor(text);
       g2.drawString(subject, textX, baseline);
       int pillX = textX + fm.stringWidth(subject) + gap;
       for (String ref : entry.refs()) {
@@ -629,39 +637,20 @@ final class ProjectHistoryPanel extends JPanel {
     return text.substring(0, end) + ellipsis;
   }
 
-  /** 바뀐 파일: 색 상자 안 상태 글자, 파일 이름, 흐린 상위 폴더 이름. */
-  private static final class FileRenderer extends JPanel implements ListCellRenderer<History.FileChange> {
-    private final JLabel status = new JLabel("", SwingConstants.CENTER);
-    private final JLabel name = new JLabel();
-    private final JLabel folder = new JLabel();
-
-    FileRenderer() {
-      super(new BorderLayout(JBUI.scale(GAP), 0));
-      setBorder(JBUI.Borders.empty(GAP / 2, GAP));
-      status.setOpaque(true);
-      status.setFont(JBUI.Fonts.smallFont().asBold());
-      status.setPreferredSize(JBUI.size(PILL_H, PILL_H));
-      folder.setForeground(DIM);
-      add(status, BorderLayout.WEST);
-      add(name, BorderLayout.CENTER);
-      add(folder, BorderLayout.EAST);
-    }
-
+  /** 바뀐 파일: 파일 형식 아이콘, 상태 색 이름, 흐린 상위 폴더 경로. 풍선 도움말은 상태 글자와 전체 경로. */
+  private static final class FileRenderer extends ColoredListCellRenderer<History.FileChange> {
     @Override
-    public Component getListCellRendererComponent(JList<? extends History.FileChange> list, History.FileChange value, int index,
-                                                  boolean selected, boolean focused) {
-      Color color = STATUS_COLORS.getOrDefault(value.status(), DIM);
-      status.setText(value.status());
-      status.setForeground(color);
-      status.setBackground(alpha(color, PILL_BORDER_ALPHA / 2));
-      File file = new File(value.path());
-      name.setText(file.getName());
-      name.setToolTipText(value.path());
-      File parent = file.getParentFile();
-      folder.setText(parent == null ? "" : parent.getName());
-      setBackground(selected ? SELECTED_ROW : list.getBackground());
-      name.setForeground(list.getForeground());
-      return this;
+    protected void customizeCellRenderer(@NotNull JList<? extends History.FileChange> list, History.FileChange value, int index,
+                                         boolean selected, boolean focused) {
+      String path = value.path();
+      int slash = path.lastIndexOf('/');
+      String name = path.substring(slash + 1);
+      setIcon(FileTypeManager.getInstance().getFileTypeByFileName(name).getIcon());
+      FileStatus status = FILE_STATUS.get(value.status());
+      append(name, status == null ? SimpleTextAttributes.REGULAR_ATTRIBUTES
+                                  : new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, status.getColor()));
+      if (slash > 0) append("  " + path.substring(0, slash), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+      setToolTipText(value.status() + "  " + path);
     }
   }
 

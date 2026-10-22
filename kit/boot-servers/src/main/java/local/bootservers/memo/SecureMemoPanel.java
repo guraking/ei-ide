@@ -1,25 +1,35 @@
 package local.bootservers.memo;
 
+import com.intellij.icons.AllIcons;
 import com.intellij.markdown.utils.MarkdownToHtmlConverterKt;
 import com.intellij.openapi.Disposable;
+import com.intellij.openapi.actionSystem.ActionManager;
+import com.intellij.openapi.actionSystem.ActionToolbar;
+import com.intellij.openapi.actionSystem.ActionUpdateThread;
+import com.intellij.openapi.actionSystem.AnActionEvent;
+import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.application.PathManager;
+import com.intellij.openapi.project.DumbAwareAction;
+import com.intellij.openapi.project.DumbAwareToggleAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
+import com.intellij.openapi.ui.SimpleToolWindowPanel;
 import com.intellij.ui.BrowserHyperlinkListener;
+import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBPasswordField;
-import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.components.JBTextArea;
 import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.HTMLEditorKitBuilder;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
 import local.bootservers.BootServersBundle;
+import org.jetbrains.annotations.NotNull;
 
+import javax.swing.Box;
 import javax.swing.JButton;
 import javax.swing.JEditorPane;
 import javax.swing.JPanel;
-import javax.swing.JToggleButton;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.FlowLayout;
@@ -48,6 +58,7 @@ final class SecureMemoPanel extends JPanel implements Disposable {
     private static final String EDIT = "edit";
     private static final String PREVIEW = "preview";
     private static final int FIELD_COLUMNS = 20;
+    private static final String TOOLBAR_PLACE = "EI.SecureMemo.Toolbar";
 
     private final Project project;
     private final Path file = PathManager.getConfigDir().resolve(FILE_NAME);
@@ -64,7 +75,8 @@ final class SecureMemoPanel extends JPanel implements Disposable {
     private final CardLayout bodyCards = new CardLayout();
     private final JPanel body = new JPanel(bodyCards);
     private final JEditorPane preview = new JEditorPane();
-    private final JToggleButton previewButton = new JToggleButton(BootServersBundle.message("memo.preview"));
+    // 미리보기 켜짐. 도구 막대의 미리보기 단추가 이 값을 보인다.
+    private boolean previewOn;
     private char[] password;
     private String saved;
 
@@ -83,9 +95,11 @@ final class SecureMemoPanel extends JPanel implements Disposable {
         unlockButton.addActionListener(e -> unlock());
         newButton.addActionListener(e -> startNew());
         resetButton.addActionListener(e -> reset());
+        // 왼쪽 끝은 글 칸과 맞추고 단추 사이만 띄운다.
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         buttons.add(unlockButton);
         buttons.add(newButton);
+        buttons.add(Box.createHorizontalStrut(JBUI.scale(UIUtil.DEFAULT_HGAP)));
         buttons.add(resetButton);
         JPanel form = FormBuilder.createFormBuilder()
                 .addComponent(prompt)
@@ -99,26 +113,40 @@ final class SecureMemoPanel extends JPanel implements Disposable {
     }
 
     private JPanel openView() {
-        JButton save = new JButton(BootServersBundle.message("common.save"));
-        save.addActionListener(e -> save());
-        JButton lock = new JButton(BootServersBundle.message("memo.lock"));
-        lock.addActionListener(e -> lock());
-        JButton change = new JButton(BootServersBundle.message("memo.change.password"));
-        change.addActionListener(e -> changePassword());
-        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        buttons.add(save);
-        buttons.add(lock);
-        buttons.add(change);
-        previewButton.addActionListener(e -> showPreview(previewButton.isSelected()));
-        buttons.add(previewButton);
+        DefaultActionGroup group = new DefaultActionGroup();
+        group.add(DumbAwareAction.create(BootServersBundle.message("common.save"), AllIcons.Actions.MenuSaveall, e -> save()));
+        group.add(DumbAwareAction.create(BootServersBundle.message("memo.lock"), AllIcons.Nodes.Padlock, e -> lock()));
+        group.add(DumbAwareAction.create(BootServersBundle.message("memo.change.password"), AllIcons.Actions.Edit, e -> changePassword()));
+        group.addSeparator();
+        group.add(new DumbAwareToggleAction(BootServersBundle.message("memo.preview"), null, AllIcons.Actions.Preview) {
+            @Override
+            public boolean isSelected(@NotNull AnActionEvent e) {
+                return previewOn;
+            }
+
+            @Override
+            public void setSelected(@NotNull AnActionEvent e, boolean state) {
+                showPreview(state);
+            }
+
+            @Override
+            public @NotNull ActionUpdateThread getActionUpdateThread() {
+                return ActionUpdateThread.EDT;
+            }
+        });
         preview.setEditorKit(HTMLEditorKitBuilder.simple());
         preview.setEditable(false);
         preview.addHyperlinkListener(BrowserHyperlinkListener.INSTANCE);
-        body.add(new JBScrollPane(area), EDIT);
-        body.add(new JBScrollPane(preview), PREVIEW);
-        JPanel view = new JPanel(new BorderLayout());
-        view.add(buttons, BorderLayout.NORTH);
-        view.add(body, BorderLayout.CENTER);
+        area.setBorder(JBUI.Borders.empty(UIUtil.DEFAULT_VGAP, UIUtil.DEFAULT_HGAP));
+        preview.setBorder(JBUI.Borders.empty(UIUtil.DEFAULT_VGAP, UIUtil.DEFAULT_HGAP));
+        // 창 머리 선 위에 테두리가 겹치지 않게 테두리 없는 스크롤을 쓴다.
+        body.add(ScrollPaneFactory.createScrollPane(area, true), EDIT);
+        body.add(ScrollPaneFactory.createScrollPane(preview, true), PREVIEW);
+        SimpleToolWindowPanel view = new SimpleToolWindowPanel(true, true);
+        ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar(TOOLBAR_PLACE, group, true);
+        toolbar.setTargetComponent(view);
+        view.setToolbar(toolbar.getComponent());
+        view.setContent(body);
         return view;
     }
 
@@ -236,7 +264,7 @@ final class SecureMemoPanel extends JPanel implements Disposable {
 
     /** 켜면 지금 글을 Markdown 으로 그려 보여 주고, 끄면 편집 칸으로 돌아간다. */
     private void showPreview(boolean on) {
-        previewButton.setSelected(on);
+        previewOn = on;
         if (on) {
             preview.setText(MarkdownToHtmlConverterKt.convertMarkdownToHtml(area.getText()));
             preview.setCaretPosition(0);

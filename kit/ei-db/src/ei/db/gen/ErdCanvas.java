@@ -23,8 +23,10 @@ import java.awt.RenderingHints;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseWheelEvent;
+import java.awt.geom.Path2D;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -65,6 +67,10 @@ final class ErdCanvas extends JComponent {
   private static final int MAX_PER_COLUMN = 8;
   private static final int DETOUR = 24;
   private static final int ARROW = 7;
+  private static final int TRACK = 8;       // 같은 틈을 지나는 세로 선끼리의 간격
+  private static final int CORNER = 6;      // 꺾이는 곳 둥근 반지름
+  private static final int CLEARANCE = 4;   // 선과 남의 카드 사이 최소 여백
+  private static final int LABEL_GAP = 4;   // 「FK:PK」 이름표와 선 사이
   private static final double ZOOM_STEP = 1.1;
   private static final double ZOOM_MIN = 0.3;
   private static final double ZOOM_MAX = 2.0;
@@ -247,7 +253,8 @@ final class ErdCanvas extends JComponent {
   private void paintDiagram(Graphics2D g) {
     g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
     g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-    for (Map.Entry<String, List<Meta.ForeignKey>> e : groupedFks().entrySet()) paintFk(g, e.getValue());
+    Map<Integer, Integer> tracks = new HashMap<>();
+    for (List<Meta.ForeignKey> group : groupedFks().values()) paintFk(g, group, tracks);
     for (Card c : cards) paintCard(g, c);
   }
 
@@ -269,45 +276,151 @@ final class ErdCanvas extends JComponent {
     return c.y + HEAD / 2;
   }
 
-  private void paintFk(Graphics2D g, List<Meta.ForeignKey> group) {
+  private void paintFk(Graphics2D g, List<Meta.ForeignKey> group, Map<Integer, Integer> tracks) {
     Meta.ForeignKey fk = group.get(0);
     Card child = byName.get(fk.fkTable());
     Card parent = byName.get(fk.pkTable());
     boolean hot = selected != null && (selected == child || selected == parent);
     g.setColor(hot ? JBUI.CurrentTheme.Focus.focusColor() : Ui.muted());
-    g.setStroke(new BasicStroke(hot ? 2f : 1.2f));
-    int sy = rowY(child, fk.fkColumn());
-    int ey = rowY(parent, fk.pkColumn());
+    g.setStroke(new BasicStroke(hot ? 2f : 1.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+    List<Point> path = route(child, parent, rowY(child, fk.fkColumn()), rowY(parent, fk.pkColumn()), tracks);
+    g.draw(rounded(path));
+
+    Point end = path.get(path.size() - 1);
+    Point before = path.get(path.size() - 2);
+    int dir = end.x < before.x ? -1 : 1;
+    Polygon head = new Polygon();
+    head.addPoint(end.x, end.y);
+    head.addPoint(end.x - dir * ARROW, end.y - ARROW / 2 - 1);
+    head.addPoint(end.x - dir * ARROW, end.y + ARROW / 2 + 1);
+    g.fillPolygon(head);
+
+    List<String> fkCols = new ArrayList<>();
+    List<String> pkCols = new ArrayList<>();
+    for (Meta.ForeignKey f : group) {
+      fkCols.add(f.fkColumn());
+      pkCols.add(f.pkColumn());
+    }
+    String label = String.join(",", fkCols) + ":" + String.join(",", pkCols);
+    g.setFont(plainFont().deriveFont(plainFont().getSize2D() - 2));
+    int lw = g.getFontMetrics().stringWidth(label);
+    Point start = path.get(0);
+    int lx = path.get(1).x < start.x ? start.x - LABEL_GAP - lw : start.x + LABEL_GAP;
+    g.drawString(label, lx, start.y - LABEL_GAP);
+  }
+
+  /**
+   * 자식 FK 칼럼 줄에서 나가 부모 키 칼럼 줄로 들어가는 가로 · 세로 꺾은선(점 목록, 첫 점 자식 · 끝 점 부모).
+   * 다른 카드를 지나지 않는 길을 고른다: 세 토막(가로 → 세로 → 가로)을 두 카드 사이 가운데 · 자식 쪽 틈 · 부모 쪽 틈 순서로 해 보고,
+   * 모두 막히면 자식 쪽 틈 → 카드 사이 빈 가로 줄 → 부모 쪽 틈으로 도는 다섯 토막. 그래도 막히면 첫 세 토막을 그대로 쓴다.
+   */
+  private List<Point> route(Card child, Card parent, int sy, int ey, Map<Integer, Integer> tracks) {
     int sx;
     int ex;
-    int midX;
+    int sOut;
+    int eOut;
     if (parent.x + parent.w + DETOUR <= child.x) {
       sx = child.x;
       ex = parent.x + parent.w;
-      midX = (sx + ex) / 2;
+      sOut = -1;
+      eOut = 1;
     } else if (child.x + child.w + DETOUR <= parent.x) {
       sx = child.x + child.w;
       ex = parent.x;
-      midX = (sx + ex) / 2;
+      sOut = 1;
+      eOut = -1;
     } else {
       sx = child.x + child.w;
       ex = parent.x + parent.w;
-      midX = Math.max(sx, ex) + DETOUR;
+      sOut = 1;
+      eOut = 1;
     }
-    g.drawLine(sx, sy, midX, sy);
-    g.drawLine(midX, sy, midX, ey);
-    g.drawLine(midX, ey, ex, ey);
-    int dir = ex < midX ? -1 : 1;
-    Polygon head = new Polygon();
-    head.addPoint(ex, ey);
-    head.addPoint(ex - dir * ARROW, ey - ARROW / 2 - 1);
-    head.addPoint(ex - dir * ARROW, ey + ARROW / 2 + 1);
-    g.fillPolygon(head);
-    g.setFont(plainFont().deriveFont(plainFont().getSize2D() - 2));
-    String label = fk.fkColumn();
-    int lw = g.getFontMetrics().stringWidth(label);
-    int lx = sx < midX ? sx + 4 : sx - 4 - lw;
-    g.drawString(label, lx, sy - 4);
+    int nearChild = sx + sOut * GAP_X / 2;
+    int nearParent = ex + eOut * GAP_X / 2;
+    List<Integer> xs = sOut == eOut ? List.of(Math.max(sx, ex) + DETOUR) : List.of((sx + ex) / 2, nearChild, nearParent);
+    for (int x : xs) {
+      List<Point> p = List.of(new Point(sx, sy), new Point(x, sy), new Point(x, ey), new Point(ex, ey));
+      if (clear(p, child, parent)) return shifted(p, tracks);
+    }
+    for (int y : channels(sy, ey)) {
+      List<Point> p = List.of(new Point(sx, sy), new Point(nearChild, sy), new Point(nearChild, y),
+                              new Point(nearParent, y), new Point(nearParent, ey), new Point(ex, ey));
+      if (clear(p, child, parent)) return shifted(p, tracks);
+    }
+    int x = xs.get(0);
+    return shifted(List.of(new Point(sx, sy), new Point(x, sy), new Point(x, ey), new Point(ex, ey)), tracks);
+  }
+
+  /** 꺾은선의 어느 토막도 다른 카드(첫 토막은 자식, 끝 토막은 부모 제외)와 CLEARANCE 안으로 겹치지 않으면 true. */
+  private boolean clear(List<Point> path, Card child, Card parent) {
+    int last = path.size() - 2;
+    for (int i = 0; i <= last; i++) {
+      Point a = path.get(i);
+      Point b = path.get(i + 1);
+      Rectangle seg = new Rectangle(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(a.x - b.x) + 1, Math.abs(a.y - b.y) + 1);
+      seg.grow(CLEARANCE, CLEARANCE);
+      for (Card c : cards) {
+        if (i == 0 && c == child || i == last && c == parent) continue;
+        if (seg.intersects(c.bounds())) return false;
+      }
+    }
+    return true;
+  }
+
+  /** 다섯 토막 길의 가로 줄 후보: 카드 위 · 아래 틈을 sy · ey 가운데에 가까운 순으로, 맨 끝은 모든 카드 아래(늘 비어 있음). */
+  private List<Integer> channels(int sy, int ey) {
+    List<Integer> ys = new ArrayList<>();
+    int bottom = 0;
+    for (Card c : cards) {
+      if (c.y >= GAP_Y) ys.add(c.y - GAP_Y / 2);
+      ys.add(c.y + c.h + GAP_Y / 2);
+      bottom = Math.max(bottom, c.y + c.h);
+    }
+    int mid = (sy + ey) / 2;
+    ys.sort(Comparator.comparingInt(y -> Math.abs(y - mid)));
+    ys.add(bottom + GAP_Y / 2);
+    return ys;
+  }
+
+  /**
+   * 가운데 세로 토막(점 1-2, 3-4)을 같은 x 를 먼저 쓴 선이 있으면 0, -TRACK, +TRACK, -2·TRACK … 순서로 비켜 겹치지 않게 한다.
+   * 비키는 폭은 틈 절반을 넘지 않는다. tracks 는 한 번 그릴 때마다 새로 만든다(x → 지금까지 쓴 선 수).
+   */
+  private static List<Point> shifted(List<Point> path, Map<Integer, Integer> tracks) {
+    List<Point> out = new ArrayList<>();
+    for (Point p : path) out.add(new Point(p));
+    int limit = GAP_X / 2 - TRACK;
+    for (int i = 1; i + 2 < out.size(); i += 2) {
+      int n = tracks.merge(out.get(i).x, 1, Integer::sum) - 1;
+      int off = (n % 2 == 0 ? 1 : -1) * ((n + 1) / 2) * TRACK;
+      off = Math.max(-limit, Math.min(limit, off));
+      out.get(i).x += off;
+      out.get(i + 1).x += off;
+    }
+    return out;
+  }
+
+  /** 꺾이는 곳을 CORNER 반지름으로 둥글린 선. 토막이 짧으면 반지름을 토막 절반까지 줄인다. */
+  private static Path2D rounded(List<Point> pts) {
+    Path2D path = new Path2D.Double();
+    path.moveTo(pts.get(0).x, pts.get(0).y);
+    for (int i = 1; i + 1 < pts.size(); i++) {
+      Point a = pts.get(i - 1);
+      Point p = pts.get(i);
+      Point b = pts.get(i + 1);
+      double d1 = a.distance(p);
+      double d2 = p.distance(b);
+      if (d1 == 0 || d2 == 0) {
+        path.lineTo(p.x, p.y);
+        continue;
+      }
+      double r = Math.min(CORNER, Math.min(d1, d2) / 2);
+      path.lineTo(p.x + (a.x - p.x) * r / d1, p.y + (a.y - p.y) * r / d1);
+      path.quadTo(p.x, p.y, p.x + (b.x - p.x) * r / d2, p.y + (b.y - p.y) * r / d2);
+    }
+    Point last = pts.get(pts.size() - 1);
+    path.lineTo(last.x, last.y);
+    return path;
   }
 
   private void paintCard(Graphics2D g, Card c) {

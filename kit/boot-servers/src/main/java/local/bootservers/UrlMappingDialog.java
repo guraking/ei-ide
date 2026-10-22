@@ -9,7 +9,6 @@ import com.intellij.psi.PsiMethod;
 import com.intellij.ui.CollectionListModel;
 import com.intellij.ui.ColoredListCellRenderer;
 import com.intellij.ui.DocumentAdapter;
-import com.intellij.ui.JBColor;
 import com.intellij.ui.PopupHandler;
 import com.intellij.ui.ScrollingUtil;
 import com.intellij.ui.SimpleTextAttributes;
@@ -20,6 +19,8 @@ import com.intellij.openapi.ui.JBPopupMenu;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.components.JBTextField;
 import com.intellij.util.ui.JBUI;
+import com.intellij.util.ui.NamedColorUtil;
+import com.intellij.util.ui.UIUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -47,6 +48,8 @@ final class UrlMappingDialog extends DialogWrapper {
     /** HTTP 방식 칸 너비(글자 수). 「DELETE」 와 여러 방식을 이은 것의 앞부분이 들어갈 만큼. */
     private static final int METHOD_COLUMN_CHARS = 8;
     private static final String COLUMN_GAP = "  ";
+    private static final int DIALOG_WIDTH = 900;
+    private static final int DIALOG_HEIGHT = 500;
 
     private final Project project;
     private final List<UrlMappingAction.Endpoint> all;
@@ -107,15 +110,15 @@ final class UrlMappingDialog extends DialogWrapper {
             }
         });
 
-        JPanel north = new JPanel(new BorderLayout(0, JBUI.scale(4)));
+        JPanel north = new JPanel(new BorderLayout(0, JBUI.scale(UIUtil.DEFAULT_VGAP)));
         north.add(queryField, BorderLayout.NORTH);
         north.add(status, BorderLayout.SOUTH);
-        north.setBorder(JBUI.Borders.emptyBottom(4));
+        north.setBorder(JBUI.Borders.emptyBottom(UIUtil.DEFAULT_VGAP));
 
         JPanel panel = new JPanel(new BorderLayout());
         panel.add(north, BorderLayout.NORTH);
         panel.add(new JBScrollPane(list), BorderLayout.CENTER);
-        panel.setPreferredSize(JBUI.size(900, 500));
+        panel.setPreferredSize(JBUI.size(DIALOG_WIDTH, DIALOG_HEIGHT));
         return panel;
     }
 
@@ -169,7 +172,7 @@ final class UrlMappingDialog extends DialogWrapper {
         PsiMethod method = ReadAction.compute(() -> target.target().getElement());
         if (method == null || !method.isValid()) {
             status.setText(BootServersBundle.message("url.method.gone"));
-            status.setForeground(JBColor.RED);
+            status.setForeground(NamedColorUtil.getErrorForeground());
             return;
         }
         super.doOKAction();
@@ -189,7 +192,7 @@ final class UrlMappingDialog extends DialogWrapper {
             list.setSelectedIndex(0);
         }
         status.setText(BootServersBundle.message("url.count", shown.size(), all.size()));
-        status.setForeground(JBColor.foreground());
+        status.setForeground(UIUtil.getLabelForeground());
     }
 
     private static String shownText(UrlMappingAction.Endpoint e) {

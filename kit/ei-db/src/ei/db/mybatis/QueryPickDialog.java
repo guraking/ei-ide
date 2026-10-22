@@ -14,7 +14,7 @@ import com.intellij.ui.ColoredListCellRenderer;
 import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.DoubleClickListener;
 import com.intellij.ui.EditorTextField;
-import com.intellij.ui.JBSplitter;
+import com.intellij.ui.OnePixelSplitter;
 import com.intellij.ui.SearchTextField;
 import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.components.JBLabel;
@@ -55,6 +55,8 @@ final class QueryPickDialog extends DialogWrapper {
   private static final int PREVIEW_WIDTH = 640;
   private static final int HEIGHT = 480;
   private static final float SPLIT = 0.37f;
+  /** 칸막이 양쪽 안쪽 여백(px, 배율 전). */
+  private static final int SPLIT_PADDING = 8;
   /** 이름(주석 · 로거)이 없는 쿼리를 목록 한 줄에 보일 SQL 글자 수. */
   private static final int LABEL_SQL_LENGTH = 60;
 
@@ -75,6 +77,7 @@ final class QueryPickDialog extends DialogWrapper {
     list = new JBList<>(model);
     list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
     list.setCellRenderer(new EntryRenderer());
+    list.setEmptyText(EiDbBundle.message("querypick.empty"));
     preview = new EditorTextField(EditorFactory.getInstance().createDocument(""), project,
                                   FileTypeManager.getInstance().getFileTypeByExtension("sql"), true, false);
     preview.addSettingsProvider(e -> {
@@ -141,7 +144,10 @@ final class QueryPickDialog extends DialogWrapper {
     left.add(new JBScrollPane(list), BorderLayout.CENTER);
     left.setPreferredSize(JBUI.size(LIST_WIDTH, HEIGHT));
     right.setPreferredSize(JBUI.size(PREVIEW_WIDTH, HEIGHT));
-    JBSplitter split = new JBSplitter(false, SPLIT);
+    // 얇은 한 줄 칸막이를 쓰고, 양쪽 내용이 선에 붙지 않게 안쪽 여백을 둔다.
+    left.setBorder(JBUI.Borders.emptyRight(SPLIT_PADDING));
+    right.setBorder(JBUI.Borders.emptyLeft(SPLIT_PADDING));
+    OnePixelSplitter split = new OnePixelSplitter(false, SPLIT);
     split.setFirstComponent(left);
     split.setSecondComponent(right);
     JBLabel hint = new JBLabel(EiDbBundle.message("querypick.hint"));

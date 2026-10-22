@@ -11,7 +11,14 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VirtualFileWrapper;
+import com.intellij.openapi.actionSystem.ActionToolbar;
+import com.intellij.openapi.actionSystem.AnActionEvent;
+import com.intellij.openapi.actionSystem.Separator;
+import com.intellij.openapi.ui.SimpleToolWindowPanel;
 import com.intellij.ui.ColorUtil;
+import com.intellij.ui.ScrollPaneFactory;
+import com.intellij.ui.components.panels.HorizontalLayout;
+import ei.db.BarAction;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.components.JBTextArea;
@@ -31,7 +38,6 @@ import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.ui.content.Content;
 
 import javax.swing.Box;
-import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
@@ -85,7 +91,7 @@ import javax.swing.event.DocumentEvent;
 import java.awt.Color;
 
 /** 결과 탭 하나의 내용: 조회면 도구줄 + 표, 변경이면 한 줄 요약, 오류면 붉은 글. */
-final class ResultPanel extends JPanel {
+final class ResultPanel extends SimpleToolWindowPanel {
 
   /** 칸 너비를 잴 때 보는 앞쪽 행 수와 칸 최대 너비. */
   private static final int FIT_ROWS = 50;
@@ -97,6 +103,9 @@ final class ResultPanel extends JPanel {
   private static final int SEARCH_WIDTH = 180;
   private static final int PREVIEW_WIDTH = 640;
   private static final int PREVIEW_HEIGHT = 360;
+  /** 도구줄 왼쪽 여백 · 묶음 사이 간격(px, 배율 전). */
+  private static final int BAR_INSET = 8;
+  private static final String TOOLBAR_PLACE = "EiDbResult";
   /** 고쳤지만 아직 반영하지 않은 칸의 바탕. */
   private static final Color EDITED_BACKGROUND = new JBColor(new Color(0xFFF1C2), new Color(0x4D4421));
 
@@ -108,8 +117,8 @@ final class ResultPanel extends JPanel {
   private TableRowSorter<Model> sorter;
   private JBLabel count;
   private SearchTextField searchBox;
-  private JButton applyButton;
-  private JButton revertButton;
+  /** 반영 · 되돌리기 단추가 든 도구줄. 고친 값이 바뀌면 다시 판정하게 한다. */
+  private ActionToolbar actions;
   /** 고친 값: 모델 행 → (결과 칼럼 번호 → 새 값). 반영 전까지 화면에만 있다. */
   private final Map<Integer, Map<Integer, Object>> edits = new TreeMap<>();
   /** 결과 칼럼마다 PK 여부. null 이면 아직 표 정의를 읽지 않았다. */
@@ -119,7 +128,7 @@ final class ResultPanel extends JPanel {
   private boolean loadingEdit;
 
   ResultPanel(Project project, DbConfig c, QueryResult result, String table) {
-    super(new BorderLayout());
+    super(true, true);
     this.project = project;
     this.config = c;
     this.result = result;
@@ -143,8 +152,8 @@ final class ResultPanel extends JPanel {
     text.setWrapStyleWord(true);
     text.setForeground(UiColors.DANGER);
     text.setFont(monoFont());
-    text.setBorder(JBUI.Borders.empty(10, 12));
-    return new JBScrollPane(text);
+    text.setBorder(JBUI.Borders.empty(8, 12));
+    return ScrollPaneFactory.createScrollPane(text, true);
   }
 
   private static Font monoFont() {
@@ -203,9 +212,9 @@ final class ResultPanel extends JPanel {
     });
     fitColumns(grid);
 
-    JPanel bar = new JPanel();
-    bar.setLayout(new BoxLayout(bar, BoxLayout.X_AXIS));
-    bar.setBorder(JBUI.Borders.compound(JBUI.Borders.customLineBottom(JBUI.CurrentTheme.ToolWindow.borderColor()), JBUI.Borders.empty(3, 8)));
+    // 도구줄 아래 선은 SimpleToolWindowPanel 이 그린다(새 UI 는 표를 내렸을 때만). 칸 테두리를 따로 두면 선이 겹친다.
+    JPanel bar = new JPanel(new HorizontalLayout(0, SwingConstants.CENTER));
+    bar.setBorder(JBUI.Borders.emptyLeft(BAR_INSET));
     count = new JBLabel(EiDbBundle.message("common.rows", result.rows().size()));
     count.setForeground(UiColors.SUCCESS);
     JBLabel millis = new JBLabel(" · " + result.millis() + " ms");
@@ -225,29 +234,38 @@ final class ResultPanel extends JPanel {
       wanted.setMaximumSize(wanted.getPreferredSize());
       Runnable byInput = () -> readWanted(c, wanted.getText());
       wanted.addActionListener(e -> byInput.run());
-      bar.add(Box.createHorizontalStrut(JBUI.scale(8)));
+      bar.add(Box.createHorizontalStrut(JBUI.scale(BAR_INSET)));
       bar.add(wanted);
       bar.add(new JBLabel(EiDbBundle.message("result.rows.unit")));
       bar.add(button(EiDbBundle.message("result.fetch"), null, byInput));
     }
-    bar.add(Box.createHorizontalStrut(JBUI.scale(8)));
+    bar.add(Box.createHorizontalStrut(JBUI.scale(BAR_INSET)));
     bar.add(searchField());
-    bar.add(Box.createHorizontalGlue());
-    applyButton = button(EiDbBundle.message("result.apply"), AllIcons.Actions.Commit, EiDbBundle.message("result.apply.tooltip"), this::applyEdits);
-    revertButton = button(EiDbBundle.message("result.revert"), AllIcons.Actions.Rollback, EiDbBundle.message("result.revert.tooltip"), this::revertEdits);
-    bar.add(applyButton);
-    bar.add(revertButton);
-    updateEditButtons();
-    bar.add(button(EiDbBundle.message("common.copy"), AllIcons.Actions.Copy, this::copyTsv));
-    bar.add(button("CSV", AllIcons.Actions.Download, EiDbBundle.message("result.csv.tooltip"), this::exportCsv));
-    bar.add(button(EiDbBundle.message("result.excel"), AllIcons.Actions.Download, EiDbBundle.message("result.excel.tooltip"), this::exportXlsx));
-    bar.add(button("INSERT", null, EiDbBundle.message("result.insert.tooltip"), this::copyInserts));
-    bar.add(button("UPDATE", null, EiDbBundle.message("result.update.tooltip"), () -> copyUpdates(c)));
-    bar.add(button("DTO", null, EiDbBundle.message("dto.command"), () -> DtoDialog.show(project, c, result)));
-    bar.add(button("enum", null, EiDbBundle.message("result.enum.tooltip"), () -> EnumDialog.show(project, c, result)));
+    bar.add(Box.createHorizontalStrut(JBUI.scale(BAR_INSET)));
+    BarAction apply = new BarAction(EiDbBundle.message("result.apply"), EiDbBundle.message("result.apply.tooltip"), AllIcons.Actions.Commit, this::applyEdits) {
+      @Override
+      public void update(@NotNull AnActionEvent e) {
+        super.update(e);
+        e.getPresentation().setText(EiDbBundle.message("result.apply.count", edits.size()));
+      }
+    };
+    actions = BarAction.toolbar(TOOLBAR_PLACE, this,
+        apply.visibleWhen(() -> !edits.isEmpty()).withText(),
+        new BarAction(EiDbBundle.message("result.revert"), EiDbBundle.message("result.revert.tooltip"), AllIcons.Actions.Rollback, this::revertEdits)
+            .visibleWhen(() -> !edits.isEmpty()).withText(),
+        new BarAction(EiDbBundle.message("common.copy"), null, AllIcons.Actions.Copy, this::copyTsv),
+        new BarAction("CSV", EiDbBundle.message("result.csv.tooltip"), AllIcons.Actions.Download, this::exportCsv).withText(),
+        new BarAction(EiDbBundle.message("result.excel"), EiDbBundle.message("result.excel.tooltip"), AllIcons.Actions.Download, this::exportXlsx).withText(),
+        Separator.getInstance(),
+        new BarAction("INSERT", EiDbBundle.message("result.insert.tooltip"), null, this::copyInserts).withText(),
+        new BarAction("UPDATE", EiDbBundle.message("result.update.tooltip"), null, () -> copyUpdates(c)).withText(),
+        Separator.getInstance(),
+        new BarAction("DTO", EiDbBundle.message("dto.command"), AllIcons.Nodes.Class, () -> DtoDialog.show(project, c, result)).withText(),
+        new BarAction("enum", EiDbBundle.message("result.enum.tooltip"), AllIcons.Nodes.Enum, () -> EnumDialog.show(project, c, result)).withText());
+    bar.add(actions.getComponent());
 
-    add(bar, BorderLayout.NORTH);
-    add(new JBScrollPane(grid), BorderLayout.CENTER);
+    setToolbar(bar);
+    setContent(ScrollPaneFactory.createScrollPane(grid, true));
     // 결과 창 안에서 Ctrl+F(찾기 단축키)는 IDE 찾기 대신 검색칸으로 간다.
     DumbAwareAction.create(e -> searchBox.getTextEditor().requestFocusInWindow()).registerCustomShortcutSet(CommonShortcuts.getFind(), this);
   }
@@ -727,11 +745,9 @@ final class ResultPanel extends JPanel {
     updateEditButtons();
   }
 
+  /** 반영 · 되돌리기의 보임과 건수는 도구줄이 BarAction.update 로 다시 판정한다. */
   private void updateEditButtons() {
-    applyButton.setText(EiDbBundle.message("result.apply.count", edits.size()));
-    applyButton.setVisible(!edits.isEmpty());
-    revertButton.setVisible(!edits.isEmpty());
-    applyButton.getParent().revalidate();
+    actions.updateActionsAsync();
   }
 
   private void revertEdits() {

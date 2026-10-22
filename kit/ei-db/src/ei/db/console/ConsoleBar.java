@@ -1,11 +1,12 @@
 package ei.db.console;
 
 import com.intellij.icons.AllIcons;
+import com.intellij.openapi.actionSystem.ActionToolbar;
+import com.intellij.openapi.actionSystem.Separator;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.fileEditor.FileEditor;
 import com.intellij.openapi.fileEditor.TextEditor;
-import com.intellij.openapi.keymap.KeymapUtil;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.ComboBox;
@@ -17,7 +18,8 @@ import com.intellij.ui.SimpleListCellRenderer;
 import com.intellij.ui.components.JBCheckBox;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.util.ui.JBUI;
-import com.intellij.util.ui.UIUtil;
+import com.intellij.ui.components.panels.HorizontalLayout;
+import ei.db.BarAction;
 import ei.db.DbConfig;
 import ei.db.DbSessions;
 import ei.db.DbSettings;
@@ -26,11 +28,7 @@ import ei.db.Notify;
 import ei.db.SqlRunner;
 import org.jetbrains.annotations.NotNull;
 
-import javax.swing.Box;
-import javax.swing.BoxLayout;
 import javax.swing.DefaultComboBoxModel;
-import javax.swing.Icon;
-import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.JSeparator;
@@ -38,7 +36,6 @@ import javax.swing.SwingConstants;
 import javax.swing.event.PopupMenuEvent;
 import javax.swing.event.PopupMenuListener;
 import java.awt.BorderLayout;
-import java.awt.Dimension;
 import java.awt.Font;
 import java.sql.SQLException;
 import java.util.function.Function;
@@ -55,6 +52,12 @@ final class ConsoleBar extends JPanel {
   private static final String FORMAT_ACTION = "ei.db.console.Format";
   private static final String UPPER_ACTION = "ei.db.console.Upper";
   private static final String LOWER_ACTION = "ei.db.console.Lower";
+  private static final String EXPLAIN_ACTION = "ei.db.console.Explain";
+  private static final String TOOLBAR_PLACE = "EiDbConsole";
+  /** 도구줄 묶음 사이 간격 · 띠 왼쪽 여백(px, 배율 전). */
+  private static final int GAP = 8;
+  /** 묶음 사이 세로선 높이(px, 배율 전). 도구줄 아이콘 단추 높이보다 조금 낮게 둔다. */
+  private static final int SEPARATOR_HEIGHT = 18;
 
   private final Project project;
   private final VirtualFile file;
@@ -65,10 +68,9 @@ final class ConsoleBar extends JPanel {
   /** 조회 건수. 목록에서 고르거나 1 이상 숫자를 직접 쓴다. 프로젝트의 모든 콘솔 · 표 데이터 보기에 같이 적용된다. */
   private final ComboBox<Integer> rows = new ComboBox<>(new Integer[] {DbSessions.MAX_ROWS, 1000, 5000, 10000});
   private final JBLabel badge = new JBLabel();
-  private final JButton commit = new JButton(EiDbBundle.message("console.commit"), AllIcons.Actions.Commit);
-  private final JButton rollback = new JButton(EiDbBundle.message("console.rollback"), AllIcons.Actions.Rollback);
-  /** 이 콘솔 접속에서 실행 중일 때만 켠다. */
-  private final JButton stop = iconButton(AllIcons.Actions.Suspend, EiDbBundle.message("console.stop"));
+  /** 실행 · 정렬 단추와 커밋 · 롤백 단추. 켜짐 · 보임은 BarAction.update 가 접속 상태로 판정하고 refresh 가 다시 판정하게 한다. */
+  private final ActionToolbar runBar;
+  private final ActionToolbar commitBar;
   /** 화면을 값에 맞추는 중이면 콤보 · 체크 상자의 변경 처리를 건너뛴다. */
   private boolean updating;
 
@@ -105,28 +107,27 @@ final class ConsoleBar extends JPanel {
     band.add(bandTarget, BorderLayout.EAST);
     add(band, BorderLayout.NORTH);
 
-    JButton run = new JButton(EiDbBundle.message("common.run"), AllIcons.Actions.Execute);
-    run.setToolTipText(EiDbBundle.message("console.run.tooltip"));
-    run.addActionListener(e -> ConsoleRun.runCurrent(project, editor, file));
-    JBLabel runKey = new JBLabel(KeymapUtil.getFirstKeyboardShortcutText(RUN_ACTION));
-    runKey.setForeground(UIUtil.getContextHelpForeground());
-    JButton runAll = new JButton(EiDbBundle.message("action.ei.db.console.RunAll.text"), AllIcons.Actions.RunAll);
-    String allKey = KeymapUtil.getFirstKeyboardShortcutText(RUN_ALL_ACTION);
-    runAll.setToolTipText(allKey.isEmpty() ? EiDbBundle.message("console.runall.tooltip") : EiDbBundle.message("console.runall.tooltip.key", allKey));
-    runAll.addActionListener(e -> ConsoleRun.runAll(project, editor, file));
-
-    stop.addActionListener(e -> cancelRun());
-    JButton plan = iconButton(AllIcons.Toolwindows.ToolWindowHierarchy, EiDbBundle.message("console.plan.tooltip"));
-    plan.addActionListener(e -> ExplainPlan.run(project, editor, file));
-    JButton history = iconButton(AllIcons.Vcs.History, EiDbBundle.message("console.history.tooltip"));
-    history.addActionListener(e -> HistoryDialog.open(project));
-
-    JButton format = textButton(EiDbBundle.message("console.format"), AllIcons.Actions.ReformatCode, EiDbBundle.message("console.format.tooltip"), FORMAT_ACTION);
-    format.addActionListener(e -> ConsoleRun.format(project, editor));
-    JButton upper = textButton(EiDbBundle.message("console.upper"), null, EiDbBundle.message("console.upper.tooltip"), UPPER_ACTION);
-    upper.addActionListener(e -> ConsoleRun.toCase(project, editor, true));
-    JButton lower = textButton(EiDbBundle.message("console.lower"), null, EiDbBundle.message("console.lower.tooltip"), LOWER_ACTION);
-    lower.addActionListener(e -> ConsoleRun.toCase(project, editor, false));
+    runBar = BarAction.toolbar(TOOLBAR_PLACE, editor.getContentComponent(),
+        new BarAction(EiDbBundle.message("common.run"), EiDbBundle.message("console.run.tooltip"), AllIcons.Actions.Execute,
+            () -> ConsoleRun.runCurrent(project, editor, file)).shortcutOf(RUN_ACTION),
+        new BarAction(EiDbBundle.message("action.ei.db.console.RunAll.text"), EiDbBundle.message("console.runall.tooltip"), AllIcons.Actions.RunAll,
+            () -> ConsoleRun.runAll(project, editor, file)).shortcutOf(RUN_ALL_ACTION),
+        new BarAction(EiDbBundle.message("console.stop"), null, AllIcons.Actions.Suspend, this::cancelRun).enabledWhen(this::isRunning),
+        new BarAction(EiDbBundle.message("console.plan.tooltip"), null, AllIcons.Toolwindows.ToolWindowHierarchy,
+            () -> ExplainPlan.run(project, editor, file)).shortcutOf(EXPLAIN_ACTION),
+        new BarAction(EiDbBundle.message("console.history.tooltip"), null, AllIcons.Vcs.History, () -> HistoryDialog.open(project)),
+        Separator.getInstance(),
+        new BarAction(EiDbBundle.message("console.format"), EiDbBundle.message("console.format.tooltip"), AllIcons.Actions.ReformatCode,
+            () -> ConsoleRun.format(project, editor)).shortcutOf(FORMAT_ACTION),
+        new BarAction(EiDbBundle.message("console.upper"), EiDbBundle.message("console.upper.tooltip"), null,
+            () -> ConsoleRun.toCase(project, editor, true)).withText().shortcutOf(UPPER_ACTION),
+        new BarAction(EiDbBundle.message("console.lower"), EiDbBundle.message("console.lower.tooltip"), null,
+            () -> ConsoleRun.toCase(project, editor, false)).withText().shortcutOf(LOWER_ACTION));
+    commitBar = BarAction.toolbar(TOOLBAR_PLACE, editor.getContentComponent(),
+        new BarAction(EiDbBundle.message("console.commit"), null, AllIcons.Actions.Commit, () -> endTransaction(true))
+            .visibleWhen(this::manualCommit).enabledWhen(this::hasPending).withText(),
+        new BarAction(EiDbBundle.message("console.rollback"), null, AllIcons.Actions.Rollback, () -> endTransaction(false))
+            .visibleWhen(this::manualCommit).enabledWhen(this::hasPending).withText());
 
     combo.setRenderer(SimpleListCellRenderer.create("", ConsoleBar::label));
     combo.addPopupMenuListener(new PopupMenuListener() {
@@ -138,49 +139,23 @@ final class ConsoleBar extends JPanel {
     rows.setEditable(true);
     rows.setRenderer(SimpleListCellRenderer.create("", n -> EiDbBundle.message("console.rows.item", String.valueOf(n))));
     rows.setToolTipText(EiDbBundle.message("console.rows.tooltip"));
-    rows.setMaximumSize(rows.getPreferredSize());
     rows.addActionListener(e -> changeRows());
     autoCommit.addActionListener(e -> toggleAutoCommit());
     badge.setForeground(UiColors.WARNING);
-    commit.addActionListener(e -> endTransaction(true));
-    rollback.addActionListener(e -> endTransaction(false));
 
-    JPanel bar = new JPanel();
-    bar.setLayout(new BoxLayout(bar, BoxLayout.X_AXIS));
-    bar.setBorder(JBUI.Borders.compound(JBUI.Borders.customLineBottom(JBUI.CurrentTheme.ToolWindow.borderColor()), JBUI.Borders.empty(4, 8)));
-    bar.add(run);
-    bar.add(Box.createHorizontalStrut(JBUI.scale(4)));
-    bar.add(runKey);
-    bar.add(Box.createHorizontalStrut(JBUI.scale(8)));
-    bar.add(runAll);
-    bar.add(Box.createHorizontalStrut(JBUI.scale(4)));
-    bar.add(stop);
-    bar.add(Box.createHorizontalStrut(JBUI.scale(4)));
-    bar.add(plan);
-    bar.add(Box.createHorizontalStrut(JBUI.scale(4)));
-    bar.add(history);
-    bar.add(separator());
-    bar.add(format);
-    bar.add(Box.createHorizontalStrut(JBUI.scale(4)));
-    bar.add(upper);
-    bar.add(Box.createHorizontalStrut(JBUI.scale(4)));
-    bar.add(lower);
+    // 띠 아래 선 하나로 편집기와 나눈다. 단추는 IntelliJ 도구줄(평평한 아이콘 단추)이고 콤보 · 체크 상자만 일반 부품이다.
+    JPanel bar = new JPanel(new HorizontalLayout(GAP, SwingConstants.CENTER));
+    bar.setBorder(JBUI.Borders.compound(JBUI.Borders.customLineBottom(JBUI.CurrentTheme.ToolWindow.borderColor()), JBUI.Borders.emptyLeft(GAP)));
+    bar.add(runBar.getComponent());
     bar.add(separator());
     bar.add(combo);
-    bar.add(Box.createHorizontalStrut(JBUI.scale(4)));
     bar.add(rows);
     bar.add(separator());
     bar.add(autoCommit);
-    bar.add(Box.createHorizontalStrut(JBUI.scale(8)));
     bar.add(badge);
-    bar.add(Box.createHorizontalStrut(JBUI.scale(8)));
-    bar.add(commit);
-    bar.add(Box.createHorizontalStrut(JBUI.scale(4)));
-    bar.add(rollback);
-    bar.add(Box.createHorizontalGlue());
+    bar.add(commitBar.getComponent());
     add(bar, BorderLayout.CENTER);
 
-    combo.setMaximumSize(combo.getPreferredSize());
     DbSessions.get(project).addListener(parent, () -> ApplicationManager.getApplication().invokeLater(this::refresh));
     reloadConnections();
     refresh();
@@ -190,30 +165,28 @@ final class ConsoleBar extends JPanel {
     return c.name + " · " + c.effectiveSchema();
   }
 
-  /** 단축키가 있으면 풀이 끝에 붙인다. */
-  private static JButton textButton(String text, Icon icon, String tip, String actionId) {
-    JButton b = new JButton(text, icon);
-    String key = KeymapUtil.getFirstKeyboardShortcutText(actionId);
-    b.setToolTipText(key.isEmpty() ? tip : tip + " (" + key + ")");
-    return b;
+  /** 이 콘솔 접속에서 실행 중일 때만 「실행 중지」를 켠다. */
+  private boolean isRunning() {
+    DbConfig c = ConsoleOpener.config(project, file);
+    return c != null && DbSessions.get(project).isRunning(c.id);
   }
 
-  /** 도구줄이 넘치지 않게 글 없이 아이콘만 둔다. 뜻은 툴팁 · 접근성 이름으로. */
-  private static JButton iconButton(Icon icon, String tip) {
-    JButton b = new JButton(icon);
-    b.setToolTipText(tip);
-    b.getAccessibleContext().setAccessibleName(tip);
-    return b;
+  /** 커밋 · 롤백은 자동 커밋이 꺼진 접속에서만 보인다. */
+  private boolean manualCommit() {
+    DbConfig c = ConsoleOpener.config(project, file);
+    return c != null && !c.autoCommit;
   }
 
+  private boolean hasPending() {
+    DbConfig c = ConsoleOpener.config(project, file);
+    return c != null && DbSessions.get(project).pending(c.id) > 0;
+  }
+
+  /** 묶음 사이 세로선. 줄 가운데에 SEPARATOR_HEIGHT 높이로 선다. */
   private static JComponent separator() {
     JSeparator s = new JSeparator(SwingConstants.VERTICAL);
-    s.setMaximumSize(new Dimension(JBUI.scale(1), JBUI.scale(18)));
-    JPanel wrap = new JPanel(new BorderLayout());
-    wrap.setBorder(JBUI.Borders.empty(0, 8));
-    wrap.add(s, BorderLayout.CENTER);
-    wrap.setMaximumSize(new Dimension(JBUI.scale(17), JBUI.scale(18)));
-    return wrap;
+    s.setPreferredSize(JBUI.size(s.getPreferredSize().width, SEPARATOR_HEIGHT));
+    return s;
   }
 
   private void reloadConnections() {
@@ -228,7 +201,6 @@ final class ConsoleBar extends JPanel {
       }
       model.setSelectedItem(selected);
       combo.setModel(model);
-      combo.setMaximumSize(combo.getPreferredSize());
     } finally {
       updating = false;
     }
@@ -242,13 +214,10 @@ final class ConsoleBar extends JPanel {
     try {
       band.setVisible(c != null && c.production);
       rows.setSelectedItem(DbSessions.get(project).maxRows());
-      stop.setEnabled(c != null && DbSessions.get(project).isRunning(c.id));
       if (c == null) {
         autoCommit.setEnabled(false);
         badge.setText(EiDbBundle.message("console.badge.removed"));
         badge.setVisible(true);
-        commit.setVisible(false);
-        rollback.setVisible(false);
         return;
       }
       bandTarget.setText(label(c));
@@ -257,12 +226,10 @@ final class ConsoleBar extends JPanel {
       int pending = DbSessions.get(project).pending(c.id);
       badge.setText(EiDbBundle.message("console.badge.pending", pending));
       badge.setVisible(pending > 0);
-      commit.setVisible(!c.autoCommit);
-      rollback.setVisible(!c.autoCommit);
-      commit.setEnabled(pending > 0);
-      rollback.setEnabled(pending > 0);
     } finally {
       updating = false;
+      runBar.updateActionsAsync();
+      commitBar.updateActionsAsync();
       revalidate();
       repaint();
     }
