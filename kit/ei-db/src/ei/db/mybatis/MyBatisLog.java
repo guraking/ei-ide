@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -34,6 +35,8 @@ public final class MyBatisLog {
   private static final String SQL_TIMING = "sqltiming";
   private static final Pattern EXECUTED = Pattern.compile("\\{executed in \\d+ msec}\\s*$");
   /** sqltiming 뒤의 구분자와 연결 번호. */
+  /** SQL 맨 앞 블록 주석 안의 이름(MyBatis 문장 표시, 예: 매퍼.문장id). */
+  private static final Pattern HEAD_COMMENT = Pattern.compile("^\\s*/\\*\\s*(\\S+)\\s*\\*/");
   private static final Pattern TIMING_HEAD = Pattern.compile("^\\s*[:\\-]?\\s*(\\d+\\.\\s+)?");
   private static final String JAVA_DATE_FORMAT = "EEE MMM dd HH:mm:ss zzz yyyy";
   private static final int MAX_INCLUDE_DEPTH = 16;
@@ -122,6 +125,28 @@ public final class MyBatisLog {
       out.add(0, e);
     }
     return out;
+  }
+
+  /**
+   * 같은 쿼리는 가장 뒤(최근) 것 하나만 남겨 최대 max 개를 줄 순서대로 돌려준다. entries 는 줄 순서여야 한다.
+   * 같은 쿼리: SQL 맨 앞 블록 주석 안의 매퍼.문장id 가 같거나, 없으면 로거의 매퍼.문장id 가, 그것도 없으면 공백을 줄인 SQL 이 같은 것.
+   * 그래서 한 실행이 MyBatis 로그와 log4jdbc 로그로 두 번 찍혀도, 값이 다른 여러 번의 실행도 한 줄이 된다.
+   */
+  public static List<Entry> distinct(List<Entry> entries, int max) {
+    Set<String> seen = new HashSet<>();
+    List<Entry> out = new ArrayList<>();
+    for (int k = entries.size() - 1; k >= 0 && out.size() < max; k--) {
+      Entry e = entries.get(k);
+      if (seen.add(queryKey(e))) out.add(0, e);
+    }
+    return out;
+  }
+
+  private static String queryKey(Entry e) {
+    Matcher m = HEAD_COMMENT.matcher(e.sql);
+    if (m.find()) return m.group(1);
+    if (e.statementId() != null) return e.mapperName() + "." + e.statementId();
+    return e.sql.replaceAll("\\s+", " ").strip();
   }
 
   /**

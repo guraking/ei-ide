@@ -41,6 +41,8 @@ public final class LogActions {
   private static final int LOOK_AHEAD = 20;
   /** 쿼리 목록에 띄울 최대 수(최근 것부터)와 목록 한 줄에 보일 SQL 글자 수. */
   private static final int MAX_PICK = 50;
+  /** 같은 쿼리를 한 줄로 줄이기 전에 콘솔 끝에서부터 읽는 쿼리 로그 수. */
+  private static final int MAX_SCAN = 1000;
   private static final int LABEL_SQL_LENGTH = 80;
   /** 고르기 창 강조 테두리 두께(px). */
   private static final int POPUP_BORDER = 2;
@@ -100,7 +102,7 @@ public final class LogActions {
   }
 
   /**
-   * 보낼 쿼리를 고른다. 선택 글이 있으면 그것을 읽고, 없으면 콘솔에 찍힌 쿼리 목록(최근 것이 위, 커서 위 가장 가까운 것을 미리 고름)을 띄운다.
+   * 보낼 쿼리를 고른다. 선택 글이 있으면 그것을 읽고, 없으면 콘솔에 찍힌 쿼리 목록(같은 쿼리는 최근 것 하나, 최근 것이 위, 커서 위 가장 가까운 것을 미리 고름)을 띄운다.
    * 하나뿐이면 묻지 않는다. 쿼리가 없으면 then 을 부르지 않는다.
    */
   static void chooseEntry(Editor editor, Consumer<MyBatisLog.Entry> then) {
@@ -111,7 +113,7 @@ public final class LogActions {
       return;
     }
     Document doc = editor.getDocument();
-    List<MyBatisLog.Entry> found = new ArrayList<>(MyBatisLog.parseAll(List.of(doc.getText().split("\n", -1)), MAX_PICK));
+    List<MyBatisLog.Entry> found = new ArrayList<>(MyBatisLog.distinct(MyBatisLog.parseAll(List.of(doc.getText().split("\n", -1)), MAX_SCAN), MAX_PICK));
     if (found.isEmpty()) return;
     if (found.size() == 1) {
       then.accept(found.get(0));
