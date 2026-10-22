@@ -48,7 +48,25 @@
     "glass-veil-0": "#16161800",
     "glass-veil-b": "#16161833",
     "tab-selected-bg-inactive": "glass-accent-12",
-    "tab-selected-border-inactive": "glass-accent-border-muted"
+    "tab-selected-border-inactive": "glass-accent-border-muted",
+    "glass-cat-1": "#BF5AF2",
+    "glass-cat-2": "#0A84FF",
+    "glass-cat-3": "#40C8C0",
+    "glass-cat-4": "#30D158",
+    "glass-cat-5": "#FF375F",
+    "glass-cat-6": "#FF9F0A",
+    "glass-cat-7": "#64D2FF",
+    "glass-cat-8": "#7D7AFF",
+    "glass-cat-9": "#FFD60A",
+    "glass-cat-10": "#FF6482",
+    "glass-urgent": "#FF6961",
+    "glass-high": "#FFB340",
+    "glass-primary": "#0A84FF",
+    "glass-urgent-bg": "#462C2D",
+    "glass-high-bg": "#463927",
+    "glass-info-bg": "#1A304A",
+    "glass-success-bg": "#213E2C",
+    "glass-accent-bg": "#46222D"
   },
   "ui": {
     "Island": {
@@ -297,6 +315,82 @@
     "List": {
       "Selection": {
         "borderColor": "#FF375F99"
+      }
+    },
+    "Link": {
+      "activeForeground": "glass-cat-7",
+      "hoverForeground": "glass-cat-7",
+      "pressedForeground": "glass-cat-2",
+      "visitedForeground": "glass-cat-1"
+    },
+    "Label": {
+      "errorForeground": "glass-urgent",
+      "warningForeground": "glass-high",
+      "successForeground": "glass-cat-4"
+    },
+    "Component": {
+      "errorFocusColor": "glass-urgent",
+      "warningFocusColor": "glass-high"
+    },
+    "ProgressBar": {
+      "progressColor": "glass-accent",
+      "indeterminateStartColor": "glass-cat-5",
+      "indeterminateEndColor": "glass-cat-1"
+    },
+    "Counter": {
+      "background": "glass-accent",
+      "foreground": "#FFFFFF"
+    },
+    "Notification": {
+      "errorBackground": "glass-urgent-bg",
+      "errorBorderColor": "glass-urgent",
+      "ToolWindow": {
+        "errorBackground": "glass-urgent-bg",
+        "errorBorderColor": "glass-urgent",
+        "warningBackground": "glass-high-bg",
+        "warningBorderColor": "glass-high",
+        "informativeBackground": "glass-success-bg",
+        "informativeBorderColor": "glass-cat-4"
+      }
+    },
+    "ValidationTooltip": {
+      "errorBackground": "glass-urgent-bg",
+      "errorBorderColor": "glass-urgent",
+      "warningBackground": "glass-high-bg",
+      "warningBorderColor": "glass-high"
+    },
+    "Banner": {
+      "infoBackground": "glass-info-bg",
+      "infoBorderColor": "glass-cat-2",
+      "successBackground": "glass-success-bg",
+      "successBorderColor": "glass-cat-4",
+      "warningBackground": "glass-high-bg",
+      "warningBorderColor": "glass-high",
+      "errorBackground": "glass-urgent-bg",
+      "errorBorderColor": "glass-urgent",
+      "aiBackground": "#3B2947",
+      "aiBorderColor": "glass-cat-1"
+    },
+    "FileColor": {
+      "Blue": "#1A3453",
+      "Green": "#22452E",
+      "Orange": "#503A1D",
+      "Rose": "#50242F",
+      "Violet": "#412B50",
+      "Yellow": "#50461D"
+    },
+    "VersionControl": {
+      "GitLog": {
+        "headIconColor": "glass-cat-9",
+        "localBranchIconColor": "glass-cat-4",
+        "remoteBranchIconColor": "glass-cat-1",
+        "tagIconColor": "glass-cat-6",
+        "otherIconColor": "glass-cat-7"
+      },
+      "Log": {
+        "Commit": {
+          "currentBranchBackground": "glass-accent-bg"
+        }
       }
     }
   }
