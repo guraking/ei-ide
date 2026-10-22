@@ -149,12 +149,7 @@
             <action id="KingGura.AiConsoleError" class="local.bootservers.ai.AiActions$ConsoleError" text="이 오류 원인 찾기"/>
             <add-to-group group-id="ConsoleView.PopupMenu" anchor="last"/>
         </group>
-        <!-- 코드 도구: 옮겨 담기 · 요청 값 묶기 -->
-        <action id="KingGura.BeanCopy" class="local.bootservers.code.BeanCopyAction" text="옮겨 담기 코드 만들기…"
-                description="꺼낼 객체의 getter 로 담을 객체의 setter 를 부르는 줄을 커서 줄 다음에 넣습니다">
-            <add-to-group group-id="KG.SourceMenu" anchor="last"/>
-            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
-        </action>
+        <!-- 코드 도구: 요청 값 묶기 -->
         <action id="KingGura.BundleRequestParams" class="local.bootservers.code.ParamBundleAction" text="요청 값을 DTO 로 묶기…" icon="AllIcons.Nodes.Class">
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
             <add-to-group group-id="KG.SourceMenu" anchor="last"/>

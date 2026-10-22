@@ -1364,7 +1364,7 @@ build-windows.bat
       <tr><td>데이터베이스 탐색기 우클릭</td><td>표: SELECT · INSERT · UPDATE 문, 매퍼 뼈대, 기능 한 벌, ERD, 테이블 정의서 엑셀. 접속: 세션 · 잠금 보기. 프로그램: 컴파일 오류 보기</td></tr>
       <tr><td>결과 탭 우클릭</td><td>다른 결과와 비교…, 다른 탭 닫기 · 모든 탭 닫기</td></tr>
       <tr><td>커밋 창 파일 우클릭</td><td>Assume Unchanged</td></tr>
-      <tr><td>코드 도구(편집기 우클릭 · Source 메뉴)</td><td>옮겨 담기 코드 · 요청 값을 DTO 로 묶기 · 입력 검증 붙이기 · enum 다시 맞추기 · JSON 으로 DTO(트리 우클릭도) · 칼럼 이름 바꾸기. 매퍼 XML 우클릭: 호출 코드 복사 · 동적 조건 · 페이징 쿼리. 자바 우클릭: 문자열 SQL 정리. 결과 창: enum 단추. 자세한 것은 13 절</td></tr>
+      <tr><td>코드 도구(편집기 우클릭 · Source 메뉴)</td><td>요청 값을 DTO 로 묶기 · 입력 검증 붙이기 · enum 다시 맞추기 · JSON 으로 DTO(트리 우클릭도) · 칼럼 이름 바꾸기. 매퍼 XML 우클릭: 호출 코드 복사 · 동적 조건 · 페이징 쿼리. 자바 우클릭: 문자열 SQL 정리. 결과 창: enum 단추. 자세한 것은 13 절</td></tr>
     </table>
   </div>
 </section>
@@ -1444,7 +1444,6 @@ build-windows.bat
     <p class="lead">자바 · 매퍼 XML 을 쓰면서 손으로 치던 코드를 만들어 주거나 바꿔 주는 기능입니다. 모두 편집기 우클릭에 있고, 대부분 Source 메뉴에도 있습니다.</p>
     <table class="keys">
       <tr><th>기능 · 자리</th><th>하는 일</th></tr>
-      <tr><td>옮겨 담기 코드 만들기…<br>자바 우클릭</td><td>꺼낼 객체 · 담을 객체를 고르면 <code>to.setX(from.getX());</code> 줄을 커서 줄 다음에 넣습니다. 형이 다르거나 짝이 없는 필드는 주석 줄로 남깁니다.</td></tr>
       <tr><td>빈 catch · printStackTrace · System.out 검사</td><td>세 가지를 노란 줄로 표시합니다. 클래스에 로거 필드나 <code>@Slf4j</code> 가 있으면 <kbd>Alt</kbd>+<kbd>Enter</kbd> 로 <code>log.error(…)</code> · <code>log.info(…)</code> 로 바꿉니다. 테스트 폴더 · main 메서드는 건너뜁니다.</td></tr>
       <tr><td>요청 값을 DTO 로 묶기…<br>컨트롤러 메서드 안</td><td><code>@RequestParam</code> 여러 개를 <code>@ModelAttribute</code> DTO 하나로 묶고, 본문의 참조를 <code>req.getX()</code> 로 바꿉니다.</td></tr>
       <tr><td>입력 검증 붙이기…<br>DTO 안</td><td>접속 · 표를 고르면 칼럼의 NULL · 길이 · 자릿수로 <code>@NotBlank</code> · <code>@NotNull</code> · <code>@Size</code> · <code>@Digits</code> 를 필드에 붙입니다. 이미 있는 주석은 그대로 둡니다.</td></tr>
@@ -1456,30 +1455,6 @@ build-windows.bat
       <tr><td>호출 코드 복사<br>매퍼 XML 문장 안</td><td>그 문장을 부르는 서비스 쪽 코드(매개변수 객체 채우기 + 호출 줄)를 클립보드에 복사합니다.</td></tr>
       <tr><td>칼럼 이름 바꾸기…<br>매퍼 XML 우클릭 · Source 메뉴</td><td>모든 매퍼 XML 에서 옛 칼럼 이름을 찾아 미리보기에서 골라 바꾸고, 짝인 DTO 필드 · getter · setter 와 <code>#{}</code> · property 도 함께 바꿉니다. <code>&lt;if test&gt;</code> 안 이름은 바꾸지 않습니다.</td></tr>
     </table>
-
-    <h3>옮겨 담기 코드 만들기 · 자바 우클릭</h3>
-    <div class="cols2">
-      <div class="scroll">
-        <div class="ide" style="min-width:560px">
-          <div class="title"><span class="dots"><i></i><i></i><i></i></span>옮겨 담기 코드 만들기</div>
-          <div class="form">
-            <label><span><span class="mark">1</span> 꺼낼 객체</span><span class="f">src : UserForm</span></label>
-            <label>담을 객체<span class="f">dst : UserDto</span></label>
-            <div style="display:flex; gap:6px"><span class="btn">취소</span><span class="btn pri">넣기</span></div>
-          </div>
-        </div>
-      </div>
-      <div class="scroll">
-        <div class="ide" style="min-width:560px">
-          <div class="title"><span class="dots"><i></i><i></i><i></i></span>UserService.java</div>
-          <pre class="sql nolig"><span class="ln">dst.setName(src.getName());</span><span class="ln">dst.setActive(src.isActive());</span><span class="ln"><span class="mark">2</span> <span class="cm">// 형 다름: dst.setId(src.getId()); // Long ← String</span></span><span class="ln"><span class="cm">// 짝 없음: dst.setMemo(...);</span></span></pre>
-        </div>
-      </div>
-    </div>
-    <ol class="legend" style="grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:14px">
-      <li><span class="mark">1</span><div><b>두 객체 고르기</b> <span class="t">메서드 안의 지역 변수 · 매개변수 · 필드 중에서 고릅니다. 줄은 커서 줄 다음에 들어갑니다.</span></div></li>
-      <li><span class="mark">2</span><div><b>그대로 못 옮기는 필드</b> <span class="t">형이 다르거나 꺼낼 쪽에 getter 가 없으면 주석 줄로 남겨, 손으로 마저 채울 곳이 보이게 합니다.</span></div></li>
-    </ol>
 
     <h3>요청 값을 DTO 로 묶기 · 컨트롤러 메서드 안</h3>
     <div class="cols2">
