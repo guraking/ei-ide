@@ -10,6 +10,7 @@ import com.intellij.ui.components.JBTextField;
 import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.JBUI;
 import org.jetbrains.annotations.Nullable;
+import ei.db.EiDbBundle;
 
 import javax.swing.DefaultCellEditor;
 import javax.swing.JComponent;
@@ -25,13 +26,12 @@ final class WhereDialog extends DialogWrapper {
   /** DTO 필드 하나. type 은 정규 이름. */
   record Field(String name, String type) {}
 
-  private static final String TITLE = "동적 조건 만들기";
   private static final int USE = 0;
   private static final int NAME = 1;
   private static final int TYPE = 2;
   private static final int COLUMN = 3;
   private static final int OP = 4;
-  private static final String[] HEADERS = {"사용", "필드", "형식", "칼럼", "비교"};
+  private static final String[] HEADERS = {EiDbBundle.message("where.col.use"), EiDbBundle.message("common.col.field"), EiDbBundle.message("common.col.type"), EiDbBundle.message("common.col.column"), EiDbBundle.message("where.col.compare")};
   private static final int ALIAS_COLUMNS = 10;
   private static final int TABLE_WIDTH = 640;
   private static final int TABLE_HEIGHT = 320;
@@ -61,15 +61,15 @@ final class WhereDialog extends DialogWrapper {
     table.getColumnModel().getColumn(USE).setMaxWidth(JBUI.scale(USE_WIDTH));
     table.getColumnModel().getColumn(OP).setMaxWidth(JBUI.scale(OP_WIDTH));
     alias.setText(guessedAlias);
-    setTitle(TITLE + " — " + dtoName);
-    setOKButtonText("넣기");
+    setTitle(EiDbBundle.message("action.EiDb.MyBatis.DynamicWhere.command") + " — " + dtoName);
+    setOKButtonText(EiDbBundle.message("common.insert"));
     init();
   }
 
   @Override
   protected @Nullable JComponent createCenterPanel() {
     JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-    top.add(new JBLabel("표 별칭 (비우면 붙이지 않음): "));
+    top.add(new JBLabel(EiDbBundle.message("where.alias.label")));
     top.add(alias);
     JBScrollPane scroll = new JBScrollPane(table);
     scroll.setPreferredSize(JBUI.size(TABLE_WIDTH, TABLE_HEIGHT));
@@ -83,15 +83,15 @@ final class WhereDialog extends DialogWrapper {
   protected @Nullable ValidationInfo doValidate() {
     stopEditing();
     String a = alias.getText().trim();
-    if (!a.isEmpty() && !WhereGen.validName(a)) return new ValidationInfo("표 별칭은 영문 · 숫자 · _ 로 된 이름이어야 합니다.", alias);
+    if (!a.isEmpty() && !WhereGen.validName(a)) return new ValidationInfo(EiDbBundle.message("where.alias.invalid"), alias);
     boolean any = false;
     for (int r = 0; r < model.getRowCount(); r++) {
       if (!Boolean.TRUE.equals(model.getValueAt(r, USE))) continue;
       any = true;
       String col = String.valueOf(model.getValueAt(r, COLUMN)).trim();
-      if (!WhereGen.validName(col)) return new ValidationInfo(fields.get(r).name() + " 의 칼럼 이름이 올바르지 않습니다: " + col, table);
+      if (!WhereGen.validName(col)) return new ValidationInfo(EiDbBundle.message("where.column.invalid", fields.get(r).name(), col), table);
     }
-    return any ? null : new ValidationInfo("조건으로 쓸 필드를 하나 이상 고르세요.", table);
+    return any ? null : new ValidationInfo(EiDbBundle.message("where.no.field"), table);
   }
 
   /** 고른 필드의 조건(표 순서). OK 로 닫힌 뒤 부른다. */

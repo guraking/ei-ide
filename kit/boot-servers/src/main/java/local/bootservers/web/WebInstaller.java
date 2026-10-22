@@ -13,6 +13,7 @@ import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.util.io.HttpRequests;
+import local.bootservers.BootServersBundle;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
@@ -33,13 +34,13 @@ final class WebInstaller {
 
     /** nodejs.org 의 최신 LTS 윈도우 zip 을 받아 SHA256 을 맞춰 보고 <base>/node 에 푼다. */
     static void installNode(Project project) {
-        new Task.Backgroundable(project, "Node.js 받는 중", true) {
+        new Task.Backgroundable(project, BootServersBundle.message("web.install.node.progress"), true) {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 try {
                     downloadNode(indicator);
                 } catch (IOException e) {
-                    fail(project, "Node.js 를 받지 못했습니다", e.getMessage());
+                    fail(project, BootServersBundle.message("web.install.node.failed"), e.getMessage());
                 }
             }
 
@@ -62,18 +63,18 @@ final class WebInstaller {
     private static void downloadNode(ProgressIndicator indicator) throws IOException {
         String arch = NodeDist.arch(System.getProperty("os.arch"));
         if (!SystemInfo.isWindows || arch == null) {
-            throw new IOException("윈도우 x64 · arm64 용 zip 만 받을 수 있습니다.");
+            throw new IOException(BootServersBundle.message("web.install.node.arch"));
         }
-        indicator.setText("Node.js LTS 판 확인");
+        indicator.setText(BootServersBundle.message("web.install.node.check"));
         String version = NodeDist.latestLts(HttpRequests.request(NodeDist.INDEX_URL).readString(indicator), arch);
         if (version == null) {
-            throw new IOException("index.json 에서 win-" + arch + " zip 이 있는 LTS 판을 찾지 못했습니다.");
+            throw new IOException(BootServersBundle.message("web.install.node.no.lts", arch));
         }
         String zipName = NodeDist.zipName(version, arch);
         String expected = NodeDist.expectedSha256(
                 HttpRequests.request(NodeDist.shasumsUrl(version)).readString(indicator), zipName);
         if (expected == null) {
-            throw new IOException(NodeDist.SHASUMS + " 에 " + zipName + " 의 해시가 없습니다.");
+            throw new IOException(BootServersBundle.message("web.install.node.no.hash", NodeDist.SHASUMS, zipName));
         }
         Path base = WebLspSupport.baseDir();
         Path nodeDir = base.resolve(WebTools.NODE_DIR);
@@ -81,14 +82,14 @@ final class WebInstaller {
         Files.createDirectories(base);
         Path zip = Files.createTempFile(base, "node-", ".zip");
         try {
-            indicator.setText(zipName + " 받는 중");
+            indicator.setText(BootServersBundle.message("web.install.downloading", zipName));
             HttpRequests.request(NodeDist.zipUrl(version, arch)).saveToFile(zip, indicator);
             indicator.checkCanceled();
             String actual = NodeDist.sha256(zip);
             if (!expected.equals(actual)) {
-                throw new IOException("받은 파일의 SHA256 이 맞지 않습니다(기대 " + expected + ", 실제 " + actual + ").");
+                throw new IOException(BootServersBundle.message("web.install.node.sha", expected, actual));
             }
-            indicator.setText("Node.js 푸는 중");
+            indicator.setText(BootServersBundle.message("web.install.node.unzip"));
             FileUtil.delete(unpacked);
             NodeDist.unzipFlatten(zip, unpacked);
             FileUtil.delete(nodeDir);
@@ -101,7 +102,7 @@ final class WebInstaller {
 
     /** node 로 npm install 을 돌려 <base>/servers 에 언어 서버를 받는다. */
     static void installServers(Project project, Path node) {
-        new Task.Backgroundable(project, "언어 서버 받는 중", true) {
+        new Task.Backgroundable(project, BootServersBundle.message("web.install.servers.progress"), true) {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 Path base = WebLspSupport.baseDir();
@@ -115,14 +116,14 @@ final class WebInstaller {
                     indicator.setText("npm install " + String.join(" ", WebTools.SERVER_PACKAGES));
                     output = new CapturingProcessHandler(cmd).runProcessWithProgressIndicator(indicator);
                 } catch (IOException | ExecutionException e) {
-                    fail(project, "언어 서버를 받지 못했습니다", e.getMessage());
+                    fail(project, BootServersBundle.message("web.install.servers.failed"), e.getMessage());
                     return;
                 }
                 if (output.isCancelled()) {
                     return;
                 }
                 if (output.getExitCode() != 0 || !WebTools.serversInstalled(base)) {
-                    fail(project, "언어 서버를 받지 못했습니다 (종료 코드 " + output.getExitCode() + ")",
+                    fail(project, BootServersBundle.message("web.install.servers.failed.code", output.getExitCode()),
                             tail(output.getStdout() + "\n" + output.getStderr()));
                 }
             }

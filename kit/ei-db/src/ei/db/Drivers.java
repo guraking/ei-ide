@@ -135,12 +135,12 @@ public final class Drivers {
     Path jar = jarFor(c);
     if (jar == null) {
       if (c.driverJar != null && !c.driverJar.isBlank()) {
-        throw new IOException("고른 드라이버 jar 가 없습니다: " + c.driverJar);
+        throw new IOException(EiDbBundle.message("drivers.jar.missing", c.driverJar));
       }
       try {
         jar = download(c.kind);
       } catch (IOException e) {
-        throw new IOException("드라이버 jar 가 없어 내려받으려 했으나 실패했습니다: " + e.getMessage(), e);
+        throw new IOException(EiDbBundle.message("drivers.download.failed", e.getMessage()), e);
       }
     }
     String key = jar.toAbsolutePath() + "|" + c.kind.driverClass;
@@ -152,7 +152,7 @@ public final class Drivers {
     try {
       type = Class.forName(c.kind.driverClass, true, loader);
     } catch (ClassNotFoundException e) {
-      throw new ClassNotFoundException("드라이버 jar 를 찾지 못했습니다(접속 창의 내려받기): " + c.kind.driverClass + " 가 " + jar + " 에 없습니다.", e);
+      throw new ClassNotFoundException(EiDbBundle.message("drivers.class.not.found", c.kind.driverClass, jar), e);
     }
     Driver driver = (Driver) type.getDeclaredConstructor().newInstance();
     LOADED.put(key, driver);
@@ -226,7 +226,7 @@ public final class Drivers {
     Path settings = Path.of(System.getProperty("user.home"), ".m2", "settings.xml");
     String base = repository(Files.isRegularFile(settings) ? decodeSettings(Files.readAllBytes(settings)) : null);
     if (!base.regionMatches(true, 0, HTTPS, 0, HTTPS.length())) {
-      throw new IOException("저장소 주소가 https 가 아니라 내려받지 않습니다: " + base + " (~/.m2/settings.xml 의 mirror 를 확인하세요)");
+      throw new IOException(EiDbBundle.message("drivers.not.https", base));
     }
     String dir = base + kind.groupPath + "/" + kind.downloadArtifact + "/";
     String version = latestVersion(HttpRequests.request(dir + "maven-metadata.xml").readString());
@@ -237,7 +237,7 @@ public final class Drivers {
     byte[] bytes = HttpRequests.request(url).readBytes(null);
     String expected = HttpRequests.request(url + ".sha1").readString().trim().split("\\s+")[0];
     if (!expected.equalsIgnoreCase(sha1(bytes))) {
-      throw new IOException("내려받은 드라이버의 SHA-1 이 저장소 값과 다릅니다: " + url);
+      throw new IOException(EiDbBundle.message("drivers.sha1.mismatch", url));
     }
     Files.createDirectories(target.getParent());
     Path tmp = Files.createTempFile(target.getParent(), name, ".part");

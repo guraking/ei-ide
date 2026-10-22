@@ -63,8 +63,8 @@ final class LogFilterDialog extends DialogWrapper {
     private final Editor editor;
     private final Map<LogFilter.Level, JBCheckBox> levelBoxes = new EnumMap<>(LogFilter.Level.class);
     private final JBTextField queryField = new JBTextField();
-    private final JBCheckBox regexBox = new JBCheckBox("정규식");
-    private final JBCheckBox followBox = new JBCheckBox("따라가기", true);
+    private final JBCheckBox regexBox = new JBCheckBox(BootServersBundle.message("log.filter.regex"));
+    private final JBCheckBox followBox = new JBCheckBox(BootServersBundle.message("log.filter.follow"), true);
     private final JBLabel status = new JBLabel();
     private final JBList<LogFilter.Line> list = new JBList<>();
     private final Timer timer;
@@ -84,8 +84,8 @@ final class LogFilterDialog extends DialogWrapper {
         super(project, false);
         this.editor = editor;
         setModal(false);
-        setTitle("로그 거르기");
-        getCancelAction().putValue(Action.NAME, "닫기");
+        setTitle(BootServersBundle.message("log.filter.title"));
+        getCancelAction().putValue(Action.NAME, BootServersBundle.message("common.close"));
         timer = new Timer(FOLLOW_INTERVAL_MS, e -> followTick());
         editor.getDocument().addDocumentListener(new DocumentListener() {
             @Override
@@ -110,7 +110,7 @@ final class LogFilterDialog extends DialogWrapper {
             top.add(box);
         }
         queryField.setColumns(24);
-        queryField.getEmptyText().setText("찾을 글자");
+        queryField.getEmptyText().setText(BootServersBundle.message("log.filter.query.hint"));
         queryField.getDocument().addDocumentListener(new DocumentAdapter() {
             @Override
             protected void textChanged(@NotNull DocumentEvent e) {
@@ -131,7 +131,7 @@ final class LogFilterDialog extends DialogWrapper {
 
         list.setFont(editor.getColorsScheme().getFont(EditorFontType.PLAIN));
         list.setCellRenderer(new LineRenderer());
-        list.getEmptyText().setText("맞는 줄이 없습니다");
+        list.getEmptyText().setText(BootServersBundle.message("log.filter.empty"));
         list.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
@@ -183,7 +183,7 @@ final class LogFilterDialog extends DialogWrapper {
     /** tail 이 참이면 콘솔 글이 끝에 붙기만 했을 때 마지막 묶음부터만 거른다. 화면 스레드에서 부른다. */
     private void refresh(boolean tail) {
         if (editor.isDisposed()) {
-            status.setText("콘솔이 닫혔습니다");
+            status.setText(BootServersBundle.message("log.filter.console.closed"));
             timer.stop();
             return;
         }
@@ -222,7 +222,7 @@ final class LogFilterDialog extends DialogWrapper {
             result = LogFilter.filterFrom(text, from, levels, query, regex);
             head.addAll(result.lines());
         } catch (PatternSyntaxException ex) {
-            error = "정규식이 잘못되었습니다: " + ex.getDescription();
+            error = BootServersBundle.message("log.filter.regex.invalid", ex.getDescription());
         }
         LogFilter.Resume next = result == null ? null : result.resume();
         String message = error;
@@ -241,7 +241,7 @@ final class LogFilterDialog extends DialogWrapper {
             status.setForeground(ERROR_COLOR);
         } else {
             shownLines = lines;
-            status.setText("맞는 줄 " + lines.size() + "개");
+            status.setText(BootServersBundle.message("log.filter.count", lines.size()));
             status.setForeground(JBColor.foreground());
             list.setModel(new CollectionListModel<>(lines));
             if (followBox.isSelected() && !lines.isEmpty()) {
@@ -271,13 +271,13 @@ final class LogFilterDialog extends DialogWrapper {
         Document doc = editor.getDocument();
         int n = line.number();
         if (n >= doc.getLineCount()) {
-            status.setText("콘솔 글이 바뀌어 그 줄을 찾지 못했습니다");
+            status.setText(BootServersBundle.message("log.filter.line.gone"));
             return;
         }
         int start = doc.getLineStartOffset(n);
         int end = doc.getLineEndOffset(n);
         if (!doc.getImmutableCharSequence().subSequence(start, end).toString().equals(line.text())) {
-            status.setText("콘솔 글이 바뀌어 그 줄을 찾지 못했습니다");
+            status.setText(BootServersBundle.message("log.filter.line.gone"));
             return;
         }
         editor.getCaretModel().moveToOffset(start);

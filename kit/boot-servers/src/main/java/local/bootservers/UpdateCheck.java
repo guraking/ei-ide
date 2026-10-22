@@ -78,18 +78,18 @@ public final class UpdateCheck implements AppLifecycleListener {
         boolean installable = url.startsWith(DOWNLOAD_PREFIX) && url.endsWith(".exe");
         ApplicationManager.getApplication().invokeLater(() -> NotificationGroupManager.getInstance()
                 .getNotificationGroup("EI IDE 새 판")
-                .createNotification("EI IDE " + version + " 이 나왔습니다", "지금 판: " + build, NotificationType.INFORMATION)
+                .createNotification(BootServersBundle.message("update.available", version), BootServersBundle.message("update.current", build), NotificationType.INFORMATION)
                 .addActions(List.of(
                         installable
-                                ? NotificationAction.createSimpleExpiring("지금 업데이트", () -> download(url, version))
-                                : NotificationAction.createSimpleExpiring("내려받기", () -> BrowserUtil.browse(url)),
-                        NotificationAction.createSimpleExpiring("릴리스 보기", () -> BrowserUtil.browse("https://github.com/guraking/ei-ide/releases"))))
+                                ? NotificationAction.createSimpleExpiring(BootServersBundle.message("update.now"), () -> download(url, version))
+                                : NotificationAction.createSimpleExpiring(BootServersBundle.message("update.download"), () -> BrowserUtil.browse(url)),
+                        NotificationAction.createSimpleExpiring(BootServersBundle.message("update.releases"), () -> BrowserUtil.browse("https://github.com/guraking/ei-ide/releases"))))
                 .notify(null));
     }
 
     private static void download(String url, String version) {
         File target = new File(PathManager.getTempPath(), "eiide-" + version + ".exe");
-        new Task.Backgroundable(null, "EI IDE " + version + " 받는 중", true) {
+        new Task.Backgroundable(null, BootServersBundle.message("update.progress", version), true) {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 try {
@@ -97,7 +97,7 @@ public final class UpdateCheck implements AppLifecycleListener {
                 } catch (IOException e) {
                     LOG.warn("설치 파일 받기 실패: " + url, e);
                     ApplicationManager.getApplication().invokeLater(() -> Messages.showErrorDialog(
-                            "설치 파일을 받지 못했습니다.\n" + e.getMessage() + "\n\n브라우저로 받으려면 「릴리스 보기」를 쓰세요.", "EI IDE 업데이트"));
+                            BootServersBundle.message("update.download.failed", e.getMessage()), BootServersBundle.message("update.title")));
                     return;
                 }
                 ApplicationManager.getApplication().invokeLater(() -> askInstall(target, version));
@@ -107,8 +107,8 @@ public final class UpdateCheck implements AppLifecycleListener {
 
     private static void askInstall(File installer, String version) {
         int answer = Messages.showYesNoDialog(
-                "EI IDE " + version + " 설치 파일을 받았습니다.\nIDE 를 닫고 설치 화면을 띄울까요?\n\n「나중에」를 고르면 다음에 IDE 를 닫을 때 설치 화면이 뜹니다.",
-                "EI IDE 업데이트", "닫고 설치", "나중에", Messages.getInformationIcon());
+                BootServersBundle.message("update.install.confirm", version),
+                BootServersBundle.message("update.title"), BootServersBundle.message("update.install.now"), BootServersBundle.message("update.install.later"), Messages.getInformationIcon());
         // 설치 파일은 IDE 가 쓰는 파일을 덮으므로 JVM 이 끝날 때 띄운다. 끄기를 취소하면 다음에 끌 때 뜬다.
         ShutDownTracker.getInstance().registerShutdownTask(() -> launch(installer));
         if (answer == Messages.YES) {

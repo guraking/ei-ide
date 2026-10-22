@@ -14,6 +14,7 @@ import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.HTMLEditorKitBuilder;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
+import local.bootservers.BootServersBundle;
 
 import javax.swing.JButton;
 import javax.swing.JEditorPane;
@@ -37,7 +38,10 @@ import java.util.Arrays;
  */
 final class SecureMemoPanel extends JPanel implements Disposable {
 
-    static final String TITLE = "보안 메모";
+    static String title() {
+        return BootServersBundle.message("memo.title");
+    }
+
     private static final String FILE_NAME = "ei-secure-memo.bin";
     private static final String LOCKED = "locked";
     private static final String OPEN = "open";
@@ -51,16 +55,16 @@ final class SecureMemoPanel extends JPanel implements Disposable {
 
     private final JBLabel prompt = new JBLabel();
     private final JBPasswordField passwordField = new JBPasswordField();
-    private final JButton unlockButton = new JButton("열기");
-    private final JButton newButton = new JButton("새 비밀번호 정하기…");
-    private final JButton resetButton = new JButton("초기화…");
+    private final JButton unlockButton = new JButton(BootServersBundle.message("common.open"));
+    private final JButton newButton = new JButton(BootServersBundle.message("memo.new.password"));
+    private final JButton resetButton = new JButton(BootServersBundle.message("memo.reset"));
 
     private final JBTextArea area = new JBTextArea();
     // 메모 글을 Markdown(GFM)으로 그려 보여 주는 읽기 전용 칸. 저장 형식은 글 그대로다.
     private final CardLayout bodyCards = new CardLayout();
     private final JPanel body = new JPanel(bodyCards);
     private final JEditorPane preview = new JEditorPane();
-    private final JToggleButton previewButton = new JToggleButton("미리보기");
+    private final JToggleButton previewButton = new JToggleButton(BootServersBundle.message("memo.preview"));
     private char[] password;
     private String saved;
 
@@ -95,11 +99,11 @@ final class SecureMemoPanel extends JPanel implements Disposable {
     }
 
     private JPanel openView() {
-        JButton save = new JButton("저장");
+        JButton save = new JButton(BootServersBundle.message("common.save"));
         save.addActionListener(e -> save());
-        JButton lock = new JButton("잠그기");
+        JButton lock = new JButton(BootServersBundle.message("memo.lock"));
         lock.addActionListener(e -> lock());
-        JButton change = new JButton("비밀번호 바꾸기…");
+        JButton change = new JButton(BootServersBundle.message("memo.change.password"));
         change.addActionListener(e -> changePassword());
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT));
         buttons.add(save);
@@ -121,9 +125,9 @@ final class SecureMemoPanel extends JPanel implements Disposable {
     /** @param error 앞서 실패한 까닭. 없으면 null. */
     private void showLocked(String error) {
         boolean exists = Files.exists(file);
-        prompt.setText("<html>" + (!exists ? "아직 메모가 없습니다. 비밀번호를 정하면 시작합니다."
-                : error != null ? error + " 잊었다면 초기화로 지우고 새로 시작합니다(내용은 되살릴 수 없음)."
-                : "비밀번호를 입력하세요.") + "</html>");
+        prompt.setText("<html>" + (!exists ? BootServersBundle.message("memo.prompt.none")
+                : error != null ? BootServersBundle.message("memo.prompt.error", error)
+                : BootServersBundle.message("memo.prompt.enter")) + "</html>");
         prompt.setForeground(error != null ? UIUtil.getErrorForeground() : UIUtil.getLabelForeground());
         passwordField.setText("");
         passwordField.setVisible(exists);
@@ -152,12 +156,12 @@ final class SecureMemoPanel extends JPanel implements Disposable {
             showLocked(e.getMessage());
         } catch (IOException | GeneralSecurityException e) {
             Arrays.fill(entered, '\0');
-            showLocked("메모 파일을 열지 못했습니다: " + e.getMessage());
+            showLocked(BootServersBundle.message("memo.open.failed", e.getMessage()));
         }
     }
 
     private void startNew() {
-        char[] next = NewPasswordDialog.ask(project, "보안 메모 비밀번호 정하기");
+        char[] next = NewPasswordDialog.ask(project, BootServersBundle.message("memo.new.password.title"));
         if (next != null) {
             showOpen(next, "");
             save();
@@ -165,21 +169,21 @@ final class SecureMemoPanel extends JPanel implements Disposable {
     }
 
     private void reset() {
-        if (Messages.showYesNoDialog(project, "보안 메모 내용이 영구히 지워집니다. 계속할까요?", TITLE,
-                "지우기", "취소", Messages.getWarningIcon()) != Messages.YES) {
+        if (Messages.showYesNoDialog(project, BootServersBundle.message("memo.reset.confirm"), title(),
+                BootServersBundle.message("memo.reset.ok"), BootServersBundle.message("common.cancel"), Messages.getWarningIcon()) != Messages.YES) {
             return;
         }
         try {
             Files.deleteIfExists(file);
         } catch (IOException e) {
-            Messages.showErrorDialog(project, "메모 파일을 지우지 못했습니다: " + e.getMessage(), TITLE);
+            Messages.showErrorDialog(project, BootServersBundle.message("memo.delete.failed", e.getMessage()), title());
             return;
         }
         showLocked(null);
     }
 
     private void changePassword() {
-        char[] next = NewPasswordDialog.ask(project, "보안 메모 비밀번호 바꾸기");
+        char[] next = NewPasswordDialog.ask(project, BootServersBundle.message("memo.change.password.title"));
         if (next == null) {
             return;
         }
@@ -187,7 +191,7 @@ final class SecureMemoPanel extends JPanel implements Disposable {
         password = next;
         if (write(area.getText())) {
             Arrays.fill(old, '\0');
-            Messages.showInfoMessage(project, "새 비밀번호로 저장했습니다.", TITLE);
+            Messages.showInfoMessage(project, BootServersBundle.message("memo.changed"), title());
         } else {
             Arrays.fill(next, '\0');
             password = old;
@@ -211,7 +215,7 @@ final class SecureMemoPanel extends JPanel implements Disposable {
             Files.write(tmp, SecureMemoCipher.encrypt(password, text));
             Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
         } catch (IOException | GeneralSecurityException e) {
-            Messages.showErrorDialog(project, "저장하지 못했습니다: " + e.getMessage(), TITLE);
+            Messages.showErrorDialog(project, BootServersBundle.message("common.save.failed", e.getMessage()), title());
             return false;
         }
         saved = text;

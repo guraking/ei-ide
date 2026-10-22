@@ -20,6 +20,7 @@ import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.JBUI;
 import ei.db.DbConfig;
 import ei.db.DbSessions;
+import ei.db.EiDbBundle;
 import ei.db.Meta;
 import ei.db.Notify;
 import org.jetbrains.annotations.NotNull;
@@ -78,15 +79,11 @@ public final class FeatureDialog extends DialogWrapper {
   private static final int COL_TAG = 1;
   private static final int COL_NAME = 2;
   private static final int COL_TYPE = 3;
-  private static final String BAD_PATH = "경로가 올바르지 않습니다";
-  private static final String MERGE = "덧붙이기";
-  private static final String SKIP = "건너뛰기";
-  private static final String COMMAND = "기능 한 벌 만들기";
   /** 미리보기 탭 순서. */
   private static final FeatureGen.Out[] TAB_OUTS = {
       FeatureGen.Out.XML, FeatureGen.Out.MAPPER, FeatureGen.Out.DTO,
       FeatureGen.Out.SERVICE, FeatureGen.Out.SERVICE_IMPL, FeatureGen.Out.CONTROLLER};
-  private static final String[] TAB_TITLES = {"XML", "인터페이스", "DTO", "서비스", "서비스 Impl", "컨트롤러"};
+  private static final String[] TAB_TITLES = {"XML", EiDbBundle.message("mapper.tab.interface"), "DTO", EiDbBundle.message("connect.service"), EiDbBundle.message("feature.service.impl"), EiDbBundle.message("feature.controller")};
   private static final List<MapperGen.Kind> METHOD_KINDS = List.of(
       MapperGen.Kind.LIST, MapperGen.Kind.ONE, MapperGen.Kind.INSERT, MapperGen.Kind.UPDATE, MapperGen.Kind.DELETE);
 
@@ -99,24 +96,24 @@ public final class FeatureDialog extends DialogWrapper {
   private final JBTextField mapperField = new JBTextField();
   private final JBTextField xmlField = new JBTextField();
   private final JBTextField dtoField = new JBTextField();
-  private final JBCheckBox makeDto = new JBCheckBox("없으면 만들기", true);
+  private final JBCheckBox makeDto = new JBCheckBox(EiDbBundle.message("mapper.make.dto"), true);
   private final JBTextField serviceField = new JBTextField();
-  private final JBCheckBox split = new JBCheckBox("인터페이스 + Impl 로 나누기", false);
+  private final JBCheckBox split = new JBCheckBox(EiDbBundle.message("feature.split"), false);
   private final JBTextField implField = new JBTextField();
   private final JBTextField controllerField = new JBTextField();
-  private final JBCheckBox mvc = new JBCheckBox("@Controller (화면용, 기본은 @RestController)", false);
+  private final JBCheckBox mvc = new JBCheckBox(EiDbBundle.message("feature.mvc"), false);
   private final JBTextField urlField = new JBTextField();
   private final Map<MapperGen.Kind, JBCheckBox> kindBoxes = new EnumMap<>(MapperGen.Kind.class);
-  private final JBCheckBox oldJoin = new JBCheckBox("구식 조인 (콤마 + WHERE)", true);
-  private final JBCheckBox cdata = new JBCheckBox("부등호는 CDATA", true);
-  private final JBCheckBox where11 = new JBCheckBox("WHERE 1 = 1 로 시작", true);
-  private final JBCheckBox sqlComments = new JBCheckBox("칼럼 주석을 SQL 주석으로", true);
+  private final JBCheckBox oldJoin = new JBCheckBox(EiDbBundle.message("mapper.old.join"), true);
+  private final JBCheckBox cdata = new JBCheckBox(EiDbBundle.message("mapper.cdata"), true);
+  private final JBCheckBox where11 = new JBCheckBox(EiDbBundle.message("mapper.where11"), true);
+  private final JBCheckBox sqlComments = new JBCheckBox(EiDbBundle.message("mapper.sql.comments"), true);
   private DefaultTableModel columnModel;
 
   private final JBTabbedPane tabs = new JBTabbedPane();
   private final JBLabel fileLabel = new JBLabel();
   private final JBLabel badge = new JBLabel();
-  private final ComboBox<String> existingChoice = new ComboBox<>(new String[] {MERGE, SKIP});
+  private final ComboBox<String> existingChoice = new ComboBox<>(new String[] {EiDbBundle.message("feature.existing.merge"), EiDbBundle.message("feature.existing.skip")});
   private final Map<FeatureGen.Out, Preview> previews = new EnumMap<>(FeatureGen.Out.class);
   /** 있는 파일을 건너뛰기로 고른 출력. */
   private final Set<FeatureGen.Out> skipped = EnumSet.noneOf(FeatureGen.Out.class);
@@ -126,7 +123,7 @@ public final class FeatureDialog extends DialogWrapper {
   private boolean syncingChoice;
 
   public static void show(Project project, DbConfig c, String schema, String table) {
-    new Task.Backgroundable(project, table + " 칼럼 읽는 중", true) {
+    new Task.Backgroundable(project, EiDbBundle.message("validation.progress", table), true) {
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
         try {
@@ -136,7 +133,7 @@ public final class FeatureDialog extends DialogWrapper {
           ApplicationManager.getApplication().invokeLater(() -> {
             if (project.isDisposed()) return;
             if (cols.isEmpty()) {
-              Notify.error(project, schema + "." + table + " 의 칼럼을 찾지 못했습니다.");
+              Notify.error(project, EiDbBundle.message("mapper.no.columns", schema + "." + table));
               return;
             }
             new FeatureDialog(project, c, schema, table, cols, roots).show();
@@ -144,7 +141,7 @@ public final class FeatureDialog extends DialogWrapper {
         } catch (ProcessCanceledException e) {
           throw e;
         } catch (Exception e) {
-          Notify.error(project, table + " 칼럼을 읽지 못했습니다: " + e.getMessage());
+          Notify.error(project, EiDbBundle.message("validation.read.failed", table, e.getMessage()));
         }
       }
     }.queue();
@@ -167,9 +164,9 @@ public final class FeatureDialog extends DialogWrapper {
     implField.setText(join(base, SERVICE_PACKAGE + "." + IMPL_PACKAGE) + "." + entity + "ServiceImpl");
     controllerField.setText(join(base, CONTROLLER_PACKAGE) + "." + entity + "Controller");
     urlField.setText(FeatureGen.defaultBaseUrl(table));
-    setTitle("기능 한 벌 만들기 — " + table + "  ·  " + c.name + " · " + schema);
-    setOKButtonText("만들기");
-    setCancelButtonText("취소");
+    setTitle(EiDbBundle.message("feature.title", table, c.name, schema));
+    setOKButtonText(EiDbBundle.message("common.generate"));
+    setCancelButtonText(EiDbBundle.message("common.cancel"));
     refreshTimer.setRepeats(false);
     init();
     doRefresh();
@@ -195,7 +192,7 @@ public final class FeatureDialog extends DialogWrapper {
     existingChoice.addActionListener(e -> {
       if (syncingChoice) return;
       FeatureGen.Out o = TAB_OUTS[tabs.getSelectedIndex()];
-      if (SKIP.equals(existingChoice.getSelectedItem())) skipped.add(o); else skipped.remove(o);
+      if (EiDbBundle.message("feature.existing.skip").equals(existingChoice.getSelectedItem())) skipped.add(o); else skipped.remove(o);
       refresh();
     });
 
@@ -207,24 +204,24 @@ public final class FeatureDialog extends DialogWrapper {
     split.addActionListener(e -> implField.setEnabled(split.isSelected()));
     implField.setEnabled(false);
     oldJoin.setEnabled(false);
-    oldJoin.setToolTipText("표 하나의 문장이라 조인이 없습니다");
+    oldJoin.setToolTipText(EiDbBundle.message("mapper.old.join.tooltip"));
 
     JPanel dtoRow = new JPanel(new BorderLayout(JBUI.scale(12), 0));
     dtoRow.add(dtoField, BorderLayout.CENTER);
     dtoRow.add(makeDto, BorderLayout.EAST);
 
     FormBuilder form = FormBuilder.createFormBuilder()
-        .addLabeledComponent("매퍼 인터페이스", mapperField, true)
-        .addLabeledComponent("XML 위치", xmlField, true)
+        .addLabeledComponent(EiDbBundle.message("mapper.interface"), mapperField, true)
+        .addLabeledComponent(EiDbBundle.message("mapper.xml.location"), xmlField, true)
         .addLabeledComponent("DTO", dtoRow, true)
-        .addLabeledComponent("서비스", serviceField, true)
+        .addLabeledComponent(EiDbBundle.message("connect.service"), serviceField, true)
         .addComponent(split)
-        .addLabeledComponent("서비스 Impl", implField, true)
-        .addLabeledComponent("컨트롤러", controllerField, true)
+        .addLabeledComponent(EiDbBundle.message("feature.service.impl"), implField, true)
+        .addLabeledComponent(EiDbBundle.message("feature.controller"), controllerField, true)
         .addComponent(mvc)
-        .addLabeledComponent("기본 URL", urlField, true)
-        .addLabeledComponent("만들 문장", statements(), true)
-        .addLabeledComponent("스타일", stack(oldJoin, cdata, where11, sqlComments), true);
+        .addLabeledComponent(EiDbBundle.message("feature.base.url"), urlField, true)
+        .addLabeledComponent(EiDbBundle.message("mapper.statements"), statements(), true)
+        .addLabeledComponent(EiDbBundle.message("mapper.style"), stack(oldJoin, cdata, where11, sqlComments), true);
     String note = gen().missingNote();
     if (note != null) {
       JBLabel warn = new JBLabel(note, AllIcons.General.Warning, JBLabel.LEFT);
@@ -232,7 +229,7 @@ public final class FeatureDialog extends DialogWrapper {
       form.addComponent(warn);
     }
     JPanel left = form
-        .addLabeledComponentFillVertically(table + " 칼럼  " + cols.size() + "개  ·  검색 칸 = 목록 조건", columnTable())
+        .addLabeledComponentFillVertically(EiDbBundle.message("feature.columns.label", table, cols.size()), columnTable())
         .getPanel();
     left.setBorder(JBUI.Borders.emptyRight(12));
     WidthTracking leftBody = new WidthTracking();
@@ -263,7 +260,7 @@ public final class FeatureDialog extends DialogWrapper {
   @Override
   protected JPanel createSouthAdditionalPanel() {
     JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-    JBLabel note = new JBLabel("이미 있는 파일은 덮어쓰지 않고 끝에 덧붙이거나 건너뜁니다", AllIcons.General.Information, JBLabel.LEFT);
+    JBLabel note = new JBLabel(EiDbBundle.message("feature.append.note"), AllIcons.General.Information, JBLabel.LEFT);
     note.setForeground(Ui.muted());
     p.add(note);
     return p;
@@ -277,17 +274,17 @@ public final class FeatureDialog extends DialogWrapper {
       JBCheckBox box = new JBCheckBox(k == MapperGen.Kind.RESULT_MAP ? "resultMap " + probe.id(k) : probe.id(k), true);
       box.setFont(Ui.mono());
       String hint = switch (k) {
-        case LIST -> "GET 목록";
-        case ONE -> "GET 상세";
-        case INSERT -> "POST 등록";
-        case UPDATE -> "PUT 수정";
-        case DELETE -> "DELETE 삭제";
-        case RESULT_MAP -> "칼럼 ↔ 필드";
+        case LIST -> EiDbBundle.message("feature.hint.list");
+        case ONE -> EiDbBundle.message("feature.hint.one");
+        case INSERT -> EiDbBundle.message("feature.hint.insert");
+        case UPDATE -> EiDbBundle.message("feature.hint.update");
+        case DELETE -> EiDbBundle.message("feature.hint.delete");
+        case RESULT_MAP -> EiDbBundle.message("mapper.hint.result.map");
       };
       if (!probe.possible(k)) {
         box.setSelected(false);
         box.setEnabled(false);
-        hint = probe.hasPk() ? "바꿀 칼럼 없음" : "PK 없음";
+        hint = EiDbBundle.message(probe.hasPk() ? "mapper.hint.no.columns" : "mapper.hint.no.pk");
       }
       box.addActionListener(e -> refresh());
       kindBoxes.put(k, box);
@@ -309,7 +306,7 @@ public final class FeatureDialog extends DialogWrapper {
   }
 
   private JComponent columnTable() {
-    columnModel = new DefaultTableModel(new Object[] {"검색", "", "칼럼", "형식"}, 0) {
+    columnModel = new DefaultTableModel(new Object[] {EiDbBundle.message("feature.col.search"), "", EiDbBundle.message("common.col.column"), EiDbBundle.message("common.col.type")}, 0) {
       @Override
       public boolean isCellEditable(int row, int column) { return column == COL_SEARCH; }
 
@@ -399,32 +396,32 @@ public final class FeatureDialog extends DialogWrapper {
   private Plan plan(FeatureGen g, FeatureGen.Out o) throws IOException {
     String path = path(o);
     if (path == null) {
-      String why = o == FeatureGen.Out.DTO ? "DTO 는 만들지 않습니다." : "서비스를 인터페이스 + Impl 로 나누지 않습니다.";
+      String why = EiDbBundle.message(o == FeatureGen.Out.DTO ? "feature.why.no.dto" : "feature.why.no.split");
       return new Plan(null, false, false, note(o, why), null, null);
     }
     String rel = roots.rel(path);
     String existing = Targets.read(path);
     if (existing == null) {
       String text = g.file(o);
-      return new Plan(path, false, false, text, new Targets.Job(path, text, false), rel + " 새로 만듦");
+      return new Plan(path, false, false, text, new Targets.Job(path, text, false), EiDbBundle.message("common.file.created", rel));
     }
     String cannot = g.cannotMerge(o, existing);
     if (cannot != null) {
-      String msg = rel + " 이 이미 있어 건너뜀: " + cannot;
+      String msg = EiDbBundle.message("feature.exists.skipped.why", rel, cannot);
       return new Plan(path, true, false, note(o, msg), null, msg);
     }
     if (skipped.contains(o)) {
-      String msg = rel + " 이 이미 있어 건너뜀";
+      String msg = EiDbBundle.message("feature.exists.skipped", rel);
       return new Plan(path, true, true, note(o, msg), null, msg);
     }
     Merge.Result r = g.merge(o, existing);
     if (r.text() == null) {
-      String msg = rel + " 에서 끼울 자리(닫는 태그 · 괄호)를 찾지 못해 건너뜀";
+      String msg = EiDbBundle.message("feature.no.place", rel);
       return new Plan(path, true, true, note(o, msg), null, msg);
     }
     List<MapperGen.Block> blocks = o == FeatureGen.Out.XML ? g.xmlBlocks() : g.blocks(o);
-    String report = rel + " 에 " + r.added().size() + "개 덧붙임"
-        + (r.skipped().isEmpty() ? "" : " (이미 있어 건너뜀: " + String.join(", ", r.skipped()) + ")");
+    String report = EiDbBundle.message("mapper.summary", rel, r.added().size())
+        + (r.skipped().isEmpty() ? "" : EiDbBundle.message("mapper.summary.skipped", String.join(", ", r.skipped())));
     Targets.Job job = r.added().isEmpty() ? null : new Targets.Job(path, r.text(), true);
     return new Plan(path, true, true, addedOnly(o, blocks, r), job, report);
   }
@@ -432,9 +429,9 @@ public final class FeatureDialog extends DialogWrapper {
   /** 있는 파일에는 덧붙을 블록만 보여 준다. */
   private static String addedOnly(FeatureGen.Out o, List<MapperGen.Block> blocks, Merge.Result r) {
     StringBuilder b = new StringBuilder();
-    if (!r.skipped().isEmpty()) b.append(note(o, "이미 있어 건너뜀: " + String.join(", ", r.skipped()))).append('\n');
+    if (!r.skipped().isEmpty()) b.append(note(o, EiDbBundle.message("feature.note.skipped", String.join(", ", r.skipped())))).append('\n');
     for (MapperGen.Block bl : blocks) if (r.added().contains(bl.id())) b.append(bl.text()).append('\n');
-    return r.added().isEmpty() ? b.append(note(o, "덧붙일 것이 없습니다")).append('\n').toString() : b.toString();
+    return r.added().isEmpty() ? b.append(note(o, EiDbBundle.message("feature.note.nothing"))).append('\n').toString() : b.toString();
   }
 
   private static String note(FeatureGen.Out o, String text) {
@@ -454,7 +451,7 @@ public final class FeatureDialog extends DialogWrapper {
       for (FeatureGen.Out o : TAB_OUTS) path(o);
     } catch (InvalidPathException e) {
       shown.clear();
-      fileLabel.setText(BAD_PATH);
+      fileLabel.setText(EiDbBundle.message("mapper.bad.path"));
       badge.setText("");
       existingChoice.setVisible(false);
       return;
@@ -464,7 +461,7 @@ public final class FeatureDialog extends DialogWrapper {
       try {
         p = plan(g, o);
       } catch (IOException e) {
-        p = new Plan(path(o), true, false, note(o, "파일을 읽지 못했습니다: " + e.getMessage()), null, null);
+        p = new Plan(path(o), true, false, note(o, EiDbBundle.message("feature.read.failed", e.getMessage())), null, null);
       }
       shown.put(o, p);
       previews.get(o).setText(p.preview());
@@ -477,16 +474,16 @@ public final class FeatureDialog extends DialogWrapper {
     if (p == null) return;
     if (p.path() == null) {
       fileLabel.setText("");
-      badge.setText("만들지 않음");
+      badge.setText(EiDbBundle.message("feature.badge.none"));
       badge.setForeground(Ui.muted());
       existingChoice.setVisible(false);
       return;
     }
     fileLabel.setText(p.path().substring(p.path().lastIndexOf('/') + 1));
-    badge.setText(p.exists() ? (p.mergeable() ? "있는 파일" : "있는 파일 · 건너뜀") : "새 파일");
+    badge.setText(EiDbBundle.message(p.exists() ? (p.mergeable() ? "mapper.badge.existing" : "feature.badge.existing.skipped") : "mapper.badge.new"));
     badge.setForeground(p.exists() ? Ui.muted() : Ui.SUCCESS);
     syncingChoice = true;
-    existingChoice.setSelectedItem(skipped.contains(TAB_OUTS[tabs.getSelectedIndex()]) ? SKIP : MERGE);
+    existingChoice.setSelectedItem(skipped.contains(TAB_OUTS[tabs.getSelectedIndex()]) ? EiDbBundle.message("feature.existing.skip") : EiDbBundle.message("feature.existing.merge"));
     syncingChoice = false;
     existingChoice.setVisible(p.exists() && p.mergeable());
   }
@@ -503,27 +500,27 @@ public final class FeatureDialog extends DialogWrapper {
 
   @Override
   protected ValidationInfo doValidate() {
-    if (!FQN.matcher(mapperField.getText().strip()).matches()) return new ValidationInfo("매퍼 인터페이스 이름이 자바 이름 꼴이 아닙니다.", mapperField);
-    if (!xmlField.getText().strip().endsWith(".xml")) return new ValidationInfo("XML 위치는 .xml 파일이어야 합니다.", xmlField);
-    if (!validPath(xmlField.getText())) return new ValidationInfo(BAD_PATH + ".", xmlField);
-    if (!FQN.matcher(dtoField.getText().strip()).matches()) return new ValidationInfo("DTO 이름이 자바 이름 꼴이 아닙니다.", dtoField);
-    if (!FQN.matcher(serviceField.getText().strip()).matches()) return new ValidationInfo("서비스 이름이 자바 이름 꼴이 아닙니다.", serviceField);
+    if (!FQN.matcher(mapperField.getText().strip()).matches()) return new ValidationInfo(EiDbBundle.message("mapper.interface.invalid"), mapperField);
+    if (!xmlField.getText().strip().endsWith(".xml")) return new ValidationInfo(EiDbBundle.message("mapper.xml.invalid"), xmlField);
+    if (!validPath(xmlField.getText())) return new ValidationInfo(EiDbBundle.message("mapper.bad.path.sentence"), xmlField);
+    if (!FQN.matcher(dtoField.getText().strip()).matches()) return new ValidationInfo(EiDbBundle.message("mapper.dto.invalid"), dtoField);
+    if (!FQN.matcher(serviceField.getText().strip()).matches()) return new ValidationInfo(EiDbBundle.message("feature.service.invalid"), serviceField);
     if (split.isSelected() && !FQN.matcher(implField.getText().strip()).matches()) {
-      return new ValidationInfo("서비스 Impl 이름이 자바 이름 꼴이 아닙니다.", implField);
+      return new ValidationInfo(EiDbBundle.message("feature.impl.invalid"), implField);
     }
-    if (!FQN.matcher(controllerField.getText().strip()).matches()) return new ValidationInfo("컨트롤러 이름이 자바 이름 꼴이 아닙니다.", controllerField);
-    if (!URL.matcher(baseUrl()).matches()) return new ValidationInfo("기본 URL 은 /order-item 꼴이어야 합니다.", urlField);
+    if (!FQN.matcher(controllerField.getText().strip()).matches()) return new ValidationInfo(EiDbBundle.message("feature.controller.invalid"), controllerField);
+    if (!URL.matcher(baseUrl()).matches()) return new ValidationInfo(EiDbBundle.message("feature.url.invalid"), urlField);
     Set<String> types = new LinkedHashSet<>();
     List<String> all = new ArrayList<>(List.of(dtoType(), mapperField.getText().strip(), serviceField.getText().strip(),
                                                controllerField.getText().strip()));
     if (split.isSelected()) all.add(implField.getText().strip());
     for (String t : all) {
-      if (!types.add(t)) return new ValidationInfo("같은 클래스 이름이 두 번 쓰였습니다: " + t);
+      if (!types.add(t)) return new ValidationInfo(EiDbBundle.message("feature.duplicate.class", t));
     }
     boolean anyMethod = false;
     Set<MapperGen.Kind> kinds = kinds();
     for (MapperGen.Kind k : METHOD_KINDS) anyMethod |= kinds.contains(k);
-    if (!anyMethod) return new ValidationInfo("만들 문장(목록 · 상세 · 등록 · 수정 · 삭제)을 하나 이상 고르세요.");
+    if (!anyMethod) return new ValidationInfo(EiDbBundle.message("feature.no.statements"));
     return null;
   }
 
@@ -546,13 +543,13 @@ public final class FeatureDialog extends DialogWrapper {
         if (p.report() != null) report.add(p.report());
       }
     } catch (IOException | InvalidPathException e) {
-      Notify.error(project, "파일을 읽지 못해 만들지 않았습니다: " + e.getMessage());
+      Notify.error(project, EiDbBundle.message("feature.read.failed.none", e.getMessage()));
       return;
     }
     try {
-      Targets.write(project, COMMAND, jobs);
+      Targets.write(project, EiDbBundle.message("feature.command"), jobs);
     } catch (IOException e) {
-      Notify.error(project, "파일을 쓰지 못했습니다: " + e.getMessage());
+      Notify.error(project, EiDbBundle.message("common.write.failed", e.getMessage()));
       return;
     }
     super.doOKAction();

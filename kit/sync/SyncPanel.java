@@ -86,16 +86,23 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 final class SyncPanel extends JPanel {
   /** ASSUMED 는 변경이 아니라 skip-worktree(예전 판은 assume-unchanged)로 모른 척 중인 Git 파일이다. 「모두 보기」에서만 맨 아래 묶음으로 보인다. */
-  enum Kind { CONFLICT("충돌"), INCOMING("들어올 변경"), OUTGOING("나갈 변경"), ASSUMED("Assume Unchanged");
-    final String label;
-    Kind(String label) { this.label = label; }
+  enum Kind { CONFLICT, INCOMING, OUTGOING, ASSUMED;
+    /** 트리 묶음 줄에 보일 이름. */
+    String label() {
+      return switch (this) {
+        case CONFLICT -> SyncBundle.message("sync.kind.conflict");
+        case INCOMING -> SyncBundle.message("sync.kind.incoming");
+        case OUTGOING -> SyncBundle.message("sync.kind.outgoing");
+        case ASSUMED -> SyncBundle.message("sync.kind.assumed");
+      };
+    }
   }
 
   enum Vcs { GIT, SVN }
 
   /** 비교 대상 저장소 하나. Git 은 branch ↔ upstream, SVN 은 branch 가 없고 upstream 자리에 작업본 리비전이 온다. */
   record Repo(File root, Vcs vcs, String branch, String upstream) {
-    String label() { return vcs == Vcs.GIT ? branch + " ↔ " + upstream : "svn 리비전 " + upstream; }
+    String label() { return vcs == Vcs.GIT ? branch + " ↔ " + upstream : SyncBundle.message("sync.repo.svn.revision", upstream); }
     String remoteName() { return vcs == Vcs.GIT ? upstream : "svn HEAD"; }
     @Override public String toString() { return root.getName() + " (" + label() + ")"; }
   }
@@ -138,15 +145,14 @@ final class SyncPanel extends JPanel {
   private static final char SKIP_WORKTREE_TAG = 'S';
   // svn 은 오류 문구를 운영체제 문자셋(한국어 윈도우는 CP949)으로 낸다. Java 18 부터 기본 문자셋은 UTF-8 이라 native.encoding 을 쓴다.
   private static final Charset NATIVE_CHARSET = Charset.forName(System.getProperty("native.encoding", Charset.defaultCharset().name()));
-  static final String UNASSUME_HINT = "풀려면 동기화 창의 「Assume Unchanged」 묶음에서 우클릭 → No Assume Unchanged";
 
   private final Project project;
   private final Tree tree = new Tree(new DefaultTreeModel(new DefaultMutableTreeNode()));
   private final DiffRequestPanel diffPanel;
-  private final JLabel title = new JLabel("동기화");
+  private final JLabel title = new JLabel(SyncBundle.message("sync.title"));
   private final JLabel status = new JLabel(" ");
-  private final JButton refreshButton = new JButton("전체 새로고침");
-  private final JButton refreshSelectedButton = new JButton("고른 저장소만");
+  private final JButton refreshButton = new JButton(SyncBundle.message("sync.refresh.all"));
+  private final JButton refreshSelectedButton = new JButton(SyncBundle.message("sync.refresh.selected"));
   private final Map<String, JToggleButton> modeButtons = new LinkedHashMap<>();
 
   private volatile List<Repo> repos = List.of();
@@ -178,11 +184,11 @@ final class SyncPanel extends JPanel {
     top.add(refreshButton);
     top.add(refreshSelectedButton);
     ButtonGroup group = new ButtonGroup();
-    addMode(top, group, "모두 보기", null);
-    addMode(top, group, "들어올", Kind.INCOMING);
-    addMode(top, group, "나갈", Kind.OUTGOING);
-    addMode(top, group, "충돌", Kind.CONFLICT);
-    modeButtons.get("모두 보기").setSelected(true);
+    addMode(top, group, SyncBundle.message("sync.mode.all"), null);
+    addMode(top, group, SyncBundle.message("sync.mode.incoming"), Kind.INCOMING);
+    addMode(top, group, SyncBundle.message("sync.mode.outgoing"), Kind.OUTGOING);
+    addMode(top, group, SyncBundle.message("sync.mode.conflict"), Kind.CONFLICT);
+    modeButtons.get(SyncBundle.message("sync.mode.all")).setSelected(true);
     top.add(status);
     add(top, BorderLayout.NORTH);
 
@@ -192,13 +198,13 @@ final class SyncPanel extends JPanel {
     add(splitter, BorderLayout.CENTER);
 
     JPanel bottom = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
-    bottom.add(actionButton("전체 받기", ACTION_UPDATE_ALL, false));
-    bottom.add(actionButton("받기(Pull)", ACTION_PULL, true));
-    bottom.add(actionButton("충돌 해결", "Git.ResolveConflicts", false));
+    bottom.add(actionButton(SyncBundle.message("sync.button.update.all"), ACTION_UPDATE_ALL, false));
+    bottom.add(actionButton(SyncBundle.message("sync.button.pull"), ACTION_PULL, true));
+    bottom.add(actionButton(SyncBundle.message("sync.button.resolve"), "Git.ResolveConflicts", false));
     add(bottom, BorderLayout.SOUTH);
 
     tree.setRootVisible(false);
-    tree.getEmptyText().setText("변경 없음");
+    tree.getEmptyText().setText(SyncBundle.message("sync.empty"));
     // 묶음 줄과 파일 줄은 종류별로 IDE 의 파일 상태 색(테마를 따름)으로 그린다. 충돌 빨강 · 들어올 파랑(수정됨) · 나갈 보라(병합됨).
     tree.setCellRenderer(new ColoredTreeCellRenderer() {
       @Override
@@ -271,7 +277,7 @@ final class SyncPanel extends JPanel {
     // 모른 척 중인 파일은 변경이 아니므로 무시 · 되돌리기 대신 풀기만 둔다.
     List<Change> assumed = all.stream().filter(c -> c.kind() == Kind.ASSUMED).toList();
     if (!assumed.isEmpty()) {
-      JMenuItem unassume = new JMenuItem("No Assume Unchanged (" + assumed.size() + "개 파일)");
+      JMenuItem unassume = new JMenuItem(SyncBundle.message("sync.menu.unassume", assumed.size()));
       unassume.addActionListener(a -> assumeUnchanged(assumed, false));
       menu.add(unassume);
     }
@@ -283,8 +289,8 @@ final class SyncPanel extends JPanel {
     if (!assumed.isEmpty()) menu.addSeparator();
 
     boolean allGit = selected.stream().allMatch(c -> c.repo().vcs() == Vcs.GIT);
-    String ignoreName = allGit ? ".gitignore" : "무시 목록";
-    JMenuItem ignoreFiles = new JMenuItem(ignoreName + " 에 추가 (" + selected.size() + "개 파일)");
+    String ignoreName = allGit ? ".gitignore" : SyncBundle.message("sync.ignore.list");
+    JMenuItem ignoreFiles = new JMenuItem(SyncBundle.message("sync.menu.ignore", ignoreName, selected.size()));
     ignoreFiles.addActionListener(a -> ignore(selected, false));
     menu.add(ignoreFiles);
 
@@ -292,7 +298,7 @@ final class SyncPanel extends JPanel {
     List<String> folders = selected.stream().map(Change::path).filter(p -> p.contains("/"))
       .map(p -> "/" + p.substring(0, p.lastIndexOf('/') + 1)).distinct().toList();
     if (!folders.isEmpty()) {
-      JMenuItem ignoreFolders = new JMenuItem("폴더째 " + ignoreName + " 에 추가 (" + String.join(", ", folders) + ")");
+      JMenuItem ignoreFolders = new JMenuItem(SyncBundle.message("sync.menu.ignore.folders", ignoreName, String.join(", ", folders)));
       ignoreFolders.addActionListener(a -> ignore(selected, true));
       menu.add(ignoreFolders);
     }
@@ -302,12 +308,12 @@ final class SyncPanel extends JPanel {
     List<Change> unstageable = selected.stream().filter(c -> undoOf(c) == Undo.UNSTAGE).toList();
     if (!revertable.isEmpty() || !unstageable.isEmpty()) menu.addSeparator();
     if (!revertable.isEmpty()) {
-      JMenuItem revert = new JMenuItem("내 변경 되돌리기 (" + revertable.size() + "개 파일)");
+      JMenuItem revert = new JMenuItem(SyncBundle.message("sync.menu.revert", revertable.size()));
       revert.addActionListener(a -> revert(revertable, unstageable.size()));
       menu.add(revert);
     }
     if (!unstageable.isEmpty()) {
-      JMenuItem unstage = new JMenuItem("스테이징만 풀기 — 파일은 그대로 (" + unstageable.size() + "개 파일)");
+      JMenuItem unstage = new JMenuItem(SyncBundle.message("sync.menu.unstage", unstageable.size()));
       unstage.addActionListener(a -> unstage(unstageable));
       menu.add(unstage);
     }
@@ -315,7 +321,7 @@ final class SyncPanel extends JPanel {
     // 내 작업본에만 적용된다. SVN 에는 대응 기능이 없다.
     List<Change> assumable = revertable.stream().filter(c -> c.repo().vcs() == Vcs.GIT).toList();
     if (!assumable.isEmpty()) {
-      JMenuItem assume = new JMenuItem("Assume Unchanged (" + assumable.size() + "개 파일)");
+      JMenuItem assume = new JMenuItem(SyncBundle.message("sync.menu.assume", assumable.size()));
       assume.addActionListener(a -> assumeUnchanged(assumable, true));
       menu.add(assume);
     }
@@ -363,11 +369,11 @@ final class SyncPanel extends JPanel {
           else addToSvnIgnore(entry.getKey().root(), patterns);
           done.addAll(patterns);
         }
-        message = "무시 목록에 추가했습니다: " + String.join(", ", done);
+        message = SyncBundle.message("sync.ignore.done", String.join(", ", done));
       }
       catch (IOException ex) {
-        message = "무시 목록을 쓰지 못했습니다: " + ex.getMessage()
-                  + (done.isEmpty() ? "" : " (먼저 추가한 것: " + String.join(", ", done) + ")");
+        message = SyncBundle.message("sync.ignore.failed", ex.getMessage())
+                  + (done.isEmpty() ? "" : " " + SyncBundle.message("sync.ignore.failed.partial", String.join(", ", done)));
       }
       catch (InterruptedException ex) {
         Thread.currentThread().interrupt();
@@ -451,25 +457,25 @@ final class SyncPanel extends JPanel {
    */
   private void revert(List<Change> targets, int skipped) {
     int answer = Messages.showYesNoDialog(project,
-      "아래 파일의 내 변경을 지우고 마지막 커밋 상태로 되돌립니다. 되돌린 변경은 복구할 수 없습니다.\n\n" + pathList(targets)
-        + (skipped > 0 ? "\n\n새로 추가 · 이름 바꿈 · 복사한 파일 " + skipped + "개는 지우지 않도록 뺐습니다. 그 파일은 「스테이징만 풀기」를 쓰세요." : ""),
-      "내 변경 되돌리기", Messages.getWarningIcon());
+      SyncBundle.message("sync.revert.confirm") + "\n\n" + pathList(targets)
+        + (skipped > 0 ? "\n\n" + SyncBundle.message("sync.revert.skipped", skipped) : ""),
+      SyncBundle.message("sync.revert.title"), Messages.getWarningIcon());
     if (answer != Messages.YES) return;
     runOnRepos(targets, repo -> repo.vcs() == Vcs.GIT
                                 ? List.of("restore", "--staged", "--worktree", "--")
                                 : List.of("revert", "--"),
-               targets.size() + "개 파일을 되돌렸습니다.");
+               SyncBundle.message("sync.revert.done", targets.size()));
   }
 
   /** 스테이징(색인)에서만 빼고 파일 내용은 그대로 둔다. 디스크를 바꾸지 않으므로 확인받지 않는다. */
   private void unstage(List<Change> targets) {
     runOnRepos(targets, repo -> List.of("restore", "--staged", "--"),
-               targets.size() + "개 파일의 스테이징을 풀었습니다. 파일은 그대로 남아 있습니다.");
+               SyncBundle.message("sync.unstage.done", targets.size()));
   }
 
   private static String pathList(List<Change> targets) {
     String list = String.join("\n", targets.stream().map(Change::path).limit(PATH_LIST_MAX).toList());
-    return targets.size() > PATH_LIST_MAX ? list + "\n… 외 " + (targets.size() - PATH_LIST_MAX) + "개" : list;
+    return targets.size() > PATH_LIST_MAX ? list + "\n" + SyncBundle.message("sync.path.more", targets.size() - PATH_LIST_MAX) : list;
   }
 
   /** 저장소마다 앞 인자(head) 뒤에 경로를 붙여 git 또는 svn 을 작업 스레드에서 돌리고, 결과를 상태 줄에 적은 뒤 다시 비교한다. */
@@ -500,8 +506,7 @@ final class SyncPanel extends JPanel {
 
   /** 모른 척하기 · 풀기 뒤 알림 문구. 프로젝트 트리 메뉴(AssumeUnchangedAction)와 같이 쓴다. */
   static String hideMessage(int count, boolean on) {
-    return on ? count + "개 파일을 Assume Unchanged 로 두어 변경을 모른 척합니다. 원격에서 이 파일이 바뀌면 받기(Pull)가 멈추니 그때는 먼저 No Assume Unchanged 로 푸세요. " + UNASSUME_HINT
-              : count + "개 파일의 Assume Unchanged 를 풀었습니다. 내 변경이 다시 보입니다.";
+    return on ? SyncBundle.message("sync.assume.done", count) : SyncBundle.message("sync.unassume.done", count);
   }
 
   /**
@@ -755,10 +760,10 @@ final class SyncPanel extends JPanel {
   private void svnUpdate(JButton button, List<Repo> targets) {
     String text = button.getText();
     button.setEnabled(false);
-    status.setText(text + ": svn update 중…");
+    status.setText(SyncBundle.message("sync.svn.updating", text));
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       try {
-        String message = text + ": " + targets.size() + "개 저장소를 최신으로 받았습니다.";
+        String message = SyncBundle.message("sync.svn.updated", text, targets.size());
         List<File> roots = new ArrayList<>();
         try {
           for (Repo repo : targets) {
@@ -788,14 +793,14 @@ final class SyncPanel extends JPanel {
   private void runAction(String text, String actionId, DataContext context) {
     AnAction action = ActionManager.getInstance().getAction(actionId);
     if (action == null) {
-      status.setText(text + " 동작을 찾을 수 없습니다(" + actionId + ").");
+      status.setText(SyncBundle.message("sync.action.missing", text, actionId));
       return;
     }
     AnActionEvent event = AnActionEvent.createFromAnAction(action, null, "KingGuraSynchronize", context);
     ActionUtil.updateAction(action, event);
     if (!event.getPresentation().isEnabled()) {
-      status.setText(text + ": 지금은 할 수 없습니다" + ("Git.ResolveConflicts".equals(actionId)
-        ? " — git 에 충돌 상태인 파일이 없습니다. 받기 뒤 충돌이 나면 이 단추로 해결합니다." : "."));
+      status.setText("Git.ResolveConflicts".equals(actionId)
+        ? SyncBundle.message("sync.action.disabled.resolve", text) : SyncBundle.message("sync.action.disabled", text));
       return;
     }
     ActionUtil.performActionDumbAwareWithCallbacks(action, event);
@@ -886,12 +891,12 @@ final class SyncPanel extends JPanel {
   void refresh() {
     List<Map.Entry<File, Vcs>> roots = vcsRoots();
     if (roots.isEmpty()) {
-      status.setText("프로젝트 폴더를 알 수 없습니다.");
+      status.setText(SyncBundle.message("sync.no.project"));
       return;
     }
     refreshButton.setEnabled(false);
     refreshSelectedButton.setEnabled(false);
-    status.setText("비교 중…");
+    status.setText(SyncBundle.message("sync.comparing"));
     int seq = ++compareSeq;
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       List<String> errors = Collections.synchronizedList(new ArrayList<>());
@@ -920,11 +925,11 @@ final class SyncPanel extends JPanel {
         repos = List.copyOf(found);
         List<Change> local = List.copyOf(result);
         SwingUtilities.invokeLater(() -> {
-          title.setText(found.size() == 1 ? found.get(0).label() : "저장소 " + found.size() + "개");
+          title.setText(found.size() == 1 ? found.get(0).label() : SyncBundle.message("sync.repo.count", found.size()));
           if (seq != compareSeq) return;
           changes = local;
           rebuildTree();
-          status.setText(summary(local) + " — 원격 변경을 받아 오는 중…");
+          status.setText(SyncBundle.message("sync.fetching", summary(local)));
         });
         List<Change> fetched = new ArrayList<>();
         for (Scanned scanned : scannedAll) fetched.addAll(await(scanned.remote()));
@@ -935,12 +940,12 @@ final class SyncPanel extends JPanel {
       }
       catch (InterruptedException e) {
         Thread.currentThread().interrupt();
-        errors.add("중단됨");
+        errors.add(SyncBundle.message("sync.interrupted"));
         // 새로고침 자체가 중단될 때만 원격 확인을 멈춘다. 그 밖에는 끝까지 둔다. 도중에 죽인 git fetch 는 .lock 파일을 남겨 다음 fetch 를 막을 수 있다.
         for (Future<List<Change>> remote : remotes) remote.cancel(true);
       }
       List<Change> finalResult = result;
-      String message = summary(finalResult) + " — 마지막 원격 확인 " + LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"));
+      String message = SyncBundle.message("sync.last.check", summary(finalResult), LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm")));
       if (!errors.isEmpty()) message = String.join(" / ", errors);
       String finalMessage = message;
       SwingUtilities.invokeLater(() -> {
@@ -963,7 +968,7 @@ final class SyncPanel extends JPanel {
     Repo selected = selectedRepo();
     if (selected == null && repos.size() == 1) selected = repos.get(0);
     if (selected == null) {
-      status.setText("새로고침할 저장소를 트리에서 고르세요.");
+      status.setText(SyncBundle.message("sync.select.repo"));
       return;
     }
     refreshRepo(selected.root(), selected.vcs());
@@ -988,7 +993,7 @@ final class SyncPanel extends JPanel {
     String name = root.getName();
     refreshButton.setEnabled(false);
     refreshSelectedButton.setEnabled(false);
-    status.setText(name + " 원격 변경을 받아 오는 중…");
+    status.setText(SyncBundle.message("sync.repo.fetching", name));
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       Repo updated = null;
       List<Change> fresh = List.of();
@@ -1009,7 +1014,7 @@ final class SyncPanel extends JPanel {
       }
       catch (InterruptedException e) {
         Thread.currentThread().interrupt();
-        error = name + ": 중단됨";
+        error = name + ": " + SyncBundle.message("sync.interrupted");
       }
       Repo finalRepo = updated;
       List<Change> finalFresh = fresh;
@@ -1036,9 +1041,9 @@ final class SyncPanel extends JPanel {
         }
         next.addAll(finalFresh);
         changes = next;
-        title.setText(repos.size() == 1 ? finalRepo.label() : "저장소 " + repos.size() + "개");
+        title.setText(repos.size() == 1 ? finalRepo.label() : SyncBundle.message("sync.repo.count", repos.size()));
         rebuildTree();
-        status.setText(summary(next) + " — " + name + " 원격 확인 끝");
+        status.setText(SyncBundle.message("sync.repo.checked", summary(next), name));
       });
     });
   }
@@ -1100,7 +1105,7 @@ final class SyncPanel extends JPanel {
       return new Repo(root, Vcs.GIT, branch, git(root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}").trim());
     }
     catch (IOException noUpstream) {
-      throw new IOException("'" + branch + "' 브랜치에 원격 추적 브랜치가 없습니다. 먼저 올리기(Push)로 원격 브랜치를 연결하세요.");
+      throw new IOException(SyncBundle.message("sync.no.upstream", branch));
     }
   }
 
@@ -1230,11 +1235,11 @@ final class SyncPanel extends JPanel {
   private static List<Change> merge(Repo repo, Map<String, String> incoming, Map<String, String> outgoing, Set<String> unmerged) {
     List<Change> result = new ArrayList<>();
     for (String path : new TreeSet<>(incoming.keySet())) {
-      if (outgoing.containsKey(path) || unmerged.contains(path)) result.add(new Change(Kind.CONFLICT, "충돌", path, repo));
+      if (outgoing.containsKey(path) || unmerged.contains(path)) result.add(new Change(Kind.CONFLICT, SyncBundle.message("sync.status.conflict"), path, repo));
       else result.add(new Change(Kind.INCOMING, incoming.get(path), path, repo));
     }
     for (String path : unmerged) {
-      if (!incoming.containsKey(path)) result.add(new Change(Kind.CONFLICT, "미해결", path, repo));
+      if (!incoming.containsKey(path)) result.add(new Change(Kind.CONFLICT, SyncBundle.message("sync.status.unresolved"), path, repo));
     }
     for (String path : new TreeSet<>(outgoing.keySet())) {
       if (!incoming.containsKey(path) && !unmerged.contains(path)) result.add(new Change(Kind.OUTGOING, outgoing.get(path), path, repo));
@@ -1291,7 +1296,7 @@ final class SyncPanel extends JPanel {
       if (modeFilter != null && modeFilter != kind) continue;
       List<Change> ofKind = source.stream().filter(c -> c.kind() == kind).toList();
       if (ofKind.isEmpty()) continue;
-      DefaultMutableTreeNode group = new DefaultMutableTreeNode(kind.label + " " + ofKind.size());
+      DefaultMutableTreeNode group = new DefaultMutableTreeNode(kind.label() + " " + ofKind.size());
       for (Change c : ofKind) group.add(new DefaultMutableTreeNode(c));
       parent.add(group);
     }
@@ -1334,7 +1339,7 @@ final class SyncPanel extends JPanel {
         diffPanel.setRequest(new SimpleDiffRequest(change.path(),
                                                    factory.create(project, remoteText, type),
                                                    factory.create(project, mineText, type),
-                                                   "원격 (" + repo.remoteName() + ")", "내 작업본"));
+                                                   SyncBundle.message("sync.diff.remote", repo.remoteName()), SyncBundle.message("sync.diff.local")));
       });
     });
   }

@@ -20,6 +20,7 @@ import com.intellij.openapi.util.TextRange;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.terminal.frontend.toolwindow.TerminalToolWindowTabsManager;
+import local.bootservers.BootServersBundle;
 
 import java.io.File;
 import java.io.IOException;
@@ -115,7 +116,7 @@ public final class AiActions {
     public static final class Ask extends EditorAction {
         @Override
         String instruction(Project project) {
-            String question = Messages.showInputDialog(project, "고른 코드에 대해 물을 내용을 적으세요.", "AI 에 질문", null);
+            String question = Messages.showInputDialog(project, BootServersBundle.message("ai.ask.prompt"), BootServersBundle.message("ai.ask.title"), null);
             if (question == null || question.isBlank()) {
                 return null;
             }
@@ -190,8 +191,8 @@ public final class AiActions {
     /** 풀 스레드에서 부른다. 시작할 수 없으면 알림만 띄운다. */
     private static void writePromptAndOpen(Project project, String prompt) {
         if (!AiText.claudeOnPath(System.getenv("PATH"), File.pathSeparator)) {
-            notify(project, "Claude Code 를 찾지 못했습니다",
-                    "PATH 에 claude 가 없습니다. Claude Code 를 설치한 뒤 IDE 를 다시 시작하세요.", NotificationType.WARNING);
+            notify(project, BootServersBundle.message("ai.claude.missing"),
+                    BootServersBundle.message("ai.claude.missing.content"), NotificationType.WARNING);
             return;
         }
         Path dir = PathManager.getTempDir();
@@ -204,7 +205,7 @@ public final class AiActions {
             command = AiText.command(file.toString());
         } catch (IOException | IllegalArgumentException ex) {
             LOG.warn("AI 프롬프트 파일을 만들지 못함: " + dir, ex);
-            notify(project, "Claude Code 를 시작하지 못했습니다", ex.getMessage(), NotificationType.ERROR);
+            notify(project, BootServersBundle.message("ai.claude.start.failed"), ex.getMessage(), NotificationType.ERROR);
             return;
         }
         ApplicationManager.getApplication().invokeLater(() -> openTerminal(project, command), project.getDisposed());

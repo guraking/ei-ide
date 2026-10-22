@@ -9,6 +9,7 @@ import com.intellij.openapi.vfs.VirtualFile;
 import ei.db.DbConfig;
 import ei.db.DbKind;
 import ei.db.DbSessions;
+import ei.db.EiDbBundle;
 import ei.db.Notify;
 import ei.db.QueryResult;
 import ei.db.mybatis.SqlValues;
@@ -32,18 +33,18 @@ public final class ExplainPlan {
   public static void run(Project project, Editor editor, VirtualFile file) {
     DbConfig c = ConsoleOpener.config(project, file);
     if (c == null) {
-      Notify.error(project, "이 콘솔의 접속이 지워졌습니다. 도구줄에서 다른 접속을 고르세요.");
+      Notify.error(project, EiDbBundle.message("console.connection.removed"));
       return;
     }
     String sql = statement(editor);
     if (sql == null) {
-      Notify.info(project, "실행 계획을 볼 문장이 없습니다.");
+      Notify.info(project, EiDbBundle.message("explain.no.statement"));
       return;
     }
     List<SqlParams.Bound> bound = BindDialog.ask(project, List.of(sql));
     if (bound == null) return;
     SqlParams.Bound stmt = bound.get(0);
-    new Task.Backgroundable(project, c.name + " 실행 계획 읽는 중", true) {
+    new Task.Backgroundable(project, EiDbBundle.message("explain.progress", c.name), true) {
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
         try {

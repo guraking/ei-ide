@@ -19,6 +19,7 @@ import com.intellij.psi.PsiModifier;
 import com.intellij.psi.PsiNameIdentifierOwner;
 import com.intellij.psi.search.GlobalSearchScope;
 import org.jetbrains.annotations.NotNull;
+import ei.db.EiDbBundle;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -63,7 +64,7 @@ final class MapperPairInspection {
         if (!missing.contains(id)) continue;
         PsiElement at = file.findElementAt(s.start + 1); // 여는 태그 이름 토큰
         if (at == null) continue;
-        out.add(manager.createProblemDescriptor(at, "매퍼 인터페이스 " + mapper.getName() + " 에 " + id + " 메서드가 없습니다",
+        out.add(manager.createProblemDescriptor(at, EiDbBundle.message("inspection.mapper.no.method", mapper.getName(), id),
             (LocalQuickFix) null, ProblemHighlightType.GENERIC_ERROR_OR_WARNING, isOnTheFly));
       }
       return toArray(out);
@@ -95,7 +96,7 @@ final class MapperPairInspection {
           if (!needs) continue;
           PsiElement at = ((PsiNameIdentifierOwner) m).getNameIdentifier();
           if (at == null) continue;
-          out.add(manager.createProblemDescriptor(at, "매퍼 XML(" + c.getName() + ")에 " + m.getName() + " 문장이 없습니다",
+          out.add(manager.createProblemDescriptor(at, EiDbBundle.message("inspection.mapper.no.statement", c.getName(), m.getName()),
               (LocalQuickFix) null, ProblemHighlightType.GENERIC_ERROR_OR_WARNING, isOnTheFly));
         }
       }

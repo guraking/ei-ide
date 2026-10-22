@@ -12,6 +12,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.vfs.VirtualFile;
 import org.jetbrains.annotations.NotNull;
+import ei.db.EiDbBundle;
 
 /**
  * 「JSON 으로 DTO 만들기…」: 프로젝트 트리에서 고른 폴더(파일이면 그 폴더)가 소스 폴더 안이면 그 패키지 · 폴더를 기본값으로 연다.
@@ -35,7 +36,7 @@ public final class JsonDtoAction extends DumbAwareAction {
     if (project == null) return;
     VirtualFile picked = e.getData(CommonDataKeys.VIRTUAL_FILE);
     VirtualFile dir = picked == null || picked.isDirectory() ? picked : picked.getParent();
-    new Task.Backgroundable(project, "DTO 위치 찾는 중", true) {
+    new Task.Backgroundable(project, EiDbBundle.message("jsondto.progress.find.location"), true) {
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
         JsonDtoDialog.Start start = ReadAction.compute(() -> start(project, dir));

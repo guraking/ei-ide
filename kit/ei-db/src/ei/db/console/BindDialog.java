@@ -12,6 +12,7 @@ import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import ei.db.EiDbBundle;
 
 import javax.swing.JComponent;
 import javax.swing.JPanel;
@@ -47,9 +48,9 @@ final class BindDialog extends DialogWrapper {
     super(project);
     this.project = project;
     this.params = params;
-    setTitle("바인드 변수 값");
-    setOKButtonText("실행");
-    setCancelButtonText("취소");
+    setTitle(EiDbBundle.message("bind.title"));
+    setOKButtonText(EiDbBundle.message("common.run"));
+    setCancelButtonText(EiDbBundle.message("common.cancel"));
     init();
   }
 
@@ -81,7 +82,7 @@ final class BindDialog extends DialogWrapper {
     g.insets = JBUI.insets(2, 0, 2, 10);
     g.anchor = GridBagConstraints.WEST;
     g.gridy = 0;
-    addRow(grid, g, header("이름"), header("값"), header("형식"));
+    addRow(grid, g, header(EiDbBundle.message("common.col.name")), header(EiDbBundle.message("bind.col.value")), header(EiDbBundle.message("common.col.type")));
     for (SqlParams.Param p : params) {
       JBTextField value = new JBTextField(props.getValue(VALUE_KEY + p.name(), ""), VALUE_COLUMNS);
       JBLabel type = new JBLabel();
@@ -103,8 +104,7 @@ final class BindDialog extends DialogWrapper {
     int rows = Math.min(params.size() + 1, MAX_VISIBLE_ROWS);
     scroll.setPreferredSize(new Dimension(grid.getPreferredSize().width + JBUI.scale(20), JBUI.scale(ROW_HEIGHT) * rows));
 
-    JBLabel note = new JBLabel("<html>숫자는 숫자로, 'abc' 처럼 따옴표로 감싸면 문자열, 비우면 NULL 입니다.<br>"
-                               + "${이름} 자리는 넣은 글이 그대로 들어갑니다.</html>",
+    JBLabel note = new JBLabel(EiDbBundle.message("bind.note"),
                                UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER);
     note.setBorder(JBUI.Borders.emptyTop(8));
     JPanel panel = new JPanel(new BorderLayout());
@@ -124,7 +124,7 @@ final class BindDialog extends DialogWrapper {
     for (SqlParams.Param p : params) {
       JBTextField field = fields.get(p.name());
       if (p.kind() != SqlParams.Kind.RAW && badDate(field.getText())) {
-        return new ValidationInfo("날짜 형식이 맞지 않습니다: " + p.label() + " = " + field.getText().strip(), field);
+        return new ValidationInfo(EiDbBundle.message("bind.bad.date", p.label(), field.getText().strip()), field);
       }
     }
     return null;
@@ -180,12 +180,12 @@ final class BindDialog extends DialogWrapper {
   }
 
   static String typeLabel(SqlParams.Param p, String text) {
-    if (p.kind() == SqlParams.Kind.RAW) return "글자 그대로";
-    if (badDate(text)) return "날짜 형식 오류";
+    if (p.kind() == SqlParams.Kind.RAW) return EiDbBundle.message("bind.type.raw");
+    if (badDate(text)) return EiDbBundle.message("bind.type.bad.date");
     Object v = SqlParams.value(text);
     if (v == null) return "NULL";
-    if (v instanceof Long || v instanceof BigDecimal) return "숫자";
-    if (v instanceof java.util.Date) return "날짜";
-    return "문자열";
+    if (v instanceof Long || v instanceof BigDecimal) return EiDbBundle.message("bind.type.number");
+    if (v instanceof java.util.Date) return EiDbBundle.message("bind.type.date");
+    return EiDbBundle.message("bind.type.string");
   }
 }

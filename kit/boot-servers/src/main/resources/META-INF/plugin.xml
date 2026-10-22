@@ -3,10 +3,11 @@
     <name>서버 창</name>
     <vendor>개인</vendor>
     <description><![CDATA[
-        프로젝트 트리에서 모듈을 우클릭해 스프링 부트 서버를 시작 · 디버그 · 재시작 · 중지하고,
-        실행 중인 모듈 옆에 상태를 표시한다.
-        아래쪽 「서버」 창에서 여러 서버를 한꺼번에 다루고 프로필 · VM 옵션 · 포트를 고친다.
+        Right-click a module in the project tree to start, debug, restart or stop its Spring Boot server,
+        and see the state next to running modules.
+        The bottom Servers window handles several servers at once and edits profiles, VM options and ports.
     ]]></description>
+    <resource-bundle>messages.BootServersBundle</resource-bundle>
 
     <depends>com.intellij.java</depends>
     <depends>Git4Idea</depends>
@@ -23,9 +24,9 @@
         <toolWindow id="Servers" anchor="bottom" icon="AllIcons.Nodes.Services"
                     factoryClass="local.bootservers.ServersToolWindowFactory"/>
         <defaultToolWindowLayout implementation="local.bootservers.ToolWindowOrder" order="last"/>
-        <notificationGroup id="EI IDE 새 판" displayType="STICKY_BALLOON"/>
-        <notificationGroup id="서버 실행" displayType="BALLOON"/>
-        <notificationGroup id="프로그램 목록" displayType="BALLOON"/>
+        <notificationGroup id="EI IDE 새 판" key="notification.group.update" displayType="STICKY_BALLOON"/>
+        <notificationGroup id="서버 실행" key="notification.group.servers" displayType="BALLOON"/>
+        <notificationGroup id="프로그램 목록" key="notification.group.programs" displayType="BALLOON"/>
         <!-- @Controller 뷰 이름 글 Ctrl+클릭 → JSP, 주석 속성 ${키} Ctrl+클릭 → application*.yml · properties 의 키 줄 -->
         <gotoDeclarationHandler implementation="local.bootservers.ViewNameGotoHandler"/>
         <gotoDeclarationHandler implementation="local.bootservers.ConfigKeyGotoHandler"/>
@@ -49,12 +50,12 @@
 
     <!-- JavaScript · TypeScript · Vue: vtsls · Vue 언어 서버(LSP). Node · 서버는 사용자 폴더의 .ei-web 아래 -->
     <extensions defaultExtensionNs="com.intellij">
-        <notificationGroup id="웹 언어 지원" displayType="BALLOON"/>
-        <notificationGroup id="AI" displayType="BALLOON"/>
+        <notificationGroup id="웹 언어 지원" key="notification.group.web" displayType="BALLOON"/>
+        <notificationGroup id="AI" key="notification.group.ai" displayType="BALLOON"/>
         <!-- 코드 도구(local.bootservers.code) -->
-        <notificationGroup id="요청 값 묶기" displayType="BALLOON"/>
-        <localInspection language="JAVA" shortName="EiLogUsage" displayName="빈 catch · printStackTrace · System.out 사용"
-                         groupName="EI 코드" enabledByDefault="true" level="WARNING"
+        <notificationGroup id="요청 값 묶기" key="notification.group.params" displayType="BALLOON"/>
+        <localInspection language="JAVA" shortName="EiLogUsage" key="inspection.log.usage.display.name"
+                         groupKey="inspection.group.ei.code" bundle="messages.BootServersBundle" enabledByDefault="true" level="WARNING"
                          implementationClass="local.bootservers.code.LogUsageInspection"/>
         <platform.lsp.serverSupportProvider implementation="local.bootservers.web.WebLspSupport"/>
         <platform.lsp.serverSupportProvider implementation="local.bootservers.web.VueLspSupport"/>
@@ -76,21 +77,17 @@
     </projectListeners>
 
     <actions>
-        <group id="BootServers.Menu" class="local.bootservers.ServerActions$Menu" text="스프링 부트 서버" popup="true"
+        <group id="BootServers.Menu" class="local.bootservers.ServerActions$Menu" popup="true"
                icon="AllIcons.Nodes.Services">
-            <action id="BootServers.Start" class="local.bootservers.ServerActions$Start"
-                    text="서버 시작" icon="AllIcons.Actions.Execute"/>
-            <action id="BootServers.Debug" class="local.bootservers.ServerActions$Debug"
-                    text="디버그로 시작" icon="AllIcons.Actions.StartDebugger"/>
-            <action id="BootServers.Restart" class="local.bootservers.ServerActions$Restart"
-                    text="재시작" icon="AllIcons.Actions.Restart"/>
-            <action id="BootServers.Stop" class="local.bootservers.ServerActions$Stop"
-                    text="중지" icon="AllIcons.Actions.Suspend"/>
+            <action id="BootServers.Start" class="local.bootservers.ServerActions$Start" icon="AllIcons.Actions.Execute"/>
+            <action id="BootServers.Debug" class="local.bootservers.ServerActions$Debug" icon="AllIcons.Actions.StartDebugger"/>
+            <action id="BootServers.Restart" class="local.bootservers.ServerActions$Restart" icon="AllIcons.Actions.Restart"/>
+            <action id="BootServers.Stop" class="local.bootservers.ServerActions$Stop" icon="AllIcons.Actions.Suspend"/>
             <add-to-group group-id="ProjectViewPopupMenu" anchor="first"/>
         </group>
 
         <!-- 이클립스 Import · Team 메뉴 대응. 인텔리제이 기본 동작을 우클릭 메뉴에 연결만 한다. -->
-        <group id="BootServers.Workspace" text="작업공간" popup="true" icon="AllIcons.Nodes.Folder">
+        <group id="BootServers.Workspace" popup="true" icon="AllIcons.Nodes.Folder">
             <reference ref="ImportModule"/>
             <reference ref="Vcs.VcsClone"/>
             <separator/>
@@ -100,57 +97,57 @@
         </group>
 
         <!-- 이클립스 키맵은 Ctrl+F 를 「바꾸기」 에 주므로, 콘솔에서만 켜지는 찾기를 Ctrl+F 에 따로 건다. 이클립스 키맵은 $default 를 물려받는다. -->
-        <action id="KingGura.ConsoleFind" class="local.bootservers.ConsoleFindAction" text="콘솔에서 찾기" icon="AllIcons.Actions.Find">
+        <action id="KingGura.ConsoleFind" class="local.bootservers.ConsoleFindAction" icon="AllIcons.Actions.Find">
             <keyboard-shortcut keymap="$default" first-keystroke="control F"/>
         </action>
         <!-- 이클립스처럼 프로젝트 창에서 F5 로 디스크에서 다시 읽기. 이클립스 키맵의 F5(Step Into)는 프로젝트 창 밖에서 그대로다. -->
-        <action id="KingGura.ProjectViewRefresh" class="local.bootservers.ProjectViewRefreshAction" text="디스크에서 다시 읽기" icon="AllIcons.Actions.Refresh">
+        <action id="KingGura.ProjectViewRefresh" class="local.bootservers.ProjectViewRefreshAction" icon="AllIcons.Actions.Refresh">
             <keyboard-shortcut keymap="Eclipse" first-keystroke="F5"/>
         </action>
         <!-- 콘솔 우클릭 메뉴: 지금 콘솔 글을 레벨 · 검색어로 거르는 창을 연다. -->
-        <action id="KingGura.LogFilter" class="local.bootservers.LogFilterAction" text="로그 거르기" icon="AllIcons.General.Filter">
+        <action id="KingGura.LogFilter" class="local.bootservers.LogFilterAction" icon="AllIcons.General.Filter">
             <add-to-group group-id="ConsoleEditorPopupMenu" anchor="first"/>
         </action>
         <!-- Navigate · Search 메뉴: 스프링 요청 매핑 목록에서 URL 로 컨트롤러 메서드를 찾는다. 이클립스 키맵은 $default 를 물려받는다. -->
-        <action id="KingGura.FindUrlMapping" class="local.bootservers.UrlMappingAction" text="URL 찾기…" icon="AllIcons.Nodes.PpWeb">
+        <action id="KingGura.FindUrlMapping" class="local.bootservers.UrlMappingAction" icon="AllIcons.Nodes.PpWeb">
             <keyboard-shortcut keymap="$default" first-keystroke="control alt shift U"/>
             <add-to-group group-id="GoToMenu" anchor="first"/>
             <add-to-group group-id="KG.SearchMenu" anchor="last"/>
         </action>
         <!-- Run 메뉴: 아래쪽 「API」 창을 열어 컨트롤러 API 를 Swagger UI 로 시험한다. -->
-        <action id="KingGura.ApiTest" class="local.bootservers.SwaggerToolWindow$OpenAction" text="API 테스트(Swagger)…" icon="AllIcons.Nodes.PpWeb">
+        <action id="KingGura.ApiTest" class="local.bootservers.SwaggerToolWindow$OpenAction" icon="AllIcons.Nodes.PpWeb">
             <add-to-group group-id="RunMenu" anchor="last"/>
         </action>
         <!-- Project 메뉴 · 프로젝트 창 우클릭: 소스 · 리소스 · 웹 폴더의 전체 파일과 URL 매핑을 엑셀 한 파일로 저장한다(프로그램 사양서용). -->
-        <action id="KingGura.ExportProgramList" class="local.bootservers.ProgramListAction" text="프로그램 목록 엑셀로 내보내기…" icon="AllIcons.ToolbarDecorator.Export">
+        <action id="KingGura.ExportProgramList" class="local.bootservers.ProgramListAction" icon="AllIcons.ToolbarDecorator.Export">
             <add-to-group group-id="KG.ProjectMenu" anchor="last"/>
             <add-to-group group-id="ProjectViewPopupMenu" relative-to-action="BootServers.Workspace" anchor="after"/>
         </action>
         <!-- JSP 편집기 우클릭: 이 JSP 를 뷰로 돌려주는 컨트롤러 글로 이동 -->
-        <action id="KingGura.GoToController" class="local.bootservers.GoToControllerAction" text="컨트롤러로 이동" icon="AllIcons.Nodes.Class">
+        <action id="KingGura.GoToController" class="local.bootservers.GoToControllerAction" icon="AllIcons.Nodes.Class">
             <add-to-group group-id="EditorPopupMenu" anchor="first"/>
         </action>
         <!-- 편집기 우클릭 「표기법 바꾸기」: 고른 글 안의 식별자를 카멜 · 파스칼 · 스네이크 · 대문자 스네이크로 바꾼다. 문자열 · 주석은 둔다. -->
-        <group id="KingGura.CaseConvert" text="표기법 바꾸기" popup="true">
-            <action id="KingGura.CaseCamel" class="local.bootservers.CaseConvertActions$Camel" text="카멜 (userName)"/>
-            <action id="KingGura.CasePascal" class="local.bootservers.CaseConvertActions$Pascal" text="파스칼 (UserName)"/>
-            <action id="KingGura.CaseSnake" class="local.bootservers.CaseConvertActions$Snake" text="스네이크 (user_name)"/>
-            <action id="KingGura.CaseUpperSnake" class="local.bootservers.CaseConvertActions$UpperSnake" text="대문자 스네이크 (USER_NAME)"/>
+        <group id="KingGura.CaseConvert" popup="true">
+            <action id="KingGura.CaseCamel" class="local.bootservers.CaseConvertActions$Camel"/>
+            <action id="KingGura.CasePascal" class="local.bootservers.CaseConvertActions$Pascal"/>
+            <action id="KingGura.CaseSnake" class="local.bootservers.CaseConvertActions$Snake"/>
+            <action id="KingGura.CaseUpperSnake" class="local.bootservers.CaseConvertActions$UpperSnake"/>
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
         </group>
         <!-- 편집기 · 콘솔 우클릭 「AI」: 고른 코드 · 로그를 프롬프트 파일로 만들어 터미널 새 탭에서 Claude Code 를 시작한다 -->
-        <group id="KingGura.AiEditor" text="AI" popup="true" icon="AllIcons.Toolwindows.ToolWindowAskAI">
-            <action id="KingGura.AiExplain" class="local.bootservers.ai.AiActions$Explain" text="설명해 줘"/>
-            <action id="KingGura.AiFix" class="local.bootservers.ai.AiActions$Fix" text="고쳐 줘"/>
-            <action id="KingGura.AiAsk" class="local.bootservers.ai.AiActions$Ask" text="질문하기…"/>
+        <group id="KingGura.AiEditor" popup="true" icon="AllIcons.Toolwindows.ToolWindowAskAI">
+            <action id="KingGura.AiExplain" class="local.bootservers.ai.AiActions$Explain"/>
+            <action id="KingGura.AiFix" class="local.bootservers.ai.AiActions$Fix"/>
+            <action id="KingGura.AiAsk" class="local.bootservers.ai.AiActions$Ask"/>
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
         </group>
-        <group id="KingGura.AiConsole" text="AI" popup="true" icon="AllIcons.Toolwindows.ToolWindowAskAI">
-            <action id="KingGura.AiConsoleError" class="local.bootservers.ai.AiActions$ConsoleError" text="이 오류 원인 찾기"/>
+        <group id="KingGura.AiConsole" popup="true" icon="AllIcons.Toolwindows.ToolWindowAskAI">
+            <action id="KingGura.AiConsoleError" class="local.bootservers.ai.AiActions$ConsoleError"/>
             <add-to-group group-id="ConsoleView.PopupMenu" anchor="last"/>
         </group>
         <!-- 코드 도구: 요청 값 묶기 -->
-        <action id="KingGura.BundleRequestParams" class="local.bootservers.code.ParamBundleAction" text="요청 값을 DTO 로 묶기…" icon="AllIcons.Nodes.Class">
+        <action id="KingGura.BundleRequestParams" class="local.bootservers.code.ParamBundleAction" icon="AllIcons.Nodes.Class">
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
             <add-to-group group-id="KG.SourceMenu" anchor="last"/>
         </action>

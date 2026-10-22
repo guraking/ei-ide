@@ -19,6 +19,7 @@ import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.JBUI;
 import ei.db.DbConfig;
+import ei.db.EiDbBundle;
 import ei.db.Notify;
 import ei.db.QueryResult;
 import org.jetbrains.annotations.NotNull;
@@ -66,10 +67,10 @@ public final class DtoDialog extends DialogWrapper {
   private final TextFieldWithBrowseButton locationField = new TextFieldWithBrowseButton();
   private final DefaultTableModel model;
   private final JBCheckBox lombok = new JBCheckBox("Lombok @Getter @Setter", true);
-  private final JBCheckBox javadoc = new JBCheckBox("칼럼 주석을 Javadoc 으로", true);
-  private final JBCheckBox makeResultMap = new JBCheckBox("resultMap 도 만들기", false);
+  private final JBCheckBox javadoc = new JBCheckBox(EiDbBundle.message("dto.javadoc"), true);
+  private final JBCheckBox makeResultMap = new JBCheckBox(EiDbBundle.message("dto.resultmap"), false);
   private final TextFieldWithBrowseButton xmlField = new TextFieldWithBrowseButton();
-  private final JBCheckBox camel = new JBCheckBox("밑줄 이름을 낙타 이름으로", true);
+  private final JBCheckBox camel = new JBCheckBox(EiDbBundle.message("dto.camel"), true);
   private final JBTabbedPane tabs = new JBTabbedPane();
   private final JBLabel fileLabel = new JBLabel();
   private final JBLabel countLabel = new JBLabel();
@@ -78,10 +79,10 @@ public final class DtoDialog extends DialogWrapper {
 
   public static void show(Project project, DbConfig c, QueryResult result) {
     if (result == null || !result.isQuery()) {
-      Notify.error(project, "DTO 를 만들 조회 결과가 없습니다.");
+      Notify.error(project, EiDbBundle.message("dto.no.result"));
       return;
     }
-    new Task.Backgroundable(project, "DTO 위치 찾는 중", true) {
+    new Task.Backgroundable(project, EiDbBundle.message("jsondto.progress.find.location"), true) {
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
         Targets.Roots roots = ReadAction.compute(() -> Targets.find(project));
@@ -108,7 +109,7 @@ public final class DtoDialog extends DialogWrapper {
         makeResultMap.setSelected(true);
       }
     }
-    model = new DefaultTableModel(new Object[] {"칼럼", "필드", "자바 형식", "주석"}, 0) {
+    model = new DefaultTableModel(new Object[] {EiDbBundle.message("common.col.column"), EiDbBundle.message("common.col.field"), EiDbBundle.message("dto.col.java.type"), EiDbBundle.message("common.col.comment")}, 0) {
       @Override
       public boolean isCellEditable(int row, int column) { return column == COL_FIELD || column == COL_TYPE; }
     };
@@ -118,9 +119,9 @@ public final class DtoDialog extends DialogWrapper {
       String comment = result.comments() == null ? "" : result.comments().getOrDefault(col, "");
       model.addRow(new Object[] {col, fieldName(col), TypeMap.javaType(dbType, TypeMap.anyFraction(result.rows(), i)), comment});
     }
-    setTitle("결과 → DTO 만들기 — " + (table == null ? "결과" : table.toLowerCase(Locale.ROOT)) + " · 칼럼 " + result.columns().size() + "개");
-    setOKButtonText("만들기");
-    setCancelButtonText("취소");
+    setTitle(EiDbBundle.message("dto.title", table == null ? EiDbBundle.message("dto.title.result") : table.toLowerCase(Locale.ROOT), result.columns().size()));
+    setOKButtonText(EiDbBundle.message("common.generate"));
+    setCancelButtonText(EiDbBundle.message("common.cancel"));
     init();
     refresh();
   }
@@ -145,8 +146,8 @@ public final class DtoDialog extends DialogWrapper {
     tabs.addTab("resultMap", mapPreview.component());
     tabs.addChangeListener(e -> refresh());
 
-    locationField.addBrowseFolderListener(project, FileChooserDescriptorFactory.createSingleFolderDescriptor().withTitle("DTO 위치"));
-    xmlField.addBrowseFolderListener(project, FileChooserDescriptorFactory.createSingleFileDescriptor("xml").withTitle("resultMap 을 덧붙일 매퍼 XML"));
+    locationField.addBrowseFolderListener(project, FileChooserDescriptorFactory.createSingleFolderDescriptor().withTitle(EiDbBundle.message("jsondto.location.title")));
+    xmlField.addBrowseFolderListener(project, FileChooserDescriptorFactory.createSingleFileDescriptor("xml").withTitle(EiDbBundle.message("dto.xml.title")));
     Ui.onChange(classField, this::refresh);
     Ui.onChange(packageField, () -> {
       locationField.setText(roots.rel(roots.java() + "/" + packageField.getText().strip().replace('.', '/')));
@@ -160,9 +161,9 @@ public final class DtoDialog extends DialogWrapper {
     model.addTableModelListener(e -> refresh());
 
     JPanel top = new JPanel(new GridLayout(1, 3, JBUI.scale(16), 0));
-    top.add(labeled("클래스 이름", classField));
-    top.add(labeled("패키지", packageField));
-    top.add(labeled("위치", locationField));
+    top.add(labeled(EiDbBundle.message("common.class.name"), classField));
+    top.add(labeled(EiDbBundle.message("common.package"), packageField));
+    top.add(labeled(EiDbBundle.message("common.location"), locationField));
 
     JBTable table = new JBTable(model);
     table.setShowGrid(false);
@@ -260,29 +261,29 @@ public final class DtoDialog extends DialogWrapper {
   private void refresh() {
     if (dtoPreview == null) return;
     dtoPreview.setText(dtoText());
-    mapPreview.setText(makeResultMap.isSelected() ? mapText() : "<!-- resultMap 은 만들지 않습니다 -->");
+    mapPreview.setText(makeResultMap.isSelected() ? mapText() : EiDbBundle.message("dto.no.resultmap.preview"));
     xmlField.setEnabled(makeResultMap.isSelected());
     String xml = xmlField.getText().strip();
     makeResultMap.setText(makeResultMap.isSelected() && !xml.isEmpty()
-                          ? "resultMap 도 만들기 → " + xml.substring(xml.lastIndexOf('/') + 1) + " 끝에 추가"
-                          : "resultMap 도 만들기");
+                          ? EiDbBundle.message("dto.resultmap.into", xml.substring(xml.lastIndexOf('/') + 1))
+                          : EiDbBundle.message("dto.resultmap"));
     fileLabel.setText(tabs.getSelectedIndex() == 0 ? cls() + ".java" : xml.isEmpty() ? "" : xml.substring(xml.lastIndexOf('/') + 1));
-    countLabel.setText("필드 " + model.getRowCount() + "개 · resultMap " + (makeResultMap.isSelected() ? 1 : 0) + "개");
+    countLabel.setText(EiDbBundle.message("dto.count", model.getRowCount(), makeResultMap.isSelected() ? 1 : 0));
   }
 
   @Override
   protected ValidationInfo doValidate() {
-    if (!IDENT.matcher(cls()).matches()) return new ValidationInfo("클래스 이름이 자바 이름 꼴이 아닙니다.", classField);
-    if (!PACKAGE.matcher(pkg()).matches()) return new ValidationInfo("패키지 이름이 자바 이름 꼴이 아닙니다.", packageField);
-    if (locationField.getText().isBlank()) return new ValidationInfo("위치를 고르세요.", locationField);
+    if (!IDENT.matcher(cls()).matches()) return new ValidationInfo(EiDbBundle.message("common.class.name.invalid"), classField);
+    if (!PACKAGE.matcher(pkg()).matches()) return new ValidationInfo(EiDbBundle.message("common.package.invalid"), packageField);
+    if (locationField.getText().isBlank()) return new ValidationInfo(EiDbBundle.message("common.location.empty"), locationField);
     Set<String> seen = new HashSet<>();
     for (DtoGen.Field f : fields()) {
-      if (!IDENT.matcher(f.name()).matches()) return new ValidationInfo(f.column() + " 의 필드 이름이 자바 이름 꼴이 아닙니다.");
-      if (!seen.add(f.name())) return new ValidationInfo("필드 이름 " + f.name() + " 이 겹칩니다.");
-      if (f.type().isEmpty()) return new ValidationInfo(f.column() + " 의 자바 형식이 비었습니다.");
+      if (!IDENT.matcher(f.name()).matches()) return new ValidationInfo(EiDbBundle.message("dto.field.invalid", f.column()));
+      if (!seen.add(f.name())) return new ValidationInfo(EiDbBundle.message("dto.field.duplicate", f.name()));
+      if (f.type().isEmpty()) return new ValidationInfo(EiDbBundle.message("dto.type.empty", f.column()));
     }
     if (makeResultMap.isSelected() && !xmlField.getText().strip().endsWith(".xml")) {
-      return new ValidationInfo("resultMap 을 덧붙일 매퍼 XML 을 고르세요.", xmlField);
+      return new ValidationInfo(EiDbBundle.message("dto.xml.empty"), xmlField);
     }
     return null;
   }
@@ -291,36 +292,36 @@ public final class DtoDialog extends DialogWrapper {
   protected void doOKAction() {
     String dtoPath = dtoPath();
     if (Targets.exists(dtoPath)) {
-      setErrorText(roots.rel(dtoPath) + " 이 이미 있습니다. 덮어쓰지 않으니 이름이나 위치를 바꾸세요.", classField);
+      setErrorText(EiDbBundle.message("common.exists.no.overwrite", roots.rel(dtoPath)), classField);
       return;
     }
     List<Targets.Job> jobs = new ArrayList<>();
     jobs.add(new Targets.Job(dtoPath, dtoText(), false));
-    String note = roots.rel(dtoPath) + " 새로 만듦";
+    String note = EiDbBundle.message("common.file.created", roots.rel(dtoPath));
     try {
       if (makeResultMap.isSelected()) {
         String xmlPath = roots.abs(xmlField.getText());
         String xml = Targets.read(xmlPath);
         if (xml == null) {
-          setErrorText(roots.rel(xmlPath) + " 이 없습니다.", xmlField);
+          setErrorText(EiDbBundle.message("common.file.missing", roots.rel(xmlPath)), xmlField);
           return;
         }
         Merge.Result r = Merge.xml(xml, List.of(new MapperGen.Block(resultMapId(), mapText())));
         if (r.text() == null) {
-          setErrorText(roots.rel(xmlPath) + " 에서 </mapper> 를 찾지 못했습니다.", xmlField);
+          setErrorText(EiDbBundle.message("common.no.mapper.end", roots.rel(xmlPath)), xmlField);
           return;
         }
         jobs.add(new Targets.Job(xmlPath, r.text(), !r.added().isEmpty()));
         note += r.added().isEmpty()
-                ? "\nresultMap " + resultMapId() + " 은 이미 있어 건너뜀"
-                : "\n" + roots.rel(xmlPath) + " 에 resultMap " + resultMapId() + " 덧붙임";
+                ? "\n" + EiDbBundle.message("dto.resultmap.skipped", resultMapId())
+                : "\n" + EiDbBundle.message("dto.resultmap.appended", roots.rel(xmlPath), resultMapId());
       }
-      Targets.write(project, "DTO 만들기", jobs);
+      Targets.write(project, EiDbBundle.message("dto.command"), jobs);
       super.doOKAction();
       Targets.open(project, dtoPath);
       Notify.info(project, note);
     } catch (IOException e) {
-      setErrorText("파일을 쓰지 못했습니다: " + e.getMessage());
+      setErrorText(EiDbBundle.message("common.write.failed", e.getMessage()));
     }
   }
 }

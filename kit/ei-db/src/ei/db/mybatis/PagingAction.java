@@ -23,6 +23,7 @@ import com.intellij.psi.PsiType;
 import com.intellij.psi.codeStyle.CodeStyleManager;
 import com.intellij.psi.codeStyle.JavaCodeStyleManager;
 import com.intellij.util.IncorrectOperationException;
+import ei.db.EiDbBundle;
 import ei.db.Notify;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -33,7 +34,6 @@ import org.jetbrains.annotations.Nullable;
  */
 public final class PagingAction extends AnAction {
   private static final String SELECT = "select";
-  private static final String COMMAND = "페이징 쿼리 만들기";
   private static final String OBJECT = "java.lang.Object";
 
   /** 인터페이스에 더할 두 메서드와 넣을 자리. anchor 가 null 이면 인터페이스 끝. */
@@ -62,7 +62,7 @@ public final class PagingAction extends AnAction {
     Project project = e.getProject();
     if (editor == null || project == null) return;
     if (DumbService.isDumb(project)) {
-      Notify.warning(project, "색인 중에는 매퍼 인터페이스를 찾을 수 없습니다. 색인이 끝난 뒤 다시 해 주세요.");
+      Notify.warning(project, EiDbBundle.message("paging.dumb"));
       return;
     }
     Document document = editor.getDocument();
@@ -70,7 +70,7 @@ public final class PagingAction extends AnAction {
     MapperDoc doc = MapperDoc.parse(text);
     MapperDoc.Node s = doc.statementAt(editor.getCaretModel().getOffset());
     if (s == null || !SELECT.equals(s.name)) {
-      Notify.error(project, "커서 위치에서 select 문장을 찾지 못했습니다.");
+      Notify.error(project, EiDbBundle.message("paging.no.select"));
       return;
     }
     PagingGen.Result r;
@@ -83,13 +83,13 @@ public final class PagingAction extends AnAction {
     for (MapperIndex.Entry entry : MapperIndex.find(project, doc.namespace)) {
       for (String id : new String[]{r.pageId(), r.countId()}) {
         if (entry.ids().containsKey(id)) {
-          Notify.warning(project, "같은 namespace 의 " + entry.file().getName() + " 에 이미 " + id + " 문장이 있어 만들지 않았습니다.");
+          Notify.warning(project, EiDbBundle.message("paging.exists", entry.file().getName(), id));
           return;
         }
       }
     }
     if (!FileDocumentManager.getInstance().requestWriting(document, project)) {
-      Notify.error(project, "읽기 전용 문서라 페이징 쿼리를 넣지 못했습니다.");
+      Notify.error(project, EiDbBundle.message("paging.read.only"));
       return;
     }
 
@@ -99,36 +99,35 @@ public final class PagingAction extends AnAction {
     String javaNote;
     JavaPart part = null;
     if (mapper == null || !mapper.isInterface()) {
-      javaNote = "매퍼 인터페이스(" + doc.namespace + ")를 찾지 못해 XML 문장만 더했습니다.";
+      javaNote = EiDbBundle.message("paging.note.no.mapper", doc.namespace);
     } else if (original == null) {
-      javaNote = mapper.getName() + " 에 " + id + " 메서드가 없어 XML 문장만 더했습니다.";
+      javaNote = EiDbBundle.message("paging.note.no.method", mapper.getName(), id);
     } else if (mapper.findMethodsByName(r.pageId(), false).length > 0 || mapper.findMethodsByName(r.countId(), false).length > 0) {
-      javaNote = mapper.getName() + " 에 이미 " + r.pageId() + " 또는 " + r.countId() + " 메서드가 있어 XML 문장만 더했습니다.";
+      javaNote = EiDbBundle.message("paging.note.method.exists", mapper.getName(), r.pageId(), r.countId());
     } else if (!FileModificationService.getInstance().preparePsiElementForWrite(mapper)) {
-      javaNote = mapper.getName() + " 를 고칠 수 없어 XML 문장만 더했습니다.";
+      javaNote = EiDbBundle.message("paging.note.read.only", mapper.getName());
     } else {
       try {
         part = javaPart(project, mapper, original, r);
-        javaNote = mapper.getName() + " 에도 두 메서드를 더했습니다.";
+        javaNote = EiDbBundle.message("paging.note.added", mapper.getName());
       } catch (IncorrectOperationException ex) {
-        javaNote = "인터페이스 메서드 글을 만들지 못해 XML 문장만 더했습니다: " + ex.getMessage();
+        javaNote = EiDbBundle.message("paging.note.failed", ex.getMessage());
       }
     }
 
     PsiDocumentManager.getInstance(project).commitAllDocuments();
     JavaPart java = part;
     try {
-      WriteCommandAction.writeCommandAction(project).withName(COMMAND).run(() -> {
+      WriteCommandAction.writeCommandAction(project).withName(EiDbBundle.message("action.EiDb.MyBatis.Paging.text")).run(() -> {
         document.insertString(r.offset(), r.text());
         if (java != null) addMethods(project, java);
       });
     } catch (RuntimeException ex) {
-      Notify.error(project, "페이징 쿼리를 넣지 못했습니다: " + ex.getMessage());
+      Notify.error(project, EiDbBundle.message("paging.insert.failed", ex.getMessage()));
       return;
     }
     editor.getCaretModel().moveToOffset(r.offset());
-    Notify.info(project, r.pageId() + " · " + r.countId() + " 문장을 만들었습니다. 매개변수에 "
-        + PagingGen.START_ROW + " · " + PagingGen.END_ROW + " 를 넣어 주세요. " + javaNote);
+    Notify.info(project, EiDbBundle.message("paging.done", r.pageId(), r.countId(), PagingGen.START_ROW, PagingGen.END_ROW, javaNote));
   }
 
   /** 원래 메서드의 반환 원소 형식 · 매개변수 글로 두 메서드를 만든다(아직 넣지 않는다). 읽기 접근 안에서 부른다. */

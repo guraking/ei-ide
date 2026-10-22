@@ -96,14 +96,14 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 final class ServersPanel extends SimpleToolWindowPanel {
 
-    private static final String[] COLUMNS = {"서버", "상태", "포트", "컨텍스트 · 프로필", "실행 시간"};
+    // 표 머리글 글 키
+    private static final String[] COLUMN_KEYS = {"servers.column.server", "servers.column.state", "servers.column.port", "servers.column.context", "servers.column.uptime"};
     private static final String PROFILE_KEY = "spring.profiles.active";
     private static final String PORT_KEY = "server.port";
     private static final int TICK_MILLIS = 1000;
     // 글자가 칸 왼쪽 끝 · 머리글에 붙지 않게 두는 칸 안쪽 여백
     private static final int CELL_PAD = 8;
     private static final int ROW_HEIGHT = 24;
-    private static final String COPY_SUFFIX = " (복제)";
 
     /** 스프링 부트 줄. settings 가 null 이면 실행 설정이 아직 없는 모듈의 자리 줄이다(시작 · 적용하면 모듈 이름으로 만든다). */
     private record Boot(Module module, RunnerAndConfigurationSettings settings) {
@@ -232,14 +232,14 @@ final class ServersPanel extends SimpleToolWindowPanel {
     }
 
     private void reload() {
-        table.getEmptyText().setText("서버를 찾는 중…");
+        table.getEmptyText().setText(BootServersBundle.message("servers.empty.loading"));
         ReadAction.nonBlocking(() -> ServerLauncher.serverModules(project))
                 .inSmartMode(project)
                 .expireWith(parent)
                 .finishOnUiThread(ModalityState.any(), found -> {
                     bootModules = found;
                     rebuildRows();
-                    table.getEmptyText().setText("스프링 부트 모듈이 없습니다. 「WAS 추가」 로 Tomcat 을 추가할 수 있습니다.");
+                    table.getEmptyText().setText(BootServersBundle.message("servers.empty.none"));
                 })
                 .submit(AppExecutorUtil.getAppExecutorService());
     }
@@ -404,7 +404,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
 
     private DefaultActionGroup actions() {
         DefaultActionGroup g = new DefaultActionGroup();
-        g.add(new AnAction("WAS 추가…", "Tomcat 같은 WAS 를 추가합니다", AllIcons.General.Add) {
+        g.add(new AnAction(BootServersBundle.message("servers.action.add.was"), BootServersBundle.message("servers.action.add.was.description"), AllIcons.General.Add) {
             @Override
             public void actionPerformed(@NotNull AnActionEvent e) {
                 editWas(null);
@@ -416,11 +416,11 @@ final class ServersPanel extends SimpleToolWindowPanel {
             }
         });
         g.addSeparator();
-        g.add(action("시작", AllIcons.Actions.Execute, t -> isStartable(stateOf(t)), t -> start(t, false)));
-        g.add(action("디버그로 시작", AllIcons.Actions.StartDebugger, t -> isStartable(stateOf(t)), t -> start(t, true)));
-        g.add(action("재시작", AllIcons.Actions.Restart, t -> isLive(stateOf(t)), this::restart));
-        g.add(action("중지", AllIcons.Actions.Suspend, t -> isLive(stateOf(t)), this::stop));
-        g.add(new AnAction("모두 중지", "실행 중인 서버와 WAS 를 모두 중지합니다", AllIcons.Actions.Cancel) {
+        g.add(action(BootServersBundle.message("servers.action.start"), AllIcons.Actions.Execute, t -> isStartable(stateOf(t)), t -> start(t, false)));
+        g.add(action(BootServersBundle.message("servers.action.debug"), AllIcons.Actions.StartDebugger, t -> isStartable(stateOf(t)), t -> start(t, true)));
+        g.add(action(BootServersBundle.message("servers.action.restart"), AllIcons.Actions.Restart, t -> isLive(stateOf(t)), this::restart));
+        g.add(action(BootServersBundle.message("servers.action.stop"), AllIcons.Actions.Suspend, t -> isLive(stateOf(t)), this::stop));
+        g.add(new AnAction(BootServersBundle.message("servers.action.stop.all"), BootServersBundle.message("servers.action.stop.all.description"), AllIcons.Actions.Cancel) {
             @Override
             public void update(@NotNull AnActionEvent e) {
                 e.getPresentation().setEnabled(rows.stream().anyMatch(r -> !(r instanceof Deploy) && isLive(stateOf(r))));
@@ -442,15 +442,15 @@ final class ServersPanel extends SimpleToolWindowPanel {
         });
         g.add(groupMenu());
         g.addSeparator();
-        g.add(action("서버 복제", AllIcons.Actions.Copy, t -> t instanceof Boot b && b.settings() != null, this::duplicate));
-        g.add(action("반영 (다시 빌드)", AllIcons.Actions.Compile, t -> t instanceof WasSettings.Server && isLive(stateOf(t)), this::publish));
-        g.add(action("브라우저로 열기", AllIcons.General.Web, t -> stateOf(t) == ServerLauncher.State.RUNNING, this::openBrowser));
-        g.add(action("콘솔 보기", AllIcons.Debugger.Console, t -> isLive(stateOf(t)), this::showConsoleOrStart));
-        g.add(action("설정 편집…", AllIcons.Actions.EditSource, t -> true, this::editSettings));
-        g.add(action("WAS 삭제", AllIcons.General.Remove, t -> t instanceof WasSettings.Server && !isLive(stateOf(t)), this::removeWas));
-        g.add(action("로그 파일 보기…", AllIcons.FileTypes.Text, t -> t instanceof WasSettings.Server, this::showLogFiles));
+        g.add(action(BootServersBundle.message("servers.action.duplicate"), AllIcons.Actions.Copy, t -> t instanceof Boot b && b.settings() != null, this::duplicate));
+        g.add(action(BootServersBundle.message("servers.action.publish"), AllIcons.Actions.Compile, t -> t instanceof WasSettings.Server && isLive(stateOf(t)), this::publish));
+        g.add(action(BootServersBundle.message("servers.action.open.browser"), AllIcons.General.Web, t -> stateOf(t) == ServerLauncher.State.RUNNING, this::openBrowser));
+        g.add(action(BootServersBundle.message("servers.action.console"), AllIcons.Debugger.Console, t -> isLive(stateOf(t)), this::showConsoleOrStart));
+        g.add(action(BootServersBundle.message("servers.action.edit.settings"), AllIcons.Actions.EditSource, t -> true, this::editSettings));
+        g.add(action(BootServersBundle.message("servers.action.remove.was"), AllIcons.General.Remove, t -> t instanceof WasSettings.Server && !isLive(stateOf(t)), this::removeWas));
+        g.add(action(BootServersBundle.message("servers.action.log.files"), AllIcons.FileTypes.Text, t -> t instanceof WasSettings.Server, this::showLogFiles));
         g.addSeparator();
-        g.add(new AnAction("서버 목록 새로 찾기", null, AllIcons.Actions.Refresh) {
+        g.add(new AnAction(BootServersBundle.message("servers.action.reload"), null, AllIcons.Actions.Refresh) {
             @Override
             public void actionPerformed(@NotNull AnActionEvent e) {
                 reload();
@@ -493,7 +493,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
         RunnerAndConfigurationSettings source = ((Boot) target).settings();
         RunManager runManager = RunManager.getInstance(project);
         RunConfiguration copy = source.getConfiguration().clone();
-        copy.setName(runManager.suggestUniqueName(source.getName() + COPY_SUFFIX, source.getType()));
+        copy.setName(runManager.suggestUniqueName(source.getName() + BootServersBundle.message("servers.copy.suffix"), source.getType()));
         RunnerAndConfigurationSettings created = runManager.createConfiguration(copy, source.getFactory());
         runManager.addConfiguration(created);
         rebuildRows();
@@ -512,7 +512,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
         if (target instanceof Boot b) {
             ServerRegistry.Run run = b.settings() == null ? null : ServerRegistry.getInstance(project).get(b.name());
             if (run == null || run.port == null) {
-                Messages.showInfoMessage(project, "콘솔 출력에서 포트를 아직 찾지 못했습니다.", "브라우저로 열기");
+                Messages.showInfoMessage(project, BootServersBundle.message("servers.browser.no.port"), BootServersBundle.message("servers.action.open.browser"));
                 return;
             }
             BrowserUtil.browse("http://localhost:" + run.port);
@@ -553,7 +553,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
     private void editSettings(Object target) {
         if (target instanceof Boot b) {
             RunnerAndConfigurationSettings settings = b.settings() == null ? ServerLauncher.ensureSettings(b.module()) : b.settings();
-            if (settings != null && RunDialog.editConfiguration(project, settings, settings.getName() + " 실행 설정")) {
+            if (settings != null && RunDialog.editConfiguration(project, settings, BootServersBundle.message("servers.run.config.title", settings.getName()))) {
                 rebuildRows();
             }
         }
@@ -572,7 +572,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
 
     private void removeWas(Object target) {
         WasSettings.Server s = (WasSettings.Server) target;
-        if (Messages.showYesNoDialog(project, "'" + s.name + "' 을(를) 서버 목록에서 뺄까요? 설치 폴더는 지우지 않습니다.", "WAS 삭제",
+        if (Messages.showYesNoDialog(project, BootServersBundle.message("servers.remove.was.confirm", s.name), BootServersBundle.message("servers.action.remove.was"),
                 Messages.getQuestionIcon()) == Messages.YES) {
             WasSettings.getInstance(project).remove(s);
             // 뺀 서버의 JEUS 비밀번호가 저장소에 남지 않게 한다.
@@ -590,7 +590,6 @@ final class ServersPanel extends SimpleToolWindowPanel {
 
     // ---- 서버 묶음: 정한 순서대로 하나씩, 앞 서버가 실행 중이 된 뒤 다음 서버를 시작한다 ----
 
-    private static final String GROUP_TITLE = "서버 묶음";
     // 서버 하나가 실행 중이 되기까지 기다리는 한도. WAS 는 시작 전 빌드까지 하므로 넉넉히 둔다.
     private static final long GROUP_START_TIMEOUT_MILLIS = 5 * 60 * 1000;
     // plugin.xml 의 알림 묶음 id.
@@ -664,17 +663,17 @@ final class ServersPanel extends SimpleToolWindowPanel {
 
     /** 도구 모음 · 우클릭의 「서버 묶음」: 새 묶음, 묶음마다 시작 · 중지 · 편집 · 삭제. */
     private ActionGroup groupMenu() {
-        ActionGroup menu = new ActionGroup(GROUP_TITLE, "정한 순서대로 서버를 하나씩 시작합니다", AllIcons.Nodes.Folder) {
+        ActionGroup menu = new ActionGroup(BootServersBundle.message("servers.group.title"), BootServersBundle.message("servers.group.description"), AllIcons.Nodes.Folder) {
             @Override
             public AnAction @NotNull [] getChildren(@Nullable AnActionEvent e) {
                 List<AnAction> children = new ArrayList<>();
-                children.add(DumbAwareAction.create("새 묶음… (고른 줄로 시작)", ev -> newGroup()));
+                children.add(DumbAwareAction.create(BootServersBundle.message("servers.group.new"), ev -> newGroup()));
                 for (ServerGroups.Group group : ServerGroups.getInstance(project).groups()) {
                     DefaultActionGroup sub = DefaultActionGroup.createPopupGroup(() -> group.name);
-                    sub.add(DumbAwareAction.create("묶음 시작", ev -> startGroup(group)));
-                    sub.add(DumbAwareAction.create("묶음 중지 (거꾸로)", ev -> stopGroup(group)));
-                    sub.add(DumbAwareAction.create("편집…", ev -> editGroup(group)));
-                    sub.add(DumbAwareAction.create("삭제", ev -> deleteGroup(group)));
+                    sub.add(DumbAwareAction.create(BootServersBundle.message("servers.group.start"), ev -> startGroup(group)));
+                    sub.add(DumbAwareAction.create(BootServersBundle.message("servers.group.stop"), ev -> stopGroup(group)));
+                    sub.add(DumbAwareAction.create(BootServersBundle.message("servers.group.edit"), ev -> editGroup(group)));
+                    sub.add(DumbAwareAction.create(BootServersBundle.message("servers.group.delete"), ev -> deleteGroup(group)));
                     children.add(sub);
                 }
                 return children.toArray(AnAction[]::new);
@@ -715,7 +714,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
     }
 
     private void deleteGroup(ServerGroups.Group group) {
-        if (Messages.showYesNoDialog(project, "「" + group.name + "」 묶음을 지울까요? 서버는 그대로 둡니다.", GROUP_TITLE,
+        if (Messages.showYesNoDialog(project, BootServersBundle.message("servers.group.delete.confirm", group.name), BootServersBundle.message("servers.group.title"),
                 Messages.getQuestionIcon()) == Messages.YES) {
             ServerGroups.getInstance(project).groups().remove(group);
         }
@@ -742,9 +741,8 @@ final class ServersPanel extends SimpleToolWindowPanel {
         }
         if (group.members.isEmpty() || !missing.isEmpty()) {
             Messages.showErrorDialog(project, group.members.isEmpty()
-                    ? "「" + group.name + "」 묶음에 서버가 없습니다. 편집에서 넣으세요."
-                    : "「" + group.name + "」 묶음의 서버를 서버 창에서 찾지 못했습니다: " + String.join(", ", missing)
-                      + "\n편집에서 빼거나 다시 넣으세요.", GROUP_TITLE);
+                    ? BootServersBundle.message("servers.group.empty", group.name)
+                    : BootServersBundle.message("servers.group.missing", group.name, String.join(", ", missing)), BootServersBundle.message("servers.group.title"));
             return;
         }
         cancelGroupRun();
@@ -802,7 +800,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
         String name = groupRunName;
         GroupSequence run = groupRun;
         GroupSequence.Step step = run.step(System.currentTimeMillis(), this::groupStatus);
-        String order = run.position() + "/" + run.size() + "번째 「" + (step.member() == null ? "" : labelOf(step.member())) + "」";
+        String order = BootServersBundle.message("servers.group.order", run.position(), run.size(), (step.member() == null ? "" : labelOf(step.member())));
         switch (step.kind()) {
             case WAIT -> {
             }
@@ -810,7 +808,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
                 Object row = rowByKey(step.member());
                 if (row == null) {
                     cancelGroupRun();
-                    notifyGroup("「" + name + "」 묶음 시작을 멈췄습니다. " + order + " 이(가) 서버 창에서 사라졌습니다.", NotificationType.ERROR);
+                    notifyGroup(BootServersBundle.message("servers.group.stopped.gone", name, order), NotificationType.ERROR);
                     return;
                 }
                 // 스윙 타이머는 잠금 없이 돌고, 실행 설정이 없는 부트 줄은 PSI 로 메인 클래스를 찾으므로 잠금 안에서 부른다.
@@ -824,32 +822,31 @@ final class ServersPanel extends SimpleToolWindowPanel {
                 }
                 if (!began[0]) {
                     cancelGroupRun();
-                    notifyGroup("「" + name + "」 묶음 시작을 멈췄습니다. " + order + " 이(가) 시작되지 않았습니다. 띄운 오류 창의 내용을 확인하세요.", NotificationType.ERROR);
+                    notifyGroup(BootServersBundle.message("servers.group.stopped.not.started", name, order), NotificationType.ERROR);
                 }
             }
             case DONE -> {
                 cancelGroupRun();
-                notifyGroup("「" + name + "」 묶음의 서버 " + run.size() + "개를 모두 시작했습니다.", NotificationType.INFORMATION);
+                notifyGroup(BootServersBundle.message("servers.group.done", name, run.size()), NotificationType.INFORMATION);
             }
             case FAILED -> {
                 cancelGroupRun();
-                notifyGroup("「" + name + "」 묶음 시작을 멈췄습니다. " + order + " 이(가) 시작하지 못했습니다. 콘솔을 확인하세요.", NotificationType.ERROR);
+                notifyGroup(BootServersBundle.message("servers.group.stopped.failed", name, order), NotificationType.ERROR);
             }
             case NOT_STARTED -> {
                 cancelGroupRun();
-                notifyGroup("「" + name + "」 묶음 시작을 멈췄습니다. " + order + " 이(가) 시작되지 않았습니다. 띄운 오류 창의 내용을 확인하세요.", NotificationType.ERROR);
+                notifyGroup(BootServersBundle.message("servers.group.stopped.not.started", name, order), NotificationType.ERROR);
             }
             case TIMEOUT -> {
                 cancelGroupRun();
-                notifyGroup("「" + name + "」 묶음 시작을 멈췄습니다. " + order + " 이(가) " + GROUP_START_TIMEOUT_MILLIS / 60_000
-                        + "분 안에 실행 중이 되지 않았습니다.", NotificationType.ERROR);
+                notifyGroup(BootServersBundle.message("servers.group.stopped.timeout", name, order, GROUP_START_TIMEOUT_MILLIS / 60_000), NotificationType.ERROR);
             }
         }
     }
 
     private void notifyGroup(String text, NotificationType type) {
         NotificationGroupManager.getInstance().getNotificationGroup(NOTIFICATION_GROUP)
-                .createNotification(GROUP_TITLE, text, type)
+                .createNotification(BootServersBundle.message("servers.group.title"), text, type)
                 .notify(project);
     }
 
@@ -857,7 +854,6 @@ final class ServersPanel extends SimpleToolWindowPanel {
 
     // 로그 파일 고르기 창에서 로그 폴더 기준 하위 폴더를 보일 최대 글자 수. 넘으면 가운데를 줄인다(전체 경로는 풍선 도움말).
     private static final int LOG_FOLDER_MAX_CHARS = 40;
-    private static final String LOG_FILES_TITLE = "로그 파일 보기";
 
     /** WAS 의 로그 파일 목록을 띄우고, 고른 파일을 실행 창 콘솔 탭에서 끝을 따라가며 보인다. 폴더 읽기는 풀 스레드에서 한다. */
     private void showLogFiles(Object target) {
@@ -887,7 +883,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
     }
 
     private void showLogFolderError(WasSettings.Server s, Exception e) {
-        Messages.showErrorDialog(project, s.name + " 의 로그 폴더를 읽지 못했습니다: " + e.getMessage(), LOG_FILES_TITLE);
+        Messages.showErrorDialog(project, BootServersBundle.message("servers.log.files.read.error", s.name, e.getMessage()), BootServersBundle.message("servers.log.files.title"));
     }
 
     private void chooseLogFile(WasSettings.Server s, List<Path> roots, List<Path> files) {
@@ -896,11 +892,11 @@ final class ServersPanel extends SimpleToolWindowPanel {
             for (Path root : roots) {
                 where.append("\n· ").append(root);
             }
-            Messages.showInfoMessage(project, s.name + " 의 로그 파일이 없습니다. 서버를 한 번 시작하면 생깁니다.\n찾아본 곳:" + where, LOG_FILES_TITLE);
+            Messages.showInfoMessage(project, BootServersBundle.message("servers.log.files.none", s.name, where), BootServersBundle.message("servers.log.files.title"));
             return;
         }
         JBPopupFactory.getInstance().createPopupChooserBuilder(files)
-                .setTitle(s.name + " 로그 파일 (최근 순)")
+                .setTitle(BootServersBundle.message("servers.log.files.popup", s.name))
                 .setRenderer(new ColoredListCellRenderer<>() {
                     @Override
                     protected void customizeCellRenderer(@NotNull JList<? extends Path> list, Path p, int index, boolean selected, boolean hasFocus) {
@@ -920,28 +916,28 @@ final class ServersPanel extends SimpleToolWindowPanel {
     // ---- 오른쪽 칸 ----
 
     private static JComponent emptyCard() {
-        JPanel p = FormBuilder.createFormBuilder().addComponent(new JBLabel("서버를 고르세요")).addComponentFillVertically(new JPanel(), 0).getPanel();
+        JPanel p = FormBuilder.createFormBuilder().addComponent(new JBLabel(BootServersBundle.message("servers.detail.choose"))).addComponentFillVertically(new JPanel(), 0).getPanel();
         p.setBorder(JBUI.Borders.empty(8, 10));
         return p;
     }
 
     private JComponent bootCard() {
-        bootName.getEmptyText().setText("실행 설정 이름");
+        bootName.getEmptyText().setText(BootServersBundle.message("servers.boot.name.hint"));
         profile.setEditable(true);
-        vmOptions.getEmptyText().setText("-Dkey=value 띄어쓰기로 구분");
-        port.getEmptyText().setText("비우면 application 설정 값");
+        vmOptions.getEmptyText().setText(BootServersBundle.message("servers.boot.vm.hint"));
+        port.getEmptyText().setText(BootServersBundle.message("servers.boot.port.hint"));
         bootTitle.setFont(JBUI.Fonts.label().asBold());
         bootStatus.setForeground(JBColor.GRAY);
-        JButton apply = new JButton("적용");
+        JButton apply = new JButton(BootServersBundle.message("servers.boot.apply"));
         // 2026.2 는 버튼 클릭을 읽기 잠금 없이 처리한다. 설정이 없으면 PSI 로 메인 클래스를 찾으므로 잠금 안에서 돌린다.
         apply.addActionListener(e -> WriteIntentReadAction.run(() -> applyBoot()));
         JPanel p = FormBuilder.createFormBuilder()
                 .addComponent(bootTitle)
                 .addComponent(bootStatus)
-                .addLabeledComponent("이름", bootName)
-                .addLabeledComponent("프로필", profile)
-                .addLabeledComponent("VM 옵션", vmOptions)
-                .addLabeledComponent("포트", port)
+                .addLabeledComponent(BootServersBundle.message("servers.boot.name"), bootName)
+                .addLabeledComponent(BootServersBundle.message("servers.boot.profile"), profile)
+                .addLabeledComponent(BootServersBundle.message("servers.boot.vm"), vmOptions)
+                .addLabeledComponent(BootServersBundle.message("servers.boot.port"), port)
                 .addComponent(apply)
                 .addComponentFillVertically(new JPanel(), 0)
                 .getPanel();
@@ -953,7 +949,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
         wasTitle.setFont(JBUI.Fonts.label().asBold());
         wasStatus.setForeground(JBColor.GRAY);
         wasSummary.setVerticalAlignment(JBLabel.TOP);
-        JButton edit = new JButton("설정 편집…");
+        JButton edit = new JButton(BootServersBundle.message("servers.action.edit.settings"));
         edit.addActionListener(e -> {
             if (detailServer != null) {
                 editWas(detailServer);
@@ -975,7 +971,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
         detailBoot = row instanceof Boot b ? b : null;
         detailServer = row instanceof Deploy d ? d.server() : row instanceof WasSettings.Server s ? s : null;
         if (detailBoot != null) {
-            bootTitle.setText(detailBoot.module().getName() + " 모듈 실행 설정");
+            bootTitle.setText(BootServersBundle.message("servers.boot.title", detailBoot.module().getName()));
             bootName.setText(detailBoot.name());
             String vm = vmOf(detailBoot);
             profile.setSelectedItem(getProperty(vm, PROFILE_KEY));
@@ -988,11 +984,11 @@ final class ServersPanel extends SimpleToolWindowPanel {
             wasTitle.setText(s.name);
             StringBuilder html = new StringBuilder("<html>")
                     .append(s.kind().label).append(" · ").append(escape(s.home)).append("<br>")
-                    .append("HTTP ").append(s.httpPort).append(" · 종료 ").append(s.shutdownPort).append(" · 디버그 ").append(s.debugPort).append("<br>")
-                    .append("VM 옵션: ").append(s.vmOptions.isBlank() ? "없음" : escape(s.vmOptions)).append("<br>")
-                    .append(s.reloadable ? "클래스가 바뀌면 자동으로 다시 올림" : "자동으로 다시 올리지 않음").append("<br><br>올린 프로젝트<br>");
+                    .append(BootServersBundle.message("servers.was.ports", s.httpPort, s.shutdownPort, s.debugPort)).append("<br>")
+                    .append(BootServersBundle.message("servers.was.vm", s.vmOptions.isBlank() ? BootServersBundle.message("servers.was.vm.none") : escape(s.vmOptions))).append("<br>")
+                    .append(s.reloadable ? BootServersBundle.message("servers.was.reload.on") : BootServersBundle.message("servers.was.reload.off")).append("<br><br>").append(BootServersBundle.message("servers.was.deployments")).append("<br>");
             if (s.deployments.isEmpty()) {
-                html.append("· 없음 (설정 편집에서 고르세요)");
+                html.append("· ").append(BootServersBundle.message("servers.was.deployments.none"));
             }
             for (WasSettings.Deployment d : s.deployments) {
                 html.append("· ").append(escape(d.module)).append(" → ").append(escape(d.contextPath)).append("<br>");
@@ -1010,12 +1006,12 @@ final class ServersPanel extends SimpleToolWindowPanel {
         if (detailBoot != null) {
             ServerRegistry.Run run = ServerRegistry.getInstance(project).get(detailBoot.name());
             ServerLauncher.State state = stateOf(detailBoot);
-            String text = state.label;
+            String text = state.label();
             if (state == ServerLauncher.State.FAILED && run != null && run.error != null) {
                 text += " · " + run.error;
             }
             else if (detailBoot.settings() == null) {
-                text += " · 처음 시작하거나 적용하면 실행 설정이 만들어집니다";
+                text += " · " + BootServersBundle.message("servers.boot.no.config");
             }
             bootStatus.setText(text);
             bootStatus.setToolTipText(text);
@@ -1023,7 +1019,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
         if (detailServer != null) {
             ServerRegistry.Run run = ServerRegistry.getInstance(project).get(WasRunner.registryKey(detailServer));
             ServerLauncher.State state = WasRunner.getInstance(project).state(detailServer);
-            String text = state.label + (state == ServerLauncher.State.FAILED && run != null && run.error != null ? " · " + run.error : "");
+            String text = state.label() + (state == ServerLauncher.State.FAILED && run != null && run.error != null ? " · " + run.error : "");
             wasStatus.setText(text);
             wasStatus.setToolTipText(text);
         }
@@ -1036,7 +1032,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
         }
         String name = bootName.getText().strip();
         if (name.isEmpty()) {
-            Messages.showErrorDialog(project, "실행 설정 이름을 입력하세요.", "서버");
+            Messages.showErrorDialog(project, BootServersBundle.message("servers.boot.name.required"), BootServersBundle.message("servers.column.server"));
             return;
         }
         String portText = port.getText().strip();
@@ -1049,7 +1045,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
                 n = -1;
             }
             if (n < 1 || n > 65535) {
-                Messages.showErrorDialog(project, "포트는 1 ~ 65535 사이 숫자여야 합니다.", "서버");
+                Messages.showErrorDialog(project, BootServersBundle.message("servers.boot.port.invalid"), BootServersBundle.message("servers.column.server"));
                 return;
             }
         }
@@ -1113,12 +1109,12 @@ final class ServersPanel extends SimpleToolWindowPanel {
     static String uptime(long startMillis) {
         long sec = Math.max(0, (System.currentTimeMillis() - startMillis) / 1000);
         if (sec < 60) {
-            return sec + "초";
+            return BootServersBundle.message("servers.uptime.seconds", sec);
         }
         if (sec < 3600) {
-            return (sec / 60) + "분";
+            return BootServersBundle.message("servers.uptime.minutes", sec / 60);
         }
-        return (sec / 3600) + "시간 " + (sec % 3600 / 60) + "분";
+        return BootServersBundle.message("servers.uptime.hours", sec / 3600, sec % 3600 / 60);
     }
 
     // ---- 표 ----
@@ -1131,12 +1127,12 @@ final class ServersPanel extends SimpleToolWindowPanel {
 
         @Override
         public int getColumnCount() {
-            return COLUMNS.length;
+            return COLUMN_KEYS.length;
         }
 
         @Override
         public String getColumnName(int column) {
-            return COLUMNS[column];
+            return BootServersBundle.message(COLUMN_KEYS[column]);
         }
 
         @Override
@@ -1148,7 +1144,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
             if (r instanceof Deploy d) {
                 return switch (column) {
                     case 0 -> "    └ " + d.deployment().module;
-                    case 1 -> shownState(d) == ServerLauncher.State.RUNNING ? "올라감" : "-";
+                    case 1 -> shownState(d) == ServerLauncher.State.RUNNING ? BootServersBundle.message("servers.deploy.up") : "-";
                     case 3 -> d.deployment().contextPath;
                     default -> "";
                 };
@@ -1210,7 +1206,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
                 case STOPPED -> JBColor.GRAY;
             };
             append("● ", new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, color));
-            append(state.label);
+            append(state.label());
         }
     }
 }

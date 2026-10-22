@@ -49,7 +49,7 @@ final class LogFileView {
             }
         };
         Disposer.register(descriptor, console);
-        console.print("파일: " + file + "\n", ConsoleViewContentType.SYSTEM_OUTPUT);
+        console.print(BootServersBundle.message("log.view.file", file) + "\n", ConsoleViewContentType.SYSTEM_OUTPUT);
 
         LogTail tail = new LogTail(file, FALLBACK, INITIAL_BYTES);
         int[] polls = {0};
@@ -76,7 +76,7 @@ final class LogFileView {
         }
         if (newer != null && !newer.equals(noticed[0])) {
             noticed[0] = newer;
-            console.print("\n--- 날짜가 바뀌어 새 로그 파일 " + newer.getFileName() + " 이(가) 생겼습니다. 서버 창 「로그 파일 보기…」 에서 새 파일을 여세요. ---\n",
+            console.print("\n--- " + BootServersBundle.message("log.view.newer", newer.getFileName()) + " ---\n",
                     ConsoleViewContentType.SYSTEM_OUTPUT);
         }
     }
@@ -84,10 +84,10 @@ final class LogFileView {
     private static void show(ConsoleView console, LogTail.Poll poll) {
         String note = switch (poll.event()) {
             case NONE -> null;
-            case MISSING -> "로그 파일이 없습니다. 생기면 이어서 보입니다.";
-            case APPEARED -> "로그 파일이 다시 생겨 처음부터 읽습니다.";
-            case ROTATED -> "로그 파일이 줄었거나 새 파일로 바뀌어(순환) 처음부터 다시 읽습니다.";
-            case ERROR -> "로그 파일을 읽지 못했습니다: " + poll.error();
+            case MISSING -> BootServersBundle.message("log.view.missing");
+            case APPEARED -> BootServersBundle.message("log.view.appeared");
+            case ROTATED -> BootServersBundle.message("log.view.rotated");
+            case ERROR -> BootServersBundle.message("log.view.error", poll.error());
         };
         if (note != null) {
             console.print("\n--- " + note + " ---\n", poll.event() == LogTail.Event.ERROR ? ConsoleViewContentType.ERROR_OUTPUT : ConsoleViewContentType.SYSTEM_OUTPUT);

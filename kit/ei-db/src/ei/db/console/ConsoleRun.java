@@ -17,6 +17,7 @@ import com.intellij.openapi.util.TextRange;
 import com.intellij.openapi.vfs.VirtualFile;
 import ei.db.DbConfig;
 import ei.db.DbSessions;
+import ei.db.EiDbBundle;
 import ei.db.Notify;
 import ei.db.SqlGuard;
 import ei.db.SqlRunner;
@@ -81,11 +82,11 @@ public final class ConsoleRun {
   }
 
   static void format(Project project, Editor editor) {
-    rewrite(project, editor, "SQL 정렬", SqlFormatter::format);
+    rewrite(project, editor, EiDbBundle.message("action.ei.db.console.Format.text"), SqlFormatter::format);
   }
 
   static void toCase(Project project, Editor editor, boolean upper) {
-    rewrite(project, editor, upper ? "대문자로" : "소문자로", sql -> SqlFormatter.changeCase(sql, upper));
+    rewrite(project, editor, EiDbBundle.message(upper ? "action.ei.db.console.Upper.text" : "action.ei.db.console.Lower.text"), sql -> SqlFormatter.changeCase(sql, upper));
   }
 
   private static List<String> texts(List<SqlSplitter.Stmt> stmts) {
@@ -96,12 +97,12 @@ public final class ConsoleRun {
 
   private static void start(Project project, VirtualFile file, List<String> sqls) {
     if (sqls.isEmpty()) {
-      Notify.info(project, "실행할 문장이 없습니다.");
+      Notify.info(project, EiDbBundle.message("console.no.statement"));
       return;
     }
     DbConfig c = ConsoleOpener.config(project, file);
     if (c == null) {
-      Notify.error(project, "이 콘솔의 접속이 지워졌습니다. 도구줄에서 다른 접속을 고르세요.");
+      Notify.error(project, EiDbBundle.message("console.connection.removed"));
       return;
     }
     List<SqlParams.Bound> bound = BindDialog.ask(project, sqls);
@@ -154,7 +155,7 @@ public final class ConsoleRun {
   private static void drop(Project project, VirtualFile file) {
     Queue q = file.getUserData(QUEUE);
     clear(project, file);
-    if (q != null && !q.rest.isEmpty()) Notify.info(project, "남은 " + q.rest.size() + "개 문장을 실행하지 않았습니다.");
+    if (q != null && !q.rest.isEmpty()) Notify.info(project, EiDbBundle.message("console.rest.not.run", q.rest.size()));
   }
 
   private static void clear(Project project, VirtualFile file) {

@@ -19,6 +19,7 @@ import com.intellij.psi.PsiClassType;
 import com.intellij.psi.PsiField;
 import com.intellij.psi.PsiMethod;
 import com.intellij.psi.PsiParameter;
+import ei.db.EiDbBundle;
 import ei.db.Notify;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -33,8 +34,6 @@ import java.util.Set;
  */
 public final class DynamicWhereAction extends AnAction {
   private static final Set<String> TAGS = Set.of("select", "update", "delete");
-  private static final String COMMAND = "동적 조건 만들기";
-  private static final String CHOOSER_TITLE = "조건에 쓸 DTO 클래스 고르기 (parameterType 을 찾지 못했습니다)";
   /** PsiModifier.STATIC 과 같은 값. */
   private static final String STATIC = "static";
   private static final String JAVA_PREFIX = "java.";
@@ -53,7 +52,7 @@ public final class DynamicWhereAction extends AnAction {
     Project project = e.getProject();
     if (editor == null || project == null) return;
     if (DumbService.isDumb(project)) {
-      Notify.warning(project, "색인 중에는 DTO 를 찾을 수 없습니다. 색인이 끝난 뒤 다시 해 주세요.");
+      Notify.warning(project, EiDbBundle.message("dynamicwhere.dumb"));
       return;
     }
     Document document = editor.getDocument();
@@ -62,19 +61,19 @@ public final class DynamicWhereAction extends AnAction {
     MapperDoc doc = MapperDoc.parse(text);
     MapperDoc.Node s = doc.statementAt(caret);
     if (s == null || !TAGS.contains(s.name)) {
-      Notify.error(project, "커서 위치에서 select · update · delete 문장을 찾지 못했습니다.");
+      Notify.error(project, EiDbBundle.message("dynamicwhere.no.statement"));
       return;
     }
     PsiClass dto = dtoOf(project, doc, s);
     if (dto == null) {
-      TreeClassChooser chooser = TreeClassChooserFactory.getInstance(project).createProjectScopeChooser(CHOOSER_TITLE);
+      TreeClassChooser chooser = TreeClassChooserFactory.getInstance(project).createProjectScopeChooser(EiDbBundle.message("dynamicwhere.chooser.title"));
       chooser.showDialog();
       dto = chooser.getSelected();
       if (dto == null) return; // 고르는 창을 닫은 경우다.
     }
     List<WhereDialog.Field> fields = fields(dto);
     if (fields.isEmpty()) {
-      Notify.warning(project, dto.getName() + " 에 조건으로 쓸 필드(static 제외)가 없습니다.");
+      Notify.warning(project, EiDbBundle.message("dynamicwhere.no.fields", dto.getName()));
       return;
     }
     int bodyStart = WhereGen.openEnd(text, s.start);
@@ -87,7 +86,7 @@ public final class DynamicWhereAction extends AnAction {
     String now = document.getText();
     MapperDoc.Node target = MapperDoc.parse(now).statementAt(caret);
     if (target == null || !TAGS.contains(target.name)) {
-      Notify.error(project, "문서가 바뀌어 커서 위치의 문장을 다시 찾지 못했습니다.");
+      Notify.error(project, EiDbBundle.message("dynamicwhere.document.changed"));
       return;
     }
     WhereGen.Insert in;
@@ -98,10 +97,10 @@ public final class DynamicWhereAction extends AnAction {
       return;
     }
     if (!FileDocumentManager.getInstance().requestWriting(document, project)) {
-      Notify.error(project, "읽기 전용 문서라 조건을 넣지 못했습니다.");
+      Notify.error(project, EiDbBundle.message("dynamicwhere.read.only"));
       return;
     }
-    WriteCommandAction.runWriteCommandAction(project, COMMAND, null, () -> document.insertString(in.offset(), in.text()));
+    WriteCommandAction.runWriteCommandAction(project, EiDbBundle.message("action.EiDb.MyBatis.DynamicWhere.command"), null, () -> document.insertString(in.offset(), in.text()));
     editor.getCaretModel().moveToOffset(in.offset() + in.text().length());
     editor.getScrollingModel().scrollToCaret(ScrollType.MAKE_VISIBLE);
   }

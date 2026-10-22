@@ -22,6 +22,7 @@ import com.intellij.ui.components.JBList;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
+import ei.db.EiDbBundle;
 import ei.db.Notify;
 import ei.db.console.SqlFormatter;
 import org.jetbrains.annotations.NotNull;
@@ -50,9 +51,6 @@ import java.util.List;
 final class QueryPickDialog extends DialogWrapper {
   static final int RUN_EXIT = NEXT_USER_EXIT_CODE;
 
-  private static final String TITLE = "보낼 쿼리";
-  private static final String FILTER_HINT = "매퍼 · 문장 · SQL 글자로 거르기";
-  private static final String HINT = "↑↓ 고르기 · Enter · 두 번 누름 콘솔로 보내기 · Ctrl+Enter 실행 · 같은 쿼리는 최근 것 하나";
   private static final int LIST_WIDTH = 380;
   private static final int PREVIEW_WIDTH = 640;
   private static final int HEIGHT = 480;
@@ -85,7 +83,7 @@ final class QueryPickDialog extends DialogWrapper {
       e.getSettings().setLineNumbersShown(true);
     });
     meta.setForeground(UIUtil.getContextHelpForeground());
-    filter.getTextEditor().getEmptyText().setText(FILTER_HINT);
+    filter.getTextEditor().getEmptyText().setText(EiDbBundle.message("querypick.filter.hint"));
     filter.addDocumentListener(new DocumentAdapter() {
       @Override
       protected void textChanged(@NotNull DocumentEvent e) {
@@ -112,8 +110,8 @@ final class QueryPickDialog extends DialogWrapper {
         return true;
       }
     }.installOn(list);
-    setTitle(TITLE);
-    setOKButtonText("콘솔로 보내기");
+    setTitle(EiDbBundle.message("querypick.title"));
+    setOKButtonText(EiDbBundle.message("querypick.send"));
     init();
     list.setSelectedValue(near, true);
     showEntry(list.getSelectedValue());
@@ -146,7 +144,7 @@ final class QueryPickDialog extends DialogWrapper {
     JBSplitter split = new JBSplitter(false, SPLIT);
     split.setFirstComponent(left);
     split.setSecondComponent(right);
-    JBLabel hint = new JBLabel(HINT);
+    JBLabel hint = new JBLabel(EiDbBundle.message("querypick.hint"));
     hint.setForeground(UIUtil.getContextHelpForeground());
     JPanel panel = new JPanel(new BorderLayout(0, JBUI.scale(6)));
     panel.add(split, BorderLayout.CENTER);
@@ -181,17 +179,17 @@ final class QueryPickDialog extends DialogWrapper {
 
   @Override
   protected Action @NotNull [] createActions() {
-    Action copy = new DialogWrapperAction("복사") {
+    Action copy = new DialogWrapperAction(EiDbBundle.message("common.copy")) {
       @Override
       protected void doAction(ActionEvent e) {
         MyBatisLog.Entry entry = list.getSelectedValue();
         if (entry == null) return;
         CopyPasteManager.copyTextToClipboard(previewSql(entry));
-        Notify.info(project, "쿼리를 복사했습니다.");
+        Notify.info(project, EiDbBundle.message("querypick.copied"));
         close(CANCEL_EXIT_CODE);
       }
     };
-    Action run = new DialogWrapperAction("실행") {
+    Action run = new DialogWrapperAction(EiDbBundle.message("common.run")) {
       @Override
       protected void doAction(ActionEvent e) {
         if (list.getSelectedValue() != null) close(RUN_EXIT);

@@ -12,6 +12,7 @@ import com.intellij.testFramework.LightVirtualFile;
 import ei.db.DbConfig;
 import ei.db.DbSessions;
 import ei.db.DbSettings;
+import ei.db.EiDbBundle;
 import ei.db.Notify;
 
 import java.io.IOException;
@@ -67,7 +68,7 @@ public final class ConsoleOpener {
   public static boolean append(Project project, VirtualFile file, String sql) {
     DbConfig c = config(file);
     if (c == null || !(file instanceof LightVirtualFile light)) {
-      Notify.error(project, "이 콘솔의 접속이 지워졌습니다: " + file.getName());
+      Notify.error(project, EiDbBundle.message("console.connection.removed.named", file.getName()));
       return false;
     }
     show(project, c, light, sql);
@@ -78,7 +79,7 @@ public final class ConsoleOpener {
     int n = counts(project).merge(c.id, 1, Integer::sum);
     ConsoleStore store = ConsoleStore.get(project);
     String saved = store.load(c.id, n);
-    LightVirtualFile file = new LightVirtualFile(n == 1 ? fileName(c) : "콘솔 · " + c.name + " (" + n + ").sql", saved == null ? "" : saved);
+    LightVirtualFile file = new LightVirtualFile(n == 1 ? fileName(c) : EiDbBundle.message("console.file.name.numbered", c.name, n), saved == null ? "" : saved);
     file.putUserData(CONFIG_ID, c.id);
     consoles(project).put(c.id, file);
     if (saved != null) store.track(file, c.id, n);
@@ -88,7 +89,7 @@ public final class ConsoleOpener {
   private static void show(Project project, DbConfig c, LightVirtualFile file, String initialSql) {
     Document doc = FileDocumentManager.getInstance().getDocument(file);
     if (doc == null) {
-      Notify.error(project, "콘솔 문서를 만들지 못했습니다: " + c.name);
+      Notify.error(project, EiDbBundle.message("console.document.failed", c.name));
       return;
     }
     int caret = doc.getTextLength();
@@ -98,7 +99,7 @@ public final class ConsoleOpener {
       String gap = before.isBlank() ? "" : before.endsWith("\n\n") ? "" : before.endsWith("\n") ? "\n" : "\n\n";
       String text = gap + initialSql.strip() + "\n";
       caret = doc.getTextLength() + gap.length();
-      WriteCommandAction.runWriteCommandAction(project, "콘솔에 SQL 넣기", null, () -> doc.insertString(doc.getTextLength(), text));
+      WriteCommandAction.runWriteCommandAction(project, EiDbBundle.message("console.command.insert.sql"), null, () -> doc.insertString(doc.getTextLength(), text));
     }
     PsiNavigationSupport.getInstance().createNavigatable(project, file, caret).navigate(true);
   }
@@ -133,12 +134,12 @@ public final class ConsoleOpener {
       file.rename(ConsoleOpener.class, fileName(target));
     } catch (IOException e) {
       // 메모리 파일은 이름 바꾸기에 실패하지 않는다. 실패해도 탭 이름만 옛것으로 남는다.
-      Notify.error(project, "콘솔 이름을 바꾸지 못했습니다: " + e.getMessage());
+      Notify.error(project, EiDbBundle.message("console.rename.failed", e.getMessage()));
     }
   }
 
   private static String fileName(DbConfig c) {
-    return "콘솔 · " + c.name + ".sql";
+    return EiDbBundle.message("console.file.name", c.name);
   }
 
   private static Map<String, Integer> counts(Project project) {

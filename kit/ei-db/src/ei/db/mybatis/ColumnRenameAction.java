@@ -26,6 +26,7 @@ import com.intellij.psi.PsiField;
 import com.intellij.psi.PsiMethod;
 import com.intellij.psi.util.PropertyUtilBase;
 import com.intellij.refactoring.rename.RenameProcessor;
+import ei.db.EiDbBundle;
 import ei.db.Notify;
 import ei.db.gen.Names;
 import org.jetbrains.annotations.NotNull;
@@ -45,7 +46,6 @@ import java.util.TreeSet;
  * 편집기 오른쪽 클릭(매퍼 XML 에서만 보임, 커서 낱말을 옛 이름으로)과 소스 메뉴에서 연다.
  */
 public final class ColumnRenameAction extends AnAction {
-  private static final String FINDING = "매퍼 XML 에서 칼럼 찾는 중";
   private static final String MAPPER_MARK = "<mapper";
 
   @Override
@@ -66,20 +66,20 @@ public final class ColumnRenameAction extends AnAction {
     Project project = e.getProject();
     if (project == null) return;
     if (DumbService.isDumb(project)) {
-      Notify.warning(project, "색인 중에는 칼럼 이름을 바꿀 수 없습니다. 색인이 끝난 뒤 다시 해 주세요.");
+      Notify.warning(project, EiDbBundle.message("columnrename.dumb"));
       return;
     }
     ColumnRenameDialog dialog = new ColumnRenameDialog(project, initialWord(e.getData(CommonDataKeys.EDITOR)));
     if (!dialog.showAndGet()) return;
     ColumnRenameDialog.Input in = dialog.input();
-    new Task.Backgroundable(project, FINDING, true) {
+    new Task.Backgroundable(project, EiDbBundle.message("columnrename.progress"), true) {
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
         List<ColumnRenameDialog.Row> rows = ReadAction.nonBlocking(() -> collect(project, in))
             .inSmartMode(project).wrapProgress(indicator).executeSynchronously();
         ApplicationManager.getApplication().invokeLater(() -> {
           if (rows.isEmpty()) {
-            Notify.info(project, "매퍼 XML 에서 " + in.oldName() + " 을(를) 찾지 못했습니다.");
+            Notify.info(project, EiDbBundle.message("columnrename.not.found", in.oldName()));
             return;
           }
           ColumnRenameDialog.Preview preview = new ColumnRenameDialog.Preview(project, in, rows);
@@ -122,24 +122,24 @@ public final class ColumnRenameAction extends AnAction {
     Set<VirtualFile> files = new LinkedHashSet<>();
     for (ColumnRenameDialog.Row r : chosen) {
       if (r.doc().getModificationStamp() != r.stamp()) {
-        Notify.error(project, r.file().getName() + " 이(가) 찾은 뒤 바뀌었습니다. 다시 찾아 주세요.");
+        Notify.error(project, EiDbBundle.message("columnrename.changed", r.file().getName()));
         return;
       }
       byDoc.computeIfAbsent(r.doc(), k -> new ArrayList<>()).add(r);
       files.add(r.file());
     }
     if (!FileModificationService.getInstance().prepareVirtualFilesForWrite(project, files)) {
-      Notify.error(project, "읽기 전용 파일이 있어 칼럼 이름을 바꾸지 못했습니다.");
+      Notify.error(project, EiDbBundle.message("columnrename.read.only"));
       return;
     }
-    WriteCommandAction.writeCommandAction(project).withName(ColumnRenameDialog.TITLE).run(() -> {
+    WriteCommandAction.writeCommandAction(project).withName(EiDbBundle.message("columnrename.title")).run(() -> {
       for (List<ColumnRenameDialog.Row> rows : byDoc.values()) {
         rows.sort(Comparator.comparingInt((ColumnRenameDialog.Row r) -> r.hit().start()).reversed());
         for (ColumnRenameDialog.Row r : rows) r.doc().replaceString(r.hit().start(), r.hit().end(), r.hit().replacement());
       }
     });
     PsiDocumentManager.getInstance(project).commitAllDocuments();
-    String done = "칼럼 이름을 " + chosen.size() + "곳 바꿨습니다(" + in.oldName() + " → " + in.newName() + ").";
+    String done = EiDbBundle.message("columnrename.done", chosen.size(), in.oldName(), in.newName());
     if (!in.renameDto()) {
       Notify.info(project, done);
       return;
@@ -176,10 +176,10 @@ public final class ColumnRenameAction extends AnAction {
       processor.setPreviewUsages(false);
       processor.run();
     }
-    if (!fields.isEmpty()) done += " DTO 필드 " + fields.size() + "개를 " + newProp + " 로 바꿨습니다.";
+    if (!fields.isEmpty()) done += EiDbBundle.message("columnrename.dto.done", fields.size(), newProp);
     Notify.info(project, done);
     if (!missing.isEmpty()) {
-      Notify.warning(project, String.join(", ", missing) + " 에서 " + oldProp + " 필드를 찾지 못해 DTO 는 바꾸지 않았습니다.");
+      Notify.warning(project, EiDbBundle.message("columnrename.dto.missing", String.join(", ", missing), oldProp));
     }
   }
 }

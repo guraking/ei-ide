@@ -26,6 +26,7 @@ import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.components.JBTabbedPane;
 import com.intellij.ui.components.JBTextField;
 import com.intellij.util.ui.JBUI;
+import ei.db.EiDbBundle;
 import ei.db.Notify;
 import ei.db.gen.Names;
 import org.jetbrains.annotations.NotNull;
@@ -53,11 +54,7 @@ import java.util.function.Supplier;
  * 클래스 찾기는 창을 열기 전에(gather) 화면 스레드 밖에서 한다.
  */
 final class LayerCodeDialog extends DialogWrapper {
-  private static final String TITLE = "계층 코드 만들기";
   private static final String JAVA_EXT = "java";
-  private static final String LOADING_CHILD = "자식 문장 읽는 중";
-  private static final String LOADING_LIST = "매퍼 문장 목록 읽는 중";
-  private static final String NONE = "(없음 — 넣을 때 고릅니다)";
   private static final int CODE_WIDTH = 1200;
   private static final int CODE_HEIGHT = 180;
   private static final int JOIN_HEIGHT = 300;
@@ -155,14 +152,14 @@ final class LayerCodeDialog extends DialogWrapper {
     JPanel panel(String title, boolean insertable) {
       JPanel bar = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(6), 0));
       bar.add(new JBLabel(title));
-      JButton copy = new JButton("복사");
+      JButton copy = new JButton(EiDbBundle.message("common.copy"));
       copy.addActionListener(e -> {
         CopyPasteManager.copyTextToClipboard(editor.getText());
-        Notify.info(project, title + " 글을 복사했습니다.");
+        Notify.info(project, EiDbBundle.message("layercode.copied", title));
       });
       bar.add(copy);
       if (insertable) {
-        JButton put = new JButton("이 클래스에 넣기…");
+        JButton put = new JButton(EiDbBundle.message("layercode.insert.into"));
         put.addActionListener(e -> insert(title));
         bar.add(put);
         bar.add(targetLabel);
@@ -176,7 +173,7 @@ final class LayerCodeDialog extends DialogWrapper {
 
     private void insert(String title) {
       TreeClassChooserFactory f = TreeClassChooserFactory.getInstance(project);
-      String chooserTitle = title + " 을(를) 넣을 클래스";
+      String chooserTitle = EiDbBundle.message("layercode.chooser.title", title);
       TreeClassChooser chooser = target != null && target.isValid()
           ? f.createProjectScopeChooser(chooserTitle, target) : f.createProjectScopeChooser(chooserTitle);
       chooser.showDialog();
@@ -189,7 +186,7 @@ final class LayerCodeDialog extends DialogWrapper {
 
     private void showTarget() {
       String name = target == null ? null : ReadAction.compute(() -> target.isValid() ? target.getQualifiedName() : null);
-      targetLabel.setText(name == null ? NONE : "기본: " + name);
+      targetLabel.setText(name == null ? EiDbBundle.message("layercode.target.none") : EiDbBundle.message("layercode.target.default", name));
     }
 
     void setText(String text) { editor.setText(text); }
@@ -208,8 +205,8 @@ final class LayerCodeDialog extends DialogWrapper {
     mapperCode = new Section(CODE_HEIGHT, info.mapper(), () -> ServiceCode.importsOf(info.sig()));
     joinCode = new Section(JOIN_HEIGHT, info.service(), this::joinImports);
     fieldCode = new Section(CODE_HEIGHT, null, this::fieldImports);
-    setTitle(TITLE + " — " + info.mapperSimple() + "." + info.id());
-    setOKButtonText("닫기");
+    setTitle(EiDbBundle.message("layercode.title.with", info.mapperSimple() + "." + info.id()));
+    setOKButtonText(EiDbBundle.message("common.close"));
     init();
     refreshLayers();
     for (ChildRef r : info.selects()) childBox.addItem(r);
@@ -231,8 +228,8 @@ final class LayerCodeDialog extends DialogWrapper {
   @Override
   protected @Nullable JComponent createCenterPanel() {
     JBTabbedPane tabs = new JBTabbedPane();
-    tabs.addTab("계층 코드", layersTab());
-    tabs.addTab("부모-자식", joinTab());
+    tabs.addTab(EiDbBundle.message("layercode.tab.layers"), layersTab());
+    tabs.addTab(EiDbBundle.message("layercode.tab.join"), joinTab());
     return tabs;
   }
 
@@ -240,9 +237,9 @@ final class LayerCodeDialog extends DialogWrapper {
     JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(6), 0));
     top.add(new JBLabel("URL"));
     top.add(url);
-    top.add(new JBLabel("HTTP 방식"));
+    top.add(new JBLabel(EiDbBundle.message("layercode.http.method")));
     top.add(http);
-    if (info.sig().guessed()) top.add(new JBLabel("매퍼 인터페이스에 메서드가 없어 XML 속성으로 형식을 짐작했습니다."));
+    if (info.sig().guessed()) top.add(new JBLabel(EiDbBundle.message("layercode.guessed")));
     url.getDocument().addDocumentListener(new DocumentAdapter() {
       @Override
       protected void textChanged(@NotNull DocumentEvent e) { refreshController(); }
@@ -250,10 +247,10 @@ final class LayerCodeDialog extends DialogWrapper {
     http.addActionListener(e -> refreshController());
     JPanel list = new JPanel();
     list.setLayout(new BoxLayout(list, BoxLayout.Y_AXIS));
-    list.add(controllerCode.panel("컨트롤러 메서드", true));
-    list.add(interfaceCode.panel("서비스 인터페이스 선언", true));
-    list.add(serviceCode.panel("서비스 구현 메서드", true));
-    if (!info.mapperHasMethod()) list.add(mapperCode.panel("매퍼 인터페이스 메서드", true));
+    list.add(controllerCode.panel(EiDbBundle.message("layercode.panel.controller"), true));
+    list.add(interfaceCode.panel(EiDbBundle.message("layercode.panel.interface"), true));
+    list.add(serviceCode.panel(EiDbBundle.message("layercode.panel.service"), true));
+    if (!info.mapperHasMethod()) list.add(mapperCode.panel(EiDbBundle.message("layercode.panel.mapper"), true));
     JPanel p = new JPanel(new BorderLayout(0, JBUI.scale(6)));
     p.add(top, BorderLayout.NORTH);
     JBScrollPane scroll = new JBScrollPane(list);
@@ -264,14 +261,14 @@ final class LayerCodeDialog extends DialogWrapper {
 
   private JComponent joinTab() {
     JPanel row1 = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(6), 0));
-    row1.add(new JBLabel("부모 " + info.id() + " · 자식 문장"));
+    row1.add(new JBLabel(EiDbBundle.message("layercode.parent.child", info.id())));
     row1.add(childBox);
-    row1.add(new ActionLink("다른 매퍼에서…", (ActionListener) e -> pickOther()));
+    row1.add(new ActionLink(EiDbBundle.message("layercode.other.mapper"), (ActionListener) e -> pickOther()));
     JPanel row2 = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(6), 0));
     keyBox.setEditable(true);
-    row2.add(new JBLabel("연결 키"));
+    row2.add(new JBLabel(EiDbBundle.message("layercode.join.key")));
     row2.add(keyBox);
-    row2.add(new JBLabel("자식 목록 이름"));
+    row2.add(new JBLabel(EiDbBundle.message("layercode.child.list.name")));
     row2.add(listName);
     joinError.setForeground(ERROR);
     row2.add(joinError);
@@ -292,8 +289,8 @@ final class LayerCodeDialog extends DialogWrapper {
     top.add(row2);
     JPanel list = new JPanel();
     list.setLayout(new BoxLayout(list, BoxLayout.Y_AXIS));
-    list.add(joinCode.panel("부모-자식 서비스 메서드", true));
-    list.add(fieldCode.panel(info.parentLombok() ? "부모 DTO 에 더할 필드(Lombok)" : "부모 DTO 에 더할 필드 · getter · setter", false));
+    list.add(joinCode.panel(EiDbBundle.message("layercode.panel.join"), true));
+    list.add(fieldCode.panel(info.parentLombok() ? EiDbBundle.message("layercode.panel.field.lombok") : EiDbBundle.message("layercode.panel.field"), false));
     JPanel p = new JPanel(new BorderLayout(0, JBUI.scale(6)));
     p.add(top, BorderLayout.NORTH);
     p.add(new JBScrollPane(list), BorderLayout.CENTER);
@@ -318,9 +315,9 @@ final class LayerCodeDialog extends DialogWrapper {
     child = null;
     if (ref != null) {
       if (DumbService.isDumb(project)) {
-        Notify.warning(project, "색인 중이라 자식 문장을 읽지 못했습니다. 색인이 끝난 뒤 다시 골라 주세요.");
+        Notify.warning(project, EiDbBundle.message("layercode.dumb.child"));
       } else {
-        child = withProgress(LOADING_CHILD, () -> readChild(ref));
+        child = withProgress(EiDbBundle.message("layercode.loading.child"), () -> readChild(ref));
       }
     }
     keyBox.removeAllItems();
@@ -353,10 +350,10 @@ final class LayerCodeDialog extends DialogWrapper {
 
   private void pickOther() {
     if (DumbService.isDumb(project)) {
-      Notify.warning(project, "색인 중이라 매퍼 목록을 읽지 못했습니다.");
+      Notify.warning(project, EiDbBundle.message("layercode.dumb.list"));
       return;
     }
-    List<ChildRef> all = withProgress(LOADING_LIST, () -> {
+    List<ChildRef> all = withProgress(EiDbBundle.message("layercode.loading.list"), () -> {
       List<ChildRef> out = new ArrayList<>();
       for (MapperIndex.Entry e : MapperIndex.all(project)) {
         for (String id : e.ids().keySet()) out.add(new ChildRef(e.namespace(), id, e.file()));
@@ -366,7 +363,7 @@ final class LayerCodeDialog extends DialogWrapper {
     });
     if (all == null || all.isEmpty()) return;
     JBPopupFactory.getInstance().createPopupChooserBuilder(all)
-        .setTitle("자식 문장(select)")
+        .setTitle(EiDbBundle.message("layercode.child.title"))
         .setFilterAlwaysVisible(true)
         .setItemChosenCallback(r -> {
           childBox.addItem(r);
@@ -377,7 +374,7 @@ final class LayerCodeDialog extends DialogWrapper {
 
   private void refreshJoin() {
     if (child == null) {
-      joinError.setText(childBox.getSelectedItem() == null ? "자식 문장을 골라 주세요." : "자식 문장이 select 가 아니거나 찾지 못했습니다.");
+      joinError.setText(childBox.getSelectedItem() == null ? EiDbBundle.message("layercode.child.empty") : EiDbBundle.message("layercode.child.invalid"));
       joinCode.setText("");
       fieldCode.setText("");
       return;

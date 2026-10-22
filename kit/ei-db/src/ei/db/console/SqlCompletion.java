@@ -8,6 +8,7 @@ import com.intellij.icons.AllIcons;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import ei.db.DbConfig;
+import ei.db.EiDbBundle;
 import ei.db.Meta;
 import ei.db.SchemaCache;
 import org.jetbrains.annotations.NotNull;
@@ -50,13 +51,13 @@ public final class SqlCompletion extends CompletionContributor {
 
     if (qualifier != null) {
       String table = aliases.getOrDefault(qualifier.toUpperCase(Locale.ROOT), qualifier);
-      if (!addColumns(rs, project, c, table, lower)) rs.addLookupAdvertisement("칼럼 목록을 읽는 중입니다. 잠시 뒤 다시 Ctrl+Space");
+      if (!addColumns(rs, project, c, table, lower)) rs.addLookupAdvertisement(EiDbBundle.message("completion.loading.columns"));
       rs.stopHere();
       return;
     }
     List<Meta.Table> tables = SchemaCache.tables(project, c);
     if (tables == null) {
-      rs.addLookupAdvertisement("표 목록을 읽는 중입니다. 잠시 뒤 다시 Ctrl+Space");
+      rs.addLookupAdvertisement(EiDbBundle.message("completion.loading.tables"));
     } else {
       for (Meta.Table t : tables) {
         rs.addElement(LookupElementBuilder.create(cased(t.name(), lower))

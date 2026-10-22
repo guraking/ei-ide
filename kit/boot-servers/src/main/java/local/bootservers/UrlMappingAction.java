@@ -41,7 +41,10 @@ import java.util.Set;
  */
 public final class UrlMappingAction extends DumbAwareAction {
 
-    static final String TITLE = "URL 찾기";
+    static String title() {
+        return BootServersBundle.message("url.title");
+    }
+
 
     private static final String PACKAGE = "org.springframework.web.bind.annotation.";
     private static final String REQUEST_MAPPING = PACKAGE + "RequestMapping";
@@ -80,10 +83,10 @@ public final class UrlMappingAction extends DumbAwareAction {
             return;
         }
         if (DumbService.isDumb(project)) {
-            Messages.showWarningDialog(project, "색인 중에는 URL 을 찾을 수 없습니다. 색인이 끝난 뒤 다시 시도하세요.", TITLE);
+            Messages.showWarningDialog(project, BootServersBundle.message("url.indexing"), title());
             return;
         }
-        ProgressManager.getInstance().run(new Task.Backgroundable(project, "URL 모으는 중", true) {
+        ProgressManager.getInstance().run(new Task.Backgroundable(project, BootServersBundle.message("url.progress"), true) {
             private List<Endpoint> found;
 
             @Override
@@ -98,7 +101,7 @@ public final class UrlMappingAction extends DumbAwareAction {
             public void onSuccess() {
                 if (found == null) {
                     Messages.showInfoMessage(project,
-                            "프로젝트에 스프링 웹(spring-web) 의존성이 없습니다. Gradle · Maven 프로젝트로 연결됐는지 확인하세요.", TITLE);
+                            BootServersBundle.message("spring.web.missing"), title());
                     return;
                 }
                 new UrlMappingDialog(project, found).show();
