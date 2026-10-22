@@ -32,7 +32,6 @@ import java.awt.*;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.awt.geom.Path2D;
 import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
@@ -45,8 +44,8 @@ import java.util.*;
 import java.util.List;
 
 /**
- * 아래쪽 「Git Log」 창. 왼쪽에서 프로젝트(모듈)를 고르면 그 폴더 안을 바꾼 최근 커밋을 GitKraken 처럼 보여 준다.
- * 가지마다 색이 다른 선 위에 작성자 동그라미, 브랜치 · 태그 알약, 오른쪽에 커밋 내용과 바뀐 파일(두 번 누르면 비교 창).
+ * 아래쪽 「Git Log」 창. 왼쪽에서 프로젝트(모듈)를 고르면 그 폴더 안을 바꾼 최근 커밋을 IntelliJ 기본 Log 탭처럼 보여 준다.
+ * 가지마다 색이 다른 꺾인 선 위에 커밋 점(합치기는 속이 빈 점), 브랜치 · 태그 알약, 오른쪽에 커밋 내용과 바뀐 파일(두 번 누르면 비교 창).
  * 위쪽은 찾기 칸과 새로고침뿐이다. 찾기로 거르면 사이가 빠지므로 가지 선 대신 한 줄로 그린다. 기존 Git 로그 창은 그대로 둔다.
  * Git 은 git log, SVN 은 svn log 를 작업 스레드에서 돌린다(SyncPanel.run 과 같은 실행 · 시간 제한). SVN 은 한 줄 기록이다.
  */
@@ -59,22 +58,22 @@ final class ProjectHistoryPanel extends JPanel {
   private static final DateTimeFormatter THIS_YEAR = timeFormat("history.time.year");
   private static final DateTimeFormatter OLDER = timeFormat("history.time.older");
   private static final DateTimeFormatter FULL = timeFormat("history.time.full");
+  private static final DateTimeFormatter ROW_TIME = timeFormat("history.time.row");
   private static final int MINUTES_PER_HOUR = 60;
   private static final int SHORT_HASH = 7;
   private static final int INITIALS = 2;
 
-  // 크기(JBUI.scale 전). 칸 폭 · 줄 높이 · 동그라미 지름은 시안(kraken.png) 비율을 따른다.
-  private static final int ROW_H = 40;
-  private static final int LANE_W = 26;
-  private static final int GRAPH_PAD = 10;
+  // 크기(JBUI.scale 전). 목록 줄 · 가지 칸 · 점은 IntelliJ 기본 Log 탭 비율을 따른다.
+  private static final int ROW_H = 26;
+  private static final int LANE_W = 16;
+  private static final int GRAPH_PAD = 8;
   private static final int MAX_LANES = 12;
-  private static final int AVATAR = 24;
+  private static final int DOT = 7;
   private static final int AVATAR_BIG = 40;
-  private static final int MERGE_DOT = 10;
   private static final int PILL_H = 18;
   private static final int GAP = 8;
   private static final int SEARCH_COLUMNS = 30;
-  private static final float LINE_WIDTH = 2f;
+  private static final float LINE_WIDTH = 1.5f;
   // 동그라미 지름 대비 머리글자 크기.
   private static final float AVATAR_FONT_RATIO = 0.4f;
 
@@ -95,7 +94,6 @@ final class ProjectHistoryPanel extends JPanel {
   private static final Map<String, Color> STATUS_COLORS = Map.of(
     "M", new Color(0xFFC061), "A", new Color(0x5FE39B), "D", new Color(0xFF7A95), "R", new Color(0x7FB3FF));
   private static final Color DIM = JBUI.CurrentTheme.ContextHelp.FOREGROUND;
-  private static final Color CHIP = new JBColor(new Color(0xE6E7EA), new Color(0x2A2C31));
 
   /** 왼쪽 목록 한 줄. dir 은 모듈의 첫 콘텐츠 루트. */
   private record Target(String name, File dir, SyncPanel.Vcs vcs) {
@@ -569,38 +567,30 @@ final class ProjectHistoryPanel extends JPanel {
         for (History.Seg s : row.top()) segment(lane, s, 0, cy);
         for (History.Seg s : row.bottom()) segment(lane, s, cy, h);
       }
+      // 커밋은 가지 색 점, 합치기 커밋은 속이 빈 점.
       int x = laneX(col);
-      if (entry.merge()) {
-        int d = JBUI.scale(MERGE_DOT);
-        lane.setColor(background);
-        lane.fillOval(x - d / 2, cy - d / 2, d, d);
-        lane.setColor(laneColor(col));
-        lane.drawOval(x - d / 2, cy - d / 2, d, d);
-      }
-      else {
-        int d = JBUI.scale(AVATAR);
-        new Avatar(entry.author(), d).paintIcon(this, lane, x - d / 2, cy - d / 2);
-      }
+      int d = JBUI.scale(DOT);
+      lane.setColor(entry.merge() ? background : laneColor(col));
+      lane.fillOval(x - d / 2, cy - d / 2, d, d);
+      lane.setColor(laneColor(col));
+      lane.drawOval(x - d / 2, cy - d / 2, d, d);
       lane.dispose();
 
       g2.setFont(getFont());
       FontMetrics fm = g2.getFontMetrics();
       int baseline = (h + fm.getAscent() - fm.getDescent()) / 2;
       int gap = JBUI.scale(GAP);
-      String meta = entry.author() + " · " + when(entry.time());
-      int right = w - gap * 2 - fm.stringWidth(meta);
-      g2.setColor(DIM);
-      g2.drawString(meta, right, baseline);
-      if (!entry.files().isEmpty()) {
-        String chip = SyncBundle.message("history.file.count", entry.files().size());
-        int cw = fm.stringWidth(chip) + gap;
-        int ch = JBUI.scale(PILL_H);
-        right -= cw + gap;
-        g2.setColor(CHIP);
-        g2.fillRoundRect(right, cy - ch / 2, cw, ch, ch / 2, ch / 2);
-        g2.setColor(DIM);
-        g2.drawString(chip, right + gap / 2, baseline);
-      }
+      // 오른쪽: 굵은 작성자, 그 뒤 날짜 전체. 합치기 커밋은 둘 다 흐리게.
+      String time = ROW_TIME.format(entry.time().atZone(ZONE));
+      int right = w - gap * 2 - fm.stringWidth(time);
+      g2.setColor(entry.merge() ? DIM : UIUtil.getListForeground());
+      g2.drawString(time, right, baseline);
+      Font bold = getFont().deriveFont(Font.BOLD);
+      FontMetrics bm = g2.getFontMetrics(bold);
+      right -= gap + bm.stringWidth(entry.author());
+      g2.setFont(bold);
+      g2.drawString(entry.author(), right, baseline);
+      g2.setFont(getFont());
 
       int textX = graphWidth + gap;
       int room = right - gap - textX;
@@ -620,15 +610,7 @@ final class ProjectHistoryPanel extends JPanel {
       int x1 = laneX(s.from());
       int x2 = laneX(s.to());
       g.setColor(laneColor(s.lane()));
-      if (x1 == x2) {
-        g.drawLine(x1, y1, x2, y2);
-        return;
-      }
-      Path2D path = new Path2D.Float();
-      int mid = (y1 + y2) / 2;
-      path.moveTo(x1, y1);
-      path.curveTo(x1, mid, x2, mid, x2, y2);
-      g.draw(path);
+      g.drawLine(x1, y1, x2, y2);
     }
   }
 
