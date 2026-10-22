@@ -52,13 +52,13 @@ import java.util.List;
  */
 final class ProjectHistoryPanel extends JPanel {
   static final String ID = "ProjectHistory";
-  static final String TITLE = "Git 기록";
   private static final int LOG_LIMIT = 100;
   private static final ZoneId ZONE = ZoneId.systemDefault();
-  private static final DateTimeFormatter TODAY = DateTimeFormatter.ofPattern("a h:mm", Locale.KOREAN);
-  private static final DateTimeFormatter THIS_YEAR = DateTimeFormatter.ofPattern("MM-dd HH:mm");
-  private static final DateTimeFormatter OLDER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-  private static final DateTimeFormatter FULL = DateTimeFormatter.ofPattern("yyyy-MM-dd a h:mm", Locale.KOREAN);
+  private static final Locale TIME_LOCALE = Locale.forLanguageTag(SyncBundle.message("history.locale"));
+  private static final DateTimeFormatter TODAY = timeFormat("history.time.today");
+  private static final DateTimeFormatter THIS_YEAR = timeFormat("history.time.year");
+  private static final DateTimeFormatter OLDER = timeFormat("history.time.older");
+  private static final DateTimeFormatter FULL = timeFormat("history.time.full");
   private static final int MINUTES_PER_HOUR = 60;
   private static final int SHORT_HASH = 7;
   private static final int INITIALS = 2;
@@ -111,9 +111,9 @@ final class ProjectHistoryPanel extends JPanel {
   private final JBList<History.Entry> commits = new JBList<>(commitModel);
   private final JBList<History.FileChange> files = new JBList<>();
   private final SearchTextField filter = new SearchTextField(false);
-  private final JToggleButton lines = new JToggleButton("가지 선", true);
-  private final JToggleButton mine = new JToggleButton("내 것만");
-  private final JToggleButton hideMerges = new JToggleButton("Merge 숨김");
+  private final JToggleButton lines = new JToggleButton(SyncBundle.message("history.lines"), true);
+  private final JToggleButton mine = new JToggleButton(SyncBundle.message("history.mine"));
+  private final JToggleButton hideMerges = new JToggleButton(SyncBundle.message("history.hide.merges"));
   private final JLabel projectName = new JLabel(" ");
   private final Pill branch = new Pill();
   private final JLabel status = new JLabel(" ");
@@ -149,7 +149,7 @@ final class ProjectHistoryPanel extends JPanel {
       if (entry != null) CopyPasteManager.getInstance().setContents(new StringSelection(entry.id()));
     });
 
-    JButton refresh = new JButton("새로고침");
+    JButton refresh = new JButton(SyncBundle.message("history.refresh"));
     refresh.addActionListener(e -> { reloadTargets(); load(); });
     projectName.setFont(JBUI.Fonts.label().biggerOn(2).asBold());
     JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(GAP), JBUI.scale(GAP / 2)));
@@ -182,14 +182,14 @@ final class ProjectHistoryPanel extends JPanel {
   private JComponent detailPanel() {
     author.setFont(JBUI.Fonts.label().biggerOn(1).asBold());
     author.setIconTextGap(JBUI.scale(GAP + GAP / 2));
-    hash.setToolTipText("누르면 복사");
+    hash.setToolTipText(SyncBundle.message("history.copy"));
     message.setEditable(false);
     message.setLineWrap(true);
     message.setWrapStyleWord(true);
     message.setOpaque(false);
     message.setFont(JBUI.Fonts.label().biggerOn(1));
     filesTitle.setForeground(DIM);
-    JLabel hint = new JLabel("파일을 두 번 누르면 커밋 전 · 후 비교 창");
+    JLabel hint = new JLabel(SyncBundle.message("history.hint"));
     hint.setForeground(DIM);
 
     JPanel head = new JPanel();
@@ -232,7 +232,7 @@ final class ProjectHistoryPanel extends JPanel {
     Target target = targets.getSelectedValue();
     if (target == null) return;
     projectName.setText(target.name());
-    status.setText("기록을 읽는 중…");
+    status.setText(SyncBundle.message("history.loading"));
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       Loaded result;
       String error = null;
@@ -255,9 +255,9 @@ final class ProjectHistoryPanel extends JPanel {
         branch.setText(done == null ? "" : done.branch());
         mine.setEnabled(done != null && done.me() != null);
         if (!mine.isEnabled()) mine.setSelected(false);
-        mine.setToolTipText(mine.isEnabled() ? done.me() : "Git 의 user.name 이 있어야 씁니다");
+        mine.setToolTipText(mine.isEnabled() ? done.me() : SyncBundle.message("history.mine.disabled"));
         fillCommits();
-        status.setText(done == null ? failure : "최근 " + done.entries().size() + "개");
+        status.setText(done == null ? failure : SyncBundle.message("history.count", done.entries().size()));
       });
     });
   }
@@ -341,7 +341,7 @@ final class ProjectHistoryPanel extends JPanel {
     hash.setText(entry.id().length() > SHORT_HASH ? entry.id().substring(0, SHORT_HASH) : "r" + entry.id());
     hash.setVisible(true);
     message.setText(entry.message());
-    filesTitle.setText("바뀐 파일 " + entry.files().size());
+    filesTitle.setText(SyncBundle.message("history.files", entry.files().size()));
     files.setListData(entry.files().toArray(History.FileChange[]::new));
   }
 
@@ -367,7 +367,7 @@ final class ProjectHistoryPanel extends JPanel {
         DiffContentFactory factory = DiffContentFactory.getInstance();
         DiffManager.getInstance().showDiff(project, new SimpleDiffRequest(
           file.path() + " (" + entry.id() + ")", factory.create(project, before, type), factory.create(project, after, type),
-          "이전", entry.author() + " · " + FULL.format(entry.time().atZone(ZONE))));
+          SyncBundle.message("history.before"), entry.author() + " · " + FULL.format(entry.time().atZone(ZONE))));
       });
     });
   }
@@ -386,10 +386,15 @@ final class ProjectHistoryPanel extends JPanel {
     }
   }
 
-  /** 목록에 보일 시간: 한 시간 안은 「N분 전」, 오늘은 「오후 6:40」, 올해는 「10-20 15:30」, 그 전은 날짜만. */
+  /** 화면 글 묶음에 적힌 시간 모양. 오전 · 오후 글자는 history.locale 을 따른다. */
+  private static DateTimeFormatter timeFormat(String key) {
+    return DateTimeFormatter.ofPattern(SyncBundle.message(key), TIME_LOCALE);
+  }
+
+  /** 목록에 보일 시간: 한 시간 안은 「N분 전」, 오늘은 시각, 올해는 월-일 시각, 그 전은 날짜만(모양은 화면 글 묶음). */
   static String when(Instant time) {
     Duration ago = Duration.between(time, Instant.now());
-    if (!ago.isNegative() && ago.toMinutes() < MINUTES_PER_HOUR) return Math.max(1, ago.toMinutes()) + "분 전";
+    if (!ago.isNegative() && ago.toMinutes() < MINUTES_PER_HOUR) return SyncBundle.message("history.minutes.ago", Math.max(1, ago.toMinutes()));
     ZonedDateTime at = time.atZone(ZONE);
     LocalDate today = LocalDate.now(ZONE);
     if (at.toLocalDate().equals(today)) return TODAY.format(at);
@@ -599,7 +604,7 @@ final class ProjectHistoryPanel extends JPanel {
       g2.setColor(DIM);
       g2.drawString(meta, right, baseline);
       if (!entry.files().isEmpty()) {
-        String chip = "파일 " + entry.files().size();
+        String chip = SyncBundle.message("history.file.count", entry.files().size());
         int cw = fm.stringWidth(chip) + gap;
         int ch = JBUI.scale(PILL_H);
         right -= cw + gap;
@@ -688,7 +693,7 @@ final class ProjectHistoryPanel extends JPanel {
   public static final class Factory implements ToolWindowFactory, DumbAware {
     @Override
     public void init(@NotNull ToolWindow toolWindow) {
-      toolWindow.setStripeTitle(TITLE);
+      toolWindow.setStripeTitle(SyncBundle.message("history.title"));
     }
 
     @Override

@@ -13,6 +13,9 @@
   <!-- SVN 플러그인이 있으면 트리 우클릭 Subversion 묶음에도 「작업 공간 동기화」를 넣는다. -->
   <depends optional="true" config-file="kinggura-sync-svn.xml">Subversion</depends>
 
+  <!-- 화면 글 묶음: 기본 영어, _ko 한국어. -->
+  <resource-bundle>messages.SyncBundle</resource-bundle>
+
   <extensions defaultExtensionNs="com.intellij">
     <toolWindow id="Synchronize" anchor="bottom" icon="AllIcons.Actions.Refresh"
                 factoryClass="kinggura.sync.SyncToolWindowFactory"/>
