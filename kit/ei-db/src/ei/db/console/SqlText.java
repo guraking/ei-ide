@@ -25,6 +25,10 @@ final class SqlText {
       "(?i)(NUMBER|NUMERIC|DECIMAL|DEC|FLOAT\\d*|DOUBLE( PRECISION)?|REAL|BINARY_FLOAT|BINARY_DOUBLE"
       + "|(TINY|SMALL|MEDIUM|BIG)?INT(EGER)?\\d*|(SMALL|BIG)?SERIAL\\d*)( UNSIGNED)?");
   private static final Pattern UNEDITABLE_TYPE = Pattern.compile("(?i)(\\w*LOB|LONG( RAW)?|\\w*RAW|BYTEA|(VAR)?BINARY|IMAGE)");
+  /** display 가 쉼표를 넣는 일반 숫자 꼴과 묶음 자릿수 · 쉼표. */
+  private static final Pattern PLAIN_NUMBER = Pattern.compile("-?\\d+(\\.\\d+)?");
+  private static final int GROUP = 3;
+  private static final char GROUP_SEPARATOR = ',';
   private static final String IDENT = "[A-Z_][\\w$#]*";
   private static final Pattern SET_OPERATION = Pattern.compile("\\b(UNION|INTERSECT|MINUS|EXCEPT)\\b");
   private static final Pattern SELECT = Pattern.compile("\\bSELECT\\b");
@@ -63,6 +67,26 @@ final class SqlText {
 
   static String text(Object v) {
     return v instanceof BigDecimal b ? b.toPlainString() : String.valueOf(v);
+  }
+
+  /**
+   * 결과 표에 보일 글. 숫자는 정수 부분에 세 자리마다 쉼표를 넣고, 나머지는 text 와 같다.
+   * 화면 표시만 쓴다. 복사 · CSV · 엑셀 · INSERT · UPDATE · 고치기는 원래 값(text)을 쓴다.
+   * 지수 표기(1.0E10 등)처럼 일반 숫자 꼴이 아니면 그대로 둔다.
+   */
+  static String display(Object v) {
+    String s = text(v);
+    if (!(v instanceof Number) || !PLAIN_NUMBER.matcher(s).matches()) return s;
+    int sign = s.startsWith("-") ? 1 : 0;
+    int dot = s.indexOf('.');
+    int end = dot < 0 ? s.length() : dot;
+    StringBuilder sb = new StringBuilder(s.length() + (end - sign) / GROUP);
+    sb.append(s, 0, sign);
+    for (int i = sign; i < end; i++) {
+      if (i > sign && (end - i) % GROUP == 0) sb.append(GROUP_SEPARATOR);
+      sb.append(s.charAt(i));
+    }
+    return sb.append(s, end, s.length()).toString();
   }
 
   /**

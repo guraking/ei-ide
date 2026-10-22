@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.MatchResult;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -36,13 +37,25 @@ public final class LogFilter {
             "(?<![A-Za-z0-9_])(FATAL|SEVERE|ERROR|WARNING|WARN|INFO|DEBUG|TRACE)(?![A-Za-z0-9_])");
     /** 들여쓰기 없는 예외 머리 줄(「java.lang.OutOfMemoryError」 처럼 Exception 이 없는 것까지). */
     private static final Pattern EXCEPTION_HEAD = Pattern.compile("[\\w$]+(\\.[\\w$]+)+(Error|Exception)\\b");
+    /**
+     * 줄 앞의 날짜 · 시각(「22-Oct-2026 09:12:03.114」, 「2026-10-22 09:12:03,114」, 「[2026/10/22T09:12:03]」, 「09:12:03.114」).
+     * time 묶음은 시각 부분이다. 화면에 보일 때만 쓰고 거르기 판정에는 쓰지 않는다.
+     */
+    public static final Pattern LEADING_TIMESTAMP = Pattern.compile(
+            "^\\[?(?:\\d{1,4}[-/.](?:\\d{1,2}|[A-Za-z]{3})[-/.]\\d{1,4}[ T])?(?<time>\\d{1,2}:\\d{2}:\\d{2}(?:[.,]\\d{1,9})?)\\]?");
 
     private LogFilter() {}
 
+    /** 줄에서 처음 나온 레벨 낱말의 자리. 없으면 null. */
+    public static MatchResult levelWord(String line) {
+        Matcher m = LEVEL.matcher(line);
+        return m.find() ? m.toMatchResult() : null;
+    }
+
     /** 줄에서 처음 나온 레벨 낱말. 없으면 null. */
     public static Level levelOf(String line) {
-        Matcher m = LEVEL.matcher(line);
-        if (!m.find()) {
+        MatchResult m = levelWord(line);
+        if (m == null) {
             return null;
         }
         return switch (m.group(1)) {

@@ -13,6 +13,7 @@ import com.intellij.execution.ui.RunContentDescriptor;
 import com.intellij.execution.ui.RunContentManager;
 import com.intellij.icons.AllIcons;
 import com.intellij.ide.BrowserUtil;
+import com.intellij.ide.ui.laf.darcula.ui.DarculaButtonUI;
 import com.intellij.ide.projectView.ProjectView;
 import com.intellij.openapi.Disposable;
 import com.intellij.notification.NotificationGroupManager;
@@ -24,6 +25,7 @@ import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
+import com.intellij.openapi.actionSystem.Separator;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.application.ReadAction;
@@ -36,6 +38,7 @@ import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.ui.SimpleToolWindowPanel;
 import com.intellij.openapi.ui.popup.JBPopupFactory;
 import com.intellij.openapi.util.Disposer;
+import com.intellij.openapi.util.IconLoader;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.task.ProjectTaskContext;
@@ -44,12 +47,17 @@ import com.intellij.task.ProjectTaskManager;
 import com.intellij.openapi.wm.ToolWindowId;
 import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.ui.ColoredTableCellRenderer;
+import com.intellij.ui.EditorNotificationPanel;
+import com.intellij.ui.InlineBanner;
+import com.intellij.ui.JBColor;
 import com.intellij.ui.OnePixelSplitter;
 import com.intellij.ui.PopupHandler;
 import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.SimpleTextAttributes;
+import com.intellij.ui.TitledSeparator;
 import com.intellij.ui.ColoredListCellRenderer;
 import com.intellij.ui.components.JBLabel;
+import com.intellij.ui.components.JBPanelWithEmptyText;
 import com.intellij.ui.components.JBTextField;
 import com.intellij.ui.table.JBTable;
 import com.intellij.util.concurrency.AppExecutorUtil;
@@ -60,9 +68,12 @@ import com.intellij.util.ui.NamedColorUtil;
 import com.intellij.util.ui.UIUtil;
 import local.bootservers.was.WasSettings;
 import local.bootservers.was.WasLogFiles;
+import local.bootservers.ui.Pill;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import javax.swing.Box;
+import javax.swing.BoxLayout;
 import javax.swing.Icon;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
@@ -72,10 +83,16 @@ import javax.swing.JPanel;
 import javax.swing.JTable;
 import javax.swing.border.Border;
 import javax.swing.ListSelectionModel;
+import javax.swing.SwingConstants;
 import javax.swing.Timer;
 import javax.swing.table.AbstractTableModel;
+import javax.swing.table.TableCellRenderer;
+import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Color;
+import java.awt.Component;
+import java.awt.FlowLayout;
+import java.awt.Font;
 import java.awt.event.HierarchyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -106,7 +123,32 @@ final class ServersPanel extends SimpleToolWindowPanel {
     private static final int TICK_MILLIS = 1000;
     // 글자가 칸 왼쪽 끝 · 머리글에 붙지 않게 두는 칸 안쪽 여백
     private static final int CELL_PAD = 8;
-    private static final int ROW_HEIGHT = 24;
+    private static final int ROW_HEIGHT = 28;
+    // 올린 프로젝트 줄을 WAS 줄 아래로 들이는 너비
+    private static final int DEPLOY_INDENT = 20;
+    // 값이 없는 칸
+    private static final String EMPTY = "—";
+    // 실행 설정 이름 끝의 「 (local)」 같은 덧붙임. 회색으로 보인다.
+    private static final String SUFFIX_OPEN = " (";
+    private static final String SUFFIX_CLOSE = ")";
+    // 상태 꼬리표 앞 점
+    private static final String STATE_DOT = "● ";
+    private static final String JOIN = " · ";
+    // 상태 꼬리표 바탕(글 색은 테마의 성공 · 경고 · 오류 글 색)
+    private static final Color RUNNING_BG = JBColor.namedColor("EIServers.runningBackground", new JBColor(0xDDF3E2, 0x213E2C));
+    private static final Color STARTING_BG = JBColor.namedColor("EIServers.startingBackground", new JBColor(0xFBEFD9, 0x463927));
+    private static final Color FAILED_BG = JBColor.namedColor("EIServers.failedBackground", new JBColor(0xFADEDF, 0x462C2D));
+    // 프로필 꼬리표 색. 그 밖 프로필은 흐린 글 색이다.
+    private static final Map<String, Color> PROFILE_COLORS = Map.of(
+            "local", JBColor.namedColor("EIServers.tag.local", new JBColor(0x208A3C, 0x30D158)),
+            "dev", JBColor.namedColor("EIServers.tag.dev", new JBColor(0x0A6ED1, 0x0A84FF)),
+            "prod", JBColor.namedColor("EIServers.tag.prod", new JBColor(0xD1365A, 0xFF6482)));
+    // WAS 종류 꼬리표 색
+    private static final Map<WasSettings.Kind, Color> KIND_COLORS = Map.of(
+            WasSettings.Kind.TOMCAT, JBColor.namedColor("EIServers.tag.tomcat", new JBColor(0xB86E00, 0xFF9F0A)),
+            WasSettings.Kind.JEUS, JBColor.namedColor("EIServers.tag.jeus", new JBColor(0x0A6ED1, 0x0A84FF)),
+            WasSettings.Kind.WEBLOGIC, JBColor.namedColor("EIServers.tag.weblogic", new JBColor(0x5856D6, 0x7D7AFF)),
+            WasSettings.Kind.WILDFLY, JBColor.namedColor("EIServers.tag.wildfly", new JBColor(0x9A3CC4, 0xBF5AF2)));
 
     /** 스프링 부트 줄. settings 가 null 이면 실행 설정이 아직 없는 모듈의 자리 줄이다(시작 · 적용하면 모듈 이름으로 만든다). */
     private record Boot(Module module, RunnerAndConfigurationSettings settings) {
@@ -120,7 +162,10 @@ final class ServersPanel extends SimpleToolWindowPanel {
     }
 
     private final Project project;
+    private final ToolWindow toolWindow;
     private final Disposable parent;
+    // 창 제목에 마지막으로 보인 실행 중 · 실패 개수 글
+    private String shownTitle = "";
     private Map<Module, Set<String>> bootModules = Map.of();
     private List<Object> rows = List.of();
     private final Map<Object, ServerLauncher.State> lastStates = new HashMap<>();
@@ -134,6 +179,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
     private final JPanel detail = new JPanel(cards);
     // 스프링 부트 칸
     private final JBLabel bootTitle = new JBLabel();
+    private final Pill bootState = new Pill();
     private final JBLabel bootStatus = new JBLabel();
     private final JBTextField bootName = new JBTextField();
     private final JComboBox<String> profile = new JComboBox<>(new String[]{"", "local", "dev", "prod"});
@@ -142,20 +188,24 @@ final class ServersPanel extends SimpleToolWindowPanel {
     private Boot detailBoot;
     // WAS 칸
     private final JBLabel wasTitle = new JBLabel();
+    private final Pill wasState = new Pill();
     private final JBLabel wasStatus = new JBLabel();
-    private final JBLabel wasSummary = new JBLabel();
+    private final JPanel wasSummary = new JPanel(new BorderLayout());
     private WasSettings.Server detailServer;
+    // 고른 서버가 실패했을 때 오른쪽 칸 위에 보이는 오류 띠
+    private final InlineBanner errorBanner = new InlineBanner("", EditorNotificationPanel.Status.Error);
+    private final JPanel bannerRow = new JPanel(new BorderLayout());
 
     ServersPanel(Project project, ToolWindow toolWindow) {
         super(true, true);
         this.project = project;
+        this.toolWindow = toolWindow;
         this.parent = toolWindow.getDisposable();
 
         table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         table.setShowGrid(false);
         table.setRowHeight(JBUI.scale(ROW_HEIGHT));
-        table.setDefaultRenderer(Object.class, new CellRenderer());
-        table.getColumnModel().getColumn(1).setCellRenderer(new StateRenderer());
+        table.setDefaultRenderer(Object.class, new RowRenderer());
         table.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
                 showDetail();
@@ -175,18 +225,32 @@ final class ServersPanel extends SimpleToolWindowPanel {
             }
         });
 
+        // 자주 쓰는 동작은 왼쪽 막대, 새로고침은 오른쪽 끝 막대. 우클릭 메뉴에는 둘 다 넣는다.
         DefaultActionGroup group = actions();
+        AnAction reload = reloadAction();
         ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar("BootServers.Toolbar", group, true);
         toolbar.setTargetComponent(table);
-        setToolbar(toolbar.getComponent());
-        PopupHandler.installPopupMenu(table, group, "BootServers.Popup");
+        ActionToolbar sideToolbar = ActionManager.getInstance().createActionToolbar("BootServers.Toolbar.Side", new DefaultActionGroup(reload), true);
+        sideToolbar.setTargetComponent(table);
+        JPanel bars = new JPanel(new BorderLayout());
+        bars.add(toolbar.getComponent(), BorderLayout.CENTER);
+        bars.add(sideToolbar.getComponent(), BorderLayout.EAST);
+        setToolbar(bars);
+        PopupHandler.installPopupMenu(table, new DefaultActionGroup(group, Separator.getInstance(), reload), "BootServers.Popup");
 
         detail.add(emptyCard(), "none");
         detail.add(bootCard(), "boot");
         detail.add(wasCard(), "was");
+        errorBanner.showCloseButton(false);
+        bannerRow.add(errorBanner, BorderLayout.CENTER);
+        bannerRow.setBorder(JBUI.Borders.empty(UIUtil.DEFAULT_VGAP, UIUtil.DEFAULT_HGAP, 0, UIUtil.DEFAULT_HGAP));
+        bannerRow.setVisible(false);
+        JPanel side = new JPanel(new BorderLayout());
+        side.add(bannerRow, BorderLayout.NORTH);
+        side.add(detail, BorderLayout.CENTER);
         OnePixelSplitter splitter = new OnePixelSplitter(false, 0.66f);
         splitter.setFirstComponent(ScrollPaneFactory.createScrollPane(table, true));
-        splitter.setSecondComponent(detail);
+        splitter.setSecondComponent(side);
         setContent(splitter);
 
         // 실행 시간 · 상태를 1초마다 다시 그린다. 상태가 바뀐 줄이 있으면 프로젝트 트리 표시도 맞춘다.
@@ -242,7 +306,8 @@ final class ServersPanel extends SimpleToolWindowPanel {
                 .finishOnUiThread(ModalityState.any(), found -> {
                     bootModules = found;
                     rebuildRows();
-                    table.getEmptyText().setText(BootServersBundle.message("servers.empty.none"));
+                    table.getEmptyText().setText(BootServersBundle.message("servers.empty.none"))
+                            .appendSecondaryText(BootServersBundle.message("servers.action.add.was"), SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES, e -> editWas(null));
                 })
                 .submit(AppExecutorUtil.getAppExecutorService());
     }
@@ -313,8 +378,38 @@ final class ServersPanel extends SimpleToolWindowPanel {
         shownStates = states;
         model.fireTableRowsUpdated(0, rows.size() - 1);
         updateStatus();
+        updateTitle(states);
         if (changed) {
             ProjectView.getInstance(project).refresh();
+        }
+    }
+
+    /** 창 제목 옆에 실행 중 · 실패 개수를 보인다. 올린 프로젝트 줄은 세지 않고, 글이 바뀔 때만 고친다. */
+    private void updateTitle(Map<Object, ServerLauncher.State> states) {
+        int running = 0;
+        int failed = 0;
+        for (Map.Entry<Object, ServerLauncher.State> e : states.entrySet()) {
+            if (e.getKey() instanceof Deploy) {
+                continue;
+            }
+            if (e.getValue() == ServerLauncher.State.RUNNING) {
+                running++;
+            }
+            else if (e.getValue() == ServerLauncher.State.FAILED) {
+                failed++;
+            }
+        }
+        List<String> parts = new ArrayList<>();
+        if (running > 0) {
+            parts.add(BootServersBundle.message("servers.title.count", ServerLauncher.State.RUNNING.label(), running));
+        }
+        if (failed > 0) {
+            parts.add(BootServersBundle.message("servers.title.count", ServerLauncher.State.FAILED.label(), failed));
+        }
+        String title = String.join(JOIN, parts);
+        if (!title.equals(shownTitle)) {
+            shownTitle = title;
+            toolWindow.setTitle(title);
         }
     }
 
@@ -445,15 +540,22 @@ final class ServersPanel extends SimpleToolWindowPanel {
         });
         g.add(groupMenu());
         g.addSeparator();
-        g.add(action(BootServersBundle.message("servers.action.duplicate"), AllIcons.Actions.Copy, t -> t instanceof Boot b && b.settings() != null, this::duplicate));
-        g.add(action(BootServersBundle.message("servers.action.publish"), AllIcons.Actions.Compile, t -> t instanceof WasSettings.Server && isLive(stateOf(t)), this::publish));
         g.add(action(BootServersBundle.message("servers.action.open.browser"), AllIcons.General.Web, t -> stateOf(t) == ServerLauncher.State.RUNNING, this::openBrowser));
         g.add(action(BootServersBundle.message("servers.action.console"), AllIcons.Debugger.Console, t -> isLive(stateOf(t)), this::showConsoleOrStart));
         g.add(action(BootServersBundle.message("servers.action.edit.settings"), AllIcons.Actions.EditSource, t -> true, this::editSettings));
-        g.add(action(BootServersBundle.message("servers.action.remove.was"), AllIcons.General.Remove, t -> t instanceof WasSettings.Server && !isLive(stateOf(t)), this::removeWas));
-        g.add(action(BootServersBundle.message("servers.action.log.files"), AllIcons.FileTypes.Text, t -> t instanceof WasSettings.Server, this::showLogFiles));
-        g.addSeparator();
-        g.add(new AnAction(BootServersBundle.message("servers.action.reload"), null, AllIcons.Actions.Refresh) {
+        // 덜 쓰는 동작은 「⋯」 묶음에 둔다.
+        DefaultActionGroup more = new DefaultActionGroup(BootServersBundle.message("servers.action.more"), true);
+        more.getTemplatePresentation().setIcon(AllIcons.Actions.More);
+        more.add(action(BootServersBundle.message("servers.action.duplicate"), AllIcons.Actions.Copy, t -> t instanceof Boot b && b.settings() != null, this::duplicate));
+        more.add(action(BootServersBundle.message("servers.action.publish"), AllIcons.Actions.Compile, t -> t instanceof WasSettings.Server && isLive(stateOf(t)), this::publish));
+        more.add(action(BootServersBundle.message("servers.action.remove.was"), AllIcons.General.Remove, t -> t instanceof WasSettings.Server && !isLive(stateOf(t)), this::removeWas));
+        more.add(action(BootServersBundle.message("servers.action.log.files"), AllIcons.FileTypes.Text, t -> t instanceof WasSettings.Server, this::showLogFiles));
+        g.add(more);
+        return g;
+    }
+
+    private AnAction reloadAction() {
+        return new AnAction(BootServersBundle.message("servers.action.reload"), null, AllIcons.Actions.Refresh) {
             @Override
             public void actionPerformed(@NotNull AnActionEvent e) {
                 reload();
@@ -463,8 +565,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
             public @NotNull ActionUpdateThread getActionUpdateThread() {
                 return ActionUpdateThread.EDT;
             }
-        });
-        return g;
+        };
     }
 
     /** 고른 대상 가운데 조건에 맞는 것에만 적용되는 동작. 맞는 대상이 하나도 없으면 꺼진다. */
@@ -923,10 +1024,30 @@ final class ServersPanel extends SimpleToolWindowPanel {
         return JBUI.Borders.empty(UIUtil.DEFAULT_VGAP * 2, UIUtil.DEFAULT_HGAP);
     }
 
+    /** 아무 줄도 고르지 않았을 때: 가운데 회색 안내 두 줄. */
     private static JComponent emptyCard() {
-        JPanel p = FormBuilder.createFormBuilder().addComponent(new JBLabel(BootServersBundle.message("servers.detail.choose"))).addComponentFillVertically(new JPanel(), 0).getPanel();
-        p.setBorder(cardBorder());
+        JBPanelWithEmptyText p = new JBPanelWithEmptyText();
+        p.getEmptyText().setText(BootServersBundle.message("servers.detail.choose"))
+                .appendLine(BootServersBundle.message("servers.detail.choose.hint"), SimpleTextAttributes.GRAYED_ATTRIBUTES, null);
         return p;
+    }
+
+    /** 오른쪽 칸 머리 줄: 아이콘 붙은 굵은 이름 + 상태 꼬리표. */
+    private static JComponent header(JBLabel title, Pill state) {
+        title.setFont(JBUI.Fonts.label().asBold());
+        JPanel head = new JPanel();
+        head.setLayout(new BoxLayout(head, BoxLayout.X_AXIS));
+        head.add(title);
+        head.add(Box.createHorizontalStrut(JBUI.scale(UIUtil.DEFAULT_HGAP)));
+        head.add(state);
+        head.add(Box.createHorizontalGlue());
+        return head;
+    }
+
+    private static JBLabel grayLabel(String text) {
+        JBLabel label = new JBLabel(text);
+        label.setForeground(NamedColorUtil.getInactiveTextColor());
+        return label;
     }
 
     private JComponent bootCard() {
@@ -934,19 +1055,25 @@ final class ServersPanel extends SimpleToolWindowPanel {
         profile.setEditable(true);
         vmOptions.getEmptyText().setText(BootServersBundle.message("servers.boot.vm.hint"));
         port.getEmptyText().setText(BootServersBundle.message("servers.boot.port.hint"));
-        bootTitle.setFont(JBUI.Fonts.label().asBold());
         bootStatus.setForeground(NamedColorUtil.getInactiveTextColor());
         JButton apply = new JButton(BootServersBundle.message("servers.boot.apply"));
+        apply.putClientProperty(DarculaButtonUI.DEFAULT_STYLE_KEY, true);
         // 2026.2 는 버튼 클릭을 읽기 잠금 없이 처리한다. 설정이 없으면 PSI 로 메인 클래스를 찾으므로 잠금 안에서 돌린다.
         apply.addActionListener(e -> WriteIntentReadAction.run(() -> applyBoot()));
+        JPanel applyRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        applyRow.add(apply);
+        applyRow.add(Box.createHorizontalStrut(JBUI.scale(UIUtil.DEFAULT_HGAP)));
+        applyRow.add(grayLabel(BootServersBundle.message("servers.boot.apply.hint")));
         JPanel p = FormBuilder.createFormBuilder()
-                .addComponent(bootTitle)
+                .addComponent(header(bootTitle, bootState))
                 .addComponent(bootStatus)
+                .addComponent(new TitledSeparator(BootServersBundle.message("servers.boot.section.run")))
                 .addLabeledComponent(BootServersBundle.message("servers.boot.name"), bootName)
                 .addLabeledComponent(BootServersBundle.message("servers.boot.profile"), profile)
-                .addLabeledComponent(BootServersBundle.message("servers.boot.vm"), vmOptions)
                 .addLabeledComponent(BootServersBundle.message("servers.boot.port"), port)
-                .addComponent(apply)
+                .addComponent(new TitledSeparator(BootServersBundle.message("servers.boot.vm")))
+                .addComponent(vmOptions)
+                .addComponent(applyRow)
                 .addComponentFillVertically(new JPanel(), 0)
                 .getPanel();
         p.setBorder(cardBorder());
@@ -954,24 +1081,53 @@ final class ServersPanel extends SimpleToolWindowPanel {
     }
 
     private JComponent wasCard() {
-        wasTitle.setFont(JBUI.Fonts.label().asBold());
+        wasTitle.setIcon(AllIcons.Webreferences.Server);
         wasStatus.setForeground(NamedColorUtil.getInactiveTextColor());
-        wasSummary.setVerticalAlignment(JBLabel.TOP);
         JButton edit = new JButton(BootServersBundle.message("servers.action.edit.settings"));
         edit.addActionListener(e -> {
             if (detailServer != null) {
                 editWas(detailServer);
             }
         });
+        JPanel editRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        editRow.add(edit);
         JPanel p = FormBuilder.createFormBuilder()
-                .addComponent(wasTitle)
+                .addComponent(header(wasTitle, wasState))
                 .addComponent(wasStatus)
                 .addComponent(wasSummary)
-                .addComponent(edit)
+                .addComponent(editRow)
                 .addComponentFillVertically(new JPanel(), 0)
                 .getPanel();
         p.setBorder(cardBorder());
         return p;
+    }
+
+    /** WAS 설정 요약: 회색 이름표 + 값 두 줄 칸, 그 아래 올린 프로젝트를 아이콘 붙은 줄로. */
+    private static JComponent wasSummaryOf(WasSettings.Server s) {
+        FormBuilder form = FormBuilder.createFormBuilder()
+                .addLabeledComponent(grayLabel(BootServersBundle.message("servers.was.kind")), new JBLabel(s.kind().label))
+                .addLabeledComponent(grayLabel(BootServersBundle.message("servers.was.home")), valueLabel(s.home))
+                .addLabeledComponent(grayLabel(BootServersBundle.message("servers.was.ports.label")),
+                        new JBLabel(BootServersBundle.message("servers.was.ports", s.httpPort, s.shutdownPort, s.debugPort)))
+                .addLabeledComponent(grayLabel(BootServersBundle.message("servers.boot.vm")),
+                        valueLabel(s.vmOptions.isBlank() ? BootServersBundle.message("servers.was.vm.none") : s.vmOptions))
+                .addLabeledComponent(grayLabel(BootServersBundle.message("servers.was.reload")),
+                        new JBLabel(s.reloadable ? BootServersBundle.message("servers.was.reload.on") : BootServersBundle.message("servers.was.reload.off")))
+                .addComponent(new TitledSeparator(BootServersBundle.message("servers.was.deployments")));
+        if (s.deployments.isEmpty()) {
+            form.addComponent(grayLabel(BootServersBundle.message("servers.was.deployments.none")));
+        }
+        for (WasSettings.Deployment d : s.deployments) {
+            form.addComponent(new JBLabel(BootServersBundle.message("servers.was.deployment", d.module, d.contextPath), AllIcons.Nodes.WebFolder, SwingConstants.LEFT));
+        }
+        return form.getPanel();
+    }
+
+    /** 칸보다 길 수 있는 값(설치 폴더 · VM 옵션). 잘리면 말풍선으로 전체를 보인다. */
+    private static JBLabel valueLabel(String text) {
+        JBLabel label = new JBLabel(text);
+        label.setToolTipText(text);
+        return label;
     }
 
     private void showDetail() {
@@ -979,7 +1135,8 @@ final class ServersPanel extends SimpleToolWindowPanel {
         detailBoot = row instanceof Boot b ? b : null;
         detailServer = row instanceof Deploy d ? d.server() : row instanceof WasSettings.Server s ? s : null;
         if (detailBoot != null) {
-            bootTitle.setText(BootServersBundle.message("servers.boot.title", detailBoot.module().getName()));
+            bootTitle.setText(detailBoot.name());
+            bootTitle.setIcon(bootIcon(detailBoot));
             bootName.setText(detailBoot.name());
             String vm = vmOf(detailBoot);
             profile.setSelectedItem(getProperty(vm, PROFILE_KEY));
@@ -988,20 +1145,11 @@ final class ServersPanel extends SimpleToolWindowPanel {
             cards.show(detail, "boot");
         }
         else if (detailServer != null) {
-            WasSettings.Server s = detailServer;
-            wasTitle.setText(s.name);
-            StringBuilder html = new StringBuilder("<html>")
-                    .append(s.kind().label).append(" · ").append(escape(s.home)).append("<br>")
-                    .append(BootServersBundle.message("servers.was.ports", s.httpPort, s.shutdownPort, s.debugPort)).append("<br>")
-                    .append(BootServersBundle.message("servers.was.vm", s.vmOptions.isBlank() ? BootServersBundle.message("servers.was.vm.none") : escape(s.vmOptions))).append("<br>")
-                    .append(s.reloadable ? BootServersBundle.message("servers.was.reload.on") : BootServersBundle.message("servers.was.reload.off")).append("<br><br>").append(BootServersBundle.message("servers.was.deployments")).append("<br>");
-            if (s.deployments.isEmpty()) {
-                html.append("· ").append(BootServersBundle.message("servers.was.deployments.none"));
-            }
-            for (WasSettings.Deployment d : s.deployments) {
-                html.append("· ").append(escape(d.module)).append(" → ").append(escape(d.contextPath)).append("<br>");
-            }
-            wasSummary.setText(html.append("</html>").toString());
+            wasTitle.setText(detailServer.name);
+            wasSummary.removeAll();
+            wasSummary.add(wasSummaryOf(detailServer), BorderLayout.CENTER);
+            wasSummary.revalidate();
+            wasSummary.repaint();
             cards.show(detail, "was");
         }
         else {
@@ -1010,26 +1158,58 @@ final class ServersPanel extends SimpleToolWindowPanel {
         updateStatus();
     }
 
+    /** 오른쪽 칸 머리의 상태 꼬리표 · 회색 보조 줄(모듈 · 포트 · 실행 시간)과, 실패했으면 위쪽 오류 띠를 맞춘다. */
     private void updateStatus() {
+        String error = null;
         if (detailBoot != null) {
             ServerRegistry.Run run = ServerRegistry.getInstance(project).get(detailBoot.name());
             ServerLauncher.State state = stateOf(detailBoot);
-            String text = state.label();
-            if (state == ServerLauncher.State.FAILED && run != null && run.error != null) {
-                text += " · " + run.error;
+            showState(bootState, state);
+            List<String> parts = new ArrayList<>();
+            parts.add(BootServersBundle.message("servers.boot.module", detailBoot.module().getName()));
+            if (detailBoot.settings() == null) {
+                parts.add(BootServersBundle.message("servers.boot.no.config"));
             }
-            else if (detailBoot.settings() == null) {
-                text += " · " + BootServersBundle.message("servers.boot.no.config");
+            else {
+                addIfPresent(parts, model.bootCell(detailBoot, 2));
+                addIfPresent(parts, model.bootCell(detailBoot, 4));
             }
+            String text = String.join(JOIN, parts);
             bootStatus.setText(text);
             bootStatus.setToolTipText(text);
+            if (state == ServerLauncher.State.FAILED) {
+                error = run != null && run.error != null ? run.error : state.label();
+            }
         }
         if (detailServer != null) {
             ServerRegistry.Run run = ServerRegistry.getInstance(project).get(WasRunner.registryKey(detailServer));
             ServerLauncher.State state = WasRunner.getInstance(project).state(detailServer);
-            String text = state.label() + (state == ServerLauncher.State.FAILED && run != null && run.error != null ? " · " + run.error : "");
+            showState(wasState, state);
+            List<String> parts = new ArrayList<>();
+            parts.add(detailServer.kind().label);
+            parts.add(":" + detailServer.httpPort);
+            if (state == ServerLauncher.State.RUNNING && run != null) {
+                parts.add(uptime(run.startMillis));
+            }
+            String text = String.join(JOIN, parts);
             wasStatus.setText(text);
             wasStatus.setToolTipText(text);
+            if (state == ServerLauncher.State.FAILED) {
+                error = run != null && run.error != null ? run.error : state.label();
+            }
+        }
+        if (error != null) {
+            errorBanner.setMessage(error);
+        }
+        if (bannerRow.isVisible() != (error != null)) {
+            bannerRow.setVisible(error != null);
+            bannerRow.revalidate();
+        }
+    }
+
+    private static void addIfPresent(List<String> parts, Object cell) {
+        if (cell != null && !EMPTY.equals(cell.toString())) {
+            parts.add(cell.toString());
         }
     }
 
@@ -1085,10 +1265,6 @@ final class ServersPanel extends SimpleToolWindowPanel {
     private static String vmOf(Boot b) {
         String vm = b.settings() == null ? null : ((ApplicationConfiguration) b.settings().getConfiguration()).getVMParameters();
         return vm == null ? "" : vm;
-    }
-
-    private static String escape(String s) {
-        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
     // ---- VM 옵션의 -Dkey=value ----
@@ -1151,8 +1327,8 @@ final class ServersPanel extends SimpleToolWindowPanel {
             }
             if (r instanceof Deploy d) {
                 return switch (column) {
-                    case 0 -> "    └ " + d.deployment().module;
-                    case 1 -> shownState(d) == ServerLauncher.State.RUNNING ? BootServersBundle.message("servers.deploy.up") : "-";
+                    case 0 -> d.deployment().module;
+                    case 1 -> shownState(d) == ServerLauncher.State.RUNNING ? BootServersBundle.message("servers.deploy.up") : EMPTY;
                     case 3 -> d.deployment().contextPath;
                     default -> "";
                 };
@@ -1161,11 +1337,11 @@ final class ServersPanel extends SimpleToolWindowPanel {
             ServerLauncher.State state = shownState(s);
             ServerRegistry.Run run = ServerRegistry.getInstance(project).get(WasRunner.registryKey(s));
             return switch (column) {
-                case 0 -> s.name + "  [" + s.kind().label + "]";
+                case 0 -> s.name;
                 case 1 -> state;
                 case 2 -> ":" + s.httpPort;
-                case 3 -> "-";
-                default -> state == ServerLauncher.State.RUNNING && run != null ? uptime(run.startMillis) : "-";
+                case 3 -> EMPTY;
+                default -> state == ServerLauncher.State.RUNNING && run != null ? uptime(run.startMillis) : EMPTY;
             };
         }
 
@@ -1178,41 +1354,124 @@ final class ServersPanel extends SimpleToolWindowPanel {
                 case 1 -> state;
                 case 2 -> state == ServerLauncher.State.RUNNING && run != null && run.port != null
                         ? ":" + run.port
-                        : getProperty(vm, PORT_KEY).isEmpty() ? "-" : ":" + getProperty(vm, PORT_KEY);
-                case 3 -> getProperty(vm, PROFILE_KEY).isEmpty() ? "-" : getProperty(vm, PROFILE_KEY);
-                default -> state == ServerLauncher.State.RUNNING && run != null ? uptime(run.startMillis) : "-";
+                        : getProperty(vm, PORT_KEY).isEmpty() ? EMPTY : ":" + getProperty(vm, PORT_KEY);
+                case 3 -> getProperty(vm, PROFILE_KEY).isEmpty() ? EMPTY : getProperty(vm, PROFILE_KEY);
+                default -> state == ServerLauncher.State.RUNNING && run != null ? uptime(run.startMillis) : EMPTY;
             };
         }
     }
 
-    /** 모든 칸의 기본 그리기. 좌우 여백을 두고, 실행 설정이 없는 자리 줄의 이름은 회색으로 보인다. */
-    private final class CellRenderer extends ColoredTableCellRenderer {
-        @Override
-        protected void customizeCellRenderer(@NotNull JTable table, Object value, boolean selected, boolean hasFocus, int row, int column) {
-            setIpad(JBUI.insets(0, CELL_PAD));
-            boolean placeholder = column == 0 && row < rows.size() && rows.get(row) instanceof Boot b && b.settings() == null;
-            append(value == null ? "" : value.toString(), placeholder ? SimpleTextAttributes.GRAYED_ATTRIBUTES : SimpleTextAttributes.REGULAR_ATTRIBUTES);
+    private static Icon bootIcon(Boot b) {
+        return b.settings() == null ? IconLoader.getDisabledIcon(AllIcons.RunConfigurations.Application) : AllIcons.RunConfigurations.Application;
+    }
+
+    /** 상태 꼬리표: 실행 중 · 시작 중 · 실패는 테마 바탕 위 성공 · 경고 · 오류 글 색, 중지됨은 흐린 글 색. */
+    private static void showState(Pill pill, ServerLauncher.State state) {
+        String text = STATE_DOT + state.label();
+        switch (state) {
+            case RUNNING -> pill.show(text, UIUtil.getLabelSuccessForeground(), RUNNING_BG);
+            case STARTING -> pill.show(text, JBUI.CurrentTheme.Label.warningForeground(), STARTING_BG);
+            case FAILED -> pill.show(text, JBUI.CurrentTheme.Label.errorForeground(), FAILED_BG);
+            case STOPPED -> pill.show(state.label(), NamedColorUtil.getInactiveTextColor(), null);
         }
     }
 
-    private static final class StateRenderer extends ColoredTableCellRenderer {
+    /**
+     * 모든 칸의 그리기. 글 칸(아이콘 · 글) 오른쪽에 꼬리표를 붙인다.
+     * 서버 칸: 줄 종류 아이콘, 실행 설정 이름 끝 괄호는 회색, 자리 줄은 회색 기울임 + 「설정 없음」, WAS 는 종류 꼬리표, 올린 프로젝트는 들여 쓴다.
+     * 상태 칸: 중지됨만 회색 글, 나머지는 상태 꼬리표. 프로필 칸: 프로필 꼬리표, 올린 프로젝트의 경로는 회색 고정폭.
+     * 꺼진 서버의 포트 · 실행 시간과 값 없음은 회색이다.
+     */
+    private final class RowRenderer implements TableCellRenderer {
+        private final Pill pill = new Pill();
+        private final ColoredTableCellRenderer text = new ColoredTableCellRenderer() {
+            @Override
+            protected void customizeCellRenderer(@NotNull JTable table, Object value, boolean selected, boolean hasFocus, int row, int column) {
+                setFont(table.getFont());
+                setIpad(JBUI.insets(0, CELL_PAD));
+                if (row < rows.size()) {
+                    customizeCell(this, rows.get(row), value, column);
+                }
+            }
+        };
+        private final JPanel panel = new JPanel(new BorderLayout());
+
+        RowRenderer() {
+            panel.add(text, BorderLayout.WEST);
+            panel.add(pill, BorderLayout.CENTER);
+        }
 
         @Override
-        protected void customizeCellRenderer(@NotNull JTable table, Object value, boolean selected, boolean hasFocus, int row, int column) {
-            setIpad(JBUI.insets(0, CELL_PAD));
-            if (!(value instanceof ServerLauncher.State state)) {
-                append(value == null ? "" : value.toString(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+        public Component getTableCellRendererComponent(JTable table, Object value, boolean selected, boolean hasFocus, int row, int column) {
+            pill.clear();
+            Component c = text.getTableCellRendererComponent(table, value, selected, hasFocus, row, column);
+            panel.setBackground(c.getBackground());
+            return panel;
+        }
+
+        private void customizeCell(ColoredTableCellRenderer cell, Object r, Object value, int column) {
+            String shown = value == null ? "" : value.toString();
+            if (EMPTY.equals(shown)) {
+                cell.append(shown, SimpleTextAttributes.GRAYED_ATTRIBUTES);
                 return;
             }
-            // 상태 점 색은 테마의 성공 · 경고 · 오류 · 흐린 글 색을 따른다.
-            Color color = switch (state) {
-                case RUNNING -> UIUtil.getLabelSuccessForeground();
-                case STARTING -> JBUI.CurrentTheme.Label.warningForeground();
-                case FAILED -> JBUI.CurrentTheme.Label.errorForeground();
-                case STOPPED -> NamedColorUtil.getInactiveTextColor();
-            };
-            append("● ", new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, color));
-            append(state.label());
+            switch (column) {
+                case 0 -> customizeName(cell, r, shown);
+                case 1 -> {
+                    if (!(value instanceof ServerLauncher.State state)) {
+                        cell.append(shown);
+                    }
+                    else if (state == ServerLauncher.State.STOPPED) {
+                        cell.append(state.label(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+                    }
+                    else {
+                        cell.setIpad(JBUI.insetsLeft(CELL_PAD));
+                        showState(pill, state);
+                    }
+                }
+                case 3 -> {
+                    if (r instanceof Deploy) {
+                        cell.setFont(new Font(Font.MONOSPACED, Font.PLAIN, JBUI.Fonts.smallFont().getSize()));
+                        cell.append(shown, SimpleTextAttributes.GRAYED_ATTRIBUTES);
+                    }
+                    else {
+                        Color color = PROFILE_COLORS.get(shown);
+                        cell.setIpad(JBUI.insetsLeft(CELL_PAD));
+                        pill.show(shown, color != null ? color : NamedColorUtil.getInactiveTextColor(), null);
+                    }
+                }
+                default -> cell.append(shown, isLive(shownState(r)) ? SimpleTextAttributes.REGULAR_ATTRIBUTES : SimpleTextAttributes.GRAYED_ATTRIBUTES);
+            }
+        }
+
+        private void customizeName(ColoredTableCellRenderer cell, Object r, String name) {
+            if (r instanceof Deploy) {
+                cell.setIpad(JBUI.insets(0, CELL_PAD + DEPLOY_INDENT, 0, CELL_PAD));
+                cell.setIcon(AllIcons.Nodes.WebFolder);
+                cell.append(name);
+                return;
+            }
+            if (r instanceof WasSettings.Server s) {
+                cell.setIcon(AllIcons.Webreferences.Server);
+                cell.append(name);
+                pill.show(s.kind().label, KIND_COLORS.getOrDefault(s.kind(), NamedColorUtil.getInactiveTextColor()), null);
+                return;
+            }
+            Boot b = (Boot) r;
+            cell.setIcon(bootIcon(b));
+            if (b.settings() == null) {
+                cell.append(name, SimpleTextAttributes.GRAYED_ITALIC_ATTRIBUTES);
+                cell.append(" " + BootServersBundle.message("servers.boot.no.config.short"), SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES);
+                return;
+            }
+            int suffix = name.lastIndexOf(SUFFIX_OPEN);
+            if (suffix > 0 && name.endsWith(SUFFIX_CLOSE)) {
+                cell.append(name.substring(0, suffix));
+                cell.append(name.substring(suffix), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+            }
+            else {
+                cell.append(name);
+            }
         }
     }
 }

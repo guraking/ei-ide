@@ -51,4 +51,18 @@ public final class ErdLayout {
     memo.put(t, d);
     return d;
   }
+
+  /** category 가 접두어로 보는 첫 토막의 최대 길이(TB_ · T_ · TBL_ 등). */
+  private static final int PREFIX_MAX = 3;
+
+  /**
+   * 표 머리 색 띠 번호(0 ~ count-1). 이름을 _ 로 나눠 짧은 접두어(PREFIX_MAX 글자 이하) 첫 토막은 빼고 다음 토막으로 고른다.
+   * 그래서 TB_ORDER · TB_ORDER_ITEM 은 같은 번호(ORDER)다. 대소문자는 가리지 않는다.
+   */
+  public static int category(String table, int count) {
+    String[] parts = table.toUpperCase(java.util.Locale.ROOT).split("_");
+    if (parts.length == 0) return 0;
+    String key = parts.length > 1 && parts[0].length() <= PREFIX_MAX && !parts[1].isEmpty() ? parts[1] : parts[0];
+    return Math.floorMod(key.hashCode(), count);
+  }
 }

@@ -379,6 +379,52 @@
       "Violet": "#412B50",
       "Yellow": "#50461D"
     },
+    "EIServers": {
+      "runningBackground": "glass-success-bg",
+      "startingBackground": "glass-high-bg",
+      "failedBackground": "glass-urgent-bg",
+      "tag.local": "glass-cat-4",
+      "tag.dev": "glass-cat-2",
+      "tag.prod": "glass-cat-10",
+      "tag.tomcat": "glass-cat-6",
+      "tag.jeus": "glass-cat-2",
+      "tag.weblogic": "glass-cat-8",
+      "tag.wildfly": "glass-cat-1"
+    },
+    "EILog": {
+      "infoForeground": "glass-cat-7",
+      "match.background": "glass-accent-30"
+    },
+    "EIMemo": {
+      "lockForeground": "glass-accent"
+    },
+    "EiDatabase": {
+      "connected": "glass-cat-4",
+      "production": "glass-urgent",
+      "productionBackground": "glass-urgent-bg",
+      "readOnly": "glass-cat-2",
+      "readOnlyBackground": "glass-info-bg",
+      "pk": "glass-cat-6",
+      "pkBackground": "glass-high-bg",
+      "fk": "glass-cat-2",
+      "fkBackground": "glass-info-bg",
+      "pending": "glass-high",
+      "pendingBackground": "glass-high-bg",
+      "countBackground": "glass-success-bg",
+      "number": "glass-cat-7",
+      "selection": "glass-accent",
+      "selectionBackground": "glass-accent-bg",
+      "erd.cat1": "glass-cat-1",
+      "erd.cat2": "glass-cat-2",
+      "erd.cat3": "glass-cat-3",
+      "erd.cat4": "glass-cat-4",
+      "erd.cat5": "glass-cat-5",
+      "erd.cat6": "glass-cat-6",
+      "erd.cat7": "glass-cat-7",
+      "erd.cat8": "glass-cat-8",
+      "erd.cat9": "glass-cat-9",
+      "erd.cat10": "glass-cat-10"
+    },
     "VersionControl": {
       "GitLog": {
         "headIconColor": "glass-cat-9",

@@ -30,6 +30,7 @@ import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.SearchTextField;
 import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.components.JBLabel;
+import com.intellij.ui.content.Content;
 import com.intellij.ui.treeStructure.Tree;
 import com.intellij.util.Alarm;
 import com.intellij.util.concurrency.AppExecutorUtil;
@@ -45,7 +46,9 @@ import ei.db.Meta;
 import ei.db.Notify;
 import ei.db.Passwords;
 import ei.db.SqlRunner;
+import ei.db.console.Badge;
 import ei.db.console.ConsoleOpener;
+import ei.db.console.KindIcon;
 import ei.db.console.XlsxExport;
 import ei.db.gen.ErdView;
 import ei.db.gen.FeatureDialog;
@@ -56,6 +59,7 @@ import org.jetbrains.annotations.NotNull;
 import javax.swing.Icon;
 import javax.swing.JPanel;
 import javax.swing.JTree;
+import javax.swing.SwingConstants;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.TreeExpansionEvent;
 import javax.swing.event.TreeWillExpandListener;
@@ -66,9 +70,8 @@ import javax.swing.tree.TreePath;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.FontMetrics;
 import java.awt.Graphics;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -102,9 +105,17 @@ final class DbExplorer extends SimpleToolWindowPanel {
   private static final Message LOADING = new Message(EiDbBundle.message("explorer.loading"), false);
   private static final Color CONNECTED = JBColor.namedColor("EiDatabase.connected", new JBColor(0x3E9B47, 0x5FB865));
   private static final Color DANGER = JBColor.namedColor("EiDatabase.production", new JBColor(0xD9363E, 0xF75464));
-  private static final Color KEY_TAG = JBColor.namedColor("EiDatabase.keyTag", new JBColor(0xB07400, 0xE0A64F));
-  private static final int DOT_SIZE = 8;
-  private static final int DOT_BOX = 16;
+  private static final Color PRODUCTION_BG = JBColor.namedColor("EiDatabase.productionBackground", new JBColor(0xFADBDC, 0x4D2A2C));
+  private static final Color READ_ONLY = JBColor.namedColor("EiDatabase.readOnly", new JBColor(0x2F63D3, 0x6F9DF7));
+  private static final Color READ_ONLY_BG = JBColor.namedColor("EiDatabase.readOnlyBackground", new JBColor(0xDCE7FC, 0x22334D));
+  /** 이름 뒤 꼬리표(운영 · 읽기 전용): 바탕을 칠한 작은 굵은 글. 글 양옆 빈칸이 바탕 여백이 된다. */
+  private static final int TAG_STYLE = SimpleTextAttributes.STYLE_OPAQUE | SimpleTextAttributes.STYLE_SMALLER | SimpleTextAttributes.STYLE_BOLD;
+  private static final String TAG_PAD = " ";
+  /** 이름 · 주석 · 주소 사이 간격 글. */
+  private static final String SPACE = "  ";
+  /** 칼럼 줄의 PK · FK 꼬리표 칸 최소 폭과 칼럼 아이콘과의 간격(px, 배율 전). */
+  private static final int KEY_TAG_WIDTH = 24;
+  private static final int KEY_TAG_GAP = 4;
   /** 찾기 칸 입력이 이만큼 멈춘 뒤에 나무를 다시 거른다(글자마다 전체를 다시 그리지 않게). */
   private static final int FILTER_DELAY_MS = 200;
 
@@ -121,6 +132,11 @@ final class DbExplorer extends SimpleToolWindowPanel {
     final Meta.Table table;
     /** 아직 안 읽었으면 null. 화면 스레드에서만 바꾼다. */
     List<Meta.Column> columns;
+    /**
+     * 칼럼 줄에서 형식 글을 오른쪽 정렬할 끝 위치(px, 글 시작 기준). 0 이면 아직 안 쟀다. 화면 스레드에서만 쓴다.
+     * shortcut: 처음 그릴 때의 글꼴로 한 번만 재므로 글꼴 크기를 바꾸면 줄이 덜 맞을 수 있다(겹치지는 않음). 어긋남이 보이면 글꼴별로 다시 잰다.
+     */
+    int typeEnd;
 
     TableItem(DbConfig c, String schema, Meta.Table table) { this.c = c; this.schema = schema; this.table = table; }
   }
@@ -135,6 +151,8 @@ final class DbExplorer extends SimpleToolWindowPanel {
   private final Alarm filterAlarm;
   private final Set<DefaultMutableTreeNode> loading = Collections.newSetFromMap(new IdentityHashMap<>());
   private final ExecutorService metaQueue = AppExecutorUtil.createBoundedApplicationPoolExecutor("EI Database 탐색기", 1);
+  /** 창 머리에 「접속 N / M」을 보일 내용 탭. attach 전에는 null. */
+  private Content content;
 
   DbExplorer(Project project, Disposable parent) {
     super(true, true);
@@ -189,14 +207,17 @@ final class DbExplorer extends SimpleToolWindowPanel {
     });
 
     DefaultActionGroup bar = new DefaultActionGroup();
+    // 묶음: 추가 · 새로고침 │ 콘솔 · 찾기 │ 끊기 · 편집 · 삭제 │ 더 보기.
     bar.add(new Act(EiDbBundle.message("connect.title.add"), AllIcons.General.Add, () -> true, this::addConnection));
     bar.add(new Act(EiDbBundle.message("explorer.refresh"), AllIcons.Actions.Refresh, () -> true, this::refreshSelected));
+    bar.addSeparator();
     bar.add(new Act(EiDbBundle.message("explorer.new.console"), AllIcons.Nodes.Console, () -> selectedConfig() != null, () -> ConsoleOpener.openNew(project, selectedConfig())));
+    bar.add(new Act(EiDbBundle.message("explorer.find"), AllIcons.Actions.Search, () -> selectedConfig() != null, () -> openSearch(selectedConfig())));
+    bar.addSeparator();
     bar.add(new Act(EiDbBundle.message("explorer.disconnect"), AllIcons.Actions.Suspend, this::selectedIsOpen, () -> disconnect(selectedConfig())));
     bar.add(new Act(EiDbBundle.message("explorer.edit"), AllIcons.Actions.Edit, () -> selectedConfig() != null, () -> edit(selectedConfig())));
     bar.add(new Act(EiDbBundle.message("explorer.delete"), AllIcons.General.Remove, () -> selectedConfig() != null, () -> delete(selectedConfig())));
     bar.addSeparator();
-    bar.add(new Act(EiDbBundle.message("explorer.find"), AllIcons.Actions.Search, () -> selectedConfig() != null, () -> openSearch(selectedConfig())));
     DefaultActionGroup more = DefaultActionGroup.createPopupGroup(() -> EiDbBundle.message("explorer.more"));
     more.getTemplatePresentation().setIcon(AllIcons.Actions.More);
     more.add(new Act(EiDbBundle.message("explorer.export"), AllIcons.ToolbarDecorator.Export, () -> !DbSettings.getInstance().connections().isEmpty(), this::exportConnections));
@@ -209,17 +230,39 @@ final class DbExplorer extends SimpleToolWindowPanel {
     JPanel top = new JPanel(new BorderLayout());
     top.setBorder(JBUI.Borders.empty(6));
     top.add(search, BorderLayout.CENTER);
+    // 한 줄 안내. 창이 좁아 잘리면 툴팁으로 전체를 본다.
     JBLabel hint = new JBLabel(EiDbBundle.message("explorer.hint"),
                                UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER);
-    hint.setBorder(JBUI.Borders.empty(6, 8));
+    hint.setToolTipText(EiDbBundle.message("explorer.hint"));
+    hint.setBorder(JBUI.Borders.compound(JBUI.Borders.customLineTop(JBUI.CurrentTheme.ToolWindow.borderColor()), JBUI.Borders.empty(6, 8)));
     JPanel body = new JPanel(new BorderLayout());
     body.add(top, BorderLayout.NORTH);
     body.add(ScrollPaneFactory.createScrollPane(tree, true), BorderLayout.CENTER);
     body.add(hint, BorderLayout.SOUTH);
     setContent(body);
 
-    DbSessions.get(project).addListener(parent, () -> ApplicationManager.getApplication().invokeLater(tree::repaint, project.getDisposed()));
+    DbSessions.get(project).addListener(parent, () -> ApplicationManager.getApplication().invokeLater(() -> {
+      tree.repaint();
+      updateTitle();
+    }, project.getDisposed()));
     rebuild();
+  }
+
+  /** 창 머리에 「접속 N / M」(열린 접속 / 전체 접속)을 보일 내용 탭을 잇는다. */
+  void attach(Content content) {
+    this.content = content;
+    updateTitle();
+  }
+
+  private void updateTitle() {
+    if (content == null) return;
+    List<DbConfig> all = DbSettings.getInstance().connections();
+    DbSessions sessions = DbSessions.get(project);
+    int open = 0;
+    for (DbConfig c : all) {
+      if (sessions.isOpen(c.id)) open++;
+    }
+    content.setDisplayName(all.isEmpty() ? "" : EiDbBundle.message("explorer.title.count", open, all.size()));
   }
 
   // ---- 나무 만들기 · 읽기 ----
@@ -232,6 +275,7 @@ final class DbExplorer extends SimpleToolWindowPanel {
       root.add(conn);
     }
     model.reload();
+    updateTitle();
   }
 
   private static DefaultMutableTreeNode schemaNode(DbConfig c) {
@@ -783,15 +827,17 @@ final class DbExplorer extends SimpleToolWindowPanel {
       Object o = n.getUserObject();
       if (o instanceof Conn conn) {
         DbConfig c = conn.c();
-        setIcon(new Dot(DbSessions.get(project).isOpen(c.id) ? CONNECTED : JBColor.GRAY));
-        append(c.name, c.production ? new SimpleTextAttributes(SimpleTextAttributes.STYLE_BOLD, DANGER) : SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES);
-        if (c.production) append(EiDbBundle.message("explorer.production"), new SimpleTextAttributes(SimpleTextAttributes.STYLE_SMALLER, DANGER));
-        append("  " + (c.readOnly ? EiDbBundle.message("explorer.read.only") : c.host + ":" + c.port), SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES);
+        setIcon(new KindIcon(c.kind, DbSessions.get(project).isOpen(c.id) ? CONNECTED : JBColor.GRAY, selected ? null : UIUtil.getTreeBackground()));
+        append(c.name, SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES);
+        if (c.production) tag(EiDbBundle.message("explorer.production"), PRODUCTION_BG, DANGER);
+        if (c.readOnly) tag(EiDbBundle.message("explorer.read.only"), READ_ONLY_BG, READ_ONLY);
+        append(SPACE + c.host + ":" + c.port, SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES);
       } else if (o instanceof Schema s) {
         setIcon(AllIcons.Nodes.DataSchema);
         append(s.name());
         append(EiDbBundle.message("explorer.default.schema"), SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES);
       } else if (o instanceof Group g) {
+        setIcon(AllIcons.Nodes.Folder);
         append(g.label());
         String count = n.getChildCount() == g.items().size() ? String.valueOf(g.items().size()) : n.getChildCount() + " / " + g.items().size();
         append("  " + count, SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES);
@@ -799,13 +845,21 @@ final class DbExplorer extends SimpleToolWindowPanel {
         setIcon(AllIcons.Nodes.DataTables);
         append(ti.table.name());
         if (!ti.table.comment().isEmpty()) append("  " + ti.table.comment(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+        if (ti.columns != null) append(SPACE + EiDbBundle.message("explorer.column.count", ti.columns.size()), SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES);
       } else if (o instanceof Meta.Column col) {
-        setIcon(AllIcons.Nodes.DataColumn);
-        if (col.pk() || col.fk()) append(col.pk() ? "PK " : "FK ", new SimpleTextAttributes(SimpleTextAttributes.STYLE_SMALLER | SimpleTextAttributes.STYLE_BOLD, KEY_TAG));
+        Icon icon = new ColumnIcon(col.pk() ? Badge.pk(KEY_TAG_WIDTH) : col.fk() ? Badge.fk(KEY_TAG_WIDTH) : null);
+        setIcon(icon);
         append(col.name());
-        if (!col.comment().isEmpty()) append("  " + col.comment(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
-        append("  " + col.typeLabel(), SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES);
+        if (!col.comment().isEmpty()) append(SPACE + col.comment(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+        String type = SPACE + col.typeLabel();
+        append(type, SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES);
+        if (n.getParent() instanceof DefaultMutableTreeNode parent && parent.getUserObject() instanceof TableItem owner) {
+          // 끝 위치는 부품 왼쪽 기준이라 아이콘 · 여백만큼 더한다. 자기 글보다 짧게 잡으면 앞 글과 겹치므로 자기 폭 이상으로 둔다.
+          int textStart = getInsets().left + getIpad().left + icon.getIconWidth() + getIconTextGap();
+          appendTextPadding(textStart + Math.max(typeEnd(t, owner), textWidth(t, col) + smallWidth(t, type)), SwingConstants.RIGHT);
+        }
       } else if (o instanceof ProgramGroup) {
+        setIcon(AllIcons.Nodes.Package);
         append(EiDbBundle.message("explorer.programs"));
         append(EiDbBundle.message("explorer.programs.hint"), SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES);
       } else if (o instanceof Program p) {
@@ -817,25 +871,54 @@ final class DbExplorer extends SimpleToolWindowPanel {
         append(m.text(), m.error() ? SimpleTextAttributes.ERROR_ATTRIBUTES : SimpleTextAttributes.GRAYED_ITALIC_ATTRIBUTES);
       }
     }
-  }
 
-  /** 접속 상태 점. */
-  private record Dot(Color color) implements Icon {
-    @Override
-    public void paintIcon(Component c, Graphics g, int x, int y) {
-      Graphics2D g2 = (Graphics2D) g.create();
-      try {
-        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        g2.setColor(color);
-        int size = JBUI.scale(DOT_SIZE);
-        g2.fillOval(x + (getIconWidth() - size) / 2, y + (getIconHeight() - size) / 2, size, size);
-      } finally {
-        g2.dispose();
-      }
+    /** 이름 뒤 꼬리표: 바탕을 칠한 작은 굵은 글. */
+    private void tag(String text, Color background, Color foreground) {
+      append(SPACE);
+      append(TAG_PAD + text + TAG_PAD, new SimpleTextAttributes(background, foreground, null, TAG_STYLE));
     }
 
-    @Override public int getIconWidth() { return JBUI.scale(DOT_BOX); }
-    @Override public int getIconHeight() { return JBUI.scale(DOT_BOX); }
+    /** 칼럼 이름 + 주석 글 폭(일반 글꼴). */
+    private static int textWidth(JTree t, Meta.Column col) {
+      FontMetrics fm = t.getFontMetrics(t.getFont());
+      return fm.stringWidth(col.name()) + (col.comment().isEmpty() ? 0 : fm.stringWidth(SPACE + col.comment()));
+    }
+
+    /** 작은 글꼴(STYLE_SMALLER 와 같은 크기) 글 폭. */
+    private static int smallWidth(JTree t, String text) {
+      return t.getFontMetrics(t.getFont().deriveFont(UIUtil.getFontSize(UIUtil.FontSize.SMALL))).stringWidth(text);
+    }
+
+    /** 표의 모든 칼럼 중 가장 긴 이름 · 주석 뒤에 가장 긴 형식이 들어가는 끝 위치. */
+    private static int typeEnd(JTree t, TableItem owner) {
+      if (owner.typeEnd == 0 && owner.columns != null) {
+        int text = 0;
+        int type = 0;
+        for (Meta.Column col : owner.columns) {
+          text = Math.max(text, textWidth(t, col));
+          type = Math.max(type, smallWidth(t, SPACE + col.typeLabel()));
+        }
+        owner.typeEnd = text + type;
+      }
+      return owner.typeEnd;
+    }
+  }
+
+  /** 칼럼 아이콘 + PK · FK 꼬리표 칸. 키가 아니면(tag 가 null) 칸만 비워 이름 줄을 맞춘다. */
+  private record ColumnIcon(Badge tag) implements Icon {
+    @Override
+    public void paintIcon(Component c, Graphics g, int x, int y) {
+      Icon base = AllIcons.Nodes.DataColumn;
+      base.paintIcon(c, g, x, y + (getIconHeight() - base.getIconHeight()) / 2);
+      if (tag != null) tag.paintIcon(c, g, x + base.getIconWidth() + JBUI.scale(KEY_TAG_GAP), y + (getIconHeight() - tag.getIconHeight()) / 2);
+    }
+
+    private static int slot() {
+      return Math.max(Badge.pk(KEY_TAG_WIDTH).getIconWidth(), Badge.fk(KEY_TAG_WIDTH).getIconWidth());
+    }
+
+    @Override public int getIconWidth() { return AllIcons.Nodes.DataColumn.getIconWidth() + JBUI.scale(KEY_TAG_GAP) + slot(); }
+    @Override public int getIconHeight() { return Math.max(AllIcons.Nodes.DataColumn.getIconHeight(), Badge.pk(KEY_TAG_WIDTH).getIconHeight()); }
   }
 
   /** 켜짐 조건이 있는 단순 동작. 조건은 선택 상태만 보므로 화면 스레드에서 판정한다. */

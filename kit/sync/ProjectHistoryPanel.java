@@ -29,9 +29,13 @@ import com.intellij.ui.components.ActionLink;
 import com.intellij.ui.render.RenderingUtil;
 import com.intellij.ui.OnePixelSplitter;
 import com.intellij.ui.ScrollPaneFactory;
+import com.intellij.ui.RowIcon;
 import com.intellij.ui.SearchTextField;
+import com.intellij.ui.TitledSeparator;
+import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBList;
 import com.intellij.ui.content.ContentFactory;
+import com.intellij.util.IconUtil;
 import com.intellij.util.ui.JBUI;
 import org.jetbrains.annotations.NotNull;
 
@@ -78,7 +82,14 @@ final class ProjectHistoryPanel extends JPanel {
   private static final int GRAPH_PAD = 8;
   private static final int MAX_LANES = 12;
   private static final int DOT = 7;
-  private static final int AVATAR_BIG = 40;
+  private static final int AVATAR_BIG = 28;
+  // 목록 오른쪽 작성자 · 시간 칸 폭(JBUI.scale 전). 줄마다 같은 자리에 서도록 고정한다.
+  private static final int AUTHOR_COL_W = 64;
+  private static final int TIME_COL_W = 84;
+  // 바뀐 파일 줄 앞 상태 글자 칸의 최소 폭(JBUI.scale 전).
+  private static final int STATUS_COL_W = 16;
+  // 현재 브랜치 알약 안 브랜치 아이콘 크기(16 픽셀 아이콘 대비).
+  private static final float PILL_ICON_SCALE = 0.75f;
   private static final int PILL_H = 18;
   private static final int GAP = 8;
   private static final int SEARCH_COLUMNS = 30;
@@ -98,6 +109,12 @@ final class ProjectHistoryPanel extends JPanel {
   private static final Color LOCAL_BRANCH = new JBColor(0x2A8A4E, 0x5FE39B);
   private static final Color REMOTE_BRANCH = new JBColor(0x3A6FD8, 0x8FB3FF);
   private static final Color TAG = new JBColor(0x9A6B00, 0xFFD36B);
+  private static final Color HEAD_BRANCH = new JBColor(0xD6265A, 0xFF6482);
+  // 알약 글자색은 IntelliJ Log 탭과 같은 테마 키를 따르고, 키가 없는 테마에서는 위 색을 쓴다. 현재 브랜치(HEAD)는 강조 색 + 브랜치 아이콘.
+  private static final Color HEAD_COLOR = JBColor.namedColor("VersionControl.GitLog.headIconColor", HEAD_BRANCH);
+  private static final Color LOCAL_COLOR = JBColor.namedColor("VersionControl.GitLog.localBranchIconColor", LOCAL_BRANCH);
+  private static final Color REMOTE_COLOR = JBColor.namedColor("VersionControl.GitLog.remoteBranchIconColor", REMOTE_BRANCH);
+  private static final Color TAG_COLOR = JBColor.namedColor("VersionControl.GitLog.tagIconColor", TAG);
   private static final int PILL_FILL_ALPHA = 0x22;
   private static final int PILL_BORDER_ALPHA = 0x66;
   private static final String TAG_PREFIX = "tag: ";
@@ -118,16 +135,30 @@ final class ProjectHistoryPanel extends JPanel {
   private final Project project;
   private final JBList<Target> targets = new JBList<>();
   private final DefaultListModel<History.Entry> commitModel = new DefaultListModel<>();
-  private final JBList<History.Entry> commits = new JBList<>(commitModel);
+  // 풍선 도움말: 작성자와 긴 날짜(목록에는 짧은 시간만 보인다).
+  private final JBList<History.Entry> commits = new JBList<>(commitModel) {
+    @Override
+    public String getToolTipText(MouseEvent e) {
+      int i = locationToIndex(e.getPoint());
+      if (i < 0 || !getCellBounds(i, i).contains(e.getPoint())) return null;
+      History.Entry entry = commitModel.get(i);
+      return entry.author() + " · " + ROW_TIME.format(entry.time().atZone(ZONE));
+    }
+  };
   private final JBList<History.FileChange> files = new JBList<>();
   private final SearchTextField filter = new SearchTextField(false);
   private final JLabel projectName = new JLabel(" ");
   private final Pill branch = new Pill();
   private final JLabel status = new JLabel(" ");
-  private final JLabel author = new JLabel(" ");
-  private final ActionLink hash = new ActionLink();
+  private final JBLabel subject = new JBLabel();
   private final JTextArea message = new JTextArea();
-  private final JLabel filesTitle = new JLabel(" ");
+  private final JBLabel avatar = new JBLabel();
+  private final JBLabel author = new JBLabel();
+  private final JBLabel authorTime = new JBLabel();
+  private final JComponent authorRow = new JPanel(new BorderLayout(JBUI.scale(GAP), 0));
+  private final ActionLink hash = new ActionLink();
+  private final Pill refs = new Pill();
+  private final TitledSeparator filesTitle = new TitledSeparator();
   private Loaded loaded;
   private boolean graph;
   private int graphWidth;
@@ -150,6 +181,7 @@ final class ProjectHistoryPanel extends JPanel {
       @Override public void mouseClicked(MouseEvent e) { if (e.getClickCount() == 2) showDiff(); }
     });
     filter.getTextEditor().setColumns(SEARCH_COLUMNS);
+    filter.getTextEditor().getEmptyText().setText(SyncBundle.message("history.search.hint"));
     filter.addDocumentListener(new DocumentAdapter() {
       @Override protected void textChanged(@NotNull DocumentEvent e) { fillCommits(); }
     });
@@ -164,14 +196,17 @@ final class ProjectHistoryPanel extends JPanel {
       DumbAwareAction.create(SyncBundle.message("history.refresh"), AllIcons.Actions.Refresh, e -> { reloadTargets(); load(); }));
     ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar(TOOLBAR_PLACE, actions, true);
     toolbar.setTargetComponent(this);
-    projectName.setFont(JBUI.Fonts.label().biggerOn(2).asBold());
-    JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(GAP), JBUI.scale(GAP / 2)));
+    projectName.setFont(JBUI.Fonts.label().asBold());
+    // 왼쪽에 이름 · 브랜치 · 찾기 · 새로고침, 오른쪽 끝에 「최근 N개」.
+    JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(GAP), JBUI.scale(GAP / 2)));
+    left.add(projectName);
+    left.add(branch);
+    left.add(filter);
+    left.add(toolbar.getComponent());
+    JPanel top = new JPanel(new BorderLayout());
     top.setBorder(JBUI.Borders.empty(GAP / 2, GAP / 2, 0, GAP));
-    top.add(projectName);
-    top.add(branch);
-    top.add(filter);
-    top.add(toolbar.getComponent());
-    top.add(status);
+    top.add(left, BorderLayout.CENTER);
+    top.add(status, BorderLayout.EAST);
     status.setForeground(DIM);
 
     JPanel center = new JPanel(new BorderLayout());
@@ -190,20 +225,28 @@ final class ProjectHistoryPanel extends JPanel {
     reloadTargets();
   }
 
-  /** 오른쪽: 작성자 동그라미 · 이름 · 시간, 해시(누르면 복사), 전체 메시지, 바뀐 파일. */
+  /** 오른쪽: 굵은 제목, 회색 본문, 작성자 동그라미 · 이름 · 시간, 고정폭 해시(누르면 복사), 이 커밋의 알약, 바뀐 파일. */
   private JComponent detailPanel() {
-    author.setFont(JBUI.Fonts.label().biggerOn(1).asBold());
-    author.setIconTextGap(JBUI.scale(GAP + GAP / 2));
+    subject.setFont(JBUI.Fonts.label().biggerOn(1).asBold());
+    author.setFont(JBUI.Fonts.label().asBold());
+    authorTime.setFont(JBUI.Fonts.smallFont());
+    authorTime.setForeground(DIM);
+    JPanel names = new JPanel(new GridLayout(0, 1));
+    names.add(author);
+    names.add(authorTime);
+    authorRow.add(avatar, BorderLayout.WEST);
+    authorRow.add(names, BorderLayout.CENTER);
     hash.setToolTipText(SyncBundle.message("history.copy"));
     hash.setIcon(AllIcons.Actions.Copy);
     hash.setHorizontalTextPosition(SwingConstants.LEFT);
+    hash.setFont(new Font(Font.MONOSPACED, Font.PLAIN, JBUI.Fonts.label().getSize()));
     message.setEditable(false);
     message.setLineWrap(true);
     message.setWrapStyleWord(true);
     message.setOpaque(false);
     message.setFont(JBUI.Fonts.label());
+    message.setForeground(DIM);
     message.setBorder(JBUI.Borders.empty());
-    filesTitle.setForeground(DIM);
     JLabel hint = new JLabel(SyncBundle.message("history.hint"));
     hint.setForeground(DIM);
     hint.setFont(JBUI.Fonts.smallFont());
@@ -211,7 +254,7 @@ final class ProjectHistoryPanel extends JPanel {
 
     JPanel head = new JPanel();
     head.setLayout(new BoxLayout(head, BoxLayout.Y_AXIS));
-    for (JComponent c : List.of(author, hash, message, filesTitle)) {
+    for (JComponent c : List.of(subject, message, authorRow, hash, refs, filesTitle)) {
       c.setAlignmentX(LEFT_ALIGNMENT);
       head.add(c);
       head.add(Box.createVerticalStrut(JBUI.scale(GAP)));
@@ -269,7 +312,8 @@ final class ProjectHistoryPanel extends JPanel {
       SwingUtilities.invokeLater(() -> {
         if (target != targets.getSelectedValue()) return;  // 읽는 동안 다른 프로젝트를 골랐다.
         loaded = done;
-        branch.setText(done == null ? "" : done.branch());
+        String current = done == null ? "" : done.branch();
+        branch.setRefs(current.isEmpty() ? List.of() : List.of(current), current);
         fillCommits();
         status.setText(done == null ? failure : SyncBundle.message("history.count", done.entries().size()));
       });
@@ -331,11 +375,13 @@ final class ProjectHistoryPanel extends JPanel {
   }
 
   private void clearDetail() {
-    author.setText(" ");
-    author.setIcon(null);
-    hash.setVisible(false);
+    subject.setText("");
     message.setText("");
-    filesTitle.setText(" ");
+    message.setVisible(false);
+    authorRow.setVisible(false);
+    hash.setVisible(false);
+    refs.setRefs(List.of(), null);
+    filesTitle.setVisible(false);
     files.setListData(new History.FileChange[0]);
     files.getEmptyText().setText(SyncBundle.message("history.empty.select"));
   }
@@ -346,13 +392,22 @@ final class ProjectHistoryPanel extends JPanel {
       clearDetail();
       return;
     }
-    author.setIcon(new Avatar(entry.author(), JBUI.scale(AVATAR_BIG)));
-    author.setText("<html>" + escape(entry.author()) + "<br><font color='#" + hex(DIM) + "' size='-1'>"
-                   + FULL.format(entry.time().atZone(ZONE)) + " · " + when(entry.time()) + "</font></html>");
+    // 첫 줄은 제목, 나머지는 본문(없으면 숨긴다).
+    String text = entry.message().strip();
+    int nl = text.indexOf('\n');
+    String body = nl < 0 ? "" : text.substring(nl + 1).strip();
+    subject.setText(entry.subject());
+    message.setText(body);
+    message.setVisible(!body.isEmpty());
+    avatar.setIcon(new Avatar(entry.author(), JBUI.scale(AVATAR_BIG)));
+    author.setText(entry.author());
+    authorTime.setText(FULL.format(entry.time().atZone(ZONE)) + " · " + when(entry.time()));
+    authorRow.setVisible(true);
     hash.setText(entry.id().length() > SHORT_HASH ? entry.id().substring(0, SHORT_HASH) : "r" + entry.id());
     hash.setVisible(true);
-    message.setText(entry.message());
+    refs.setRefs(entry.refs(), loaded == null ? null : loaded.branch());
     filesTitle.setText(SyncBundle.message("history.files", entry.files().size()));
+    filesTitle.setVisible(true);
     files.setListData(entry.files().toArray(History.FileChange[]::new));
     files.getEmptyText().setText(SyncBundle.message("history.empty.files"));
   }
@@ -428,34 +483,43 @@ final class ProjectHistoryPanel extends JPanel {
     return PALETTE[lane % PALETTE.length];
   }
 
-  private static Color refColor(String ref) {
-    if (ref.startsWith(TAG_PREFIX)) return TAG;
-    return ref.contains("/") ? REMOTE_BRANCH : LOCAL_BRANCH;
+  private static Color refColor(String ref, boolean head) {
+    if (head) return HEAD_COLOR;
+    if (ref.startsWith(TAG_PREFIX)) return TAG_COLOR;
+    return ref.contains("/") ? REMOTE_COLOR : LOCAL_COLOR;
+  }
+
+  /** 현재 브랜치 알약 안에 그릴 브랜치 아이콘(알약 글자색으로 물들임). 다른 알약은 null. */
+  private static Icon pillIcon(boolean head, Color color) {
+    return head ? IconUtil.scale(IconUtil.colorize(AllIcons.Vcs.Branch, color), null, PILL_ICON_SCALE) : null;
+  }
+
+  /** 알약 폭: 글 · 아이콘 · 양쪽 여백. */
+  private static int pillWidth(FontMetrics fm, String text, Icon icon) {
+    int gap = JBUI.scale(GAP);
+    return fm.stringWidth(text) + gap * 2 + (icon == null ? 0 : icon.getIconWidth() + gap / 2);
   }
 
   private static Color alpha(Color c, int a) {
     return new Color(c.getRed(), c.getGreen(), c.getBlue(), a);
   }
 
-  private static String hex(Color c) {
-    return String.format("%06x", c.getRGB() & 0xFFFFFF);
-  }
-
-  private static String escape(String text) {
-    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
-  }
-
-  /** 알약 하나를 그리고 폭을 돌려준다. y 는 알약 위쪽. */
-  private static int paintPill(Graphics2D g, String text, Color color, int x, int y) {
+  /** 알약 하나를 그리고 폭을 돌려준다. y 는 알약 위쪽. icon 은 글 앞에 그린다(없으면 null). */
+  private static int paintPill(Component c, Graphics2D g, String text, Color color, Icon icon, int x, int y) {
     FontMetrics fm = g.getFontMetrics();
     int h = JBUI.scale(PILL_H);
-    int w = fm.stringWidth(text) + JBUI.scale(GAP) * 2;
+    int w = pillWidth(fm, text, icon);
+    int textX = x + JBUI.scale(GAP);
     g.setColor(alpha(color, PILL_FILL_ALPHA));
     g.fillRoundRect(x, y, w, h, h, h);
     g.setColor(alpha(color, PILL_BORDER_ALPHA));
     g.drawRoundRect(x, y, w - 1, h - 1, h, h);
+    if (icon != null) {
+      icon.paintIcon(c, g, textX - JBUI.scale(GAP) / 2, y + (h - icon.getIconHeight()) / 2);
+      textX += icon.getIconWidth();
+    }
     g.setColor(color);
-    g.drawString(text, x + JBUI.scale(GAP), y + (h + fm.getAscent() - fm.getDescent()) / 2);
+    g.drawString(text, textX, y + (h + fm.getAscent() - fm.getDescent()) / 2);
     return w;
   }
 
@@ -493,32 +557,47 @@ final class ProjectHistoryPanel extends JPanel {
     @Override public int getIconHeight() { return size; }
   }
 
-  /** 위쪽 현재 브랜치 알약. */
+  /** 알약 줄: 위쪽 현재 브랜치, 오른쪽 칸의 이 커밋 브랜치 · 태그. head 와 같은 이름은 현재 브랜치 모양. */
   private static final class Pill extends JComponent {
-    private String text = "";
+    private List<String> refs = List.of();
+    private String head;
 
     Pill() {
       setFont(JBUI.Fonts.label());
     }
 
-    void setText(String text) {
-      this.text = text;
+    void setRefs(List<String> refs, String head) {
+      this.refs = refs;
+      this.head = head;
+      setVisible(!refs.isEmpty());
       revalidate();
       repaint();
     }
 
     @Override
     public Dimension getPreferredSize() {
-      if (text.isEmpty()) return new Dimension(0, 0);
-      return new Dimension(getFontMetrics(getFont()).stringWidth(text) + JBUI.scale(GAP) * 2 + 1, JBUI.scale(PILL_H) + 1);
+      if (refs.isEmpty()) return new Dimension(0, 0);
+      FontMetrics fm = getFontMetrics(getFont());
+      int w = 0;
+      for (String ref : refs) {
+        boolean isHead = ref.equals(head);
+        w += pillWidth(fm, ref, pillIcon(isHead, refColor(ref, isHead))) + JBUI.scale(GAP) / 2;
+      }
+      return new Dimension(w + 1, JBUI.scale(PILL_H) + 1);
     }
+
+    @Override public Dimension getMaximumSize() { return getPreferredSize(); }
 
     @Override
     protected void paintComponent(Graphics g) {
-      if (text.isEmpty()) return;
       Graphics2D g2 = smooth(g);
       g2.setFont(getFont());
-      paintPill(g2, text, LOCAL_BRANCH, 0, 0);
+      int x = 0;
+      for (String ref : refs) {
+        boolean isHead = ref.equals(head);
+        Color color = refColor(ref, isHead);
+        x += paintPill(this, g2, ref, color, pillIcon(isHead, color), x, 0) + JBUI.scale(GAP) / 2;
+      }
       g2.dispose();
     }
   }
@@ -593,18 +672,14 @@ final class ProjectHistoryPanel extends JPanel {
       FontMetrics fm = g2.getFontMetrics();
       int baseline = (h + fm.getAscent() - fm.getDescent()) / 2;
       int gap = JBUI.scale(GAP);
-      // 오른쪽: 굵은 작성자, 그 뒤 날짜 전체. 합치기 커밋은 둘 다 흐리게(고른 줄은 선택 글자색).
+      // 오른쪽: 회색 작성자 · 짧은 시간을 고정 폭 칸에(시간은 오른쪽 맞춤). 합치기 커밋은 제목도 흐리게(고른 줄은 선택 글자색).
       Color text = entry.merge() && !selected ? DIM : foreground;
-      String time = ROW_TIME.format(entry.time().atZone(ZONE));
-      int right = w - gap * 2 - fm.stringWidth(time);
-      g2.setColor(text);
-      g2.drawString(time, right, baseline);
-      Font bold = getFont().deriveFont(Font.BOLD);
-      FontMetrics bm = g2.getFontMetrics(bold);
-      right -= gap + bm.stringWidth(entry.author());
-      g2.setFont(bold);
-      g2.drawString(entry.author(), right, baseline);
-      g2.setFont(getFont());
+      Color meta = selected ? foreground : DIM;
+      String time = when(entry.time());
+      g2.setColor(meta);
+      g2.drawString(time, w - gap * 2 - fm.stringWidth(time), baseline);
+      int right = w - gap * 3 - JBUI.scale(TIME_COL_W) - JBUI.scale(AUTHOR_COL_W);
+      g2.drawString(fit(entry.author(), fm, JBUI.scale(AUTHOR_COL_W)), right, baseline);
 
       int textX = graphWidth + gap;
       int room = right - gap - textX;
@@ -612,10 +687,13 @@ final class ProjectHistoryPanel extends JPanel {
       g2.setColor(text);
       g2.drawString(subject, textX, baseline);
       int pillX = textX + fm.stringWidth(subject) + gap;
+      String head = loaded == null ? null : loaded.branch();
       for (String ref : entry.refs()) {
-        int pw = fm.stringWidth(ref) + gap * 2;
-        if (pillX + pw > right - gap) break;
-        pillX += paintPill(g2, ref, refColor(ref), pillX, cy - JBUI.scale(PILL_H) / 2) + gap / 2;
+        boolean isHead = ref.equals(head);
+        Color color = refColor(ref, isHead);
+        Icon icon = pillIcon(isHead, color);
+        if (pillX + pillWidth(fm, ref, icon) > right - gap) break;
+        pillX += paintPill(this, g2, ref, color, icon, pillX, cy - JBUI.scale(PILL_H) / 2) + gap / 2;
       }
       g2.dispose();
     }
@@ -637,7 +715,7 @@ final class ProjectHistoryPanel extends JPanel {
     return text.substring(0, end) + ellipsis;
   }
 
-  /** 바뀐 파일: 파일 형식 아이콘, 상태 색 이름, 흐린 상위 폴더 경로. 풍선 도움말은 상태 글자와 전체 경로. */
+  /** 바뀐 파일: 상태 색 굵은 상태 글자, 파일 형식 아이콘, 상태 색 이름(삭제는 취소선), 흐린 상위 폴더 경로. 풍선 도움말은 상태 글자와 전체 경로. */
   private static final class FileRenderer extends ColoredListCellRenderer<History.FileChange> {
     @Override
     protected void customizeCellRenderer(@NotNull JList<? extends History.FileChange> list, History.FileChange value, int index,
@@ -645,10 +723,15 @@ final class ProjectHistoryPanel extends JPanel {
       String path = value.path();
       int slash = path.lastIndexOf('/');
       String name = path.substring(slash + 1);
-      setIcon(FileTypeManager.getInstance().getFileTypeByFileName(name).getIcon());
+      Icon fileIcon = FileTypeManager.getInstance().getFileTypeByFileName(name).getIcon();
+      if (fileIcon == null) fileIcon = AllIcons.FileTypes.Unknown;
       FileStatus status = FILE_STATUS.get(value.status());
-      append(name, status == null ? SimpleTextAttributes.REGULAR_ATTRIBUTES
-                                  : new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, status.getColor()));
+      Color color = status == null ? DIM : status.getColor();
+      Font bold = JBUI.Fonts.label().asBold();
+      int statusWidth = Math.max(JBUI.scale(STATUS_COL_W), getFontMetrics(bold).stringWidth(value.status()));
+      setIcon(new RowIcon(new SyncPanel.StatusIcon(value.status(), color, bold, statusWidth, fileIcon.getIconHeight()), fileIcon));
+      int style = FileStatus.DELETED.equals(status) ? SimpleTextAttributes.STYLE_STRIKEOUT : SimpleTextAttributes.STYLE_PLAIN;
+      append(name, status == null ? SimpleTextAttributes.REGULAR_ATTRIBUTES : new SimpleTextAttributes(style, status.getColor()));
       if (slash > 0) append("  " + path.substring(0, slash), SimpleTextAttributes.GRAYED_ATTRIBUTES);
       setToolTipText(value.status() + "  " + path);
     }

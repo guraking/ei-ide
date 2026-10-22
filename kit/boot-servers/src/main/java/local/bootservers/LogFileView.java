@@ -6,6 +6,7 @@ import com.intellij.execution.ui.ConsoleView;
 import com.intellij.execution.ui.ConsoleViewContentType;
 import com.intellij.execution.ui.RunContentDescriptor;
 import com.intellij.execution.ui.RunContentManager;
+import com.intellij.icons.AllIcons;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.util.concurrency.AppExecutorUtil;
@@ -32,17 +33,19 @@ final class LogFileView {
     // 날짜 이름 로그(catalina.날짜.log)의 다음 날 파일이 생겼는지 볼 간격(poll 횟수). 날이 바뀌는 일이라 자주 볼 까닭이 없다.
     private static final int NEWER_CHECK_POLLS = 60;
     private static final Charset FALLBACK = Charset.forName(System.getProperty("native.encoding", Charset.defaultCharset().name()));
+    // 안내 줄(파일 순환 · 새 날짜 파일 등) 앞 표시
+    private static final String NOTE_PREFIX = "ⓘ ";
 
     private LogFileView() {
     }
 
     /** 화면 스레드에서 부른다. */
     static void open(Project project, String serverName, Path file) {
-        ConsoleView console = TextConsoleBuilderFactory.getInstance().createBuilder(project).getConsole();
+        ConsoleView console = TextConsoleBuilderFactory.getInstance().createBuilder(project).filters(new LogLevelFilter()).getConsole();
         JPanel panel = new JPanel(new BorderLayout());
         panel.add(console.getComponent(), BorderLayout.CENTER);
         // 프로세스가 없는 탭은 실행 창이 끝난 탭으로 보고 다음 실행에 다시 쓰거나(닫아 버리거나) 이 탭이 끝난 다른 탭을 차지하므로 다시 쓰기를 막는다.
-        RunContentDescriptor descriptor = new RunContentDescriptor(console, null, panel, serverName + " · " + file.getFileName()) {
+        RunContentDescriptor descriptor = new RunContentDescriptor(console, null, panel, serverName + " · " + file.getFileName(), AllIcons.FileTypes.Text) {
             @Override
             public boolean isContentReuseProhibited() {
                 return true;
@@ -76,8 +79,8 @@ final class LogFileView {
         }
         if (newer != null && !newer.equals(noticed[0])) {
             noticed[0] = newer;
-            console.print("\n--- " + BootServersBundle.message("log.view.newer", newer.getFileName()) + " ---\n",
-                    ConsoleViewContentType.SYSTEM_OUTPUT);
+            console.print("\n" + NOTE_PREFIX + BootServersBundle.message("log.view.newer", newer.getFileName()) + "\n",
+                    ConsoleViewContentType.LOG_INFO_OUTPUT);
         }
     }
 
@@ -90,7 +93,7 @@ final class LogFileView {
             case ERROR -> BootServersBundle.message("log.view.error", poll.error());
         };
         if (note != null) {
-            console.print("\n--- " + note + " ---\n", poll.event() == LogTail.Event.ERROR ? ConsoleViewContentType.ERROR_OUTPUT : ConsoleViewContentType.SYSTEM_OUTPUT);
+            console.print("\n" + NOTE_PREFIX + note + "\n", poll.event() == LogTail.Event.ERROR ? ConsoleViewContentType.ERROR_OUTPUT : ConsoleViewContentType.LOG_INFO_OUTPUT);
         }
         if (!poll.text().isEmpty()) {
             console.print(poll.text(), ConsoleViewContentType.NORMAL_OUTPUT);
