@@ -1364,7 +1364,7 @@ build-windows.bat
       <tr><td>데이터베이스 탐색기 우클릭</td><td>표: SELECT · INSERT · UPDATE 문, 매퍼 뼈대, 기능 한 벌, ERD, 테이블 정의서 엑셀. 접속: 세션 · 잠금 보기. 프로그램: 컴파일 오류 보기</td></tr>
       <tr><td>결과 탭 우클릭</td><td>다른 결과와 비교…, 다른 탭 닫기 · 모든 탭 닫기</td></tr>
       <tr><td>커밋 창 파일 우클릭</td><td>Assume Unchanged</td></tr>
-      <tr><td>코드 도구(편집기 우클릭 · Source 메뉴)</td><td>옮겨 담기 코드 · 테스트 뼈대 · 요청 값을 DTO 로 묶기 · 입력 검증 붙이기 · enum 다시 맞추기 · JSON 으로 DTO(트리 우클릭도) · 칼럼 이름 바꾸기. 매퍼 XML 우클릭: 호출 코드 복사 · 동적 조건 · 페이징 쿼리. 자바 우클릭: 문자열 SQL 정리. 결과 창: enum 단추. 자세한 것은 13 절</td></tr>
+      <tr><td>코드 도구(편집기 우클릭 · Source 메뉴)</td><td>옮겨 담기 코드 · 요청 값을 DTO 로 묶기 · 입력 검증 붙이기 · enum 다시 맞추기 · JSON 으로 DTO(트리 우클릭도) · 칼럼 이름 바꾸기. 매퍼 XML 우클릭: 호출 코드 복사 · 동적 조건 · 페이징 쿼리. 자바 우클릭: 문자열 SQL 정리. 결과 창: enum 단추. 자세한 것은 13 절</td></tr>
     </table>
   </div>
 </section>
@@ -1446,7 +1446,6 @@ build-windows.bat
       <tr><th>기능 · 자리</th><th>하는 일</th></tr>
       <tr><td>옮겨 담기 코드 만들기…<br>자바 우클릭</td><td>꺼낼 객체 · 담을 객체를 고르면 <code>to.setX(from.getX());</code> 줄을 커서 줄 다음에 넣습니다. 형이 다르거나 짝이 없는 필드는 주석 줄로 남깁니다.</td></tr>
       <tr><td>빈 catch · printStackTrace · System.out 검사</td><td>세 가지를 노란 줄로 표시합니다. 클래스에 로거 필드나 <code>@Slf4j</code> 가 있으면 <kbd>Alt</kbd>+<kbd>Enter</kbd> 로 <code>log.error(…)</code> · <code>log.info(…)</code> 로 바꿉니다. 테스트 폴더 · main 메서드는 건너뜁니다.</td></tr>
-      <tr><td>테스트 뼈대 만들기<br>자바 · 트리 우클릭</td><td>서비스는 Mockito(<code>@Mock</code> · <code>@InjectMocks</code>), 매퍼는 <code>@MybatisTest</code> 로 메서드마다 테스트 틀을 모듈의 테스트 폴더에 만듭니다. 파일이 있으면 없는 테스트만 더합니다.</td></tr>
       <tr><td>요청 값을 DTO 로 묶기…<br>컨트롤러 메서드 안</td><td><code>@RequestParam</code> 여러 개를 <code>@ModelAttribute</code> DTO 하나로 묶고, 본문의 참조를 <code>req.getX()</code> 로 바꿉니다.</td></tr>
       <tr><td>입력 검증 붙이기…<br>DTO 안</td><td>접속 · 표를 고르면 칼럼의 NULL · 길이 · 자릿수로 <code>@NotBlank</code> · <code>@NotNull</code> · <code>@Size</code> · <code>@Digits</code> 를 필드에 붙입니다. 이미 있는 주석은 그대로 둡니다.</td></tr>
       <tr><td>enum 만들기 · 다시 맞추기<br>결과 창 「enum」 단추, enum 안 우클릭</td><td>코드 표 조회 결과의 두 칼럼(코드 · 이름)으로 enum 을 만듭니다. SQL 과 접속 이름을 Javadoc 에 남겨 두어, 표가 바뀌면 「enum 다시 맞추기」로 상수를 새로 만듭니다(손으로 더한 메서드는 사라짐).</td></tr>
@@ -1537,15 +1536,6 @@ build-windows.bat
       </div>
     </div>
     <p class="lead" style="margin-top:10px">로거가 없는 클래스는 노란 줄만 보이고 바꾸기는 뜨지 않습니다. 끄려면 설정 → 검사에서 「EiLogUsage」를 찾습니다.</p>
-
-    <h3>테스트 뼈대 만들기 · 자바 · 트리 우클릭</h3>
-    <div class="scroll">
-      <div class="ide" style="min-width:560px">
-        <div class="title"><span class="dots"><i></i><i></i><i></i></span>src/test/java/…/UserServiceTest.java</div>
-        <pre class="sql nolig"><span class="ln">@ExtendWith(MockitoExtension.<span class="kw">class</span>)</span><span class="ln"><span class="kw">class</span> UserServiceTest {</span><span class="ln">    @Mock <span class="kw">private</span> UserMapper userMapper;</span><span class="ln">    @InjectMocks <span class="kw">private</span> UserService target;</span><span class="ln">&nbsp;</span><span class="ln">    @Test</span><span class="ln">    <span class="kw">void</span> find() {</span><span class="ln">        <span class="cm">// given</span></span><span class="ln">        <span class="cm">// when</span></span><span class="ln">        target.find((String) <span class="kw">null</span>);</span><span class="ln">        <span class="cm">// then</span></span><span class="ln">    }</span></pre>
-      </div>
-    </div>
-    <p class="lead" style="margin-top:10px">서비스 클래스는 위처럼 Mockito, 매퍼 인터페이스는 <code>@MybatisTest</code> 로 만듭니다. 이름이 같은 메서드는 <code>find_2</code> 처럼 번호를 붙이고, 테스트 파일이 이미 있으면 빠진 테스트만 끝에 더합니다.</p>
 
     <h3>enum 만들기 · 결과 창 「enum」 단추</h3>
     <div class="cols2">
