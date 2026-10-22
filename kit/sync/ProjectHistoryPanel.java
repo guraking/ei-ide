@@ -19,7 +19,6 @@ import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.JBColor;
 import com.intellij.ui.JBSplitter;
 import com.intellij.ui.SearchTextField;
-import com.intellij.ui.components.JBCheckBox;
 import com.intellij.ui.components.JBList;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.content.ContentFactory;
@@ -48,7 +47,7 @@ import java.util.List;
 /**
  * 아래쪽 「Git Log」 창. 왼쪽에서 프로젝트(모듈)를 고르면 그 폴더 안을 바꾼 최근 커밋을 GitKraken 처럼 보여 준다.
  * 가지마다 색이 다른 선 위에 작성자 동그라미, 브랜치 · 태그 알약, 오른쪽에 커밋 내용과 바뀐 파일(두 번 누르면 비교 창).
- * 「내 것만」 · 「Merge 숨김」 · 찾기로 거르면 사이가 빠지므로 가지 선 대신 한 줄로 그린다. 기존 Git 로그 창은 그대로 둔다.
+ * 위쪽은 찾기 칸과 새로고침뿐이다. 찾기로 거르면 사이가 빠지므로 가지 선 대신 한 줄로 그린다. 기존 Git 로그 창은 그대로 둔다.
  * Git 은 git log, SVN 은 svn log 를 작업 스레드에서 돌린다(SyncPanel.run 과 같은 실행 · 시간 제한). SVN 은 한 줄 기록이다.
  */
 final class ProjectHistoryPanel extends JPanel {
@@ -105,8 +104,8 @@ final class ProjectHistoryPanel extends JPanel {
     @Override public String toString() { return name; }
   }
 
-  /** 읽어 온 기록. branch 는 Git 현재 브랜치 · SVN 저장소 경로, me 는 git user.name(없거나 SVN 이면 null). svnRoot · svnPrefix 는 SVN 비교 창용. */
-  private record Loaded(Target target, String branch, String me, String svnRoot, String svnPrefix,
+  /** 읽어 온 기록. branch 는 Git 현재 브랜치 · SVN 저장소 경로. svnRoot · svnPrefix 는 SVN 비교 창용. */
+  private record Loaded(Target target, String branch, String svnRoot, String svnPrefix,
                         List<History.Entry> entries, List<History.Row> rows) {}
 
   private final Project project;
@@ -115,9 +114,6 @@ final class ProjectHistoryPanel extends JPanel {
   private final JBList<History.Entry> commits = new JBList<>(commitModel);
   private final JBList<History.FileChange> files = new JBList<>();
   private final SearchTextField filter = new SearchTextField(false);
-  private final JToggleButton lines = new JBCheckBox(SyncBundle.message("history.lines"), true);
-  private final JToggleButton mine = new JBCheckBox(SyncBundle.message("history.mine"));
-  private final JToggleButton hideMerges = new JBCheckBox(SyncBundle.message("history.hide.merges"));
   private final JLabel projectName = new JLabel(" ");
   private final Pill branch = new Pill();
   private final JLabel status = new JLabel(" ");
@@ -148,7 +144,6 @@ final class ProjectHistoryPanel extends JPanel {
     filter.addDocumentListener(new DocumentAdapter() {
       @Override protected void textChanged(@NotNull DocumentEvent e) { fillCommits(); }
     });
-    for (JToggleButton toggle : List.of(lines, mine, hideMerges)) toggle.addActionListener(e -> fillCommits());
     hash.addActionListener(e -> {
       History.Entry entry = commits.getSelectedValue();
       if (entry != null) CopyPasteManager.getInstance().setContents(new StringSelection(entry.id()));
@@ -160,9 +155,6 @@ final class ProjectHistoryPanel extends JPanel {
     JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(GAP), JBUI.scale(GAP / 2)));
     top.add(projectName);
     top.add(branch);
-    top.add(lines);
-    top.add(mine);
-    top.add(hideMerges);
     top.add(filter);
     top.add(refresh);
     top.add(status);
@@ -258,9 +250,6 @@ final class ProjectHistoryPanel extends JPanel {
         if (target != targets.getSelectedValue()) return;  // 읽는 동안 다른 프로젝트를 골랐다.
         loaded = done;
         branch.setText(done == null ? "" : done.branch());
-        mine.setEnabled(done != null && done.me() != null);
-        if (!mine.isEnabled()) mine.setSelected(false);
-        mine.setToolTipText(mine.isEnabled() ? done.me() : SyncBundle.message("history.mine.disabled"));
         fillCommits();
         status.setText(done == null ? failure : SyncBundle.message("history.count", done.entries().size()));
       });
@@ -271,16 +260,15 @@ final class ProjectHistoryPanel extends JPanel {
     File dir = target.dir();
     if (target.vcs() == SyncPanel.Vcs.GIT) {
       List<History.Entry> entries = History.parseGitLog(SyncPanel.git(dir, History.gitLogArgs(LOG_LIMIT)));
-      return new Loaded(target, gitOrEmpty(dir, "rev-parse", "--abbrev-ref", "HEAD"), gitOrNull(dir, "config", "user.name"),
-                        null, null, entries, History.layout(entries));
+      return new Loaded(target, gitOrEmpty(dir, "rev-parse", "--abbrev-ref", "HEAD"), null, null, entries, History.layout(entries));
     }
     String[] info = History.parseSvnInfo(SyncPanel.run(dir, "svn", "info", "--xml"));
     String xml = SyncPanel.run(dir, "svn", "log", "--xml", "-v", "-l", String.valueOf(LOG_LIMIT));
     List<History.Entry> entries = History.parseSvnLog(xml, info[1]);
-    return new Loaded(target, info[1], null, info[0], info[1], entries, History.layout(entries));
+    return new Loaded(target, info[1], info[0], info[1], entries, History.layout(entries));
   }
 
-  /** 없어도 되는 값(브랜치 이름 · user.name)을 읽는다. 실패 · 빈 값이면 null. */
+  /** 없어도 되는 값(브랜치 이름)을 읽는다. 실패 · 빈 값이면 null. */
   private static String gitOrNull(File dir, String... args) throws InterruptedException {
     try {
       String value = SyncPanel.git(dir, args).trim();
@@ -296,22 +284,19 @@ final class ProjectHistoryPanel extends JPanel {
     return value == null ? "" : value;
   }
 
-  /** 거르기를 적용해 목록을 다시 채운다. 거르는 것이 하나도 없고 「가지 선」이 켜져 있을 때만 가지 선을 그린다. */
+  /** 찾기 글로 목록을 다시 채운다. 찾기 칸이 비어 있을 때만 가지 선을 그린다. */
   private void fillCommits() {
     commitModel.clear();
     clearDetail();
     if (loaded == null) return;
     String word = filter.getText().trim().toLowerCase(Locale.ROOT);
-    boolean filtered = !word.isEmpty() || mine.isSelected() || hideMerges.isSelected();
-    graph = lines.isSelected() && !filtered;
+    graph = word.isEmpty();
     int lanes = 1;
     if (graph) {
       for (History.Row row : loaded.rows()) lanes = Math.max(lanes, laneCount(row));
     }
     graphWidth = JBUI.scale(Math.min(lanes, MAX_LANES) * LANE_W + GRAPH_PAD * 2);
     for (History.Entry entry : loaded.entries()) {
-      if (hideMerges.isSelected() && entry.merge()) continue;
-      if (mine.isSelected() && !entry.author().equals(loaded.me())) continue;
       if (!word.isEmpty() && !entry.subject().toLowerCase(Locale.ROOT).contains(word)
           && !entry.author().toLowerCase(Locale.ROOT).contains(word)) continue;
       commitModel.addElement(entry);
