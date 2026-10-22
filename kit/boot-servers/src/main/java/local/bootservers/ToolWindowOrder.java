@@ -25,5 +25,6 @@ public final class ToolWindowOrder implements DefaultToolWindowLayoutExtension {
     builder.removeAll(w -> w.getAnchor() == ToolWindowDescriptor.ToolWindowAnchor.BOTTOM);
     for (String id : BOTTOM) builder.getBottom().addOrUpdate(id, null);
     builder.getRight().addOrUpdate("EI Database", null);
+    builder.getRight().addOrUpdate("Secure Memo", null);
   }
 }

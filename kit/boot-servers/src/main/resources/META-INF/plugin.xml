@@ -32,6 +32,9 @@
         <!-- OpenAPI: 아래쪽 「API」 창(컨트롤러로 만든 사양의 Swagger UI), 사양 파일 옆 미리보기, 사양 파일 자동 완성 · 오류 표시 -->
         <toolWindow id="API" anchor="bottom" icon="AllIcons.Nodes.PpWeb" doNotActivateOnStart="true"
                     factoryClass="local.bootservers.SwaggerToolWindow"/>
+        <!-- 오른쪽 옆줄 「보안 메모」: 내가 정한 비밀번호로만 열리는 암호화 메모장 -->
+        <toolWindow id="Secure Memo" anchor="right" icon="AllIcons.Ide.Readonly" doNotActivateOnStart="true"
+                    factoryClass="local.bootservers.memo.SecureMemoToolWindowFactory"/>
         <fileEditorProvider implementation="local.bootservers.OpenApiEditorProvider"/>
         <!-- JDK 24 이상 실행에 sun-misc-unsafe-memory-access=allow 옵션을 더해 Unsafe 경고를 끈다 -->
         <java.programPatcher implementation="local.bootservers.UnsafeWarningPatcher"/>
