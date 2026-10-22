@@ -78,9 +78,10 @@ final class ProjectHistoryPanel extends JPanel {
   private static final float AVATAR_FONT_RATIO = 0.4f;
 
   // 색. 가지 선 · 작성자 동그라미는 EI Glass 분홍을 첫 색으로 한 고정 팔레트, 알약은 글자색 + 옅은 바탕 · 테두리.
+  // 유리 디자인 분류 색 10개. 이웃한 가지끼리 비슷한 색이 붙지 않도록 분홍 · 파랑 · 초록 · 주황 … 순으로 둔다.
   private static final Color[] PALETTE = {
-    new Color(0xFF6B8B), new Color(0x7FB3FF), new Color(0x5FE39B), new Color(0xFFD36B),
-    new Color(0xB69CFF), new Color(0x7FD1FF), new Color(0xFFA36B)};
+    new Color(0xFF375F), new Color(0x0A84FF), new Color(0x30D158), new Color(0xFF9F0A), new Color(0xBF5AF2),
+    new Color(0x40C8C0), new Color(0xFFD60A), new Color(0x64D2FF), new Color(0x7D7AFF), new Color(0xFF6482)};
   private static final Color SELECTED_ROW = new Color(0x30FF375F, true);
   private static final Color AVATAR_TEXT = new Color(0x111111);
   private static final Color LOCAL_BRANCH = new Color(0x5FE39B);
