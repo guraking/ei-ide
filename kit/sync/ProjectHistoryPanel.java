@@ -19,7 +19,6 @@ import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.JBColor;
 import com.intellij.ui.JBSplitter;
 import com.intellij.ui.SearchTextField;
-import com.intellij.ui.components.JBCheckBox;
 import com.intellij.ui.components.JBList;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.content.ContentFactory;
@@ -33,7 +32,6 @@ import java.awt.*;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.awt.geom.Path2D;
 import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
@@ -46,9 +44,9 @@ import java.util.*;
 import java.util.List;
 
 /**
- * 아래쪽 「Git Log」 창. 왼쪽에서 프로젝트(모듈)를 고르면 그 폴더 안을 바꾼 최근 커밋을 GitKraken 처럼 보여 준다.
- * 가지마다 색이 다른 선 위에 작성자 동그라미, 브랜치 · 태그 알약, 오른쪽에 커밋 내용과 바뀐 파일(두 번 누르면 비교 창).
- * 「내 것만」 · 「Merge 숨김」 · 찾기로 거르면 사이가 빠지므로 가지 선 대신 한 줄로 그린다. 기존 Git 로그 창은 그대로 둔다.
+ * 아래쪽 「Git Log」 창. 왼쪽에서 프로젝트(모듈)를 고르면 그 폴더 안을 바꾼 최근 커밋을 IntelliJ 기본 Log 탭처럼 보여 준다.
+ * 가지마다 색이 다른 꺾인 선 위에 커밋 점(합치기는 속이 빈 점), 브랜치 · 태그 알약, 오른쪽에 커밋 내용과 바뀐 파일(두 번 누르면 비교 창).
+ * 위쪽은 찾기 칸과 새로고침뿐이다. 찾기로 거르면 사이가 빠지므로 가지 선 대신 한 줄로 그린다. 기존 Git 로그 창은 그대로 둔다.
  * Git 은 git log, SVN 은 svn log 를 작업 스레드에서 돌린다(SyncPanel.run 과 같은 실행 · 시간 제한). SVN 은 한 줄 기록이다.
  */
 final class ProjectHistoryPanel extends JPanel {
@@ -60,22 +58,22 @@ final class ProjectHistoryPanel extends JPanel {
   private static final DateTimeFormatter THIS_YEAR = timeFormat("history.time.year");
   private static final DateTimeFormatter OLDER = timeFormat("history.time.older");
   private static final DateTimeFormatter FULL = timeFormat("history.time.full");
+  private static final DateTimeFormatter ROW_TIME = timeFormat("history.time.row");
   private static final int MINUTES_PER_HOUR = 60;
   private static final int SHORT_HASH = 7;
   private static final int INITIALS = 2;
 
-  // 크기(JBUI.scale 전). 칸 폭 · 줄 높이 · 동그라미 지름은 시안(kraken.png) 비율을 따른다.
-  private static final int ROW_H = 40;
-  private static final int LANE_W = 26;
-  private static final int GRAPH_PAD = 10;
+  // 크기(JBUI.scale 전). 목록 줄 · 가지 칸 · 점은 IntelliJ 기본 Log 탭 비율을 따른다.
+  private static final int ROW_H = 26;
+  private static final int LANE_W = 16;
+  private static final int GRAPH_PAD = 8;
   private static final int MAX_LANES = 12;
-  private static final int AVATAR = 24;
+  private static final int DOT = 7;
   private static final int AVATAR_BIG = 40;
-  private static final int MERGE_DOT = 10;
   private static final int PILL_H = 18;
   private static final int GAP = 8;
   private static final int SEARCH_COLUMNS = 30;
-  private static final float LINE_WIDTH = 2f;
+  private static final float LINE_WIDTH = 1.5f;
   // 동그라미 지름 대비 머리글자 크기.
   private static final float AVATAR_FONT_RATIO = 0.4f;
 
@@ -92,21 +90,18 @@ final class ProjectHistoryPanel extends JPanel {
   private static final Color GIT_BADGE = new Color(0xFF8A6A);
   private static final int PILL_FILL_ALPHA = 0x22;
   private static final int PILL_BORDER_ALPHA = 0x66;
-  // 가지 선 칸에만 옅게 깔리는 그 커밋의 가지 색. 글자 칸 바탕은 무채색으로 둔다.
-  private static final int ROW_TINT_ALPHA = 0x2A;
   private static final String TAG_PREFIX = "tag: ";
   private static final Map<String, Color> STATUS_COLORS = Map.of(
     "M", new Color(0xFFC061), "A", new Color(0x5FE39B), "D", new Color(0xFF7A95), "R", new Color(0x7FB3FF));
   private static final Color DIM = JBUI.CurrentTheme.ContextHelp.FOREGROUND;
-  private static final Color CHIP = new JBColor(new Color(0xE6E7EA), new Color(0x2A2C31));
 
   /** 왼쪽 목록 한 줄. dir 은 모듈의 첫 콘텐츠 루트. */
   private record Target(String name, File dir, SyncPanel.Vcs vcs) {
     @Override public String toString() { return name; }
   }
 
-  /** 읽어 온 기록. branch 는 Git 현재 브랜치 · SVN 저장소 경로, me 는 git user.name(없거나 SVN 이면 null). svnRoot · svnPrefix 는 SVN 비교 창용. */
-  private record Loaded(Target target, String branch, String me, String svnRoot, String svnPrefix,
+  /** 읽어 온 기록. branch 는 Git 현재 브랜치 · SVN 저장소 경로. svnRoot · svnPrefix 는 SVN 비교 창용. */
+  private record Loaded(Target target, String branch, String svnRoot, String svnPrefix,
                         List<History.Entry> entries, List<History.Row> rows) {}
 
   private final Project project;
@@ -115,9 +110,6 @@ final class ProjectHistoryPanel extends JPanel {
   private final JBList<History.Entry> commits = new JBList<>(commitModel);
   private final JBList<History.FileChange> files = new JBList<>();
   private final SearchTextField filter = new SearchTextField(false);
-  private final JToggleButton lines = new JBCheckBox(SyncBundle.message("history.lines"), true);
-  private final JToggleButton mine = new JBCheckBox(SyncBundle.message("history.mine"));
-  private final JToggleButton hideMerges = new JBCheckBox(SyncBundle.message("history.hide.merges"));
   private final JLabel projectName = new JLabel(" ");
   private final Pill branch = new Pill();
   private final JLabel status = new JLabel(" ");
@@ -148,7 +140,6 @@ final class ProjectHistoryPanel extends JPanel {
     filter.addDocumentListener(new DocumentAdapter() {
       @Override protected void textChanged(@NotNull DocumentEvent e) { fillCommits(); }
     });
-    for (JToggleButton toggle : List.of(lines, mine, hideMerges)) toggle.addActionListener(e -> fillCommits());
     hash.addActionListener(e -> {
       History.Entry entry = commits.getSelectedValue();
       if (entry != null) CopyPasteManager.getInstance().setContents(new StringSelection(entry.id()));
@@ -160,9 +151,6 @@ final class ProjectHistoryPanel extends JPanel {
     JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(GAP), JBUI.scale(GAP / 2)));
     top.add(projectName);
     top.add(branch);
-    top.add(lines);
-    top.add(mine);
-    top.add(hideMerges);
     top.add(filter);
     top.add(refresh);
     top.add(status);
@@ -258,9 +246,6 @@ final class ProjectHistoryPanel extends JPanel {
         if (target != targets.getSelectedValue()) return;  // 읽는 동안 다른 프로젝트를 골랐다.
         loaded = done;
         branch.setText(done == null ? "" : done.branch());
-        mine.setEnabled(done != null && done.me() != null);
-        if (!mine.isEnabled()) mine.setSelected(false);
-        mine.setToolTipText(mine.isEnabled() ? done.me() : SyncBundle.message("history.mine.disabled"));
         fillCommits();
         status.setText(done == null ? failure : SyncBundle.message("history.count", done.entries().size()));
       });
@@ -271,16 +256,15 @@ final class ProjectHistoryPanel extends JPanel {
     File dir = target.dir();
     if (target.vcs() == SyncPanel.Vcs.GIT) {
       List<History.Entry> entries = History.parseGitLog(SyncPanel.git(dir, History.gitLogArgs(LOG_LIMIT)));
-      return new Loaded(target, gitOrEmpty(dir, "rev-parse", "--abbrev-ref", "HEAD"), gitOrNull(dir, "config", "user.name"),
-                        null, null, entries, History.layout(entries));
+      return new Loaded(target, gitOrEmpty(dir, "rev-parse", "--abbrev-ref", "HEAD"), null, null, entries, History.layout(entries));
     }
     String[] info = History.parseSvnInfo(SyncPanel.run(dir, "svn", "info", "--xml"));
     String xml = SyncPanel.run(dir, "svn", "log", "--xml", "-v", "-l", String.valueOf(LOG_LIMIT));
     List<History.Entry> entries = History.parseSvnLog(xml, info[1]);
-    return new Loaded(target, info[1], null, info[0], info[1], entries, History.layout(entries));
+    return new Loaded(target, info[1], info[0], info[1], entries, History.layout(entries));
   }
 
-  /** 없어도 되는 값(브랜치 이름 · user.name)을 읽는다. 실패 · 빈 값이면 null. */
+  /** 없어도 되는 값(브랜치 이름)을 읽는다. 실패 · 빈 값이면 null. */
   private static String gitOrNull(File dir, String... args) throws InterruptedException {
     try {
       String value = SyncPanel.git(dir, args).trim();
@@ -296,22 +280,19 @@ final class ProjectHistoryPanel extends JPanel {
     return value == null ? "" : value;
   }
 
-  /** 거르기를 적용해 목록을 다시 채운다. 거르는 것이 하나도 없고 「가지 선」이 켜져 있을 때만 가지 선을 그린다. */
+  /** 찾기 글로 목록을 다시 채운다. 찾기 칸이 비어 있을 때만 가지 선을 그린다. */
   private void fillCommits() {
     commitModel.clear();
     clearDetail();
     if (loaded == null) return;
     String word = filter.getText().trim().toLowerCase(Locale.ROOT);
-    boolean filtered = !word.isEmpty() || mine.isSelected() || hideMerges.isSelected();
-    graph = lines.isSelected() && !filtered;
+    graph = word.isEmpty();
     int lanes = 1;
     if (graph) {
       for (History.Row row : loaded.rows()) lanes = Math.max(lanes, laneCount(row));
     }
     graphWidth = JBUI.scale(Math.min(lanes, MAX_LANES) * LANE_W + GRAPH_PAD * 2);
     for (History.Entry entry : loaded.entries()) {
-      if (hideMerges.isSelected() && entry.merge()) continue;
-      if (mine.isSelected() && !entry.author().equals(loaded.me())) continue;
       if (!word.isEmpty() && !entry.subject().toLowerCase(Locale.ROOT).contains(word)
           && !entry.author().toLowerCase(Locale.ROOT).contains(word)) continue;
       commitModel.addElement(entry);
@@ -576,10 +557,6 @@ final class ProjectHistoryPanel extends JPanel {
 
       History.Row row = graph && loaded != null && index < loaded.rows().size() ? loaded.rows().get(index) : null;
       int col = row == null ? 0 : row.col();
-      if (!selected) {
-        g2.setColor(alpha(laneColor(col), ROW_TINT_ALPHA));
-        g2.fillRect(0, 0, graphWidth, h);
-      }
       Graphics2D lane = (Graphics2D)g2.create(0, 0, graphWidth, h);
       lane.setStroke(new BasicStroke(JBUI.scale(LINE_WIDTH)));
       if (row == null) {
@@ -590,38 +567,30 @@ final class ProjectHistoryPanel extends JPanel {
         for (History.Seg s : row.top()) segment(lane, s, 0, cy);
         for (History.Seg s : row.bottom()) segment(lane, s, cy, h);
       }
+      // 커밋은 가지 색 점, 합치기 커밋은 속이 빈 점.
       int x = laneX(col);
-      if (entry.merge()) {
-        int d = JBUI.scale(MERGE_DOT);
-        lane.setColor(background);
-        lane.fillOval(x - d / 2, cy - d / 2, d, d);
-        lane.setColor(laneColor(col));
-        lane.drawOval(x - d / 2, cy - d / 2, d, d);
-      }
-      else {
-        int d = JBUI.scale(AVATAR);
-        new Avatar(entry.author(), d).paintIcon(this, lane, x - d / 2, cy - d / 2);
-      }
+      int d = JBUI.scale(DOT);
+      lane.setColor(entry.merge() ? background : laneColor(col));
+      lane.fillOval(x - d / 2, cy - d / 2, d, d);
+      lane.setColor(laneColor(col));
+      lane.drawOval(x - d / 2, cy - d / 2, d, d);
       lane.dispose();
 
       g2.setFont(getFont());
       FontMetrics fm = g2.getFontMetrics();
       int baseline = (h + fm.getAscent() - fm.getDescent()) / 2;
       int gap = JBUI.scale(GAP);
-      String meta = entry.author() + " · " + when(entry.time());
-      int right = w - gap * 2 - fm.stringWidth(meta);
-      g2.setColor(DIM);
-      g2.drawString(meta, right, baseline);
-      if (!entry.files().isEmpty()) {
-        String chip = SyncBundle.message("history.file.count", entry.files().size());
-        int cw = fm.stringWidth(chip) + gap;
-        int ch = JBUI.scale(PILL_H);
-        right -= cw + gap;
-        g2.setColor(CHIP);
-        g2.fillRoundRect(right, cy - ch / 2, cw, ch, ch / 2, ch / 2);
-        g2.setColor(DIM);
-        g2.drawString(chip, right + gap / 2, baseline);
-      }
+      // 오른쪽: 굵은 작성자, 그 뒤 날짜 전체. 합치기 커밋은 둘 다 흐리게.
+      String time = ROW_TIME.format(entry.time().atZone(ZONE));
+      int right = w - gap * 2 - fm.stringWidth(time);
+      g2.setColor(entry.merge() ? DIM : UIUtil.getListForeground());
+      g2.drawString(time, right, baseline);
+      Font bold = getFont().deriveFont(Font.BOLD);
+      FontMetrics bm = g2.getFontMetrics(bold);
+      right -= gap + bm.stringWidth(entry.author());
+      g2.setFont(bold);
+      g2.drawString(entry.author(), right, baseline);
+      g2.setFont(getFont());
 
       int textX = graphWidth + gap;
       int room = right - gap - textX;
@@ -641,15 +610,7 @@ final class ProjectHistoryPanel extends JPanel {
       int x1 = laneX(s.from());
       int x2 = laneX(s.to());
       g.setColor(laneColor(s.lane()));
-      if (x1 == x2) {
-        g.drawLine(x1, y1, x2, y2);
-        return;
-      }
-      Path2D path = new Path2D.Float();
-      int mid = (y1 + y2) / 2;
-      path.moveTo(x1, y1);
-      path.curveTo(x1, mid, x2, mid, x2, y2);
-      g.draw(path);
+      g.drawLine(x1, y1, x2, y2);
     }
   }
 
