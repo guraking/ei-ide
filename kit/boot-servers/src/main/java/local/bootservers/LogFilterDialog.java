@@ -12,7 +12,6 @@ import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.ui.CollectionListModel;
 import com.intellij.ui.ColoredListCellRenderer;
 import com.intellij.ui.DocumentAdapter;
-import com.intellij.ui.JBColor;
 import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.components.JBCheckBox;
 import com.intellij.ui.components.JBLabel;
@@ -20,6 +19,8 @@ import com.intellij.ui.components.JBList;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.components.JBTextField;
 import com.intellij.util.ui.JBUI;
+import com.intellij.util.ui.NamedColorUtil;
+import com.intellij.util.ui.UIUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -55,10 +56,9 @@ final class LogFilterDialog extends DialogWrapper {
     /** 한 줄에 보이는 최대 글자 수. 넘으면 줄임표. */
     private static final int MAX_SHOWN_CHARS = 1000;
     private static final String TAB_SHOWN = "    ";
-
-    private static final Color ERROR_COLOR = new JBColor(new Color(0xC6, 0x28, 0x28), new Color(0xFF, 0x6B, 0x68));
-    private static final Color WARN_COLOR = new JBColor(new Color(0xA0, 0x5A, 0x00), new Color(0xE5, 0xB5, 0x4A));
-    private static final Color INFO_COLOR = new JBColor(new Color(0x1B, 0x5E, 0x20), new Color(0x8A, 0xC8, 0x7C));
+    private static final int QUERY_COLUMNS = 24;
+    private static final int DIALOG_WIDTH = 900;
+    private static final int DIALOG_HEIGHT = 500;
 
     private final Editor editor;
     private final Map<LogFilter.Level, JBCheckBox> levelBoxes = new EnumMap<>(LogFilter.Level.class);
@@ -102,14 +102,14 @@ final class LogFilterDialog extends DialogWrapper {
 
     @Override
     protected @Nullable JComponent createCenterPanel() {
-        JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0));
+        JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(UIUtil.DEFAULT_HGAP), 0));
         for (LogFilter.Level level : LogFilter.Level.values()) {
             JBCheckBox box = new JBCheckBox(level.name(), true);
             box.addActionListener(e -> refresh());
             levelBoxes.put(level, box);
             top.add(box);
         }
-        queryField.setColumns(24);
+        queryField.setColumns(QUERY_COLUMNS);
         queryField.getEmptyText().setText(BootServersBundle.message("log.filter.query.hint"));
         queryField.getDocument().addDocumentListener(new DocumentAdapter() {
             @Override
@@ -125,7 +125,7 @@ final class LogFilterDialog extends DialogWrapper {
         JPanel north = new JPanel();
         north.setLayout(new BoxLayout(north, BoxLayout.Y_AXIS));
         north.add(top);
-        JPanel statusRow = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(8), JBUI.scale(4)));
+        JPanel statusRow = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(UIUtil.DEFAULT_HGAP), JBUI.scale(UIUtil.DEFAULT_VGAP)));
         statusRow.add(status);
         north.add(statusRow);
 
@@ -144,7 +144,7 @@ final class LogFilterDialog extends DialogWrapper {
         JPanel panel = new JPanel(new BorderLayout());
         panel.add(north, BorderLayout.NORTH);
         panel.add(new JBScrollPane(list), BorderLayout.CENTER);
-        panel.setPreferredSize(JBUI.size(900, 500));
+        panel.setPreferredSize(JBUI.size(DIALOG_WIDTH, DIALOG_HEIGHT));
         return panel;
     }
 
@@ -238,11 +238,11 @@ final class LogFilterDialog extends DialogWrapper {
         resume = next;
         if (error != null) {
             status.setText(error);
-            status.setForeground(ERROR_COLOR);
+            status.setForeground(NamedColorUtil.getErrorForeground());
         } else {
             shownLines = lines;
             status.setText(BootServersBundle.message("log.filter.count", lines.size()));
-            status.setForeground(JBColor.foreground());
+            status.setForeground(UIUtil.getLabelForeground());
             list.setModel(new CollectionListModel<>(lines));
             if (followBox.isSelected() && !lines.isEmpty()) {
                 list.ensureIndexIsVisible(lines.size() - 1);
@@ -285,15 +285,16 @@ final class LogFilterDialog extends DialogWrapper {
         editor.getScrollingModel().scrollToCaret(ScrollType.CENTER);
     }
 
+    /** 레벨 글 색. 테마의 오류 · 경고 · 성공 · 흐린 글 색을 따르고, 레벨이 없는 줄은 보통 글 색이다. */
     private static Color colorOf(LogFilter.Level level) {
         if (level == null) {
-            return JBColor.foreground();
+            return UIUtil.getLabelForeground();
         }
         return switch (level) {
-            case ERROR -> ERROR_COLOR;
-            case WARN -> WARN_COLOR;
-            case INFO -> INFO_COLOR;
-            case DEBUG -> JBColor.GRAY;
+            case ERROR -> JBUI.CurrentTheme.Label.errorForeground();
+            case WARN -> JBUI.CurrentTheme.Label.warningForeground();
+            case INFO -> UIUtil.getLabelSuccessForeground();
+            case DEBUG -> NamedColorUtil.getInactiveTextColor();
         };
     }
 

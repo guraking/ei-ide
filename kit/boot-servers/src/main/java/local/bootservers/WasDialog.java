@@ -9,7 +9,6 @@ import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.openapi.ui.TextFieldWithBrowseButton;
 import com.intellij.openapi.ui.ValidationInfo;
 import com.intellij.ui.DocumentAdapter;
-import com.intellij.ui.JBColor;
 import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.SimpleListCellRenderer;
 import com.intellij.ui.components.JBCheckBox;
@@ -18,6 +17,8 @@ import com.intellij.ui.components.JBTextField;
 import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.JBUI;
+import com.intellij.util.ui.NamedColorUtil;
+import com.intellij.util.ui.UIUtil;
 import local.bootservers.was.JeusBase;
 import local.bootservers.was.WasSettings;
 import org.jetbrains.annotations.NotNull;
@@ -35,6 +36,11 @@ import java.util.Set;
 
 /** WAS 추가 · 편집 대화 상자. 확인을 누르면 {@link #result()} 로 고친 사본을 돌려준다(원본은 건드리지 않는다). */
 final class WasDialog extends DialogWrapper {
+
+    private static final int CHECK_COLUMN_WIDTH = 50;
+    private static final int DEPLOY_VISIBLE_ROWS = 6;
+    private static final int DIALOG_WIDTH = 720;
+    private static final int DIALOG_HEIGHT = 760;
 
     private final WasSettings.Server server;
 
@@ -111,7 +117,7 @@ final class WasDialog extends DialogWrapper {
         for (JBTextField f : List.of(startCommand, stopCommand, deployCommand)) {
             f.setToolTipText(placeholders);
         }
-        jeusHint.setForeground(JBColor.GRAY);
+        jeusHint.setForeground(UIUtil.getContextHelpForeground());
 
         List<String> modules = new ArrayList<>();
         for (Module m : ModuleManager.getInstance(project).getModules()) {
@@ -198,7 +204,7 @@ final class WasDialog extends DialogWrapper {
             default -> BootServersBundle.message("was.dialog.hint.tomcat");
         };
         found.setText(version == null ? BootServersBundle.message("was.dialog.choose.home", k.label, hint) : BootServersBundle.message("was.dialog.found", version));
-        found.setForeground(version == null ? JBColor.GRAY : new JBColor(0x3E9C46, 0x5FB865));
+        found.setForeground(version == null ? NamedColorUtil.getInactiveTextColor() : UIUtil.getLabelSuccessForeground());
     }
 
     private static String versionOf(WasSettings.Kind k, String path) {
@@ -216,8 +222,8 @@ final class WasDialog extends DialogWrapper {
     @Override
     protected @Nullable JComponent createCenterPanel() {
         JBTable table = new JBTable(new DeployModel());
-        table.getColumnModel().getColumn(0).setMaxWidth(JBUI.scale(50));
-        table.setVisibleRowCount(6);
+        table.getColumnModel().getColumn(0).setMaxWidth(JBUI.scale(CHECK_COLUMN_WIDTH));
+        table.setVisibleRowCount(DEPLOY_VISIBLE_ROWS);
         JComponent panel = FormBuilder.createFormBuilder()
                 .addLabeledComponent(BootServersBundle.message("was.dialog.kind"), kind)
                 .addLabeledComponent(BootServersBundle.message("servers.boot.name"), name)
@@ -239,7 +245,7 @@ final class WasDialog extends DialogWrapper {
                 .addComponentToRightColumn(jeusHint)
                 .addLabeledComponentFillVertically(BootServersBundle.message("was.dialog.deployments"), ScrollPaneFactory.createScrollPane(table))
                 .getPanel();
-        panel.setPreferredSize(JBUI.size(720, 760));
+        panel.setPreferredSize(JBUI.size(DIALOG_WIDTH, DIALOG_HEIGHT));
         return panel;
     }
 

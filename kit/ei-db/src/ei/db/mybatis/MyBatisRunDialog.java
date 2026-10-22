@@ -65,8 +65,10 @@ public final class MyBatisRunDialog extends DialogWrapper {
   private static final String VALUE_KEY = "ei.db.mybatis.value.";
   private static final int PREVIEW_ROWS = 12;
   private static final int PREVIEW_COLUMNS = 80;
-  private static final JBColor WARNING = new JBColor(new Color(0xC27D0E), new Color(0xE0A64F));
-  private static final JBColor WARNING_BACKGROUND = new JBColor(new Color(0xFFF6E5), new Color(0x3A3121));
+  /** 칼럼 · 필드 불일치 알림: 경고 글자색과 알림 띠(Banner)의 경고 바탕 · 테두리. 모두 테마 색. */
+  private static final Color WARNING = JBUI.CurrentTheme.Label.warningForeground();
+  private static final Color WARNING_BACKGROUND = JBUI.CurrentTheme.Banner.WARNING_BACKGROUND;
+  private static final Color WARNING_BORDER = JBUI.CurrentTheme.Banner.WARNING_BORDER_COLOR;
 
   private final Project project;
   private final MapperDoc doc;
@@ -290,7 +292,7 @@ public final class MyBatisRunDialog extends DialogWrapper {
     warning.add(head, BorderLayout.NORTH);
     warning.add(lines, BorderLayout.CENTER);
     warning.setBackground(WARNING_BACKGROUND);
-    warning.setBorder(JBUI.Borders.compound(JBUI.Borders.customLine(WARNING, 1), JBUI.Borders.empty(8, 12)));
+    warning.setBorder(JBUI.Borders.compound(JBUI.Borders.customLine(WARNING_BORDER, 1), JBUI.Borders.empty(8, 12)));
     warning.revalidate();
     warning.repaint();
   }

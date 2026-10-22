@@ -1,21 +1,29 @@
 package ei.db.gen;
 
+import com.intellij.icons.AllIcons;
+import com.intellij.openapi.actionSystem.ActionToolbar;
+import com.intellij.openapi.actionSystem.ActionUpdateThread;
+import com.intellij.openapi.actionSystem.AnActionEvent;
+import com.intellij.openapi.actionSystem.Separator;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.fileChooser.FileChooserFactory;
 import com.intellij.openapi.fileChooser.FileSaverDescriptor;
 import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.Task;
+import com.intellij.openapi.project.DumbAwareToggleAction;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.ui.SimpleToolWindowPanel;
 import com.intellij.openapi.vfs.VirtualFileWrapper;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowAnchor;
 import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.ui.components.JBLabel;
-import com.intellij.ui.components.JBScrollPane;
+import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentFactory;
 import com.intellij.util.ui.JBUI;
+import ei.db.BarAction;
 import ei.db.DbConfig;
 import ei.db.DbSessions;
 import ei.db.EiDbBundle;
@@ -25,12 +33,8 @@ import ei.db.SqlRunner;
 import org.jetbrains.annotations.NotNull;
 
 import javax.imageio.ImageIO;
-import javax.swing.ButtonGroup;
-import javax.swing.JButton;
 import javax.swing.JPanel;
-import javax.swing.JToggleButton;
 import java.awt.BorderLayout;
-import java.awt.FlowLayout;
 import java.io.IOException;
 import java.sql.Connection;
 import java.util.ArrayList;
@@ -48,6 +52,7 @@ public final class ErdView {
   /** 도구 창 id(설정 저장용 열쇠라 바꾸지 않는다). 화면에는 STRIPE_TITLE 로 보인다. */
   static final String TOOL_WINDOW_ID = "EI ERD";
   private static final String STRIPE_TITLE = "ERD";
+  private static final String TOOLBAR_PLACE = "EiDbErd";
   private static final int MAX_TABLES = 60;
   private static final String[] TABLE_TYPES = {"TABLE"};
 
@@ -101,33 +106,24 @@ public final class ErdView {
   private static void show(Project project, DbConfig c, String schema, List<ErdCanvas.Card> cards, List<Meta.ForeignKey> fks) {
     ErdCanvas canvas = new ErdCanvas(cards, fks, table -> SqlRunner.run(project, c, "SELECT * FROM " + Names.sql(c.kind, schema, table), List.of()));
 
-    JButton relayout = new JButton(EiDbBundle.message("erd.relayout"));
-    relayout.addActionListener(e -> canvas.autoLayout());
-    JToggleButton allCols = new JToggleButton(EiDbBundle.message("erd.all.columns"), true);
-    JToggleButton keyCols = new JToggleButton(EiDbBundle.message("erd.key.columns"));
-    ButtonGroup group = new ButtonGroup();
-    group.add(allCols);
-    group.add(keyCols);
-    allCols.addActionListener(e -> canvas.setKeysOnly(false));
-    keyCols.addActionListener(e -> canvas.setKeysOnly(true));
-    JButton png = new JButton(EiDbBundle.message("erd.save.png"));
-    png.addActionListener(e -> savePng(project, schema, canvas));
-
-    JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(6), JBUI.scale(4)));
-    toolbar.add(relayout);
-    toolbar.add(new JBLabel(EiDbBundle.message("erd.columns.label")));
-    toolbar.add(allCols);
-    toolbar.add(keyCols);
-    toolbar.add(png);
+    SimpleToolWindowPanel panel = new SimpleToolWindowPanel(true, true);
+    ActionToolbar toolbar = BarAction.toolbar(TOOLBAR_PLACE, panel,
+        new BarAction(EiDbBundle.message("erd.relayout"), null, AllIcons.Graph.Layout, canvas::autoLayout),
+        new KeysOnly(canvas),
+        Separator.getInstance(),
+        new BarAction(EiDbBundle.message("erd.save.png"), EiDbBundle.message("erd.save.png.description"), AllIcons.ToolbarDecorator.Export,
+            () -> savePng(project, schema, canvas)));
 
     JBLabel legend = new JBLabel(EiDbBundle.message("erd.legend"));
     legend.setForeground(Ui.muted());
     legend.setBorder(JBUI.Borders.empty(4, 8));
 
-    JPanel panel = new JPanel(new BorderLayout());
-    panel.add(toolbar, BorderLayout.NORTH);
-    panel.add(new JBScrollPane(canvas), BorderLayout.CENTER);
-    panel.add(legend, BorderLayout.SOUTH);
+    // 도구줄 아래 선은 SimpleToolWindowPanel 이 그리고, 스크롤 칸은 테두리 없이 둔다(선이 겹치지 않게).
+    JPanel body = new JPanel(new BorderLayout());
+    body.add(ScrollPaneFactory.createScrollPane(canvas, true), BorderLayout.CENTER);
+    body.add(legend, BorderLayout.SOUTH);
+    panel.setToolbar(toolbar.getComponent());
+    panel.setContent(body);
 
     ToolWindowManager twm = ToolWindowManager.getInstance(project);
     ToolWindow tw = twm.getToolWindow(TOOL_WINDOW_ID);
@@ -139,6 +135,27 @@ public final class ErdView {
     tw.getContentManager().addContent(content);
     tw.getContentManager().setSelectedContent(content);
     tw.activate(null);
+  }
+
+  /** 「키 칼럼만」 켜고 끄기. 끄면 모든 칼럼을 보인다. */
+  private static final class KeysOnly extends DumbAwareToggleAction {
+    private final ErdCanvas canvas;
+    private boolean on;
+
+    KeysOnly(ErdCanvas canvas) {
+      super(EiDbBundle.message("erd.key.columns.only"), null, AllIcons.Nodes.DataColumn);
+      this.canvas = canvas;
+    }
+
+    @Override public boolean isSelected(@NotNull AnActionEvent e) { return on; }
+
+    @Override
+    public void setSelected(@NotNull AnActionEvent e, boolean state) {
+      on = state;
+      canvas.setKeysOnly(state);
+    }
+
+    @Override public @NotNull ActionUpdateThread getActionUpdateThread() { return ActionUpdateThread.EDT; }
   }
 
   private static void savePng(Project project, String schema, ErdCanvas canvas) {

@@ -33,6 +33,9 @@ import java.util.Map;
 final class ServerGroupDialog extends DialogWrapper {
 
     private static final int LIST_ROWS = 10;
+    // 두 목록 사이 · 이름 줄과 목록 사이 간격
+    private static final int LIST_GAP = 8;
+    private static final int SECTION_GAP = 4;
 
     private final Map<String, String> labels;
     private final List<String> otherNames;
@@ -77,6 +80,8 @@ final class ServerGroupDialog extends DialogWrapper {
         memberList.setCellRenderer(renderer);
         availableList.setVisibleRowCount(LIST_ROWS);
         memberList.setVisibleRowCount(LIST_ROWS);
+        availableList.getEmptyText().setText(BootServersBundle.message("group.dialog.available.empty"));
+        memberList.getEmptyText().setText(BootServersBundle.message("group.dialog.order.empty"));
         availableList.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
@@ -89,7 +94,7 @@ final class ServerGroupDialog extends DialogWrapper {
                 .setAddAction(button -> addSelected())
                 .setRemoveAction(button -> removeSelected())
                 .createPanel();
-        JPanel lists = new JPanel(new GridLayout(1, 2, JBUI.scale(8), 0));
+        JPanel lists = new JPanel(new GridLayout(1, 2, JBUI.scale(LIST_GAP), 0));
         lists.add(FormBuilder.createFormBuilder()
                 .addComponent(new JBLabel(BootServersBundle.message("group.dialog.available")))
                 .addComponentFillVertically(ScrollPaneFactory.createScrollPane(availableList), 0)
@@ -100,7 +105,7 @@ final class ServerGroupDialog extends DialogWrapper {
                 .getPanel());
         return FormBuilder.createFormBuilder()
                 .addLabeledComponent(BootServersBundle.message("group.dialog.name"), name)
-                .addComponentFillVertically(lists, JBUI.scale(4))
+                .addComponentFillVertically(lists, JBUI.scale(SECTION_GAP))
                 .getPanel();
     }
 

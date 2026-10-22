@@ -25,7 +25,6 @@ import ei.db.Meta;
 import ei.db.Notify;
 import org.jetbrains.annotations.NotNull;
 
-import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
@@ -254,7 +253,7 @@ public final class MapperDialog extends DialogWrapper {
       }
     });
     JBScrollPane sp = new JBScrollPane(t);
-    sp.setBorder(BorderFactory.createEmptyBorder());
+    sp.setBorder(JBUI.Borders.empty());
     return sp;
   }
 

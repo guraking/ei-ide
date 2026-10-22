@@ -34,9 +34,19 @@ import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.openapi.wm.ex.ToolWindowManagerListener;
 import com.intellij.ui.ColoredTreeCellRenderer;
-import com.intellij.ui.JBSplitter;
+import com.intellij.icons.AllIcons;
+import com.intellij.openapi.actionSystem.ActionToolbar;
+import com.intellij.openapi.actionSystem.ActionUpdateThread;
+import com.intellij.openapi.actionSystem.DefaultActionGroup;
+import com.intellij.openapi.project.DumbAwareAction;
+import com.intellij.openapi.project.DumbAwareToggleAction;
+import com.intellij.openapi.ui.SimpleToolWindowPanel;
+import com.intellij.ui.JBColor;
+import com.intellij.ui.OnePixelSplitter;
+import com.intellij.ui.ScrollPaneFactory;
+import com.intellij.util.ui.JBUI;
+import org.jetbrains.annotations.NotNull;
 import com.intellij.ui.SimpleTextAttributes;
-import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.treeStructure.Tree;
 import com.intellij.util.ui.tree.TreeUtil;
 import git4idea.repo.GitRepository;
@@ -84,7 +94,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * git · svn 은 PATH 의 실행 파일을 쓴다. SVN 은 CLI 만 쓰므로 svn4idea 플러그인이 없어도 동작한다.
  * shortcut: Git 설정 화면의 git 경로를 따르지 않는다, PATH 에 git 이 없는 PC 를 지원해야 할 때 Git4Idea 의 실행 파일 관리자로 바꾼다.
  */
-final class SyncPanel extends JPanel {
+final class SyncPanel extends SimpleToolWindowPanel {
   /** ASSUMED 는 변경이 아니라 skip-worktree(예전 판은 assume-unchanged)로 모른 척 중인 Git 파일이다. 「모두 보기」에서만 맨 아래 묶음으로 보인다. */
   enum Kind { CONFLICT, INCOMING, OUTGOING, ASSUMED;
     /** 트리 묶음 줄에 보일 이름. */
@@ -119,6 +129,9 @@ final class SyncPanel extends JPanel {
   private static final long SVN_UPDATE_TIMEOUT_SEC = TimeUnit.MINUTES.toSeconds(30);
   private static final int PATH_LIST_MAX = 10;
   private static final int REPO_CHANGE_DELAY_MS = 500;
+  private static final String TOOLBAR_PLACE = "KingGuraSynchronizeToolbar";
+  // 도구줄 글 사이 · 아래 단추 사이 간격(JBUI.scale 전).
+  private static final int GAP = 8;
   private static final Set<String> UNMERGED = Set.of("DD", "AU", "UD", "UA", "DU", "AA", "UU");
   // ProjectLevelVcsManager 가 주는 AbstractVcs.getName() 값. GitVcs.NAME · SvnVcs.VCS_NAME 과 같다.
   private static final String VCS_NAME_GIT = "Git";
@@ -151,9 +164,8 @@ final class SyncPanel extends JPanel {
   private final DiffRequestPanel diffPanel;
   private final JLabel title = new JLabel(SyncBundle.message("sync.title"));
   private final JLabel status = new JLabel(" ");
-  private final JButton refreshButton = new JButton(SyncBundle.message("sync.refresh.all"));
-  private final JButton refreshSelectedButton = new JButton(SyncBundle.message("sync.refresh.selected"));
-  private final Map<String, JToggleButton> modeButtons = new LinkedHashMap<>();
+  // 새로고침이 도는 동안 참(EDT 에서만). 도구줄의 새로고침 동작은 이 값이 참이면 꺼진다.
+  private boolean busy;
 
   private volatile List<Repo> repos = List.of();
   private List<Change> changes = List.of();
@@ -175,33 +187,45 @@ final class SyncPanel extends JPanel {
   private volatile Set<String> lastLocalPaths = Set.of();
 
   SyncPanel(Project project, Disposable parent) {
-    super(new BorderLayout());
+    super(true, true);
     this.project = project;
     this.diffPanel = DiffManager.getInstance().createRequestPanel(project, parent, null);
 
-    JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
-    top.add(title);
-    top.add(refreshButton);
-    top.add(refreshSelectedButton);
-    ButtonGroup group = new ButtonGroup();
-    addMode(top, group, SyncBundle.message("sync.mode.all"), null);
-    addMode(top, group, SyncBundle.message("sync.mode.incoming"), Kind.INCOMING);
-    addMode(top, group, SyncBundle.message("sync.mode.outgoing"), Kind.OUTGOING);
-    addMode(top, group, SyncBundle.message("sync.mode.conflict"), Kind.CONFLICT);
-    modeButtons.get(SyncBundle.message("sync.mode.all")).setSelected(true);
-    top.add(status);
-    add(top, BorderLayout.NORTH);
+    // IntelliJ 기본 창처럼 위쪽은 아이콘 도구줄(새로고침 · 보기 거르기), 그 오른쪽에 저장소 이름과 상태 글.
+    // 창 머리 아래 선은 IntelliJ 가 그으므로 스크롤 상자는 테두리 없이, 칸막이는 1픽셀로 둔다.
+    DefaultActionGroup actions = new DefaultActionGroup();
+    actions.add(new RefreshAction("sync.refresh.all", AllIcons.Actions.Refresh, this::refresh));
+    actions.add(new RefreshAction("sync.refresh.selected", AllIcons.Actions.ForceRefresh, this::refreshSelected));
+    actions.addSeparator();
+    actions.add(new ModeAction("sync.mode.all", AllIcons.Actions.ListChanges, null));
+    actions.add(new ModeAction("sync.mode.incoming", AllIcons.Actions.CheckOut, Kind.INCOMING));
+    actions.add(new ModeAction("sync.mode.outgoing", AllIcons.Vcs.Push, Kind.OUTGOING));
+    actions.add(new ModeAction("sync.mode.conflict", AllIcons.Vcs.Merge, Kind.CONFLICT));
+    ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar(TOOLBAR_PLACE, actions, true);
+    toolbar.setTargetComponent(this);
+    status.setForeground(SimpleTextAttributes.GRAYED_ATTRIBUTES.getFgColor());
+    JPanel labels = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(GAP), 0));
+    labels.add(title);
+    labels.add(status);
+    JPanel top = new JPanel(new BorderLayout());
+    top.add(toolbar.getComponent(), BorderLayout.WEST);
+    top.add(labels, BorderLayout.CENTER);
+    setToolbar(top);
 
-    JBSplitter splitter = new JBSplitter(false, 0.35f);
-    splitter.setFirstComponent(new JBScrollPane(tree));
+    OnePixelSplitter splitter = new OnePixelSplitter(false, 0.35f);
+    splitter.setFirstComponent(ScrollPaneFactory.createScrollPane(tree, true));
     splitter.setSecondComponent(diffPanel.getComponent());
-    add(splitter, BorderLayout.CENTER);
 
-    JPanel bottom = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
+    // 아래 단추 줄: 위쪽 1픽셀 선으로 목록과 가르고, 단추 사이 · 가장자리는 IntelliJ 기본 간격.
+    JPanel bottom = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(GAP), JBUI.scale(GAP / 2)));
+    bottom.setBorder(JBUI.Borders.customLineTop(JBColor.border()));
     bottom.add(actionButton(SyncBundle.message("sync.button.update.all"), ACTION_UPDATE_ALL, false));
     bottom.add(actionButton(SyncBundle.message("sync.button.pull"), ACTION_PULL, true));
     bottom.add(actionButton(SyncBundle.message("sync.button.resolve"), "Git.ResolveConflicts", false));
-    add(bottom, BorderLayout.SOUTH);
+    JPanel content = new JPanel(new BorderLayout());
+    content.add(splitter, BorderLayout.CENTER);
+    content.add(bottom, BorderLayout.SOUTH);
+    setContent(content);
 
     tree.setRootVisible(false);
     tree.getEmptyText().setText(SyncBundle.message("sync.empty"));
@@ -222,8 +246,6 @@ final class SyncPanel extends JPanel {
       @Override public void mousePressed(MouseEvent e) { showPopup(e); }
       @Override public void mouseReleased(MouseEvent e) { showPopup(e); }
     });
-    refreshButton.addActionListener(e -> refresh());
-    refreshSelectedButton.addActionListener(e -> refreshSelected());
 
     // 커밋 · Push · Pull · 브랜치 전환으로 Git 상태가 바뀌면 그 저장소만 fetch 없이 다시 비교한다.
     // 변경 목록이 갱신되면(편집 · 저장마다 온다) 변경 · 새 파일 경로가 달라진 저장소(Git · SVN)만 다시 비교한다.
@@ -698,12 +720,39 @@ final class SyncPanel extends JPanel {
     });
   }
 
-  private void addMode(JPanel top, ButtonGroup group, String text, Kind kind) {
-    JToggleButton button = new JToggleButton(text);
-    button.addActionListener(e -> { modeFilter = kind; rebuildTree(); });
-    group.add(button);
-    modeButtons.put(text, button);
-    top.add(button);
+  /** 도구줄 새로고침 동작. 새로고침이 도는 동안(busy) 꺼진다. 글은 풍선 도움말로 보인다. */
+  private final class RefreshAction extends DumbAwareAction {
+    private final Runnable run;
+
+    RefreshAction(String key, Icon icon, Runnable run) {
+      super(SyncBundle.message(key), null, icon);
+      this.run = run;
+    }
+
+    @Override public @NotNull ActionUpdateThread getActionUpdateThread() { return ActionUpdateThread.EDT; }
+    @Override public void update(@NotNull AnActionEvent e) { e.getPresentation().setEnabled(!busy); }
+    @Override public void actionPerformed(@NotNull AnActionEvent e) { run.run(); }
+  }
+
+  /** 도구줄 보기 거르기. 넷 중 하나만 눌린 상태(라디오)이고, kind 가 null 이면 전체. 아이콘 옆에 글도 보인다. */
+  private final class ModeAction extends DumbAwareToggleAction {
+    private final Kind kind;
+
+    ModeAction(String key, Icon icon, Kind kind) {
+      super(SyncBundle.message(key), null, icon);
+      this.kind = kind;
+      getTemplatePresentation().putClientProperty(ActionUtil.SHOW_TEXT_IN_TOOLBAR, true);
+    }
+
+    @Override public @NotNull ActionUpdateThread getActionUpdateThread() { return ActionUpdateThread.EDT; }
+    @Override public boolean isSelected(@NotNull AnActionEvent e) { return modeFilter == kind; }
+
+    @Override
+    public void setSelected(@NotNull AnActionEvent e, boolean state) {
+      if (!state) return;  // 눌린 것을 다시 눌러도 거르기는 풀리지 않는다.
+      modeFilter = kind;
+      rebuildTree();
+    }
   }
 
   /**
@@ -894,8 +943,7 @@ final class SyncPanel extends JPanel {
       status.setText(SyncBundle.message("sync.no.project"));
       return;
     }
-    refreshButton.setEnabled(false);
-    refreshSelectedButton.setEnabled(false);
+    busy = true;
     status.setText(SyncBundle.message("sync.comparing"));
     int seq = ++compareSeq;
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
@@ -949,8 +997,7 @@ final class SyncPanel extends JPanel {
       if (!errors.isEmpty()) message = String.join(" / ", errors);
       String finalMessage = message;
       SwingUtilities.invokeLater(() -> {
-        refreshButton.setEnabled(true);
-        refreshSelectedButton.setEnabled(true);
+        busy = false;
         // 그사이 다시 비교(recompare)가 시작됐으면 목록은 그쪽 결과를 따르고, 원격 확인 결과 · 오류는 그대로 알린다.
         status.setText(finalMessage);
         if (seq != compareSeq) return;
@@ -991,8 +1038,7 @@ final class SyncPanel extends JPanel {
   /** 저장소 하나만 원격을 받아 와 다시 비교하고 목록에서 그 저장소 것만 바꾼다. 목록에 없던 저장소면 더한다. */
   private void refreshRepo(File root, Vcs vcs) {
     String name = root.getName();
-    refreshButton.setEnabled(false);
-    refreshSelectedButton.setEnabled(false);
+    busy = true;
     status.setText(SyncBundle.message("sync.repo.fetching", name));
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       Repo updated = null;
@@ -1020,8 +1066,7 @@ final class SyncPanel extends JPanel {
       List<Change> finalFresh = fresh;
       String finalError = error;
       SwingUtilities.invokeLater(() -> {
-        refreshButton.setEnabled(true);
-        refreshSelectedButton.setEnabled(true);
+        busy = false;
         if (finalError != null) {
           status.setText(finalError);
           return;
