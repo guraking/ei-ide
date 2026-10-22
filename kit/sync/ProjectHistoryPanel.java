@@ -19,6 +19,7 @@ import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.JBColor;
 import com.intellij.ui.JBSplitter;
 import com.intellij.ui.SearchTextField;
+import com.intellij.ui.components.JBCheckBox;
 import com.intellij.ui.components.JBList;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.content.ContentFactory;
@@ -73,6 +74,7 @@ final class ProjectHistoryPanel extends JPanel {
   private static final int MERGE_DOT = 10;
   private static final int PILL_H = 18;
   private static final int GAP = 8;
+  private static final int SEARCH_COLUMNS = 30;
   private static final float LINE_WIDTH = 2f;
   // 동그라미 지름 대비 머리글자 크기.
   private static final float AVATAR_FONT_RATIO = 0.4f;
@@ -113,9 +115,9 @@ final class ProjectHistoryPanel extends JPanel {
   private final JBList<History.Entry> commits = new JBList<>(commitModel);
   private final JBList<History.FileChange> files = new JBList<>();
   private final SearchTextField filter = new SearchTextField(false);
-  private final JToggleButton lines = new JToggleButton(SyncBundle.message("history.lines"), true);
-  private final JToggleButton mine = new JToggleButton(SyncBundle.message("history.mine"));
-  private final JToggleButton hideMerges = new JToggleButton(SyncBundle.message("history.hide.merges"));
+  private final JToggleButton lines = new JBCheckBox(SyncBundle.message("history.lines"), true);
+  private final JToggleButton mine = new JBCheckBox(SyncBundle.message("history.mine"));
+  private final JToggleButton hideMerges = new JBCheckBox(SyncBundle.message("history.hide.merges"));
   private final JLabel projectName = new JLabel(" ");
   private final Pill branch = new Pill();
   private final JLabel status = new JLabel(" ");
@@ -142,6 +144,7 @@ final class ProjectHistoryPanel extends JPanel {
     files.addMouseListener(new MouseAdapter() {
       @Override public void mouseClicked(MouseEvent e) { if (e.getClickCount() == 2) showDiff(); }
     });
+    filter.getTextEditor().setColumns(SEARCH_COLUMNS);
     filter.addDocumentListener(new DocumentAdapter() {
       @Override protected void textChanged(@NotNull DocumentEvent e) { fillCommits(); }
     });
