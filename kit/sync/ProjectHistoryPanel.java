@@ -90,6 +90,8 @@ final class ProjectHistoryPanel extends JPanel {
   private static final Color GIT_BADGE = new Color(0xFF8A6A);
   private static final int PILL_FILL_ALPHA = 0x22;
   private static final int PILL_BORDER_ALPHA = 0x66;
+  // 줄 바탕에 옅게 깔리는 가지 색. 글자 대비를 해치지 않도록 알약 바탕보다 옅게 둔다.
+  private static final int ROW_TINT_ALPHA = 0x1A;
   private static final String TAG_PREFIX = "tag: ";
   private static final Map<String, Color> STATUS_COLORS = Map.of(
     "M", new Color(0xFFC061), "A", new Color(0x5FE39B), "D", new Color(0xFF7A95), "R", new Color(0x7FB3FF));
@@ -571,6 +573,10 @@ final class ProjectHistoryPanel extends JPanel {
 
       History.Row row = graph && loaded != null && index < loaded.rows().size() ? loaded.rows().get(index) : null;
       int col = row == null ? 0 : row.col();
+      if (!selected) {
+        g2.setColor(alpha(laneColor(col), ROW_TINT_ALPHA));
+        g2.fillRect(0, 0, w, h);
+      }
       Graphics2D lane = (Graphics2D)g2.create(0, 0, graphWidth, h);
       lane.setStroke(new BasicStroke(JBUI.scale(LINE_WIDTH)));
       if (row == null) {
