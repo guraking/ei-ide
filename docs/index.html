@@ -357,7 +357,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
     <div class="notes">
       <div class="note warn"><b>IDE 가 켜져 있으면</b>3번 bat 은 「먼저 종료」만 띄우고 멈춥니다. 끄고 다시 실행하세요.</div>
       <div class="note"><b>인터넷이 없을 때</b>bat 옆 <code>plugins</code> 폴더에 있는 것을 씁니다. 없을 때만 저장소 릴리스 · JetBrains 마켓에서 받습니다.</div>
-      <div class="note ok"><b>새 판 알림</b>IDE 를 켤 때 이 저장소의 최신 릴리스를 보고, 새 판이 있으면 오른쪽 아래에 「내려받기」 풍선이 뜹니다.</div>
+      <div class="note ok"><b>새 판 알림</b>IDE 를 켤 때 이 저장소의 최신 릴리스를 보고, 새 판이 있으면 오른쪽 아래에 「지금 업데이트」 풍선이 뜹니다. 누르면 설치 파일을 받고, IDE 를 닫은 뒤 설치 화면이 뜹니다.</div>
     </div>
 
     <h3>release 폴더</h3>
@@ -806,7 +806,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
         <li><span class="mark">+</span><div><b>IDE 파일은 처음부터 안 뜸</b> <span class="t">프로젝트를 열면 저장소마다 <code>.git/info/exclude</code> 에 <code>*.iml</code> · <code>.idea/</code> · <code>.project</code> · <code>.classpath</code> · <code>.settings/</code> 를 넣습니다. 팀 <code>.gitignore</code> 와 서버에는 영향이 없습니다.</span></div></li>
       </ol>
     </div>
-    <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note"><b>SVN</b>svn 명령줄 도구(VisualSVN)가 본체에 같이 들어 있어 따로 설치하지 않아도 SVN 저장소가 함께 보입니다.</div></div>
+    <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note"><b>SVN</b>svn 명령줄 도구(VisualSVN)가 본체에 같이 들어 있어 따로 설치하지 않아도 SVN 저장소가 함께 보입니다.</div><div class="note"><b>Git Log 창</b>아래쪽 「Git Log」 창 왼쪽에서 프로젝트(모듈)를 고르면 그 폴더를 바꾼 최근 커밋 100개를 GitKraken 처럼 보여 줍니다. 가지마다 색이 다른 선 위에 작성자 동그라미가 찍히고, 브랜치 · 태그는 알약으로 붙습니다. 커밋을 누르면 오른쪽에 작성자 · 해시(누르면 복사) · 전체 메시지 · 바뀐 파일, 파일을 두 번 누르면 커밋 전 · 후 비교 창이 열립니다. 위 단추: 가지 선(켜고 끄기) · 내 것만 · Merge 숨김 · 찾기. 거르면 한 줄로 그립니다. Git · SVN(한 줄) 모두 되고, 기존 Git 로그 창은 그대로입니다.</div></div>
   </div>
 </section>
 
@@ -919,7 +919,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
         <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
       </div>
       <ol class="legend" style="grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:14px">
-        <li><span class="mark">1</span><div><b>실행</b> <span class="t">커서가 있는 문장(또는 선택 영역) <kbd>Ctrl</kbd>+<kbd>Enter</kbd>, 전체는 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd>. 문장은 <code>;</code> 와 괄호 밖의 빈 줄로 나눕니다. 여러 문장은 앞 문장이 끝나야 다음을 실행하고, 실패하면 멈춥니다.</span></div></li>
+        <li><span class="mark">1</span><div><b>실행</b> <span class="t">커서가 있는 문장(또는 선택 영역) <kbd>Ctrl</kbd>+<kbd>Enter</kbd>, 전체는 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd>. 문장은 <code>;</code> 와 괄호 밖의 빈 줄로 나눕니다(빈 줄 뒤가 <code>ORDER BY</code> · <code>OFFSET</code> · <code>,</code> 같은 이어지는 절이면 잇습니다). 여러 문장은 앞 문장이 끝나야 다음을 실행하고, 실패하면 멈춥니다.</span></div></li>
         <li><span class="mark">2</span><div><b>정렬 · 대소문자</b> <span class="t">선택 영역에만, 없으면 전체에. 정렬 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd>, 대문자 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd>, 소문자 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Y</kbd>. 문자열 · 주석 · <code>#{}</code> 는 그대로. <kbd>Ctrl</kbd>+<kbd>Z</kbd> 로 되돌림.</span></div></li>
         <li><span class="mark">3</span><div><b>접속 · 조회 건수</b> <span class="t">콘솔마다 접속을 바꿀 수 있습니다. 건수는 500 · 1000 · 5000 · 10000 을 고르거나 숫자를 쓰고 Enter.</span></div></li>
         <li><span class="mark">4</span><div><b>자동 커밋 · 커밋 · 롤백</b> <span class="t">자동 커밋은 기본 꺼짐. 변경을 실행하면 「미반영 변경 N건」이 뜨고 커밋 · 롤백이 켜집니다.</span></div></li>
@@ -1092,7 +1092,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       <div class="side"><h5>값을 채운 SQL</h5><pre><span class="kw">SELECT</span> * <span class="kw">FROM</span> ORDERS <span class="kw">WHERE</span> ORDER_NO = <span class="st">'O100'</span> <span class="kw">AND</span> ST = <span class="st">'A'</span></pre></div>
     </div>
     <p class="lead" style="margin-top:10px">우클릭 메뉴: 「데이터베이스 콘솔에서 실행」 · 「쿼리 콘솔로 보내기」.</p>
-    <p class="lead">「쿼리 콘솔로 보내기」는 실행하지 않고 콘솔에 붙입니다. 로그가 아닌 선택 글도 보냅니다. 붙는 SQL 은 콘솔 「정렬」과 같은 모양으로 정렬됩니다. MyBatis 로그와 log4jdbc(<code>jdbc.sqltiming</code>) 로그를 모두 읽습니다.</p>
+    <p class="lead">「쿼리 콘솔로 보내기」는 실행하지 않고 콘솔에 붙입니다. 로그가 아닌 선택 글도 보냅니다. 붙는 SQL 은 콘솔 「정렬」과 같은 모양으로 정렬됩니다. MyBatis 로그와 log4jdbc(<code>jdbc.sqltiming</code>) 로그를 모두 읽고, 같은 쿼리는 가장 최근 것 하나만 목록에 보입니다. 쿼리가 여럿이면 「보낼 쿼리」 창이 뜹니다. 왼쪽 거르기 칸 · 목록에서 고르면 오른쪽에 값을 채우고 정렬한 쿼리가 보이고, 「복사」 · 「실행」(Ctrl+Enter) · 「콘솔로 보내기」(Enter)로 끝냅니다.</p>
     <p class="lead">로그에 쿼리가 여럿이면 보낼 쿼리를 목록에서 고르고, 이어서 보낼 콘솔 탭(또는 「새 콘솔…」)을 고릅니다. 실행도 고른 콘솔에서 합니다.</p>
 
     <h3>⑦ 매퍼 뼈대 · DTO · ERD</h3>
@@ -1355,6 +1355,7 @@ build-windows.bat
       <tr><td>Navigate · Search 메뉴</td><td>URL 찾기…</td></tr>
       <tr><td>Project 메뉴</td><td>프로그램 목록 엑셀로 내보내기…</td></tr>
       <tr><td>Run 메뉴</td><td>API 테스트(Swagger)…</td></tr>
+      <tr><td>오른쪽 옆줄(데이터베이스 아래)</td><td>보안 메모 — 내가 정한 비밀번호로만 열리는 메모장 하나. 처음 열 때 비밀번호를 정하고(4자 이상), 내용은 그 비밀번호로 암호화해 설정 폴더 <code>ei-secure-memo.bin</code> 에 둡니다. 「잠그기」나 IDE 를 닫으면 저장하고 잠깁니다. 비밀번호는 어디에도 저장하지 않으므로 잊으면 되살릴 수 없고, 「초기화」로 지우고 새로 시작합니다</td></tr>
       <tr><td>Git 메뉴 · Git · Subversion 우클릭</td><td>작업 공간 동기화 (맨 위)</td></tr>
       <tr><td>프로젝트 트리 우클릭</td><td>맨 위 Maven 다시 읽기 · Gradle 다시 읽기, 스프링 부트 서버(시작 · 디버그 · 재시작 · 중지), 작업공간(Module from Existing Sources · Get from VCS · Create Git Repository · Manage Remotes), 프로그램 목록 엑셀, Assume Unchanged · No Assume Unchanged</td></tr>
       <tr><td>편집기 우클릭</td><td>맨 위 MyBatis 쿼리 실행 · 계층 코드 만들기… · 컨트롤러로 이동(JSP), SQL 콘솔이면 실행 · 전체 실행 · 정렬 · 실행 계획 · 대문자 · 소문자. 맨 아래 표기법 바꾸기, AI(설명해 줘 · 고쳐 줘 · 질문하기…)</td></tr>
@@ -1363,7 +1364,7 @@ build-windows.bat
       <tr><td>데이터베이스 탐색기 우클릭</td><td>표: SELECT · INSERT · UPDATE 문, 매퍼 뼈대, 기능 한 벌, ERD, 테이블 정의서 엑셀. 접속: 세션 · 잠금 보기. 프로그램: 컴파일 오류 보기</td></tr>
       <tr><td>결과 탭 우클릭</td><td>다른 결과와 비교…, 다른 탭 닫기 · 모든 탭 닫기</td></tr>
       <tr><td>커밋 창 파일 우클릭</td><td>Assume Unchanged</td></tr>
-      <tr><td>코드 도구(편집기 우클릭 · Source 메뉴)</td><td>옮겨 담기 코드 · 테스트 뼈대 · 요청 값을 DTO 로 묶기 · 입력 검증 붙이기 · enum 다시 맞추기 · JSON 으로 DTO(트리 우클릭도) · 칼럼 이름 바꾸기. 매퍼 XML 우클릭: 호출 코드 복사 · 동적 조건 · 페이징 쿼리. 자바 우클릭: 문자열 SQL 정리. 결과 창: enum 단추. 자세한 것은 13 절</td></tr>
+      <tr><td>코드 도구(편집기 우클릭 · Source 메뉴)</td><td>요청 값을 DTO 로 묶기 · 입력 검증 붙이기 · enum 다시 맞추기 · JSON 으로 DTO(트리 우클릭도) · 칼럼 이름 바꾸기. 매퍼 XML 우클릭: 호출 코드 복사 · 동적 조건 · 페이징 쿼리. 자바 우클릭: 문자열 SQL 정리. 결과 창: enum 단추. 자세한 것은 13 절</td></tr>
     </table>
   </div>
 </section>
@@ -1443,9 +1444,7 @@ build-windows.bat
     <p class="lead">자바 · 매퍼 XML 을 쓰면서 손으로 치던 코드를 만들어 주거나 바꿔 주는 기능입니다. 모두 편집기 우클릭에 있고, 대부분 Source 메뉴에도 있습니다.</p>
     <table class="keys">
       <tr><th>기능 · 자리</th><th>하는 일</th></tr>
-      <tr><td>옮겨 담기 코드 만들기…<br>자바 우클릭</td><td>꺼낼 객체 · 담을 객체를 고르면 <code>to.setX(from.getX());</code> 줄을 커서 줄 다음에 넣습니다. 형이 다르거나 짝이 없는 필드는 주석 줄로 남깁니다.</td></tr>
       <tr><td>빈 catch · printStackTrace · System.out 검사</td><td>세 가지를 노란 줄로 표시합니다. 클래스에 로거 필드나 <code>@Slf4j</code> 가 있으면 <kbd>Alt</kbd>+<kbd>Enter</kbd> 로 <code>log.error(…)</code> · <code>log.info(…)</code> 로 바꿉니다. 테스트 폴더 · main 메서드는 건너뜁니다.</td></tr>
-      <tr><td>테스트 뼈대 만들기<br>자바 · 트리 우클릭</td><td>서비스는 Mockito(<code>@Mock</code> · <code>@InjectMocks</code>), 매퍼는 <code>@MybatisTest</code> 로 메서드마다 테스트 틀을 모듈의 테스트 폴더에 만듭니다. 파일이 있으면 없는 테스트만 더합니다.</td></tr>
       <tr><td>요청 값을 DTO 로 묶기…<br>컨트롤러 메서드 안</td><td><code>@RequestParam</code> 여러 개를 <code>@ModelAttribute</code> DTO 하나로 묶고, 본문의 참조를 <code>req.getX()</code> 로 바꿉니다.</td></tr>
       <tr><td>입력 검증 붙이기…<br>DTO 안</td><td>접속 · 표를 고르면 칼럼의 NULL · 길이 · 자릿수로 <code>@NotBlank</code> · <code>@NotNull</code> · <code>@Size</code> · <code>@Digits</code> 를 필드에 붙입니다. 이미 있는 주석은 그대로 둡니다.</td></tr>
       <tr><td>enum 만들기 · 다시 맞추기<br>결과 창 「enum」 단추, enum 안 우클릭</td><td>코드 표 조회 결과의 두 칼럼(코드 · 이름)으로 enum 을 만듭니다. SQL 과 접속 이름을 Javadoc 에 남겨 두어, 표가 바뀌면 「enum 다시 맞추기」로 상수를 새로 만듭니다(손으로 더한 메서드는 사라짐).</td></tr>
@@ -1456,30 +1455,6 @@ build-windows.bat
       <tr><td>호출 코드 복사<br>매퍼 XML 문장 안</td><td>그 문장을 부르는 서비스 쪽 코드(매개변수 객체 채우기 + 호출 줄)를 클립보드에 복사합니다.</td></tr>
       <tr><td>칼럼 이름 바꾸기…<br>매퍼 XML 우클릭 · Source 메뉴</td><td>모든 매퍼 XML 에서 옛 칼럼 이름을 찾아 미리보기에서 골라 바꾸고, 짝인 DTO 필드 · getter · setter 와 <code>#{}</code> · property 도 함께 바꿉니다. <code>&lt;if test&gt;</code> 안 이름은 바꾸지 않습니다.</td></tr>
     </table>
-
-    <h3>옮겨 담기 코드 만들기 · 자바 우클릭</h3>
-    <div class="cols2">
-      <div class="scroll">
-        <div class="ide" style="min-width:560px">
-          <div class="title"><span class="dots"><i></i><i></i><i></i></span>옮겨 담기 코드 만들기</div>
-          <div class="form">
-            <label><span><span class="mark">1</span> 꺼낼 객체</span><span class="f">src : UserForm</span></label>
-            <label>담을 객체<span class="f">dst : UserDto</span></label>
-            <div style="display:flex; gap:6px"><span class="btn">취소</span><span class="btn pri">넣기</span></div>
-          </div>
-        </div>
-      </div>
-      <div class="scroll">
-        <div class="ide" style="min-width:560px">
-          <div class="title"><span class="dots"><i></i><i></i><i></i></span>UserService.java</div>
-          <pre class="sql nolig"><span class="ln">dst.setName(src.getName());</span><span class="ln">dst.setActive(src.isActive());</span><span class="ln"><span class="mark">2</span> <span class="cm">// 형 다름: dst.setId(src.getId()); // Long ← String</span></span><span class="ln"><span class="cm">// 짝 없음: dst.setMemo(...);</span></span></pre>
-        </div>
-      </div>
-    </div>
-    <ol class="legend" style="grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:14px">
-      <li><span class="mark">1</span><div><b>두 객체 고르기</b> <span class="t">메서드 안의 지역 변수 · 매개변수 · 필드 중에서 고릅니다. 줄은 커서 줄 다음에 들어갑니다.</span></div></li>
-      <li><span class="mark">2</span><div><b>그대로 못 옮기는 필드</b> <span class="t">형이 다르거나 꺼낼 쪽에 getter 가 없으면 주석 줄로 남겨, 손으로 마저 채울 곳이 보이게 합니다.</span></div></li>
-    </ol>
 
     <h3>요청 값을 DTO 로 묶기 · 컨트롤러 메서드 안</h3>
     <div class="cols2">
@@ -1536,15 +1511,6 @@ build-windows.bat
       </div>
     </div>
     <p class="lead" style="margin-top:10px">로거가 없는 클래스는 노란 줄만 보이고 바꾸기는 뜨지 않습니다. 끄려면 설정 → 검사에서 「EiLogUsage」를 찾습니다.</p>
-
-    <h3>테스트 뼈대 만들기 · 자바 · 트리 우클릭</h3>
-    <div class="scroll">
-      <div class="ide" style="min-width:560px">
-        <div class="title"><span class="dots"><i></i><i></i><i></i></span>src/test/java/…/UserServiceTest.java</div>
-        <pre class="sql nolig"><span class="ln">@ExtendWith(MockitoExtension.<span class="kw">class</span>)</span><span class="ln"><span class="kw">class</span> UserServiceTest {</span><span class="ln">    @Mock <span class="kw">private</span> UserMapper userMapper;</span><span class="ln">    @InjectMocks <span class="kw">private</span> UserService target;</span><span class="ln">&nbsp;</span><span class="ln">    @Test</span><span class="ln">    <span class="kw">void</span> find() {</span><span class="ln">        <span class="cm">// given</span></span><span class="ln">        <span class="cm">// when</span></span><span class="ln">        target.find((String) <span class="kw">null</span>);</span><span class="ln">        <span class="cm">// then</span></span><span class="ln">    }</span></pre>
-      </div>
-    </div>
-    <p class="lead" style="margin-top:10px">서비스 클래스는 위처럼 Mockito, 매퍼 인터페이스는 <code>@MybatisTest</code> 로 만듭니다. 이름이 같은 메서드는 <code>find_2</code> 처럼 번호를 붙이고, 테스트 파일이 이미 있으면 빠진 테스트만 끝에 더합니다.</p>
 
     <h3>enum 만들기 · 결과 창 「enum」 단추</h3>
     <div class="cols2">

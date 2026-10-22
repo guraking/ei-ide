@@ -32,6 +32,9 @@
         <!-- OpenAPI: 아래쪽 「API」 창(컨트롤러로 만든 사양의 Swagger UI), 사양 파일 옆 미리보기, 사양 파일 자동 완성 · 오류 표시 -->
         <toolWindow id="API" anchor="bottom" icon="AllIcons.Nodes.PpWeb" doNotActivateOnStart="true"
                     factoryClass="local.bootservers.SwaggerToolWindow"/>
+        <!-- 오른쪽 옆줄 「보안 메모」: 내가 정한 비밀번호로만 열리는 암호화 메모장 -->
+        <toolWindow id="Secure Memo" anchor="right" icon="AllIcons.Ide.Readonly" doNotActivateOnStart="true"
+                    factoryClass="local.bootservers.memo.SecureMemoToolWindowFactory"/>
         <fileEditorProvider implementation="local.bootservers.OpenApiEditorProvider"/>
         <!-- JDK 24 이상 실행에 sun-misc-unsafe-memory-access=allow 옵션을 더해 Unsafe 경고를 끈다 -->
         <java.programPatcher implementation="local.bootservers.UnsafeWarningPatcher"/>
@@ -49,7 +52,6 @@
         <notificationGroup id="웹 언어 지원" displayType="BALLOON"/>
         <notificationGroup id="AI" displayType="BALLOON"/>
         <!-- 코드 도구(local.bootservers.code) -->
-        <notificationGroup id="테스트 뼈대" displayType="BALLOON"/>
         <notificationGroup id="요청 값 묶기" displayType="BALLOON"/>
         <localInspection language="JAVA" shortName="EiLogUsage" displayName="빈 catch · printStackTrace · System.out 사용"
                          groupName="EI 코드" enabledByDefault="true" level="WARNING"
@@ -69,6 +71,8 @@
         <listener class="local.bootservers.ServerStatusRefresher" topic="com.intellij.execution.ExecutionListener"/>
         <!-- 아래쪽 창을 닫으면 그 창이 가렸던 직전 창을 다시 연다 -->
         <listener class="local.bootservers.ReopenPreviousToolWindow" topic="com.intellij.openapi.wm.ex.ToolWindowManagerListener"/>
+        <!-- 새 파일(버전 관리 밖) 위 폴더 목록을 변경 목록 갱신 때마다 만든다(ChangedFolderIconDecorator 가 씀) -->
+        <listener class="local.bootservers.UnversionedDirs" topic="com.intellij.openapi.vcs.changes.ChangeListListener"/>
     </projectListeners>
 
     <actions>
@@ -145,17 +149,7 @@
             <action id="KingGura.AiConsoleError" class="local.bootservers.ai.AiActions$ConsoleError" text="이 오류 원인 찾기"/>
             <add-to-group group-id="ConsoleView.PopupMenu" anchor="last"/>
         </group>
-        <!-- 코드 도구: 옮겨 담기 · 테스트 뼈대 · 요청 값 묶기 -->
-        <action id="KingGura.BeanCopy" class="local.bootservers.code.BeanCopyAction" text="옮겨 담기 코드 만들기…"
-                description="꺼낼 객체의 getter 로 담을 객체의 setter 를 부르는 줄을 커서 줄 다음에 넣습니다">
-            <add-to-group group-id="KG.SourceMenu" anchor="last"/>
-            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
-        </action>
-        <action id="KingGura.TestSkeleton" class="local.bootservers.code.TestSkeletonAction" text="테스트 뼈대 만들기" icon="AllIcons.Nodes.Test">
-            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
-            <add-to-group group-id="ProjectViewPopupMenu" relative-to-action="KingGura.ExportProgramList" anchor="after"/>
-            <add-to-group group-id="KG.SourceMenu" anchor="last"/>
-        </action>
+        <!-- 코드 도구: 요청 값 묶기 -->
         <action id="KingGura.BundleRequestParams" class="local.bootservers.code.ParamBundleAction" text="요청 값을 DTO 로 묶기…" icon="AllIcons.Nodes.Class">
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
             <add-to-group group-id="KG.SourceMenu" anchor="last"/>

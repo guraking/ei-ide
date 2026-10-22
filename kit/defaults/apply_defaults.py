@@ -18,6 +18,7 @@
   21) 프로젝트 창에서 바뀐 파일 · 새 파일이 든 폴더 · 패키지 이름도 그 색으로 보인다.
   22) 첫 실행 기본 어두운 테마를 EI Glass(boot-servers 플러그인)로 한다.
   23) EI Glass 테마가 켜는 유리 그리기: 창 전체 빛 배경, 트리 · 목록 선택 테두리, 툴바 알약, 열린 툴 창 단추 색.
+  24) 프로젝트 머리글자 아이콘에 한글 같은 JetBrains Mono 에 없는 글자가 오면 대체 글꼴이 있는 Dialog 글꼴로 그린다.
 고치기 전 원본은 <intellij-community>/../backup/<시각>-before/ 에 같은 상대경로로 남긴다.
 모든 원문을 먼저 찾아 본 뒤에 쓴다. 하나라도 못 찾으면 아무 파일도 바꾸지 않는다. 줄끝(LF · CRLF)은 파일마다 원래대로 둔다.
 두 번 실행해도 같은 결과가 된다.
@@ -275,6 +276,12 @@ EDITS = [
      '      if (button.isFocused()) return UIManager.getColor("ToolWindow.Button.selectedBackground")?: color',
      '      if (button.isFocused()) return UIManager.getColor("ToolWindow.Button.selectedBackground")?: color\n'
      '      if (button.toolWindow.isVisible) return UIManager.getColor("ToolWindow.Button.visibleBackground") ?: color'),
+    # 24) 프로젝트 머리글자 아이콘(툴바 프로젝트 칸 · 최근 프로젝트 목록)은 JetBrains Mono 로 그림 파일에 직접 그려서 대체 글꼴이 없다.
+    #     머리글자에 그 글꼴에 없는 글자(한글 등)가 있으면 네모로 나오므로, 그때만 자바 논리 글꼴 Dialog(운영체제 대체 글꼴을 씀)로 그린다.
+    ("platform/util/ui/src/com/intellij/util/ui/AvatarUtils.kt",
+     "    g2.font = getFont(size)\n",
+     "    val font = getFont(size)\n"
+     "    g2.font = if (font.canDisplayUpTo(presentation.shortName) == -1) font else Font(Font.DIALOG, Font.BOLD, font.size)\n"),
 ]
 
 

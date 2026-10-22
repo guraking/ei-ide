@@ -232,6 +232,36 @@ public class MyBatisCheck {
     eq(logs.get(1).statementId(), null);
     eq(logs.get(2).sql, "SELECT 2 FROM dual");
     eq(MyBatisLog.parseAll(mixed, 1).get(0).line, 12);
+    // 같은 쿼리(머리 주석 · 매퍼.문장id · SQL)는 최근 것 하나. MyBatis 로그와 log4jdbc 로그로 두 번 찍힌 것도 한 줄.
+    List<String> repeated = List.of(
+        "[e1] c.m.TermsMapper.readList : ==>  Preparing: /* TermsMapper.readList */ SELECT ? FROM dual",
+        "[e1] c.m.TermsMapper.readList : ==> Parameters: 1(Integer)",
+        "[e1] j.sqltiming : /* TermsMapper.readList */ SELECT 1 FROM dual {executed in 1 msec}",
+        "[e2] c.m.UserMapper.readOne : ==>  Preparing: SELECT ? FROM t",
+        "[e2] c.m.UserMapper.readOne : ==> Parameters: 1(Integer)",
+        "[e3] j.sqltiming : SELECT  9 FROM dual {executed in 1 msec}",
+        "[e4] c.m.TermsMapper.readList : ==>  Preparing: /* TermsMapper.readList */ SELECT ? FROM dual",
+        "[e4] c.m.TermsMapper.readList : ==> Parameters: 2(Integer)",
+        "[e4] j.sqltiming : /* TermsMapper.readList */ SELECT 2 FROM dual {executed in 1 msec}",
+        "[e5] c.m.UserMapper.readOne : ==>  Preparing: SELECT ? FROM t",
+        "[e5] c.m.UserMapper.readOne : ==> Parameters: 5(Integer)",
+        "[e6] j.sqltiming : SELECT 9 FROM dual {executed in 1 msec}");
+    List<MyBatisLog.Entry> once = MyBatisLog.distinct(MyBatisLog.parseAll(repeated, 100), 50);
+    eq(once.size(), 3);
+    eq(once.get(0).line, 8);
+    eq(once.get(1).runnableSql(), "SELECT 5 FROM t");
+    eq(once.get(2).line, 11);
+    eq(MyBatisLog.distinct(MyBatisLog.parseAll(repeated, 100), 1).get(0).line, 11);
+    // 시각 · 스레드 · 실행 시간, 쿼리 이름(주석 → 로거), 거르기.
+    eq(logs.get(0).time + " " + logs.get(0).thread + " " + logs.get(0).elapsed, "19:41:24.039 exec-8 null");
+    eq(logs.get(1).time + " " + logs.get(1).thread + " " + logs.get(1).elapsed, "19:41:24.051 exec-8 5 msec");
+    eq(MyBatisLog.queryName(once.get(0)), "TermsMapper.readList");
+    eq(MyBatisLog.queryName(once.get(1)), "UserMapper.readOne");
+    eq(MyBatisLog.queryName(once.get(2)), null);
+    eq(MyBatisLog.matches(once.get(0), " termsmapper "), true);
+    eq(MyBatisLog.matches(once.get(1), "from T"), true);
+    eq(MyBatisLog.matches(once.get(1), "dual"), false);
+    eq(MyBatisLog.matches(once.get(2), ""), true);
     MyBatisLog.Entry plain = MyBatisLog.parse("DEBUG [main] - ==>  Preparing: select 1 from dual\nDEBUG [main] - ==> Parameters: ");
     eq(plain.logger, null);
     eq(plain.runnableSql(), "select 1 from dual");

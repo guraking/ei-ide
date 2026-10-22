@@ -10,6 +10,7 @@ import java.util.Set;
 /**
  * 콘솔 글을 문장으로 나눈다. 순수 자바(플랫폼 의존 없음).
  * 경계: 따옴표 · 주석 밖의 ; (문장에 포함), 괄호 밖의 빈 줄, / 만 있는 줄(문장에서 뺀다).
+ * 빈 줄 뒤가 혼자서는 문장이 될 수 없는 절(CONTINUE_WORDS)이나 , · ) 로 시작하면 빈 줄에서 끊지 않는다.
  * PL/SQL 블록(BEGIN · DECLARE · CREATE [OR REPLACE] PROCEDURE/FUNCTION/PACKAGE [BODY]/TRIGGER/TYPE BODY)은 빈 줄로 나누지 않고
  * 여는 쪽(BEGIN · CASE · DECLARE · 하위 프로그램 머리의 IS/AS)과 END 의 짝이 모두 맞은 뒤의 ; 에서만 끝난다.
  * 하위 프로그램(지역 함수 · 패키지 · 타입 메서드)의 IS/AS 가 연 겹은 그 BEGIN 이 이어받아 END 하나로 닫힌다.
@@ -27,6 +28,10 @@ public final class SqlSplitter {
   private static final Set<String> CREATE_MODIFIERS = Set.of("OR", "REPLACE", "EDITIONABLE", "NONEDITIONABLE");
   /** 선언부 겹(DECLARE · 하위 프로그램 머리의 IS/AS). 이어지는 BEGIN 이 이 겹을 이어받는다. */
   private static final String DECL = "DECL";
+  /** 앞 문장에 이어지는 절의 첫 낱말. 빈 줄 뒤에 와도 문장을 끊지 않는다. */
+  private static final Set<String> CONTINUE_WORDS = Set.of(
+      "FROM", "WHERE", "AND", "OR", "ORDER", "GROUP", "HAVING", "OFFSET", "FETCH", "UNION", "MINUS", "INTERSECT", "EXCEPT",
+      "JOIN", "INNER", "LEFT", "RIGHT", "FULL", "CROSS", "OUTER", "ON", "CONNECT", "LIMIT", "FOR");
 
   public static List<Stmt> split(String text) {
     List<Stmt> out = new ArrayList<>();
@@ -48,7 +53,7 @@ public final class SqlSplitter {
       if (ch == '\n') {
         int lineStart = text.lastIndexOf('\n', i - 1) + 1;
         String line = text.substring(lineStart, i).strip();
-        if (line.equals("/") || (line.isEmpty() && !seg.block && seg.depth == 0)) {
+        if (line.equals("/") || (line.isEmpty() && !seg.block && seg.depth == 0 && !continues(text, i + 1))) {
           seg.flush(text, out, lineStart);
           seg = new Seg();
         }
@@ -116,6 +121,27 @@ public final class SqlSplitter {
       return s;
     }
     return before;
+  }
+
+  /** from 부터 공백 · 주석을 건너뛴 첫 글이 이어지는 절(CONTINUE_WORDS) · , · ) 이면 참. */
+  private static boolean continues(String text, int from) {
+    int n = text.length();
+    int i = from;
+    while (i < n) {
+      char ch = text.charAt(i);
+      char next = i + 1 < n ? text.charAt(i + 1) : 0;
+      if (Character.isWhitespace(ch)) i++;
+      else if (ch == '-' && next == '-') i = indexOrEnd(text, "\n", i);
+      else if (ch == '/' && next == '*') {
+        int close = text.indexOf("*/", i + 2);
+        i = close < 0 ? n : close + 2;
+      } else break;
+    }
+    if (i >= n) return false;
+    if (text.charAt(i) == ',' || text.charAt(i) == ')') return true;
+    int j = i;
+    while (j < n && isIdent(text.charAt(j))) j++;
+    return CONTINUE_WORDS.contains(text.substring(i, j).toUpperCase(Locale.ROOT));
   }
 
   private static int indexOrEnd(String text, String what, int from) {

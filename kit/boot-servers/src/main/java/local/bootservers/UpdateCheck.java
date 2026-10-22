@@ -7,10 +7,17 @@ import com.intellij.notification.NotificationGroupManager;
 import com.intellij.notification.NotificationType;
 import com.intellij.openapi.application.ApplicationInfo;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.progress.ProgressIndicator;
+import com.intellij.openapi.progress.Task;
+import com.intellij.openapi.ui.Messages;
+import com.intellij.openapi.util.ShutDownTracker;
 import com.intellij.util.io.HttpRequests;
 import org.jetbrains.annotations.NotNull;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -19,6 +26,7 @@ import java.util.regex.Pattern;
  * IDE 를 켤 때 GitHub 릴리스를 한 번 보고 지금 판보다 새 판이 있으면 알림을 띄운다.
  * 릴리스 태그는 build-windows.bat 이 붙이는 「v262.10968.N」 꼴이고, 지금 판은 ApplicationInfo 의 「IC-262.10968.N」 이다.
  * 판 번호 앞자리(262.10968)가 다르면 비교하지 않는다. 네트워크 실패는 조용히 넘긴다.
+ * 「지금 업데이트」는 설치 파일을 임시 폴더에 받고, IDE 가 닫힌 뒤 설치 화면을 띄운다(설치 화면에서 옛 판 정리를 고를 수 있다).
  */
 public final class UpdateCheck implements AppLifecycleListener {
 
@@ -26,6 +34,8 @@ public final class UpdateCheck implements AppLifecycleListener {
     private static final String LATEST = "https://api.github.com/repos/guraking/ei-ide/releases/latest";
     private static final Pattern TAG = Pattern.compile("\"tag_name\"\\s*:\\s*\"v(\\d+\\.\\d+)\\.(\\d+)\"");
     private static final Pattern EXE = Pattern.compile("\"browser_download_url\"\\s*:\\s*\"([^\"]+\\.exe)\"");
+    /** 이 주소로 시작하는 설치 파일만 받아 실행한다. 릴리스 응답이 다른 곳의 exe 를 가리키면 브라우저로만 연다. */
+    private static final String DOWNLOAD_PREFIX = "https://github.com/guraking/ei-ide/releases/download/";
     private static final Pattern PAGE = Pattern.compile("\"html_url\"\\s*:\\s*\"([^\"]+/releases/tag/[^\"]+)\"");
 
     @Override
@@ -65,12 +75,53 @@ public final class UpdateCheck implements AppLifecycleListener {
         Matcher page = PAGE.matcher(json);
         String url = exe.find() ? exe.group(1) : page.find() ? page.group(1) : "https://github.com/guraking/ei-ide/releases";
         String version = base + "." + latest;
+        boolean installable = url.startsWith(DOWNLOAD_PREFIX) && url.endsWith(".exe");
         ApplicationManager.getApplication().invokeLater(() -> NotificationGroupManager.getInstance()
                 .getNotificationGroup("EI IDE 새 판")
                 .createNotification("EI IDE " + version + " 이 나왔습니다", "지금 판: " + build, NotificationType.INFORMATION)
                 .addActions(List.of(
-                        NotificationAction.createSimpleExpiring("내려받기", () -> BrowserUtil.browse(url)),
+                        installable
+                                ? NotificationAction.createSimpleExpiring("지금 업데이트", () -> download(url, version))
+                                : NotificationAction.createSimpleExpiring("내려받기", () -> BrowserUtil.browse(url)),
                         NotificationAction.createSimpleExpiring("릴리스 보기", () -> BrowserUtil.browse("https://github.com/guraking/ei-ide/releases"))))
                 .notify(null));
+    }
+
+    private static void download(String url, String version) {
+        File target = new File(PathManager.getTempPath(), "eiide-" + version + ".exe");
+        new Task.Backgroundable(null, "EI IDE " + version + " 받는 중", true) {
+            @Override
+            public void run(@NotNull ProgressIndicator indicator) {
+                try {
+                    HttpRequests.request(url).connectTimeout(10000).saveToFile(target, indicator);
+                } catch (IOException e) {
+                    LOG.warn("설치 파일 받기 실패: " + url, e);
+                    ApplicationManager.getApplication().invokeLater(() -> Messages.showErrorDialog(
+                            "설치 파일을 받지 못했습니다.\n" + e.getMessage() + "\n\n브라우저로 받으려면 「릴리스 보기」를 쓰세요.", "EI IDE 업데이트"));
+                    return;
+                }
+                ApplicationManager.getApplication().invokeLater(() -> askInstall(target, version));
+            }
+        }.queue();
+    }
+
+    private static void askInstall(File installer, String version) {
+        int answer = Messages.showYesNoDialog(
+                "EI IDE " + version + " 설치 파일을 받았습니다.\nIDE 를 닫고 설치 화면을 띄울까요?\n\n「나중에」를 고르면 다음에 IDE 를 닫을 때 설치 화면이 뜹니다.",
+                "EI IDE 업데이트", "닫고 설치", "나중에", Messages.getInformationIcon());
+        // 설치 파일은 IDE 가 쓰는 파일을 덮으므로 JVM 이 끝날 때 띄운다. 끄기를 취소하면 다음에 끌 때 뜬다.
+        ShutDownTracker.getInstance().registerShutdownTask(() -> launch(installer));
+        if (answer == Messages.YES) {
+            ApplicationManager.getApplication().exit();
+        }
+    }
+
+    /** cmd start 는 ShellExecute 로 띄우므로 관리자 승인(UAC)이 필요한 설치 파일도 실행된다. */
+    private static void launch(File installer) {
+        try {
+            new ProcessBuilder("cmd", "/c", "start", "", installer.getAbsolutePath()).start();
+        } catch (IOException e) {
+            LOG.warn("설치 파일 실행 실패: " + installer, e);
+        }
     }
 }
