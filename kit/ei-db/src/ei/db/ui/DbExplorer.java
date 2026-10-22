@@ -40,6 +40,7 @@ import ei.db.DbConfig;
 import ei.db.DbKind;
 import ei.db.DbSessions;
 import ei.db.DbSettings;
+import ei.db.EiDbBundle;
 import ei.db.Meta;
 import ei.db.Notify;
 import ei.db.Passwords;
@@ -98,7 +99,7 @@ final class DbExplorer extends SimpleToolWindowPanel {
   private static final String PLACE = "EiDatabaseExplorer";
   private static final String[] TABLE_TYPES = {"TABLE"};
   private static final String[] VIEW_TYPES = {"VIEW"};
-  private static final Message LOADING = new Message("불러오는 중…", false);
+  private static final Message LOADING = new Message(EiDbBundle.message("explorer.loading"), false);
   private static final Color CONNECTED = JBColor.namedColor("EiDatabase.connected", new JBColor(0x3E9B47, 0x5FB865));
   private static final Color DANGER = JBColor.namedColor("EiDatabase.production", new JBColor(0xD9363E, 0xF75464));
   private static final Color KEY_TAG = JBColor.namedColor("EiDatabase.keyTag", new JBColor(0xB07400, 0xE0A64F));
@@ -175,7 +176,7 @@ final class DbExplorer extends SimpleToolWindowPanel {
       }
     });
 
-    search.getTextEditor().getEmptyText().setText("표 · 칼럼 찾기");
+    search.getTextEditor().getEmptyText().setText(EiDbBundle.message("explorer.search.hint"));
     filterAlarm = new Alarm(Alarm.ThreadToUse.SWING_THREAD, parent);
     search.addDocumentListener(new DocumentAdapter() {
       @Override protected void textChanged(@NotNull DocumentEvent e) {
@@ -185,18 +186,18 @@ final class DbExplorer extends SimpleToolWindowPanel {
     });
 
     DefaultActionGroup bar = new DefaultActionGroup();
-    bar.add(new Act("접속 추가", AllIcons.General.Add, () -> true, this::addConnection));
-    bar.add(new Act("새로고침", AllIcons.Actions.Refresh, () -> true, this::refreshSelected));
-    bar.add(new Act("새 콘솔", AllIcons.Nodes.Console, () -> selectedConfig() != null, () -> ConsoleOpener.openNew(project, selectedConfig())));
-    bar.add(new Act("접속 끊기", AllIcons.Actions.Suspend, this::selectedIsOpen, () -> disconnect(selectedConfig())));
-    bar.add(new Act("편집", AllIcons.Actions.Edit, () -> selectedConfig() != null, () -> edit(selectedConfig())));
-    bar.add(new Act("삭제", AllIcons.General.Remove, () -> selectedConfig() != null, () -> delete(selectedConfig())));
+    bar.add(new Act(EiDbBundle.message("connect.title.add"), AllIcons.General.Add, () -> true, this::addConnection));
+    bar.add(new Act(EiDbBundle.message("explorer.refresh"), AllIcons.Actions.Refresh, () -> true, this::refreshSelected));
+    bar.add(new Act(EiDbBundle.message("explorer.new.console"), AllIcons.Nodes.Console, () -> selectedConfig() != null, () -> ConsoleOpener.openNew(project, selectedConfig())));
+    bar.add(new Act(EiDbBundle.message("explorer.disconnect"), AllIcons.Actions.Suspend, this::selectedIsOpen, () -> disconnect(selectedConfig())));
+    bar.add(new Act(EiDbBundle.message("explorer.edit"), AllIcons.Actions.Edit, () -> selectedConfig() != null, () -> edit(selectedConfig())));
+    bar.add(new Act(EiDbBundle.message("explorer.delete"), AllIcons.General.Remove, () -> selectedConfig() != null, () -> delete(selectedConfig())));
     bar.addSeparator();
-    bar.add(new Act("찾기", AllIcons.Actions.Search, () -> selectedConfig() != null, () -> openSearch(selectedConfig())));
-    DefaultActionGroup more = DefaultActionGroup.createPopupGroup(() -> "더 보기");
+    bar.add(new Act(EiDbBundle.message("explorer.find"), AllIcons.Actions.Search, () -> selectedConfig() != null, () -> openSearch(selectedConfig())));
+    DefaultActionGroup more = DefaultActionGroup.createPopupGroup(() -> EiDbBundle.message("explorer.more"));
     more.getTemplatePresentation().setIcon(AllIcons.Actions.More);
-    more.add(new Act("접속 내보내기", AllIcons.ToolbarDecorator.Export, () -> !DbSettings.getInstance().connections().isEmpty(), this::exportConnections));
-    more.add(new Act("접속 가져오기", AllIcons.ToolbarDecorator.Import, () -> true, this::importConnections));
+    more.add(new Act(EiDbBundle.message("explorer.export"), AllIcons.ToolbarDecorator.Export, () -> !DbSettings.getInstance().connections().isEmpty(), this::exportConnections));
+    more.add(new Act(EiDbBundle.message("explorer.import"), AllIcons.ToolbarDecorator.Import, () -> true, this::importConnections));
     bar.add(more);
     ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar(PLACE, bar, true);
     toolbar.setTargetComponent(this);
@@ -205,7 +206,7 @@ final class DbExplorer extends SimpleToolWindowPanel {
     JPanel top = new JPanel(new BorderLayout());
     top.setBorder(JBUI.Borders.empty(6));
     top.add(search, BorderLayout.CENTER);
-    JBLabel hint = new JBLabel("<html>표 더블클릭 → 데이터 보기<br>우클릭 → SELECT · INSERT · UPDATE 문 만들기<br>도구줄 찾기 → 스키마 전체에서 표 · 칼럼 찾기</html>",
+    JBLabel hint = new JBLabel(EiDbBundle.message("explorer.hint"),
                                UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER);
     hint.setBorder(JBUI.Borders.empty(6, 8));
     JPanel body = new JPanel(new BorderLayout());
@@ -297,10 +298,10 @@ final class DbExplorer extends SimpleToolWindowPanel {
 
   private void showError(DefaultMutableTreeNode node, DbConfig c, Exception e) {
     String msg = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
-    Notify.error(project, c.name + " 목록을 읽지 못했습니다: " + msg);
+    Notify.error(project, EiDbBundle.message("explorer.list.failed", c.name, msg));
     if (!attached(node)) return;
     node.removeAllChildren();
-    node.add(new DefaultMutableTreeNode(new Message("읽지 못함: " + msg, true)));
+    node.add(new DefaultMutableTreeNode(new Message(EiDbBundle.message("explorer.node.failed", msg), true)));
     model.nodeStructureChanged(node);
   }
 
@@ -312,8 +313,8 @@ final class DbExplorer extends SimpleToolWindowPanel {
   private void fillSchema(DefaultMutableTreeNode node, Schema s, List<Meta.Table> tables, List<Meta.Table> views) {
     if (!attached(node)) return;
     node.removeAllChildren();
-    node.add(new DefaultMutableTreeNode(new Group("표", items(s, tables))));
-    node.add(new DefaultMutableTreeNode(new Group("뷰", items(s, views))));
+    node.add(new DefaultMutableTreeNode(new Group(EiDbBundle.message("explorer.group.tables"), items(s, tables))));
+    node.add(new DefaultMutableTreeNode(new Group(EiDbBundle.message("explorer.group.views"), items(s, views))));
     String q = query();
     for (int i = 0; i < node.getChildCount(); i++) fillGroup(node(node.getChildAt(i)), q);
     if (s.c().kind == DbKind.ORACLE) {
@@ -328,7 +329,7 @@ final class DbExplorer extends SimpleToolWindowPanel {
     if (!attached(node)) return;
     node.removeAllChildren();
     for (ProgramSql.Item item : items) node.add(new DefaultMutableTreeNode(new Program(pg.c(), pg.schema(), item)));
-    if (items.isEmpty()) node.add(new DefaultMutableTreeNode(new Message("없음", false)));
+    if (items.isEmpty()) node.add(new DefaultMutableTreeNode(new Message(EiDbBundle.message("common.none"), false)));
     model.nodeStructureChanged(node);
   }
 
@@ -339,7 +340,7 @@ final class DbExplorer extends SimpleToolWindowPanel {
       String sql = Programs.source(sessions.connection(p.c()), p.schema(), p.item());
       return () -> {
         if (sql.isEmpty()) {
-          Notify.error(project, p.item().name() + " 의 소스를 읽지 못했습니다. 없어졌거나 소스를 볼 권한이 없습니다.");
+          Notify.error(project, EiDbBundle.message("explorer.source.failed", p.item().name()));
         } else {
           ConsoleOpener.open(project, p.c(), sql);
         }
@@ -467,47 +468,47 @@ final class DbExplorer extends SimpleToolWindowPanel {
     if (o instanceof Conn conn) {
       DbConfig c = conn.c();
       if (DbSessions.get(project).isOpen(c.id)) {
-        g.add(new Act("끊기", AllIcons.Actions.Suspend, () -> true, () -> disconnect(c)));
+        g.add(new Act(EiDbBundle.message("explorer.disconnect.short"), AllIcons.Actions.Suspend, () -> true, () -> disconnect(c)));
       } else {
-        g.add(new Act("연결", AllIcons.Actions.Execute, () -> true, () -> connect(c)));
+        g.add(new Act(EiDbBundle.message("explorer.connect"), AllIcons.Actions.Execute, () -> true, () -> connect(c)));
       }
-      g.add(new Act("새 콘솔", AllIcons.Nodes.Console, () -> true, () -> ConsoleOpener.openNew(project, c)));
-      g.add(new Act("세션 보기", null, () -> true, () -> SqlRunner.run(project, c, SessionSql.sessions(c.kind), List.of())));
-      g.add(new Act("잠금 보기", null, () -> true, () -> SqlRunner.run(project, c, SessionSql.locks(c.kind), List.of())));
+      g.add(new Act(EiDbBundle.message("explorer.new.console"), AllIcons.Nodes.Console, () -> true, () -> ConsoleOpener.openNew(project, c)));
+      g.add(new Act(EiDbBundle.message("explorer.sessions"), null, () -> true, () -> SqlRunner.run(project, c, SessionSql.sessions(c.kind), List.of())));
+      g.add(new Act(EiDbBundle.message("explorer.locks"), null, () -> true, () -> SqlRunner.run(project, c, SessionSql.locks(c.kind), List.of())));
       g.addSeparator();
-      g.add(new Act("편집", AllIcons.Actions.Edit, () -> true, () -> edit(c)));
-      g.add(new Act("삭제", AllIcons.General.Remove, () -> true, () -> delete(c)));
+      g.add(new Act(EiDbBundle.message("explorer.edit"), AllIcons.Actions.Edit, () -> true, () -> edit(c)));
+      g.add(new Act(EiDbBundle.message("explorer.delete"), AllIcons.General.Remove, () -> true, () -> delete(c)));
       return g;
     }
     if (o instanceof Schema s) {
-      g.add(new Act("ERD 열기 (전체)", null, () -> true, () -> ErdView.open(project, s.c(), s.name(), null)));
-      g.add(new Act("테이블 정의서 엑셀…", AllIcons.ToolbarDecorator.Export, () -> true, () -> exportSpec(s.c(), s.name(), null)));
+      g.add(new Act(EiDbBundle.message("explorer.erd.all"), null, () -> true, () -> ErdView.open(project, s.c(), s.name(), null)));
+      g.add(new Act(EiDbBundle.message("explorer.spec"), AllIcons.ToolbarDecorator.Export, () -> true, () -> exportSpec(s.c(), s.name(), null)));
       return g;
     }
     if (o instanceof Program p) {
-      g.add(new Act("소스 열기", AllIcons.Actions.Edit, () -> true, () -> openSource(p)));
-      g.add(new Act("컴파일 오류 보기", null, () -> true,
+      g.add(new Act(EiDbBundle.message("explorer.open.source"), AllIcons.Actions.Edit, () -> true, () -> openSource(p)));
+      g.add(new Act(EiDbBundle.message("explorer.compile.errors"), null, () -> true,
           () -> SqlRunner.run(project, p.c(), ProgramSql.ERRORS, List.of(p.schema(), p.item().name()))));
       return g;
     }
     if (o instanceof TableItem t) {
-      g.add(new Act("데이터 보기", AllIcons.Actions.Execute, () -> true, () -> viewData(t)));
+      g.add(new Act(EiDbBundle.message("explorer.view.data"), AllIcons.Actions.Execute, () -> true, () -> viewData(t)));
       List<String> picked = selectedTables(t);
       if (picked.size() > 1) {
-        g.add(new Act("SELECT 문 만들기 (표 " + picked.size() + "개 조인)", null, () -> true, () -> joinSelect(n, t, picked)));
+        g.add(new Act(EiDbBundle.message("explorer.select.join", picked.size()), null, () -> true, () -> joinSelect(n, t, picked)));
       } else {
-        g.add(new Act("SELECT 문 만들기", null, () -> true, () -> withColumns(n, t,
+        g.add(new Act(EiDbBundle.message("explorer.select"), null, () -> true, () -> withColumns(n, t,
             cols -> ConsoleOpener.open(project, t.c, SelectSql.build(t.c.kind, t.schema, t.table.name(), cols)))));
       }
-      g.add(new Act("INSERT 문 만들기", null, () -> true, () -> withColumns(n, t,
+      g.add(new Act(EiDbBundle.message("explorer.insert"), null, () -> true, () -> withColumns(n, t,
           cols -> ConsoleOpener.open(project, t.c, SelectSql.insert(t.c.kind, t.schema, t.table.name(), cols)))));
-      g.add(new Act("UPDATE 문 만들기", null, () -> true, () -> withColumns(n, t,
+      g.add(new Act(EiDbBundle.message("explorer.update"), null, () -> true, () -> withColumns(n, t,
           cols -> ConsoleOpener.open(project, t.c, SelectSql.update(t.c.kind, t.schema, t.table.name(), cols)))));
-      g.add(new Act("매퍼 뼈대 만들기", null, () -> true, () -> MapperDialog.show(project, t.c, t.schema, t.table.name())));
-      g.add(new Act("기능 한 벌 만들기…", null, () -> true, () -> FeatureDialog.show(project, t.c, t.schema, t.table.name())));
+      g.add(new Act(EiDbBundle.message("mapper.command"), null, () -> true, () -> MapperDialog.show(project, t.c, t.schema, t.table.name())));
+      g.add(new Act(EiDbBundle.message("action.ei.db.gen.Feature.text"), null, () -> true, () -> FeatureDialog.show(project, t.c, t.schema, t.table.name())));
       g.addSeparator();
-      g.add(new Act("ERD 열기", null, () -> true, () -> ErdView.open(project, t.c, t.schema, picked)));
-      g.add(new Act("테이블 정의서 엑셀…", AllIcons.ToolbarDecorator.Export, () -> true, () -> exportSpec(t.c, t.schema, picked)));
+      g.add(new Act(EiDbBundle.message("explorer.erd"), null, () -> true, () -> ErdView.open(project, t.c, t.schema, picked)));
+      g.add(new Act(EiDbBundle.message("explorer.spec"), AllIcons.ToolbarDecorator.Export, () -> true, () -> exportSpec(t.c, t.schema, picked)));
       return g;
     }
     return null;
@@ -536,17 +537,16 @@ final class DbExplorer extends SimpleToolWindowPanel {
   // ---- 테이블 정의서 ----
 
   private static final String XLSX = "xlsx";
-  private static final String SPEC_FILE_SUFFIX = "_테이블정의서";
 
   /** 표 · 뷰 정의를 엑셀 한 장으로. picked 가 null 이면 스키마의 모든 표 · 뷰, 아니면 그 이름의 것만(DB 가 돌려준 순서). */
   private void exportSpec(DbConfig c, String schema, List<String> picked) {
     String base = picked != null && picked.size() == 1 ? picked.get(0) : schema;
-    FileSaverDescriptor desc = new FileSaverDescriptor("테이블 정의서 엑셀", "표 정의를 엑셀 파일로 저장합니다", XLSX);
-    VirtualFileWrapper target = FileChooserFactory.getInstance().createSaveFileDialog(desc, project).save(base + SPEC_FILE_SUFFIX + "." + XLSX);
+    FileSaverDescriptor desc = new FileSaverDescriptor(EiDbBundle.message("explorer.spec.title"), EiDbBundle.message("explorer.spec.description"), XLSX);
+    VirtualFileWrapper target = FileChooserFactory.getInstance().createSaveFileDialog(desc, project).save(base + EiDbBundle.message("explorer.spec.file.suffix") + "." + XLSX);
     if (target == null) return;
     Path path = target.getFile().toPath();
     // 큰 스키마는 오래 걸려 탐색기의 metaQueue 를 막지 않도록 따로 진행 창(취소 가능)에서 읽는다.
-    new Task.Backgroundable(project, "테이블 정의서 · " + schema + " 읽는 중", true) {
+    new Task.Backgroundable(project, EiDbBundle.message("explorer.spec.progress", schema), true) {
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
         List<TableSpec.Table> specs = new ArrayList<>();
@@ -560,27 +560,27 @@ final class DbExplorer extends SimpleToolWindowPanel {
           for (int i = 0; i < targets.size(); i++) {
             indicator.checkCanceled();
             Meta.Table t = targets.get(i);
-            indicator.setText2("표 " + (i + 1) + "/" + targets.size() + " · " + t.name());
+            indicator.setText2(EiDbBundle.message("explorer.spec.progress.table", i + 1, targets.size(), t.name()));
             indicator.setFraction((double) i / targets.size());
             specs.add(TableSpec.read(conn, c, schema, t));
           }
         } catch (SQLException e) {
-          Notify.error(project, "테이블 정의서 읽기 실패: " + e.getMessage());
+          Notify.error(project, EiDbBundle.message("explorer.spec.read.failed", e.getMessage()));
           return;
         }
         List<TableSpec.Table> filled = TableSpec.filled(specs);
         if (filled.isEmpty()) {
-          Notify.warning(project, schema + " 에서 칼럼을 읽은 표가 없어 정의서를 저장하지 않았습니다.");
+          Notify.warning(project, EiDbBundle.message("explorer.spec.empty", schema));
           return;
         }
         indicator.checkCanceled();
         try {
           XlsxExport.write(path, TableSpec.HEADER, null, TableSpec.rows(filled));
         } catch (IOException e) {
-          Notify.error(project, "테이블 정의서 저장 실패: " + e.getMessage());
+          Notify.error(project, EiDbBundle.message("explorer.spec.save.failed", e.getMessage()));
           return;
         }
-        Notify.info(project, "표 " + filled.size() + "개의 정의서를 저장했습니다: " + path);
+        Notify.info(project, EiDbBundle.message("explorer.spec.saved", filled.size(), path));
       }
     }.queue();
   }
@@ -636,7 +636,7 @@ final class DbExplorer extends SimpleToolWindowPanel {
 
   /** 모든 접속을 JSON 파일 하나로. 비밀번호는 넣지 않는다. */
   private void exportConnections() {
-    FileSaverDescriptor desc = new FileSaverDescriptor("접속 내보내기", "비밀번호는 파일에 넣지 않습니다.", JSON);
+    FileSaverDescriptor desc = new FileSaverDescriptor(EiDbBundle.message("explorer.export"), EiDbBundle.message("explorer.export.description"), JSON);
     VirtualFileWrapper target = FileChooserFactory.getInstance().createSaveFileDialog(desc, project).save(EXPORT_FILE);
     if (target == null) return;
     Path path = target.getFile().toPath();
@@ -645,16 +645,16 @@ final class DbExplorer extends SimpleToolWindowPanel {
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       try {
         Files.writeString(path, json, StandardCharsets.UTF_8);
-        Notify.info(project, "접속 " + count + "개를 내보냈습니다: " + path);
+        Notify.info(project, EiDbBundle.message("explorer.exported", count, path));
       } catch (IOException e) {
-        Notify.error(project, "접속을 내보내지 못했습니다: " + e.getMessage());
+        Notify.error(project, EiDbBundle.message("explorer.export.failed", e.getMessage()));
       }
     });
   }
 
   /** 파일의 접속을 더한다(기존 접속은 바꾸지 않는다). 같은 이름은 「이름 (가져옴)」. */
   private void importConnections() {
-    VirtualFile file = FileChooser.chooseFile(FileChooserDescriptorFactory.createSingleFileDescriptor(JSON).withTitle("접속 가져오기"), project, null);
+    VirtualFile file = FileChooser.chooseFile(FileChooserDescriptorFactory.createSingleFileDescriptor(JSON).withTitle(EiDbBundle.message("explorer.import")), project, null);
     if (file == null) return;
     Path path = file.toNioPath();
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
@@ -662,7 +662,7 @@ final class DbExplorer extends SimpleToolWindowPanel {
       try {
         read = ConnectionsJson.read(Files.readString(path, StandardCharsets.UTF_8));
       } catch (IOException | IllegalArgumentException e) {
-        Notify.error(project, "접속을 가져오지 못했습니다: " + e.getMessage());
+        Notify.error(project, EiDbBundle.message("explorer.import.failed", e.getMessage()));
         return;
       }
       ApplicationManager.getApplication().invokeLater(() -> addImported(read), project.getDisposed());
@@ -679,7 +679,7 @@ final class DbExplorer extends SimpleToolWindowPanel {
       settings.put(c);
     }
     rebuild();
-    Notify.info(project, "접속 " + read.size() + "개를 가져왔습니다. 비밀번호는 접속 편집에서 넣으세요.");
+    Notify.info(project, EiDbBundle.message("explorer.imported", read.size()));
   }
 
   // ---- 접속 다루기 ----
@@ -705,7 +705,7 @@ final class DbExplorer extends SimpleToolWindowPanel {
   }
 
   private void askPasswordAndConnect(DbConfig c) {
-    String pw = Messages.showPasswordDialog(project, c.name + " · " + c.user + " 의 비밀번호를 넣으세요.\nIDE 를 끌 때까지만 기억합니다.", "비밀번호", null);
+    String pw = Messages.showPasswordDialog(project, EiDbBundle.message("explorer.password.prompt", c.name, c.user), EiDbBundle.message("connect.password"), null);
     if (pw == null) return;
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       SessionPassword.set(c, pw);
@@ -718,7 +718,7 @@ final class DbExplorer extends SimpleToolWindowPanel {
     try {
       DbSessions.get(project).connection(c);
     } catch (Exception e) {
-      Notify.error(project, c.name + " 에 연결하지 못했습니다: " + e.getMessage());
+      Notify.error(project, EiDbBundle.message("explorer.connect.failed", c.name, e.getMessage()));
     }
   }
 
@@ -726,7 +726,7 @@ final class DbExplorer extends SimpleToolWindowPanel {
   private boolean confirmRollback(DbConfig c, String title) {
     int pending = DbSessions.get(project).pending(c.id);
     return pending == 0
-           || Messages.showYesNoDialog(project, "미반영 변경 " + pending + "건이 롤백됩니다. 계속할까요?", title, Messages.getWarningIcon()) == Messages.YES;
+           || Messages.showYesNoDialog(project, EiDbBundle.message("explorer.rollback.confirm", pending), title, Messages.getWarningIcon()) == Messages.YES;
   }
 
   private void closeInBackground(DbConfig c) {
@@ -735,13 +735,13 @@ final class DbExplorer extends SimpleToolWindowPanel {
   }
 
   private void disconnect(DbConfig c) {
-    if (c == null || !confirmRollback(c, "접속 끊기")) return;
+    if (c == null || !confirmRollback(c, EiDbBundle.message("explorer.disconnect"))) return;
     closeInBackground(c);
   }
 
   private void delete(DbConfig c) {
-    if (Messages.showYesNoDialog(project, c.name + " 접속을 삭제할까요?", "접속 삭제", Messages.getWarningIcon()) != Messages.YES) return;
-    if (!confirmRollback(c, "접속 삭제")) return;
+    if (Messages.showYesNoDialog(project, EiDbBundle.message("explorer.delete.confirm", c.name), EiDbBundle.message("explorer.delete.title"), Messages.getWarningIcon()) != Messages.YES) return;
+    if (!confirmRollback(c, EiDbBundle.message("explorer.delete.title"))) return;
     DbSettings.getInstance().remove(c.id);
     DbSessions sessions = DbSessions.get(project);
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
@@ -782,12 +782,12 @@ final class DbExplorer extends SimpleToolWindowPanel {
         DbConfig c = conn.c();
         setIcon(new Dot(DbSessions.get(project).isOpen(c.id) ? CONNECTED : JBColor.GRAY));
         append(c.name, c.production ? new SimpleTextAttributes(SimpleTextAttributes.STYLE_BOLD, DANGER) : SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES);
-        if (c.production) append(" 운영", new SimpleTextAttributes(SimpleTextAttributes.STYLE_SMALLER, DANGER));
-        append("  " + (c.readOnly ? "읽기 전용" : c.host + ":" + c.port), SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES);
+        if (c.production) append(EiDbBundle.message("explorer.production"), new SimpleTextAttributes(SimpleTextAttributes.STYLE_SMALLER, DANGER));
+        append("  " + (c.readOnly ? EiDbBundle.message("explorer.read.only") : c.host + ":" + c.port), SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES);
       } else if (o instanceof Schema s) {
         setIcon(AllIcons.Nodes.DataSchema);
         append(s.name());
-        append("  기본 스키마", SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES);
+        append(EiDbBundle.message("explorer.default.schema"), SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES);
       } else if (o instanceof Group g) {
         append(g.label());
         String count = n.getChildCount() == g.items().size() ? String.valueOf(g.items().size()) : n.getChildCount() + " / " + g.items().size();
@@ -803,8 +803,8 @@ final class DbExplorer extends SimpleToolWindowPanel {
         if (!col.comment().isEmpty()) append("  " + col.comment(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
         append("  " + col.typeLabel(), SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES);
       } else if (o instanceof ProgramGroup) {
-        append("프로그램");
-        append("  패키지 · 프로시저 · 함수", SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES);
+        append(EiDbBundle.message("explorer.programs"));
+        append(EiDbBundle.message("explorer.programs.hint"), SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES);
       } else if (o instanceof Program p) {
         setIcon(ProgramSql.PACKAGE.equals(p.item().type()) ? AllIcons.Nodes.Package : AllIcons.Nodes.Function);
         append(p.item().name());

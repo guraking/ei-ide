@@ -12,7 +12,7 @@ public final class ServersToolWindowFactory implements ToolWindowFactory, DumbAw
 
     @Override
     public void init(@NotNull ToolWindow toolWindow) {
-        toolWindow.setStripeTitle("서버");
+        toolWindow.setStripeTitle(BootServersBundle.message("toolwindow.stripe.Servers"));
     }
 
     @Override

@@ -5,6 +5,7 @@ import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.openapi.ui.ValidationInfo;
 import com.intellij.ui.components.JBPasswordField;
 import com.intellij.util.ui.FormBuilder;
+import local.bootservers.BootServersBundle;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.JComponent;
@@ -36,9 +37,9 @@ final class NewPasswordDialog extends DialogWrapper {
     @Override
     protected JComponent createCenterPanel() {
         return FormBuilder.createFormBuilder()
-                .addLabeledComponent("새 비밀번호:", first)
-                .addLabeledComponent("한 번 더:", second)
-                .addTooltip("잊으면 메모를 되살릴 수 없습니다. 비밀번호는 어디에도 저장되지 않습니다.")
+                .addLabeledComponent(BootServersBundle.message("memo.password.new"), first)
+                .addLabeledComponent(BootServersBundle.message("memo.password.again"), second)
+                .addTooltip(BootServersBundle.message("memo.password.tooltip"))
                 .getPanel();
     }
 
@@ -53,10 +54,10 @@ final class NewPasswordDialog extends DialogWrapper {
         char[] b = second.getPassword();
         try {
             if (a.length < MIN_LENGTH) {
-                return new ValidationInfo("비밀번호는 " + MIN_LENGTH + "자 이상이어야 합니다.", first);
+                return new ValidationInfo(BootServersBundle.message("memo.password.short", MIN_LENGTH), first);
             }
             if (!Arrays.equals(a, b)) {
-                return new ValidationInfo("두 비밀번호가 다릅니다.", second);
+                return new ValidationInfo(BootServersBundle.message("memo.password.mismatch"), second);
             }
             return null;
         } finally {

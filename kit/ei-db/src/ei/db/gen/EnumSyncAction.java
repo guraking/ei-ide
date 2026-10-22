@@ -20,6 +20,7 @@ import com.intellij.psi.util.PsiTreeUtil;
 import ei.db.DbConfig;
 import ei.db.DbSessions;
 import ei.db.DbSettings;
+import ei.db.EiDbBundle;
 import ei.db.Notify;
 import ei.db.QueryResult;
 import ei.db.SqlGuard;
@@ -35,7 +36,6 @@ import java.util.Locale;
  */
 public final class EnumSyncAction extends AnAction {
 
-  private static final String TITLE = "enum 다시 맞추기";
   private static final int CODE_COL = 0;
   private static final int LABEL_COL = 1;
   private static final int MIN_COLUMNS = 2;
@@ -62,16 +62,16 @@ public final class EnumSyncAction extends AnAction {
     String doc = javadocOf(cls);
     EnumGen.Source src = doc == null ? null : EnumGen.source(doc);
     if (src == null) {
-      Notify.warning(project, "커서가 있는 enum 의 Javadoc 에서 " + EnumGen.SQL_TAG + " · " + EnumGen.CONNECTION_TAG + " 를 찾지 못했습니다.");
+      Notify.warning(project, EiDbBundle.message("enumsync.no.tags", EnumGen.SQL_TAG, EnumGen.CONNECTION_TAG));
       return;
     }
     if (SqlGuard.isWrite(src.sql())) {
-      Notify.error(project, "조회문이 아니어서 다시 실행하지 않습니다: " + src.sql());
+      Notify.error(project, EiDbBundle.message("enumsync.not.query", src.sql()));
       return;
     }
     DbConfig c = connectionNamed(src.connection());
     if (c == null) {
-      Notify.error(project, "접속 「" + src.connection() + "」 이 없습니다. 같은 이름의 접속을 만들거나 Javadoc 의 " + EnumGen.CONNECTION_TAG + " 를 고치세요.");
+      Notify.error(project, EiDbBundle.message("enumsync.no.connection", src.connection(), EnumGen.CONNECTION_TAG));
       return;
     }
     Target t = new Target(editor.getDocument(), ((PsiJavaFile) file).getPackageName(), cls.getName(), src);
@@ -102,7 +102,7 @@ public final class EnumSyncAction extends AnAction {
   }
 
   private static void rerun(Project project, DbConfig c, Target t) {
-    new Task.Backgroundable(project, t.cls() + " 코드 다시 읽는 중", true) {
+    new Task.Backgroundable(project, EiDbBundle.message("enumsync.progress", t.cls()), true) {
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
         QueryResult r;
@@ -112,7 +112,7 @@ public final class EnumSyncAction extends AnAction {
         } catch (ProcessCanceledException e) {
           throw e;
         } catch (Exception e) {
-          Notify.error(project, t.cls() + " 의 SQL 을 실행하지 못했습니다: " + e.getMessage());
+          Notify.error(project, EiDbBundle.message("enumsync.run.failed", t.cls(), e.getMessage()));
           return;
         }
         String text = regenerate(project, t, r);
@@ -125,7 +125,7 @@ public final class EnumSyncAction extends AnAction {
   /** 새 파일 글. 쓸 수 없는 결과면 알리고 null. */
   private static @Nullable String regenerate(Project project, Target t, QueryResult r) {
     if (!r.isQuery() || r.columns().size() < MIN_COLUMNS) {
-      Notify.error(project, t.cls() + " 의 SQL 결과에 코드 · 이름 두 칼럼이 없습니다.");
+      Notify.error(project, EiDbBundle.message("enumsync.no.two.columns", t.cls()));
       return null;
     }
     int code = CODE_COL;
@@ -134,13 +134,13 @@ public final class EnumSyncAction extends AnAction {
       code = indexOf(r.columns(), t.src().columns().get(0));
       label = indexOf(r.columns(), t.src().columns().get(1));
       if (code < 0 || label < 0) {
-        Notify.error(project, t.cls() + " 의 SQL 결과에 칼럼 " + String.join(" · ", t.src().columns()) + " 가 없습니다.");
+        Notify.error(project, EiDbBundle.message("enumsync.no.columns", t.cls(), String.join(" · ", t.src().columns())));
         return null;
       }
     }
     List<EnumGen.Item> items = EnumGen.items(r.rows(), code, label);
     if (items.isEmpty()) {
-      Notify.warning(project, t.cls() + " 의 SQL 결과에 코드가 있는 행이 없어 바꾸지 않았습니다.");
+      Notify.warning(project, EiDbBundle.message("enumsync.no.rows", t.cls()));
       return null;
     }
     return EnumGen.text(t.pkg(), t.cls(), items, t.src());
@@ -155,14 +155,14 @@ public final class EnumSyncAction extends AnAction {
 
   private static void replace(Project project, Target t, String text) {
     if (text.equals(t.doc().getText())) {
-      Notify.info(project, t.cls() + " 는 이미 최신입니다. 바뀐 것이 없습니다.");
+      Notify.info(project, EiDbBundle.message("enumsync.up.to.date", t.cls()));
       return;
     }
     if (!t.doc().isWritable()) {
-      Notify.error(project, t.cls() + " 파일이 읽기 전용이라 바꾸지 못했습니다.");
+      Notify.error(project, EiDbBundle.message("enumsync.read.only", t.cls()));
       return;
     }
-    WriteCommandAction.writeCommandAction(project).withName(TITLE).run(() -> t.doc().setText(text));
-    Notify.info(project, t.cls() + " 를 다시 맞췄습니다.");
+    WriteCommandAction.writeCommandAction(project).withName(EiDbBundle.message("action.ei.db.gen.EnumSync.text")).run(() -> t.doc().setText(text));
+    Notify.info(project, EiDbBundle.message("enumsync.done", t.cls()));
   }
 }

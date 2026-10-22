@@ -53,7 +53,6 @@ import java.util.Set;
  */
 public final class ProgramListAction extends DumbAwareAction {
 
-    static final String TITLE = "프로그램 목록 내보내기";
     /** plugin.xml 의 notificationGroup id. */
     static final String NOTIFICATION_GROUP = "프로그램 목록";
     static final String SHEET_PROGRAMS = "프로그램 목록";
@@ -85,10 +84,10 @@ public final class ProgramListAction extends DumbAwareAction {
             return;
         }
         if (DumbService.isDumb(project)) {
-            Messages.showWarningDialog(project, "색인 중에는 내보낼 수 없습니다. 색인이 끝난 뒤 다시 시도하세요.", TITLE);
+            Messages.showWarningDialog(project, BootServersBundle.message("programs.indexing"), BootServersBundle.message("programs.title"));
             return;
         }
-        FileSaverDescriptor descriptor = new FileSaverDescriptor(TITLE, "엑셀 파일을 저장할 곳을 고르세요.", EXTENSION);
+        FileSaverDescriptor descriptor = new FileSaverDescriptor(BootServersBundle.message("programs.title"), BootServersBundle.message("programs.save.description"), EXTENSION);
         String defaultName = project.getName() + FILE_INFIX + LocalDate.now().format(FILE_DATE) + "." + EXTENSION;
         VirtualFileWrapper chosen = FileChooserFactory.getInstance().createSaveFileDialog(descriptor, project)
                 .save(ProjectUtil.guessProjectDir(project), defaultName);
@@ -96,7 +95,7 @@ public final class ProgramListAction extends DumbAwareAction {
             return;
         }
         Path target = chosen.getFile().toPath();
-        ProgressManager.getInstance().run(new Task.Backgroundable(project, "프로그램 목록 만드는 중", true) {
+        ProgressManager.getInstance().run(new Task.Backgroundable(project, BootServersBundle.message("programs.progress"), true) {
             private Collected collected;
 
             @Override
@@ -120,11 +119,11 @@ public final class ProgramListAction extends DumbAwareAction {
             @Override
             public void onSuccess() {
                 NotificationGroupManager.getInstance().getNotificationGroup(NOTIFICATION_GROUP)
-                        .createNotification("프로그램 목록을 저장했습니다",
-                                "파일 " + collected.programs().size() + "개 · URL " + collected.urls().size() + "개<br>" + target,
+                        .createNotification(BootServersBundle.message("programs.saved"),
+                                BootServersBundle.message("programs.saved.content", collected.programs().size(), collected.urls().size()) + "<br>" + target,
                                 NotificationType.INFORMATION)
-                        .addAction(NotificationAction.createSimple("열기", () -> RevealFileAction.openFile(target)))
-                        .addAction(NotificationAction.createSimple("폴더 열기", () -> RevealFileAction.openDirectory(target.getParent())))
+                        .addAction(NotificationAction.createSimple(BootServersBundle.message("common.open"), () -> RevealFileAction.openFile(target)))
+                        .addAction(NotificationAction.createSimple(BootServersBundle.message("programs.open.folder"), () -> RevealFileAction.openDirectory(target.getParent())))
                         .notify(project);
             }
 
@@ -133,8 +132,8 @@ public final class ProgramListAction extends DumbAwareAction {
                 LOG.warn("프로그램 목록 저장 실패: " + target, error);
                 Throwable cause = error instanceof UncheckedIOException io ? io.getCause() : error;
                 NotificationGroupManager.getInstance().getNotificationGroup(NOTIFICATION_GROUP)
-                        .createNotification("프로그램 목록을 저장하지 못했습니다",
-                                target + "<br>" + cause.getMessage() + "<br>엑셀에서 열려 있으면 닫고 다시 시도하세요.",
+                        .createNotification(BootServersBundle.message("programs.save.failed"),
+                                target + "<br>" + cause.getMessage() + "<br>" + BootServersBundle.message("programs.save.failed.hint"),
                                 NotificationType.ERROR)
                         .notify(project);
             }

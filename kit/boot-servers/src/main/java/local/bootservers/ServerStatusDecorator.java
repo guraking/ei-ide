@@ -32,7 +32,7 @@ public final class ServerStatusDecorator implements ProjectViewNodeDecorator {
         if (state == ServerLauncher.State.STOPPED) {
             return;
         }
-        String text = state.label;
+        String text = state.label();
         ServerRegistry.Run run = ServerRegistry.getInstance(project).get(module.getName());
         if (state == ServerLauncher.State.RUNNING && run != null && run.port != null) {
             text += " :" + run.port;

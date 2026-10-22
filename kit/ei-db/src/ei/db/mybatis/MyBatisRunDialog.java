@@ -28,6 +28,7 @@ import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
 import ei.db.DbConfig;
 import ei.db.DbSettings;
+import ei.db.EiDbBundle;
 import ei.db.Notify;
 import ei.db.SqlRunner;
 import ei.db.console.ConsoleOpener;
@@ -62,8 +63,6 @@ public final class MyBatisRunDialog extends DialogWrapper {
   /** 마지막에 고른 접속 id(프로젝트 단위). 로그 실행도 같은 값을 기본으로 쓴다. */
   public static final String CONNECTION_KEY = "ei.db.mybatis.connection";
   private static final String VALUE_KEY = "ei.db.mybatis.value.";
-  private static final String TITLE = "MyBatis 쿼리 실행";
-  private static final String FINDING_TYPES = "매개변수 · 결과 클래스 찾는 중";
   private static final int PREVIEW_ROWS = 12;
   private static final int PREVIEW_COLUMNS = 80;
   private static final JBColor WARNING = new JBColor(new Color(0xC27D0E), new Color(0xE0A64F));
@@ -94,10 +93,10 @@ public final class MyBatisRunDialog extends DialogWrapper {
     MapperDoc doc = MapperDoc.parse(text);
     MapperDoc.Node s = doc.statementAt(offset);
     if (s == null) {
-      Notify.error(project, "커서 위치에서 select · insert · update · delete 문장을 찾지 못했습니다.");
+      Notify.error(project, EiDbBundle.message("mybatisrun.no.statement"));
       return;
     }
-    new Task.Backgroundable(project, FINDING_TYPES, true) {
+    new Task.Backgroundable(project, EiDbBundle.message("mybatisrun.progress"), true) {
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
         DtoFields.ForRun types = ReadAction.nonBlocking(() -> DtoFields.forRun(project, doc, s)).wrapProgress(indicator).executeSynchronously();
@@ -132,10 +131,10 @@ public final class MyBatisRunDialog extends DialogWrapper {
     dto = types.result();
     dtoFields = types.resultFields();
     textParams = types.textParams();
-    setTitle(TITLE);
-    setOKButtonText("실행");
+    setTitle(EiDbBundle.message("action.EiDb.MyBatis.Run.text"));
+    setOKButtonText(EiDbBundle.message("common.run"));
     getOKAction().putValue(Action.SMALL_ICON, AllIcons.Actions.Execute);
-    setCancelButtonText("취소");
+    setCancelButtonText(EiDbBundle.message("common.cancel"));
     init();
     refresh();
   }
@@ -143,7 +142,7 @@ public final class MyBatisRunDialog extends DialogWrapper {
   static String connectionLabel(DbConfig c) {
     if (c == null) return "";
     String schema = c.effectiveSchema();
-    return c.name + (schema.isEmpty() ? "" : " · " + schema) + (c.readOnly ? " (읽기 전용)" : "");
+    return c.name + (schema.isEmpty() ? "" : " · " + schema) + (c.readOnly ? EiDbBundle.message("common.read.only.suffix") : "");
   }
 
   private String valueKey(String name) {
@@ -155,11 +154,11 @@ public final class MyBatisRunDialog extends DialogWrapper {
     JBLabel id = new JBLabel(doc.shortNamespace() + "." + statement.attr("id"));
     id.setFont(monospace());
     id.setForeground(UIUtil.getContextHelpForeground());
-    JBLabel note = new JBLabel("마지막에 넣은 값은 문장마다 기억합니다.");
+    JBLabel note = new JBLabel(EiDbBundle.message("mybatisrun.note"));
     note.setForeground(UIUtil.getContextHelpForeground());
     return FormBuilder.createFormBuilder()
         .addComponent(id)
-        .addLabeledComponent("접속", connection, JBUI.scale(8))
+        .addLabeledComponent(EiDbBundle.message("common.connection"), connection, JBUI.scale(8))
         .addComponent(parameters(), JBUI.scale(10))
         .addComponent(note)
         .addComponent(previewBox(), JBUI.scale(8))
@@ -170,14 +169,14 @@ public final class MyBatisRunDialog extends DialogWrapper {
   private JComponent parameters() {
     JPanel p = new JPanel(new GridBagLayout());
     if (rows.isEmpty()) {
-      p.add(new JBLabel("매개변수가 없습니다."));
+      p.add(new JBLabel(EiDbBundle.message("mybatisrun.no.params")));
       return p;
     }
     GridBagConstraints g = new GridBagConstraints();
     g.insets = JBUI.insets(2, 0, 2, 10);
     g.anchor = GridBagConstraints.WEST;
     g.gridy = 0;
-    String[] heads = {"매개변수", "형식", "값", ""};
+    String[] heads = {EiDbBundle.message("mybatisrun.col.param"), EiDbBundle.message("common.col.type"), EiDbBundle.message("bind.col.value"), ""};
     for (int k = 0; k < heads.length; k++) {
       JBLabel h = new JBLabel(heads[k]);
       h.setForeground(UIUtil.getContextHelpForeground());
@@ -191,7 +190,7 @@ public final class MyBatisRunDialog extends DialogWrapper {
       g.gridy++;
       JBLabel name = new JBLabel(e.getKey());
       name.setFont(monospace());
-      row.value.getEmptyText().setText("비움 → <if> 빠짐");
+      row.value.getEmptyText().setText(EiDbBundle.message("mybatisrun.empty.hint"));
       row.value.getDocument().addDocumentListener(new DocumentAdapter() {
         @Override
         protected void textChanged(@NotNull DocumentEvent ev) {
@@ -212,10 +211,10 @@ public final class MyBatisRunDialog extends DialogWrapper {
   }
 
   private JComponent previewBox() {
-    JBLabel title = new JBLabel("실제 실행될 SQL");
+    JBLabel title = new JBLabel(EiDbBundle.message("mybatisrun.sql.label"));
     title.setFont(title.getFont().deriveFont(java.awt.Font.BOLD));
     summary.setForeground(UIUtil.getContextHelpForeground());
-    ActionLink copy = new ActionLink("복사", e -> {
+    ActionLink copy = new ActionLink(EiDbBundle.message("common.copy"), e -> {
       CopyPasteManager.getInstance().setContents(new StringSelection(preview.getText()));
     });
     JPanel head = new JPanel();
@@ -272,10 +271,10 @@ public final class MyBatisRunDialog extends DialogWrapper {
     List<ResultColumns.Issue> issues = columns == null ? List.of() : ResultColumns.compare(columns, dtoFields);
     warning.setVisible(!issues.isEmpty());
     if (issues.isEmpty()) return;
-    JBLabel title = new JBLabel("resultType " + dto.getName() + " 와 맞지 않는 곳 " + issues.size(), AllIcons.General.Warning, JBLabel.LEFT);
+    JBLabel title = new JBLabel(EiDbBundle.message("mybatisrun.mismatch", dto.getName(), issues.size()), AllIcons.General.Warning, JBLabel.LEFT);
     title.setForeground(WARNING);
     title.setFont(title.getFont().deriveFont(java.awt.Font.BOLD));
-    ActionLink open = new ActionLink("DTO 열기", e -> {
+    ActionLink open = new ActionLink(EiDbBundle.message("mybatisrun.open.dto"), e -> {
       close(CANCEL_EXIT_CODE);
       dto.navigate(true);
     });
@@ -297,15 +296,15 @@ public final class MyBatisRunDialog extends DialogWrapper {
   }
 
   private static String issueText(ResultColumns.Issue i) {
-    if (!i.columnWithoutField) return "<html>DTO 필드 <b>" + i.field + "</b> 는 SELECT 에 없음 — 늘 null</html>";
-    String hint = i.similar == null ? "" : " (비슷한 필드: " + i.similar + ")";
-    return "<html>SELECT 의 <b>" + i.column + "</b> → DTO 에 <b>" + i.field + "</b> 필드 없음" + hint + " — 값이 버려짐</html>";
+    if (!i.columnWithoutField) return EiDbBundle.message("mybatisrun.issue.field", i.field);
+    String hint = i.similar == null ? "" : EiDbBundle.message("mybatisrun.issue.similar", i.similar);
+    return EiDbBundle.message("mybatisrun.issue.column", i.column, i.field, hint);
   }
 
   @Override
   protected JPanel createSouthAdditionalPanel() {
     JPanel p = new JPanel(new BorderLayout());
-    JBLabel hint = new JBLabel("실행은 바인드 변수로 · 결과는 아래 「결과」 창");
+    JBLabel hint = new JBLabel(EiDbBundle.message("mybatisrun.hint"));
     hint.setForeground(UIUtil.getContextHelpForeground());
     p.add(hint, BorderLayout.CENTER);
     return p;
@@ -313,7 +312,7 @@ public final class MyBatisRunDialog extends DialogWrapper {
 
   @Override
   protected Action @NotNull [] createActions() {
-    Action toConsole = new AbstractAction("콘솔로 보내기") {
+    Action toConsole = new AbstractAction(EiDbBundle.message("querypick.send")) {
       @Override
       public void actionPerformed(ActionEvent e) {
         ValidationInfo invalid = doValidate();
@@ -332,7 +331,7 @@ public final class MyBatisRunDialog extends DialogWrapper {
 
   @Override
   protected @Nullable ValidationInfo doValidate() {
-    return selected() == null ? new ValidationInfo("접속이 없습니다. 먼저 데이터베이스 접속을 추가하세요.", connection) : null;
+    return selected() == null ? new ValidationInfo(EiDbBundle.message("common.no.connection"), connection) : null;
   }
 
   private DbConfig selected() { return (DbConfig) connection.getSelectedItem(); }

@@ -3,6 +3,7 @@ package ei.db.gen;
 import com.intellij.ui.JBColor;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
+import ei.db.EiDbBundle;
 import ei.db.Meta;
 
 import javax.swing.JComponent;
@@ -338,7 +339,7 @@ final class ErdCanvas extends JComponent {
     int y = c.y + HEAD;
     List<Meta.Column> cols = visible(c);
     if (cols.isEmpty()) {
-      g.drawString("키 칼럼 없음", c.x + PAD, y + ROW - 6);
+      g.drawString(EiDbBundle.message("erd.no.key.columns"), c.x + PAD, y + ROW - 6);
     }
     for (Meta.Column col : cols) {
       int b = y + ROW - 6;

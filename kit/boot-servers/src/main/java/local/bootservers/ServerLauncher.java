@@ -50,7 +50,6 @@ final class ServerLauncher {
 
     // 스프링 부트 2.x · 3.x 공통 정규 이름
     private static final String BOOT_APP_ANNOTATION = "org.springframework.boot.autoconfigure.SpringBootApplication";
-    private static final String TITLE = "스프링 부트 서버";
 
     private ServerLauncher() {
     }
@@ -207,14 +206,14 @@ final class ServerLauncher {
     /** @SpringBootApplication 주석 클래스. 색인 중이거나 스프링 부트 의존성이 없으면 사유를 알리고 null. 화면 스레드에서 부른다. */
     private static PsiClass bootAnnotation(Project project) {
         if (DumbService.isDumb(project)) {
-            Messages.showWarningDialog(project, "색인이 끝난 뒤 다시 시도하세요.", TITLE);
+            Messages.showWarningDialog(project, BootServersBundle.message("launcher.indexing"), BootServersBundle.message("launcher.title"));
             return null;
         }
         PsiClass annotation = JavaPsiFacade.getInstance(project)
                 .findClass(BOOT_APP_ANNOTATION, GlobalSearchScope.allScope(project));
         if (annotation == null) {
             Messages.showErrorDialog(project,
-                    "프로젝트에 스프링 부트 의존성이 없습니다. Gradle · Maven 프로젝트로 연결됐는지 확인하세요.", TITLE);
+                    BootServersBundle.message("launcher.no.boot"), BootServersBundle.message("launcher.title"));
         }
         return annotation;
     }
@@ -238,14 +237,13 @@ final class ServerLauncher {
     private static PsiClass pickMainClass(Module module, Collection<PsiClass> found) {
         Project project = module.getProject();
         if (found.isEmpty()) {
-            Messages.showErrorDialog(project, "'" + module.getName() + "' 모듈에 @SpringBootApplication 클래스가 없습니다.", TITLE);
+            Messages.showErrorDialog(project, BootServersBundle.message("launcher.no.main", module.getName()), BootServersBundle.message("launcher.title"));
             return null;
         }
         if (found.size() > 1) {
             Messages.showErrorDialog(project,
-                    "'" + module.getName() + "' 모듈에 @SpringBootApplication 클래스가 " + found.size()
-                            + "개 있습니다. 모듈 이름과 같은 이름으로 실행 설정을 직접 만들면 그 설정으로 시작합니다.",
-                    TITLE);
+                    BootServersBundle.message("launcher.many.main", module.getName(), found.size()),
+                    BootServersBundle.message("launcher.title"));
             return null;
         }
         return found.iterator().next();
@@ -253,12 +251,17 @@ final class ServerLauncher {
 
     /** 서버 창 · 트리에 보여 줄 상태. */
     enum State {
-        RUNNING("실행 중"), STARTING("시작 중"), STOPPED("중지됨"), FAILED("실패");
+        RUNNING("server.state.running"), STARTING("server.state.starting"), STOPPED("server.state.stopped"), FAILED("server.state.failed");
 
-        final String label;
+        // 화면 글 키
+        private final String labelKey;
 
-        State(String label) {
-            this.label = label;
+        State(String labelKey) {
+            this.labelKey = labelKey;
+        }
+
+        String label() {
+            return BootServersBundle.message(labelKey);
         }
     }
 

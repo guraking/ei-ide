@@ -126,7 +126,7 @@ public final class DbSessions implements Disposable {
           applyAutoCommit(id, conn, autoCommit(c));
         } catch (SQLException e) {
           putOverride(id, before);
-          Notify.error(project, c.name + " 의 자동 커밋을 바꾸지 못했습니다: " + e.getMessage());
+          Notify.error(project, EiDbBundle.message("sessions.autocommit.failed", c.name, e.getMessage()));
         }
       }
     }
@@ -161,7 +161,7 @@ public final class DbSessions implements Disposable {
   /** cancel 로 멈춘 실행. 실행하던 쪽(run)이 받는다. */
   public static final class CancelledException extends SQLException {
     CancelledException(SQLException cause) {
-      super("취소했습니다", cause);
+      super(EiDbBundle.message("sessions.cancelled"), cause);
     }
   }
 
@@ -178,7 +178,7 @@ public final class DbSessions implements Disposable {
 
   /** 음수는 받지 않는다. 바꾸면 리스너를 불러 다른 콘솔 도구줄도 맞춘다. */
   public void setMaxRows(int rows) {
-    if (rows < 0) throw new IllegalArgumentException("조회 건수는 0(전부) 이상이어야 합니다: " + rows);
+    if (rows < 0) throw new IllegalArgumentException(EiDbBundle.message("sessions.bad.row.limit", rows));
     maxRows = rows;
     fire();
   }
@@ -195,11 +195,10 @@ public final class DbSessions implements Disposable {
         if (conn.isValid(VALID_TIMEOUT_SEC)) return conn;
         int lost = pending(c.id);
         if (lost > 0 && !conn.isClosed()) {
-          throw new SQLException(c.name + " 접속이 " + VALID_TIMEOUT_SEC + "초 안에 응답하지 않습니다. 미반영 변경 " + lost
-              + "건이 있어 다시 열지 않았습니다. 다시 실행하거나, 접속을 끊어 정리하세요.");
+          throw new SQLException(EiDbBundle.message("sessions.not.responding", c.name, VALID_TIMEOUT_SEC, lost));
         }
         close(c.id);
-        if (lost > 0) Notify.error(project, c.name + ": 미반영 변경 " + lost + "건이 사라졌습니다(서버에서 롤백됨).");
+        if (lost > 0) Notify.error(project, EiDbBundle.message("sessions.lost", c.name, lost));
       }
       return openNew(c);
     }
@@ -207,9 +206,9 @@ public final class DbSessions implements Disposable {
 
   private Connection openNew(DbConfig c) throws SQLException {
     String schema = c.schema == null ? "" : c.schema.trim();
-    if (!schema.isEmpty() && !IDENT.matcher(schema).matches()) throw new SQLException("스키마 이름이 올바르지 않습니다: " + schema);
+    if (!schema.isEmpty() && !IDENT.matcher(schema).matches()) throw new SQLException(EiDbBundle.message("sessions.bad.schema", schema));
     String password = Passwords.get(c);
-    if (password == null) throw new SQLException("저장된 비밀번호가 없습니다. 접속 설정에서 비밀번호를 넣으세요.");
+    if (password == null) throw new SQLException(EiDbBundle.message("sessions.no.password"));
     Connection conn = connect(c, password);
     try {
       conn.setAutoCommit(autoCommit(c));
@@ -239,8 +238,7 @@ public final class DbSessions implements Disposable {
     try {
       String version = conn.getMetaData().getDriverVersion();
       if (Drivers.isOlderDriver(version, Drivers.PG_MIN_DRIVER)) {
-        Notify.warning(project, c.name + " 의 PostgreSQL 드라이버(" + version + ")가 낡았습니다. 드라이버를 새 판으로 바꾸세요"
-            + "(접속 창의 「내려받기」). 이 판은 읽기 전용 접속을 서버에서 막지 못합니다.");
+        Notify.warning(project, EiDbBundle.message("sessions.old.pg.driver", c.name, version));
       }
     } catch (SQLException e) {
       // 판 확인은 안내용이라 실패해도 접속을 막지 않는다.
@@ -255,7 +253,7 @@ public final class DbSessions implements Disposable {
     } catch (ReflectiveOperationException | java.io.IOException e) {
       throw new SQLException(e.getMessage(), e);
     }
-    if (conn == null) throw new SQLException("드라이버가 주소를 받지 않았습니다: " + c.url());
+    if (conn == null) throw new SQLException(EiDbBundle.message("sessions.url.rejected", c.url()));
     return conn;
   }
 
@@ -318,7 +316,7 @@ public final class DbSessions implements Disposable {
     try (ps) {
       if (stop.getAsBoolean()) {
         cancelled.add(ps);
-        throw new SQLException("실행 전에 취소했습니다");
+        throw new SQLException(EiDbBundle.message("sessions.cancelled.before"));
       }
       // limit + 1 건을 받아 보고 넘치면 잘렸다고 알린다.
       if (limit != ALL_ROWS) ps.setMaxRows(limit + 1);
@@ -372,7 +370,7 @@ public final class DbSessions implements Disposable {
     if (c.kind != DbKind.POSTGRES && SqlGuard.isDdl(text)) {
       Integer committed = pending.put(c.id, 0);
       if (committed != null && committed > 0) {
-        Notify.info(project, c.name + ": DDL 실행으로 미반영 변경 " + committed + "건이 함께 커밋되었습니다.");
+        Notify.info(project, EiDbBundle.message("sessions.ddl.committed", c.name, committed));
       }
     } else {
       pending.merge(c.id, 1, Integer::sum);
@@ -384,7 +382,7 @@ public final class DbSessions implements Disposable {
   private void warnCompileErrors(DbConfig c, Statement st, String text) throws SQLException {
     if (c.kind != DbKind.ORACLE || !SqlGuard.isPlsql(text)) return;
     SQLWarning w = st.getWarnings();
-    if (w != null) Notify.error(project, c.name + ": 컴파일 오류가 있습니다. USER_ERRORS 를 확인하세요.");
+    if (w != null) Notify.error(project, EiDbBundle.message("sessions.compile.errors", c.name));
   }
 
   /**

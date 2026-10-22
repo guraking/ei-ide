@@ -13,6 +13,7 @@ import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.JBUI;
 import org.jetbrains.annotations.Nullable;
+import ei.db.EiDbBundle;
 
 import javax.swing.JComponent;
 import javax.swing.JPanel;
@@ -24,7 +25,6 @@ import java.util.List;
 
 /** 「칼럼 이름 바꾸기」 입력 창. 확인하면 input() 으로 값을 준다. */
 final class ColumnRenameDialog extends DialogWrapper {
-  static final String TITLE = "칼럼 이름 바꾸기";
   private static final int FIELD_COLUMNS = 28;
 
   /** 창에서 받은 값. table 이 비면 모든 매퍼. */
@@ -36,13 +36,13 @@ final class ColumnRenameDialog extends DialogWrapper {
   private final JBTextField oldField = new JBTextField(FIELD_COLUMNS);
   private final JBTextField newField = new JBTextField(FIELD_COLUMNS);
   private final JBTextField tableField = new JBTextField(FIELD_COLUMNS);
-  private final JBCheckBox dtoBox = new JBCheckBox("DTO 필드도 바꾸기(resultMap property · #{} · getter · setter)", true);
+  private final JBCheckBox dtoBox = new JBCheckBox(EiDbBundle.message("columnrename.dto.box"), true);
 
   ColumnRenameDialog(Project project, String initialOld) {
     super(project);
     oldField.setText(initialOld == null ? "" : initialOld);
-    tableField.getEmptyText().setText("비우면 모든 매퍼");
-    setTitle(TITLE);
+    tableField.getEmptyText().setText(EiDbBundle.message("columnrename.table.hint"));
+    setTitle(EiDbBundle.message("columnrename.title"));
     init();
   }
 
@@ -53,9 +53,9 @@ final class ColumnRenameDialog extends DialogWrapper {
   @Override
   protected @Nullable JComponent createCenterPanel() {
     return FormBuilder.createFormBuilder()
-        .addLabeledComponent("옛 칼럼 이름", oldField)
-        .addLabeledComponent("새 칼럼 이름", newField)
-        .addLabeledComponent("표 이름(선택)", tableField)
+        .addLabeledComponent(EiDbBundle.message("columnrename.old"), oldField)
+        .addLabeledComponent(EiDbBundle.message("columnrename.new"), newField)
+        .addLabeledComponent(EiDbBundle.message("columnrename.table"), tableField)
         .addComponent(dtoBox)
         .getPanel();
   }
@@ -88,7 +88,7 @@ final class ColumnRenameDialog extends DialogWrapper {
     private static final int HEIGHT = 420;
 
     private final List<Row> rows;
-    private final DefaultTableModel model = new DefaultTableModel(new Object[] {"바꿈", "파일", "줄", "내용"}, 0) {
+    private final DefaultTableModel model = new DefaultTableModel(new Object[] {EiDbBundle.message("columnrename.col.change"), EiDbBundle.message("common.col.file"), EiDbBundle.message("common.col.line"), EiDbBundle.message("columnrename.col.content")}, 0) {
       @Override
       public Class<?> getColumnClass(int column) {
         return column == COL_CHECK ? Boolean.class : column == COL_LINE ? Integer.class : String.class;
@@ -105,9 +105,9 @@ final class ColumnRenameDialog extends DialogWrapper {
       super(project);
       this.rows = rows;
       for (Row r : rows) model.addRow(new Object[] {Boolean.TRUE, r.file().getName(), r.line(), r.lineText()});
-      summary = in.oldName() + " → " + in.newName() + " · " + rows.size() + "곳";
-      setTitle(TITLE + " — 미리보기");
-      setOKButtonText("바꾸기");
+      summary = EiDbBundle.message("columnrename.summary", in.oldName(), in.newName(), rows.size());
+      setTitle(EiDbBundle.message("columnrename.preview.title"));
+      setOKButtonText(EiDbBundle.message("columnrename.ok"));
       init();
     }
 
@@ -136,7 +136,7 @@ final class ColumnRenameDialog extends DialogWrapper {
 
     @Override
     protected @Nullable ValidationInfo doValidate() {
-      return chosen().isEmpty() ? new ValidationInfo("바꿀 곳을 하나 이상 고르세요.") : null;
+      return chosen().isEmpty() ? new ValidationInfo(EiDbBundle.message("columnrename.none.chosen")) : null;
     }
   }
 }

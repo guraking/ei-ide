@@ -191,11 +191,11 @@ public final class WasRunner {
             return false;
         }
         if (!server.kind().supported) {
-            Messages.showInfoMessage(project, server.kind().label + " 실행은 아직 준비 중입니다.", TITLE);
+            Messages.showInfoMessage(project, BootServersBundle.message("was.not.supported", server.kind().label), TITLE);
             return false;
         }
         if (detectVersion(server.kind(), Path.of(server.home)) == null) {
-            Messages.showErrorDialog(project, server.kind().label + " 설치 폴더가 아닙니다: " + server.home, TITLE);
+            Messages.showErrorDialog(project, BootServersBundle.message("was.not.home", server.kind().label, server.home), TITLE);
             return false;
         }
         if (server.kind() == WasSettings.Kind.JEUS && jeusPassword(server, true) == null) {
@@ -212,7 +212,7 @@ public final class WasRunner {
         ProjectTaskManager.getInstance(project).build(modules.toArray(Module[]::new)).onSuccess(result ->
                 ApplicationManager.getApplication().invokeLater(() -> {
                     if (result.isAborted() || result.hasErrors()) {
-                        Messages.showErrorDialog(project, "빌드에 실패해서 " + server.name + " 을(를) 띄우지 않았습니다. 문제 창을 확인하세요.", TITLE);
+                        Messages.showErrorDialog(project, BootServersBundle.message("was.build.failed", server.name), TITLE);
                     }
                     else {
                         launch(server, debug);
@@ -228,7 +228,7 @@ public final class WasRunner {
             Module folder = ModuleManager.getInstance(project).findModuleByName(d.module);
             if (folder == null) {
                 if (report) {
-                    Messages.showErrorDialog(project, "'" + d.module + "' 모듈이 프로젝트에 없습니다. WAS 설정에서 빼거나 다시 고르세요.", TITLE);
+                    Messages.showErrorDialog(project, BootServersBundle.message("was.module.missing", d.module), TITLE);
                     return null;
                 }
                 continue;
@@ -259,7 +259,7 @@ public final class WasRunner {
                 prepareAndRun(server, debug);
             }
             catch (RuntimeException e) {
-                showError(server.name + " 을(를) 띄우지 못했습니다: " + e.getMessage());
+                showError(BootServersBundle.message("was.launch.failed", server.name, e.getMessage()));
             }
             finally {
                 launching.remove(server.id);
@@ -271,8 +271,7 @@ public final class WasRunner {
     private void prepareAndRun(WasSettings.Server server, boolean debug) {
         String busy = busyPorts(server, debug);
         if (busy != null) {
-            showError(busy + " 포트를 다른 프로그램이 쓰고 있어 " + server.name
-                    + " 을(를) 띄우지 않았습니다. 그 프로그램을 끄거나 WAS 편집에서 포트를 바꾸세요.");
+            showError(BootServersBundle.message("was.port.busy", busy, server.name));
             return;
         }
         Path base = baseDir(server);
@@ -298,7 +297,7 @@ public final class WasRunner {
             }
         }
         catch (IOException e) {
-            showError("실행 폴더를 꾸미지 못했습니다: " + e.getMessage());
+            showError(BootServersBundle.message("was.run.dir.failed", e.getMessage()));
             return;
         }
 
@@ -312,7 +311,7 @@ public final class WasRunner {
                     : new KillableColoredProcessHandler(cmd);
         }
         catch (ExecutionException e) {
-            showError(server.kind().label + " 을(를) 띄우지 못했습니다: " + e.getMessage());
+            showError(BootServersBundle.message("was.launch.failed", server.kind().label, e.getMessage()));
             return;
         }
         ProcessTerminatedListener.attach(handler);
@@ -373,10 +372,10 @@ public final class WasRunner {
         ports.put("HTTP", server.httpPort);
         // WebLogic 은 두 번째 포트를 쓰지 않는다.
         if (server.kind() != WasSettings.Kind.WEBLOGIC) {
-            ports.put(server.kind() == WasSettings.Kind.TOMCAT ? "종료" : "관리", server.shutdownPort);
+            ports.put(server.kind() == WasSettings.Kind.TOMCAT ? BootServersBundle.message("was.port.shutdown") : BootServersBundle.message("was.port.admin"), server.shutdownPort);
         }
         if (debug) {
-            ports.put("디버그", server.debugPort);
+            ports.put(BootServersBundle.message("was.port.debug"), server.debugPort);
         }
         List<String> busy = new ArrayList<>();
         for (Map.Entry<String, Integer> e : ports.entrySet()) {
@@ -529,17 +528,17 @@ public final class WasRunner {
             ProcessOutput out = new CapturingProcessHandler(cmd.createProcess(), StandardCharsets.UTF_8, shown)
                     .runProcess((int) TimeUnit.SECONDS.toMillis(DEPLOY_TIMEOUT_SECONDS));
             console.notifyTextAvailable(out.getStdout(), ProcessOutputTypes.STDOUT);
-            failure = out.isTimeout() ? DEPLOY_TIMEOUT_SECONDS + "초 안에 끝나지 않았습니다"
-                    : out.getExitCode() != 0 ? "종료 코드 " + out.getExitCode() : null;
+            failure = out.isTimeout() ? BootServersBundle.message("was.deploy.timeout", DEPLOY_TIMEOUT_SECONDS)
+                    : out.getExitCode() != 0 ? BootServersBundle.message("was.deploy.exit.code", out.getExitCode()) : null;
         }
         catch (ExecutionException e) {
-            failure = "명령을 띄우지 못했습니다: " + e.getMessage();
+            failure = BootServersBundle.message("was.deploy.command.failed", e.getMessage());
         }
         catch (IOException e) {
-            failure = "비밀번호 파일을 만들지 못했습니다: " + e.getMessage();
+            failure = BootServersBundle.message("was.deploy.password.file.failed", e.getMessage());
         }
         if (failure != null) {
-            console.notifyTextAvailable(name + " 배포 실패 — " + failure + ". WAS 편집에서 배포 명령을 확인하세요.\n", ProcessOutputTypes.STDERR);
+            console.notifyTextAvailable(BootServersBundle.message("was.deploy.failed", name, failure) + "\n", ProcessOutputTypes.STDERR);
         }
     }
 
@@ -555,11 +554,11 @@ public final class WasRunner {
         CredentialAttributes key = jeusCredential(server);
         password = PasswordSafe.getInstance().getPassword(key);
         if (password == null && ask) {
-            password = Messages.showPasswordDialog(project, server.jeusUser + " 계정의 비밀번호를 입력하세요.", server.name, null);
+            password = Messages.showPasswordDialog(project, BootServersBundle.message("was.jeus.password.prompt", server.jeusUser), server.name, null);
             if (password == null || password.isEmpty()) {
                 return null;
             }
-            if (Messages.showYesNoDialog(project, "비밀번호를 IDE 비밀번호 저장소에 기억할까요?", TITLE, null) == Messages.YES) {
+            if (Messages.showYesNoDialog(project, BootServersBundle.message("was.jeus.password.remember"), TITLE, null) == Messages.YES) {
                 PasswordSafe.getInstance().setPassword(key, password);
             }
         }
@@ -727,7 +726,7 @@ public final class WasRunner {
 
     /** 반영 실패를 그 서버 실행 창(떠 있으면)과 알림으로 보인다. 어느 스레드에서든 부른다. */
     private void reportSyncFailure(WasSettings.Server server, String reason) {
-        String text = server.name + " 반영 실패 — " + reason;
+        String text = BootServersBundle.message("was.publish.failed", server.name, reason);
         ProcessHandler console = running.get(server.id);
         if (console != null) {
             console.notifyTextAvailable(text + "\n", ProcessOutputTypes.STDERR);
@@ -740,7 +739,7 @@ public final class WasRunner {
     private void attachDebugger(WasSettings.Server server) {
         RunManager runManager = RunManager.getInstance(project);
         RunnerAndConfigurationSettings settings = runManager.createConfiguration(
-                server.name + " 디버그", RemoteConfigurationType.getInstance().getConfigurationFactories()[0]);
+                BootServersBundle.message("was.debug.config", server.name), RemoteConfigurationType.getInstance().getConfigurationFactories()[0]);
         RemoteConfiguration remote = (RemoteConfiguration) settings.getConfiguration();
         remote.HOST = "localhost";
         remote.PORT = String.valueOf(server.debugPort);

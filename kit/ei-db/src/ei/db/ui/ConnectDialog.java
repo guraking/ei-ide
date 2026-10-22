@@ -26,6 +26,7 @@ import ei.db.DbKind;
 import ei.db.DbSessions;
 import ei.db.DbSettings;
 import ei.db.Drivers;
+import ei.db.EiDbBundle;
 import ei.db.Passwords;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -68,23 +69,23 @@ public final class ConnectDialog extends DialogWrapper {
   private final JBTextField port = new JBTextField(PORT_COLUMNS);
   private final JBLabel serviceLabel = new JBLabel();
   private final JBTextField service = new JBTextField();
-  private final JBRadioButton serviceName = new JBRadioButton("서비스 이름");
+  private final JBRadioButton serviceName = new JBRadioButton(EiDbBundle.message("connect.service.name"));
   private final JBRadioButton sid = new JBRadioButton("SID");
   private final JBTextField user = new JBTextField();
   private final JBPasswordField password = new JBPasswordField();
-  private final JBCheckBox savePassword = new JBCheckBox("IDE 암호 저장소에 저장", true);
+  private final JBCheckBox savePassword = new JBCheckBox(EiDbBundle.message("connect.save.password"), true);
   /** 사용자가 비밀번호 칸을 고쳤는지. 저장소에서 읽어 채운 값은 치지 않는다. 화면 스레드에서만 바꾼다. */
   private boolean passwordTouched;
   private boolean fillingPassword;
   private final JBTextField schema = new JBTextField();
   private final JBLabel driverName = new JBLabel();
   private final JBLabel driverStatus = new JBLabel("", UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER);
-  private final ActionLink downloadLink = new ActionLink("내려받기", (ActionListener) e -> downloadDriver());
-  private final ActionLink autoDriverLink = new ActionLink("자동으로", (ActionListener) e -> autoDriver());
+  private final ActionLink downloadLink = new ActionLink(EiDbBundle.message("connect.download"), (ActionListener) e -> downloadDriver());
+  private final ActionLink autoDriverLink = new ActionLink(EiDbBundle.message("connect.auto.driver"), (ActionListener) e -> autoDriver());
   private final JBLabel url = new JBLabel();
-  private final JBCheckBox autoCommit = new JBCheckBox("자동 커밋");
-  private final JBCheckBox readOnly = new JBCheckBox("읽기 전용 (UPDATE · DELETE 막음)");
-  private final JBCheckBox production = new JBCheckBox("운영 표시 (빨간 띠)");
+  private final JBCheckBox autoCommit = new JBCheckBox(EiDbBundle.message("console.autocommit"));
+  private final JBCheckBox readOnly = new JBCheckBox(EiDbBundle.message("connect.read.only"));
+  private final JBCheckBox production = new JBCheckBox(EiDbBundle.message("connect.production"));
   private final JBLabel testResult = new JBLabel();
 
   /** existing 이 null 이면 새 접속. 저장하면 설정에 넣고 그 접속을, 취소하면 null. */
@@ -97,9 +98,9 @@ public final class ConnectDialog extends DialogWrapper {
     super(project, true);
     this.project = project;
     this.base = existing == null ? new DbConfig() : existing.copy();
-    setTitle(existing == null ? "접속 추가" : "접속 편집");
-    setOKButtonText("저장");
-    setCancelButtonText("취소");
+    setTitle(EiDbBundle.message(existing == null ? "connect.title.add" : "connect.title.edit"));
+    setOKButtonText(EiDbBundle.message("common.save"));
+    setCancelButtonText(EiDbBundle.message("common.cancel"));
 
     kind = base.kind;
     driverJar = base.driverJar == null ? "" : base.driverJar;
@@ -154,7 +155,7 @@ public final class ConnectDialog extends DialogWrapper {
     JPanel passwordRow = new JPanel(new BorderLayout(JBUI.scale(8), 0));
     passwordRow.add(password, BorderLayout.CENTER);
     passwordRow.add(savePassword, BorderLayout.EAST);
-    savePassword.setToolTipText("끄면 비밀번호를 IDE 를 끌 때까지만 기억하고, 다음 실행 뒤 처음 연결할 때 묻습니다");
+    savePassword.setToolTipText(EiDbBundle.message("connect.save.password.tooltip"));
     password.getDocument().addDocumentListener(new DocumentAdapter() {
       @Override protected void textChanged(@NotNull DocumentEvent e) { if (!fillingPassword) passwordTouched = true; }
     });
@@ -164,8 +165,8 @@ public final class ConnectDialog extends DialogWrapper {
     driverRow.add(driverStatus);
     downloadLink.setVisible(false);
     driverRow.add(downloadLink);
-    driverRow.add(new ActionLink("다른 jar 고르기", (ActionListener) e -> chooseJar()));
-    autoDriverLink.setToolTipText("고른 jar 를 비우고 .m2 에서 자동으로 찾습니다");
+    driverRow.add(new ActionLink(EiDbBundle.message("connect.choose.jar"), (ActionListener) e -> chooseJar()));
+    autoDriverLink.setToolTipText(EiDbBundle.message("connect.auto.driver.tooltip"));
     driverRow.add(autoDriverLink);
 
     JPanel safety = new JPanel();
@@ -182,16 +183,16 @@ public final class ConnectDialog extends DialogWrapper {
     service.getDocument().addDocumentListener(preview);
 
     JPanel form = FormBuilder.createFormBuilder()
-        .addLabeledComponent("종류", kindRow)
-        .addLabeledComponent("이름", name)
-        .addLabeledComponent("호스트 · 포트", hostRow)
+        .addLabeledComponent(EiDbBundle.message("connect.kind"), kindRow)
+        .addLabeledComponent(EiDbBundle.message("common.col.name"), name)
+        .addLabeledComponent(EiDbBundle.message("connect.host.port"), hostRow)
         .addLabeledComponent(serviceLabel, serviceRow)
-        .addLabeledComponent("사용자", user)
-        .addLabeledComponent("비밀번호", passwordRow)
-        .addLabeledComponent("기본 스키마", schema)
-        .addLabeledComponent("드라이버", driverRow)
-        .addLabeledComponent("JDBC 주소", url)
-        .addLabeledComponent("안전", safety)
+        .addLabeledComponent(EiDbBundle.message("connect.user"), user)
+        .addLabeledComponent(EiDbBundle.message("connect.password"), passwordRow)
+        .addLabeledComponent(EiDbBundle.message("connect.default.schema"), schema)
+        .addLabeledComponent(EiDbBundle.message("connect.driver"), driverRow)
+        .addLabeledComponent(EiDbBundle.message("connect.url"), url)
+        .addLabeledComponent(EiDbBundle.message("connect.safety"), safety)
         .getPanel();
     form.setPreferredSize(JBUI.size(600, -1).withHeight(form.getPreferredSize().height));
     return form;
@@ -200,7 +201,7 @@ public final class ConnectDialog extends DialogWrapper {
   @Override
   protected JPanel createSouthAdditionalPanel() {
     JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0));
-    JButton test = new JButton("연결 시험");
+    JButton test = new JButton(EiDbBundle.message("connect.test"));
     test.addActionListener(e -> testConnection());
     p.add(test);
     p.add(testResult);
@@ -216,7 +217,7 @@ public final class ConnectDialog extends DialogWrapper {
   private void applyKind(boolean byUser) {
     if (byUser) port.setText(String.valueOf(kind.defaultPort));
     boolean oracle = kind == DbKind.ORACLE;
-    serviceLabel.setText(oracle ? "서비스" : "데이터베이스");
+    serviceLabel.setText(EiDbBundle.message(oracle ? "connect.service" : "connect.database"));
     serviceName.setVisible(oracle);
     sid.setVisible(oracle);
     refreshDriver();
@@ -257,7 +258,7 @@ public final class ConnectDialog extends DialogWrapper {
   private void refreshDriver() {
     DbConfig probe = current();
     autoDriverLink.setVisible(!driverJar.isBlank());
-    driverName.setText("찾는 중…");
+    driverName.setText(EiDbBundle.message("common.searching"));
     driverStatus.setText("");
     // 창이 뜨기 전(init)에도 불리므로 current() 를 쓰면 바깥 상태가 잡혀 창이 닫힐 때까지 갱신이 밀린다. 글자만 바꾸므로 any() 로 둔다.
     ModalityState modality = ModalityState.any();
@@ -267,7 +268,7 @@ public final class ConnectDialog extends DialogWrapper {
         if (kind != probe.kind || !Objects.equals(driverJar, probe.driverJar)) return;
         boolean chosen = !driverJar.isBlank();
         driverName.setText(jar != null ? jar.getFileName().toString() : chosen ? Path.of(driverJar).getFileName().toString() : kind.artifactPrefix + " jar");
-        driverStatus.setText(jar == null ? "찾지 못함" : chosen ? "직접 고름" : ".m2 에서 찾음");
+        driverStatus.setText(EiDbBundle.message(jar == null ? "connect.driver.not.found" : chosen ? "connect.driver.chosen" : "connect.driver.m2"));
         driverStatus.setForeground(jar == null ? ERROR_COLOR : UIUtil.getContextHelpForeground());
         downloadLink.setVisible(jar == null && !chosen);
       }, modality);
@@ -279,18 +280,17 @@ public final class ConnectDialog extends DialogWrapper {
     DbKind target = kind;
     try {
       Path jar = ProgressManager.getInstance().runProcessWithProgressSynchronously(
-          () -> Drivers.download(target), target.label + " 드라이버 내려받는 중", true, project);
-      Messages.showInfoMessage(getContentPane(), jar.getFileName() + " 을 받았습니다.", "드라이버");
+          () -> Drivers.download(target), EiDbBundle.message("connect.download.progress", target.label), true, project);
+      Messages.showInfoMessage(getContentPane(), EiDbBundle.message("connect.downloaded", jar.getFileName()), EiDbBundle.message("connect.driver"));
     } catch (Exception e) {
-      Messages.showErrorDialog(getContentPane(), "드라이버를 받지 못했습니다: " + e.getMessage()
-          + "\n인터넷이 막혀 있으면 「다른 jar 고르기」로 직접 고르세요.", "드라이버");
+      Messages.showErrorDialog(getContentPane(), EiDbBundle.message("connect.download.failed", e.getMessage()), EiDbBundle.message("connect.driver"));
     }
     refreshDriver();
   }
 
   private void chooseJar() {
     FileChooserDescriptor descriptor = new FileChooserDescriptor(true, false, true, true, false, false)
-        .withTitle("JDBC 드라이버 jar")
+        .withTitle(EiDbBundle.message("connect.jar.title"))
         .withExtensionFilter("jar");
     VirtualFile file = FileChooser.chooseFile(descriptor, getContentPane(), project, null);
     if (file == null) return;
@@ -345,7 +345,7 @@ public final class ConnectDialog extends DialogWrapper {
     String pw = new String(password.getPassword());
     testResult.setForeground(UIUtil.getContextHelpForeground());
     testResult.setToolTipText(null);
-    testResult.setText("시험 중…");
+    testResult.setText(EiDbBundle.message("connect.testing"));
     // 창이 뜨기 전(init)에도 불리므로 current() 를 쓰면 바깥 상태가 잡혀 창이 닫힐 때까지 갱신이 밀린다. 글자만 바꾸므로 any() 로 둔다.
     ModalityState modality = ModalityState.any();
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
@@ -355,7 +355,7 @@ public final class ConnectDialog extends DialogWrapper {
       Color color;
       try {
         String product = DbSessions.test(probe, pw);
-        text = "연결됨 · " + product + " · " + (System.currentTimeMillis() - start) + " ms";
+        text = EiDbBundle.message("connect.test.ok", product, System.currentTimeMillis() - start);
         color = OK_COLOR;
       } catch (Exception e) {
         String msg = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
@@ -377,11 +377,11 @@ public final class ConnectDialog extends DialogWrapper {
 
   @Override
   protected @Nullable ValidationInfo doValidate() {
-    if (name.getText().isBlank()) return new ValidationInfo("이름을 넣으세요.", name);
-    if (host.getText().isBlank()) return new ValidationInfo("호스트를 넣으세요.", host);
+    if (name.getText().isBlank()) return new ValidationInfo(EiDbBundle.message("connect.name.empty"), name);
+    if (host.getText().isBlank()) return new ValidationInfo(EiDbBundle.message("connect.host.empty"), host);
     int p = parsePort();
-    if (p < MIN_PORT || p > MAX_PORT) return new ValidationInfo("포트는 " + MIN_PORT + "–" + MAX_PORT + " 사이 숫자여야 합니다.", port);
-    if (user.getText().isBlank()) return new ValidationInfo("사용자를 넣으세요.", user);
+    if (p < MIN_PORT || p > MAX_PORT) return new ValidationInfo(EiDbBundle.message("connect.port.invalid", MIN_PORT, MAX_PORT), port);
+    if (user.getText().isBlank()) return new ValidationInfo(EiDbBundle.message("connect.user.empty"), user);
     return null;
   }
 
@@ -393,7 +393,7 @@ public final class ConnectDialog extends DialogWrapper {
     boolean reopen = sessions.isOpen(c.id);
     int pending = sessions.pending(c.id);
     if (reopen && pending > 0
-        && Messages.showYesNoDialog(getContentPane(), "미반영 변경 " + pending + "건이 롤백됩니다. 저장할까요?", "접속 편집", Messages.getWarningIcon()) != Messages.YES) {
+        && Messages.showYesNoDialog(getContentPane(), EiDbBundle.message("connect.pending.confirm", pending), EiDbBundle.message("connect.title.edit"), Messages.getWarningIcon()) != Messages.YES) {
       return;
     }
     DbSettings.getInstance().put(c);

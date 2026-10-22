@@ -16,7 +16,6 @@ import com.intellij.openapi.project.Project;
  */
 public final class CaseConvertActions {
 
-    private static final String COMMAND_NAME = "표기법 바꾸기";
 
     private CaseConvertActions() {
     }
@@ -60,7 +59,7 @@ public final class CaseConvertActions {
             int start = selection.getSelectionStart();
             int end = selection.getSelectionEnd();
             Document document = editor.getDocument();
-            WriteCommandAction.runWriteCommandAction(project, COMMAND_NAME, null, () -> {
+            WriteCommandAction.runWriteCommandAction(project, BootServersBundle.message("case.command"), null, () -> {
                 document.replaceString(start, end, converted);
                 selection.setSelection(start, start + converted.length());
             });

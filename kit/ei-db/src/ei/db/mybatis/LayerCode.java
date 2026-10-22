@@ -25,6 +25,7 @@ import com.intellij.psi.search.searches.ReferencesSearch;
 import com.intellij.psi.util.PropertyUtilBase;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.util.IncorrectOperationException;
+import ei.db.EiDbBundle;
 import ei.db.Notify;
 import ei.db.gen.Names;
 import org.jetbrains.annotations.Nullable;
@@ -44,7 +45,6 @@ final class LayerCode {
   private static final String LOMBOK_DATA = "lombok.Data";
   private static final String LOMBOK_GETTER = "lombok.Getter";
   private static final String LOMBOK_SETTER = "lombok.Setter";
-  private static final String INSERT_COMMAND = "메서드 넣기";
 
   /** type 형식의 필드를 가진 클래스와 그 필드 이름. */
   record Holder(PsiClass cls, String field) {}
@@ -184,18 +184,18 @@ final class LayerCode {
    */
   static void insert(Project project, @Nullable PsiClass target, String methodText, Set<String> imports) {
     if (target == null || !target.isValid()) {
-      Notify.error(project, "넣을 클래스를 찾지 못했습니다. 다른 클래스를 골라 주세요.");
+      Notify.error(project, EiDbBundle.message("layercode.no.target.class"));
       return;
     }
     if (methodText == null || methodText.isBlank()) {
-      Notify.error(project, "넣을 메서드 글이 비었습니다.");
+      Notify.error(project, EiDbBundle.message("layercode.empty.method"));
       return;
     }
     if (!FileModificationService.getInstance().preparePsiElementForWrite(target)) return;
     PsiMethod[] result = new PsiMethod[1];
     boolean[] existed = new boolean[1];
     try {
-      WriteCommandAction.writeCommandAction(project, target.getContainingFile()).withName(INSERT_COMMAND).run(() -> {
+      WriteCommandAction.writeCommandAction(project, target.getContainingFile()).withName(EiDbBundle.message("layercode.command.insert")).run(() -> {
         PsiMethod m = JavaPsiFacade.getElementFactory(project).createMethodFromText(methodText.strip(), target);
         PsiMethod[] same = target.findMethodsByName(m.getName(), false);
         if (same.length > 0) {
@@ -208,16 +208,16 @@ final class LayerCode {
         result[0] = (PsiMethod) CodeStyleManager.getInstance(project).reformat(added);
       });
     } catch (IncorrectOperationException ex) {
-      Notify.error(project, "메서드 글을 읽지 못해 넣지 않았습니다: " + ex.getMessage());
+      Notify.error(project, EiDbBundle.message("layercode.parse.failed", ex.getMessage()));
       return;
     } catch (RuntimeException ex) {
-      Notify.error(project, "메서드를 넣지 못했습니다: " + ex.getMessage());
+      Notify.error(project, EiDbBundle.message("layercode.insert.failed", ex.getMessage()));
       return;
     }
     if (result[0] == null) return;
     result[0].navigate(true);
     if (existed[0]) {
-      Notify.info(project, target.getName() + " 에 이미 " + result[0].getName() + " 메서드가 있어 넣지 않고 그리로 이동했습니다.");
+      Notify.info(project, EiDbBundle.message("layercode.exists", target.getName(), result[0].getName()));
     }
   }
 }

@@ -15,6 +15,7 @@ import com.intellij.ui.content.Content;
 import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
+import ei.db.EiDbBundle;
 import ei.db.QueryResult;
 import org.jetbrains.annotations.NotNull;
 
@@ -72,7 +73,7 @@ final class ResultCompare extends DialogWrapper {
       List<String> names = new ArrayList<>();
       for (Content c : others) names.add(label(c));
       JBPopupFactory.getInstance().createPopupChooserBuilder(names)
-          .setTitle("비교할 결과")
+          .setTitle(EiDbBundle.message("compare.choose"))
           .setItemChosenCallback(name -> {
             Content right = others.get(names.indexOf(name));
             new ResultCompare(project, left, label(content), queryPanel(right), label(right)).show();
@@ -105,7 +106,7 @@ final class ResultCompare extends DialogWrapper {
   private final String rightLabel;
   private final List<String> common;
   private final CheckBoxList<String> keyList = new CheckBoxList<>();
-  private final JBCheckBox showSame = new JBCheckBox("같은 행도 보기");
+  private final JBCheckBox showSame = new JBCheckBox(EiDbBundle.message("compare.show.same"));
   private final JBLabel counts = new JBLabel();
   private final JBLabel keyNote = new JBLabel();
   private final DiffModel model = new DiffModel();
@@ -123,7 +124,7 @@ final class ResultCompare extends DialogWrapper {
     for (String k : keys) keyList.setItemSelected(k, true);
     keyList.setCheckBoxListListener((index, value) -> refresh());
     showSame.addActionListener(e -> refresh());
-    setTitle("결과 비교");
+    setTitle(EiDbBundle.message("compare.title"));
     init();
     refresh();
   }
@@ -157,10 +158,9 @@ final class ResultCompare extends DialogWrapper {
   protected JComponent createCenterPanel() {
     JPanel top = new JPanel();
     top.setLayout(new BoxLayout(top, BoxLayout.Y_AXIS));
-    top.add(new JBLabel("왼쪽: " + leftLabel + "   ·   오른쪽: " + rightLabel));
+    top.add(new JBLabel(EiDbBundle.message("compare.sides", leftLabel, rightLabel)));
     if (left.truncated() || right.truncated()) {
-      JBLabel cut = new JBLabel("불러온 행만 비교합니다(왼쪽 " + left.rows().size() + "건 · 오른쪽 " + right.rows().size()
-                                + "건). 잘린 결과는 결과 탭에서 더 읽은 뒤 비교하세요.");
+      JBLabel cut = new JBLabel(EiDbBundle.message("compare.truncated", left.rows().size(), right.rows().size()));
       cut.setForeground(UiColors.WARNING);
       top.add(cut);
     }
@@ -169,8 +169,9 @@ final class ResultCompare extends DialogWrapper {
     leftOnly.removeIf(c -> matchCommon(c) != null);
     rightOnly.removeIf(c -> matchCommon(c) != null);
     if (!leftOnly.isEmpty() || !rightOnly.isEmpty()) {
-      JBLabel cols = new JBLabel("비교하지 않는 칼럼 · 왼쪽에만: " + (leftOnly.isEmpty() ? "없음" : String.join(", ", leftOnly))
-                                 + " · 오른쪽에만: " + (rightOnly.isEmpty() ? "없음" : String.join(", ", rightOnly)));
+      JBLabel cols = new JBLabel(EiDbBundle.message("compare.uncompared.columns",
+                                 leftOnly.isEmpty() ? EiDbBundle.message("common.none") : String.join(", ", leftOnly),
+                                 rightOnly.isEmpty() ? EiDbBundle.message("common.none") : String.join(", ", rightOnly)));
       cols.setForeground(UIUtil.getContextHelpForeground());
       top.add(cols);
     }
@@ -181,7 +182,7 @@ final class ResultCompare extends DialogWrapper {
     top.setBorder(JBUI.Borders.emptyBottom(6));
 
     JPanel keys = new JPanel(new BorderLayout());
-    keys.add(new JBLabel("기준 칼럼"), BorderLayout.NORTH);
+    keys.add(new JBLabel(EiDbBundle.message("compare.key.columns")), BorderLayout.NORTH);
     keys.add(new JBScrollPane(keyList), BorderLayout.CENTER);
     keyNote.setForeground(UIUtil.getContextHelpForeground());
     keys.add(keyNote, BorderLayout.SOUTH);
@@ -202,16 +203,16 @@ final class ResultCompare extends DialogWrapper {
 
   @Override
   protected Action @NotNull [] createActions() {
-    getOKAction().putValue(Action.NAME, "닫기");
+    getOKAction().putValue(Action.NAME, EiDbBundle.message("common.close"));
     return new Action[]{getOKAction()};
   }
 
   private void refresh() {
     List<String> keys = keyList.getCheckedItems();
     ResultDiff.Outcome outcome = ResultDiff.compare(left.columns(), left.rows(), right.columns(), right.rows(), keys);
-    keyNote.setText(keys.isEmpty() ? "<html>고른 칼럼이 없어 행 순서로 비교합니다.</html>" : "");
-    counts.setText("같음 " + outcome.count(ResultDiff.Kind.SAME) + " · 다름 " + outcome.count(ResultDiff.Kind.CHANGED)
-                   + " · 왼쪽에만 " + outcome.count(ResultDiff.Kind.LEFT_ONLY) + " · 오른쪽에만 " + outcome.count(ResultDiff.Kind.RIGHT_ONLY));
+    keyNote.setText(keys.isEmpty() ? EiDbBundle.message("compare.no.keys") : "");
+    counts.setText(EiDbBundle.message("compare.counts", outcome.count(ResultDiff.Kind.SAME), outcome.count(ResultDiff.Kind.CHANGED),
+                   outcome.count(ResultDiff.Kind.LEFT_ONLY), outcome.count(ResultDiff.Kind.RIGHT_ONLY)));
     List<ResultDiff.Row> shown = new ArrayList<>();
     for (ResultDiff.Row r : outcome.rows()) {
       if (showSame.isSelected() || r.kind() != ResultDiff.Kind.SAME) shown.add(r);
@@ -236,10 +237,10 @@ final class ResultCompare extends DialogWrapper {
 
   private static String kindText(ResultDiff.Kind kind) {
     return switch (kind) {
-      case SAME -> "같음";
-      case CHANGED -> "다름";
-      case LEFT_ONLY -> "왼쪽에만";
-      case RIGHT_ONLY -> "오른쪽에만";
+      case SAME -> EiDbBundle.message("compare.kind.same");
+      case CHANGED -> EiDbBundle.message("compare.kind.changed");
+      case LEFT_ONLY -> EiDbBundle.message("compare.kind.left");
+      case RIGHT_ONLY -> EiDbBundle.message("compare.kind.right");
     };
   }
 
@@ -264,7 +265,7 @@ final class ResultCompare extends DialogWrapper {
 
     @Override public int getRowCount() { return rows.size(); }
     @Override public int getColumnCount() { return columns.size() + 1; }
-    @Override public String getColumnName(int column) { return column == 0 ? "구분" : columns.get(column - 1); }
+    @Override public String getColumnName(int column) { return column == 0 ? EiDbBundle.message("compare.col.kind") : columns.get(column - 1); }
 
     @Override
     public Object getValueAt(int rowIndex, int columnIndex) {

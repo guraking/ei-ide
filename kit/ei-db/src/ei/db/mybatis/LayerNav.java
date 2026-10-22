@@ -36,6 +36,7 @@ import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.psi.util.PsiUtilCore;
 import com.intellij.ui.awt.RelativePoint;
 import com.intellij.util.Processor;
+import ei.db.EiDbBundle;
 import ei.db.Notify;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -55,13 +56,6 @@ import java.util.Set;
  * 매퍼 인터페이스 자체에는 달지 않는다(MapperNav 가 맡는다).
  */
 public final class LayerNav implements LineMarkerProvider {
-  private static final String TOOLTIP = "계층 이동(서비스 · 매퍼 · XML)";
-  private static final String TITLE = "계층 이동";
-  private static final String FINDING = "호출 계층 찾는 중";
-  private static final String NOT_FOUND = "이 메서드가 부르는 서비스 · 매퍼를 찾지 못했습니다";
-  private static final String INDEXING = "색인 중에는 계층 이동을 할 수 없습니다";
-  private static final String LABEL_BEAN = "서비스";
-  private static final String LABEL_MAPPER = "매퍼";
   private static final String LABEL_XML = "XML";
   private static final String INDENT = "    ";
 
@@ -99,7 +93,7 @@ public final class LayerNav implements LineMarkerProvider {
     if (LayerRules.kind(annotationNames(c), annotationNames(m)) == null) return null;
     if (!callsField(c, m)) return null;
     return new LineMarkerInfo<>(element, element.getTextRange(), AllIcons.Hierarchy.Subtypes,
-        e -> TOOLTIP, LayerNav::open, GutterIconRenderer.Alignment.LEFT, () -> TOOLTIP);
+        e -> EiDbBundle.message("layernav.tooltip"), LayerNav::open, GutterIconRenderer.Alignment.LEFT, () -> EiDbBundle.message("layernav.tooltip"));
   }
 
   /** 메서드 이름 토큰이면 그 메서드. PsiIdentifier 대신 소유자의 이름 토큰과 견준다. */
@@ -138,29 +132,29 @@ public final class LayerNav implements LineMarkerProvider {
   private static void open(MouseEvent mouse, PsiElement element) {
     Project project = element.getProject();
     if (DumbService.isDumb(project)) {
-      Notify.info(project, INDEXING);
+      Notify.info(project, EiDbBundle.message("layernav.dumb"));
       return;
     }
     List<Step> steps;
     try {
       steps = ProgressManager.getInstance().runProcessWithProgressSynchronously(
           (ThrowableComputable<List<Step>, RuntimeException>) () -> ReadAction.compute(() -> chain(element)),
-          FINDING, true, project);
+          EiDbBundle.message("layernav.progress"), true, project);
     } catch (ProcessCanceledException ex) {
       return; // 사용자가 진행 창에서 취소한 경우다.
     } catch (IndexNotReadyException ex) {
-      Notify.info(project, INDEXING);
+      Notify.info(project, EiDbBundle.message("layernav.dumb"));
       return;
     }
     if (steps == null || steps.isEmpty()) {
-      Notify.info(project, NOT_FOUND);
+      Notify.info(project, EiDbBundle.message("layernav.not.found"));
       return;
     }
     if (steps.size() == 1) {
       navigate(steps.get(0));
       return;
     }
-    ListPopup popup = JBPopupFactory.getInstance().createListPopup(new BaseListPopupStep<>(TITLE, steps) {
+    ListPopup popup = JBPopupFactory.getInstance().createListPopup(new BaseListPopupStep<>(EiDbBundle.message("layernav.title"), steps) {
       @Override
       public @NotNull String getTextFor(Step value) { return value.label(); }
 
@@ -215,7 +209,7 @@ public final class LayerNav implements LineMarkerProvider {
       if (called == null) continue;
       for (PsiMethod target : implementations(called, scope)) {
         if (!seen.add(target)) continue;
-        out.add(new Step(depth, LABEL_BEAN, text(target), AllIcons.Nodes.Method, target));
+        out.add(new Step(depth, EiDbBundle.message("layernav.label.service"), text(target), AllIcons.Nodes.Method, target));
         walk(target, depth + 1, out, seen);
       }
     }
@@ -234,7 +228,7 @@ public final class LayerNav implements LineMarkerProvider {
     PsiMethod[] ms = mapper.findMethodsByName(name, true);
     if (ms.length > 0) {
       if (!seen.add(ms[0])) return;
-      out.add(new Step(depth, LABEL_MAPPER, mapper.getName() + "." + name, AllIcons.Nodes.Interface, ms[0]));
+      out.add(new Step(depth, EiDbBundle.message("layernav.label.mapper"), mapper.getName() + "." + name, AllIcons.Nodes.Interface, ms[0]));
     }
     for (MapperIndex.Entry e : xmls) {
       Integer at = e.ids().get(name);

@@ -26,6 +26,7 @@ import com.intellij.psi.PsiParameterList;
 import com.intellij.psi.codeStyle.CodeStyleManager;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.util.IncorrectOperationException;
+import ei.db.EiDbBundle;
 import ei.db.Notify;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -42,7 +43,6 @@ import java.util.Set;
 public final class ServiceMethodCompletion extends CompletionContributor {
   /** 앞 글자가 이것이면 멤버 선언이 시작될 자리다(클래스 여는 괄호, 앞 멤버의 끝). */
   private static final String MEMBER_START_CHARS = "{};";
-  private static final String TAIL_PREFIX = "  서비스 메서드 → ";
 
   @Override
   public void fillCompletionVariants(@NotNull CompletionParameters parameters, @NotNull CompletionResultSet result) {
@@ -66,7 +66,7 @@ public final class ServiceMethodCompletion extends CompletionContributor {
         if (cls.findMethodsByName(id, false).length > 0 || !offered.add(id)) continue;
         result.addElement(LookupElementBuilder.create(id)
             .withIcon(AllIcons.Nodes.Method)
-            .withTailText(TAIL_PREFIX + f.getName(), true)
+            .withTailText(EiDbBundle.message("servicecompletion.tail", f.getName()), true)
             .withTypeText(mapper.getName())
             .withInsertHandler(new Insert(f.getName(), id, sig(project, mapper.getQualifiedName(), id))));
       }
@@ -101,7 +101,7 @@ public final class ServiceMethodCompletion extends CompletionContributor {
     public void handleInsert(@NotNull InsertionContext ctx, @NotNull LookupElement item) {
       Project project = ctx.getProject();
       if (sig == null) {
-        Notify.warning(project, id + " 문장을 매퍼 인터페이스 · XML 에서 찾지 못해 이름만 넣었습니다.");
+        Notify.warning(project, EiDbBundle.message("servicecompletion.statement.not.found", id));
         return;
       }
       String text = ServiceCode.serviceMethod(mapperField, id, sig);
@@ -117,7 +117,7 @@ public final class ServiceMethodCompletion extends CompletionContributor {
         pdm.commitDocument(doc);
         if (range.isValid()) CodeStyleManager.getInstance(project).reformatText(file, range.getStartOffset(), range.getEndOffset());
       } catch (IncorrectOperationException ex) {
-        Notify.warning(project, "서비스 메서드는 넣었지만 들여오기 · 줄 맞춤을 하지 못했습니다: " + ex.getMessage());
+        Notify.warning(project, EiDbBundle.message("servicecompletion.format.failed", ex.getMessage()));
       } finally {
         range.dispose();
       }

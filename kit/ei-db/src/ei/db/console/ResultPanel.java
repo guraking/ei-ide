@@ -21,6 +21,7 @@ import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
 import ei.db.DbConfig;
 import ei.db.DbSessions;
+import ei.db.EiDbBundle;
 import ei.db.Notify;
 import ei.db.QueryResult;
 import ei.db.gen.DtoDialog;
@@ -153,7 +154,7 @@ final class ResultPanel extends JPanel {
   private void buildUpdate(DbConfig c) {
     int count = Math.max(result.updateCount(), 0);
     boolean auto = DbSessions.get(project).autoCommit(c);
-    JBLabel label = new JBLabel(count + "행 변경됨 · " + (auto ? "자동 커밋됨" : "커밋 전") + " · " + result.millis() + " ms");
+    JBLabel label = new JBLabel(EiDbBundle.message(auto ? "result.updated.auto" : "result.updated.pending", count) + " · " + result.millis() + " ms");
     label.setForeground(auto ? UiColors.SUCCESS : UiColors.WARNING);
     label.setToolTipText(result.sql());
     label.setBorder(JBUI.Borders.empty(10, 12));
@@ -205,45 +206,45 @@ final class ResultPanel extends JPanel {
     JPanel bar = new JPanel();
     bar.setLayout(new BoxLayout(bar, BoxLayout.X_AXIS));
     bar.setBorder(JBUI.Borders.compound(JBUI.Borders.customLineBottom(JBUI.CurrentTheme.ToolWindow.borderColor()), JBUI.Borders.empty(3, 8)));
-    count = new JBLabel(result.rows().size() + "건");
+    count = new JBLabel(EiDbBundle.message("common.rows", result.rows().size()));
     count.setForeground(UiColors.SUCCESS);
     JBLabel millis = new JBLabel(" · " + result.millis() + " ms");
     millis.setForeground(UIUtil.getContextHelpForeground());
     bar.add(count);
     bar.add(millis);
     if (result.truncated()) {
-      JBLabel cut = new JBLabel(" · " + result.rows().size() + "건에서 자름  ");
+      JBLabel cut = new JBLabel(EiDbBundle.message("result.truncated", result.rows().size()));
       cut.setForeground(UiColors.WARNING);
       bar.add(cut);
     }
     // 다시 읽기는 문장을 처음부터 다시 실행하므로 변경이 섞인 문장(INSERT … RETURNING 등)에는 두지 않는다.
     if (result.truncated() && SqlText.isRereadable(result.sql())) {
-      bar.add(button(DbSessions.MAX_ROWS + "건 더", null, () -> readMore(c, result.rows().size() + DbSessions.MAX_ROWS)));
+      bar.add(button(EiDbBundle.message("result.more", DbSessions.MAX_ROWS), null, () -> readMore(c, result.rows().size() + DbSessions.MAX_ROWS)));
       JBTextField wanted = new JBTextField(String.valueOf(result.rows().size() + DbSessions.MAX_ROWS), 6);
-      wanted.setToolTipText("읽을 건수 · Enter 또는 「조회」");
+      wanted.setToolTipText(EiDbBundle.message("result.wanted.tooltip"));
       wanted.setMaximumSize(wanted.getPreferredSize());
       Runnable byInput = () -> readWanted(c, wanted.getText());
       wanted.addActionListener(e -> byInput.run());
       bar.add(Box.createHorizontalStrut(JBUI.scale(8)));
       bar.add(wanted);
-      bar.add(new JBLabel(" 건 "));
-      bar.add(button("조회", null, byInput));
+      bar.add(new JBLabel(EiDbBundle.message("result.rows.unit")));
+      bar.add(button(EiDbBundle.message("result.fetch"), null, byInput));
     }
     bar.add(Box.createHorizontalStrut(JBUI.scale(8)));
     bar.add(searchField());
     bar.add(Box.createHorizontalGlue());
-    applyButton = button("반영", AllIcons.Actions.Commit, "고친 값을 UPDATE 문으로 실행합니다(실행 전 문장 확인)", this::applyEdits);
-    revertButton = button("되돌리기", AllIcons.Actions.Rollback, "고친 값을 모두 처음 값으로 돌립니다", this::revertEdits);
+    applyButton = button(EiDbBundle.message("result.apply"), AllIcons.Actions.Commit, EiDbBundle.message("result.apply.tooltip"), this::applyEdits);
+    revertButton = button(EiDbBundle.message("result.revert"), AllIcons.Actions.Rollback, EiDbBundle.message("result.revert.tooltip"), this::revertEdits);
     bar.add(applyButton);
     bar.add(revertButton);
     updateEditButtons();
-    bar.add(button("복사", AllIcons.Actions.Copy, this::copyTsv));
-    bar.add(button("CSV", AllIcons.Actions.Download, "CSV 파일로 내보내기", this::exportCsv));
-    bar.add(button("엑셀", AllIcons.Actions.Download, "엑셀(.xlsx) 파일로 내보내기", this::exportXlsx));
-    bar.add(button("INSERT", null, "고른 행(없으면 보이는 행 전체)을 INSERT 문으로 복사", this::copyInserts));
-    bar.add(button("UPDATE", null, "고른 행(없으면 보이는 행 전체)을 UPDATE 문으로 복사", () -> copyUpdates(c)));
-    bar.add(button("DTO", null, "DTO 만들기", () -> DtoDialog.show(project, c, result)));
-    bar.add(button("enum", null, "앞 두 칼럼(코드 · 이름)으로 enum 만들기", () -> EnumDialog.show(project, c, result)));
+    bar.add(button(EiDbBundle.message("common.copy"), AllIcons.Actions.Copy, this::copyTsv));
+    bar.add(button("CSV", AllIcons.Actions.Download, EiDbBundle.message("result.csv.tooltip"), this::exportCsv));
+    bar.add(button(EiDbBundle.message("result.excel"), AllIcons.Actions.Download, EiDbBundle.message("result.excel.tooltip"), this::exportXlsx));
+    bar.add(button("INSERT", null, EiDbBundle.message("result.insert.tooltip"), this::copyInserts));
+    bar.add(button("UPDATE", null, EiDbBundle.message("result.update.tooltip"), () -> copyUpdates(c)));
+    bar.add(button("DTO", null, EiDbBundle.message("dto.command"), () -> DtoDialog.show(project, c, result)));
+    bar.add(button("enum", null, EiDbBundle.message("result.enum.tooltip"), () -> EnumDialog.show(project, c, result)));
 
     add(bar, BorderLayout.NORTH);
     add(new JBScrollPane(grid), BorderLayout.CENTER);
@@ -254,8 +255,8 @@ final class ResultPanel extends JPanel {
   /** 결과 안에서 찾기: 글자가 든 칸이 하나라도 있는 행만 보인다(대소문자 무시, null 칸 · 행 번호 제외). */
   private JComponent searchField() {
     searchBox = new SearchTextField(false);
-    searchBox.getTextEditor().getEmptyText().setText("결과에서 찾기");
-    searchBox.setToolTipText("결과에서 찾기 (Ctrl+F)");
+    searchBox.getTextEditor().getEmptyText().setText(EiDbBundle.message("result.search.hint"));
+    searchBox.setToolTipText(EiDbBundle.message("result.search.tooltip"));
     Dimension size = new Dimension(JBUI.scale(SEARCH_WIDTH), searchBox.getPreferredSize().height);
     searchBox.setPreferredSize(size);
     searchBox.setMaximumSize(size);
@@ -269,7 +270,7 @@ final class ResultPanel extends JPanel {
     String needle = text.toLowerCase(Locale.ROOT);
     sorter.setRowFilter(needle.isEmpty() ? null : new Contains(needle));
     int total = result.rows().size();
-    count.setText(needle.isEmpty() ? total + "건" : grid.getRowCount() + " / 전체 " + total + "건");
+    count.setText(needle.isEmpty() ? EiDbBundle.message("common.rows", total) : EiDbBundle.message("result.filtered", grid.getRowCount(), total));
   }
 
   private static final class Contains extends RowFilter<Model, Integer> {
@@ -297,7 +298,7 @@ final class ResultPanel extends JPanel {
         QueryResult more = DbSessions.get(project).run(c, result.sql(), result.binds(), limit);
         ApplicationManager.getApplication().invokeLater(() -> replaceWith(new ResultPanel(project, c, more, table)));
       } catch (Exception e) {
-        Notify.error(project, c.name + " 더 읽기 실패: " + ResultView.message(e));
+        Notify.error(project, EiDbBundle.message("result.more.failed", c.name, ResultView.message(e)));
       }
     });
   }
@@ -306,7 +307,7 @@ final class ResultPanel extends JPanel {
   private void readWanted(DbConfig c, String text) {
     int n = DbSessions.parseRowCount(text);
     if (n == 0) {
-      Notify.error(project, "읽을 건수는 1 ~ " + DbSessions.MAX_ROW_LIMIT + " 사이 숫자로 써 주세요: " + text);
+      Notify.error(project, EiDbBundle.message("result.wanted.invalid", DbSessions.MAX_ROW_LIMIT, text));
       return;
     }
     readMore(c, n);
@@ -413,10 +414,10 @@ final class ResultPanel extends JPanel {
     JPopupMenu menu = col > 0 ? columnMenu(col - 1) : new JPopupMenu();
     if (col > 0) {
       Object v = result.rows().get(grid.convertRowIndexToModel(row)).get(col - 1);
-      menu.insert(item("값 복사", () -> copy(v == null ? "" : text(v), "값을 복사했습니다.")), 0);
+      menu.insert(item(EiDbBundle.message("result.menu.copy.value"), () -> copy(v == null ? "" : text(v), EiDbBundle.message("result.copied.value"))), 0);
     }
     menu.addSeparator();
-    menu.add(item("고른 행 복사 (머리 포함)", this::copyTsv));
+    menu.add(item(EiDbBundle.message("result.menu.copy.rows"), this::copyTsv));
     menu.show(e.getComponent(), e.getX(), e.getY());
   }
 
@@ -424,21 +425,21 @@ final class ResultPanel extends JPanel {
   private JPopupMenu columnMenu(int index) {
     String name = result.columns().get(index);
     JPopupMenu menu = new JPopupMenu();
-    menu.add(item("칼럼 이름 복사 (" + name + ")", () -> copy(name, "칼럼 이름을 복사했습니다.")));
-    menu.add(item("칼럼 이름 모두 복사", () -> copy(String.join(", ", result.columns()), "칼럼 이름 " + result.columns().size() + "개를 복사했습니다.")));
-    menu.add(item("이 칼럼 값 복사 (줄마다 하나)", () -> {
+    menu.add(item(EiDbBundle.message("result.menu.copy.column.name", name), () -> copy(name, EiDbBundle.message("result.copied.column.name"))));
+    menu.add(item(EiDbBundle.message("result.menu.copy.column.names"), () -> copy(String.join(", ", result.columns()), EiDbBundle.message("result.copied.column.names", result.columns().size()))));
+    menu.add(item(EiDbBundle.message("result.menu.copy.column.values"), () -> {
       List<String> values = columnValues(index);
-      copy(String.join("\n", values), values.size() + "개 값을 복사했습니다.");
+      copy(String.join("\n", values), EiDbBundle.message("result.copied.values", values.size()));
     }));
-    menu.add(item("이 칼럼 값을 IN 목록으로 복사", () -> {
+    menu.add(item(EiDbBundle.message("result.menu.copy.in.list"), () -> {
       List<String> quoted = new ArrayList<>();
       for (String v : columnValues(index)) quoted.add("'" + v.replace("'", "''") + "'");
-      copy("(" + String.join(", ", quoted) + ")", quoted.size() + "개 값을 IN 목록으로 복사했습니다.");
+      copy("(" + String.join(", ", quoted) + ")", EiDbBundle.message("result.copied.in.list", quoted.size()));
     }));
     menu.addSeparator();
-    menu.add(item("오름차순 정렬", () -> sortBy(index + 1, SortOrder.ASCENDING)));
-    menu.add(item("내림차순 정렬", () -> sortBy(index + 1, SortOrder.DESCENDING)));
-    menu.add(item("정렬 풀기", () -> sortBy(index + 1, null)));
+    menu.add(item(EiDbBundle.message("result.sort.asc"), () -> sortBy(index + 1, SortOrder.ASCENDING)));
+    menu.add(item(EiDbBundle.message("result.sort.desc"), () -> sortBy(index + 1, SortOrder.DESCENDING)));
+    menu.add(item(EiDbBundle.message("result.sort.none"), () -> sortBy(index + 1, null)));
     return menu;
   }
 
@@ -475,7 +476,7 @@ final class ResultPanel extends JPanel {
       sb.append('\n');
     }
     CopyPasteManager.getInstance().setContents(new StringSelection(sb.toString()));
-    Notify.info(project, chosenRows().length + "행을 복사했습니다.");
+    Notify.info(project, EiDbBundle.message("result.copied.rows", chosenRows().length));
   }
 
   /** 저장할 파일을 묻는다. 취소하면 null. */
@@ -494,7 +495,7 @@ final class ResultPanel extends JPanel {
   }
 
   private void exportCsv() {
-    Path path = askSavePath("CSV 내보내기", "결과를 CSV 파일로 저장합니다", "csv");
+    Path path = askSavePath(EiDbBundle.message("result.csv.export"), EiDbBundle.message("result.csv.export.description"), "csv");
     if (path == null) return;
     StringBuilder sb = new StringBuilder(BOM);
     appendCsvLine(sb, List.copyOf(result.columns()));
@@ -503,24 +504,24 @@ final class ResultPanel extends JPanel {
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       try {
         Files.writeString(path, csv, StandardCharsets.UTF_8);
-        Notify.info(project, "CSV 로 저장했습니다: " + path);
+        Notify.info(project, EiDbBundle.message("result.csv.saved", path));
       } catch (IOException e) {
-        Notify.error(project, "CSV 저장 실패: " + e.getMessage());
+        Notify.error(project, EiDbBundle.message("result.csv.failed", e.getMessage()));
       }
     });
   }
 
   private void exportXlsx() {
-    Path path = askSavePath("엑셀 내보내기", "결과를 엑셀 파일로 저장합니다", "xlsx");
+    Path path = askSavePath(EiDbBundle.message("result.excel.export"), EiDbBundle.message("result.excel.export.description"), "xlsx");
     if (path == null) return;
     List<List<Object>> rows = visibleRows();
     List<String> comments = commentRow();
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       try {
         XlsxWriter.write(path, result.columns(), comments, rows);
-        Notify.info(project, "엑셀로 저장했습니다: " + path);
+        Notify.info(project, EiDbBundle.message("result.excel.saved", path));
       } catch (IOException e) {
-        Notify.error(project, "엑셀 저장 실패: " + e.getMessage());
+        Notify.error(project, EiDbBundle.message("result.excel.failed", e.getMessage()));
       }
     });
   }
@@ -554,7 +555,7 @@ final class ResultPanel extends JPanel {
   private void copyInserts() {
     String target = table;
     if (target == null) {
-      target = Messages.showInputDialog(project, "INSERT 할 표 이름", "INSERT 문으로", null);
+      target = Messages.showInputDialog(project, EiDbBundle.message("result.insert.table"), EiDbBundle.message("result.insert.title"), null);
       if (target == null || target.isBlank()) return;
       target = target.strip();
     }
@@ -568,14 +569,14 @@ final class ResultPanel extends JPanel {
       return;
     }
     CopyPasteManager.getInstance().setContents(new StringSelection(sql));
-    Notify.info(project, "INSERT 문 " + rows.size() + "개를 복사했습니다." + lobNotice(sql));
+    Notify.info(project, EiDbBundle.message("result.insert.copied", rows.size()) + lobNotice(sql));
   }
 
   /** 고른 행(없으면 전체)을 UPDATE 문으로 복사. PK 는 접속해서 표 정의로 찾으므로 뒤에서 읽은 뒤 복사한다. */
   private void copyUpdates(DbConfig c) {
     String target = table;
     if (target == null) {
-      target = Messages.showInputDialog(project, "UPDATE 할 표 이름", "UPDATE 문으로", null);
+      target = Messages.showInputDialog(project, EiDbBundle.message("result.update.table"), EiDbBundle.message("result.update.title"), null);
       if (target == null || target.isBlank()) return;
       target = target.strip();
     }
@@ -601,13 +602,13 @@ final class ResultPanel extends JPanel {
       }
       ApplicationManager.getApplication().invokeLater(() -> {
         CopyPasteManager.getInstance().setContents(new StringSelection(sql));
-        Notify.info(project, "UPDATE 문 " + rows.size() + "개를 복사했습니다." + (pks.isEmpty() ? " PK 를 찾지 못했으니 WHERE 를 확인하세요." : "") + lobNotice(sql));
+        Notify.info(project, EiDbBundle.message("result.update.copied", rows.size()) + (pks.isEmpty() ? EiDbBundle.message("result.update.no.pk") : "") + lobNotice(sql));
       });
     });
   }
 
   private static String lobNotice(String sql) {
-    return sql.startsWith(SqlText.LOB_EXCLUDED) ? " LOB · 이진 칼럼은 뺐습니다." : "";
+    return sql.startsWith(SqlText.LOB_EXCLUDED) ? EiDbBundle.message("result.lob.excluded") : "";
   }
 
   /**
@@ -632,7 +633,7 @@ final class ResultPanel extends JPanel {
     int col = grid.convertColumnIndexToModel(viewColumn) - 1;
     if (col < 0 || grid.isEditing()) return;
     if (table == null) {
-      Notify.error(project, "표 하나를 조회한 결과만 고칠 수 있습니다.");
+      Notify.error(project, EiDbBundle.message("result.edit.single.table"));
       return;
     }
     if (pkColumns == null && editBlocked == null) {
@@ -648,7 +649,7 @@ final class ResultPanel extends JPanel {
   }
 
   private void loadEditInfo(int viewRow, int viewColumn) {
-    String early = config.readOnly ? "읽기 전용 접속이라 결과를 고칠 수 없습니다." : SqlText.notEditable(result.sql());
+    String early = config.readOnly ? EiDbBundle.message("result.edit.read.only") : SqlText.notEditable(result.sql());
     if (early != null) {
       editBlocked = early;
       Notify.error(project, early);
@@ -669,27 +670,27 @@ final class ResultPanel extends JPanel {
       } catch (Exception e) {
         // 다음 두 번 누름에서 다시 읽게 상태를 두지 않는다.
         ApplicationManager.getApplication().invokeLater(() -> loadingEdit = false);
-        Notify.error(project, "표 정의를 읽지 못해 고칠 수 없습니다: " + ResultView.message(e));
+        Notify.error(project, EiDbBundle.message("result.edit.no.definition", ResultView.message(e)));
       }
     });
   }
 
   /** 결과 칼럼이 모두 이 표의 칼럼이고 PK 칼럼이 모두 결과에 있어야 고칠 수 있다. keys 에 결과 칼럼마다 PK 여부를 채운다. */
   private String editBlockReason(List<Meta.Column> defs, boolean[] keys) {
-    if (defs.isEmpty()) return "표 " + table + " 의 정의를 찾지 못해 고칠 수 없습니다.";
+    if (defs.isEmpty()) return EiDbBundle.message("result.edit.table.missing", table);
     Map<String, Boolean> pkByName = new HashMap<>();
     for (Meta.Column d : defs) pkByName.put(d.name().toUpperCase(Locale.ROOT), d.pk());
-    if (!pkByName.containsValue(true)) return "표 " + table + " 에 PK 가 없어 고칠 행을 정확히 가리킬 수 없습니다.";
+    if (!pkByName.containsValue(true)) return EiDbBundle.message("result.edit.no.pk", table);
     for (int i = 0; i < keys.length; i++) {
       Boolean pk = pkByName.get(result.columns().get(i).toUpperCase(Locale.ROOT));
-      if (pk == null) return "칼럼 " + result.columns().get(i) + " 은 표 " + table + " 에 없어(별칭 · 식) 결과를 고칠 수 없습니다.";
+      if (pk == null) return EiDbBundle.message("result.edit.column.missing", result.columns().get(i), table);
       keys[i] = pk;
-      if (pk && SqlText.isUneditableType(typeOf(i))) return "PK 칼럼 " + result.columns().get(i) + " 이 이진 형식이라 결과를 고칠 수 없습니다.";
+      if (pk && SqlText.isUneditableType(typeOf(i))) return EiDbBundle.message("result.edit.pk.binary", result.columns().get(i));
     }
     Set<String> shown = new HashSet<>();
     for (String name : result.columns()) shown.add(name.toUpperCase(Locale.ROOT));
     for (Meta.Column d : defs) {
-      if (d.pk() && !shown.contains(d.name().toUpperCase(Locale.ROOT))) return "PK 칼럼 " + d.name() + " 이 결과에 없어 고칠 수 없습니다.";
+      if (d.pk() && !shown.contains(d.name().toUpperCase(Locale.ROOT))) return EiDbBundle.message("result.edit.pk.missing", d.name());
     }
     return null;
   }
@@ -697,8 +698,8 @@ final class ResultPanel extends JPanel {
   /** 이 칼럼(결과 칼럼 번호)만 고칠 수 없는 이유. 고칠 수 있으면 null. */
   private String cellBlocked(int col) {
     String name = result.columns().get(col);
-    if (pkColumns[col]) return "PK 칼럼(" + name + ")은 고칠 수 없습니다.";
-    if (SqlText.isUneditableType(typeOf(col))) return "LOB · 이진 칼럼(" + name + ")은 고칠 수 없습니다.";
+    if (pkColumns[col]) return EiDbBundle.message("result.edit.pk.column", name);
+    if (SqlText.isUneditableType(typeOf(col))) return EiDbBundle.message("result.edit.lob.column", name);
     return null;
   }
 
@@ -727,7 +728,7 @@ final class ResultPanel extends JPanel {
   }
 
   private void updateEditButtons() {
-    applyButton.setText("반영 (" + edits.size() + ")");
+    applyButton.setText(EiDbBundle.message("result.apply.count", edits.size()));
     applyButton.setVisible(!edits.isEmpty());
     revertButton.setVisible(!edits.isEmpty());
     applyButton.getParent().revalidate();
@@ -758,7 +759,7 @@ final class ResultPanel extends JPanel {
     edits.clear();
     updateEditButtons();
     grid.repaint();
-    Notify.info(project, "UPDATE 문 " + statements.size() + "개를 실행했습니다. 실패 · 취소한 문장이 있으면 다시 조회해 값을 확인하세요.");
+    Notify.info(project, EiDbBundle.message("result.apply.done", statements.size()));
   }
 
   private SqlText.Update updateStatement(int row, Map<Integer, Object> changed) {
@@ -787,13 +788,13 @@ final class ResultPanel extends JPanel {
     text.setFont(monoFont());
     JBScrollPane scroll = new JBScrollPane(text);
     scroll.setPreferredSize(new Dimension(JBUI.scale(PREVIEW_WIDTH), JBUI.scale(PREVIEW_HEIGHT)));
-    JBLabel note = new JBLabel(config.name + " 에서 아래 문장을 차례로 실행합니다." + (DbSessions.get(project).autoCommit(config) ? "" : " 자동 커밋이 꺼져 있어 커밋해야 반영됩니다."));
+    JBLabel note = new JBLabel(EiDbBundle.message("result.apply.note", config.name) + (DbSessions.get(project).autoCommit(config) ? "" : EiDbBundle.message("result.apply.note.commit")));
     note.setBorder(JBUI.Borders.emptyBottom(8));
     DialogBuilder dialog = new DialogBuilder(project);
-    dialog.setTitle("고친 값 반영 · UPDATE 문 " + statements.size() + "개");
+    dialog.setTitle(EiDbBundle.message("result.apply.title", statements.size()));
     dialog.setNorthPanel(note);
     dialog.setCenterPanel(scroll);
-    dialog.addOkAction().setText("실행");
+    dialog.addOkAction().setText(EiDbBundle.message("common.run"));
     dialog.addCancelAction();
     return dialog.showAndGet();
   }

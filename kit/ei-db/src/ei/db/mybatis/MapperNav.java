@@ -22,6 +22,7 @@ import com.intellij.psi.PsiManager;
 import com.intellij.psi.PsiMethod;
 import com.intellij.psi.PsiNameIdentifierOwner;
 import com.intellij.psi.search.GlobalSearchScope;
+import ei.db.EiDbBundle;
 import ei.db.Notify;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -91,11 +92,11 @@ final class MapperNav {
     T found;
     try {
       found = ProgressManager.getInstance().runProcessWithProgressSynchronously(
-          (ThrowableComputable<T, RuntimeException>) () -> ReadAction.compute(find::get), FINDING, true, project);
+          (ThrowableComputable<T, RuntimeException>) () -> ReadAction.compute(find::get), EiDbBundle.message("mappernav.progress"), true, project);
     } catch (ProcessCanceledException ex) {
       return null; // 사용자가 진행 창에서 취소한 경우다.
     }
-    if (found == null) Notify.info(project, NOT_FOUND);
+    if (found == null) Notify.info(project, EiDbBundle.message("mappernav.not.found"));
     return found;
   }
 
@@ -107,12 +108,9 @@ final class MapperNav {
         e -> tooltip, (mouse, e) -> open.accept(e), GutterIconRenderer.Alignment.LEFT, () -> tooltip);
   }
 
-  private static final String FINDING = "이동할 곳 찾는 중";
-  private static final String NOT_FOUND = "이동할 곳을 찾지 못했습니다";
 
   /** 자바 매퍼 인터페이스와 그 메서드 옆: XML 로 이동. */
   public static final class JavaMarker implements LineMarkerProvider {
-    private static final String TOOLTIP = "매퍼 XML 로 이동";
 
     @Override
     public @Nullable LineMarkerInfo<?> getLineMarkerInfo(@NotNull PsiElement element) { return null; }
@@ -122,7 +120,7 @@ final class MapperNav {
                                        @NotNull Collection<? super LineMarkerInfo<?>> result) {
       for (PsiElement element : elements) {
         ProgressManager.checkCanceled();
-        if (xmlTarget(element) != null) result.add(marker(element, AllIcons.Gutter.ImplementedMethod, TOOLTIP, JavaMarker::open));
+        if (xmlTarget(element) != null) result.add(marker(element, AllIcons.Gutter.ImplementedMethod, EiDbBundle.message("mappernav.goto.xml"), JavaMarker::open));
       }
     }
 
@@ -136,7 +134,6 @@ final class MapperNav {
 
   /** 매퍼 XML 문장 옆: 인터페이스 메서드로 이동. 실행 아이콘(MyBatisLineMarker)과 따로 단다. */
   public static final class XmlMarker implements LineMarkerProvider {
-    private static final String TOOLTIP = "인터페이스 메서드로 이동";
 
     @Override
     public @Nullable LineMarkerInfo<?> getLineMarkerInfo(@NotNull PsiElement element) { return null; }
@@ -146,7 +143,7 @@ final class MapperNav {
                                        @NotNull Collection<? super LineMarkerInfo<?>> result) {
       for (PsiElement element : elements) {
         ProgressManager.checkCanceled();
-        if (javaTarget(element) != null) result.add(marker(element, AllIcons.Gutter.ImplementingMethod, TOOLTIP, XmlMarker::open));
+        if (javaTarget(element) != null) result.add(marker(element, AllIcons.Gutter.ImplementingMethod, EiDbBundle.message("mappernav.goto.interface"), XmlMarker::open));
       }
     }
 

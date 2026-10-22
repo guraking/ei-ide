@@ -13,7 +13,7 @@ public final class SecureMemoToolWindowFactory implements ToolWindowFactory, Dum
 
     @Override
     public void init(@NotNull ToolWindow toolWindow) {
-        toolWindow.setStripeTitle(SecureMemoPanel.TITLE);
+        toolWindow.setStripeTitle(SecureMemoPanel.title());
     }
 
     @Override

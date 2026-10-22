@@ -21,6 +21,7 @@ import com.intellij.util.ui.UIUtil;
 import ei.db.DbConfig;
 import ei.db.DbSessions;
 import ei.db.DbSettings;
+import ei.db.EiDbBundle;
 import ei.db.Notify;
 import ei.db.SqlRunner;
 import org.jetbrains.annotations.NotNull;
@@ -60,14 +61,14 @@ final class ConsoleBar extends JPanel {
   private final JPanel band = new JPanel(new BorderLayout());
   private final JBLabel bandTarget = new JBLabel();
   private final ComboBox<DbConfig> combo = new ComboBox<>();
-  private final JBCheckBox autoCommit = new JBCheckBox("자동 커밋");
+  private final JBCheckBox autoCommit = new JBCheckBox(EiDbBundle.message("console.autocommit"));
   /** 조회 건수. 목록에서 고르거나 1 이상 숫자를 직접 쓴다. 프로젝트의 모든 콘솔 · 표 데이터 보기에 같이 적용된다. */
   private final ComboBox<Integer> rows = new ComboBox<>(new Integer[] {DbSessions.MAX_ROWS, 1000, 5000, 10000});
   private final JBLabel badge = new JBLabel();
-  private final JButton commit = new JButton("커밋", AllIcons.Actions.Commit);
-  private final JButton rollback = new JButton("롤백", AllIcons.Actions.Rollback);
+  private final JButton commit = new JButton(EiDbBundle.message("console.commit"), AllIcons.Actions.Commit);
+  private final JButton rollback = new JButton(EiDbBundle.message("console.rollback"), AllIcons.Actions.Rollback);
   /** 이 콘솔 접속에서 실행 중일 때만 켠다. */
-  private final JButton stop = iconButton(AllIcons.Actions.Suspend, "실행 중지");
+  private final JButton stop = iconButton(AllIcons.Actions.Suspend, EiDbBundle.message("console.stop"));
   /** 화면을 값에 맞추는 중이면 콤보 · 체크 상자의 변경 처리를 건너뛴다. */
   private boolean updating;
 
@@ -93,7 +94,7 @@ final class ConsoleBar extends JPanel {
     this.project = project;
     this.file = file;
 
-    JBLabel warning = new JBLabel("운영 접속 · 변경은 매번 확인합니다", AllIcons.General.Warning, SwingConstants.LEFT);
+    JBLabel warning = new JBLabel(EiDbBundle.message("console.production.warning"), AllIcons.General.Warning, SwingConstants.LEFT);
     warning.setForeground(UiColors.DANGER_TEXT);
     warning.setFont(warning.getFont().deriveFont(Font.BOLD));
     bandTarget.setForeground(UiColors.DANGER_TEXT);
@@ -104,27 +105,27 @@ final class ConsoleBar extends JPanel {
     band.add(bandTarget, BorderLayout.EAST);
     add(band, BorderLayout.NORTH);
 
-    JButton run = new JButton("실행", AllIcons.Actions.Execute);
-    run.setToolTipText("커서가 있는 문장 또는 선택 영역 실행");
+    JButton run = new JButton(EiDbBundle.message("common.run"), AllIcons.Actions.Execute);
+    run.setToolTipText(EiDbBundle.message("console.run.tooltip"));
     run.addActionListener(e -> ConsoleRun.runCurrent(project, editor, file));
     JBLabel runKey = new JBLabel(KeymapUtil.getFirstKeyboardShortcutText(RUN_ACTION));
     runKey.setForeground(UIUtil.getContextHelpForeground());
-    JButton runAll = new JButton("전체 실행", AllIcons.Actions.RunAll);
+    JButton runAll = new JButton(EiDbBundle.message("action.ei.db.console.RunAll.text"), AllIcons.Actions.RunAll);
     String allKey = KeymapUtil.getFirstKeyboardShortcutText(RUN_ALL_ACTION);
-    runAll.setToolTipText(allKey.isEmpty() ? "모든 문장을 차례로 실행" : "모든 문장을 차례로 실행 (" + allKey + ")");
+    runAll.setToolTipText(allKey.isEmpty() ? EiDbBundle.message("console.runall.tooltip") : EiDbBundle.message("console.runall.tooltip.key", allKey));
     runAll.addActionListener(e -> ConsoleRun.runAll(project, editor, file));
 
     stop.addActionListener(e -> cancelRun());
-    JButton plan = iconButton(AllIcons.Toolwindows.ToolWindowHierarchy, "실행 계획 · 커서가 있는 문장 또는 선택 영역");
+    JButton plan = iconButton(AllIcons.Toolwindows.ToolWindowHierarchy, EiDbBundle.message("console.plan.tooltip"));
     plan.addActionListener(e -> ExplainPlan.run(project, editor, file));
-    JButton history = iconButton(AllIcons.Vcs.History, "실행 기록 · 고르면 콘솔에 넣고, 두 번 누르면 바로 실행");
+    JButton history = iconButton(AllIcons.Vcs.History, EiDbBundle.message("console.history.tooltip"));
     history.addActionListener(e -> HistoryDialog.open(project));
 
-    JButton format = textButton("정렬", AllIcons.Actions.ReformatCode, "선택 영역(없으면 전체) SQL 정렬", FORMAT_ACTION);
+    JButton format = textButton(EiDbBundle.message("console.format"), AllIcons.Actions.ReformatCode, EiDbBundle.message("console.format.tooltip"), FORMAT_ACTION);
     format.addActionListener(e -> ConsoleRun.format(project, editor));
-    JButton upper = textButton("대문자", null, "선택 영역(없으면 전체) 대문자로 · 문자열 · 주석은 그대로", UPPER_ACTION);
+    JButton upper = textButton(EiDbBundle.message("console.upper"), null, EiDbBundle.message("console.upper.tooltip"), UPPER_ACTION);
     upper.addActionListener(e -> ConsoleRun.toCase(project, editor, true));
-    JButton lower = textButton("소문자", null, "선택 영역(없으면 전체) 소문자로 · 문자열 · 주석은 그대로", LOWER_ACTION);
+    JButton lower = textButton(EiDbBundle.message("console.lower"), null, EiDbBundle.message("console.lower.tooltip"), LOWER_ACTION);
     lower.addActionListener(e -> ConsoleRun.toCase(project, editor, false));
 
     combo.setRenderer(SimpleListCellRenderer.create("", ConsoleBar::label));
@@ -135,8 +136,8 @@ final class ConsoleBar extends JPanel {
     });
     combo.addActionListener(e -> switchConnection());
     rows.setEditable(true);
-    rows.setRenderer(SimpleListCellRenderer.create("", n -> n + "건"));
-    rows.setToolTipText("조회할 건수 · 고르거나 숫자를 쓰고 Enter · 다음 실행부터 적용");
+    rows.setRenderer(SimpleListCellRenderer.create("", n -> EiDbBundle.message("console.rows.item", String.valueOf(n))));
+    rows.setToolTipText(EiDbBundle.message("console.rows.tooltip"));
     rows.setMaximumSize(rows.getPreferredSize());
     rows.addActionListener(e -> changeRows());
     autoCommit.addActionListener(e -> toggleAutoCommit());
@@ -244,7 +245,7 @@ final class ConsoleBar extends JPanel {
       stop.setEnabled(c != null && DbSessions.get(project).isRunning(c.id));
       if (c == null) {
         autoCommit.setEnabled(false);
-        badge.setText("접속이 지워졌습니다");
+        badge.setText(EiDbBundle.message("console.badge.removed"));
         badge.setVisible(true);
         commit.setVisible(false);
         rollback.setVisible(false);
@@ -254,7 +255,7 @@ final class ConsoleBar extends JPanel {
       autoCommit.setEnabled(true);
       autoCommit.setSelected(c.autoCommit);
       int pending = DbSessions.get(project).pending(c.id);
-      badge.setText("미반영 변경 " + pending + "건");
+      badge.setText(EiDbBundle.message("console.badge.pending", pending));
       badge.setVisible(pending > 0);
       commit.setVisible(!c.autoCommit);
       rollback.setVisible(!c.autoCommit);
@@ -274,7 +275,7 @@ final class ConsoleBar extends JPanel {
     String text = v == null ? "" : v.toString();
     int n = DbSessions.parseRowCount(text);
     if (n == 0) {
-      Notify.error(project, "조회 건수는 1 ~ " + DbSessions.MAX_ROW_LIMIT + " 사이 숫자로 써 주세요: " + text);
+      Notify.error(project, EiDbBundle.message("console.rows.invalid", DbSessions.MAX_ROW_LIMIT, text));
       refresh();
       return;
     }
@@ -300,8 +301,8 @@ final class ConsoleBar extends JPanel {
     boolean on = autoCommit.isSelected();
     DbSessions sessions = DbSessions.get(project);
     int pending = sessions.pending(c.id);
-    if (on && pending > 0 && Messages.showYesNoDialog(project, "미반영 변경 " + pending + "건이 커밋됩니다. 자동 커밋을 켤까요?",
-        "자동 커밋", "커밋하고 켜기", "취소", Messages.getWarningIcon()) != Messages.YES) {
+    if (on && pending > 0 && Messages.showYesNoDialog(project, EiDbBundle.message("console.autocommit.confirm", pending),
+        EiDbBundle.message("console.autocommit"), EiDbBundle.message("console.autocommit.ok"), EiDbBundle.message("common.cancel"), Messages.getWarningIcon()) != Messages.YES) {
       refresh();
       return;
     }
@@ -310,7 +311,7 @@ final class ConsoleBar extends JPanel {
         if (on && pending > 0) sessions.commit(c.id);
         sessions.setAutoCommitOverride(c.id, on);
       } catch (SQLException e) {
-        Notify.error(project, c.name + " 커밋하지 못해 자동 커밋을 켜지 않았습니다: " + e.getMessage());
+        Notify.error(project, EiDbBundle.message("console.autocommit.failed", c.name, e.getMessage()));
       }
       // 리스너가 같은 접속의 모든 콘솔 도구줄을 다시 그린다(실패했으면 원래 값으로).
       sessions.notifyChanged();
@@ -326,14 +327,13 @@ final class ConsoleBar extends JPanel {
   private void endTransaction(boolean doCommit) {
     DbConfig c = ConsoleOpener.config(project, file);
     if (c == null) return;
-    String what = doCommit ? "커밋" : "롤백";
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       try {
         if (doCommit) DbSessions.get(project).commit(c.id);
         else DbSessions.get(project).rollback(c.id);
-        Notify.info(project, c.name + " " + what + "했습니다.");
+        Notify.info(project, EiDbBundle.message(doCommit ? "console.committed" : "console.rolled.back", c.name));
       } catch (SQLException e) {
-        Notify.error(project, c.name + " " + what + " 실패: " + e.getMessage());
+        Notify.error(project, EiDbBundle.message(doCommit ? "console.commit.failed" : "console.rollback.failed", c.name, e.getMessage()));
       }
     });
   }

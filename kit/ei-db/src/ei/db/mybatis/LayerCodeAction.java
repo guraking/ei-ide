@@ -19,6 +19,7 @@ import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiMethod;
 import com.intellij.psi.util.PsiTreeUtil;
+import ei.db.EiDbBundle;
 import ei.db.Notify;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -28,7 +29,6 @@ import org.jetbrains.annotations.Nullable;
  * 메서드 안에서 「계층 코드 만들기」 창을 연다.
  */
 public final class LayerCodeAction extends AnAction {
-  private static final String FINDING = "서비스 · 컨트롤러 클래스 찾는 중";
 
   @Override
   public @NotNull ActionUpdateThread getActionUpdateThread() { return ActionUpdateThread.BGT; }
@@ -57,14 +57,14 @@ public final class LayerCodeAction extends AnAction {
     Project project = e.getProject();
     if (editor == null || project == null) return;
     if (DumbService.isDumb(project)) {
-      Notify.warning(project, "색인 중에는 계층 코드를 만들 수 없습니다. 색인이 끝난 뒤 다시 해 주세요.");
+      Notify.warning(project, EiDbBundle.message("layercode.dumb"));
       return;
     }
     CharSequence text = editor.getDocument().getImmutableCharSequence();
     int offset = editor.getCaretModel().getOffset();
     VirtualFile file = FileDocumentManager.getInstance().getFile(editor.getDocument());
     PsiFile psiFile = e.getData(CommonDataKeys.PSI_FILE);
-    new Task.Backgroundable(project, FINDING, true) {
+    new Task.Backgroundable(project, EiDbBundle.message("layercode.progress.find.classes"), true) {
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
         LayerCodeDialog.Info info = ReadAction.nonBlocking(() -> {
@@ -72,7 +72,7 @@ public final class LayerCodeAction extends AnAction {
           return at == null ? null : LayerCodeDialog.gather(project, at);
         }).inSmartMode(project).wrapProgress(indicator).executeSynchronously();
         ApplicationManager.getApplication().invokeLater(() -> {
-          if (info == null) Notify.error(project, "커서 위치에서 매퍼 문장(select · insert · update · delete)을 찾지 못했습니다.");
+          if (info == null) Notify.error(project, EiDbBundle.message("mybatis.no.statement.at.caret"));
           else new LayerCodeDialog(project, info).show();
         }, project.getDisposed());
       }

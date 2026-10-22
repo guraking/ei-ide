@@ -8,6 +8,7 @@ import com.intellij.ui.components.JBTextField;
 import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.JBUI;
+import local.bootservers.BootServersBundle;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.JComponent;
@@ -49,15 +50,15 @@ final class ParamBundleDialog extends DialogWrapper {
         table = new JBTable(new Model());
         table.getColumnModel().getColumn(CHECK_COLUMN).setMaxWidth(JBUI.scale(CHECK_COLUMN_WIDTH));
         table.setVisibleRowCount(VISIBLE_ROWS);
-        setTitle(ParamBundleAction.TITLE);
+        setTitle(ParamBundleAction.title());
         init();
     }
 
     @Override
     protected @Nullable JComponent createCenterPanel() {
         return FormBuilder.createFormBuilder()
-                .addLabeledComponent("클래스 이름", className)
-                .addLabeledComponentFillVertically("묶을 매개변수", ScrollPaneFactory.createScrollPane(table))
+                .addLabeledComponent(BootServersBundle.message("params.dialog.class"), className)
+                .addLabeledComponentFillVertically(BootServersBundle.message("params.dialog.params"), ScrollPaneFactory.createScrollPane(table))
                 .getPanel();
     }
 
@@ -73,22 +74,22 @@ final class ParamBundleDialog extends DialogWrapper {
             table.getCellEditor().stopCellEditing();
         }
         if (!ParamBundle.isValidName(className().strip())) {
-            return new ValidationInfo("클래스 이름이 자바 이름이 아닙니다.", className);
+            return new ValidationInfo(BootServersBundle.message("params.dialog.class.invalid"), className);
         }
         List<Integer> chosen = selectedIndexes();
         if (chosen.size() < MIN_SELECTED) {
-            return new ValidationInfo("매개변수를 둘 이상 고르세요.", table);
+            return new ValidationInfo(BootServersBundle.message("params.dialog.too.few"), table);
         }
         List<String> names = new ArrayList<>();
         for (int i : chosen) {
             String name = fieldNames.get(i).strip();
             if (!ParamBundle.isValidName(name)) {
-                return new ValidationInfo("필드 이름이 자바 이름이 아닙니다: " + name, table);
+                return new ValidationInfo(BootServersBundle.message("params.dialog.field.invalid", name), table);
             }
             names.add(name);
         }
         String duplicate = ParamBundle.duplicate(names);
-        return duplicate == null ? null : new ValidationInfo("필드 이름이 겹칩니다: " + duplicate, table);
+        return duplicate == null ? null : new ValidationInfo(BootServersBundle.message("params.dialog.field.duplicate", duplicate), table);
     }
 
     String className() {
@@ -110,7 +111,7 @@ final class ParamBundleDialog extends DialogWrapper {
     }
 
     private final class Model extends AbstractTableModel {
-        private final String[] columns = {"묶기", "매개변수", "필드 이름"};
+        private final String[] columns = {BootServersBundle.message("params.dialog.column.bundle"), BootServersBundle.message("params.dialog.column.param"), BootServersBundle.message("params.dialog.column.field")};
 
         @Override
         public int getRowCount() {
