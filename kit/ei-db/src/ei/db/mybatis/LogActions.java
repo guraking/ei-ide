@@ -17,6 +17,7 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.util.ui.JBUI;
 import ei.db.DbConfig;
 import ei.db.DbSettings;
+import ei.db.EiDbBundle;
 import ei.db.Notify;
 import ei.db.SqlRunner;
 import ei.db.console.ConsoleOpener;
@@ -44,7 +45,6 @@ public final class LogActions {
   private static final int MAX_SCAN = 1000;
   /** 고르기 창 강조 테두리 두께(px). */
   private static final int POPUP_BORDER = 2;
-  private static final String NEW_CONSOLE = "새 콘솔…";
 
   static Editor editor(AnActionEvent e) {
     Editor editor = e.getData(CommonDataKeys.EDITOR);
@@ -85,7 +85,7 @@ public final class LogActions {
   static void chooseConnection(Project project, Editor editor, Consumer<DbConfig> then) {
     List<DbConfig> list = connections(project);
     if (list.isEmpty()) {
-      Notify.error(project, "접속이 없습니다. 먼저 데이터베이스 접속을 추가하세요.");
+      Notify.error(project, EiDbBundle.message("common.no.connection"));
       return;
     }
     if (list.size() == 1) {
@@ -93,7 +93,7 @@ public final class LogActions {
       return;
     }
     showCentered(JBPopupFactory.getInstance().createPopupChooserBuilder(list)
-        .setTitle("실행할 접속")
+        .setTitle(EiDbBundle.message("logactions.choose.connection"))
         .setRenderer(com.intellij.ui.SimpleListCellRenderer.create("", MyBatisRunDialog::connectionLabel))
         .setItemChosenCallback(then::accept)
         .createPopup(), project);
@@ -157,7 +157,7 @@ public final class LogActions {
       try {
         sql = SqlFormatter.format(raw);
       } catch (RuntimeException ex) {
-        Notify.warning(project, "SQL 정렬에 실패했습니다(" + ex + "). 정렬하지 않은 SQL 을 붙입니다.");
+        Notify.warning(project, EiDbBundle.message("logactions.format.failed", ex));
         sql = raw;
       }
       PropertiesComponent.getInstance(project).setValue(MyBatisRunDialog.CONNECTION_KEY, config.id);
@@ -177,17 +177,17 @@ public final class LogActions {
       chooseConnection(project, editor, c -> then.accept(new Target(c, null, false)));
       return;
     }
-    items.add(NEW_CONSOLE);
+    items.add(EiDbBundle.message("logactions.new.console"));
     showCentered(JBPopupFactory.getInstance().createPopupChooserBuilder(items)
-        .setTitle("보낼 콘솔")
-        .setRenderer(com.intellij.ui.SimpleListCellRenderer.create("", v -> v instanceof VirtualFile f ? f.getNameWithoutExtension() : NEW_CONSOLE))
+        .setTitle(EiDbBundle.message("logactions.choose.console"))
+        .setRenderer(com.intellij.ui.SimpleListCellRenderer.create("", v -> v instanceof VirtualFile f ? f.getNameWithoutExtension() : EiDbBundle.message("logactions.new.console")))
         .setItemChosenCallback(v -> {
           if (!(v instanceof VirtualFile f)) {
             chooseConnection(project, editor, c -> then.accept(new Target(c, null, true)));
             return;
           }
           DbConfig c = ConsoleOpener.connection(project, f);
-          if (c == null) Notify.error(project, "이 콘솔의 접속이 지워졌습니다: " + f.getName());
+          if (c == null) Notify.error(project, EiDbBundle.message("console.connection.removed.named", f.getName()));
           else then.accept(new Target(c, f, false));
         })
         .createPopup(), project);

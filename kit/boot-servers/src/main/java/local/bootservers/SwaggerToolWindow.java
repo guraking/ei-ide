@@ -43,7 +43,6 @@ import java.util.List;
 public final class SwaggerToolWindow implements ToolWindowFactory, DumbAware {
 
     static final String ID = "API";
-    static final String TITLE = "API 테스트";
     private static final String SAVE_NAME = "openapi.yaml";
     private static final Key<State> STATE = Key.create("ei.swagger.state");
     private static final Logger LOG = Logger.getInstance(SwaggerToolWindow.class);
@@ -99,7 +98,7 @@ public final class SwaggerToolWindow implements ToolWindowFactory, DumbAware {
     private static void show(Project project, State state, String base, @Nullable String specJson, @Nullable String anchor) {
         if (specJson == null) {
             Messages.showInfoMessage(project,
-                    "프로젝트에 스프링 웹(spring-web) 의존성이 없습니다. Gradle · Maven 프로젝트로 연결됐는지 확인하세요.", TITLE);
+                    BootServersBundle.message("spring.web.missing"), BootServersBundle.message("swagger.title"));
             return;
         }
         state.specJson = specJson;
@@ -118,7 +117,7 @@ public final class SwaggerToolWindow implements ToolWindowFactory, DumbAware {
 
     private static final class Refresh extends DumbAwareAction {
         Refresh() {
-            super("다시 읽기", "컨트롤러를 다시 읽어 API 목록을 새로 만듭니다", AllIcons.Actions.Refresh);
+            super(BootServersBundle.message("swagger.refresh"), BootServersBundle.message("swagger.refresh.description"), AllIcons.Actions.Refresh);
         }
 
         @Override
@@ -132,7 +131,7 @@ public final class SwaggerToolWindow implements ToolWindowFactory, DumbAware {
     /** 지금 사양을 openapi.yaml 로 저장하고 편집기로 연다(편집기 옆에 같은 Swagger 미리보기가 붙는다). */
     private static final class Save extends DumbAwareAction {
         Save() {
-            super("openapi.yaml 로 저장…", "지금 API 목록을 OpenAPI 사양 파일로 저장합니다", AllIcons.Actions.MenuSaveall);
+            super(BootServersBundle.message("swagger.save"), BootServersBundle.message("swagger.save.description"), AllIcons.Actions.MenuSaveall);
         }
 
         @Override
@@ -143,7 +142,7 @@ public final class SwaggerToolWindow implements ToolWindowFactory, DumbAware {
                 return;
             }
             VirtualFileWrapper target = FileChooserFactory.getInstance()
-                    .createSaveFileDialog(new FileSaverDescriptor("OpenAPI 사양 저장", "저장할 위치를 고르세요", "yaml"), project)
+                    .createSaveFileDialog(new FileSaverDescriptor(BootServersBundle.message("swagger.save.title"), BootServersBundle.message("swagger.save.chooser"), "yaml"), project)
                     .save(project.getBasePath() == null ? null : LocalFileSystem.getInstance().findFileByPath(project.getBasePath()), SAVE_NAME);
             if (target == null) {
                 return;
@@ -155,7 +154,7 @@ public final class SwaggerToolWindow implements ToolWindowFactory, DumbAware {
                 } catch (IOException ex) {
                     LOG.warn("OpenAPI 사양을 저장하지 못했습니다: " + target.getFile(), ex);
                     ApplicationManager.getApplication().invokeLater(() ->
-                            Messages.showErrorDialog(project, "저장하지 못했습니다: " + ex.getMessage(), TITLE));
+                            Messages.showErrorDialog(project, BootServersBundle.message("common.save.failed", ex.getMessage()), BootServersBundle.message("swagger.title")));
                     return;
                 }
                 VirtualFile saved = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(target.getFile().toPath());

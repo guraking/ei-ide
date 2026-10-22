@@ -34,7 +34,7 @@ public final class SqlRunner {
   public static void run(Project project, DbConfig c, String sql, List<Object> binds) {
     boolean write = SqlGuard.isWrite(sql);
     if (write && c.readOnly) {
-      Notify.error(project, c.name + " 은 읽기 전용 접속이라 변경 문장을 실행하지 않습니다.");
+      Notify.error(project, EiDbBundle.message("runner.read.only", c.name));
       return;
     }
     String danger = SqlGuard.danger(sql);
@@ -45,7 +45,7 @@ public final class SqlRunner {
       ConsoleRun.stop(project, c, sql);
       return;
     }
-    new Task.Backgroundable(project, c.name + " 에서 실행 중", true) {
+    new Task.Backgroundable(project, EiDbBundle.message("runner.progress", c.name), true) {
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
         AtomicBoolean failed = new AtomicBoolean();
@@ -73,8 +73,8 @@ public final class SqlRunner {
   private static boolean confirmImplicitCommit(Project project, DbConfig c, String sql) {
     int pending = DbSessions.get(project).pending(c.id);
     if (pending == 0 || c.kind == DbKind.POSTGRES || !SqlGuard.isDdl(sql)) return true;
-    return Messages.showOkCancelDialog(project, "미반영 변경 " + pending + "건이 함께 커밋됩니다. 실행할까요?", "DDL 실행 확인",
-        "실행", "취소", Messages.getWarningIcon()) == Messages.OK;
+    return Messages.showOkCancelDialog(project, EiDbBundle.message("runner.ddl.confirm", pending), EiDbBundle.message("runner.ddl.confirm.title"),
+        EiDbBundle.message("common.run"), EiDbBundle.message("common.cancel"), Messages.getWarningIcon()) == Messages.OK;
   }
 
   /**
@@ -91,7 +91,7 @@ public final class SqlRunner {
       DbSessions.get(project).cancel(c.id);
       return true;
     } catch (SQLException e) {
-      Notify.error(project, c.name + " 실행을 취소하지 못했습니다: " + e.getMessage());
+      Notify.error(project, EiDbBundle.message("runner.cancel.failed", c.name, e.getMessage()));
       return false;
     }
   }
@@ -102,7 +102,7 @@ public final class SqlRunner {
       RunHistory.get().add(new RunHistory.Entry(System.currentTimeMillis(), c.id, c.name, millis, count, ok, sql.strip(),
           binds == null ? List.of() : binds));
     } catch (IOException e) {
-      Notify.error(project, "실행 기록을 저장하지 못했습니다: " + e.getMessage());
+      Notify.error(project, EiDbBundle.message("runner.history.save.failed", e.getMessage()));
     }
   }
 }

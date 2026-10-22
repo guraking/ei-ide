@@ -10,6 +10,7 @@ import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.ui.content.Content;
 import com.intellij.util.ui.UIUtil;
 import ei.db.DbConfig;
+import ei.db.EiDbBundle;
 import ei.db.Meta;
 import ei.db.Notify;
 import org.jetbrains.annotations.NotNull;
@@ -28,7 +29,6 @@ public final class FeatureAction extends DumbAwareAction {
 
   private static final String TOOL_WINDOW_ID = "EI Database";
   private static final String TABLE_ITEM = "ei.db.ui.DbExplorer$TableItem";
-  private static final String NO_TABLE = "「EI Database」 탐색기에서 표를 하나 고른 뒤 다시 실행하세요.";
 
   private record Picked(DbConfig c, String schema, String table) {}
 
@@ -49,14 +49,14 @@ public final class FeatureAction extends DumbAwareAction {
     Object item = selectedItem(e.getData(PlatformCoreDataKeys.CONTEXT_COMPONENT));
     if (item == null) item = selectedItem(explorerTree(project));
     if (item == null || !TABLE_ITEM.equals(item.getClass().getName())) {
-      Notify.warning(project, NO_TABLE);
+      Notify.warning(project, EiDbBundle.message("feature.no.table"));
       return;
     }
     Picked p;
     try {
       p = new Picked((DbConfig) read(item, "c"), (String) read(item, "schema"), ((Meta.Table) read(item, "table")).name());
     } catch (ReflectiveOperationException | RuntimeException ex) {
-      Notify.error(project, "탐색기에서 고른 표를 읽지 못했습니다: " + ex);
+      Notify.error(project, EiDbBundle.message("feature.read.table.failed", ex));
       return;
     }
     FeatureDialog.show(project, p.c(), p.schema(), p.table());

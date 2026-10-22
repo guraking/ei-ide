@@ -29,6 +29,7 @@ import com.intellij.psi.codeStyle.CodeStyleManager;
 import com.intellij.psi.util.InheritanceUtil;
 import com.intellij.psi.util.PsiMethodUtil;
 import com.intellij.psi.util.PsiTreeUtil;
+import local.bootservers.BootServersBundle;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -53,7 +54,6 @@ public final class LogUsageInspection extends LocalInspectionTool {
     private static final String SLF4J_LOGGER = "org.slf4j.Logger";
     private static final String LOMBOK_SLF4J = "lombok.extern.slf4j.Slf4j";
     private static final String LOMBOK_LOG = "log";
-    private static final String NO_LOGGER = " (로거 필드나 @Slf4j 가 없어 자동 수정이 없습니다)";
 
     @Override
     public @NotNull PsiElementVisitor buildVisitor(@NotNull ProblemsHolder holder, boolean isOnTheFly) {
@@ -79,7 +79,7 @@ public final class LogUsageInspection extends LocalInspectionTool {
                 String name = parameter.getName();
                 String statement = method == null || UNNAMED.equals(name)
                         ? null : LogFix.statement(LogFix.Kind.EMPTY_CATCH, name, false, logger, method.getName());
-                register(holder, section.getFirstChild(), "빈 catch 블록입니다", logger, statement, "로그 넣기: ");
+                register(holder, section.getFirstChild(), BootServersBundle.message("inspection.log.empty.catch"), logger, statement, BootServersBundle.message("inspection.log.fix.add"));
             }
 
             @Override
@@ -100,7 +100,7 @@ public final class LogUsageInspection extends LocalInspectionTool {
                     }
                     kind = LogFix.Kind.PRINT_STACK_TRACE;
                     arg = qualifier.getText();
-                    message = "printStackTrace() 대신 로거를 쓰세요";
+                    message = BootServersBundle.message("inspection.log.print.stack.trace");
                 } else if (name.startsWith(PRINT_PREFIX)) {
                     String stream = systemStream(qualifier);
                     if (stream == null) {
@@ -111,7 +111,7 @@ public final class LogUsageInspection extends LocalInspectionTool {
                     boolean single = args.length == 1 && (PRINT.equals(name) || PRINTLN.equals(name));
                     arg = single ? args[0].getText() : null;
                     literal = single && args[0] instanceof PsiLiteralExpression lit && lit.getValue() instanceof String;
-                    message = "System." + stream + " 출력 대신 로거를 쓰세요";
+                    message = BootServersBundle.message("inspection.log.system.out", stream);
                 } else {
                     return;
                 }
@@ -122,7 +122,7 @@ public final class LogUsageInspection extends LocalInspectionTool {
                 String logger = loggerName(call);
                 String statement = !(call.getParent() instanceof PsiExpressionStatement)
                         ? null : LogFix.statement(kind, arg, literal, logger, method == null ? null : method.getName());
-                register(holder, call, message, logger, statement, "로거로 바꾸기: ");
+                register(holder, call, message, logger, statement, BootServersBundle.message("inspection.log.fix.replace"));
             }
         };
     }
@@ -133,9 +133,9 @@ public final class LogUsageInspection extends LocalInspectionTool {
             return;
         }
         if (statement != null) {
-            holder.registerProblem(at, message, new ToLogFix(fixPrefix + statement, statement));
+            holder.registerProblem(at, message, new ToLogFix(fixPrefix + " " + statement, statement));
         } else {
-            holder.registerProblem(at, logger == null ? message + NO_LOGGER : message);
+            holder.registerProblem(at, logger == null ? BootServersBundle.message("inspection.log.no.logger", message) : message);
         }
     }
 
@@ -199,7 +199,7 @@ public final class LogUsageInspection extends LocalInspectionTool {
 
         @Override
         public @NotNull String getFamilyName() {
-            return "로거 호출로 바꾸기";
+            return BootServersBundle.message("inspection.log.fix.family");
         }
 
         @Override

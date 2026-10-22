@@ -8,6 +8,7 @@ import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.ui.EditorTextField;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.util.ui.JBUI;
+import ei.db.EiDbBundle;
 import ei.db.Notify;
 import org.jetbrains.annotations.NotNull;
 
@@ -22,7 +23,6 @@ import java.awt.GridLayout;
 /** 「문자열 SQL 정리」 결과: 왼쪽 정리한 SQL, 오른쪽 매퍼 XML 문장. 읽기 전용이고 복사 단추로 가져간다. */
 final class StringSqlDialog extends DialogWrapper {
 
-  private static final String TITLE = "문자열 SQL 정리";
   private static final int CODE_WIDTH = 520;
   private static final int CODE_HEIGHT = 480;
 
@@ -35,8 +35,8 @@ final class StringSqlDialog extends DialogWrapper {
     this.project = project;
     this.sql = sql;
     this.xml = xml;
-    setTitle(TITLE);
-    setOKButtonText("닫기");
+    setTitle(EiDbBundle.message("stringsql.title"));
+    setOKButtonText(EiDbBundle.message("common.close"));
     init();
   }
 
@@ -48,8 +48,8 @@ final class StringSqlDialog extends DialogWrapper {
   @Override
   protected JComponent createCenterPanel() {
     JPanel p = new JPanel(new GridLayout(1, 2, JBUI.scale(16), 0));
-    p.add(section("정리한 SQL", "SQL 복사", "sql", sql));
-    p.add(section("매퍼 XML 문장", "XML 복사", "xml", xml));
+    p.add(section(EiDbBundle.message("stringsql.section.sql"), EiDbBundle.message("stringsql.copy.sql"), "sql", sql));
+    p.add(section(EiDbBundle.message("stringsql.section.xml"), EiDbBundle.message("stringsql.copy.xml"), "xml", xml));
     return p;
   }
 
@@ -65,7 +65,7 @@ final class StringSqlDialog extends DialogWrapper {
     JButton copy = new JButton(copyText);
     copy.addActionListener(e -> {
       CopyPasteManager.copyTextToClipboard(text);
-      Notify.info(project, title + " 을 복사했습니다.");
+      Notify.info(project, EiDbBundle.message("stringsql.copied", title));
     });
     JPanel bar = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(6), 0));
     bar.add(new JBLabel(title));

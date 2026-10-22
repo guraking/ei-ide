@@ -77,7 +77,7 @@ final class SwaggerView implements Disposable {
         Disposer.register(parent, this);
         if (!JBCefApp.isSupported()) {
             browser = null;
-            component = new JBLabel("이 IDE 에서는 내장 브라우저(JCEF)를 쓸 수 없어 Swagger 화면을 띄울 수 없습니다.", SwingConstants.CENTER);
+            component = new JBLabel(BootServersBundle.message("swagger.no.jcef"), SwingConstants.CENTER);
             return;
         }
         browser = new JBCefBrowser();

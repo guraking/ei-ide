@@ -42,6 +42,7 @@ import com.intellij.psi.util.InheritanceUtil;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.psi.util.PsiUtil;
 import com.intellij.util.IncorrectOperationException;
+import local.bootservers.BootServersBundle;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -59,7 +60,10 @@ import java.util.Set;
  */
 public final class ParamBundleAction extends AnAction {
 
-    static final String TITLE = "요청 값을 DTO 로 묶기";
+    static String title() {
+        return BootServersBundle.message("params.title");
+    }
+
     private static final String NOTIFICATION_GROUP = "요청 값 묶기";
     private static final int MIN_CANDIDATES = 2;
     private static final String JAVA_FILE_SUFFIX = ".java";
@@ -115,7 +119,7 @@ public final class ParamBundleAction extends AnAction {
             }
         }
         if (candidates.size() < MIN_CANDIDATES) {
-            Messages.showInfoMessage(project, "묶을 요청 값 매개변수(@RequestParam 또는 단순형)가 둘 이상 있어야 합니다.", TITLE);
+            Messages.showInfoMessage(project, BootServersBundle.message("params.too.few"), title());
             return;
         }
         List<ParamBundle.Param> params = new ArrayList<>();
@@ -153,23 +157,22 @@ public final class ParamBundleAction extends AnAction {
             references.add(new ArrayList<>(found));
         }
         if (!written.isEmpty()) {
-            Messages.showWarningDialog(project, "본문에서 값을 대입하는 매개변수가 있어 묶지 않았습니다: " + String.join(", ", written)
-                    + "\n지역 변수로 옮긴 뒤 다시 하세요.", TITLE);
+            Messages.showWarningDialog(project, BootServersBundle.message("params.written", String.join(", ", written)), title());
             return;
         }
         PsiDirectory dir = file.getContainingDirectory();
         if (dir == null) {
-            Messages.showWarningDialog(project, "이 파일의 폴더를 찾을 수 없습니다.", TITLE);
+            Messages.showWarningDialog(project, BootServersBundle.message("params.no.dir"), title());
             return;
         }
         String className = dialog.className();
         String fileName = className + JAVA_FILE_SUFFIX;
         PsiFile existing = dir.findFile(fileName);
         if (file.equals(existing)) {
-            Messages.showWarningDialog(project, "클래스 이름이 지금 파일과 같습니다: " + className, TITLE);
+            Messages.showWarningDialog(project, BootServersBundle.message("params.same.class", className), title());
             return;
         }
-        if (existing != null && Messages.showYesNoDialog(project, fileName + " 이(가) 이미 있습니다. 덮어쓸까요?", TITLE,
+        if (existing != null && Messages.showYesNoDialog(project, BootServersBundle.message("params.overwrite", fileName), title(),
                 Messages.getQuestionIcon()) != Messages.YES) {
             return;
         }
@@ -178,13 +181,13 @@ public final class ParamBundleAction extends AnAction {
         String variable = ParamBundle.variableName(takenNames(method));
         String text = ParamBundle.dto(pkg, className, fields);
         try {
-            WriteCommandAction.writeCommandAction(project, file).withName(TITLE).run(() -> {
+            WriteCommandAction.writeCommandAction(project, file).withName(title()).run(() -> {
                 writeDto(project, dir, existing, fileName, text);
                 apply(project, method, chosen, fields, references, qualifiedName, variable);
             });
         } catch (IncorrectOperationException ex) {
             LOG.warn("요청 값 묶기 실패: " + qualifiedName, ex);
-            notify(project, "DTO 로 묶지 못했습니다", StringUtil.escapeXmlEntities(String.valueOf(ex.getMessage())), NotificationType.ERROR);
+            notify(project, BootServersBundle.message("params.failed"), StringUtil.escapeXmlEntities(String.valueOf(ex.getMessage())), NotificationType.ERROR);
             return;
         }
         report(project, qualifiedName, fields);
@@ -196,7 +199,7 @@ public final class ParamBundleAction extends AnAction {
         if (existing != null) {
             Document document = PsiDocumentManager.getInstance(project).getDocument(existing);
             if (document == null || !document.isWritable()) {
-                throw new IncorrectOperationException(fileName + " 은(는) 고칠 수 없는 파일입니다.");
+                throw new IncorrectOperationException(BootServersBundle.message("params.read.only", fileName));
             }
             document.setText(text);
             PsiDocumentManager.getInstance(project).commitDocument(document);
@@ -232,17 +235,17 @@ public final class ParamBundleAction extends AnAction {
     private static void report(Project project, String qualifiedName, List<ParamBundle.Field> fields) {
         List<String> lines = new ArrayList<>();
         for (String w : ParamBundle.nameWarnings(fields)) {
-            lines.add("요청 이름과 필드 이름이 달라 바인딩되지 않습니다: " + StringUtil.escapeXmlEntities(w));
+            lines.add(BootServersBundle.message("params.name.warning", StringUtil.escapeXmlEntities(w)));
         }
         for (ParamBundle.Field f : fields) {
             ParamBundle.Param p = f.param();
             if (p.defaultValue() != null && ParamBundle.initializer(p.type(), p.defaultValue()) == null) {
-                lines.add("기본값을 옮기지 못했습니다: " + StringUtil.escapeXmlEntities(f.name()));
+                lines.add(BootServersBundle.message("params.default.lost", StringUtil.escapeXmlEntities(f.name())));
             }
         }
         NotificationType type = lines.isEmpty() ? NotificationType.INFORMATION : NotificationType.WARNING;
-        lines.add(0, StringUtil.escapeXmlEntities(qualifiedName) + " 로 " + fields.size() + "개를 묶었습니다.");
-        notify(project, TITLE, String.join(HTML_BREAK, lines), type);
+        lines.add(0, BootServersBundle.message("params.done", StringUtil.escapeXmlEntities(qualifiedName), fields.size()));
+        notify(project, title(), String.join(HTML_BREAK, lines), type);
     }
 
     private static @Nullable PsiMethod mappingMethodAt(PsiFile file, int offset) {

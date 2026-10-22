@@ -52,7 +52,7 @@ final class ServerGroupDialog extends DialogWrapper {
         this.labels = labels;
         this.otherNames = otherNames;
         name.setText(existing == null ? "" : existing.name);
-        name.getEmptyText().setText("예: 설정 → 게이트웨이 → 업무");
+        name.getEmptyText().setText(BootServersBundle.message("group.dialog.name.hint"));
         for (String key : initialMembers) {
             members.add(key);
         }
@@ -61,7 +61,7 @@ final class ServerGroupDialog extends DialogWrapper {
                 available.add(key);
             }
         }
-        setTitle(existing == null ? "새 서버 묶음" : "서버 묶음 편집");
+        setTitle(existing == null ? BootServersBundle.message("group.dialog.title.new") : BootServersBundle.message("group.dialog.title.edit"));
         init();
     }
 
@@ -70,7 +70,7 @@ final class ServerGroupDialog extends DialogWrapper {
         ListCellRenderer<String> renderer = new SimpleListCellRenderer<>() {
             @Override
             public void customize(@NotNull JList<? extends String> list, String key, int index, boolean selected, boolean hasFocus) {
-                setText(labels.getOrDefault(key, key + " (서버 창에 없음)"));
+                setText(labels.getOrDefault(key, BootServersBundle.message("group.dialog.missing", key)));
             }
         };
         availableList.setCellRenderer(renderer);
@@ -91,15 +91,15 @@ final class ServerGroupDialog extends DialogWrapper {
                 .createPanel();
         JPanel lists = new JPanel(new GridLayout(1, 2, JBUI.scale(8), 0));
         lists.add(FormBuilder.createFormBuilder()
-                .addComponent(new JBLabel("서버 (두 번 눌러 넣기)"))
+                .addComponent(new JBLabel(BootServersBundle.message("group.dialog.available")))
                 .addComponentFillVertically(ScrollPaneFactory.createScrollPane(availableList), 0)
                 .getPanel());
         lists.add(FormBuilder.createFormBuilder()
-                .addComponent(new JBLabel("시작 순서 (위에서부터)"))
+                .addComponent(new JBLabel(BootServersBundle.message("group.dialog.order")))
                 .addComponentFillVertically(order, 0)
                 .getPanel());
         return FormBuilder.createFormBuilder()
-                .addLabeledComponent("묶음 이름", name)
+                .addLabeledComponent(BootServersBundle.message("group.dialog.name"), name)
                 .addComponentFillVertically(lists, JBUI.scale(4))
                 .getPanel();
     }
@@ -129,13 +129,13 @@ final class ServerGroupDialog extends DialogWrapper {
     protected @Nullable ValidationInfo doValidate() {
         String n = name.getText().strip();
         if (n.isEmpty()) {
-            return new ValidationInfo("묶음 이름을 입력하세요.", name);
+            return new ValidationInfo(BootServersBundle.message("group.dialog.name.required"), name);
         }
         if (otherNames.contains(n)) {
-            return new ValidationInfo("같은 이름의 묶음이 이미 있습니다.", name);
+            return new ValidationInfo(BootServersBundle.message("group.dialog.name.duplicate"), name);
         }
         if (members.getSize() == 0) {
-            return new ValidationInfo("시작 순서에 서버를 하나 이상 넣으세요.", memberList);
+            return new ValidationInfo(BootServersBundle.message("group.dialog.members.required"), memberList);
         }
         return null;
     }

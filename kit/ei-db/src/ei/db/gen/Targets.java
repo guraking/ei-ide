@@ -12,6 +12,7 @@ import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.VirtualFileManager;
 import com.intellij.openapi.vfs.VirtualFileVisitor;
+import ei.db.EiDbBundle;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -160,7 +161,7 @@ final class Targets {
           f.setBinaryContent(job.text().getBytes(StandardCharsets.UTF_8));
         } else if (job.replace()) {
           Document doc = FileDocumentManager.getInstance().getDocument(f);
-          if (doc == null) throw new IOException("글 파일로 열 수 없습니다: " + job.absPath());
+          if (doc == null) throw new IOException(EiDbBundle.message("targets.not.text.file", job.absPath()));
           doc.setText(job.text());
         }
       }
@@ -175,7 +176,7 @@ final class Targets {
   private static VirtualFile mkdirs(Path dir) throws IOException {
     VirtualFile found = VirtualFileManager.getInstance().refreshAndFindFileByNioPath(dir);
     if (found != null) return found;
-    if (dir.getParent() == null) throw new IOException("폴더를 만들지 못했습니다: " + dir);
+    if (dir.getParent() == null) throw new IOException(EiDbBundle.message("targets.mkdir.failed", dir));
     return mkdirs(dir.getParent()).createChildDirectory(Targets.class, dir.getFileName().toString());
   }
 

@@ -13,6 +13,7 @@ import com.intellij.ui.components.JBTextArea;
 import com.intellij.ui.components.JBTextField;
 import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.JBUI;
+import ei.db.EiDbBundle;
 import ei.db.Notify;
 
 import javax.swing.JComponent;
@@ -33,7 +34,6 @@ final class JsonDtoDialog extends DialogWrapper {
   private static final Pattern IDENT = Pattern.compile("[A-Za-z_$][\\w$]*");
   private static final Pattern PACKAGE = Pattern.compile("([A-Za-z_$][\\w$]*(\\.[A-Za-z_$][\\w$]*)*)?");
   private static final String DEFAULT_CLASS = "ResponseDto";
-  private static final String COMMAND = "JSON 으로 DTO 만들기";
   private static final int INPUT_WIDTH = 520;
   private static final int PREVIEW_WIDTH = 720;
   private static final int HEIGHT = 640;
@@ -56,9 +56,9 @@ final class JsonDtoDialog extends DialogWrapper {
     this.javaRoot = start.javaRoot();
     packageField.setText(start.pkg());
     locationField.setText(location());
-    setTitle(COMMAND);
-    setOKButtonText("만들기");
-    setCancelButtonText("취소");
+    setTitle(EiDbBundle.message("jsondto.title"));
+    setOKButtonText(EiDbBundle.message("common.generate"));
+    setCancelButtonText(EiDbBundle.message("common.cancel"));
     init();
     refresh();
   }
@@ -71,7 +71,7 @@ final class JsonDtoDialog extends DialogWrapper {
   @Override
   protected JComponent createCenterPanel() {
     preview = new Preview(project, "java", getDisposable());
-    locationField.addBrowseFolderListener(project, FileChooserDescriptorFactory.createSingleFolderDescriptor().withTitle("DTO 위치"));
+    locationField.addBrowseFolderListener(project, FileChooserDescriptorFactory.createSingleFolderDescriptor().withTitle(EiDbBundle.message("jsondto.location.title")));
     Ui.onChange(classField, this::refresh);
     Ui.onChange(packageField, () -> {
       locationField.setText(location());
@@ -81,13 +81,13 @@ final class JsonDtoDialog extends DialogWrapper {
     lombok.addActionListener(e -> refresh());
 
     JPanel top = new JPanel(new GridLayout(1, 3, JBUI.scale(16), 0));
-    top.add(labeled("클래스 이름", classField));
-    top.add(labeled("패키지", packageField));
-    top.add(labeled("위치", locationField));
+    top.add(labeled(EiDbBundle.message("common.class.name"), classField));
+    top.add(labeled(EiDbBundle.message("common.package"), packageField));
+    top.add(labeled(EiDbBundle.message("common.location"), locationField));
 
     jsonArea.setFont(Ui.mono());
     JPanel left = new JPanel(new BorderLayout(0, JBUI.scale(8)));
-    left.add(new JBLabel("JSON 붙여 넣기 (최상위가 배열이면 첫 원소 기준)"), BorderLayout.NORTH);
+    left.add(new JBLabel(EiDbBundle.message("jsondto.paste.label")), BorderLayout.NORTH);
     left.add(new JBScrollPane(jsonArea), BorderLayout.CENTER);
     left.add(lombok, BorderLayout.SOUTH);
     left.setPreferredSize(new Dimension(JBUI.scale(INPUT_WIDTH), JBUI.scale(HEIGHT)));
@@ -125,26 +125,26 @@ final class JsonDtoDialog extends DialogWrapper {
   private void refresh() {
     if (preview == null) return;
     if (jsonArea.getText().isBlank()) {
-      preview.setText("// 왼쪽에 JSON 을 붙여 넣으세요.");
+      preview.setText(EiDbBundle.message("jsondto.preview.empty"));
       return;
     }
     try {
       preview.setText(dtoText());
     } catch (JsonDto.JsonException e) {
-      preview.setText("// JSON 오류 — " + e.getMessage());
+      preview.setText(EiDbBundle.message("jsondto.preview.error", e.getMessage()));
     }
   }
 
   @Override
   protected ValidationInfo doValidate() {
-    if (!IDENT.matcher(cls()).matches()) return new ValidationInfo("클래스 이름이 자바 이름 꼴이 아닙니다.", classField);
-    if (!PACKAGE.matcher(pkg()).matches()) return new ValidationInfo("패키지 이름이 자바 이름 꼴이 아닙니다.", packageField);
-    if (locationField.getText().isBlank()) return new ValidationInfo("위치를 고르세요.", locationField);
-    if (jsonArea.getText().isBlank()) return new ValidationInfo("JSON 을 붙여 넣으세요.", jsonArea);
+    if (!IDENT.matcher(cls()).matches()) return new ValidationInfo(EiDbBundle.message("common.class.name.invalid"), classField);
+    if (!PACKAGE.matcher(pkg()).matches()) return new ValidationInfo(EiDbBundle.message("common.package.invalid"), packageField);
+    if (locationField.getText().isBlank()) return new ValidationInfo(EiDbBundle.message("common.location.empty"), locationField);
+    if (jsonArea.getText().isBlank()) return new ValidationInfo(EiDbBundle.message("jsondto.json.empty"), jsonArea);
     try {
       dtoText();
     } catch (JsonDto.JsonException e) {
-      return new ValidationInfo("JSON 오류 — " + e.getMessage(), jsonArea);
+      return new ValidationInfo(EiDbBundle.message("jsondto.error", e.getMessage()), jsonArea);
     }
     return null;
   }
@@ -156,22 +156,22 @@ final class JsonDtoDialog extends DialogWrapper {
     try {
       text = dtoText();
     } catch (JsonDto.JsonException e) {
-      setErrorText("JSON 오류 — " + e.getMessage(), jsonArea);
+      setErrorText(EiDbBundle.message("jsondto.error", e.getMessage()), jsonArea);
       return;
     }
     boolean exists = Targets.exists(path);
-    if (exists && Messages.showYesNoDialog(project, roots.rel(path) + " 이 이미 있습니다. 덮어쓸까요?", COMMAND,
-                                           "덮어쓰기", "취소", Messages.getWarningIcon()) != Messages.YES) {
+    if (exists && Messages.showYesNoDialog(project, EiDbBundle.message("common.overwrite.confirm", roots.rel(path)), EiDbBundle.message("jsondto.title"),
+                                           EiDbBundle.message("common.overwrite"), EiDbBundle.message("common.cancel"), Messages.getWarningIcon()) != Messages.YES) {
       return;
     }
     try {
-      Targets.write(project, COMMAND, List.of(new Targets.Job(path, text, true)));
+      Targets.write(project, EiDbBundle.message("jsondto.title"), List.of(new Targets.Job(path, text, true)));
     } catch (IOException e) {
-      setErrorText("파일을 쓰지 못했습니다: " + e.getMessage());
+      setErrorText(EiDbBundle.message("common.write.failed", e.getMessage()));
       return;
     }
     super.doOKAction();
     Targets.open(project, path);
-    Notify.info(project, roots.rel(path) + (exists ? " 덮어씀" : " 새로 만듦"));
+    Notify.info(project, EiDbBundle.message(exists ? "common.file.overwritten" : "common.file.created", roots.rel(path)));
   }
 }

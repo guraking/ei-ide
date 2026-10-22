@@ -47,7 +47,6 @@ final class UrlMappingDialog extends DialogWrapper {
     /** HTTP 방식 칸 너비(글자 수). 「DELETE」 와 여러 방식을 이은 것의 앞부분이 들어갈 만큼. */
     private static final int METHOD_COLUMN_CHARS = 8;
     private static final String COLUMN_GAP = "  ";
-    private static final String SEND_TEXT = "요청 보내기";
 
     private final Project project;
     private final List<UrlMappingAction.Endpoint> all;
@@ -60,16 +59,16 @@ final class UrlMappingDialog extends DialogWrapper {
         this.project = project;
         this.all = endpoints;
         setModal(false);
-        setTitle(UrlMappingAction.TITLE);
-        setOKButtonText("이동");
-        getCancelAction().putValue(Action.NAME, "닫기");
+        setTitle(UrlMappingAction.title());
+        setOKButtonText(BootServersBundle.message("url.go"));
+        getCancelAction().putValue(Action.NAME, BootServersBundle.message("common.close"));
         init();
         refresh();
     }
 
     @Override
     protected @Nullable JComponent createCenterPanel() {
-        queryField.getEmptyText().setText("URL · 클래스 · 메서드 (예: /api/order/123)");
+        queryField.getEmptyText().setText(BootServersBundle.message("url.query.hint"));
         queryField.getDocument().addDocumentListener(new DocumentAdapter() {
             @Override
             protected void textChanged(@NotNull DocumentEvent e) {
@@ -80,7 +79,7 @@ final class UrlMappingDialog extends DialogWrapper {
 
         list.setFont(EditorColorsManager.getInstance().getGlobalScheme().getFont(EditorFontType.PLAIN));
         list.setCellRenderer(new EndpointRenderer());
-        list.getEmptyText().setText(all.isEmpty() ? "프로젝트에 스프링 요청 매핑이 없습니다" : "맞는 URL 이 없습니다");
+        list.getEmptyText().setText(all.isEmpty() ? BootServersBundle.message("url.empty.none") : BootServersBundle.message("url.empty.no.match"));
         list.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
@@ -98,9 +97,9 @@ final class UrlMappingDialog extends DialogWrapper {
                 }
                 list.setSelectedIndex(row);
                 JBPopupMenu menu = new JBPopupMenu();
-                JBMenuItem go = new JBMenuItem("메서드로 이동");
+                JBMenuItem go = new JBMenuItem(BootServersBundle.message("url.go.method"));
                 go.addActionListener(event -> doOKAction());
-                JBMenuItem send = new JBMenuItem(SEND_TEXT);
+                JBMenuItem send = new JBMenuItem(BootServersBundle.message("url.send"));
                 send.addActionListener(event -> sendRequest());
                 menu.add(go);
                 menu.add(send);
@@ -132,7 +131,7 @@ final class UrlMappingDialog extends DialogWrapper {
 
     @Override
     protected Action @NotNull [] createLeftSideActions() {
-        return new Action[]{new AbstractAction(SEND_TEXT) {
+        return new Action[]{new AbstractAction(BootServersBundle.message("url.send")) {
             @Override
             public void actionPerformed(ActionEvent e) {
                 sendRequest();
@@ -169,7 +168,7 @@ final class UrlMappingDialog extends DialogWrapper {
         UrlMappingAction.Endpoint target = chosen;
         PsiMethod method = ReadAction.compute(() -> target.target().getElement());
         if (method == null || !method.isValid()) {
-            status.setText("코드가 바뀌어 메서드를 찾지 못했습니다. 창을 닫고 다시 여세요.");
+            status.setText(BootServersBundle.message("url.method.gone"));
             status.setForeground(JBColor.RED);
             return;
         }
@@ -189,12 +188,17 @@ final class UrlMappingDialog extends DialogWrapper {
         if (!shown.isEmpty()) {
             list.setSelectedIndex(0);
         }
-        status.setText("URL " + shown.size() + "개 / 전체 " + all.size() + "개");
+        status.setText(BootServersBundle.message("url.count", shown.size(), all.size()));
         status.setForeground(JBColor.foreground());
     }
 
     private static String shownText(UrlMappingAction.Endpoint e) {
-        return e.httpMethod() + " " + e.url() + " " + e.owner();
+        return shownMethod(e) + " " + e.url() + " " + e.owner();
+    }
+
+    /** 방식 글. 방식을 정하지 않은 매핑(UrlMappingAction.ANY_METHOD)은 화면 언어로 보인다. */
+    private static String shownMethod(UrlMappingAction.Endpoint e) {
+        return UrlMappingAction.ANY_METHOD.equals(e.httpMethod()) ? BootServersBundle.message("url.method.any") : e.httpMethod();
     }
 
     private static final class EndpointRenderer extends ColoredListCellRenderer<UrlMappingAction.Endpoint> {
@@ -202,7 +206,7 @@ final class UrlMappingDialog extends DialogWrapper {
         protected void customizeCellRenderer(@NotNull JList<? extends UrlMappingAction.Endpoint> list,
                                              UrlMappingAction.Endpoint value, int index, boolean selected, boolean hasFocus) {
             setFont(list.getFont());
-            append(String.format("%-" + METHOD_COLUMN_CHARS + "s", value.httpMethod()), SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES);
+            append(String.format("%-" + METHOD_COLUMN_CHARS + "s", shownMethod(value)), SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES);
             append(COLUMN_GAP + value.url(), SimpleTextAttributes.REGULAR_ATTRIBUTES);
             append(COLUMN_GAP + value.owner(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
         }

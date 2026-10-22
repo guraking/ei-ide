@@ -31,6 +31,7 @@ import com.intellij.psi.PsiStatement;
 import com.intellij.psi.PsiType;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.psi.util.PsiUtil;
+import ei.db.EiDbBundle;
 import ei.db.Notify;
 import ei.db.console.SqlFormatter;
 import org.jetbrains.annotations.NotNull;
@@ -76,13 +77,13 @@ public final class StringSqlAction extends AnAction {
     PsiFile file = e.getData(CommonDataKeys.PSI_FILE);
     if (editor == null || project == null || !(file instanceof PsiJavaFile)) return;
     if (DumbService.isDumb(project)) {
-      Notify.warning(project, "색인 중에는 문자열 SQL 을 정리할 수 없습니다. 색인이 끝난 뒤 다시 해 주세요.");
+      Notify.warning(project, EiDbBundle.message("stringsql.dumb"));
       return;
     }
     int offset = editor.getCaretModel().getOffset();
     Found found = ReadAction.compute(() -> find(file, offset));
     if (found == null) {
-      Notify.warning(project, "커서 자리에서 + 로 이은 문자열 · StringBuilder · += 로 만든 SQL 을 찾지 못했습니다.");
+      Notify.warning(project, EiDbBundle.message("stringsql.not.found"));
       return;
     }
     String raw = SqlConcat.sql(found.pieces());
@@ -90,7 +91,7 @@ public final class StringSqlAction extends AnAction {
     try {
       sql = SqlFormatter.format(raw);
     } catch (RuntimeException ex) {
-      Notify.warning(project, "SQL 정렬에 실패했습니다(" + ex + "). 정렬하지 않은 SQL 을 보여 줍니다.");
+      Notify.warning(project, EiDbBundle.message("stringsql.format.failed", ex));
       sql = raw.strip();
     }
     new StringSqlDialog(project, sql, SqlConcat.xml(sql, found.methodName())).show();

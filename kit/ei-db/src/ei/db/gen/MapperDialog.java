@@ -20,6 +20,7 @@ import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.JBUI;
 import ei.db.DbConfig;
 import ei.db.DbSessions;
+import ei.db.EiDbBundle;
 import ei.db.Meta;
 import ei.db.Notify;
 import org.jetbrains.annotations.NotNull;
@@ -59,7 +60,6 @@ public final class MapperDialog extends DialogWrapper {
   private static final int HEIGHT = 820;
   /** 입력이 멈춘 뒤 이만큼 지나서 미리보기를 다시 만든다(글자마다 디스크를 읽지 않게). */
   private static final int REFRESH_DELAY_MS = 300;
-  private static final String BAD_PATH = "경로가 올바르지 않습니다";
 
   private final Project project;
   private final DbConfig config;
@@ -68,15 +68,15 @@ public final class MapperDialog extends DialogWrapper {
   private final Targets.Roots roots;
 
   private final JBTextField mapperField = new JBTextField();
-  private final JBCheckBox makeInterface = new JBCheckBox("자바 인터페이스도 만들기", true);
+  private final JBCheckBox makeInterface = new JBCheckBox(EiDbBundle.message("mapper.make.interface"), true);
   private final JBTextField xmlField = new JBTextField();
   private final JBTextField dtoField = new JBTextField();
-  private final JBCheckBox makeDto = new JBCheckBox("없으면 만들기", true);
+  private final JBCheckBox makeDto = new JBCheckBox(EiDbBundle.message("mapper.make.dto"), true);
   private final Map<MapperGen.Kind, JBCheckBox> kindBoxes = new EnumMap<>(MapperGen.Kind.class);
-  private final JBCheckBox oldJoin = new JBCheckBox("구식 조인 (콤마 + WHERE)", true);
-  private final JBCheckBox cdata = new JBCheckBox("부등호는 CDATA", true);
-  private final JBCheckBox where11 = new JBCheckBox("WHERE 1 = 1 로 시작", true);
-  private final JBCheckBox sqlComments = new JBCheckBox("칼럼 주석을 SQL 주석으로", true);
+  private final JBCheckBox oldJoin = new JBCheckBox(EiDbBundle.message("mapper.old.join"), true);
+  private final JBCheckBox cdata = new JBCheckBox(EiDbBundle.message("mapper.cdata"), true);
+  private final JBCheckBox where11 = new JBCheckBox(EiDbBundle.message("mapper.where11"), true);
+  private final JBCheckBox sqlComments = new JBCheckBox(EiDbBundle.message("mapper.sql.comments"), true);
 
   private final JBTabbedPane tabs = new JBTabbedPane();
   private final JBLabel fileLabel = new JBLabel();
@@ -89,7 +89,7 @@ public final class MapperDialog extends DialogWrapper {
   private int refreshSeq;
 
   public static void show(Project project, DbConfig c, String schema, String table) {
-    new Task.Backgroundable(project, table + " 칼럼 읽는 중", true) {
+    new Task.Backgroundable(project, EiDbBundle.message("validation.progress", table), true) {
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
         try {
@@ -99,7 +99,7 @@ public final class MapperDialog extends DialogWrapper {
           ApplicationManager.getApplication().invokeLater(() -> {
             if (project.isDisposed()) return;
             if (cols.isEmpty()) {
-              Notify.error(project, schema + "." + table + " 의 칼럼을 찾지 못했습니다.");
+              Notify.error(project, EiDbBundle.message("mapper.no.columns", schema + "." + table));
               return;
             }
             new MapperDialog(project, c, schema, table, cols, roots).show();
@@ -107,7 +107,7 @@ public final class MapperDialog extends DialogWrapper {
         } catch (ProcessCanceledException e) {
           throw e;
         } catch (Exception e) {
-          Notify.error(project, table + " 칼럼을 읽지 못했습니다: " + e.getMessage());
+          Notify.error(project, EiDbBundle.message("validation.read.failed", table, e.getMessage()));
         }
       }
     }.queue();
@@ -124,9 +124,9 @@ public final class MapperDialog extends DialogWrapper {
     mapperField.setText(roots.basePackage() + ".mapper." + entity + "Mapper");
     xmlField.setText(roots.rel(roots.resources() + "/mapper/" + table.toLowerCase(Locale.ROOT) + "/" + entity + "Mapper.xml"));
     dtoField.setText(entity + "Dto");
-    setTitle("매퍼 뼈대 만들기 — " + table + "  ·  " + c.name + " · " + schema);
-    setOKButtonText("만들기");
-    setCancelButtonText("취소");
+    setTitle(EiDbBundle.message("mapper.title", table, c.name, schema));
+    setOKButtonText(EiDbBundle.message("common.generate"));
+    setCancelButtonText(EiDbBundle.message("common.cancel"));
     refreshTimer.setRepeats(false);
     init();
     startRefresh();
@@ -138,7 +138,7 @@ public final class MapperDialog extends DialogWrapper {
     interfacePreview = new Preview(project, "java", getDisposable());
     dtoPreview = new Preview(project, "java", getDisposable());
     tabs.addTab("XML", xmlPreview.component());
-    tabs.addTab("인터페이스", interfacePreview.component());
+    tabs.addTab(EiDbBundle.message("mapper.tab.interface"), interfacePreview.component());
     tabs.addTab("DTO", dtoPreview.component());
     tabs.addChangeListener(e -> refresh());
 
@@ -148,20 +148,20 @@ public final class MapperDialog extends DialogWrapper {
     }
     for (JBCheckBox b : List.of(makeInterface, makeDto, cdata, where11, sqlComments)) b.addActionListener(e -> refresh());
     oldJoin.setEnabled(false);
-    oldJoin.setToolTipText("표 하나의 문장이라 조인이 없습니다");
+    oldJoin.setToolTipText(EiDbBundle.message("mapper.old.join.tooltip"));
 
     JPanel dtoRow = new JPanel(new BorderLayout(JBUI.scale(12), 0));
     dtoRow.add(dtoField, BorderLayout.CENTER);
     dtoRow.add(makeDto, BorderLayout.EAST);
 
     JPanel left = FormBuilder.createFormBuilder()
-        .addLabeledComponent("매퍼 인터페이스", mapperField, true)
+        .addLabeledComponent(EiDbBundle.message("mapper.interface"), mapperField, true)
         .addComponent(makeInterface)
-        .addLabeledComponent("XML 위치", xmlField, true)
+        .addLabeledComponent(EiDbBundle.message("mapper.xml.location"), xmlField, true)
         .addLabeledComponent("DTO", dtoRow, true)
-        .addLabeledComponent("만들 문장", statements(), true)
-        .addLabeledComponent("스타일", stack(oldJoin, cdata, where11, sqlComments), true)
-        .addLabeledComponentFillVertically(table + " 칼럼  " + cols.size() + "개", columnTable())
+        .addLabeledComponent(EiDbBundle.message("mapper.statements"), statements(), true)
+        .addLabeledComponent(EiDbBundle.message("mapper.style"), stack(oldJoin, cdata, where11, sqlComments), true)
+        .addLabeledComponentFillVertically(EiDbBundle.message("mapper.columns.label", table, cols.size()), columnTable())
         .getPanel();
     left.setBorder(JBUI.Borders.emptyRight(12));
     left.setPreferredSize(new Dimension(JBUI.scale(LEFT_WIDTH), JBUI.scale(HEIGHT)));
@@ -186,7 +186,7 @@ public final class MapperDialog extends DialogWrapper {
   @Override
   protected JPanel createSouthAdditionalPanel() {
     JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-    JBLabel note = new JBLabel("이미 있는 파일은 덮어쓰지 않고 끝에 덧붙입니다", AllIcons.General.Information, JBLabel.LEFT);
+    JBLabel note = new JBLabel(EiDbBundle.message("mapper.append.note"), AllIcons.General.Information, JBLabel.LEFT);
     note.setForeground(Ui.muted());
     p.add(note);
     return p;
@@ -200,17 +200,17 @@ public final class MapperDialog extends DialogWrapper {
       JBCheckBox box = new JBCheckBox(k == MapperGen.Kind.RESULT_MAP ? "resultMap " + probe.id(k) : probe.id(k), k != MapperGen.Kind.DELETE);
       box.setFont(Ui.mono());
       String hint = switch (k) {
-        case LIST -> "조건 검색";
+        case LIST -> EiDbBundle.message("mapper.hint.list");
         case ONE -> "PK";
-        case INSERT -> "등록";
-        case UPDATE -> "수정";
-        case DELETE -> "삭제";
-        case RESULT_MAP -> "칼럼 ↔ 필드";
+        case INSERT -> EiDbBundle.message("mapper.hint.insert");
+        case UPDATE -> EiDbBundle.message("mapper.hint.update");
+        case DELETE -> EiDbBundle.message("mapper.hint.delete");
+        case RESULT_MAP -> EiDbBundle.message("mapper.hint.result.map");
       };
       if (!probe.possible(k)) {
         box.setSelected(false);
         box.setEnabled(false);
-        hint = probe.hasPk() ? "바꿀 칼럼 없음" : "PK 없음";
+        hint = EiDbBundle.message(probe.hasPk() ? "mapper.hint.no.columns" : "mapper.hint.no.pk");
       }
       box.addActionListener(e -> refresh());
       kindBoxes.put(k, box);
@@ -232,7 +232,7 @@ public final class MapperDialog extends DialogWrapper {
   }
 
   private JComponent columnTable() {
-    DefaultTableModel model = new DefaultTableModel(new Object[] {"", "칼럼", "형식", "주석"}, 0) {
+    DefaultTableModel model = new DefaultTableModel(new Object[] {"", EiDbBundle.message("common.col.column"), EiDbBundle.message("common.col.type"), EiDbBundle.message("common.col.comment")}, 0) {
       @Override
       public boolean isCellEditable(int row, int column) { return false; }
     };
@@ -317,7 +317,7 @@ public final class MapperDialog extends DialogWrapper {
       String itfExisting = readQuietly(itfPath);
       String itf;
       if (!in.makeInterface()) {
-        itf = "// 자바 인터페이스는 만들지 않습니다.";
+        itf = EiDbBundle.message("mapper.preview.no.interface");
       } else if (itfExisting == null) {
         itf = g.interfaceFile(kinds);
       } else {
@@ -327,9 +327,9 @@ public final class MapperDialog extends DialogWrapper {
       boolean dtoExists = Targets.exists(dtoPath);
       String dto;
       if (!in.makeDto()) {
-        dto = "// DTO 는 만들지 않습니다.";
+        dto = EiDbBundle.message("mapper.preview.no.dto");
       } else if (dtoExists) {
-        dto = "// " + roots.rel(dtoPath) + " 이 이미 있어 만들지 않습니다.";
+        dto = EiDbBundle.message("mapper.preview.dto.exists", roots.rel(dtoPath));
       } else {
         dto = g.dtoFile();
       }
@@ -338,7 +338,7 @@ public final class MapperDialog extends DialogWrapper {
       boolean exists = tab == 0 ? xmlExisting != null : tab == 1 ? itfExisting != null : dtoExists;
       return new Shown(xml, itf, dto, path, exists, null);
     } catch (InvalidPathException e) {
-      return new Shown(null, null, null, null, false, BAD_PATH);
+      return new Shown(null, null, null, null, false, EiDbBundle.message("mapper.bad.path"));
     }
   }
 
@@ -352,7 +352,7 @@ public final class MapperDialog extends DialogWrapper {
     interfacePreview.setText(s.itf());
     dtoPreview.setText(s.dto());
     fileLabel.setText(s.path().substring(s.path().lastIndexOf('/') + 1));
-    badge.setText(s.exists() ? "있는 파일" : "새 파일");
+    badge.setText(EiDbBundle.message(s.exists() ? "mapper.badge.existing" : "mapper.badge.new"));
     badge.setForeground(s.exists() ? Ui.muted() : Ui.SUCCESS);
   }
 
@@ -368,11 +368,11 @@ public final class MapperDialog extends DialogWrapper {
 
   /** 있는 파일에는 덧붙을 블록만 보여 준다. */
   private static String addedOnly(List<MapperGen.Block> blocks, Merge.Result r) {
-    if (r.text() == null) return "// 끼울 자리(닫는 태그 · 괄호)를 찾지 못했습니다.";
+    if (r.text() == null) return EiDbBundle.message("mapper.preview.no.place");
     StringBuilder b = new StringBuilder();
-    if (!r.skipped().isEmpty()) b.append("<!-- 이미 있어 건너뜀: ").append(String.join(", ", r.skipped())).append(" -->\n");
+    if (!r.skipped().isEmpty()) b.append(EiDbBundle.message("mapper.preview.skipped", String.join(", ", r.skipped()))).append('\n');
     for (MapperGen.Block bl : blocks) if (r.added().contains(bl.id())) b.append(bl.text()).append('\n');
-    return r.added().isEmpty() ? b.append("<!-- 덧붙일 것이 없습니다 -->\n").toString() : b.toString();
+    return r.added().isEmpty() ? b.append(EiDbBundle.message("mapper.preview.nothing") + "\n").toString() : b.toString();
   }
 
   /** 미리보기용. 못 읽으면 새 파일로 보이게 null(실제 쓰기 때 다시 읽어 실패를 알린다). */
@@ -386,11 +386,11 @@ public final class MapperDialog extends DialogWrapper {
 
   @Override
   protected ValidationInfo doValidate() {
-    if (!FQN.matcher(mapperField.getText().strip()).matches()) return new ValidationInfo("매퍼 인터페이스 이름이 자바 이름 꼴이 아닙니다.", mapperField);
-    if (!xmlField.getText().strip().endsWith(".xml")) return new ValidationInfo("XML 위치는 .xml 파일이어야 합니다.", xmlField);
-    if (!validPath(xmlField.getText())) return new ValidationInfo(BAD_PATH + ".", xmlField);
-    if (!FQN.matcher(dtoField.getText().strip()).matches()) return new ValidationInfo("DTO 이름이 자바 이름 꼴이 아닙니다.", dtoField);
-    if (kinds().isEmpty()) return new ValidationInfo("만들 문장을 하나 이상 고르세요.");
+    if (!FQN.matcher(mapperField.getText().strip()).matches()) return new ValidationInfo(EiDbBundle.message("mapper.interface.invalid"), mapperField);
+    if (!xmlField.getText().strip().endsWith(".xml")) return new ValidationInfo(EiDbBundle.message("mapper.xml.invalid"), xmlField);
+    if (!validPath(xmlField.getText())) return new ValidationInfo(EiDbBundle.message("mapper.bad.path.sentence"), xmlField);
+    if (!FQN.matcher(dtoField.getText().strip()).matches()) return new ValidationInfo(EiDbBundle.message("mapper.dto.invalid"), dtoField);
+    if (kinds().isEmpty()) return new ValidationInfo(EiDbBundle.message("mapper.no.statements"));
     return null;
   }
 
@@ -411,11 +411,11 @@ public final class MapperDialog extends DialogWrapper {
       String xml = Targets.read(xmlPath);
       if (xml == null) {
         jobs.add(new Targets.Job(xmlPath, g.xmlFile(kinds), false));
-        report.add(roots.rel(xmlPath) + " 새로 만듦");
+        report.add(EiDbBundle.message("common.file.created", roots.rel(xmlPath)));
       } else {
         Merge.Result r = Merge.xml(xml, g.xmlBlocks(kinds));
         if (r.text() == null) {
-          setErrorText(roots.rel(xmlPath) + " 에서 </mapper> 를 찾지 못했습니다.", xmlField);
+          setErrorText(EiDbBundle.message("common.no.mapper.end", roots.rel(xmlPath)), xmlField);
           return;
         }
         jobs.add(new Targets.Job(xmlPath, r.text(), !r.added().isEmpty()));
@@ -426,11 +426,11 @@ public final class MapperDialog extends DialogWrapper {
         String itf = Targets.read(itfPath);
         if (itf == null) {
           jobs.add(new Targets.Job(itfPath, g.interfaceFile(kinds), false));
-          report.add(roots.rel(itfPath) + " 새로 만듦");
+          report.add(EiDbBundle.message("common.file.created", roots.rel(itfPath)));
         } else {
           Merge.Result r = Merge.java(itf, g.methods(kinds), g.interfaceImports(kinds));
           if (r.text() == null) {
-            setErrorText(roots.rel(itfPath) + " 에서 닫는 괄호를 찾지 못했습니다.", mapperField);
+            setErrorText(EiDbBundle.message("mapper.no.closing.brace", roots.rel(itfPath)), mapperField);
             return;
           }
           jobs.add(new Targets.Job(itfPath, r.text(), !r.added().isEmpty()));
@@ -439,20 +439,20 @@ public final class MapperDialog extends DialogWrapper {
       }
       if (makeDto.isSelected()) {
         String dtoPath = roots.javaFile(dtoType());
-        if (!Targets.exists(dtoPath)) report.add(roots.rel(dtoPath) + " 새로 만듦");
+        if (!Targets.exists(dtoPath)) report.add(EiDbBundle.message("common.file.created", roots.rel(dtoPath)));
         jobs.add(new Targets.Job(dtoPath, g.dtoFile(), false));
       }
-      Targets.write(project, "매퍼 뼈대 만들기", jobs);
+      Targets.write(project, EiDbBundle.message("mapper.command"), jobs);
       super.doOKAction();
       Targets.open(project, xmlPath);
       Notify.info(project, String.join("\n", report));
     } catch (IOException e) {
-      setErrorText("파일을 쓰지 못했습니다: " + e.getMessage());
+      setErrorText(EiDbBundle.message("common.write.failed", e.getMessage()));
     }
   }
 
   private static String summary(String file, Merge.Result r) {
-    String s = file + " 에 " + r.added().size() + "개 덧붙임";
-    return r.skipped().isEmpty() ? s : s + " (이미 있어 건너뜀: " + String.join(", ", r.skipped()) + ")";
+    String s = EiDbBundle.message("mapper.summary", file, r.added().size());
+    return r.skipped().isEmpty() ? s : s + EiDbBundle.message("mapper.summary.skipped", String.join(", ", r.skipped()));
   }
 }

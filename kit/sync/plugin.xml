@@ -3,7 +3,7 @@
   <name>EI Synchronize</name>
   <vendor>EI IDE</vendor>
   <description><![CDATA[
-    이클립스 Team › Synchronize Workspace 처럼 원격과 비교해 들어올 변경 · 나갈 변경 · 충돌을 한 창에서 보여 준다.
+    Shows incoming changes, outgoing changes and conflicts against the remote in one window, like Eclipse Team › Synchronize Workspace.
   ]]></description>
 
   <depends>com.intellij.modules.platform</depends>
@@ -32,19 +32,18 @@
 
   <actions>
     <!-- 커밋 창 · 변경 목록 우클릭에도 동기화 창과 같은 「Assume Unchanged」 를 둔다. -->
-    <action id="KingGura.AssumeUnchanged" class="kinggura.sync.AssumeUnchangedAction" text="Assume Unchanged">
+    <action id="KingGura.AssumeUnchanged" class="kinggura.sync.AssumeUnchangedAction">
       <add-to-group group-id="ChangesViewPopupMenu" anchor="last"/>
     </action>
     <!-- 프로젝트 트리에서 고른 파일에도 모른 척하기 · 풀기. 모른 척 중인 파일은 변경 목록에 안 뜨므로 풀기는 여기와 동기화 창에 둔다. -->
     <group id="KingGura.AssumeGroup">
       <separator/>
       <reference ref="KingGura.AssumeUnchanged"/>
-      <action id="KingGura.AssumeUnchanged.Undo" class="kinggura.sync.AssumeUnchangedAction$Undo" text="No Assume Unchanged"/>
+      <action id="KingGura.AssumeUnchanged.Undo" class="kinggura.sync.AssumeUnchangedAction$Undo"/>
       <separator/>
       <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
     </group>
-    <action id="KingGura.SynchronizeWorkspace" class="kinggura.sync.SyncToolWindowFactory$OpenAction"
-            text="작업 공간 동기화" icon="AllIcons.Actions.Refresh">
+    <action id="KingGura.SynchronizeWorkspace" class="kinggura.sync.SyncToolWindowFactory$OpenAction" icon="AllIcons.Actions.Refresh">
       <add-to-group group-id="Git.MainMenu" anchor="first"/>
       <add-to-group group-id="Git.ContextMenu" anchor="first"/>
     </action>

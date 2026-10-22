@@ -11,6 +11,7 @@ import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.platform.lsp.api.LspServerManager;
 import com.intellij.platform.lsp.api.LspServerSupportProvider;
+import local.bootservers.BootServersBundle;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -51,15 +52,15 @@ public final class WebLspSupport implements LspServerSupportProvider {
         Path base = baseDir();
         Path node = WebTools.findNode(base, System.getenv("PATH"), SystemInfo.isWindows);
         if (node == null) {
-            notifyMissing(project, "Node.js 가 없어 JavaScript · TypeScript · Vue 언어 지원을 켤 수 없습니다.",
+            notifyMissing(project, BootServersBundle.message("web.node.missing"),
                     SystemInfo.isWindows && NodeDist.arch(System.getProperty("os.arch")) != null
-                            ? NotificationAction.createSimpleExpiring("Node.js 받기", () -> WebInstaller.installNode(project))
+                            ? NotificationAction.createSimpleExpiring(BootServersBundle.message("web.node.download"), () -> WebInstaller.installNode(project))
                             : null);
             return null;
         }
         if (!WebTools.serversInstalled(base)) {
-            notifyMissing(project, "JavaScript · TypeScript · Vue 언어 서버가 설치되어 있지 않습니다.",
-                    NotificationAction.createSimpleExpiring("언어 서버 받기", () -> WebInstaller.installServers(project, node)));
+            notifyMissing(project, BootServersBundle.message("web.servers.missing"),
+                    NotificationAction.createSimpleExpiring(BootServersBundle.message("web.servers.download"), () -> WebInstaller.installServers(project, node)));
             return null;
         }
         Path root = projectRoot(project);
@@ -95,12 +96,11 @@ public final class WebLspSupport implements LspServerSupportProvider {
         }
         project.putUserData(NOTICE_SHOWN, Boolean.TRUE);
         Notification notification = NotificationGroupManager.getInstance().getNotificationGroup(NOTIFICATION_GROUP)
-                .createNotification("웹 언어 지원", content, NotificationType.WARNING);
+                .createNotification(BootServersBundle.message("web.title"), content, NotificationType.WARNING);
         if (action != null) {
             notification.addAction(action);
         } else {
-            notification.setContent(content + "<br>Node.js 를 설치해 PATH 에 넣거나 " + baseDir().resolve(WebTools.NODE_DIR)
-                    + " 에 풀어 두세요.");
+            notification.setContent(content + "<br>" + BootServersBundle.message("web.node.manual", baseDir().resolve(WebTools.NODE_DIR)));
         }
         notification.notify(project);
     }

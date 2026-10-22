@@ -13,6 +13,7 @@ import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
 import ei.db.DbConfig;
 import ei.db.DbSessions;
+import ei.db.EiDbBundle;
 import ei.db.Meta;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -45,7 +46,7 @@ final class ColumnSearch extends DialogWrapper {
 
   record Hit(String table, String column, String type, String comment, String tableComment) {}
 
-  private static final String[] HEADERS = {"표", "칼럼", "형식", "주석"};
+  private static final String[] HEADERS = {EiDbBundle.message("common.col.table"), EiDbBundle.message("common.col.column"), EiDbBundle.message("common.col.type"), EiDbBundle.message("common.col.comment")};
   private static final int WIDTH = 760;
   private static final int HEIGHT = 420;
 
@@ -71,14 +72,14 @@ final class ColumnSearch extends DialogWrapper {
     this.schema = schema;
     this.open = open;
     setModal(false);
-    setTitle("표 · 칼럼 찾기 · " + c.name + " · " + schema);
-    setCancelButtonText("닫기");
+    setTitle(EiDbBundle.message("columnsearch.title", c.name, schema));
+    setCancelButtonText(EiDbBundle.message("common.close"));
     init();
   }
 
   @Override
   protected @Nullable JComponent createCenterPanel() {
-    field.getTextEditor().getEmptyText().setText("칼럼 · 표 이름 또는 주석, Enter 로 찾기");
+    field.getTextEditor().getEmptyText().setText(EiDbBundle.message("columnsearch.hint"));
     field.getTextEditor().registerKeyboardAction(e -> search(), KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), JComponent.WHEN_FOCUSED);
     table.setShowGrid(false);
     table.setAutoResizeMode(JBTable.AUTO_RESIZE_ALL_COLUMNS);
@@ -97,7 +98,7 @@ final class ColumnSearch extends DialogWrapper {
     JBScrollPane scroll = new JBScrollPane(table);
     scroll.setPreferredSize(new Dimension(JBUI.scale(WIDTH), JBUI.scale(HEIGHT)));
     panel.add(scroll, BorderLayout.CENTER);
-    status.setText("두 번 누르면 탐색기에서 그 표를 고르고, 탐색기에 없으면 SELECT 문을 콘솔에 엽니다.");
+    status.setText(EiDbBundle.message("columnsearch.status.help"));
     panel.add(status, BorderLayout.SOUTH);
     return panel;
   }
@@ -115,11 +116,11 @@ final class ColumnSearch extends DialogWrapper {
   private void search() {
     String q = field.getText().trim();
     if (q.isEmpty()) {
-      status.setText("찾을 글자를 넣으세요.");
+      status.setText(EiDbBundle.message("columnsearch.status.empty"));
       return;
     }
     int gen = generation.incrementAndGet();
-    status.setText("찾는 중…");
+    status.setText(EiDbBundle.message("common.searching"));
     DbSessions sessions = DbSessions.get(project);
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       try {
@@ -127,7 +128,7 @@ final class ColumnSearch extends DialogWrapper {
         later(gen, () -> showHits(hits));
       } catch (Exception e) {
         String msg = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
-        later(gen, () -> status.setText("찾지 못했습니다: " + msg));
+        later(gen, () -> status.setText(EiDbBundle.message("columnsearch.status.failed", msg)));
       }
     });
   }
@@ -141,8 +142,8 @@ final class ColumnSearch extends DialogWrapper {
   private void showHits(List<Hit> hits) {
     boolean truncated = hits.size() > ColumnSearchSql.MAX_HITS;
     model.set(truncated ? hits.subList(0, ColumnSearchSql.MAX_HITS) : hits);
-    if (hits.isEmpty()) status.setText("찾은 것이 없습니다.");
-    else status.setText(truncated ? ColumnSearchSql.MAX_HITS + "건까지만 보입니다. 검색어를 좁히세요." : hits.size() + "건");
+    if (hits.isEmpty()) status.setText(EiDbBundle.message("common.nothing.found"));
+    else status.setText(truncated ? EiDbBundle.message("columnsearch.status.truncated", ColumnSearchSql.MAX_HITS) : EiDbBundle.message("common.rows", hits.size()));
   }
 
   /** MAX_HITS + 1 건까지 읽어 넘침을 알린다. */

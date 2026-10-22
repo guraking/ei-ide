@@ -18,6 +18,7 @@ import com.intellij.ui.content.ContentFactory;
 import com.intellij.util.ui.JBUI;
 import ei.db.DbConfig;
 import ei.db.DbSessions;
+import ei.db.EiDbBundle;
 import ei.db.Meta;
 import ei.db.Notify;
 import ei.db.SqlRunner;
@@ -49,11 +50,10 @@ public final class ErdView {
   private static final String STRIPE_TITLE = "ERD";
   private static final int MAX_TABLES = 60;
   private static final String[] TABLE_TYPES = {"TABLE"};
-  private static final String LEGEND = "PK 주황 · FK 파랑 · 표 더블클릭 → 데이터 보기 · 칼럼에 마우스 → 형식 · 주석 · 휠 → 확대 · 빈 곳 끌기 → 이동";
 
   /** tables 가 null 이면 스키마의 모든 표. */
   public static void open(Project project, DbConfig c, String schema, List<String> tables) {
-    new Task.Backgroundable(project, "ERD · " + schema + " 읽는 중", true) {
+    new Task.Backgroundable(project, EiDbBundle.message("erd.progress", schema), true) {
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
         try {
@@ -80,19 +80,19 @@ public final class ErdView {
             fks.addAll(Meta.importedKeys(conn, c, schema, n));
           }
           if (cards.isEmpty()) {
-            Notify.error(project, schema + " 에 그릴 표가 없습니다.");
+            Notify.error(project, EiDbBundle.message("erd.no.tables", schema));
             return;
           }
           int shown = names.size();
           ApplicationManager.getApplication().invokeLater(() -> {
             if (project.isDisposed()) return;
             show(project, c, schema, cards, fks);
-            if (total > shown) Notify.info(project, "표가 " + total + "개라 처음 " + shown + "개만 그렸습니다.");
+            if (total > shown) Notify.info(project, EiDbBundle.message("erd.truncated", total, shown));
           });
         } catch (ProcessCanceledException e) {
           throw e;
         } catch (Exception e) {
-          Notify.error(project, "ERD 를 읽지 못했습니다: " + e.getMessage());
+          Notify.error(project, EiDbBundle.message("erd.read.failed", e.getMessage()));
         }
       }
     }.queue();
@@ -101,26 +101,26 @@ public final class ErdView {
   private static void show(Project project, DbConfig c, String schema, List<ErdCanvas.Card> cards, List<Meta.ForeignKey> fks) {
     ErdCanvas canvas = new ErdCanvas(cards, fks, table -> SqlRunner.run(project, c, "SELECT * FROM " + Names.sql(c.kind, schema, table), List.of()));
 
-    JButton relayout = new JButton("자동 배치");
+    JButton relayout = new JButton(EiDbBundle.message("erd.relayout"));
     relayout.addActionListener(e -> canvas.autoLayout());
-    JToggleButton allCols = new JToggleButton("전체", true);
-    JToggleButton keyCols = new JToggleButton("키만");
+    JToggleButton allCols = new JToggleButton(EiDbBundle.message("erd.all.columns"), true);
+    JToggleButton keyCols = new JToggleButton(EiDbBundle.message("erd.key.columns"));
     ButtonGroup group = new ButtonGroup();
     group.add(allCols);
     group.add(keyCols);
     allCols.addActionListener(e -> canvas.setKeysOnly(false));
     keyCols.addActionListener(e -> canvas.setKeysOnly(true));
-    JButton png = new JButton("PNG 저장");
+    JButton png = new JButton(EiDbBundle.message("erd.save.png"));
     png.addActionListener(e -> savePng(project, schema, canvas));
 
     JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(6), JBUI.scale(4)));
     toolbar.add(relayout);
-    toolbar.add(new JBLabel("칼럼:"));
+    toolbar.add(new JBLabel(EiDbBundle.message("erd.columns.label")));
     toolbar.add(allCols);
     toolbar.add(keyCols);
     toolbar.add(png);
 
-    JBLabel legend = new JBLabel(LEGEND);
+    JBLabel legend = new JBLabel(EiDbBundle.message("erd.legend"));
     legend.setForeground(Ui.muted());
     legend.setBorder(JBUI.Borders.empty(4, 8));
 
@@ -143,14 +143,14 @@ public final class ErdView {
 
   private static void savePng(Project project, String schema, ErdCanvas canvas) {
     VirtualFileWrapper target = FileChooserFactory.getInstance()
-        .createSaveFileDialog(new FileSaverDescriptor("PNG 저장", "ERD 를 그림 파일로 저장합니다", "png"), project)
+        .createSaveFileDialog(new FileSaverDescriptor(EiDbBundle.message("erd.save.png"), EiDbBundle.message("erd.save.png.description"), "png"), project)
         .save("erd-" + schema.toLowerCase(java.util.Locale.ROOT) + ".png");
     if (target == null) return;
     try {
-      if (!ImageIO.write(canvas.snapshot(), "png", target.getFile())) throw new IOException("PNG 쓰기 도구가 없습니다");
-      Notify.info(project, target.getFile().getPath() + " 에 저장했습니다.");
+      if (!ImageIO.write(canvas.snapshot(), "png", target.getFile())) throw new IOException(EiDbBundle.message("erd.no.png.writer"));
+      Notify.info(project, EiDbBundle.message("common.saved.to", target.getFile().getPath()));
     } catch (IOException e) {
-      Notify.error(project, "PNG 를 저장하지 못했습니다: " + e.getMessage());
+      Notify.error(project, EiDbBundle.message("erd.save.failed", e.getMessage()));
     }
   }
 }

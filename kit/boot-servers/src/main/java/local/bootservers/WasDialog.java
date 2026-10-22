@@ -47,7 +47,7 @@ final class WasDialog extends DialogWrapper {
     private final JBLabel shutdownLabel = new JBLabel();
     private final JBTextField debugPort = new JBTextField();
     private final JBTextField vmOptions = new JBTextField();
-    private final JBCheckBox reloadable = new JBCheckBox("저장해서 빌드되면 바로 반영 (바뀐 앱만 다시 올림)");
+    private final JBCheckBox reloadable = new JBCheckBox(BootServersBundle.message("was.dialog.reloadable"));
     // JEUS 전용 칸. 다른 종류에서는 보이되 꺼 둔다.
     private final JBTextField jeusDomain = new JBTextField();
     private final JBTextField jeusServer = new JBTextField();
@@ -55,10 +55,8 @@ final class WasDialog extends DialogWrapper {
     private final JBTextField startCommand = new JBTextField();
     private final JBTextField stopCommand = new JBTextField();
     private final JBTextField deployCommand = new JBTextField();
-    private final JBCheckBox forgetPassword = new JBCheckBox("기억한 비밀번호를 지우고 다음 시작 때 다시 묻기");
-    private final JBLabel jeusHint = new JBLabel("<html>명령을 비워 두면 JEUS 8 기본 명령을 씁니다.<br>"
-            + "디버그: JEUS 는 JVM 옵션을 도메인 설정에서 읽으므로 서버 JVM 옵션에 다음을 넣으세요.<br>"
-            + "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=(디버그 포트)</html>");
+    private final JBCheckBox forgetPassword = new JBCheckBox(BootServersBundle.message("was.dialog.forget.password"));
+    private final JBLabel jeusHint = new JBLabel(BootServersBundle.message("was.dialog.jeus.hint"));
     private final Project project;
     private final List<Row> rows = new ArrayList<>();
 
@@ -79,15 +77,15 @@ final class WasDialog extends DialogWrapper {
         super(project);
         this.project = project;
         this.server = existing == null ? new WasSettings.Server() : existing.copy();
-        setTitle(existing == null ? "WAS 추가" : "WAS 편집");
-        setOKButtonText(existing == null ? "추가" : "저장");
+        setTitle(existing == null ? BootServersBundle.message("was.dialog.title.add") : BootServersBundle.message("was.dialog.title.edit"));
+        setOKButtonText(existing == null ? BootServersBundle.message("was.dialog.ok.add") : BootServersBundle.message("common.save"));
 
-        kind.setRenderer(SimpleListCellRenderer.create("", k -> k.supported ? k.label : k.label + " (준비 중)"));
+        kind.setRenderer(SimpleListCellRenderer.create("", k -> k.supported ? k.label : BootServersBundle.message("was.dialog.kind.unsupported", k.label)));
         kind.setSelectedItem(server.kind());
         name.setText(server.name.isEmpty() ? defaultName(server.kind()) : server.name);
         kind.addActionListener(e -> kindChanged());
         home.setText(server.home);
-        home.addBrowseFolderListener(project, FileChooserDescriptorFactory.createSingleFolderDescriptor().withTitle("WAS 설치 폴더"));
+        home.addBrowseFolderListener(project, FileChooserDescriptorFactory.createSingleFolderDescriptor().withTitle(BootServersBundle.message("was.dialog.home.chooser")));
         home.getTextField().getDocument().addDocumentListener(new DocumentAdapter() {
             @Override
             protected void textChanged(@NotNull DocumentEvent e) {
@@ -109,7 +107,7 @@ final class WasDialog extends DialogWrapper {
         stopCommand.getEmptyText().setText(JeusBase.DEFAULT_STOP);
         deployCommand.setText(server.deployCommand);
         deployCommand.getEmptyText().setText(JeusBase.DEFAULT_DEPLOY);
-        String placeholders = "자리 표시: {home} {domain} {server} {user} {password} {passwordFile} {host} {port} {vmoptions}, 배포는 {path} {ctx} {name} 도";
+        String placeholders = BootServersBundle.message("was.dialog.placeholders");
         for (JBTextField f : List.of(startCommand, stopCommand, deployCommand)) {
             f.setToolTipText(placeholders);
         }
@@ -141,7 +139,7 @@ final class WasDialog extends DialogWrapper {
     }
 
     private static String defaultName(WasSettings.Kind k) {
-        return k.label.replace(" / ", " ") + " 로컬";
+        return BootServersBundle.message("was.dialog.default.name", k.label.replace(" / ", " "));
     }
 
     // 종류별 기본 HTTP · 종료(관리) 포트. 사용자가 고친 값은 종류를 바꿔도 그대로 둔다.
@@ -186,7 +184,7 @@ final class WasDialog extends DialogWrapper {
 
     private void updateFound() {
         WasSettings.Kind k = selectedKind();
-        shutdownLabel.setText(usesAdminPort(k) ? "관리 포트" : usesSecondPort(k) ? "종료 포트" : "종료 포트 (쓰지 않음)");
+        shutdownLabel.setText(usesAdminPort(k) ? BootServersBundle.message("was.dialog.port.admin") : usesSecondPort(k) ? BootServersBundle.message("was.dialog.port.shutdown") : BootServersBundle.message("was.dialog.port.shutdown.unused"));
         shutdownPort.setEnabled(usesSecondPort(k));
         boolean jeus = k == WasSettings.Kind.JEUS;
         for (JComponent c : List.of(jeusDomain, jeusServer, jeusUser, startCommand, stopCommand, deployCommand, forgetPassword, jeusHint)) {
@@ -194,12 +192,12 @@ final class WasDialog extends DialogWrapper {
         }
         String version = versionOf(k, home.getText().strip());
         String hint = switch (k) {
-            case WILDFLY -> "jboss-modules.jar 가 있는 폴더";
-            case WEBLOGIC -> "개발 모드 도메인 폴더, 예: user_projects/domains/base_domain";
-            case JEUS -> "bin/jeusadmin · lib/system/jeus.jar 가 있는 폴더";
-            default -> "bin · lib 가 있는 폴더";
+            case WILDFLY -> BootServersBundle.message("was.dialog.hint.wildfly");
+            case WEBLOGIC -> BootServersBundle.message("was.dialog.hint.weblogic");
+            case JEUS -> BootServersBundle.message("was.dialog.hint.jeus");
+            default -> BootServersBundle.message("was.dialog.hint.tomcat");
         };
-        found.setText(version == null ? k.label + " 폴더를 고르세요 (" + hint + ")" : "✓ " + version + " 을(를) 찾았습니다");
+        found.setText(version == null ? BootServersBundle.message("was.dialog.choose.home", k.label, hint) : BootServersBundle.message("was.dialog.found", version));
         found.setForeground(version == null ? JBColor.GRAY : new JBColor(0x3E9C46, 0x5FB865));
     }
 
@@ -221,25 +219,25 @@ final class WasDialog extends DialogWrapper {
         table.getColumnModel().getColumn(0).setMaxWidth(JBUI.scale(50));
         table.setVisibleRowCount(6);
         JComponent panel = FormBuilder.createFormBuilder()
-                .addLabeledComponent("종류", kind)
-                .addLabeledComponent("이름", name)
-                .addLabeledComponent("설치 · 도메인 폴더", home)
+                .addLabeledComponent(BootServersBundle.message("was.dialog.kind"), kind)
+                .addLabeledComponent(BootServersBundle.message("servers.boot.name"), name)
+                .addLabeledComponent(BootServersBundle.message("was.dialog.home"), home)
                 .addComponentToRightColumn(found)
-                .addLabeledComponent("HTTP 포트", httpPort)
+                .addLabeledComponent(BootServersBundle.message("was.dialog.port.http"), httpPort)
                 .addLabeledComponent(shutdownLabel, shutdownPort)
-                .addLabeledComponent("디버그 포트", debugPort)
-                .addLabeledComponent("VM 옵션", vmOptions)
+                .addLabeledComponent(BootServersBundle.message("was.dialog.port.debug"), debugPort)
+                .addLabeledComponent(BootServersBundle.message("servers.boot.vm"), vmOptions)
                 .addComponent(reloadable)
                 .addSeparator()
-                .addLabeledComponent("JEUS 도메인", jeusDomain)
-                .addLabeledComponent("JEUS 서버", jeusServer)
-                .addLabeledComponent("JEUS 관리자 계정", jeusUser)
+                .addLabeledComponent(BootServersBundle.message("was.dialog.jeus.domain"), jeusDomain)
+                .addLabeledComponent(BootServersBundle.message("was.dialog.jeus.server"), jeusServer)
+                .addLabeledComponent(BootServersBundle.message("was.dialog.jeus.user"), jeusUser)
                 .addComponentToRightColumn(forgetPassword)
-                .addLabeledComponent("시작 명령", startCommand)
-                .addLabeledComponent("중지 명령", stopCommand)
-                .addLabeledComponent("배포 명령", deployCommand)
+                .addLabeledComponent(BootServersBundle.message("was.dialog.command.start"), startCommand)
+                .addLabeledComponent(BootServersBundle.message("was.dialog.command.stop"), stopCommand)
+                .addLabeledComponent(BootServersBundle.message("was.dialog.command.deploy"), deployCommand)
                 .addComponentToRightColumn(jeusHint)
-                .addLabeledComponentFillVertically("올릴 프로젝트", ScrollPaneFactory.createScrollPane(table))
+                .addLabeledComponentFillVertically(BootServersBundle.message("was.dialog.deployments"), ScrollPaneFactory.createScrollPane(table))
                 .getPanel();
         panel.setPreferredSize(JBUI.size(720, 760));
         return panel;
@@ -248,18 +246,18 @@ final class WasDialog extends DialogWrapper {
     @Override
     protected @Nullable ValidationInfo doValidate() {
         if (!selectedKind().supported) {
-            return new ValidationInfo(selectedKind().label + " 실행은 아직 준비 중입니다.", kind);
+            return new ValidationInfo(BootServersBundle.message("was.not.supported", selectedKind().label), kind);
         }
         if (name.getText().isBlank()) {
-            return new ValidationInfo("이름을 적으세요.", name);
+            return new ValidationInfo(BootServersBundle.message("was.dialog.name.required"), name);
         }
         if (versionOf(selectedKind(), home.getText().strip()) == null) {
-            return new ValidationInfo(selectedKind().label + " 설치 폴더가 아닙니다.", home.getTextField());
+            return new ValidationInfo(BootServersBundle.message("was.dialog.not.home", selectedKind().label), home.getTextField());
         }
         if (selectedKind() == WasSettings.Kind.JEUS) {
             for (JBTextField f : List.of(jeusDomain, jeusServer, jeusUser)) {
                 if (f.getText().isBlank()) {
-                    return new ValidationInfo("JEUS 도메인 · 서버 · 관리자 계정을 적으세요.", f);
+                    return new ValidationInfo(BootServersBundle.message("was.dialog.jeus.required"), f);
                 }
             }
         }
@@ -267,10 +265,10 @@ final class WasDialog extends DialogWrapper {
         for (JBTextField f : usesSecondPort(selectedKind()) ? List.of(httpPort, shutdownPort, debugPort) : List.of(httpPort, debugPort)) {
             Integer p = port(f);
             if (p == null) {
-                return new ValidationInfo("포트는 1 ~ 65535 사이 숫자여야 합니다.", f);
+                return new ValidationInfo(BootServersBundle.message("servers.boot.port.invalid"), f);
             }
             if (!ports.add(p)) {
-                return new ValidationInfo("세 포트는 서로 달라야 합니다.", f);
+                return new ValidationInfo(BootServersBundle.message("was.dialog.ports.distinct"), f);
             }
         }
         Set<String> paths = new HashSet<>();
@@ -279,10 +277,10 @@ final class WasDialog extends DialogWrapper {
                 continue;
             }
             if (!r.contextPath.startsWith("/") || r.contextPath.contains(" ")) {
-                return new ValidationInfo(r.module + " 의 컨텍스트 경로는 / 로 시작하고 띄어쓰기가 없어야 합니다.");
+                return new ValidationInfo(BootServersBundle.message("was.dialog.context.invalid", r.module));
             }
             if (!paths.add(r.contextPath.replaceAll("/+$", ""))) {
-                return new ValidationInfo("컨텍스트 경로 " + r.contextPath + " 가 두 번 쓰였습니다.");
+                return new ValidationInfo(BootServersBundle.message("was.dialog.context.duplicate", r.contextPath));
             }
         }
         return null;
@@ -328,7 +326,7 @@ final class WasDialog extends DialogWrapper {
     }
 
     private final class DeployModel extends AbstractTableModel {
-        private final String[] columns = {"올림", "프로젝트", "컨텍스트 경로"};
+        private final String[] columns = {BootServersBundle.message("was.dialog.column.deploy"), BootServersBundle.message("was.dialog.column.project"), BootServersBundle.message("was.dialog.column.context")};
 
         @Override
         public int getRowCount() {

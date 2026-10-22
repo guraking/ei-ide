@@ -3,14 +3,16 @@
   <name>EI Database</name>
   <vendor>EI IDE</vendor>
   <description><![CDATA[
-    Oracle · MySQL · PostgreSQL 접속, SQL 콘솔, 결과 표, MyBatis 쿼리 바로 실행, SQL 로그 변환, 매퍼 · DTO 생성, ERD.
+    Oracle, MySQL and PostgreSQL connections, SQL console, result tables, direct MyBatis query runs, SQL log conversion, mapper and DTO generation, ERD.
   ]]></description>
+
+  <resource-bundle>messages.EiDbBundle</resource-bundle>
 
   <depends>com.intellij.modules.platform</depends>
   <depends>com.intellij.java</depends>
 
   <extensions defaultExtensionNs="com.intellij">
-    <notificationGroup id="EI Database" displayType="BALLOON"/>
+    <notificationGroup id="EI Database" displayType="BALLOON" key="notification.group.ei.database"/>
     <!-- 탐색기 -->
     <toolWindow id="EI Database" anchor="right" icon="AllIcons.Nodes.DataTables" factoryClass="ei.db.ui.DbToolWindowFactory"/>
     <!-- SQL 콘솔 · 결과 -->
@@ -31,10 +33,10 @@
     <externalAnnotator language="XML" implementationClass="ei.db.mybatis.ParamFieldAnnotator"/>
     <!-- MyBatis: 컨트롤러 · 서비스 메서드 → 서비스 → 매퍼 → XML 계층 이동, 매퍼 인터페이스 ↔ XML 빠진 짝 -->
     <codeInsight.lineMarkerProvider language="JAVA" implementationClass="ei.db.mybatis.LayerNav"/>
-    <localInspection language="XML" shortName="EiMapperXmlMissingMethod" displayName="매퍼 XML 문장에 인터페이스 메서드가 없음"
+    <localInspection language="XML" shortName="EiMapperXmlMissingMethod" bundle="messages.EiDbBundle" key="inspection.EiMapperXmlMissingMethod.display.name"
                      groupName="MyBatis" enabledByDefault="true" level="WEAK WARNING"
                      implementationClass="ei.db.mybatis.MapperPairInspection$Xml"/>
-    <localInspection language="JAVA" shortName="EiMapperMissingStatement" displayName="매퍼 인터페이스 메서드에 XML 문장이 없음"
+    <localInspection language="JAVA" shortName="EiMapperMissingStatement" bundle="messages.EiDbBundle" key="inspection.EiMapperMissingStatement.display.name"
                      groupName="MyBatis" enabledByDefault="true" level="WEAK WARNING"
                      implementationClass="ei.db.mybatis.MapperPairInspection$Java"/>
     <!-- MyBatis: 매퍼 필드를 가진 클래스에서 서비스 메서드 자동 완성 -->
@@ -43,91 +45,74 @@
   </extensions>
 
   <actions>
-    <action id="ei.db.console.Run" class="ei.db.console.ConsoleRun$Statement" text="실행"
-            description="선택 영역 또는 커서가 있는 문장을 실행합니다" icon="AllIcons.Actions.Execute">
+    <action id="ei.db.console.Run" class="ei.db.console.ConsoleRun$Statement" icon="AllIcons.Actions.Execute">
       <keyboard-shortcut keymap="$default" first-keystroke="control ENTER"/>
       <add-to-group group-id="EditorPopupMenu" anchor="first"/>
     </action>
-    <action id="ei.db.console.RunAll" class="ei.db.console.ConsoleRun$All" text="전체 실행"
-            description="콘솔의 모든 문장을 차례로 실행합니다" icon="AllIcons.Actions.RunAll">
+    <action id="ei.db.console.RunAll" class="ei.db.console.ConsoleRun$All" icon="AllIcons.Actions.RunAll">
       <keyboard-shortcut keymap="$default" first-keystroke="control shift ENTER"/>
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="ei.db.console.Run"/>
     </action>
-    <action id="ei.db.console.Format" class="ei.db.console.ConsoleRun$Format" text="SQL 정렬"
-            description="선택 영역(없으면 콘솔 전체)의 SQL 을 줄 맞춰 정렬합니다" icon="AllIcons.Actions.ReformatCode">
+    <action id="ei.db.console.Format" class="ei.db.console.ConsoleRun$Format" icon="AllIcons.Actions.ReformatCode">
       <keyboard-shortcut keymap="$default" first-keystroke="control shift F"/>
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="ei.db.console.RunAll"/>
     </action>
-    <action id="ei.db.console.Upper" class="ei.db.console.ConsoleRun$Upper" text="대문자로"
-            description="선택 영역(없으면 콘솔 전체)을 대문자로 바꿉니다. 문자열 · 주석은 그대로 둡니다">
+    <action id="ei.db.console.Upper" class="ei.db.console.ConsoleRun$Upper">
       <keyboard-shortcut keymap="$default" first-keystroke="control shift X"/>
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="ei.db.console.Format"/>
     </action>
-    <action id="ei.db.console.Lower" class="ei.db.console.ConsoleRun$Lower" text="소문자로"
-            description="선택 영역(없으면 콘솔 전체)을 소문자로 바꿉니다. 문자열 · 주석은 그대로 둡니다">
+    <action id="ei.db.console.Lower" class="ei.db.console.ConsoleRun$Lower">
       <keyboard-shortcut keymap="$default" first-keystroke="control shift Y"/>
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="ei.db.console.Upper"/>
     </action>
-    <action id="ei.db.console.Explain" class="ei.db.console.ConsoleRun$Explain" text="실행 계획"
-            description="선택 영역 또는 커서가 있는 문장의 실행 계획을 봅니다. 문장은 실행하지 않습니다" icon="AllIcons.Actions.Preview">
+    <action id="ei.db.console.Explain" class="ei.db.console.ConsoleRun$Explain" icon="AllIcons.Actions.Preview">
       <keyboard-shortcut keymap="$default" first-keystroke="control shift E"/>
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="ei.db.console.RunAll"/>
     </action>
-    <action id="EiDb.MyBatis.Run" class="ei.db.mybatis.RunStatementAction" text="MyBatis 쿼리 실행" icon="AllIcons.Actions.Execute">
+    <action id="EiDb.MyBatis.Run" class="ei.db.mybatis.RunStatementAction" icon="AllIcons.Actions.Execute">
       <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt ENTER"/>
       <add-to-group group-id="EditorPopupMenu" anchor="first"/>
     </action>
-    <action id="EiDb.MyBatis.LayerCode" class="ei.db.mybatis.LayerCodeAction" text="계층 코드 만들기…"
-            description="이 매퍼 문장의 컨트롤러 · 서비스 · 매퍼 메서드 코드를 만듭니다" icon="AllIcons.Actions.Lightning">
+    <action id="EiDb.MyBatis.LayerCode" class="ei.db.mybatis.LayerCodeAction" icon="AllIcons.Actions.Lightning">
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EiDb.MyBatis.Run"/>
     </action>
-    <action id="EiDb.MyBatis.ServiceCall" class="ei.db.mybatis.ServiceCallAction" text="호출 코드 복사"
-            description="이 매퍼 문장을 부르는 서비스 쪽 코드(매개변수 준비 + 호출 줄)를 클립보드에 복사합니다" icon="AllIcons.Actions.Copy">
+    <action id="EiDb.MyBatis.ServiceCall" class="ei.db.mybatis.ServiceCallAction" icon="AllIcons.Actions.Copy">
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EiDb.MyBatis.LayerCode"/>
     </action>
-    <action id="EiDb.MyBatis.ColumnRename" class="ei.db.mybatis.ColumnRenameAction" text="칼럼 이름 바꾸기…"
-            description="모든 매퍼 XML 의 칼럼 이름을 미리보기로 골라 바꾸고, 짝인 DTO 필드 · getter · setter 도 바꿉니다">
+    <action id="EiDb.MyBatis.ColumnRename" class="ei.db.mybatis.ColumnRenameAction">
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EiDb.MyBatis.ServiceCall"/>
       <add-to-group group-id="KG.SourceMenu" anchor="last"/>
     </action>
-    <action id="EiDb.MyBatis.DynamicWhere" class="ei.db.mybatis.DynamicWhereAction" text="동적 조건 만들기…"
-            description="DTO 필드로 이 문장의 &lt;where&gt; · &lt;if&gt; 조건을 만들어 넣습니다">
+    <action id="EiDb.MyBatis.DynamicWhere" class="ei.db.mybatis.DynamicWhereAction">
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EiDb.MyBatis.ColumnRename"/>
     </action>
-    <action id="EiDb.MyBatis.Paging" class="ei.db.mybatis.PagingAction" text="페이징 쿼리 만들기"
-            description="이 select 아래에 Oracle ROWNUM 페이징 문장과 건수 문장을 더합니다">
+    <action id="EiDb.MyBatis.Paging" class="ei.db.mybatis.PagingAction">
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EiDb.MyBatis.DynamicWhere"/>
     </action>
-    <action id="EiDb.MyBatis.StringSql" class="ei.db.mybatis.StringSqlAction" text="문자열 SQL 정리…"
-            description="+ 로 이은 문자열 · StringBuilder · += 로 만든 SQL 을 정리하고 매퍼 XML 문장으로 보여 줍니다" icon="AllIcons.Actions.ReformatCode">
+    <action id="EiDb.MyBatis.StringSql" class="ei.db.mybatis.StringSqlAction" icon="AllIcons.Actions.ReformatCode">
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EiDb.MyBatis.Paging"/>
     </action>
     <group id="EiDb.MyBatis.LogGroup">
-      <action id="EiDb.MyBatis.LogRun" class="ei.db.mybatis.LogActions$Run" text="데이터베이스 콘솔에서 실행"/>
-      <action id="EiDb.MyBatis.LogSend" class="ei.db.mybatis.LogActions$Send" text="쿼리 콘솔로 보내기"/>
+      <action id="EiDb.MyBatis.LogRun" class="ei.db.mybatis.LogActions$Run"/>
+      <action id="EiDb.MyBatis.LogSend" class="ei.db.mybatis.LogActions$Send"/>
       <separator/>
       <add-to-group group-id="ConsoleView.PopupMenu" anchor="first"/>
     </group>
-    <action id="ei.db.console.ResultCompare" class="ei.db.console.ResultCompare$OpenAction" text="다른 결과와 비교…"
-            description="이 결과와 다른 결과 탭을 기준 칼럼으로 맞춰 비교합니다" icon="AllIcons.Actions.Diff">
+    <action id="ei.db.console.ResultCompare" class="ei.db.console.ResultCompare$OpenAction" icon="AllIcons.Actions.Diff">
       <add-to-group group-id="ToolWindowContextMenu" anchor="last"/>
     </action>
-    <action id="ei.db.gen.Feature" class="ei.db.gen.FeatureAction" text="기능 한 벌 만들기…"
-            description="데이터베이스 탐색기에서 고른 표로 DTO · 매퍼 XML · 매퍼 인터페이스 · 서비스 · 컨트롤러를 한 번에 만듭니다">
+    <action id="ei.db.gen.Feature" class="ei.db.gen.FeatureAction">
       <add-to-group group-id="KG.SourceMenu" anchor="last"/>
     </action>
-    <action id="ei.db.gen.JsonDto" class="ei.db.gen.JsonDtoAction" text="JSON 으로 DTO 만들기…"
-            description="붙여 넣은 JSON 으로 DTO 클래스(중첩 객체는 안쪽 static 클래스)를 만듭니다">
+    <action id="ei.db.gen.JsonDto" class="ei.db.gen.JsonDtoAction">
       <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
       <add-to-group group-id="KG.SourceMenu" anchor="last"/>
     </action>
-    <action id="ei.db.gen.Validation" class="ei.db.gen.ValidationAction" text="입력 검증 붙이기…"
-            description="커서가 있는 클래스의 필드에 표 칼럼 메타로 @NotBlank · @NotNull · @Size · @Digits 를 붙입니다">
+    <action id="ei.db.gen.Validation" class="ei.db.gen.ValidationAction">
       <add-to-group group-id="EditorPopupMenu" anchor="last"/>
       <add-to-group group-id="KG.SourceMenu" anchor="last"/>
     </action>
-    <action id="ei.db.gen.EnumSync" class="ei.db.gen.EnumSyncAction" text="enum 다시 맞추기"
-            description="Javadoc 의 @ei-sql 을 그 접속에서 다시 실행해 enum 상수를 새로 만듭니다">
+    <action id="ei.db.gen.EnumSync" class="ei.db.gen.EnumSyncAction">
       <add-to-group group-id="EditorPopupMenu" anchor="last"/>
     </action>
   </actions>

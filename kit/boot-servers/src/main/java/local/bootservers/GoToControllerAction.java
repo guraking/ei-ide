@@ -43,7 +43,6 @@ import java.util.Set;
  */
 public final class GoToControllerAction extends DumbAwareAction {
 
-    private static final String TITLE = "컨트롤러로 이동";
     private static final String JSP_EXTENSION = "jsp";
     private static final String LABEL_SEPARATOR = "  —  ";
 
@@ -70,10 +69,10 @@ public final class GoToControllerAction extends DumbAwareAction {
             return;
         }
         if (DumbService.isDumb(project)) {
-            Messages.showWarningDialog(project, "색인 중에는 컨트롤러를 찾을 수 없습니다. 색인이 끝난 뒤 다시 시도하세요.", TITLE);
+            Messages.showWarningDialog(project, BootServersBundle.message("controller.indexing"), BootServersBundle.message("controller.title"));
             return;
         }
-        ProgressManager.getInstance().run(new Task.Backgroundable(project, "컨트롤러 찾는 중", true) {
+        ProgressManager.getInstance().run(new Task.Backgroundable(project, BootServersBundle.message("controller.progress"), true) {
             private List<Found> found;
 
             @Override
@@ -93,11 +92,11 @@ public final class GoToControllerAction extends DumbAwareAction {
 
     private static void show(Project project, Editor editor, List<Found> found) {
         if (found.isEmpty()) {
-            String message = "이 JSP 를 뷰로 쓰는 컨트롤러를 찾지 못했습니다.";
+            String message = BootServersBundle.message("controller.none");
             if (editor != null && !editor.isDisposed()) {
                 HintManager.getInstance().showInformationHint(editor, message);
             } else {
-                Messages.showInfoMessage(project, message, TITLE);
+                Messages.showInfoMessage(project, message, BootServersBundle.message("controller.title"));
             }
             return;
         }
@@ -106,7 +105,7 @@ public final class GoToControllerAction extends DumbAwareAction {
             return;
         }
         JBPopup popup = JBPopupFactory.getInstance().createPopupChooserBuilder(found)
-                .setTitle(TITLE)
+                .setTitle(BootServersBundle.message("controller.title"))
                 .setRenderer(new SimpleListCellRenderer<Found>() {
                     @Override
                     public void customize(@NotNull JList<? extends Found> list, Found value, int index,

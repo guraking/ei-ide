@@ -17,13 +17,12 @@ import org.jetbrains.annotations.NotNull;
 /** 아래쪽 「동기화」 창. 처음 열 때 한 번 원격과 비교한다. 창 id 는 설정 · 단축키 호환을 위해 영어 그대로 두고 표시 이름만 바꾼다. */
 public final class SyncToolWindowFactory implements ToolWindowFactory, DumbAware {
   static final String ID = "Synchronize";
-  static final String TITLE = "동기화";
   /** 우클릭으로 창을 열 때 비교할 파일. 있으면 창을 처음 만들 때 전체 비교를 건너뛰고 그 저장소만 비교한다. */
   private static final Key<VirtualFile> ONLY_FILE = Key.create("kinggura.sync.onlyFile");
 
   @Override
   public void init(@NotNull ToolWindow toolWindow) {
-    toolWindow.setStripeTitle(TITLE);
+    toolWindow.setStripeTitle(SyncBundle.message("sync.title"));
   }
 
   @Override

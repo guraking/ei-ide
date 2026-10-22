@@ -10,6 +10,7 @@ import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.util.Alarm;
+import ei.db.EiDbBundle;
 import ei.db.Notify;
 import org.jetbrains.annotations.NotNull;
 
@@ -55,7 +56,7 @@ public final class ConsoleStore implements Disposable {
     try {
       return ConsoleFiles.read(p);
     } catch (IOException e) {
-      Notify.error(project, "저장된 콘솔 내용을 읽지 못해 이 콘솔은 저장하지 않습니다: " + p + " · " + e.getMessage());
+      Notify.error(project, EiDbBundle.message("console.store.read.failed", p, e.getMessage()));
       return null;
     }
   }
@@ -67,7 +68,7 @@ public final class ConsoleStore implements Disposable {
     try {
       ConsoleFiles.migrate(root, dir);
     } catch (IOException e) {
-      Notify.error(project, "예전 콘솔 저장 파일을 가져오지 못했습니다: " + root + " · " + e.getMessage());
+      Notify.error(project, EiDbBundle.message("console.store.migrate.failed", root, e.getMessage()));
     }
   }
 
@@ -117,7 +118,7 @@ public final class ConsoleStore implements Disposable {
       // 불변 사본이라 읽기 동작 없이 어느 스레드에서나 읽을 수 있다.
       ConsoleFiles.write(p, doc.getImmutableCharSequence().toString());
     } catch (IOException e) {
-      Notify.error(project.isDisposed() ? null : project, "콘솔 내용을 저장하지 못했습니다: " + p + " · " + e.getMessage());
+      Notify.error(project.isDisposed() ? null : project, EiDbBundle.message("console.store.save.failed", p, e.getMessage()));
     }
   }
 

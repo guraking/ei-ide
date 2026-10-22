@@ -15,6 +15,7 @@ import com.intellij.ui.DocumentAdapter;
 import com.intellij.util.ui.JBUI;
 import ei.db.DbConfig;
 import ei.db.DbSettings;
+import ei.db.EiDbBundle;
 import ei.db.Notify;
 import ei.db.SqlRunner;
 import ei.db.mybatis.SqlValues;
@@ -58,7 +59,7 @@ final class HistoryDialog extends DialogWrapper {
         List<RunHistory.Entry> entries = RunHistory.get().entries();
         ApplicationManager.getApplication().invokeLater(() -> new HistoryDialog(project, entries).show(), ModalityState.any());
       } catch (IOException e) {
-        Notify.error(project, "실행 기록을 읽지 못했습니다: " + e.getMessage());
+        Notify.error(project, EiDbBundle.message("history.read.failed", e.getMessage()));
       }
     });
   }
@@ -67,10 +68,10 @@ final class HistoryDialog extends DialogWrapper {
     super(project, true);
     this.project = project;
     this.all = all;
-    setTitle("실행 기록");
-    setOKButtonText("콘솔에 넣기");
+    setTitle(EiDbBundle.message("history.title"));
+    setOKButtonText(EiDbBundle.message("history.insert"));
     list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-    list.setEmptyText("기록이 없습니다");
+    list.setEmptyText(EiDbBundle.message("history.empty"));
     list.setCellRenderer(SimpleListCellRenderer.create((label, e, index) -> {
       label.setText(line(e));
       label.setToolTipText(pasteSql(e));
@@ -115,11 +116,11 @@ final class HistoryDialog extends DialogWrapper {
 
   /** 시각 · 접속 · 걸린 시간 · 건수 · 성공/실패 · 문장(한 줄로). */
   private String line(RunHistory.Entry e) {
-    String count = e.count() == RunHistory.NO_COUNT ? "" : " · " + e.count() + "건";
+    String count = e.count() == RunHistory.NO_COUNT ? "" : EiDbBundle.message("history.count", e.count());
     String sql = pasteSql(e).replaceAll("\\s+", " ");
     if (sql.length() > PREVIEW_CHARS) sql = sql.substring(0, PREVIEW_CHARS) + "…";
     return time.format(new Date(e.time())) + " · " + e.configName() + " · " + e.millis() + " ms" + count
-        + " · " + (e.ok() ? "성공" : "실패") + " · " + sql;
+        + " · " + EiDbBundle.message(e.ok() ? "history.ok" : "history.failed") + " · " + sql;
   }
 
   private void filter() {
@@ -137,7 +138,7 @@ final class HistoryDialog extends DialogWrapper {
     RunHistory.Entry e = list.getSelectedValue();
     DbConfig c = DbSettings.getInstance().find(e.configId());
     if (c == null) {
-      Notify.error(project, "이 기록의 접속(" + e.configName() + ")이 지워졌습니다.");
+      Notify.error(project, EiDbBundle.message("history.connection.removed", e.configName()));
       return;
     }
     close(OK_EXIT_CODE);

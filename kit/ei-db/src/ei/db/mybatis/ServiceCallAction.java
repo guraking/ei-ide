@@ -9,6 +9,7 @@ import com.intellij.openapi.ide.CopyPasteManager;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.text.StringUtil;
+import ei.db.EiDbBundle;
 import ei.db.Notify;
 import org.jetbrains.annotations.NotNull;
 
@@ -45,7 +46,7 @@ public final class ServiceCallAction extends AnAction {
     MapperDoc doc = MapperDoc.parse(editor.getDocument().getImmutableCharSequence());
     MapperDoc.Node s = doc.statementAt(editor.getCaretModel().getOffset());
     if (s == null) {
-      Notify.error(project, "커서 위치에서 매퍼 문장(select · insert · update · delete)을 찾지 못했습니다.");
+      Notify.error(project, EiDbBundle.message("mybatis.no.statement.at.caret"));
       return;
     }
     ServiceCode.Sig sig = DumbService.isDumb(project)
@@ -54,6 +55,6 @@ public final class ServiceCallAction extends AnAction {
     String field = doc.namespace == null ? FALLBACK_MAPPER_FIELD : ServiceCode.mapperField(doc.shortNamespace());
     String code = ServiceCall.code(s.name, s.attr("id"), sig, DynamicSql.paramNames(doc, s), field);
     CopyPasteManager.copyTextToClipboard(code);
-    Notify.info(project, "호출 코드를 복사했습니다.");
+    Notify.info(project, EiDbBundle.message("servicecall.copied"));
   }
 }

@@ -15,6 +15,7 @@ import com.intellij.ui.components.JBTextField;
 import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.JBUI;
 import ei.db.DbConfig;
+import ei.db.EiDbBundle;
 import ei.db.Notify;
 import ei.db.QueryResult;
 import org.jetbrains.annotations.NotNull;
@@ -55,22 +56,22 @@ public final class EnumDialog extends DialogWrapper {
 
   public static void show(Project project, DbConfig c, QueryResult result) {
     if (c == null) {
-      Notify.error(project, "결과의 접속을 알 수 없어 enum 을 만들 수 없습니다.");
+      Notify.error(project, EiDbBundle.message("enum.no.connection"));
       return;
     }
     if (result == null || !result.isQuery() || result.sql() == null || result.sql().isBlank()) {
-      Notify.error(project, "enum 을 만들 조회 결과가 없습니다.");
+      Notify.error(project, EiDbBundle.message("enum.no.result"));
       return;
     }
     if (result.columns().size() < MIN_COLUMNS) {
-      Notify.warning(project, "enum 을 만들려면 칼럼이 두 개(코드 · 이름) 이상이어야 합니다.");
+      Notify.warning(project, EiDbBundle.message("enum.need.two.columns"));
       return;
     }
     if (result.rows().isEmpty()) {
-      Notify.warning(project, "결과에 행이 없어 enum 을 만들 수 없습니다.");
+      Notify.warning(project, EiDbBundle.message("enum.no.rows"));
       return;
     }
-    new Task.Backgroundable(project, "enum 위치 찾는 중", true) {
+    new Task.Backgroundable(project, EiDbBundle.message("enum.progress.location"), true) {
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
         Targets.Roots roots = ReadAction.compute(() -> Targets.find(project));
@@ -96,9 +97,9 @@ public final class EnumDialog extends DialogWrapper {
     classField.setText(table == null ? DEFAULT_CLASS : Names.pascal(table));
     packageField.setText(roots.basePackage() + CODE_PACKAGE);
     locationField.setText(roots.rel(roots.java() + "/" + packageField.getText().replace('.', '/')));
-    setTitle("결과 → enum 만들기 — " + c.name + " · 행 " + result.rows().size() + "개");
-    setOKButtonText("만들기");
-    setCancelButtonText("취소");
+    setTitle(EiDbBundle.message("enum.title", c.name, result.rows().size()));
+    setOKButtonText(EiDbBundle.message("common.generate"));
+    setCancelButtonText(EiDbBundle.message("common.cancel"));
     init();
     refresh();
   }
@@ -106,7 +107,7 @@ public final class EnumDialog extends DialogWrapper {
   @Override
   protected JComponent createCenterPanel() {
     preview = new Preview(project, "java", getDisposable());
-    locationField.addBrowseFolderListener(project, FileChooserDescriptorFactory.createSingleFolderDescriptor().withTitle("enum 위치"));
+    locationField.addBrowseFolderListener(project, FileChooserDescriptorFactory.createSingleFolderDescriptor().withTitle(EiDbBundle.message("enum.location.title")));
     Ui.onChange(classField, this::refresh);
     Ui.onChange(packageField, () -> {
       locationField.setText(roots.rel(roots.java() + "/" + packageField.getText().strip().replace('.', '/')));
@@ -116,11 +117,11 @@ public final class EnumDialog extends DialogWrapper {
     labelBox.addActionListener(e -> refresh());
 
     JPanel form = FormBuilder.createFormBuilder()
-        .addLabeledComponent("코드 칼럼", codeBox, true)
-        .addLabeledComponent("이름 칼럼", labelBox, true)
-        .addLabeledComponent("클래스 이름", classField, true)
-        .addLabeledComponent("패키지", packageField, true)
-        .addLabeledComponent("위치", locationField, true)
+        .addLabeledComponent(EiDbBundle.message("enum.code.column"), codeBox, true)
+        .addLabeledComponent(EiDbBundle.message("enum.label.column"), labelBox, true)
+        .addLabeledComponent(EiDbBundle.message("common.class.name"), classField, true)
+        .addLabeledComponent(EiDbBundle.message("common.package"), packageField, true)
+        .addLabeledComponent(EiDbBundle.message("common.location"), locationField, true)
         .addComponentFillVertically(new JPanel(), 0)
         .getPanel();
     form.setPreferredSize(new Dimension(JBUI.scale(FORM_WIDTH), JBUI.scale(HEIGHT)));
@@ -163,19 +164,19 @@ public final class EnumDialog extends DialogWrapper {
     if (preview == null) return;
     preview.setText(text());
     int skipped = result.rows().size() - items().size();
-    countLabel.setText("상수 " + items().size() + "개"
-                       + (skipped > 0 ? " · 코드가 빈 행 " + skipped + "개 건너뜀" : "")
-                       + (result.truncated() ? " · 결과가 잘려 있어 일부 행만 들어갑니다(다시 맞추기는 끝까지 읽습니다)" : ""));
+    countLabel.setText(EiDbBundle.message("enum.count", items().size())
+                       + (skipped > 0 ? EiDbBundle.message("enum.count.skipped", skipped) : "")
+                       + (result.truncated() ? EiDbBundle.message("enum.count.truncated") : ""));
   }
 
   @Override
   protected ValidationInfo doValidate() {
-    if (!IDENT.matcher(cls()).matches()) return new ValidationInfo("클래스 이름이 자바 이름 꼴이 아닙니다.", classField);
-    if (!PACKAGE.matcher(pkg()).matches()) return new ValidationInfo("패키지 이름이 자바 이름 꼴이 아닙니다.", packageField);
-    if (locationField.getText().isBlank()) return new ValidationInfo("위치를 고르세요.", locationField);
-    if (codeBox.getSelectedIndex() < 0) return new ValidationInfo("코드 칼럼을 고르세요.", codeBox);
-    if (labelBox.getSelectedIndex() < 0) return new ValidationInfo("이름 칼럼을 고르세요.", labelBox);
-    if (items().isEmpty()) return new ValidationInfo("코드 칼럼 값이 모두 비어 있습니다.", codeBox);
+    if (!IDENT.matcher(cls()).matches()) return new ValidationInfo(EiDbBundle.message("common.class.name.invalid"), classField);
+    if (!PACKAGE.matcher(pkg()).matches()) return new ValidationInfo(EiDbBundle.message("common.package.invalid"), packageField);
+    if (locationField.getText().isBlank()) return new ValidationInfo(EiDbBundle.message("common.location.empty"), locationField);
+    if (codeBox.getSelectedIndex() < 0) return new ValidationInfo(EiDbBundle.message("enum.code.column.empty"), codeBox);
+    if (labelBox.getSelectedIndex() < 0) return new ValidationInfo(EiDbBundle.message("enum.label.column.empty"), labelBox);
+    if (items().isEmpty()) return new ValidationInfo(EiDbBundle.message("enum.codes.empty"), codeBox);
     return null;
   }
 
@@ -183,17 +184,17 @@ public final class EnumDialog extends DialogWrapper {
   protected void doOKAction() {
     String path = path();
     if (Targets.exists(path)) {
-      setErrorText(roots.rel(path) + " 이 이미 있습니다. 덮어쓰지 않으니 이름이나 위치를 바꾸세요.", classField);
+      setErrorText(EiDbBundle.message("common.exists.no.overwrite", roots.rel(path)), classField);
       return;
     }
     try {
-      Targets.write(project, "enum 만들기", List.of(new Targets.Job(path, text(), false)));
+      Targets.write(project, EiDbBundle.message("enum.command"), List.of(new Targets.Job(path, text(), false)));
     } catch (IOException e) {
-      setErrorText("파일을 쓰지 못했습니다: " + e.getMessage());
+      setErrorText(EiDbBundle.message("common.write.failed", e.getMessage()));
       return;
     }
     super.doOKAction();
     Targets.open(project, path);
-    Notify.info(project, roots.rel(path) + " 새로 만듦 · 상수 " + items().size() + "개");
+    Notify.info(project, EiDbBundle.message("enum.created", roots.rel(path), items().size()));
   }
 }

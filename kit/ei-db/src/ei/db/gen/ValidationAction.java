@@ -36,6 +36,7 @@ import ei.db.DbConfig;
 import ei.db.DbKind;
 import ei.db.DbSessions;
 import ei.db.DbSettings;
+import ei.db.EiDbBundle;
 import ei.db.Meta;
 import ei.db.Notify;
 import org.jetbrains.annotations.NotNull;
@@ -57,7 +58,6 @@ import java.util.Set;
  */
 public final class ValidationAction extends AnAction {
 
-  private static final String TITLE = "입력 검증 붙이기";
   private static final String JAKARTA = "jakarta.validation.constraints";
   private static final String JAVAX = "javax.validation.constraints";
   private static final String PROBE = "NotNull";
@@ -84,22 +84,22 @@ public final class ValidationAction extends AnAction {
     PsiFile file = e.getData(CommonDataKeys.PSI_FILE);
     if (project == null || editor == null) return;
     if (DumbService.isDumb(project)) {
-      Notify.warning(project, "색인 중에는 입력 검증을 붙일 수 없습니다. 색인이 끝난 뒤 다시 해 주세요.");
+      Notify.warning(project, EiDbBundle.message("validation.dumb"));
       return;
     }
     PsiClass cls = classAt(file, editor.getCaretModel().getOffset());
     if (cls == null || cls.getName() == null) {
-      Notify.warning(project, "커서가 클래스 안에 있어야 합니다.");
+      Notify.warning(project, EiDbBundle.message("validation.no.class"));
       return;
     }
     String pkg = validationPackage(project);
     if (pkg == null) {
-      Notify.error(project, "프로젝트에 jakarta.validation · javax.validation 라이브러리가 없습니다. 의존성을 더한 뒤 다시 해 주세요.");
+      Notify.error(project, EiDbBundle.message("validation.no.library"));
       return;
     }
     List<DbConfig> conns = DbSettings.getInstance().connections();
     if (conns.isEmpty()) {
-      Notify.warning(project, "등록된 접속이 없습니다. 「EI Database」 창에서 접속을 먼저 만드세요.");
+      Notify.warning(project, EiDbBundle.message("validation.no.connection"));
       return;
     }
     Picker picker = new Picker(project, conns, ValidationGen.guessTable(cls.getName()));
@@ -129,7 +129,7 @@ public final class ValidationAction extends AnAction {
   }
 
   private static void readColumns(Project project, PsiClass cls, String pkg, DbConfig c, String schema, String table) {
-    new Task.Backgroundable(project, table + " 칼럼 읽는 중", true) {
+    new Task.Backgroundable(project, EiDbBundle.message("validation.progress", table), true) {
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
         List<Meta.Column> cols;
@@ -139,11 +139,11 @@ public final class ValidationAction extends AnAction {
         } catch (ProcessCanceledException e) {
           throw e;
         } catch (Exception e) {
-          Notify.error(project, table + " 칼럼을 읽지 못했습니다: " + e.getMessage());
+          Notify.error(project, EiDbBundle.message("validation.read.failed", table, e.getMessage()));
           return;
         }
         if (cols.isEmpty()) {
-          Notify.warning(project, schema + "." + table + " 표가 없거나 칼럼이 없습니다.");
+          Notify.warning(project, EiDbBundle.message("validation.no.table", schema + "." + table));
           return;
         }
         ApplicationManager.getApplication().invokeLater(() -> confirmAndApply(project, cls, pkg, cols), project.getDisposed());
@@ -153,23 +153,23 @@ public final class ValidationAction extends AnAction {
 
   private static void confirmAndApply(Project project, PsiClass cls, String pkg, List<Meta.Column> cols) {
     if (!ReadAction.compute(cls::isValid)) {
-      Notify.warning(project, "클래스가 바뀌어 찾을 수 없습니다. 다시 해 주세요.");
+      Notify.warning(project, EiDbBundle.message("validation.class.changed"));
       return;
     }
     int[] unmatched = new int[1];
     List<Plan> plans = ReadAction.compute(() -> plan(cls, cols, unmatched));
     if (plans.isEmpty()) {
-      Notify.info(project, "붙일 주석이 없습니다(짝 없는 필드 " + unmatched[0] + "개).");
+      Notify.info(project, EiDbBundle.message("validation.nothing", unmatched[0]));
       return;
     }
     String message = ReadAction.compute(() -> preview(plans, unmatched[0]));
     PsiFile file = ReadAction.compute(cls::getContainingFile);
-    if (Messages.showYesNoDialog(project, message, TITLE, "붙이기", "취소", Messages.getQuestionIcon()) != Messages.YES) {
+    if (Messages.showYesNoDialog(project, message, EiDbBundle.message("validation.title"), EiDbBundle.message("validation.ok"), EiDbBundle.message("common.cancel"), Messages.getQuestionIcon()) != Messages.YES) {
       return;
     }
     int[] added = new int[2];
-    WriteCommandAction.writeCommandAction(project, file).withName(TITLE).run(() -> apply(project, pkg, plans, added));
-    Notify.info(project, "필드 " + added[0] + "개에 주석 " + added[1] + "개를 붙였습니다.");
+    WriteCommandAction.writeCommandAction(project, file).withName(EiDbBundle.message("validation.title")).run(() -> apply(project, pkg, plans, added));
+    Notify.info(project, EiDbBundle.message("validation.done", added[0], added[1]));
   }
 
   /** 칼럼과 짝지은 필드마다 붙일 주석. 붙일 것이 없는 필드는 빼고, 짝 없는 필드 수를 unmatched[0] 에 둔다. */
@@ -216,9 +216,8 @@ public final class ValidationAction extends AnAction {
       b.append('\n');
       shown++;
     }
-    if (plans.size() > shown) b.append("… 외 필드 ").append(plans.size() - shown).append("개\n");
-    b.append('\n').append("필드 ").append(plans.size()).append("개에 주석 ").append(total).append("개를 붙입니다. 짝 없는 필드 ")
-     .append(unmatched).append("개.");
+    if (plans.size() > shown) b.append(EiDbBundle.message("validation.preview.more", plans.size() - shown)).append('\n');
+    b.append('\n').append(EiDbBundle.message("validation.preview.summary", plans.size(), total, unmatched));
     return b.toString();
   }
 
@@ -258,18 +257,18 @@ public final class ValidationAction extends AnAction {
         DbConfig c = config();
         if (c != null) schemaField.setText(Meta.schemaOf(c));
       });
-      setTitle(TITLE);
-      setOKButtonText("칼럼 읽기");
-      setCancelButtonText("취소");
+      setTitle(EiDbBundle.message("validation.title"));
+      setOKButtonText(EiDbBundle.message("validation.read.columns"));
+      setCancelButtonText(EiDbBundle.message("common.cancel"));
       init();
     }
 
     @Override
     protected JComponent createCenterPanel() {
       return FormBuilder.createFormBuilder()
-          .addLabeledComponent("접속", connection)
-          .addLabeledComponent("스키마", schemaField)
-          .addLabeledComponent("표 이름", tableField)
+          .addLabeledComponent(EiDbBundle.message("common.connection"), connection)
+          .addLabeledComponent(EiDbBundle.message("common.schema"), schemaField)
+          .addLabeledComponent(EiDbBundle.message("guard.table.label"), tableField)
           .getPanel();
     }
 
@@ -278,9 +277,9 @@ public final class ValidationAction extends AnAction {
 
     @Override
     protected ValidationInfo doValidate() {
-      if (config() == null) return new ValidationInfo("접속을 고르세요.", connection);
-      if (schema().isEmpty()) return new ValidationInfo("스키마를 적으세요.", schemaField);
-      if (table().isEmpty()) return new ValidationInfo("표 이름을 적으세요.", tableField);
+      if (config() == null) return new ValidationInfo(EiDbBundle.message("common.connection.empty"), connection);
+      if (schema().isEmpty()) return new ValidationInfo(EiDbBundle.message("common.schema.empty"), schemaField);
+      if (table().isEmpty()) return new ValidationInfo(EiDbBundle.message("common.table.empty"), tableField);
       return null;
     }
 
