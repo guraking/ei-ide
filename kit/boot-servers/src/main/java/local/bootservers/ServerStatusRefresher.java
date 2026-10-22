@@ -1,6 +1,7 @@
 package local.bootservers;
 
 import com.intellij.execution.ExecutionListener;
+import com.intellij.execution.KillableProcess;
 import com.intellij.execution.RunnerAndConfigurationSettings;
 import com.intellij.execution.application.ApplicationConfiguration;
 import com.intellij.execution.process.ProcessEvent;
@@ -11,13 +12,20 @@ import com.intellij.ide.projectView.ProjectView;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Key;
+import com.intellij.util.concurrency.AppExecutorUtil;
 import org.jetbrains.annotations.NotNull;
+
+import java.util.concurrent.TimeUnit;
 
 /**
  * 애플리케이션 실행 설정(스프링 부트 서버)의 프로세스가 뜨면 실행 기록을 시작하고, 뜨거나 시작을 마치거나 끝날 때 프로젝트 트리를 다시 그려 상태 표시를 맞춘다.
- * 다른 종류의 실행 설정은 보지 않는다. WAS 는 WasRunner 가 직접 기록한다.
+ * 중지(서버 창 · 실행 창 · 툴바 · Ctrl+F2 어디서든) 뒤 STOP_GRACE_SECONDS 안에 끝나지 않으면 프로세스를 강제로 끝낸다.
+ * 다른 종류의 실행 설정은 보지 않는다. WAS 는 WasRunner 가 직접 기록 · 중지한다.
  */
 public final class ServerStatusRefresher implements ExecutionListener {
+
+    // 정상 종료(스프링 컨텍스트 닫기)를 기다리는 한도. 넘으면 프로세스를 강제로 끝낸다.
+    private static final int STOP_GRACE_SECONDS = 10;
 
     private final Project project;
 
@@ -49,6 +57,17 @@ public final class ServerStatusRefresher implements ExecutionListener {
                 if (!shownStarted && run.started) {
                     shownStarted = true;
                     refreshLater();
+                }
+            }
+
+            @Override
+            public void processWillTerminate(@NotNull ProcessEvent event, boolean willBeDestroyed) {
+                if (willBeDestroyed && handler instanceof KillableProcess killable) {
+                    AppExecutorUtil.getAppScheduledExecutorService().schedule(() -> {
+                        if (!handler.isProcessTerminated() && killable.canKillProcess()) {
+                            killable.killProcess();
+                        }
+                    }, STOP_GRACE_SECONDS, TimeUnit.SECONDS);
                 }
             }
 

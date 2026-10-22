@@ -1,7 +1,6 @@
 package local.bootservers;
 
 import com.intellij.execution.Executor;
-import com.intellij.execution.KillableProcess;
 import com.intellij.execution.ProgramRunnerUtil;
 import com.intellij.execution.RunManager;
 import com.intellij.execution.RunnerAndConfigurationSettings;
@@ -38,7 +37,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.concurrent.TimeUnit;
 
 /**
  * 스프링 부트 모듈의 애플리케이션 실행 설정 하나를 서버 하나로 보고 시작 · 중지 · 재시작한다.
@@ -53,8 +51,6 @@ final class ServerLauncher {
     // 스프링 부트 2.x · 3.x 공통 정규 이름
     private static final String BOOT_APP_ANNOTATION = "org.springframework.boot.autoconfigure.SpringBootApplication";
     private static final String TITLE = "스프링 부트 서버";
-    // 정상 종료(스프링 컨텍스트 닫기)를 기다리는 한도. 넘으면 프로세스를 강제로 끝낸다.
-    private static final int STOP_GRACE_SECONDS = 10;
 
     private ServerLauncher() {
     }
@@ -173,19 +169,11 @@ final class ServerLauncher {
         }
     }
 
-    /** 살아 있는 실행 화면을 모두 중지한다. STOP_GRACE_SECONDS 안에 끝나지 않으면 강제로 끝낸다. */
+    /** 살아 있는 실행 화면을 모두 중지한다. 한도 안에 끝나지 않으면 ServerStatusRefresher 가 강제로 끝낸다. */
     static void stop(RunnerAndConfigurationSettings settings) {
         ServerRegistry.getInstance(settings.getConfiguration().getProject()).markStopped(settings.getName());
         for (RunContentDescriptor descriptor : runningDescriptors(settings)) {
-            ProcessHandler handler = descriptor.getProcessHandler();
             ExecutionManagerImpl.stopProcess(descriptor);
-            if (handler instanceof KillableProcess killable) {
-                AppExecutorUtil.getAppScheduledExecutorService().schedule(() -> {
-                    if (!handler.isProcessTerminated() && killable.canKillProcess()) {
-                        killable.killProcess();
-                    }
-                }, STOP_GRACE_SECONDS, TimeUnit.SECONDS);
-            }
         }
     }
 
