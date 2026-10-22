@@ -17,10 +17,12 @@ import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowFactory;
 import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.JBColor;
-import com.intellij.ui.JBSplitter;
+import com.intellij.icons.AllIcons;
+import com.intellij.ui.InplaceButton;
+import com.intellij.ui.OnePixelSplitter;
+import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.SearchTextField;
 import com.intellij.ui.components.JBList;
-import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.content.ContentFactory;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
@@ -146,10 +148,12 @@ final class ProjectHistoryPanel extends JPanel {
       if (entry != null) CopyPasteManager.getInstance().setContents(new StringSelection(entry.id()));
     });
 
-    JButton refresh = new JButton(SyncBundle.message("history.refresh"));
-    refresh.addActionListener(e -> { reloadTargets(); load(); });
+    // IntelliJ 기본 창처럼 새로고침은 도구줄 아이콘 단추, 스크롤 상자는 테두리 없이, 칸막이는 1픽셀로 둔다.
+    // 창 머리 아래 선은 IntelliJ 가 그으므로 안쪽 칸에 테두리를 더하면 선이 두 겹이 된다.
+    InplaceButton refresh = new InplaceButton(SyncBundle.message("history.refresh"), AllIcons.Actions.Refresh, e -> { reloadTargets(); load(); });
     projectName.setFont(JBUI.Fonts.label().biggerOn(2).asBold());
     JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(GAP), JBUI.scale(GAP / 2)));
+    top.setBorder(JBUI.Borders.empty(GAP / 2, GAP / 2, 0, GAP));
     top.add(projectName);
     top.add(branch);
     top.add(filter);
@@ -159,13 +163,14 @@ final class ProjectHistoryPanel extends JPanel {
 
     JPanel center = new JPanel(new BorderLayout());
     center.add(top, BorderLayout.NORTH);
-    center.add(new JBScrollPane(commits), BorderLayout.CENTER);
+    center.add(ScrollPaneFactory.createScrollPane(commits, true), BorderLayout.CENTER);
 
-    JBSplitter right = new JBSplitter(false, 0.7f);
+    OnePixelSplitter right = new OnePixelSplitter(false, 0.7f);
     right.setFirstComponent(center);
     right.setSecondComponent(detailPanel());
-    JBSplitter main = new JBSplitter(false, 0.16f);
-    main.setFirstComponent(new JBScrollPane(targets));
+    OnePixelSplitter main = new OnePixelSplitter(false, 0.16f);
+    targets.setBorder(JBUI.Borders.emptyTop(GAP / 2));
+    main.setFirstComponent(ScrollPaneFactory.createScrollPane(targets, true));
     main.setSecondComponent(right);
     add(main, BorderLayout.CENTER);
 
@@ -196,7 +201,7 @@ final class ProjectHistoryPanel extends JPanel {
     JPanel panel = new JPanel(new BorderLayout());
     panel.setBorder(JBUI.Borders.empty(GAP * 2));
     panel.add(head, BorderLayout.NORTH);
-    panel.add(new JBScrollPane(files), BorderLayout.CENTER);
+    panel.add(ScrollPaneFactory.createScrollPane(files, true), BorderLayout.CENTER);
     panel.add(hint, BorderLayout.SOUTH);
     clearDetail();
     return panel;
