@@ -45,7 +45,7 @@ import java.util.*;
 import java.util.List;
 
 /**
- * 아래쪽 「Git 기록」 창. 왼쪽에서 프로젝트(모듈)를 고르면 그 폴더 안을 바꾼 최근 커밋을 GitKraken 처럼 보여 준다.
+ * 아래쪽 「Git Log」 창. 왼쪽에서 프로젝트(모듈)를 고르면 그 폴더 안을 바꾼 최근 커밋을 GitKraken 처럼 보여 준다.
  * 가지마다 색이 다른 선 위에 작성자 동그라미, 브랜치 · 태그 알약, 오른쪽에 커밋 내용과 바뀐 파일(두 번 누르면 비교 창).
  * 「내 것만」 · 「Merge 숨김」 · 찾기로 거르면 사이가 빠지므로 가지 선 대신 한 줄로 그린다. 기존 Git 로그 창은 그대로 둔다.
  * Git 은 git log, SVN 은 svn log 를 작업 스레드에서 돌린다(SyncPanel.run 과 같은 실행 · 시간 제한). SVN 은 한 줄 기록이다.
@@ -689,7 +689,7 @@ final class ProjectHistoryPanel extends JPanel {
     }
   }
 
-  /** 아래쪽 「Git 기록」 창. 창 id 는 설정 호환을 위해 영어, 표시 이름만 한국어. */
+  /** 아래쪽 「Git Log」 창. 창 id 는 설정 호환을 위해 영어, 표시 이름만 한국어. */
   public static final class Factory implements ToolWindowFactory, DumbAware {
     @Override
     public void init(@NotNull ToolWindow toolWindow) {
