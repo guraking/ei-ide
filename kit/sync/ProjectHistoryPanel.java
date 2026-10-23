@@ -65,7 +65,7 @@ import java.util.List;
 final class ProjectHistoryPanel extends JPanel {
   static final String ID = "ProjectHistory";
   // 한 번에 읽는 커밋 수. 목록을 맨 아래까지 내리면 다음 묶음을 읽어 밑에 붙인다.
-  private static final int LOG_LIMIT = 1000;
+  private static final int LOG_LIMIT = 500;
   private static final ZoneId ZONE = ZoneId.systemDefault();
   private static final Locale TIME_LOCALE = Locale.forLanguageTag(SyncBundle.message("history.locale"));
   private static final DateTimeFormatter TODAY = timeFormat("history.time.today");
