@@ -17,7 +17,7 @@ import java.util.TreeSet;
  */
 public final class MapperGen {
 
-  public enum Kind { RESULT_MAP, LIST, ONE, INSERT, UPDATE, DELETE }
+  public enum Kind { RESULT_MAP, LIST, ONE, INSERT, UPDATE, DELETE, MERGE }
 
   /**
    * oldJoin 은 단일 표 문장이라 지금 글에는 영향이 없다(조인이 생기면 콤마 + WHERE 로 쓴다는 약속만 보존).
@@ -33,6 +33,8 @@ public final class MapperGen {
   /** 앞 쉼표 목록의 줄 머리(XML 안 4칸 + 7칸). */
   private static final String LEAD_FIRST = "           ";
   private static final String LEAD_NEXT = "         , ";
+  /** MERGE 의 UPDATE SET · INSERT 목록은 WHEN 절 아래로 6칸 더 들인다. */
+  private static final String MERGE_INDENT = "      ";
 
   private final String table;
   private final String alias;
@@ -65,6 +67,7 @@ public final class MapperGen {
       case INSERT -> "insert" + entity;
       case UPDATE -> "update" + entity;
       case DELETE -> "delete" + entity;
+      case MERGE -> "merge" + entity;
       case RESULT_MAP -> Names.lowerFirst(entity) + "Map";
     };
   }
@@ -75,9 +78,9 @@ public final class MapperGen {
     return false;
   }
 
-  /** 만들 수 있는 문장인지: PK 로 찾는 문장(ONE · UPDATE · DELETE)은 PK 가, UPDATE 는 PK 아닌 칼럼도 있어야 한다. */
+  /** 만들 수 있는 문장인지: PK 로 찾는 문장(ONE · UPDATE · DELETE · MERGE)은 PK 가, UPDATE · MERGE 는 PK 아닌 칼럼도 있어야 한다. */
   public boolean possible(Kind k) {
-    return (!needsPk(k) || hasPk()) && (k != Kind.UPDATE || hasNonPk());
+    return (!needsPk(k) || hasPk()) && (k != Kind.UPDATE && k != Kind.MERGE || hasNonPk());
   }
 
   /** 만들 수 없는 문장(possible 이 거짓)은 빠진다. */
@@ -92,6 +95,7 @@ public final class MapperGen {
         case INSERT -> insert();
         case UPDATE -> update();
         case DELETE -> delete();
+        case MERGE -> merge();
       };
       out.add(new Block(id(k), text));
     }
@@ -99,7 +103,7 @@ public final class MapperGen {
   }
 
   public static boolean needsPk(Kind k) {
-    return k == Kind.ONE || k == Kind.UPDATE || k == Kind.DELETE;
+    return k == Kind.ONE || k == Kind.UPDATE || k == Kind.DELETE || k == Kind.MERGE;
   }
 
   /** 새 파일 전체(DOCTYPE 포함). */
@@ -181,6 +185,7 @@ public final class MapperGen {
       case ONE -> "한 건 (PK)";
       case INSERT -> "등록";
       case UPDATE -> "수정";
+      case MERGE -> "등록 · 수정 (PK 로 있으면 수정, 없으면 등록)";
       default -> "삭제";
     };
     return "  <!-- " + Xml.comment(table + " " + label) + " -->\n  <" + tag + " id=\"" + id(k) + "\"" + extra + ">\n";
@@ -281,6 +286,74 @@ public final class MapperGen {
     b.append("    DELETE FROM ").append(name(table)).append('\n');
     pkWhere(b, "");
     return b.append("  </delete>\n").toString();
+  }
+
+  /**
+   * PK 가 있으면 수정, 없으면 등록. Oracle 은 MERGE INTO ... USING DUAL, MySQL 은 ON DUPLICATE KEY UPDATE,
+   * PostgreSQL 은 ON CONFLICT (PK) DO UPDATE. PK 칼럼은 고치지 않는다(Oracle 은 ON 에 쓴 칼럼을 UPDATE 할 수 없다).
+   */
+  private String merge() {
+    StringBuilder b = new StringBuilder(head(Kind.MERGE, "update", " parameterType=\"" + dtoType + "\""));
+    if (o.kind() != DbKind.ORACLE) {
+      b.append("    INSERT INTO ").append(name(table)).append(" (\n");
+      columnList(b, "", false);
+      b.append("    ) VALUES (\n");
+      columnList(b, "", true);
+      b.append("    )\n");
+      if (o.kind() == DbKind.MYSQL) {
+        b.append("    ON DUPLICATE KEY UPDATE\n");
+      } else {
+        b.append("    ON CONFLICT (").append(String.join(", ", pkNames())).append(") DO UPDATE SET\n");
+      }
+      boolean first = true;
+      for (Meta.Column c : cols) {
+        if (c.pk()) continue;
+        String n = name(c.name());
+        b.append(first ? LEAD_FIRST : LEAD_NEXT).append(n).append(" = ")
+         .append(o.kind() == DbKind.MYSQL ? "VALUES(" + n + ")" : "EXCLUDED." + n).append('\n');
+        first = false;
+      }
+      return b.append("  </update>\n").toString();
+    }
+    b.append("    MERGE INTO ").append(name(table)).append(' ').append(alias).append('\n');
+    b.append("    USING DUAL\n");
+    List<String> on = new ArrayList<>();
+    for (Meta.Column c : cols) {
+      if (c.pk()) on.add(alias + "." + name(c.name()) + " = #{" + Names.camel(c.name()) + "}");
+    }
+    b.append("       ON (").append(String.join(" AND ", on)).append(")\n");
+    b.append("     WHEN MATCHED THEN\n");
+    b.append("          UPDATE SET\n");
+    boolean first = true;
+    for (Meta.Column c : cols) {
+      if (c.pk()) continue;
+      b.append(MERGE_INDENT).append(first ? LEAD_FIRST : LEAD_NEXT).append(alias).append('.').append(name(c.name()))
+       .append(" = #{").append(Names.camel(c.name())).append("}\n");
+      first = false;
+    }
+    b.append("     WHEN NOT MATCHED THEN\n");
+    b.append("          INSERT (\n");
+    columnList(b, MERGE_INDENT, false);
+    b.append("          ) VALUES (\n");
+    columnList(b, MERGE_INDENT, true);
+    b.append("          )\n");
+    return b.append("  </update>\n").toString();
+  }
+
+  /** 모든 칼럼을 앞 쉼표 목록으로. values 면 #{필드}, 아니면 칼럼 이름. */
+  private void columnList(StringBuilder b, String indent, boolean values) {
+    boolean first = true;
+    for (Meta.Column c : cols) {
+      b.append(indent).append(first ? LEAD_FIRST : LEAD_NEXT);
+      b.append(values ? "#{" + Names.camel(c.name()) + "}" : name(c.name())).append('\n');
+      first = false;
+    }
+  }
+
+  private List<String> pkNames() {
+    List<String> out = new ArrayList<>();
+    for (Meta.Column c : cols) if (c.pk()) out.add(name(c.name()));
+    return out;
   }
 
   /** PK 조건. where11 이면 WHERE 1 = 1 다음 AND 줄로, 아니면 첫 조건을 WHERE 에 붙인다. */

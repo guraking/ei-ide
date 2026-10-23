@@ -33,7 +33,8 @@ public class FeatureGenCheck {
       new Meta.Column("ORDERED_AT", "DATE", 7, 0, false, false, true, "주문일시"));
 
   static FeatureGen gen(List<Meta.Column> cols, String table, DbKind kind, boolean split, boolean rest, Set<String> search) {
-    return gen(cols, table, kind, split, rest, search, MapperGen.allKinds());
+    // 기능 한 벌 창은 MERGE 를 꺼 둔 채 연다.
+    return gen(cols, table, kind, split, rest, search, java.util.EnumSet.complementOf(java.util.EnumSet.of(MapperGen.Kind.MERGE)));
   }
 
   static FeatureGen gen(List<Meta.Column> cols, String table, DbKind kind, boolean split, boolean rest, Set<String> search,

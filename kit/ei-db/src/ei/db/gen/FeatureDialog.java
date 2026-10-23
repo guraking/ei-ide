@@ -270,7 +270,7 @@ public final class FeatureDialog extends DialogWrapper {
     JPanel p = new JPanel();
     p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
     for (MapperGen.Kind k : MapperGen.Kind.values()) {
-      JBCheckBox box = new JBCheckBox(k == MapperGen.Kind.RESULT_MAP ? "resultMap " + probe.id(k) : probe.id(k), true);
+      JBCheckBox box = new JBCheckBox(k == MapperGen.Kind.RESULT_MAP ? "resultMap " + probe.id(k) : probe.id(k), k != MapperGen.Kind.MERGE);
       box.setFont(Ui.mono());
       String hint = switch (k) {
         case LIST -> EiDbBundle.message("feature.hint.list");
@@ -278,6 +278,7 @@ public final class FeatureDialog extends DialogWrapper {
         case INSERT -> EiDbBundle.message("feature.hint.insert");
         case UPDATE -> EiDbBundle.message("feature.hint.update");
         case DELETE -> EiDbBundle.message("feature.hint.delete");
+        case MERGE -> EiDbBundle.message("mapper.hint.merge");
         case RESULT_MAP -> EiDbBundle.message("mapper.hint.result.map");
       };
       if (!probe.possible(k)) {
