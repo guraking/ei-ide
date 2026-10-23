@@ -5,6 +5,7 @@ import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VfsUtilCore;
@@ -78,12 +79,17 @@ final class MapperIndex {
       Map<VirtualFile, Entry> old = t == null ? Map.of() : t.files();
       Map<String, List<Entry>> byNamespace = new HashMap<>();
       Map<VirtualFile, Entry> files = new ConcurrentHashMap<>();
+      ProjectFileIndex fileIndex = ProjectFileIndex.getInstance(project);
       for (VirtualFile f : FilenameIndex.getAllFilesByExt(project, XML_EXT, GlobalSearchScope.projectScope(project))) {
         ProgressManager.checkCanceled();
         Entry e = entry(old, f);
         if (e == null) continue;
         files.put(f, e);
-        if (e.namespace() != null) byNamespace.computeIfAbsent(e.namespace(), k -> new ArrayList<>()).add(e);
+        if (e.namespace() == null) continue;
+        // 소스 · 리소스 폴더의 원본을 앞에 둔다. bin · build · out 같은 빌드 출력 복사본은 뒤에 남아 원본이 없을 때만 첫 번째가 된다.
+        List<Entry> same = byNamespace.computeIfAbsent(e.namespace(), k -> new ArrayList<>());
+        if (fileIndex.isInSourceContent(f)) same.add(0, e);
+        else same.add(e);
       }
       t = new Table(version, byNamespace, files);
       project.putUserData(TABLE, t);
