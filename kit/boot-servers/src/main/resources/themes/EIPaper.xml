@@ -8,25 +8,25 @@
         <option name="ADDED_LINES_COLOR" value="7fc784" />
         <option name="ANNOTATIONS_COLOR" value="5a5d6b" />
         <option name="ANNOTATIONS_LAST_COMMIT_COLOR" value="0" />
-        <option name="CARET_ROW_COLOR" value="F6F6F4" />
+        <option name="CARET_ROW_COLOR" value="E8E8E4" />
         <option name="DELETED_LINES_COLOR" value="767a8a" />
         <option name="DIFF_SEPARATORS_BACKGROUND" value="e4e6eb" />
-        <option name="DOCUMENTATION_COLOR" value="ffffff" />
+        <option name="DOCUMENTATION_COLOR" value="F7F7F4" />
         <option name="FILESTATUS_IDEA_FILESTATUS_IGNORED" value="7d5020" />
-        <option name="GUTTER_BACKGROUND" value="ffffff" />
+        <option name="GUTTER_BACKGROUND" value="F0F0EC" />
         <option name="IGNORED_ADDED_LINES_BORDER_COLOR" value="7fc784" />
         <option name="IGNORED_DELETED_LINES_BORDER_COLOR" value="767a8a" />
         <option name="IGNORED_MODIFIED_LINES_BORDER_COLOR" value="88adf7" />
-        <option name="INDENT_GUIDE" value="DCDCD8" />
-        <option name="INFORMATION_HINT" value="ffffff" />
-        <option name="LINE_NUMBERS_COLOR" value="B0B0B0" />
+        <option name="INDENT_GUIDE" value="D4D4CF" />
+        <option name="INFORMATION_HINT" value="F7F7F4" />
+        <option name="LINE_NUMBERS_COLOR" value="A4A4A0" />
         <option name="LINE_NUMBER_ON_CARET_ROW_COLOR" value="D7263D" />
-        <option name="LOOKUP_COLOR" value="FFFFFF" />
+        <option name="LOOKUP_COLOR" value="F7F7F4" />
         <option name="MATCHED_BRACES_INDENT_GUIDE_COLOR" value="62b3b3" />
         <option name="METHOD_SEPARATORS_COLOR" value="dfe1e5" />
         <option name="MODIFIED_LINES_COLOR" value="88adf7" deuteranopia="9ca9bf" protanopia="9ca9bf" />
         <option name="NOTIFICATION_BACKGROUND" value="fff8e3" />
-        <option name="RIGHT_MARGIN_COLOR" value="DCDCD8" />
+        <option name="RIGHT_MARGIN_COLOR" value="D4D4CF" />
         <option name="SELECTED_INDENT_GUIDE" value="aeb3c2" />
         <option name="SELECTION_BACKGROUND" value="F6CDD2" deuteranopia="5974AB" protanopia="5974AB" />
         <option name="SELECTION_FOREGROUND" value="" deuteranopia="ffffff" protanopia="ffffff" />
@@ -36,7 +36,7 @@
         <option name="VCS_ANNOTATIONS_COLOR_3" value="dee8fc" />
         <option name="VCS_ANNOTATIONS_COLOR_4" value="edf2fa" />
         <option name="VCS_ANNOTATIONS_COLOR_5" value="f7f8fa" />
-        <option name="VISUAL_INDENT_GUIDE" value="DCDCD8" />
+        <option name="VISUAL_INDENT_GUIDE" value="D4D4CF" />
         <option name="WHITESPACES_MODIFIED_LINES_COLOR" value="f7e2cb" deuteranopia="c5cad4" protanopia="c5cad4" />
         <option name="ERROR_HINT" value="FFE8E8" />
         <option name="PROMOTION_PANE" value="e7effd" />
@@ -61,7 +61,7 @@
         <option name="FILESTATUS_changelistConflict" value="DE1B2E" />
         <option name="FILESTATUS_modifiedOutside" value="0033B3" />
         <option name="CARET_COLOR" value="D7263D" />
-        <option name="CONSOLE_BACKGROUND_KEY" value="FFFFFF" />
+        <option name="CONSOLE_BACKGROUND_KEY" value="F0F0EC" />
         <option name="EDITOR_GUTTER_BACKGROUND" value="" />
     </colors>
     <attributes>
@@ -458,7 +458,7 @@
         <option name="TEXT">
             <value>
                 <option name="FOREGROUND" value="111111" />
-                <option name="BACKGROUND" value="FFFFFF" />
+                <option name="BACKGROUND" value="F0F0EC" />
             </value>
         </option>
         <option name="TEXT_SEARCH_RESULT_ATTRIBUTES">
@@ -600,7 +600,7 @@
         </option>
         <option name="DEFAULT_TEMPLATE_LANGUAGE_COLOR">
             <value>
-                <option name="BACKGROUND" value="FFFFFF" />
+                <option name="BACKGROUND" value="F0F0EC" />
             </value>
         </option>
         <option name="HTML_CUSTOM_TAG_NAME">

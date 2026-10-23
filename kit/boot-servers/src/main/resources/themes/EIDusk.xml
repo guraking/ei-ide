@@ -9,11 +9,11 @@
         <option name="ANNOTATIONS_COLOR" value="8D9199" />
         <option name="ANNOTATIONS_LAST_COMMIT_COLOR" value="CED0D6" />
         <option name="CARET_COLOR" value="FF7E6B" />
-        <option name="CARET_ROW_COLOR" value="323850" />
-        <option name="CONSOLE_BACKGROUND_KEY" value="2B3144" />
+        <option name="CARET_ROW_COLOR" value="2B3144" />
+        <option name="CONSOLE_BACKGROUND_KEY" value="232838" />
         <option name="DELETED_LINES_COLOR" value="FF6B7A" />
-        <option name="DIFF_SEPARATORS_BACKGROUND" value="333A50" />
-        <option name="DOCUMENTATION_COLOR" value="2B3144" />
+        <option name="DIFF_SEPARATORS_BACKGROUND" value="2B3144" />
+        <option name="DOCUMENTATION_COLOR" value="232838" />
         <option name="DOC_COMMENT_GUIDE" value="394D3F" />
         <option name="DOC_COMMENT_LINK" value="3887A1" />
         <option name="EDITOR_GUTTER_BACKGROUND" value="" />
@@ -35,28 +35,28 @@
         <option name="FILESTATUS_addedOutside" value="7FD99A" />
         <option name="FILESTATUS_changelistConflict" value="FAB387" />
         <option name="FILESTATUS_modifiedOutside" value="7CC7FF" />
-        <option name="FOLDED_TEXT_BORDER_COLOR" value="333A50" />
-        <option name="HINT_BORDER" value="3A4158" />
+        <option name="FOLDED_TEXT_BORDER_COLOR" value="2B3144" />
+        <option name="HINT_BORDER" value="323850" />
         <option name="IGNORED_ADDED_LINES_BORDER_COLOR" value="7FD99A" />
         <option name="IGNORED_DELETED_LINES_BORDER_COLOR" value="FF6B7A" />
         <option name="IGNORED_MODIFIED_LINES_BORDER_COLOR" value="7CC7FF" />
-        <option name="INDENT_GUIDE" value="3A4158" />
-        <option name="INFORMATION_HINT" value="333A50" />
-        <option name="INLINE_REFACTORING_SETTINGS_DEFAULT" value="3A4158" />
-        <option name="INLINE_REFACTORING_SETTINGS_FOCUSED" value="3A4158" />
-        <option name="INLINE_REFACTORING_SETTINGS_HOVERED" value="3A4158" />
-        <option name="LINE_NUMBERS_COLOR" value="5A6178" />
+        <option name="INDENT_GUIDE" value="323850" />
+        <option name="INFORMATION_HINT" value="2B3144" />
+        <option name="INLINE_REFACTORING_SETTINGS_DEFAULT" value="323850" />
+        <option name="INLINE_REFACTORING_SETTINGS_FOCUSED" value="323850" />
+        <option name="INLINE_REFACTORING_SETTINGS_HOVERED" value="323850" />
+        <option name="LINE_NUMBERS_COLOR" value="515870" />
         <option name="LINE_NUMBER_ON_CARET_ROW_COLOR" value="FF9E8F" />
-        <option name="LOOKUP_COLOR" value="333A50" />
-        <option name="MATCHED_BRACES_INDENT_GUIDE_COLOR" value="4A526C" />
-        <option name="METHOD_SEPARATORS_COLOR" value="4A526C" />
+        <option name="LOOKUP_COLOR" value="2B3144" />
+        <option name="MATCHED_BRACES_INDENT_GUIDE_COLOR" value="424960" />
+        <option name="METHOD_SEPARATORS_COLOR" value="424960" />
         <option name="MODIFIED_LINES_COLOR" value="7CC7FF" />
         <option name="NOTIFICATION_BACKGROUND" value="25324D" />
         <option name="PROMOTION_PANE" value="25324D" />
         <option name="QUESTION_HINT" value="25324D" />
-        <option name="RECENT_LOCATIONS_SELECTION" value="333A50" />
-        <option name="RIGHT_MARGIN_COLOR" value="3A4158" />
-        <option name="SELECTED_INDENT_GUIDE" value="5A6178" />
+        <option name="RECENT_LOCATIONS_SELECTION" value="2B3144" />
+        <option name="RIGHT_MARGIN_COLOR" value="323850" />
+        <option name="SELECTED_INDENT_GUIDE" value="515870" />
         <option name="ScrollBar.Mac.hoverThumbColor" value="FFFFFF4D" />
         <option name="ScrollBar.Mac.thumbColor" value="FFFFFF26" />
         <option name="VCS_ANNOTATIONS_COLOR_1" value="2F5194" />
@@ -64,7 +64,7 @@
         <option name="VCS_ANNOTATIONS_COLOR_3" value="283754" />
         <option name="VCS_ANNOTATIONS_COLOR_4" value="242D42" />
         <option name="VCS_ANNOTATIONS_COLOR_5" value="22252E" />
-        <option name="VISUAL_INDENT_GUIDE" value="3A4158" />
+        <option name="VISUAL_INDENT_GUIDE" value="323850" />
         <option name="WHITESPACES" value="6F737A" />
         <option name="WHITESPACES_MODIFIED_LINES_COLOR" value="52433D" />
         <option name="SELECTION_BACKGROUND" value="5A3E48" />
@@ -377,7 +377,7 @@
         </option>
         <option name="DEFAULT_TEMPLATE_LANGUAGE_COLOR">
             <value>
-                <option name="BACKGROUND" value="2B3144" />
+                <option name="BACKGROUND" value="232838" />
             </value>
         </option>
         <option name="DEFAULT_VALID_STRING_ESCAPE">
@@ -750,8 +750,8 @@
         </option>
         <option name="TEXT">
             <value>
-                <option name="FOREGROUND" value="D5DAE8" />
-                <option name="BACKGROUND" value="2B3144" />
+                <option name="FOREGROUND" value="C9CEDC" />
+                <option name="BACKGROUND" value="232838" />
             </value>
         </option>
         <option name="TEXT_SEARCH_RESULT_ATTRIBUTES">

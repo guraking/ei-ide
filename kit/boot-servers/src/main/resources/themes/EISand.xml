@@ -11,14 +11,14 @@
         <option name="CARET_ROW_COLOR" value="F3EEE3" />
         <option name="DELETED_LINES_COLOR" value="767a8a" />
         <option name="DIFF_SEPARATORS_BACKGROUND" value="e4e6eb" />
-        <option name="DOCUMENTATION_COLOR" value="ffffff" />
+        <option name="DOCUMENTATION_COLOR" value="FFFDF8" />
         <option name="FILESTATUS_IDEA_FILESTATUS_IGNORED" value="7d5020" />
-        <option name="GUTTER_BACKGROUND" value="ffffff" />
+        <option name="GUTTER_BACKGROUND" value="FBF8F2" />
         <option name="IGNORED_ADDED_LINES_BORDER_COLOR" value="7fc784" />
         <option name="IGNORED_DELETED_LINES_BORDER_COLOR" value="767a8a" />
         <option name="IGNORED_MODIFIED_LINES_BORDER_COLOR" value="88adf7" />
         <option name="INDENT_GUIDE" value="DDD4C4" />
-        <option name="INFORMATION_HINT" value="ffffff" />
+        <option name="INFORMATION_HINT" value="FFFDF8" />
         <option name="LINE_NUMBERS_COLOR" value="B3A998" />
         <option name="LINE_NUMBER_ON_CARET_ROW_COLOR" value="0E8A84" />
         <option name="LOOKUP_COLOR" value="FFFDF8" />
