@@ -1,0 +1,3 @@
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M3.5 1.5H13C13.83 1.5 14.5 2.17 14.5 3V7" stroke="#CED0D6" stroke-linecap="round" stroke-linejoin="round"/><mask id="m88" maskUnits="userSpaceOnUse" x="0" y="0" width="16" height="16"><rect width="16" height="16" fill="white"/><rect x="7.5" y="7.5" width="9" height="9" rx="2" fill="black"/></mask><g mask="url(#m88)"><path d="M2.5 3.5H11C11.55 3.5 12 3.95 12 4.5V13C12 13.55 11.55 14 11 14H2.5C1.95 14 1.5 13.55 1.5 13V4.5C1.5 3.95 1.95 3.5 2.5 3.5ZM1.5 6H12M4.5 6V14" fill="#43454A" stroke="#CED0D6"/></g><path d="M10 10L14 14M14 10L10 14" stroke="#FF375F" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

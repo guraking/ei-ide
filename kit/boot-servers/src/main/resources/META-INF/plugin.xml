@@ -21,6 +21,9 @@
         <projectViewNodeDecorator implementation="local.bootservers.ServerStatusDecorator"/>
         <!-- 바뀐 파일 · 새 파일이 아래에 있는 폴더 · 패키지 아이콘을 그 색으로 칠한다 -->
         <projectViewNodeDecorator implementation="local.bootservers.ChangedFolderIconDecorator"/>
+        <!-- 이름으로 고른 폴더 · 패키지 아이콘, 커뮤니티판에 아이콘이 없는 파일 종류 아이콘(/icons/ei/*.properties) -->
+        <iconProvider implementation="local.bootservers.icons.FolderIcons" order="first"/>
+        <fileIconProvider implementation="local.bootservers.icons.FileIcons" order="first"/>
         <toolWindow id="Servers" anchor="bottom" icon="AllIcons.Nodes.Services"
                     factoryClass="local.bootservers.ServersToolWindowFactory"/>
         <defaultToolWindowLayout implementation="local.bootservers.ToolWindowOrder" order="last"/>
@@ -75,6 +78,8 @@
         <listener class="local.bootservers.BundledFonts" topic="com.intellij.ide.AppLifecycleListener"/>
         <!-- 사용자 폴더 .jdks 의 JDK(플러그인설치.bat 이 푼 것)를 SDK 목록에 등록 -->
         <listener class="local.bootservers.JdkAutoRegister" topic="com.intellij.ide.AppLifecycleListener"/>
+        <!-- 아이콘 없는 기본 메뉴 · 우클릭 동작에 아이콘(/icons/ei/menu-icons.properties) -->
+        <listener class="local.bootservers.icons.MenuIcons" topic="com.intellij.ide.AppLifecycleListener"/>
     </applicationListeners>
 
     <projectListeners>
@@ -137,22 +142,22 @@
             <add-to-group group-id="EditorPopupMenu" anchor="first"/>
         </action>
         <!-- 편집기 우클릭 「표기법 바꾸기」: 고른 글 안의 식별자를 카멜 · 파스칼 · 스네이크 · 대문자 스네이크로 바꾼다. 문자열 · 주석은 둔다. -->
-        <group id="KingGura.CaseConvert" popup="true">
-            <action id="KingGura.CaseCamel" class="local.bootservers.CaseConvertActions$Camel"/>
-            <action id="KingGura.CasePascal" class="local.bootservers.CaseConvertActions$Pascal"/>
-            <action id="KingGura.CaseSnake" class="local.bootservers.CaseConvertActions$Snake"/>
-            <action id="KingGura.CaseUpperSnake" class="local.bootservers.CaseConvertActions$UpperSnake"/>
+        <group id="KingGura.CaseConvert" popup="true" icon="/icons/ei/caseConvert.svg">
+            <action id="KingGura.CaseCamel" class="local.bootservers.CaseConvertActions$Camel" icon="/icons/ei/caseCamel.svg"/>
+            <action id="KingGura.CasePascal" class="local.bootservers.CaseConvertActions$Pascal" icon="/icons/ei/casePascal.svg"/>
+            <action id="KingGura.CaseSnake" class="local.bootservers.CaseConvertActions$Snake" icon="/icons/ei/caseSnake.svg"/>
+            <action id="KingGura.CaseUpperSnake" class="local.bootservers.CaseConvertActions$UpperSnake" icon="/icons/ei/caseUpperSnake.svg"/>
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
         </group>
         <!-- 편집기 · 콘솔 우클릭 「AI」: 고른 코드 · 로그를 프롬프트 파일로 만들어 터미널 새 탭에서 Claude Code 를 시작한다 -->
         <group id="KingGura.AiEditor" popup="true" icon="AllIcons.Toolwindows.ToolWindowAskAI">
-            <action id="KingGura.AiExplain" class="local.bootservers.ai.AiActions$Explain"/>
-            <action id="KingGura.AiFix" class="local.bootservers.ai.AiActions$Fix"/>
-            <action id="KingGura.AiAsk" class="local.bootservers.ai.AiActions$Ask"/>
+            <action id="KingGura.AiExplain" class="local.bootservers.ai.AiActions$Explain" icon="/icons/ei/aiExplain.svg"/>
+            <action id="KingGura.AiFix" class="local.bootservers.ai.AiActions$Fix" icon="/icons/ei/aiFix.svg"/>
+            <action id="KingGura.AiAsk" class="local.bootservers.ai.AiActions$Ask" icon="/icons/ei/aiAsk.svg"/>
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
         </group>
         <group id="KingGura.AiConsole" popup="true" icon="AllIcons.Toolwindows.ToolWindowAskAI">
-            <action id="KingGura.AiConsoleError" class="local.bootservers.ai.AiActions$ConsoleError"/>
+            <action id="KingGura.AiConsoleError" class="local.bootservers.ai.AiActions$ConsoleError" icon="/icons/ei/aiConsoleError.svg"/>
             <add-to-group group-id="ConsoleView.PopupMenu" anchor="last"/>
         </group>
         <!-- 코드 도구: 요청 값 묶기 -->

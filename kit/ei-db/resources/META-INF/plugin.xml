@@ -24,6 +24,8 @@
                 factoryClass="ei.db.console.ResultView$Factory"/>
     <!-- MyBatis: 매퍼 XML 의 문장 옆 실행 아이콘 -->
     <codeInsight.lineMarkerProvider language="XML" implementationClass="ei.db.mybatis.MyBatisLineMarker"/>
+    <!-- MyBatis: 매퍼 XML 파일 아이콘 -->
+    <iconProvider implementation="ei.db.mybatis.MapperFileIcon"/>
     <!-- MyBatis: 매퍼 인터페이스 ↔ XML 이동, #{} 필드 검사 -->
     <codeInsight.lineMarkerProvider language="JAVA" implementationClass="ei.db.mybatis.MapperNav$JavaMarker"/>
     <codeInsight.lineMarkerProvider language="XML" implementationClass="ei.db.mybatis.MapperNav$XmlMarker"/>
@@ -57,11 +59,11 @@
       <keyboard-shortcut keymap="$default" first-keystroke="control shift F"/>
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="ei.db.console.RunAll"/>
     </action>
-    <action id="ei.db.console.Upper" class="ei.db.console.ConsoleRun$Upper">
+    <action id="ei.db.console.Upper" class="ei.db.console.ConsoleRun$Upper" icon="/icons/ei/textUpper.svg">
       <keyboard-shortcut keymap="$default" first-keystroke="control shift X"/>
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="ei.db.console.Format"/>
     </action>
-    <action id="ei.db.console.Lower" class="ei.db.console.ConsoleRun$Lower">
+    <action id="ei.db.console.Lower" class="ei.db.console.ConsoleRun$Lower" icon="/icons/ei/textLower.svg">
       <keyboard-shortcut keymap="$default" first-keystroke="control shift Y"/>
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="ei.db.console.Upper"/>
     </action>
@@ -79,14 +81,14 @@
     <action id="EiDb.MyBatis.ServiceCall" class="ei.db.mybatis.ServiceCallAction" icon="AllIcons.Actions.Copy">
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EiDb.MyBatis.LayerCode"/>
     </action>
-    <action id="EiDb.MyBatis.ColumnRename" class="ei.db.mybatis.ColumnRenameAction">
+    <action id="EiDb.MyBatis.ColumnRename" class="ei.db.mybatis.ColumnRenameAction" icon="/icons/ei/columnRename.svg">
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EiDb.MyBatis.ServiceCall"/>
       <add-to-group group-id="KG.SourceMenu" anchor="last"/>
     </action>
-    <action id="EiDb.MyBatis.DynamicWhere" class="ei.db.mybatis.DynamicWhereAction">
+    <action id="EiDb.MyBatis.DynamicWhere" class="ei.db.mybatis.DynamicWhereAction" icon="/icons/ei/dynamicWhere.svg">
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EiDb.MyBatis.ColumnRename"/>
     </action>
-    <action id="EiDb.MyBatis.Paging" class="ei.db.mybatis.PagingAction">
+    <action id="EiDb.MyBatis.Paging" class="ei.db.mybatis.PagingAction" icon="/icons/ei/paging.svg">
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EiDb.MyBatis.DynamicWhere"/>
     </action>
     <group id="EiDb.MyBatis.Tags" class="ei.db.mybatis.TagGroup" popup="true" icon="AllIcons.FileTypes.Xml">
@@ -96,26 +98,26 @@
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EiDb.MyBatis.Paging"/>
     </action>
     <group id="EiDb.MyBatis.LogGroup">
-      <action id="EiDb.MyBatis.LogRun" class="ei.db.mybatis.LogActions$Run"/>
-      <action id="EiDb.MyBatis.LogSend" class="ei.db.mybatis.LogActions$Send"/>
+      <action id="EiDb.MyBatis.LogRun" class="ei.db.mybatis.LogActions$Run" icon="/icons/ei/logRun.svg"/>
+      <action id="EiDb.MyBatis.LogSend" class="ei.db.mybatis.LogActions$Send" icon="/icons/ei/logSend.svg"/>
       <separator/>
       <add-to-group group-id="ConsoleView.PopupMenu" anchor="first"/>
     </group>
     <action id="ei.db.console.ResultCompare" class="ei.db.console.ResultCompare$OpenAction" icon="AllIcons.Actions.Diff">
       <add-to-group group-id="ToolWindowContextMenu" anchor="last"/>
     </action>
-    <action id="ei.db.gen.Feature" class="ei.db.gen.FeatureAction">
+    <action id="ei.db.gen.Feature" class="ei.db.gen.FeatureAction" icon="/icons/ei/genFeature.svg">
       <add-to-group group-id="KG.SourceMenu" anchor="last"/>
     </action>
-    <action id="ei.db.gen.JsonDto" class="ei.db.gen.JsonDtoAction">
+    <action id="ei.db.gen.JsonDto" class="ei.db.gen.JsonDtoAction" icon="/icons/ei/jsonDto.svg">
       <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
       <add-to-group group-id="KG.SourceMenu" anchor="last"/>
     </action>
-    <action id="ei.db.gen.Validation" class="ei.db.gen.ValidationAction">
+    <action id="ei.db.gen.Validation" class="ei.db.gen.ValidationAction" icon="/icons/ei/validation.svg">
       <add-to-group group-id="EditorPopupMenu" anchor="last"/>
       <add-to-group group-id="KG.SourceMenu" anchor="last"/>
     </action>
-    <action id="ei.db.gen.EnumSync" class="ei.db.gen.EnumSyncAction">
+    <action id="ei.db.gen.EnumSync" class="ei.db.gen.EnumSyncAction" icon="/icons/ei/enumSync.svg">
       <add-to-group group-id="EditorPopupMenu" anchor="last"/>
     </action>
   </actions>
