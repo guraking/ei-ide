@@ -39,6 +39,20 @@ final class History {
   /** 한 줄의 그림: 점(커밋)이 놓일 칸, 줄 위쪽 반(위 줄 → 점)과 아래쪽 반(점 → 아래 줄) 토막. */
   record Row(int col, List<Seg> top, List<Seg> bottom) {}
 
+  /**
+   * 한 줄의 꺾인 선 수. split 은 위쪽 다른 칸에서 이 점으로 꺾여 들어온 선(이 커밋에서 갈라져 나간 가지),
+   * merge 는 이 점에서 아래쪽 다른 칸으로 꺾여 나간 선(이 커밋으로 합쳐 들인 가지).
+   */
+  record Bends(int split, int merge) {}
+
+  static Bends bends(Row row) {
+    int split = 0;
+    for (Seg s : row.top()) if (s.from() != s.to()) split++;
+    int merge = 0;
+    for (Seg s : row.bottom()) if (s.from() == row.col() && s.to() != row.col()) merge++;
+    return new Bends(split, merge);
+  }
+
   // git log --format 의 구분자. 커밋 메시지에 나오지 않는 제어 문자를 쓴다. BODY_END 뒤에 --name-status 줄이 온다.
   static final char RECORD_SEP = '\u001e';
   static final char FIELD_SEP = '\u001f';
@@ -51,12 +65,12 @@ final class History {
   private History() {}
 
   /**
-   * 작업 폴더(프로젝트 폴더) 안을 바꾼 최근 커밋 limit 개. 날짜 순이되 자식이 부모보다 먼저 온다.
+   * 작업 폴더(프로젝트 폴더) 안을 바꾼 커밋을 최근 것부터 skip 개 건너뛰고 limit 개. 날짜 순이되 자식이 부모보다 먼저 온다.
    * --parents 로 폴더 밖 커밋을 건너뛴 부모를 받아 가지 선이 끊기지 않게 하고, --relative 로 경로를 작업 폴더 기준으로 받는다.
    */
-  static String[] gitLogArgs(int limit) {
-    return new String[]{"log", "--date-order", "--parents", "-n", String.valueOf(limit), "--relative", "--name-status", GIT_FORMAT,
-                        "--", "."};
+  static String[] gitLogArgs(int limit, int skip) {
+    return new String[]{"log", "--date-order", "--parents", "-n", String.valueOf(limit), "--skip", String.valueOf(skip), "--relative",
+                        "--name-status", GIT_FORMAT, "--", "."};
   }
 
   /**

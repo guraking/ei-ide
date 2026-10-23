@@ -256,9 +256,15 @@ final class SyncPanel extends SimpleToolWindowPanel {
     JPanel labels = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(GAP), 0));
     labels.add(title);
     labels.add(status);
+    // FlowLayout 은 줄을 위에 붙이므로, 도구줄 높이에 맞춰 세로 가운데로 놓는다.
+    JPanel middle = new JPanel(new GridBagLayout());
+    GridBagConstraints left = new GridBagConstraints();
+    left.weightx = 1;
+    left.fill = GridBagConstraints.HORIZONTAL;
+    middle.add(labels, left);
     JPanel top = new JPanel(new BorderLayout());
     top.add(toolbar.getComponent(), BorderLayout.WEST);
-    top.add(labels, BorderLayout.CENTER);
+    top.add(middle, BorderLayout.CENTER);
     setToolbar(top);
 
     OnePixelSplitter splitter = new OnePixelSplitter(false, 0.35f);

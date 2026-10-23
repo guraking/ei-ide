@@ -22,6 +22,8 @@ import com.intellij.openapi.actionSystem.ActionManager;
 import com.intellij.openapi.actionSystem.ActionToolbar;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.project.DumbAwareAction;
+import com.intellij.openapi.ui.MessageType;
+import com.intellij.openapi.ui.popup.JBPopupFactory;
 import com.intellij.openapi.vcs.FileStatus;
 import com.intellij.ui.ColoredListCellRenderer;
 import com.intellij.ui.SimpleTextAttributes;
@@ -59,12 +61,13 @@ import java.util.List;
 /**
  * 아래쪽 「Git Log」 창. 왼쪽에서 프로젝트(모듈)를 고르면 그 폴더 안을 바꾼 최근 커밋을 IntelliJ 기본 Log 탭처럼 보여 준다.
  * 가지마다 색이 다른 꺾인 선 위에 커밋 점(합치기는 속이 빈 점), 브랜치 · 태그 알약, 오른쪽에 커밋 내용과 바뀐 파일(두 번 누르면 비교 창).
- * 위쪽은 찾기 칸과 새로고침뿐이다. 찾기로 거르면 사이가 빠지므로 가지 선 대신 한 줄로 그린다. 기존 Git 로그 창은 그대로 둔다.
+ * 맨 아래까지 내리면 다음 LOG_LIMIT 개를 읽어 밑에 붙인다. 위쪽은 찾기 칸과 새로고침뿐이다. 찾기로 거르면 사이가 빠지므로 가지 선 대신 한 줄로 그린다. 기존 Git 로그 창은 그대로 둔다.
  * Git 은 git log, SVN 은 svn log 를 작업 스레드에서 돌린다(SyncPanel.run 과 같은 실행 · 시간 제한). SVN 은 한 줄 기록이다.
  */
 final class ProjectHistoryPanel extends JPanel {
   static final String ID = "ProjectHistory";
-  private static final int LOG_LIMIT = 100;
+  // 한 번에 읽는 커밋 수. 목록을 맨 아래까지 내리면 다음 묶음을 읽어 밑에 붙인다.
+  private static final int LOG_LIMIT = 200;
   private static final ZoneId ZONE = ZoneId.systemDefault();
   private static final Locale TIME_LOCALE = Locale.forLanguageTag(SyncBundle.message("history.locale"));
   private static final DateTimeFormatter TODAY = timeFormat("history.time.today");
@@ -128,20 +131,21 @@ final class ProjectHistoryPanel extends JPanel {
     @Override public String toString() { return name; }
   }
 
-  /** 읽어 온 기록. branch 는 Git 현재 브랜치 · SVN 저장소 경로. svnRoot · svnPrefix 는 SVN 비교 창용. */
+  /** 읽어 온 기록. branch 는 Git 현재 브랜치 · SVN 저장소 경로. svnRoot · svnPrefix 는 SVN 비교 창용. more 는 다음 묶음이 남았을 수 있음. */
   private record Loaded(Target target, String branch, String svnRoot, String svnPrefix,
-                        List<History.Entry> entries, List<History.Row> rows) {}
+                        List<History.Entry> entries, List<History.Row> rows, boolean more) {}
 
   private final Project project;
   private final JBList<Target> targets = new JBList<>();
   private final DefaultListModel<History.Entry> commitModel = new DefaultListModel<>();
-  // 풍선 도움말: 작성자와 긴 날짜(목록에는 짧은 시간만 보인다).
+  // 풍선 도움말: 가지 선 칸 위에서는 그 줄의 점 · 꺾인 선 뜻, 나머지에서는 작성자와 긴 날짜(목록에는 짧은 시간만 보인다).
   private final JBList<History.Entry> commits = new JBList<>(commitModel) {
     @Override
     public String getToolTipText(MouseEvent e) {
       int i = locationToIndex(e.getPoint());
       if (i < 0 || !getCellBounds(i, i).contains(e.getPoint())) return null;
       History.Entry entry = commitModel.get(i);
+      if (graph && loaded != null && i < loaded.rows().size() && e.getX() < graphWidth) return graphTip(entry, loaded.rows().get(i));
       return entry.author() + " · " + ROW_TIME.format(entry.time().atZone(ZONE));
     }
   };
@@ -160,6 +164,7 @@ final class ProjectHistoryPanel extends JPanel {
   private final Pill refs = new Pill();
   private final TitledSeparator filesTitle = new TitledSeparator();
   private Loaded loaded;
+  private boolean loadingMore;
   private boolean graph;
   private int graphWidth;
 
@@ -193,7 +198,8 @@ final class ProjectHistoryPanel extends JPanel {
     // IntelliJ 기본 창처럼 새로고침은 도구줄 아이콘 단추, 스크롤 상자는 테두리 없이, 칸막이는 1픽셀로 둔다.
     // 창 머리 아래 선은 IntelliJ 가 그으므로 안쪽 칸에 테두리를 더하면 선이 두 겹이 된다.
     DefaultActionGroup actions = new DefaultActionGroup(
-      DumbAwareAction.create(SyncBundle.message("history.refresh"), AllIcons.Actions.Refresh, e -> { reloadTargets(); load(); }));
+      DumbAwareAction.create(SyncBundle.message("history.refresh"), AllIcons.Actions.Refresh, e -> { reloadTargets(); load(); }),
+      DumbAwareAction.create(SyncBundle.message("history.legend.action"), AllIcons.General.ContextHelp, e -> showLegend()));
     ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar(TOOLBAR_PLACE, actions, true);
     toolbar.setTargetComponent(this);
     projectName.setFont(JBUI.Fonts.label().asBold());
@@ -211,7 +217,14 @@ final class ProjectHistoryPanel extends JPanel {
 
     JPanel center = new JPanel(new BorderLayout());
     center.add(top, BorderLayout.NORTH);
-    center.add(ScrollPaneFactory.createScrollPane(commits, true), BorderLayout.CENTER);
+    JScrollPane commitScroll = ScrollPaneFactory.createScrollPane(commits, true);
+    BoundedRangeModel scroll = commitScroll.getVerticalScrollBar().getModel();
+    scroll.addChangeListener(e -> {
+      // 목록이 칸보다 길 때만 본다. 찾기로 줄어 칸에 다 들어가면 내릴 수 없으므로 저절로 읽지 않는다.
+      boolean overflows = scroll.getMaximum() > scroll.getExtent();
+      if (overflows && scroll.getValue() + scroll.getExtent() >= scroll.getMaximum() - JBUI.scale(ROW_H)) loadMore();
+    });
+    center.add(commitScroll, BorderLayout.CENTER);
 
     OnePixelSplitter right = new OnePixelSplitter(false, 0.7f);
     right.setFirstComponent(center);
@@ -297,7 +310,7 @@ final class ProjectHistoryPanel extends JPanel {
       Loaded result;
       String error = null;
       try {
-        result = read(target);
+        result = read(target, null);
       }
       catch (IOException e) {
         result = null;
@@ -320,16 +333,103 @@ final class ProjectHistoryPanel extends JPanel {
     });
   }
 
-  private static Loaded read(Target target) throws IOException, InterruptedException {
+  /** 맨 아래까지 내렸을 때 다음 묶음을 읽어 밑에 붙인다. 고른 줄 · 오른쪽 칸은 그대로 둔다. */
+  private void loadMore() {
+    Loaded before = loaded;
+    if (before == null || !before.more() || loadingMore) return;
+    loadingMore = true;
+    status.setText(SyncBundle.message("history.loading"));
+    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+      Loaded result = null;
+      String error = null;
+      try {
+        result = read(before.target(), before);
+      }
+      catch (IOException e) {
+        error = e.getMessage();
+      }
+      catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+      Loaded done = result;
+      String failure = error;
+      SwingUtilities.invokeLater(() -> {
+        loadingMore = false;
+        if (loaded != before) return;  // 읽는 동안 다른 프로젝트를 골랐거나 새로 읽었다.
+        if (done == null) {
+          // 실패한 묶음은 다시 내릴 때 또 시도하지 않도록 끝으로 본다.
+          loaded = new Loaded(before.target(), before.branch(), before.svnRoot(), before.svnPrefix(), before.entries(), before.rows(),
+                              false);
+          status.setText(Objects.toString(failure, SyncBundle.message("history.count", before.entries().size())));
+          return;
+        }
+        loaded = done;
+        updateGraphWidth();
+        String word = searchWord();
+        for (History.Entry entry : done.entries().subList(before.entries().size(), done.entries().size())) {
+          if (matches(entry, word)) commitModel.addElement(entry);
+        }
+        commits.repaint();  // 앞 묶음 마지막 줄의 아래 선도 새 줄로 이어진다.
+        status.setText(SyncBundle.message("history.count", done.entries().size()));
+      });
+    });
+  }
+
+  /**
+   * 기록을 읽는다. before 가 null 이면 처음 LOG_LIMIT 개, 아니면 before 뒤의 다음 LOG_LIMIT 개를 읽어 before 에 이어 붙인 결과.
+   * Git 은 --skip 으로, SVN 은 마지막 리비전 바로 앞부터(-r N-1:1) 읽는다. SVN 은 부모를 「목록의 다음 리비전」으로 두므로
+   * 앞 묶음 마지막 커밋의 부모를 새 묶음 첫 커밋으로 잇는다.
+   */
+  private static Loaded read(Target target, Loaded before) throws IOException, InterruptedException {
     File dir = target.dir();
+    List<History.Entry> entries = before == null ? new ArrayList<>() : new ArrayList<>(before.entries());
+    List<History.Entry> page;
+    String branch;
+    String svnRoot = null;
+    String svnPrefix = null;
     if (target.vcs() == SyncPanel.Vcs.GIT) {
-      List<History.Entry> entries = History.parseGitLog(SyncPanel.git(dir, History.gitLogArgs(LOG_LIMIT)));
-      return new Loaded(target, gitOrEmpty(dir, "rev-parse", "--abbrev-ref", "HEAD"), null, null, entries, History.layout(entries));
+      branch = before == null ? gitOrEmpty(dir, "rev-parse", "--abbrev-ref", "HEAD") : before.branch();
+      page = History.parseGitLog(SyncPanel.git(dir, History.gitLogArgs(LOG_LIMIT, entries.size())));
     }
-    String[] info = History.parseSvnInfo(SyncPanel.run(dir, "svn", "info", "--xml"));
-    String xml = SyncPanel.run(dir, "svn", "log", "--xml", "-v", "-l", String.valueOf(LOG_LIMIT));
-    List<History.Entry> entries = History.parseSvnLog(xml, info[1]);
-    return new Loaded(target, info[1], info[0], info[1], entries, History.layout(entries));
+    else {
+      if (before == null) {
+        String[] info = History.parseSvnInfo(SyncPanel.run(dir, "svn", "info", "--xml"));
+        svnRoot = info[0];
+        svnPrefix = info[1];
+      }
+      else {
+        svnRoot = before.svnRoot();
+        svnPrefix = before.svnPrefix();
+      }
+      branch = svnPrefix;
+      page = entries.isEmpty() ? History.parseSvnLog(SyncPanel.run(dir, "svn", "log", "--xml", "-v", "-l", String.valueOf(LOG_LIMIT)), svnPrefix)
+                               : nextSvnPage(dir, entries, svnPrefix);
+    }
+    entries.addAll(page);
+    return new Loaded(target, branch, svnRoot, svnPrefix, entries, History.layout(entries), page.size() == LOG_LIMIT);
+  }
+
+  /** entries(비어 있지 않음) 의 마지막 리비전 앞의 다음 묶음. 마지막이 1 이하면 빈 목록. 리비전이 숫자가 아니면 IOException. */
+  private static List<History.Entry> nextSvnPage(File dir, List<History.Entry> entries, String svnPrefix)
+    throws IOException, InterruptedException {
+    int lastIndex = entries.size() - 1;
+    History.Entry last = entries.get(lastIndex);
+    long revision;
+    try {
+      revision = Long.parseLong(last.id());
+    }
+    catch (NumberFormatException e) {
+      throw new IOException("svn 리비전을 읽지 못했습니다: " + last.id());
+    }
+    if (revision <= 1) return List.of();
+    String range = (revision - 1) + ":1";
+    List<History.Entry> page = History.parseSvnLog(
+      SyncPanel.run(dir, "svn", "log", "--xml", "-v", "-l", String.valueOf(LOG_LIMIT), "-r", range), svnPrefix);
+    if (!page.isEmpty()) {
+      entries.set(lastIndex, new History.Entry(last.id(), List.of(page.get(0).id()), last.author(), last.time(), last.refs(),
+                                               last.message(), last.files()));
+    }
+    return page;
   }
 
   /** 없어도 되는 값(브랜치 이름)을 읽는다. 실패 · 빈 값이면 null. */
@@ -353,18 +453,51 @@ final class ProjectHistoryPanel extends JPanel {
     commitModel.clear();
     clearDetail();
     if (loaded == null) return;
-    String word = filter.getText().trim().toLowerCase(Locale.ROOT);
+    String word = searchWord();
     graph = word.isEmpty();
+    updateGraphWidth();
+    for (History.Entry entry : loaded.entries()) {
+      if (matches(entry, word)) commitModel.addElement(entry);
+    }
+  }
+
+  private String searchWord() {
+    return filter.getText().trim().toLowerCase(Locale.ROOT);
+  }
+
+  /** 찾기 글(소문자, 빈 글이면 모두)이 제목이나 작성자에 들어 있는가. */
+  private static boolean matches(History.Entry entry, String word) {
+    return word.isEmpty() || entry.subject().toLowerCase(Locale.ROOT).contains(word) || entry.author().toLowerCase(Locale.ROOT).contains(word);
+  }
+
+  /** 가지 선 칸 폭. 가지 선을 그릴 때만 읽어 온 줄 가운데 가장 넓은 줄에 맞춘다. */
+  private void updateGraphWidth() {
     int lanes = 1;
     if (graph) {
       for (History.Row row : loaded.rows()) lanes = Math.max(lanes, laneCount(row));
     }
     graphWidth = JBUI.scale(Math.min(lanes, MAX_LANES) * LANE_W + GRAPH_PAD * 2);
-    for (History.Entry entry : loaded.entries()) {
-      if (!word.isEmpty() && !entry.subject().toLowerCase(Locale.ROOT).contains(word)
-          && !entry.author().toLowerCase(Locale.ROOT).contains(word)) continue;
-      commitModel.addElement(entry);
-    }
+  }
+
+  /** 가지 선 · 점 · 글자 밝기의 뜻. 목록 가운데에 풍선으로 띄우고 바깥을 누르면 닫는다. */
+  private void showLegend() {
+    String html = "<html>" + String.join("<br>", SyncBundle.message("history.legend.dot"), SyncBundle.message("history.legend.merge.dot"),
+                                         SyncBundle.message("history.legend.split"), SyncBundle.message("history.legend.merge"),
+                                         SyncBundle.message("history.legend.color"), SyncBundle.message("history.legend.hover")) + "</html>";
+    JBPopupFactory.getInstance().createHtmlTextBalloonBuilder(html, MessageType.INFO, null)
+      .setHideOnClickOutside(true)
+      .createBalloon()
+      .showInCenterOf(commits);
+  }
+
+  /** 가지 선 칸 위 풍선 도움말: 이 줄의 점 모양과 꺾인 선이 뜻하는 것. */
+  private static String graphTip(History.Entry entry, History.Row row) {
+    List<String> lines = new ArrayList<>();
+    lines.add(SyncBundle.message(entry.merge() ? "history.legend.merge.dot" : "history.legend.dot"));
+    History.Bends bends = History.bends(row);
+    if (bends.split() > 0) lines.add(SyncBundle.message("history.graph.split", bends.split()));
+    if (bends.merge() > 0) lines.add(SyncBundle.message("history.graph.merge", bends.merge()));
+    return "<html>" + String.join("<br>", lines) + "</html>";
   }
 
   private static int laneCount(History.Row row) {
