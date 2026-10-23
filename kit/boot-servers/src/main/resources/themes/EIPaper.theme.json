@@ -1,0 +1,435 @@
+{
+  "name": "EI Paper",
+  "dark": false,
+  "author": "EI IDE",
+  "parentTheme": "Islands Light",
+  "editorScheme": "EI Paper",
+  "colors": {
+    "glass-bg": "#F4F4F2",
+    "glass-island": "#FFFFFF",
+    "glass-island-inline": "#F8F8F6",
+    "glass-island-border": "#DCDCD8",
+    "glass-popup": "#FFFFFF",
+    "glass-popup-border": "#CFCFCB",
+    "glass-raised": "#FFFFFF",
+    "glass-raised-border": "#E2E2DE",
+    "glass-accent": "#D7263D",
+    "glass-accent-soft": "#B01E31",
+    "glass-accent-30": "#F6CDD2",
+    "glass-accent-20": "#FAE1E4",
+    "glass-accent-40": "#F1B6BE",
+    "layer-0-bg": "glass-island",
+    "layer-0-bg-inline": "glass-island-inline",
+    "layer-0-border": "glass-island-border",
+    "layer-0-border-inline": "glass-island-border",
+    "layer-1-bg": "glass-popup",
+    "layer-1-border": "glass-popup-border",
+    "layer-1-bg-inline": "glass-raised",
+    "layer-1-border-inline": "glass-raised-border",
+    "layer-2-bg": "glass-raised",
+    "layer-2-border": "glass-raised-border",
+    "main-window-bg": "glass-bg",
+    "control-brand-border": "glass-accent",
+    "selection-bg-active": "glass-accent-30",
+    "selection-bg-active-muted": "glass-accent-20",
+    "toolbar-selected-bg": "glass-accent-30",
+    "toolbar-selected-bg-hovered": "glass-accent-40",
+    "tab-selected-bg-active": "glass-accent-22",
+    "tab-selected-border-active": "glass-accent",
+    "popup-completion-match-text": "glass-accent-soft",
+    "glass-accent-22": "#D7263D38",
+    "glass-accent-12": "#D7263D1F",
+    "glass-accent-border-muted": "#D7263D66",
+    "glass-glow-tr": "#F3E6E6",
+    "glass-glow-mid": "#F1F1EF",
+    "glass-glow-bl": "#ECECEA",
+    "glass-glow": "#D7263D1F",
+    "glass-glow-0": "#D7263D00",
+    "glass-veil-0": "#F4F4F200",
+    "glass-veil-b": "#F4F4F233",
+    "tab-selected-bg-inactive": "glass-accent-12",
+    "tab-selected-border-inactive": "glass-accent-border-muted",
+    "glass-cat-1": "#6B4C9A",
+    "glass-cat-2": "#1F3A93",
+    "glass-cat-3": "#2F6B6B",
+    "glass-cat-4": "#2F6B2F",
+    "glass-cat-5": "#D7263D",
+    "glass-cat-6": "#A34A00",
+    "glass-cat-7": "#335C85",
+    "glass-cat-8": "#4B4B8F",
+    "glass-cat-9": "#7A5C00",
+    "glass-cat-10": "#A3214F",
+    "glass-urgent": "#D7263D",
+    "glass-high": "#A34A00",
+    "glass-primary": "#1F3A93",
+    "glass-urgent-bg": "#FADDE0",
+    "glass-high-bg": "#F5E6D3",
+    "glass-info-bg": "#E1E6F2",
+    "glass-success-bg": "#E0ECE0",
+    "glass-accent-bg": "#FAE1E4"
+  },
+  "ui": {
+    "Island": {
+      "colorGradient": true,
+      "colorGradient.mirrored": true,
+      "toolWindowAlpha": 0.15
+    },
+    "ProjectGradients": {
+      "Group1": {
+        "DiagonalGradient": {
+          "Color1": "glass-glow-tr",
+          "Color2": "glass-glow-mid",
+          "Color3": "glass-bg",
+          "Color4": "glass-glow-bl",
+          "Fraction1": 0.0,
+          "Fraction2": 0.25,
+          "Fraction3": 0.6,
+          "Fraction4": 1.0
+        },
+        "RadialGradient": {
+          "Color1": "glass-glow",
+          "Color2": "glass-glow-0"
+        },
+        "HorizontalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-0"
+        },
+        "VerticalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-b"
+        }
+      },
+      "Group2": {
+        "DiagonalGradient": {
+          "Color1": "glass-glow-tr",
+          "Color2": "glass-glow-mid",
+          "Color3": "glass-bg",
+          "Color4": "glass-glow-bl",
+          "Fraction1": 0.0,
+          "Fraction2": 0.25,
+          "Fraction3": 0.6,
+          "Fraction4": 1.0
+        },
+        "RadialGradient": {
+          "Color1": "glass-glow",
+          "Color2": "glass-glow-0"
+        },
+        "HorizontalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-0"
+        },
+        "VerticalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-b"
+        }
+      },
+      "Group3": {
+        "DiagonalGradient": {
+          "Color1": "glass-glow-tr",
+          "Color2": "glass-glow-mid",
+          "Color3": "glass-bg",
+          "Color4": "glass-glow-bl",
+          "Fraction1": 0.0,
+          "Fraction2": 0.25,
+          "Fraction3": 0.6,
+          "Fraction4": 1.0
+        },
+        "RadialGradient": {
+          "Color1": "glass-glow",
+          "Color2": "glass-glow-0"
+        },
+        "HorizontalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-0"
+        },
+        "VerticalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-b"
+        }
+      },
+      "Group4": {
+        "DiagonalGradient": {
+          "Color1": "glass-glow-tr",
+          "Color2": "glass-glow-mid",
+          "Color3": "glass-bg",
+          "Color4": "glass-glow-bl",
+          "Fraction1": 0.0,
+          "Fraction2": 0.25,
+          "Fraction3": 0.6,
+          "Fraction4": 1.0
+        },
+        "RadialGradient": {
+          "Color1": "glass-glow",
+          "Color2": "glass-glow-0"
+        },
+        "HorizontalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-0"
+        },
+        "VerticalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-b"
+        }
+      },
+      "Group5": {
+        "DiagonalGradient": {
+          "Color1": "glass-glow-tr",
+          "Color2": "glass-glow-mid",
+          "Color3": "glass-bg",
+          "Color4": "glass-glow-bl",
+          "Fraction1": 0.0,
+          "Fraction2": 0.25,
+          "Fraction3": 0.6,
+          "Fraction4": 1.0
+        },
+        "RadialGradient": {
+          "Color1": "glass-glow",
+          "Color2": "glass-glow-0"
+        },
+        "HorizontalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-0"
+        },
+        "VerticalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-b"
+        }
+      },
+      "Group6": {
+        "DiagonalGradient": {
+          "Color1": "glass-glow-tr",
+          "Color2": "glass-glow-mid",
+          "Color3": "glass-bg",
+          "Color4": "glass-glow-bl",
+          "Fraction1": 0.0,
+          "Fraction2": 0.25,
+          "Fraction3": 0.6,
+          "Fraction4": 1.0
+        },
+        "RadialGradient": {
+          "Color1": "glass-glow",
+          "Color2": "glass-glow-0"
+        },
+        "HorizontalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-0"
+        },
+        "VerticalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-b"
+        }
+      },
+      "Group7": {
+        "DiagonalGradient": {
+          "Color1": "glass-glow-tr",
+          "Color2": "glass-glow-mid",
+          "Color3": "glass-bg",
+          "Color4": "glass-glow-bl",
+          "Fraction1": 0.0,
+          "Fraction2": 0.25,
+          "Fraction3": 0.6,
+          "Fraction4": 1.0
+        },
+        "RadialGradient": {
+          "Color1": "glass-glow",
+          "Color2": "glass-glow-0"
+        },
+        "HorizontalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-0"
+        },
+        "VerticalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-b"
+        }
+      },
+      "Group8": {
+        "DiagonalGradient": {
+          "Color1": "glass-glow-tr",
+          "Color2": "glass-glow-mid",
+          "Color3": "glass-bg",
+          "Color4": "glass-glow-bl",
+          "Fraction1": 0.0,
+          "Fraction2": 0.25,
+          "Fraction3": 0.6,
+          "Fraction4": 1.0
+        },
+        "RadialGradient": {
+          "Color1": "glass-glow",
+          "Color2": "glass-glow-0"
+        },
+        "HorizontalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-0"
+        },
+        "VerticalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-b"
+        }
+      },
+      "Group9": {
+        "DiagonalGradient": {
+          "Color1": "glass-glow-tr",
+          "Color2": "glass-glow-mid",
+          "Color3": "glass-bg",
+          "Color4": "glass-glow-bl",
+          "Fraction1": 0.0,
+          "Fraction2": 0.25,
+          "Fraction3": 0.6,
+          "Fraction4": 1.0
+        },
+        "RadialGradient": {
+          "Color1": "glass-glow",
+          "Color2": "glass-glow-0"
+        },
+        "HorizontalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-0"
+        },
+        "VerticalGradient": {
+          "Color1": "glass-veil-0",
+          "Color2": "glass-veil-b"
+        }
+      }
+    },
+    "MainToolbar": {
+      "Button.arc": 28,
+      "Button.arc.compact": 24,
+      "Dropdown": {
+        "arc": 28,
+        "pillBackground": "#0000000A",
+        "pillBorderColor": "#0000001A"
+      }
+    },
+    "ToolWindow": {
+      "Button": {
+        "selectedBackground": "#D7263D40",
+        "visibleBackground": "#D7263D24"
+      }
+    },
+    "Tree": {
+      "Selection": {
+        "borderColor": "glass-accent"
+      }
+    },
+    "List": {
+      "Selection": {
+        "borderColor": "#D7263D99"
+      }
+    },
+    "Link": {
+      "activeForeground": "glass-cat-7",
+      "hoverForeground": "glass-cat-7",
+      "pressedForeground": "glass-cat-2",
+      "visitedForeground": "glass-cat-1"
+    },
+    "Label": {
+      "errorForeground": "glass-urgent",
+      "warningForeground": "glass-high",
+      "successForeground": "glass-cat-4"
+    },
+    "Component": {
+      "errorFocusColor": "glass-urgent",
+      "warningFocusColor": "glass-high"
+    },
+    "ProgressBar": {
+      "progressColor": "glass-accent",
+      "indeterminateStartColor": "glass-cat-5",
+      "indeterminateEndColor": "glass-cat-1"
+    },
+    "Counter": {
+      "background": "glass-accent",
+      "foreground": "#FFFFFF"
+    },
+    "Notification": {
+      "errorBackground": "glass-urgent-bg",
+      "errorBorderColor": "glass-urgent",
+      "ToolWindow": {
+        "errorBackground": "glass-urgent-bg",
+        "errorBorderColor": "glass-urgent",
+        "warningBackground": "glass-high-bg",
+        "warningBorderColor": "glass-high",
+        "informativeBackground": "glass-success-bg",
+        "informativeBorderColor": "glass-cat-4"
+      }
+    },
+    "ValidationTooltip": {
+      "errorBackground": "glass-urgent-bg",
+      "errorBorderColor": "glass-urgent",
+      "warningBackground": "glass-high-bg",
+      "warningBorderColor": "glass-high"
+    },
+    "Banner": {
+      "infoBackground": "glass-info-bg",
+      "infoBorderColor": "glass-cat-2",
+      "successBackground": "glass-success-bg",
+      "successBorderColor": "glass-cat-4",
+      "warningBackground": "glass-high-bg",
+      "warningBorderColor": "glass-high",
+      "errorBackground": "glass-urgent-bg",
+      "errorBorderColor": "glass-urgent",
+      "aiBackground": "#ECE6F2",
+      "aiBorderColor": "glass-cat-1"
+    },
+    "EIServers": {
+      "runningBackground": "glass-success-bg",
+      "startingBackground": "glass-high-bg",
+      "failedBackground": "glass-urgent-bg",
+      "tag.local": "glass-cat-4",
+      "tag.dev": "glass-cat-2",
+      "tag.prod": "glass-cat-10",
+      "tag.tomcat": "glass-cat-6",
+      "tag.jeus": "glass-cat-2",
+      "tag.weblogic": "glass-cat-8",
+      "tag.wildfly": "glass-cat-1"
+    },
+    "EILog": {
+      "infoForeground": "glass-cat-7",
+      "match.background": "glass-accent-30"
+    },
+    "EIMemo": {
+      "lockForeground": "glass-accent"
+    },
+    "EiDatabase": {
+      "connected": "glass-cat-4",
+      "production": "glass-urgent",
+      "productionBackground": "glass-urgent-bg",
+      "readOnly": "glass-cat-2",
+      "readOnlyBackground": "glass-info-bg",
+      "pk": "glass-cat-6",
+      "pkBackground": "glass-high-bg",
+      "fk": "glass-cat-2",
+      "fkBackground": "glass-info-bg",
+      "pending": "glass-high",
+      "pendingBackground": "glass-high-bg",
+      "countBackground": "glass-success-bg",
+      "number": "glass-cat-7",
+      "selection": "glass-accent",
+      "selectionBackground": "glass-accent-bg",
+      "erd.cat1": "glass-cat-1",
+      "erd.cat2": "glass-cat-2",
+      "erd.cat3": "glass-cat-3",
+      "erd.cat4": "glass-cat-4",
+      "erd.cat5": "glass-cat-5",
+      "erd.cat6": "glass-cat-6",
+      "erd.cat7": "glass-cat-7",
+      "erd.cat8": "glass-cat-8",
+      "erd.cat9": "glass-cat-9",
+      "erd.cat10": "glass-cat-10"
+    },
+    "VersionControl": {
+      "GitLog": {
+        "headIconColor": "glass-cat-9",
+        "localBranchIconColor": "glass-cat-4",
+        "remoteBranchIconColor": "glass-cat-1",
+        "tagIconColor": "glass-cat-6",
+        "otherIconColor": "glass-cat-7"
+      },
+      "Log": {
+        "Commit": {
+          "currentBranchBackground": "glass-accent-bg"
+        }
+      }
+    }
+  }
+}
