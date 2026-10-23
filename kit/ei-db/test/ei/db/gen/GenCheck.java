@@ -106,6 +106,19 @@ public class GenCheck {
                                  new MapperGen.Options(true, true, true, false, DbKind.POSTGRES));
     ok(pg.xmlFile(MapperGen.allKinds()).contains("      FROM ORDER_ITEM oi\n") && pg.xmlFile(MapperGen.allKinds()).contains("oi.\"Qty\""), "PostgreSQL 이름 표기");
 
+    // MERGE: PK 로 ON, PK 아닌 칼럼만 UPDATE SET, 모든 칼럼 INSERT
+    ok(xml.contains("  <update id=\"mergeProduct\" parameterType=\"com.example.dto.ProductDto\">\n    MERGE INTO PRODUCT p\n    USING DUAL\n"
+        + "       ON (p.PRODUCT_ID = #{productId})\n     WHEN MATCHED THEN\n          UPDATE SET\n"
+        + "                 p.SUPPLIER_ID = #{supplierId}\n               , p.PRODUCT_NAME = #{productName}\n"), "MERGE 머리 · SET");
+    ok(!xml.contains("p.PRODUCT_ID = #{productId}\n               ,"), "MERGE 는 PK 를 고치지 않음");
+    ok(xml.contains("     WHEN NOT MATCHED THEN\n          INSERT (\n                 PRODUCT_ID\n               , SUPPLIER_ID\n"), "MERGE INSERT 칼럼");
+    ok(xml.contains("          ) VALUES (\n                 #{productId}\n               , #{supplierId}\n"), "MERGE VALUES");
+    ok(g.interfaceFile(MapperGen.allKinds()).contains("int mergeProduct(ProductDto param);"), "MERGE 메서드");
+    ok(plainXml.contains("    ON DUPLICATE KEY UPDATE\n           SUPPLIER_ID = VALUES(SUPPLIER_ID)\n         , PRODUCT_NAME = VALUES(PRODUCT_NAME)\n"), "MySQL MERGE");
+    MapperGen pgMerge = new MapperGen("ITEM", COLS, "a.M", "a.D", new MapperGen.Options(true, true, true, false, DbKind.POSTGRES));
+    ok(pgMerge.xmlFile(MapperGen.allKinds()).contains("    ON CONFLICT (\"PRODUCT_ID\") DO UPDATE SET\n           \"SUPPLIER_ID\" = EXCLUDED.\"SUPPLIER_ID\"\n"), "PostgreSQL MERGE");
+    ok(!noPk.possible(MapperGen.Kind.MERGE) && !pkOnly.possible(MapperGen.Kind.MERGE), "PK 없거나 PK 만 있으면 MERGE 없음");
+
     String itf = g.interfaceFile(MapperGen.allKinds());
     ok(itf.contains("List<ProductDto> selectProductList(Map<String, Object> param);"), "목록 메서드");
     ok(itf.contains("import com.example.dto.ProductDto;"), "DTO import");
@@ -122,7 +135,7 @@ public class GenCheck {
     Merge.Result mr = Merge.xml(existing, g.xmlBlocks(MapperGen.allKinds()));
     parse(mr.text());
     eq(mr.skipped(), List.of("selectProduct"));
-    eq(mr.added().size(), 5);
+    eq(mr.added().size(), 6);
     ok(mr.text().startsWith(existing.substring(0, existing.indexOf("</mapper>"))), "원래 글 보존");
     eq(Merge.xml("<x/>", List.of()).text(), null);
 
@@ -130,7 +143,7 @@ public class GenCheck {
     Merge.Result jr = Merge.java(itfOld, g.methods(MapperGen.allKinds()), g.interfaceImports(MapperGen.allKinds()));
     eq(jr.skipped(), List.of("insertProduct"));
     ok(jr.text().contains("import java.util.List;\nimport com.example.dto.ProductDto;\nimport java.util.Map;\n"), "import 덧붙임");
-    ok(jr.text().endsWith("    int deleteProduct(ProductDto param);\n}\n"), "메서드 덧붙임");
+    ok(jr.text().endsWith("    int deleteProduct(ProductDto param);\n    int mergeProduct(ProductDto param);\n}\n"), "메서드 덧붙임");
     eq(jr.text().split("import java.util.List;", -1).length, 2);
 
     List<List<String>> cols = ErdLayout.columns(List.of("ORDER_ITEM", "PRODUCT", "SUPPLIER", "ORDERS", "USERS", "CODE"),

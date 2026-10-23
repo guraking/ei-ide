@@ -89,6 +89,9 @@
     <action id="EiDb.MyBatis.Paging" class="ei.db.mybatis.PagingAction">
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EiDb.MyBatis.DynamicWhere"/>
     </action>
+    <group id="EiDb.MyBatis.Tags" class="ei.db.mybatis.TagGroup" popup="true" icon="AllIcons.FileTypes.Xml">
+      <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EiDb.MyBatis.Paging"/>
+    </group>
     <action id="EiDb.MyBatis.StringSql" class="ei.db.mybatis.StringSqlAction" icon="AllIcons.Actions.ReformatCode">
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EiDb.MyBatis.Paging"/>
     </action>
