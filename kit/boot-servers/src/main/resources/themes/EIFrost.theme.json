@@ -15,9 +15,9 @@
     "glass-raised-border": "#CCCDD5",
     "glass-accent": "#0A84FF",
     "glass-accent-soft": "#0066CC",
-    "glass-accent-30": "#C7DEFA",
-    "glass-accent-20": "#DCEAFB",
-    "glass-accent-40": "#B3D3F8",
+    "glass-accent-30": "#B2C7E6",
+    "glass-accent-20": "#C5D2E7",
+    "glass-accent-40": "#A0BDE5",
     "layer-0-bg": "glass-island",
     "layer-0-bg-inline": "glass-island-inline",
     "layer-0-border": "glass-island-border",
@@ -40,9 +40,9 @@
     "glass-accent-22": "#0A84FF38",
     "glass-accent-12": "#0A84FF1F",
     "glass-accent-border-muted": "#0A84FF66",
-    "glass-glow-tr": "#DCE6F5",
-    "glass-glow-mid": "#E8EAF0",
-    "glass-glow-bl": "#E9E2F2",
+    "glass-glow-tr": "#CDD5E4",
+    "glass-glow-mid": "#D3D5DD",
+    "glass-glow-bl": "#D6D1DF",
     "glass-glow": "#0A84FF1F",
     "glass-glow-0": "#0A84FF00",
     "glass-veil-0": "#D6D7DE00",
@@ -62,11 +62,11 @@
     "glass-urgent": "#D70015",
     "glass-high": "#B25000",
     "glass-primary": "#0A84FF",
-    "glass-urgent-bg": "#FBE3E5",
-    "glass-high-bg": "#FBEBDA",
-    "glass-info-bg": "#E0ECFB",
-    "glass-success-bg": "#DFF2E3",
-    "glass-accent-bg": "#DCEAFB",
+    "glass-urgent-bg": "#E0CCD3",
+    "glass-high-bg": "#E0D3C9",
+    "glass-info-bg": "#C8D4E7",
+    "glass-success-bg": "#C7D9D1",
+    "glass-accent-bg": "#C5D2E7",
     "editor-bg": "glass-island",
     "editor-bg-inline": "glass-island-inline",
     "editor-border": "glass-island-border",
@@ -79,7 +79,15 @@
     "popup-bg": "glass-popup",
     "popup-bg-inline": "glass-popup",
     "popup-border": "glass-popup-border",
-    "popup-border-inline": "glass-popup-border"
+    "popup-border-inline": "glass-popup-border",
+    "tool-window-bg-alt": "glass-island-inline",
+    "main-window-bg-alt": "glass-bg",
+    "editor-border-alt": "glass-island-border",
+    "selection-bg-inactive": "gray-140",
+    "gray-160": "#E9EAEF",
+    "gray-150": "#DEDFE5",
+    "gray-140": "#D3D4DB",
+    "gray-130": "#C6C7CF"
   },
   "ui": {
     "Island": {
@@ -328,6 +336,9 @@
     "List": {
       "Selection": {
         "borderColor": "#0A84FF99"
+      },
+      "Tag": {
+        "background": "gray-140"
       }
     },
     "Link": {
@@ -381,8 +392,17 @@
       "warningBorderColor": "glass-high",
       "errorBackground": "glass-urgent-bg",
       "errorBorderColor": "glass-urgent",
-      "aiBackground": "#EFE3F7",
+      "aiBackground": "#D6CCE4",
       "aiBorderColor": "glass-cat-1"
+    },
+    "FileColor": {
+      "Yellow": "#E8E3CF",
+      "Green": "#D7E5DA",
+      "Orange": "#EBDDD0",
+      "Rose": "#EBD8DA",
+      "Violet": "#E0D9EC",
+      "Blue": "#D5E1EE",
+      "Gray": "#DCDDE3"
     },
     "EIServers": {
       "runningBackground": "glass-success-bg",
@@ -443,6 +463,21 @@
           "currentBranchBackground": "glass-accent-bg"
         }
       }
+    },
+    "Tag": {
+      "background": "gray-140"
+    },
+    "ParameterInfo": {
+      "background": "glass-popup",
+      "lineSeparatorColor": "glass-popup-border"
+    },
+    "Editor": {
+      "ToolTip": {
+        "selectionBackground": "gray-140"
+      }
+    },
+    "Table": {
+      "stripeColor": "glass-island-inline"
     }
   }
 }

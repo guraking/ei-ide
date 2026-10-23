@@ -10,7 +10,7 @@
         <option name="ANNOTATIONS_LAST_COMMIT_COLOR" value="0" />
         <option name="CARET_ROW_COLOR" value="DCDCD7" />
         <option name="DELETED_LINES_COLOR" value="767a8a" />
-        <option name="DIFF_SEPARATORS_BACKGROUND" value="e4e6eb" />
+        <option name="DIFF_SEPARATORS_BACKGROUND" value="CECFCF" />
         <option name="DOCUMENTATION_COLOR" value="ECECE7" />
         <option name="FILESTATUS_IDEA_FILESTATUS_IGNORED" value="7d5020" />
         <option name="GUTTER_BACKGROUND" value="E6E6E1" />
@@ -23,25 +23,25 @@
         <option name="LINE_NUMBER_ON_CARET_ROW_COLOR" value="D7263D" />
         <option name="LOOKUP_COLOR" value="ECECE7" />
         <option name="MATCHED_BRACES_INDENT_GUIDE_COLOR" value="62b3b3" />
-        <option name="METHOD_SEPARATORS_COLOR" value="dfe1e5" />
+        <option name="METHOD_SEPARATORS_COLOR" value="C9CBCA" />
         <option name="MODIFIED_LINES_COLOR" value="88adf7" deuteranopia="9ca9bf" protanopia="9ca9bf" />
-        <option name="NOTIFICATION_BACKGROUND" value="fff8e3" />
+        <option name="NOTIFICATION_BACKGROUND" value="E6E0C8" />
         <option name="RIGHT_MARGIN_COLOR" value="CACAC4" />
         <option name="SELECTED_INDENT_GUIDE" value="aeb3c2" />
-        <option name="SELECTION_BACKGROUND" value="F6CDD2" deuteranopia="5974AB" protanopia="5974AB" />
+        <option name="SELECTION_BACKGROUND" value="DEB9B9" deuteranopia="5974AB" protanopia="5974AB" />
         <option name="SELECTION_FOREGROUND" value="" deuteranopia="ffffff" protanopia="ffffff" />
-        <option name="TEARLINE_COLOR" value="d4d4d4" />
+        <option name="TEARLINE_COLOR" value="BFBFBB" />
         <option name="VCS_ANNOTATIONS_COLOR_1" value="a1bef7" />
-        <option name="VCS_ANNOTATIONS_COLOR_2" value="c9dafb" />
-        <option name="VCS_ANNOTATIONS_COLOR_3" value="dee8fc" />
-        <option name="VCS_ANNOTATIONS_COLOR_4" value="edf2fa" />
-        <option name="VCS_ANNOTATIONS_COLOR_5" value="f7f8fa" />
+        <option name="VCS_ANNOTATIONS_COLOR_2" value="B5C5DD" />
+        <option name="VCS_ANNOTATIONS_COLOR_3" value="C8D1DE" />
+        <option name="VCS_ANNOTATIONS_COLOR_4" value="D6DADD" />
+        <option name="VCS_ANNOTATIONS_COLOR_5" value="DFE0DD" />
         <option name="VISUAL_INDENT_GUIDE" value="CACAC4" />
-        <option name="WHITESPACES_MODIFIED_LINES_COLOR" value="f7e2cb" deuteranopia="c5cad4" protanopia="c5cad4" />
-        <option name="ERROR_HINT" value="FFE8E8" />
-        <option name="PROMOTION_PANE" value="e7effd" />
-        <option name="QUESTION_HINT" value="f5f8fe" />
-        <option name="RECENT_LOCATIONS_SELECTION" value="E7EFFD" />
+        <option name="WHITESPACES_MODIFIED_LINES_COLOR" value="DFCCB3" deuteranopia="c5cad4" protanopia="c5cad4" />
+        <option name="ERROR_HINT" value="E6D1CD" />
+        <option name="PROMOTION_PANE" value="D0D8DF" />
+        <option name="QUESTION_HINT" value="DDE0E0" />
+        <option name="RECENT_LOCATIONS_SELECTION" value="D0D8DF" />
         <option name="FOLDED_TEXT_BORDER_COLOR" value="ADD9C7" deuteranopia="b3b3b3" protanopia="b3b3b3" />
         <option name="FILESTATUS_ADDED" value="067D17" />
         <option name="FILESTATUS_COPIED" value="067D17" />
@@ -63,13 +63,28 @@
         <option name="CARET_COLOR" value="D7263D" />
         <option name="CONSOLE_BACKGROUND_KEY" value="E6E6E1" />
         <option name="EDITOR_GUTTER_BACKGROUND" value="" />
+        <option name="GRID_STRIPE_COLOR" value="DDE0E0" />
+        <option name="READONLY_FRAGMENT_BACKGROUND" value="BBD0E1" />
+        <option name="DOC_COMMENT_GUIDE" value="D1D1CD" />
+        <option name="DIFF_SEPARATOR_WAVE" value="BCBCB8" />
+        <option name="BLOCK_TERMINAL_BLOCK_BACKGROUND_START" value="D8DAD8" />
+        <option name="BLOCK_TERMINAL_BLOCK_BACKGROUND_END" value="E1E1DD" />
+        <option name="BLOCK_TERMINAL_SELECTED_BLOCK_BACKGROUND" value="D6DBE1" />
+        <option name="BLOCK_TERMINAL_INACTIVE_SELECTED_BLOCK_BACKGROUND" value="D4D5D4" />
+        <option name="BLOCK_TERMINAL_INACTIVE_SELECTED_BLOCK_STROKE_COLOR" value="B5B8BD" />
+        <option name="BLOCK_TERMINAL_PROMPT_SEPARATOR_COLOR" value="D4D5D4" />
+        <option name="Table.hoverBackground" value="D6DDDE" />
+        <option name="Bookmark.Mnemonic.iconBackground" value="E5DFD0" />
+        <option name="ScrollBar.background" value="DDDDD8" />
+        <option name="ActionButton.hoverBackground" value="C9C9C5" />
+        <option name="ActionButton.pressedBackground" value="BBBBB7" />
     </colors>
     <attributes>
         <option name="ANNOTATION_NAME_ATTRIBUTES" baseAttributes="DEFAULT_METADATA" />
         <option name="BREADCRUMBS_CURRENT">
             <value>
                 <option name="FOREGROUND" value="0" />
-                <option name="BACKGROUND" value="ebecf0" />
+                <option name="BACKGROUND" value="D4D5D4" />
             </value>
         </option>
         <option name="BREADCRUMBS_DEFAULT">
@@ -80,7 +95,7 @@
         <option name="BREADCRUMBS_HOVERED">
             <value>
                 <option name="FOREGROUND" value="0" />
-                <option name="BACKGROUND" value="ebecf0" />
+                <option name="BACKGROUND" value="D4D5D4" />
             </value>
         </option>
         <option name="BREADCRUMBS_INACTIVE">
@@ -162,7 +177,7 @@
         <option name="DOC_CODE_BLOCK">
             <value>
                 <option name="FOREGROUND" value="000000" />
-                <option name="BACKGROUND" value="f8f8f9" />
+                <option name="BACKGROUND" value="E0E0DC" />
                 <option name="EFFECT_COLOR" value="EBECF0" />
                 <option name="EFFECT_TYPE" value="0" />
             </value>
@@ -170,7 +185,7 @@
         <option name="DOC_CODE_INLINE">
             <value>
                 <option name="FOREGROUND" value="000000" />
-                <option name="BACKGROUND" value="f3f3f4" />
+                <option name="BACKGROUND" value="DBDBD7" />
             </value>
         </option>
         <option name="DOC_TIPS_SHORTCUT">
@@ -201,7 +216,7 @@
         <option name="DEFAULT_INVALID_STRING_ESCAPE">
             <value>
                 <option name="FOREGROUND" value="7A5C00" deuteranopia="1948a6" protanopia="1948a6" />
-                <option name="BACKGROUND" value="ffcccc" deuteranopia="ffdcbf" protanopia="ffdcbf" />
+                <option name="BACKGROUND" value="E6B8B4" deuteranopia="E6C6A9" protanopia="E6C6A9" />
                 <option name="FONT_TYPE" deuteranopia="bold" protanopia="bold" />
                 <option name="EFFECT_COLOR" value="7A5C00" />
                 <option name="EFFECT_TYPE" value="2" />
@@ -264,14 +279,14 @@
         </option>
         <option name="DIFF_MODIFIED">
             <value>
-                <option name="BACKGROUND" value="c2d8f2" />
+                <option name="BACKGROUND" value="AFC3D6" />
                 <option name="ERROR_STRIPE_COLOR" value="b6d2f2" />
             </value>
         </option>
         <option name="FOLDED_TEXT_ATTRIBUTES">
             <value>
                 <option name="FOREGROUND" value="414d41" deuteranopia="4d4d4d" protanopia="4d4d4d" />
-                <option name="BACKGROUND" value="e9f5e6" deuteranopia="ebebeb" protanopia="ebebeb" />
+                <option name="BACKGROUND" value="D2DDCB" deuteranopia="D4D4CF" protanopia="D4D4CF" />
                 <option name="EFFECT_TYPE" value="1" />
             </value>
         </option>
@@ -383,7 +398,7 @@
         </option>
         <option name="IDENTIFIER_UNDER_CARET_ATTRIBUTES">
             <value>
-                <option name="BACKGROUND" value="edebfc" deuteranopia="D9E6FF" protanopia="D9E6FF" />
+                <option name="BACKGROUND" value="D6D4DE" deuteranopia="C4CFE1" protanopia="C4CFE1" />
                 <option name="ERROR_STRIPE_COLOR" value="d0a1ff" deuteranopia="acb0bf" protanopia="acb0bf" />
             </value>
         </option>
@@ -428,7 +443,7 @@
         </option>
         <option name="MATCHED_TAG_NAME">
             <value>
-                <option name="BACKGROUND" value="c9ecec" />
+                <option name="BACKGROUND" value="B5D5D0" />
             </value>
         </option>
         <option name="PROPERTIES.KEY">
@@ -482,14 +497,14 @@
         </option>
         <option name="WARNING_ATTRIBUTES">
             <value>
-                <option name="BACKGROUND" value="fcf4d4" deuteranopia="fff0a6" protanopia="fff0a6" />
+                <option name="BACKGROUND" value="E3DCBB" deuteranopia="E6D892" protanopia="E6D892" />
                 <option name="ERROR_STRIPE_COLOR" value="f2bf57" deuteranopia="ffd400" protanopia="ffd400" />
                 <option name="EFFECT_TYPE" value="1" />
             </value>
         </option>
         <option name="WRITE_IDENTIFIER_UNDER_CARET_ATTRIBUTES">
             <value>
-                <option name="BACKGROUND" value="fce8f4" deuteranopia="E0E0CC" protanopia="E0E0CC" />
+                <option name="BACKGROUND" value="E3D1D7" deuteranopia="CACAB4" protanopia="CACAB4" />
                 <option name="ERROR_STRIPE_COLOR" value="f0a8d2" deuteranopia="807A59" protanopia="807A59" />
             </value>
         </option>
@@ -600,7 +615,7 @@
         </option>
         <option name="DEFAULT_TEMPLATE_LANGUAGE_COLOR">
             <value>
-                <option name="BACKGROUND" value="E6E6E1" />
+                <option name="BACKGROUND" value="CFCFC7" />
             </value>
         </option>
         <option name="HTML_CUSTOM_TAG_NAME">
@@ -732,5 +747,268 @@
         <option name="CLASS_NAME_ATTRIBUTES" baseAttributes="DEFAULT_CLASS_REFERENCE" />
         <option name="ENUM_NAME_ATTRIBUTES" baseAttributes="DEFAULT_CLASS_REFERENCE" />
         <option name="INTERFACE_NAME_ATTRIBUTES" baseAttributes="DEFAULT_CLASS_REFERENCE" />
+        <option name="DEBUGGER_SMART_STEP_INTO_TARGET">
+            <value>
+                <option name="BACKGROUND" value="CCBED4" />
+                <option name="FOREGROUND" value="000" />
+            </value>
+        </option>
+        <option name="DEBUGGER_SMART_STEP_INTO_SELECTION">
+            <value>
+                <option name="BACKGROUND" value="DAA1E1" />
+                <option name="FOREGROUND" value="000" />
+                <option name="EFFECT_COLOR" value="CC29CC" />
+                <option name="EFFECT_TYPE" value="0" />
+            </value>
+        </option>
+        <option name="DELETED_TEXT_ATTRIBUTES">
+            <value>
+                <option name="FOREGROUND" value="c3c3c3" deuteranopia="c3c3c3" protanopia="c3c3c3" />
+                <option name="BACKGROUND" value="D8D8D4" deuteranopia="DFDFDA" protanopia="DFDFDA" />
+                <option name="EFFECT_COLOR" />
+                <option name="EFFECT_TYPE" value="1" />
+            </value>
+        </option>
+        <option name="DUPLICATE_FROM_SERVER">
+            <value>
+                <option name="FOREGROUND" />
+                <option name="BACKGROUND" value="DDDFD4" />
+                <option name="EFFECT_COLOR" />
+                <option name="EFFECT_TYPE" />
+                <option name="ERROR_STRIPE_COLOR" />
+            </value>
+        </option>
+        <option name="DIFF_CONFLICT">
+            <value>
+                <option name="FOREGROUND" />
+                <option name="BACKGROUND" value="E6C0B4" deuteranopia="E6D57C" protanopia="E6D57C" />
+                <option name="EFFECT_COLOR" />
+                <option name="ERROR_STRIPE_COLOR" value="ffc8bd" deuteranopia="fad932" protanopia="fad932" />
+            </value>
+        </option>
+        <option name="DIFF_DELETED">
+            <value>
+                <option name="FOREGROUND" />
+                <option name="BACKGROUND" value="C1C1BD" />
+                <option name="EFFECT_COLOR" />
+                <option name="ERROR_STRIPE_COLOR" value="C8C8C8" />
+            </value>
+        </option>
+        <option name="DIFF_UNKNOWN">
+            <value>
+                <option name="FOREGROUND" />
+                <option name="BACKGROUND" value="C5D0A9" />
+                <option name="EFFECT_COLOR" />
+            </value>
+        </option>
+        <option name="INLINE_PARAMETER_HINT">
+            <value>
+                <option name="FOREGROUND" value="7a7a7a" />
+                <option name="BACKGROUND" value="D6D6D1" />
+            </value>
+        </option>
+        <option name="INLAY_DEFAULT">
+            <value>
+                <option name="FOREGROUND" value="7a7a7a" />
+                <option name="BACKGROUND" value="D6D6D1" />
+            </value>
+        </option>
+        <option name="DIFF_ABSENT">
+            <value>
+                <option name="FOREGROUND" />
+                <option name="BACKGROUND" value="D8D8D4" />
+                <option name="EFFECT_COLOR" />
+            </value>
+        </option>
+        <option name="SEARCH_RESULT_ATTRIBUTES">
+            <value>
+                <option name="FOREGROUND" />
+                <option name="BACKGROUND" value="B8B8E1" deuteranopia="A8BAE1" protanopia="A8BAE1" />
+                <option name="EFFECT_COLOR" />
+                <option name="ERROR_STRIPE_COLOR" value="8e8eb2" deuteranopia="8290b2" protanopia="8290b2" />
+            </value>
+        </option>
+        <option name="REGEXP_MATCHED_GROUPS">
+            <value>
+                <option name="BACKGROUND" value="C3C3BF" />
+            </value>
+        </option>
+        <option name="WRITE_SEARCH_RESULT_ATTRIBUTES">
+            <value>
+                <option name="FOREGROUND" />
+                <option name="BACKGROUND" value="E6B9E1" deuteranopia="D4CFB4" protanopia="D4CFB4" />
+                <option name="EFFECT_COLOR" />
+                <option name="ERROR_STRIPE_COLOR" value="b28fb2" deuteranopia="94907d" protanopia="94907d" />
+            </value>
+        </option>
+        <option name="INJECTED_LANGUAGE_FRAGMENT">
+            <value>
+                <option name="BACKGROUND" value="D6E3D1" deuteranopia="D4D4CF" protanopia="D4D4CF" />
+                <option name="FONT_TYPE" value="0" />
+                <option name="EFFECT_COLOR" />
+                <option name="EFFECT_TYPE" value="0" />
+            </value>
+        </option>
+        <option name="NOT_TOP_FRAME_ATTRIBUTES">
+            <value>
+                <option name="BACKGROUND" value="ADBCD4" />
+            </value>
+        </option>
+        <option name="EVALUATED_EXPRESSION_ATTRIBUTES">
+            <value>
+                <option name="BACKGROUND" value="CFCFCA" />
+            </value>
+        </option>
+        <option name="BREAKPOINT_ATTRIBUTES">
+            <value>
+                <option name="FOREGROUND" />
+                <option name="BACKGROUND" value="E1D3CB" deuteranopia="E6CFB8" protanopia="E6CFB8" />
+                <option name="EFFECT_COLOR" />
+                <option name="ERROR_STRIPE_COLOR" value="ffc8c8" />
+            </value>
+        </option>
+        <option name="INLINE_STACK_FRAMES">
+            <value>
+                <option name="FOREGROUND" />
+                <option name="BACKGROUND" value="CFCAD5" />
+            </value>
+        </option>
+        <option name="CUSTOM_INVALID_STRING_ESCAPE_ATTRIBUTES">
+            <value>
+                <option name="FOREGROUND" value="8000" deuteranopia="1948a6" protanopia="1948a6" />
+                <option name="BACKGROUND" value="E6B8B4" deuteranopia="E6C6A9" protanopia="E6C6A9" />
+                <option name="EFFECT_COLOR" />
+                <option name="FONT_TYPE" deuteranopia="bold" protanopia="bold" />
+            </value>
+        </option>
+        <option name="CONSOLE_BLUE_OUTPUT">
+            <value>
+                <option name="FOREGROUND" value="063FDB" />
+                <option name="BACKGROUND" value="B1C6DD" />
+                <option name="FONT_TYPE" value="0" />
+                <option name="EFFECT_COLOR" />
+                <option name="EFFECT_TYPE" value="0" />
+                <option name="ERROR_STRIPE_COLOR" />
+            </value>
+        </option>
+        <option name="CONSOLE_CYAN_OUTPUT">
+            <value>
+                <option name="FOREGROUND" value="028E8E" />
+                <option name="BACKGROUND" value="ACD7D2" />
+                <option name="FONT_TYPE" value="0" />
+                <option name="EFFECT_COLOR" />
+                <option name="EFFECT_TYPE" value="0" />
+                <option name="ERROR_STRIPE_COLOR" />
+            </value>
+        </option>
+        <option name="CONSOLE_CYAN_BRIGHT_OUTPUT">
+            <value>
+                <option name="FOREGROUND" value="15C1C1" />
+                <option name="BACKGROUND" value="7ED9D5" />
+                <option name="FONT_TYPE" value="0" />
+                <option name="EFFECT_COLOR" />
+                <option name="EFFECT_TYPE" value="0" />
+                <option name="ERROR_STRIPE_COLOR" />
+            </value>
+        </option>
+        <option name="CONSOLE_GRAY_OUTPUT">
+            <value>
+                <option name="FOREGROUND" value="929292" />
+                <option name="BACKGROUND" value="CFCFCB" />
+                <option name="FONT_TYPE" value="0" />
+                <option name="EFFECT_COLOR" />
+                <option name="EFFECT_TYPE" value="0" />
+                <option name="ERROR_STRIPE_COLOR" />
+            </value>
+        </option>
+        <option name="CONSOLE_MAGENTA_OUTPUT">
+            <value>
+                <option name="FOREGROUND" value="B309B3" />
+                <option name="BACKGROUND" value="DBBDD6" />
+                <option name="FONT_TYPE" value="0" />
+                <option name="EFFECT_COLOR" />
+                <option name="EFFECT_TYPE" value="0" />
+                <option name="ERROR_STRIPE_COLOR" />
+            </value>
+        </option>
+        <option name="CONSOLE_MAGENTA_BRIGHT_OUTPUT">
+            <value>
+                <option name="FOREGROUND" value="E617E6" />
+                <option name="BACKGROUND" value="E29BDD" />
+                <option name="FONT_TYPE" value="0" />
+                <option name="EFFECT_COLOR" />
+                <option name="EFFECT_TYPE" value="0" />
+                <option name="ERROR_STRIPE_COLOR" />
+            </value>
+        </option>
+        <option name="CONSOLE_YELLOW_OUTPUT">
+            <value>
+                <option name="FOREGROUND" value="B28C00" />
+                <option name="BACKGROUND" value="DFD08C" />
+                <option name="FONT_TYPE" value="0" />
+                <option name="EFFECT_COLOR" />
+                <option name="EFFECT_TYPE" value="0" />
+                <option name="ERROR_STRIPE_COLOR" />
+            </value>
+        </option>
+        <option name="CONSOLE_WHITE_OUTPUT">
+            <value>
+                <option name="FOREGROUND" value="C9C9C9" />
+                <option name="BACKGROUND" value="E6E6E1" />
+                <option name="FONT_TYPE" value="0" />
+                <option name="EFFECT_COLOR" />
+                <option name="EFFECT_TYPE" value="0" />
+                <option name="ERROR_STRIPE_COLOR" />
+            </value>
+        </option>
+        <option name="TERMINAL_COMMAND_TO_RUN_USING_IDE">
+            <value>
+                <option name="BACKGROUND" value="BBD8AF" />
+            </value>
+        </option>
+        <option name="BLOCK_TERMINAL_WHITE">
+            <value>
+                <option name="FOREGROUND" value="BEC0C5" />
+                <option name="BACKGROUND" value="C6C8C8" />
+                <option name="FONT_TYPE" value="0" />
+                <option name="EFFECT_COLOR" />
+                <option name="EFFECT_TYPE" value="0" />
+                <option name="ERROR_STRIPE_COLOR" />
+            </value>
+        </option>
+        <option name="BLOCK_TERMINAL_WHITE_BRIGHT">
+            <value>
+                <option name="FOREGROUND" value="D2D4D9" />
+                <option name="BACKGROUND" value="E6E6E1" />
+                <option name="FONT_TYPE" value="0" />
+                <option name="EFFECT_COLOR" />
+                <option name="EFFECT_TYPE" value="0" />
+                <option name="ERROR_STRIPE_COLOR" />
+            </value>
+        </option>
+        <option name="SPY-JS.FUNCTION_SCOPE">
+            <value>
+                <option name="BACKGROUND" value="E6E6BE" />
+                <option name="EFFECT_TYPE" value="2" />
+            </value>
+        </option>
+        <option name="SPY-JS.PROGRAM_SCOPE">
+            <value>
+                <option name="BACKGROUND" value="E6E6BE" />
+                <option name="EFFECT_TYPE" value="2" />
+            </value>
+        </option>
+        <option name="SPY-JS.EXCEPTION">
+            <value>
+                <option name="BACKGROUND" value="E6B8B4" />
+                <option name="EFFECT_TYPE" value="2" />
+            </value>
+        </option>
+        <option name="SPY-JS.PATH_LEVEL_ONE">
+            <value>
+                <option name="BACKGROUND" value="CCE6C7" deuteranopia="D2E1DD" protanopia="D2E1DD" />
+                <option name="EFFECT_TYPE" value="2" />
+            </value>
+        </option>
     </attributes>
 </scheme>
