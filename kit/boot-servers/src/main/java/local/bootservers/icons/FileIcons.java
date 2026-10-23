@@ -2,13 +2,13 @@ package local.bootservers.icons;
 
 import com.intellij.ide.FileIconProvider;
 import com.intellij.openapi.fileTypes.FileNameMatcher;
-import com.intellij.openapi.fileTypes.FileNameMatcherFactory;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Iconable;
 import com.intellij.openapi.vfs.VirtualFile;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.jps.model.fileTypes.FileNameMatcherFactory;
 
 import javax.swing.Icon;
 import java.util.ArrayList;

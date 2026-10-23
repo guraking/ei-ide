@@ -58,8 +58,22 @@ final class IconRules {
 
     private static Icon icon(String spec) {
         if (spec.startsWith(ALL_ICONS)) {
-            return IconLoader.getReflectiveIcon(spec, AllIcons.class.getClassLoader());
+            return allIcons(spec.substring(ALL_ICONS.length()));
         }
         return IconRules.class.getResource(spec) == null ? null : IconLoader.getIcon(spec, IconRules.class);
+    }
+
+    /** "Actions.Find" → AllIcons.Actions 의 Find 필드. 안쪽 클래스가 여러 단이면 점마다 한 단. 없으면 null. */
+    private static Icon allIcons(String path) {
+        int dot = path.lastIndexOf('.');
+        if (dot <= 0) {
+            return null;
+        }
+        try {
+            Class<?> owner = Class.forName(AllIcons.class.getName() + "$" + path.substring(0, dot).replace('.', '$'));
+            return owner.getField(path.substring(dot + 1)).get(null) instanceof Icon icon ? icon : null;
+        } catch (ReflectiveOperationException e) {
+            return null;
+        }
     }
 }

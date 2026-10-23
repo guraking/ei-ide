@@ -1,9 +1,9 @@
 package local.bootservers.icons;
 
 import com.intellij.ide.IconProvider;
+import com.intellij.ide.projectView.impl.ProjectRootsUtil;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.roots.ProjectFileIndex;
-import com.intellij.openapi.roots.ProjectRootsUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiDirectory;
 import com.intellij.psi.PsiElement;
