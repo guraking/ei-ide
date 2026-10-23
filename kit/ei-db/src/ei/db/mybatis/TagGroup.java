@@ -65,7 +65,8 @@ public final class TagGroup extends ActionGroup implements DumbAware {
     private final MyBatisTags.Tag tag;
 
     Insert(MyBatisTags.Tag tag) {
-      super(tag.label);
+      // 설명은 메뉴에서 항목 위에 마우스를 올리면 보인다.
+      super(tag.label, EiDbBundle.message("tags.desc." + tag.name()), null);
       this.tag = tag;
     }
 
