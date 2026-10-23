@@ -22,6 +22,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.vcs.ProjectLevelVcsManager;
 import com.intellij.openapi.vcs.VcsRoot;
+import com.intellij.openapi.util.IconLoader;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vcs.FileStatus;
 import com.intellij.openapi.vcs.changes.ChangeListListener;
@@ -47,7 +48,6 @@ import com.intellij.openapi.ui.SimpleToolWindowPanel;
 import com.intellij.ui.JBColor;
 import com.intellij.ui.OnePixelSplitter;
 import com.intellij.ui.ScrollPaneFactory;
-import com.intellij.util.IconUtil;
 import com.intellij.util.ui.JBUI;
 import org.jetbrains.annotations.NotNull;
 import com.intellij.ui.SimpleTextAttributes;
@@ -170,8 +170,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static final int PATH_LIST_MAX = 10;
   private static final int REPO_CHANGE_DELAY_MS = 500;
   private static final String TOOLBAR_PLACE = "KingGuraSynchronizeToolbar";
-  // 테마의 기본(강조색) 단추 글자색 키
-  private static final String DEFAULT_BUTTON_FOREGROUND = "Button.default.foreground";
+  // 기본(강조색) 단추 위에 놓는 흰 받기 아이콘. 테마마다 기본 단추 바탕이 강조색이고 글자가 흰색이다.
+  private static final String PULL_SELECTED_ICON = "/icons/ei/pullSelected.svg";
   // 도구줄 글 사이 · 아래 단추 사이 간격(JBUI.scale 전).
   private static final int GAP = 8;
   // 파일 줄 앞 상태 글자 칸의 최소 폭(JBUI.scale 전). 「M」 · 「??」 · 「충돌」 뒤 파일 아이콘이 한 줄로 서게 한다.
@@ -248,8 +248,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
     actions.add(new RefreshAction("sync.refresh.selected", AllIcons.Actions.ForceRefresh, this::refreshSelected));
     actions.addSeparator();
     actions.add(new ModeAction("sync.mode.all", AllIcons.Actions.ListChanges, null));
-    actions.add(new ModeAction("sync.mode.incoming", AllIcons.Actions.CheckOut, Kind.INCOMING));
-    actions.add(new ModeAction("sync.mode.outgoing", AllIcons.Vcs.Push, Kind.OUTGOING));
+    actions.add(new ModeAction("sync.mode.incoming", AllIcons.Actions.Download, Kind.INCOMING));
+    actions.add(new ModeAction("sync.mode.outgoing", AllIcons.Actions.Upload, Kind.OUTGOING));
     actions.add(new ModeAction("sync.mode.conflict", AllIcons.Vcs.Merge, Kind.CONFLICT));
     ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar(TOOLBAR_PLACE, actions, true);
     toolbar.setTargetComponent(this);
@@ -278,11 +278,9 @@ final class SyncPanel extends SimpleToolWindowPanel {
     JPanel bottom = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(GAP), JBUI.scale(GAP / 2)));
     bottom.setBorder(JBUI.Borders.customLineTop(JBColor.border()));
     // 받기(Pull)는 이 창의 주된 동작이라 기본 단추 모양으로 둔다.
-    JButton pull = actionButton(SyncBundle.message("sync.button.pull"), AllIcons.Actions.CheckOut, ACTION_PULL, true);
+    JButton pull = actionButton(SyncBundle.message("sync.button.pull"), IconLoader.getIcon(PULL_SELECTED_ICON, SyncPanel.class), ACTION_PULL, true);
     pull.putClientProperty(DarculaButtonUI.DEFAULT_STYLE_KEY, Boolean.TRUE);
-    // 기본 단추 바탕이 강조색이라 같은 계열인 파란 아이콘이 묻힌다. 아이콘을 기본 단추 글자색으로 칠한다.
-    pull.setIcon(IconUtil.colorize(AllIcons.Actions.CheckOut, JBColor.namedColor(DEFAULT_BUTTON_FOREGROUND, JBColor.WHITE)));
-    bottom.add(actionButton(SyncBundle.message("sync.button.update.all"), AllIcons.Actions.CheckOut, ACTION_UPDATE_ALL, false));
+    bottom.add(actionButton(SyncBundle.message("sync.button.update.all"), AllIcons.Vcs.ShelveSilent, ACTION_UPDATE_ALL, false));
     bottom.add(pull);
     bottom.add(actionButton(SyncBundle.message("sync.button.resolve"), AllIcons.Vcs.Merge, "Git.ResolveConflicts", false));
     JPanel content = new JPanel(new BorderLayout());
@@ -1000,8 +998,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static Icon iconOf(Kind kind) {
     return switch (kind) {
       case CONFLICT -> AllIcons.General.Warning;
-      case INCOMING -> AllIcons.Actions.CheckOut;
-      case OUTGOING -> AllIcons.Vcs.Push;
+      case INCOMING -> AllIcons.Actions.Download;
+      case OUTGOING -> AllIcons.Actions.Upload;
       case ASSUMED -> AllIcons.Actions.Show;
     };
   }
