@@ -62,6 +62,8 @@ icon('selectionShrink', '선택 좁히기', '<rect x="5.5" y="4.5" width="5" hei
      + harrow(1, 3.5, 8, 'N', 1.5) + harrow(15, 12.5, 8, 'N', 1.5))
 icon('surroundWith', '감싸기', st('M4 2.5H2.5V13.5H4M12 2.5H13.5V13.5H12', '$N') + lines([8], 5.5, 10.5, '$blue'))
 icon('unindent', '내어쓰기', lines([2.5, 13.5], 1.5, 14.5) + lines([6.5, 9.5], 7.5, 14.5) + harrow(5.5, 1.5, 8, 'blue'))
+icon('tip', '오늘의 팁', '<path d="M8 1.5C5.5 1.5 3.5 3.4 3.5 5.9C3.5 7.4 4.2 8.5 5.2 9.4C5.7 9.9 6 10.4 6 11V11.5H10V11C10 10.4 10.3 9.9 10.8 9.4C11.8 8.5 12.5 7.4 12.5 5.9C12.5 3.4 10.5 1.5 8 1.5Z" fill="'
+     + tint('yellow') + '" stroke="$yellow" stroke-linejoin="round"/>' + st('M6.5 13.5H9.5', '$N'))
 icon('toggleCase', '대소문자 뒤집기', T('A', 4.8, 10.5, 9, '$N') + T('a', 11.4, 10.5, 9, '$N')
      + st('M3.5 13.5H12.5M5 12L3.5 13.5L5 15M11 12L12.5 13.5L11 15', '$blue'))
 icon('transpose', '두 글자 맞바꾸기', T('A', 4.8, 11, 8, '$N') + T('B', 11.2, 11, 8, '$N')
@@ -120,5 +122,5 @@ SECTIONS = [('기본 메뉴 새 아이콘 02', [
     'rebase', 'refactor', 'rename', 'replaceStructural', 'reverseLines', 'rootUnmark', 'runConfigAdd', 'runConfigEdit',
     'safeDelete', 'saveAsFolder', 'searchStructural', 'selectionExtend', 'selectionShrink', 'settingsManage', 'skipCommit',
     'sortLines', 'splitChooser', 'splitRotate', 'splitterNext', 'splitterPrev', 'support', 'surroundWith', 'tabKeep',
-    'tabList', 'tabNext', 'tabPrev', 'tabs', 'toggleCase', 'toolWindow', 'transpose', 'unindent', 'unsplit', 'vcsCreate',
+    'tabList', 'tabNext', 'tabPrev', 'tabs', 'tip', 'toggleCase', 'toolWindow', 'transpose', 'unindent', 'unsplit', 'vcsCreate',
     'video', 'welcome', 'whatsNew', 'windowsMerge', 'worktree'])]
