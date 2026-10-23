@@ -88,13 +88,16 @@ public class HistoryCheck {
     git(repo, "checkout", "-q", "main");
     commit(repo, "app/main.java", "본줄기");
     git(repo, "merge", "-q", "--no-ff", "-m", "Merge branch 'side'", "side");
-    List<History.Entry> log = History.parseGitLog(git(app, History.gitLogArgs(100)));
+    List<History.Entry> log = History.parseGitLog(git(app, History.gitLogArgs(100, 0)));
     eq(log.stream().map(History.Entry::subject).toList(), List.of("Merge branch 'side'", "본줄기", "곁가지", "앱 첫 커밋"));
     eq(log.get(0).parents(), List.of(log.get(1).id(), log.get(2).id()));
     eq(log.get(1).parents(), List.of(log.get(3).id()));  // 폴더 밖 「밖 커밋」을 건너뛴 부모
     eq(log.get(3).files(), List.of(new History.FileChange("A", "한글.java")));
     eq(log.get(1).refs(), List.of());
     eq(log.get(0).refs(), List.of("main"));
+    // 다음 묶음: 앞의 둘을 건너뛰면 나머지 둘이 같은 순서로 온다.
+    List<History.Entry> next = History.parseGitLog(git(app, History.gitLogArgs(100, 2)));
+    eq(next.stream().map(History.Entry::id).toList(), List.of(log.get(2).id(), log.get(3).id()));
     List<History.Row> rows = History.layout(log);
     eq(rows.get(0).bottom(), List.of(new History.Seg(0, 0, 0), new History.Seg(0, 1, 1)));
     eq(rows.get(3).top(), List.of(new History.Seg(0, 0, 0), new History.Seg(1, 0, 1)));

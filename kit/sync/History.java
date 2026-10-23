@@ -51,12 +51,12 @@ final class History {
   private History() {}
 
   /**
-   * 작업 폴더(프로젝트 폴더) 안을 바꾼 최근 커밋 limit 개. 날짜 순이되 자식이 부모보다 먼저 온다.
+   * 작업 폴더(프로젝트 폴더) 안을 바꾼 커밋을 최근 것부터 skip 개 건너뛰고 limit 개. 날짜 순이되 자식이 부모보다 먼저 온다.
    * --parents 로 폴더 밖 커밋을 건너뛴 부모를 받아 가지 선이 끊기지 않게 하고, --relative 로 경로를 작업 폴더 기준으로 받는다.
    */
-  static String[] gitLogArgs(int limit) {
-    return new String[]{"log", "--date-order", "--parents", "-n", String.valueOf(limit), "--relative", "--name-status", GIT_FORMAT,
-                        "--", "."};
+  static String[] gitLogArgs(int limit, int skip) {
+    return new String[]{"log", "--date-order", "--parents", "-n", String.valueOf(limit), "--skip", String.valueOf(skip), "--relative",
+                        "--name-status", GIT_FORMAT, "--", "."};
   }
 
   /**
