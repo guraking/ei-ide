@@ -1,23 +1,23 @@
 {
   "name": "EI Gray",
-  "dark": true,
+  "dark": false,
   "author": "EI IDE",
-  "parentTheme": "Islands Dark",
+  "parentTheme": "Islands Light",
   "editorScheme": "EI Gray",
   "colors": {
-    "glass-bg": "#37383C",
-    "glass-island": "#3E3F44",
-    "glass-island-inline": "#434449",
-    "glass-island-border": "#4D4E53",
-    "glass-popup": "#46474C",
-    "glass-popup-border": "#56575C",
-    "glass-raised": "#4D4E53",
-    "glass-raised-border": "#5C5D62",
-    "glass-accent": "#6AA6FF",
-    "glass-accent-soft": "#8DBBFF",
-    "glass-accent-30": "#4A5C76",
-    "glass-accent-20": "#444E5C",
-    "glass-accent-40": "#516687",
+    "glass-bg": "#CBCCD3",
+    "glass-island": "#D9DAE0",
+    "glass-island-inline": "#D2D3D9",
+    "glass-island-border": "#BBBCC4",
+    "glass-popup": "#E0E1E6",
+    "glass-popup-border": "#B3B4BD",
+    "glass-raised": "#E0E1E6",
+    "glass-raised-border": "#C2C3CA",
+    "glass-accent": "#0A84FF",
+    "glass-accent-soft": "#0066CC",
+    "glass-accent-30": "#A9BEDC",
+    "glass-accent-20": "#BBC8DC",
+    "glass-accent-40": "#98B4DA",
     "layer-0-bg": "glass-island",
     "layer-0-bg-inline": "glass-island-inline",
     "layer-0-border": "glass-island-border",
@@ -37,43 +37,57 @@
     "tab-selected-bg-active": "glass-accent-22",
     "tab-selected-border-active": "glass-accent",
     "popup-completion-match-text": "glass-accent-soft",
-    "glass-accent-22": "#6AA6FF38",
-    "glass-accent-12": "#6AA6FF1F",
-    "glass-accent-border-muted": "#6AA6FF66",
-    "glass-glow-tr": "#3F424A",
-    "glass-glow-mid": "#3A3B3F",
-    "glass-glow-bl": "#3C3D42",
-    "glass-glow": "#6AA6FF38",
-    "glass-glow-0": "#6AA6FF00",
-    "glass-veil-0": "#37383C00",
-    "glass-veil-b": "#37383C33",
+    "glass-accent-22": "#0A84FF38",
+    "glass-accent-12": "#0A84FF1F",
+    "glass-accent-border-muted": "#0A84FF66",
+    "glass-glow-tr": "#C2CADA",
+    "glass-glow-mid": "#C8CAD2",
+    "glass-glow-bl": "#CBC6D4",
+    "glass-glow": "#0A84FF1F",
+    "glass-glow-0": "#0A84FF00",
+    "glass-veil-0": "#CBCCD300",
+    "glass-veil-b": "#CBCCD333",
     "tab-selected-bg-inactive": "glass-accent-12",
     "tab-selected-border-inactive": "glass-accent-border-muted",
-    "glass-cat-1": "#C9A0E8",
-    "glass-cat-2": "#6AA6FF",
-    "glass-cat-3": "#7FCFD0",
-    "glass-cat-4": "#8FC79A",
-    "glass-cat-5": "#FF7B72",
-    "glass-cat-6": "#E59C72",
-    "glass-cat-7": "#82C8F0",
-    "glass-cat-8": "#A9A3F0",
-    "glass-cat-9": "#E6C07B",
-    "glass-cat-10": "#F0A0B8",
-    "glass-urgent": "#FF7B72",
-    "glass-high": "#E6B450",
-    "glass-primary": "#6AA6FF",
-    "glass-urgent-bg": "#573F40",
-    "glass-high-bg": "#574F3F",
-    "glass-info-bg": "#404E62",
-    "glass-success-bg": "#405146",
-    "glass-accent-bg": "#444E5C",
-    "gray-10": "#393A3E",
-    "gray-20": "#414348",
-    "gray-30": "#46484E",
-    "gray-40": "#53555D",
-    "gray-50": "#60636C",
-    "gray-60": "#6C6F78",
-    "gray-70": "#7F828B"
+    "glass-cat-1": "#8944AB",
+    "glass-cat-2": "#0A6CD6",
+    "glass-cat-3": "#0E8A84",
+    "glass-cat-4": "#248A3D",
+    "glass-cat-5": "#D70015",
+    "glass-cat-6": "#C93400",
+    "glass-cat-7": "#0071A4",
+    "glass-cat-8": "#5856D6",
+    "glass-cat-9": "#9A6B00",
+    "glass-cat-10": "#C2185B",
+    "glass-urgent": "#D70015",
+    "glass-high": "#B25000",
+    "glass-primary": "#0A84FF",
+    "glass-urgent-bg": "#D6C2C9",
+    "glass-high-bg": "#D6C9BF",
+    "glass-info-bg": "#BFCADC",
+    "glass-success-bg": "#BECFC7",
+    "glass-accent-bg": "#BBC8DC",
+    "editor-bg": "glass-island",
+    "editor-bg-inline": "glass-island-inline",
+    "editor-border": "glass-island-border",
+    "tool-window-bg": "glass-island",
+    "tool-window-bg-inline": "glass-island-inline",
+    "tool-window-border": "glass-island-border",
+    "dialog-bg": "glass-island",
+    "dialog-bg-inline": "glass-island-inline",
+    "dialog-border": "glass-island-border",
+    "popup-bg": "glass-popup",
+    "popup-bg-inline": "glass-popup",
+    "popup-border": "glass-popup-border",
+    "popup-border-inline": "glass-popup-border",
+    "tool-window-bg-alt": "glass-island-inline",
+    "main-window-bg-alt": "glass-bg",
+    "editor-border-alt": "glass-island-border",
+    "selection-bg-inactive": "gray-140",
+    "gray-160": "#DEDFE4",
+    "gray-150": "#D3D4DA",
+    "gray-140": "#C8C9D0",
+    "gray-130": "#BBBCC4"
   },
   "ui": {
     "Island": {
@@ -304,14 +318,14 @@
       "Button.arc.compact": 24,
       "Dropdown": {
         "arc": 28,
-        "pillBackground": "#FFFFFF0D",
-        "pillBorderColor": "#FFFFFF1F"
+        "pillBackground": "#0000000A",
+        "pillBorderColor": "#0000001A"
       }
     },
     "ToolWindow": {
       "Button": {
-        "selectedBackground": "#6AA6FF40",
-        "visibleBackground": "#6AA6FF24"
+        "selectedBackground": "#0A84FF40",
+        "visibleBackground": "#0A84FF24"
       }
     },
     "Tree": {
@@ -321,7 +335,10 @@
     },
     "List": {
       "Selection": {
-        "borderColor": "#6AA6FF99"
+        "borderColor": "#0A84FF99"
+      },
+      "Tag": {
+        "background": "gray-140"
       }
     },
     "Link": {
@@ -375,16 +392,17 @@
       "warningBorderColor": "glass-high",
       "errorBackground": "glass-urgent-bg",
       "errorBorderColor": "glass-urgent",
-      "aiBackground": "#4C4459",
+      "aiBackground": "#CBC2D9",
       "aiBorderColor": "glass-cat-1"
     },
     "FileColor": {
-      "Blue": "#3F4C5B",
-      "Green": "#405246",
-      "Orange": "#594A3D",
-      "Rose": "#594145",
-      "Violet": "#4E4659",
-      "Yellow": "#565141"
+      "Yellow": "#DDD8C4",
+      "Green": "#CCDACF",
+      "Orange": "#E0D2C5",
+      "Rose": "#E0CDCF",
+      "Violet": "#D5CEE1",
+      "Blue": "#CAD6E3",
+      "Gray": "#D1D2D8"
     },
     "EIServers": {
       "runningBackground": "glass-success-bg",
@@ -445,6 +463,21 @@
           "currentBranchBackground": "glass-accent-bg"
         }
       }
+    },
+    "Tag": {
+      "background": "gray-140"
+    },
+    "ParameterInfo": {
+      "background": "glass-popup",
+      "lineSeparatorColor": "glass-popup-border"
+    },
+    "Editor": {
+      "ToolTip": {
+        "selectionBackground": "gray-140"
+      }
+    },
+    "Table": {
+      "stripeColor": "glass-island-inline"
     }
   }
 }
