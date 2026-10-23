@@ -64,7 +64,7 @@ import java.util.List;
  */
 final class ProjectHistoryPanel extends JPanel {
   static final String ID = "ProjectHistory";
-  private static final int LOG_LIMIT = 100;
+  private static final int LOG_LIMIT = 1000;
   private static final ZoneId ZONE = ZoneId.systemDefault();
   private static final Locale TIME_LOCALE = Locale.forLanguageTag(SyncBundle.message("history.locale"));
   private static final DateTimeFormatter TODAY = timeFormat("history.time.today");
