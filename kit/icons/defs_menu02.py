@@ -50,9 +50,8 @@ def braces(x1, x2, y1, y2, c):  # 왼쪽 · 오른쪽 중괄호
 icon('rebase', '리베이스', st('M4.5 14.5V4', '$N') + '<circle cx="4.5" cy="11.5" r="1.5" fill="$F" stroke="$N"/>'
      + st('M4.5 4H9.5', '$teal') + '<circle cx="11.5" cy="4" r="2" fill="' + tint('teal') + '" stroke="$teal"/><circle cx="4.5" cy="4" r="1.5" fill="$F" stroke="$N"/>'
      + varrow(11.5, 14.5, 7.5, 'teal'))
-icon('refactor', '리팩터링', notched(lines([3.5, 6.5, 9.5, 12.5], 1.5, 13.5)) + WRENCH)
-icon('rename', '이름 바꾸기', '<rect x="1.5" y="4.5" width="13" height="7" rx="1.5" fill="$F" stroke="$N"/>' + lines([8], 4, 7)
-     + st('M10.5 3V13M9 2.5H12M9 13.5H12', '$blue'))
+icon('refactor', '리팩터링', '<path d="M2 4.5H7.5M2 7.5H6M2 10.5H5" stroke="$N" stroke-linecap="round"/>' + '<path d="M14 8.5A3.5 3.5 0 0 1 8.2 11.2M8 7.5A3.5 3.5 0 0 1 13.8 4.8" stroke="$blue" stroke-linecap="round"/><path d="M14 2.8V5H11.8M8 13.2V11H10.2" stroke="$blue" stroke-linecap="round" stroke-linejoin="round"/>')
+icon('rename', '이름 바꾸기', text('ab', 1.5, 11.5, 9, '$N') + '<path d="M12.5 3.5V12.5M11 3H12.5M12.5 3H14M11 13H12.5M12.5 13H14" stroke="$blue" stroke-linecap="round"/>')
 icon('replaceStructural', '구조 바꾸기', braces(1.5, 9.5, 1.5, 9.5, '$N') + st('M13.5 4.5V10.5C13.5 11.6 12.6 12.5 11.5 12.5H5.5M7.5 10.5L5.5 12.5L7.5 14.5', '$blue'))
 icon('searchStructural', '구조 찾기', '<circle cx="7" cy="7" r="5" fill="$F" stroke="$N"/>' + st('M10.7 10.7L14.5 14.5', '$N') + braces(4.2, 9.8, 4.5, 9.5, '$blue'))
 icon('reverseLines', '줄 순서 뒤집기', lines([3.5, 8, 12.5], 1.5, 7.5) + varrow(10.5, 13.5, 2.5, 'blue') + varrow(13.5, 2.5, 13.5, 'blue'))
