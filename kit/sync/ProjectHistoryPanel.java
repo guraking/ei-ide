@@ -22,10 +22,7 @@ import com.intellij.openapi.actionSystem.ActionManager;
 import com.intellij.openapi.actionSystem.ActionToolbar;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.project.DumbAwareAction;
-import com.intellij.ide.IdeTooltip;
-import com.intellij.ide.IdeTooltipManager;
 import com.intellij.openapi.ui.MessageType;
-import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.ui.popup.JBPopupFactory;
 import com.intellij.openapi.vcs.FileStatus;
 import com.intellij.ui.ColoredListCellRenderer;
@@ -80,9 +77,7 @@ final class ProjectHistoryPanel extends JPanel {
   private static final DateTimeFormatter ROW_TIME = timeFormat("history.time.row");
   private static final int MINUTES_PER_HOUR = 60;
   private static final int SHORT_HASH = 7;
-  // 가지 선 풍선은 IDE 기본 풍선 지연(ide.tooltip.initialDelay)을 기다리지 않고 이만큼 뒤에 띄운다.
-  private static final int GRAPH_TIP_DELAY_MS = 120;
-  // 가지 선 풍선에 넣는 커밋 제목 최대 글자 수.
+  // 꺾임 설명에 넣는 커밋 제목 최대 글자 수.
   private static final int TIP_SUBJECT_MAX = 60;
   private static final int INITIALS = 2;
 
@@ -145,7 +140,7 @@ final class ProjectHistoryPanel extends JPanel {
   private final Project project;
   private final JBList<Target> targets = new JBList<>();
   private final DefaultListModel<History.Entry> commitModel = new DefaultListModel<>();
-  // 풍선 도움말: 작성자와 긴 날짜(목록에는 짧은 시간만 보인다). 가지 선 칸 위의 풍선은 graphTipAt 이 따로 띄운다.
+  // 풍선 도움말: 작성자와 긴 날짜(목록에는 짧은 시간만 보인다).
   private final JBList<History.Entry> commits = new JBList<>(commitModel) {
     @Override
     public String getToolTipText(MouseEvent e) {
@@ -155,13 +150,13 @@ final class ProjectHistoryPanel extends JPanel {
       return entry.author() + " · " + ROW_TIME.format(entry.time().atZone(ZONE));
     }
   };
-  // 지금 걸어 둔 가지 선 풍선의 글. 같은 글이면 풍선을 새로 만들지 않는다.
-  private String graphTipText;
   private final JBList<History.FileChange> files = new JBList<>();
   private final SearchTextField filter = new SearchTextField(false);
   private final JLabel projectName = new JLabel(" ");
   private final Pill branch = new Pill();
   private final JLabel status = new JLabel(" ");
+  // 고른 커밋의 꺾인 선이 어느 커밋과 이어지는지. 위쪽 줄 가운데 빈칸에 한 줄로 보인다.
+  private final JBLabel bend = new JBLabel();
   private final JBLabel subject = new JBLabel();
   private final JTextArea message = new JTextArea();
   private final JBLabel avatar = new JBLabel();
@@ -189,9 +184,6 @@ final class ProjectHistoryPanel extends JPanel {
     commits.setFixedCellHeight(JBUI.scale(ROW_H));
     commits.setCellRenderer(new CommitRenderer());
     commits.addListSelectionListener(e -> { if (!e.getValueIsAdjusting()) showDetail(); });
-    commits.addMouseMotionListener(new MouseAdapter() {
-      @Override public void mouseMoved(MouseEvent e) { updateGraphTip(e); }
-    });
     files.setCellRenderer(new FileRenderer());
     files.addMouseListener(new MouseAdapter() {
       @Override public void mouseClicked(MouseEvent e) { if (e.getClickCount() == 2) showDiff(); }
@@ -222,8 +214,10 @@ final class ProjectHistoryPanel extends JPanel {
     left.add(toolbar.getComponent());
     JPanel top = new JPanel(new BorderLayout());
     top.setBorder(JBUI.Borders.empty(GAP / 2, GAP / 2, 0, GAP));
-    top.add(left, BorderLayout.CENTER);
+    top.add(left, BorderLayout.WEST);
+    top.add(bend, BorderLayout.CENTER);
     top.add(status, BorderLayout.EAST);
+    bend.setBorder(JBUI.Borders.emptyLeft(GAP));
     status.setForeground(DIM);
 
     JPanel center = new JPanel(new BorderLayout());
@@ -503,63 +497,32 @@ final class ProjectHistoryPanel extends JPanel {
   }
 
   /**
-   * 가지 선 칸 위에서는 짧은 지연의 풍선을 목록에 걸고, 벗어나면 떼어 기본 풍선(작성자 · 날짜)으로 돌아간다.
-   * 글이 바뀔 때만 새 풍선을 거는데, IdeTooltipManager 는 같은 풍선을 다시 띄우지 않기 때문이다.
+   * index 번 커밋(가지 선을 그린 전체 목록 기준)의 꺾인 선이 이어진 커밋들: 합쳐 들임 · 갈라져 나감 · 합쳐 감.
+   * 꺾인 선이 없으면 곧게 이어진 보통 커밋이라고 알린다.
    */
-  private void updateGraphTip(MouseEvent e) {
-    String text = graphTipAt(e);
-    if (Objects.equals(text, graphTipText)) return;
-    graphTipText = text;
-    IdeTooltipManager tips = IdeTooltipManager.getInstance();
-    if (text == null) {
-      tips.setCustomTooltip(commits, null);
-      tips.hideCurrent(null);
-      return;
-    }
-    JBLabel label = new JBLabel(text);
-    label.setBorder(JBUI.Borders.empty(GAP / 2));
-    tips.setCustomTooltip(commits, new IdeTooltip(commits, e.getPoint(), label) {
-      @Override public int getShowDelay() { return GRAPH_TIP_DELAY_MS; }
-      @Override public int getInitialReshowDelay() { return GRAPH_TIP_DELAY_MS; }
-    });
-  }
-
-  /**
-   * 마우스 아래 가지 선의 뜻. 점이 있는 칸이면 이 커밋이 꺾인 선으로 이어진 커밋들(합쳐 들임 · 갈라져 나감 · 합쳐 감),
-   * 곧게 지나가는 선이면 그 선이 닿는 아래 커밋. 가지 선 칸 밖이거나 선이 없는 칸이면 null.
-   */
-  private String graphTipAt(MouseEvent e) {
-    int i = commits.locationToIndex(e.getPoint());
-    if (!graph || loaded == null || i < 0 || i >= loaded.rows().size() || e.getX() >= graphWidth
-        || !commits.getCellBounds(i, i).contains(e.getPoint())) return null;
-    int lane = (e.getX() - JBUI.scale(GRAPH_PAD)) / JBUI.scale(LANE_W);
-    History.Row row = loaded.rows().get(i);
-    if (lane != row.col()) {
-      int target = History.passingTarget(loaded.rows(), i, lane);
-      return target < 0 ? null : SyncBundle.message("history.graph.passing", describe(loaded.entries().get(target)));
-    }
-    History.Entry entry = loaded.entries().get(i);
-    List<String> lines = new ArrayList<>();
-    if (entry.merge()) lines.add(SyncBundle.message("history.legend.merge.dot"));
-    for (History.Link link : History.links(loaded.entries(), loaded.rows(), i)) {
+  private String bendText(int index) {
+    History.Entry entry = loaded.entries().get(index);
+    List<String> parts = new ArrayList<>();
+    if (entry.merge()) parts.add(SyncBundle.message("history.legend.merge.dot"));
+    for (History.Link link : History.links(loaded.entries(), loaded.rows(), index)) {
       String key = switch (link.kind()) {
         case MERGED_FROM -> "history.graph.merged.from";
         case BRANCHED_TO -> "history.graph.branched.to";
         case MERGED_INTO -> "history.graph.merged.into";
       };
-      lines.add(SyncBundle.message(key, describe(link.other())));
+      parts.add(SyncBundle.message(key, describe(link.other())));
     }
-    if (lines.isEmpty()) lines.add(SyncBundle.message("history.graph.straight"));
-    return "<html>" + String.join("<br>", lines) + "</html>";
+    if (parts.isEmpty()) parts.add(SyncBundle.message("history.graph.straight"));
+    return String.join("   ", parts);
   }
 
-  /** 풍선용 커밋 이름: 브랜치(있으면) · 짧은 해시 · 제목. 목록 밖이라 제목을 모르면 해시만. */
+  /** 꺾임 설명용 커밋 이름: 브랜치(있으면) · 짧은 해시 · 제목. 목록 밖이라 제목을 모르면 해시만. */
   private static String describe(History.Entry entry) {
     String id = entry.id().length() > SHORT_HASH ? entry.id().substring(0, SHORT_HASH) : "r" + entry.id();
     String subject = entry.subject();
     if (subject.length() > TIP_SUBJECT_MAX) subject = subject.substring(0, TIP_SUBJECT_MAX) + "…";
     String name = entry.refs().isEmpty() ? id : "[" + entry.refs().get(0) + "] " + id;
-    return StringUtil.escapeXmlEntities(subject.isEmpty() ? name : name + " " + subject);
+    return subject.isEmpty() ? name : name + " " + subject;
   }
 
   private static int laneCount(History.Row row) {
@@ -570,6 +533,7 @@ final class ProjectHistoryPanel extends JPanel {
   }
 
   private void clearDetail() {
+    bend.setText("");
     subject.setText("");
     message.setText("");
     message.setVisible(false);
@@ -592,6 +556,8 @@ final class ProjectHistoryPanel extends JPanel {
     int nl = text.indexOf('\n');
     String body = nl < 0 ? "" : text.substring(nl + 1).strip();
     subject.setText(entry.subject());
+    // 찾기로 줄인 목록은 가지 선이 없어 꺾임도 없다. 가지 선을 그릴 때는 목록 순서가 읽어 온 순서와 같다.
+    bend.setText(graph ? bendText(commits.getSelectedIndex()) : "");
     message.setText(body);
     message.setVisible(!body.isEmpty());
     avatar.setIcon(new Avatar(entry.author(), JBUI.scale(AVATAR_BIG)));
