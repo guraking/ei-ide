@@ -66,7 +66,20 @@
     "glass-high-bg": "#F3E3CC",
     "glass-info-bg": "#DCE7EE",
     "glass-success-bg": "#DDEAD5",
-    "glass-accent-bg": "#DAEAE3"
+    "glass-accent-bg": "#DAEAE3",
+    "editor-bg": "glass-island",
+    "editor-bg-inline": "glass-island-inline",
+    "editor-border": "glass-island-border",
+    "tool-window-bg": "glass-island",
+    "tool-window-bg-inline": "glass-island-inline",
+    "tool-window-border": "glass-island-border",
+    "dialog-bg": "glass-island",
+    "dialog-bg-inline": "glass-island-inline",
+    "dialog-border": "glass-island-border",
+    "popup-bg": "glass-popup",
+    "popup-bg-inline": "glass-popup",
+    "popup-border": "glass-popup-border",
+    "popup-border-inline": "glass-popup-border"
   },
   "ui": {
     "Island": {
