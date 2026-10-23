@@ -22,6 +22,8 @@ import com.intellij.openapi.actionSystem.ActionManager;
 import com.intellij.openapi.actionSystem.ActionToolbar;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.project.DumbAwareAction;
+import com.intellij.openapi.ui.MessageType;
+import com.intellij.openapi.ui.popup.JBPopupFactory;
 import com.intellij.openapi.vcs.FileStatus;
 import com.intellij.ui.ColoredListCellRenderer;
 import com.intellij.ui.SimpleTextAttributes;
@@ -136,13 +138,14 @@ final class ProjectHistoryPanel extends JPanel {
   private final Project project;
   private final JBList<Target> targets = new JBList<>();
   private final DefaultListModel<History.Entry> commitModel = new DefaultListModel<>();
-  // 풍선 도움말: 작성자와 긴 날짜(목록에는 짧은 시간만 보인다).
+  // 풍선 도움말: 가지 선 칸 위에서는 그 줄의 점 · 꺾인 선 뜻, 나머지에서는 작성자와 긴 날짜(목록에는 짧은 시간만 보인다).
   private final JBList<History.Entry> commits = new JBList<>(commitModel) {
     @Override
     public String getToolTipText(MouseEvent e) {
       int i = locationToIndex(e.getPoint());
       if (i < 0 || !getCellBounds(i, i).contains(e.getPoint())) return null;
       History.Entry entry = commitModel.get(i);
+      if (graph && loaded != null && i < loaded.rows().size() && e.getX() < graphWidth) return graphTip(entry, loaded.rows().get(i));
       return entry.author() + " · " + ROW_TIME.format(entry.time().atZone(ZONE));
     }
   };
@@ -195,7 +198,8 @@ final class ProjectHistoryPanel extends JPanel {
     // IntelliJ 기본 창처럼 새로고침은 도구줄 아이콘 단추, 스크롤 상자는 테두리 없이, 칸막이는 1픽셀로 둔다.
     // 창 머리 아래 선은 IntelliJ 가 그으므로 안쪽 칸에 테두리를 더하면 선이 두 겹이 된다.
     DefaultActionGroup actions = new DefaultActionGroup(
-      DumbAwareAction.create(SyncBundle.message("history.refresh"), AllIcons.Actions.Refresh, e -> { reloadTargets(); load(); }));
+      DumbAwareAction.create(SyncBundle.message("history.refresh"), AllIcons.Actions.Refresh, e -> { reloadTargets(); load(); }),
+      DumbAwareAction.create(SyncBundle.message("history.legend.action"), AllIcons.General.ContextHelp, e -> showLegend()));
     ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar(TOOLBAR_PLACE, actions, true);
     toolbar.setTargetComponent(this);
     projectName.setFont(JBUI.Fonts.label().asBold());
@@ -473,6 +477,27 @@ final class ProjectHistoryPanel extends JPanel {
       for (History.Row row : loaded.rows()) lanes = Math.max(lanes, laneCount(row));
     }
     graphWidth = JBUI.scale(Math.min(lanes, MAX_LANES) * LANE_W + GRAPH_PAD * 2);
+  }
+
+  /** 가지 선 · 점 · 글자 밝기의 뜻. 목록 가운데에 풍선으로 띄우고 바깥을 누르면 닫는다. */
+  private void showLegend() {
+    String html = "<html>" + String.join("<br>", SyncBundle.message("history.legend.dot"), SyncBundle.message("history.legend.merge.dot"),
+                                         SyncBundle.message("history.legend.split"), SyncBundle.message("history.legend.merge"),
+                                         SyncBundle.message("history.legend.color"), SyncBundle.message("history.legend.hover")) + "</html>";
+    JBPopupFactory.getInstance().createHtmlTextBalloonBuilder(html, MessageType.INFO, null)
+      .setHideOnClickOutside(true)
+      .createBalloon()
+      .showInCenterOf(commits);
+  }
+
+  /** 가지 선 칸 위 풍선 도움말: 이 줄의 점 모양과 꺾인 선이 뜻하는 것. */
+  private static String graphTip(History.Entry entry, History.Row row) {
+    List<String> lines = new ArrayList<>();
+    lines.add(SyncBundle.message(entry.merge() ? "history.legend.merge.dot" : "history.legend.dot"));
+    History.Bends bends = History.bends(row);
+    if (bends.split() > 0) lines.add(SyncBundle.message("history.graph.split", bends.split()));
+    if (bends.merge() > 0) lines.add(SyncBundle.message("history.graph.merge", bends.merge()));
+    return "<html>" + String.join("<br>", lines) + "</html>";
   }
 
   private static int laneCount(History.Row row) {

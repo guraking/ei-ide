@@ -99,6 +99,9 @@ public class HistoryCheck {
     List<History.Entry> next = History.parseGitLog(git(app, History.gitLogArgs(100, 2)));
     eq(next.stream().map(History.Entry::id).toList(), List.of(log.get(2).id(), log.get(3).id()));
     List<History.Row> rows = History.layout(log);
+    eq(History.bends(rows.get(0)), new History.Bends(0, 1));  // 합치기: 곁가지로 꺾여 내려감
+    eq(History.bends(rows.get(1)), new History.Bends(0, 0));
+    eq(History.bends(rows.get(3)), new History.Bends(1, 0));  // 갈라진 곳: 곁가지 선이 꺾여 들어옴
     eq(rows.get(0).bottom(), List.of(new History.Seg(0, 0, 0), new History.Seg(0, 1, 1)));
     eq(rows.get(3).top(), List.of(new History.Seg(0, 0, 0), new History.Seg(1, 0, 1)));
   }
