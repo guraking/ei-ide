@@ -99,9 +99,14 @@ public class HistoryCheck {
     List<History.Entry> next = History.parseGitLog(git(app, History.gitLogArgs(100, 2)));
     eq(next.stream().map(History.Entry::id).toList(), List.of(log.get(2).id(), log.get(3).id()));
     List<History.Row> rows = History.layout(log);
-    eq(History.bends(rows.get(0)), new History.Bends(0, 1));  // 합치기: 곁가지로 꺾여 내려감
-    eq(History.bends(rows.get(1)), new History.Bends(0, 0));
-    eq(History.bends(rows.get(3)), new History.Bends(1, 0));  // 갈라진 곳: 곁가지 선이 꺾여 들어옴
+    // 0 합치기(본줄기 · 곁가지) / 1 본줄기 / 2 곁가지 / 3 첫 커밋. 곁가지는 1 칸, 나머지는 0 칸.
+    eq(History.links(log, rows, 0), List.of(new History.Link(History.LinkKind.MERGED_FROM, log.get(2))));
+    eq(History.links(log, rows, 1), List.of());
+    eq(History.links(log, rows, 2), List.of(new History.Link(History.LinkKind.MERGED_INTO, log.get(0))));
+    eq(History.links(log, rows, 3), List.of(new History.Link(History.LinkKind.BRANCHED_TO, log.get(2))));
+    eq(History.passingTarget(rows, 1, 1), 2);  // 본줄기 줄의 1 칸 선은 곁가지 커밋으로 간다
+    eq(History.passingTarget(rows, 1, 0), -1);  // 점이 있는 칸은 지나가는 선이 아니다
+    eq(History.passingTarget(rows, 2, 3), -1);
     eq(rows.get(0).bottom(), List.of(new History.Seg(0, 0, 0), new History.Seg(0, 1, 1)));
     eq(rows.get(3).top(), List.of(new History.Seg(0, 0, 0), new History.Seg(1, 0, 1)));
   }
