@@ -66,7 +66,14 @@
     "glass-high-bg": "#4A4035",
     "glass-info-bg": "#2E3B5A",
     "glass-success-bg": "#2E4640",
-    "glass-accent-bg": "#46363F"
+    "glass-accent-bg": "#46363F",
+    "gray-10": "#181C2A",
+    "gray-20": "#202534",
+    "gray-30": "#252A3A",
+    "gray-40": "#323749",
+    "gray-50": "#3F4558",
+    "gray-60": "#4B5164",
+    "gray-70": "#5E6477"
   },
   "ui": {
     "Island": {

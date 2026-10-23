@@ -15,9 +15,9 @@
     "glass-raised-border": "#E2DACB",
     "glass-accent": "#0E8A84",
     "glass-accent-soft": "#0A6B66",
-    "glass-accent-30": "#C5E0DA",
-    "glass-accent-20": "#DAEAE3",
-    "glass-accent-40": "#B0D6CF",
+    "glass-accent-30": "#C2DACF",
+    "glass-accent-20": "#D7E4D7",
+    "glass-accent-40": "#ADD0C4",
     "layer-0-bg": "glass-island",
     "layer-0-bg-inline": "glass-island-inline",
     "layer-0-border": "glass-island-border",
@@ -62,11 +62,11 @@
     "glass-urgent": "#B42318",
     "glass-high": "#A65A00",
     "glass-primary": "#1F6FA8",
-    "glass-urgent-bg": "#F4DCD6",
-    "glass-high-bg": "#F3E3CC",
-    "glass-info-bg": "#DCE7EE",
-    "glass-success-bg": "#DDEAD5",
-    "glass-accent-bg": "#DAEAE3",
+    "glass-urgent-bg": "#F0D6CB",
+    "glass-high-bg": "#EFDDC2",
+    "glass-info-bg": "#D9E1E2",
+    "glass-success-bg": "#DAE4CA",
+    "glass-accent-bg": "#D7E4D7",
     "editor-bg": "glass-island",
     "editor-bg-inline": "glass-island-inline",
     "editor-border": "glass-island-border",
@@ -79,7 +79,15 @@
     "popup-bg": "glass-popup",
     "popup-bg-inline": "glass-popup",
     "popup-border": "glass-popup-border",
-    "popup-border-inline": "glass-popup-border"
+    "popup-border-inline": "glass-popup-border",
+    "tool-window-bg-alt": "glass-island-inline",
+    "main-window-bg-alt": "glass-bg",
+    "editor-border-alt": "glass-island-border",
+    "selection-bg-inactive": "gray-140",
+    "gray-160": "#F5F1E8",
+    "gray-150": "#ECE6DA",
+    "gray-140": "#E2DACB",
+    "gray-130": "#D6CCBB"
   },
   "ui": {
     "Island": {
@@ -328,6 +336,9 @@
     "List": {
       "Selection": {
         "borderColor": "#0E8A8499"
+      },
+      "Tag": {
+        "background": "gray-140"
       }
     },
     "Link": {
@@ -381,8 +392,17 @@
       "warningBorderColor": "glass-high",
       "errorBackground": "glass-urgent-bg",
       "errorBorderColor": "glass-urgent",
-      "aiBackground": "#EBDFEA",
+      "aiBackground": "#E7D9DE",
       "aiBorderColor": "glass-cat-1"
+    },
+    "FileColor": {
+      "Yellow": "#F3EBD3",
+      "Green": "#E3EDDC",
+      "Orange": "#F3E3D2",
+      "Rose": "#F2DFDD",
+      "Violet": "#E9E0EC",
+      "Blue": "#DDE8EC",
+      "Gray": "#EAE5DA"
     },
     "EIServers": {
       "runningBackground": "glass-success-bg",
@@ -443,6 +463,21 @@
           "currentBranchBackground": "glass-accent-bg"
         }
       }
+    },
+    "Tag": {
+      "background": "gray-140"
+    },
+    "ParameterInfo": {
+      "background": "glass-popup",
+      "lineSeparatorColor": "glass-popup-border"
+    },
+    "Editor": {
+      "ToolTip": {
+        "selectionBackground": "gray-140"
+      }
+    },
+    "Table": {
+      "stripeColor": "glass-island-inline"
     }
   }
 }
