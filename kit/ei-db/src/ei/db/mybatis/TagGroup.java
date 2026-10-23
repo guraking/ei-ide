@@ -16,6 +16,7 @@ import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.IconLoader;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
@@ -66,7 +67,8 @@ public final class TagGroup extends ActionGroup implements DumbAware {
 
     Insert(MyBatisTags.Tag tag) {
       // 설명은 메뉴에서 항목 위에 마우스를 올리면 보인다.
-      super(tag.label, EiDbBundle.message("tags.desc." + tag.name()), null);
+      // 아이콘은 /icons/ei/tags/태그이름.svg (when · otherwise 는 choose 와 같은 그림).
+      super(tag.label, EiDbBundle.message("tags.desc." + tag.name()), IconLoader.getIcon("/icons/ei/tags/" + tag.name() + ".svg", TagGroup.class));
       this.tag = tag;
     }
 
