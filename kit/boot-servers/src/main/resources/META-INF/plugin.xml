@@ -42,15 +42,9 @@
         <!-- EI Glass: Islands Dark 위에 숯색 판 · 분홍 강조색을 얹은 테마와 그 에디터 색. 첫 실행 기본 테마는 apply_defaults 22번 -->
         <themeProvider id="EI Glass" path="/themes/EIGlass.theme.json" targetUi="islands"/>
         <bundledColorScheme id="EI Glass" path="/themes/EIGlass.xml"/>
-        <!-- EI Glass 와 같은 키 구조의 테마 넷. Frost · Sand · Paper 는 Islands Light(에디터 색 부모 Default), Dusk 는 Islands Dark(부모 Darcula) 위에 얹는다 -->
-        <themeProvider id="EI Frost" path="/themes/EIFrost.theme.json" targetUi="islands"/>
-        <bundledColorScheme id="EI Frost" path="/themes/EIFrost.xml"/>
-        <themeProvider id="EI Sand" path="/themes/EISand.theme.json" targetUi="islands"/>
-        <bundledColorScheme id="EI Sand" path="/themes/EISand.xml"/>
-        <themeProvider id="EI Paper" path="/themes/EIPaper.theme.json" targetUi="islands"/>
-        <bundledColorScheme id="EI Paper" path="/themes/EIPaper.xml"/>
-        <themeProvider id="EI Dusk" path="/themes/EIDusk.theme.json" targetUi="islands"/>
-        <bundledColorScheme id="EI Dusk" path="/themes/EIDusk.xml"/>
+        <!-- EI Gray: EI Glass 와 같은 키 구조로 짙은 중성 회색 판 · 파란 강조색을 얹은 테마와 그 에디터 색(부모 Darcula) -->
+        <themeProvider id="EI Gray" path="/themes/EIGray.theme.json" targetUi="islands"/>
+        <bundledColorScheme id="EI Gray" path="/themes/EIGray.xml"/>
     </extensions>
 
     <extensions defaultExtensionNs="JavaScript">
