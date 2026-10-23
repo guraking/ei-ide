@@ -39,18 +39,55 @@ final class History {
   /** 한 줄의 그림: 점(커밋)이 놓일 칸, 줄 위쪽 반(위 줄 → 점)과 아래쪽 반(점 → 아래 줄) 토막. */
   record Row(int col, List<Seg> top, List<Seg> bottom) {}
 
-  /**
-   * 한 줄의 꺾인 선 수. split 은 위쪽 다른 칸에서 이 점으로 꺾여 들어온 선(이 커밋에서 갈라져 나간 가지),
-   * merge 는 이 점에서 아래쪽 다른 칸으로 꺾여 나간 선(이 커밋으로 합쳐 들인 가지).
-   */
-  record Bends(int split, int merge) {}
+  /** 커밋 하나가 다른 커밋과 이어진 방식. 그림에서는 점으로 꺾여 들어오거나 점에서 꺾여 나가는 선이다. */
+  enum LinkKind {
+    /** 이 커밋(합치기)이 다른 가지의 커밋을 합쳐 들임: 점에서 아래로 꺾여 나가는 선. */
+    MERGED_FROM,
+    /** 다른 칸의 위쪽 커밋이 이 커밋을 첫 부모로 시작함(여기서 가지가 갈라짐): 위에서 꺾여 들어오는 선. */
+    BRANCHED_TO,
+    /** 위쪽 합치기 커밋이 이 커밋을 합쳐 감: 위에서 꺾여 들어오는 선. */
+    MERGED_INTO
+  }
 
-  static Bends bends(Row row) {
-    int split = 0;
-    for (Seg s : row.top()) if (s.from() != s.to()) split++;
-    int merge = 0;
-    for (Seg s : row.bottom()) if (s.from() == row.col() && s.to() != row.col()) merge++;
-    return new Bends(split, merge);
+  record Link(LinkKind kind, Entry other) {}
+
+  /**
+   * index 줄 커밋이 목록 안 다른 커밋과 꺾인 선으로 이어진 것. 위에서 곧게 이어지는 자식(같은 칸 · 첫 부모)은 넣지 않는다.
+   * 목록 밖 부모(합쳐 들인 커밋이 아직 안 읽힘)는 other 를 null 로 두지 않고 id 만 아는 빈 Entry 로 만든다.
+   */
+  static List<Link> links(List<Entry> entries, List<Row> rows, int index) {
+    Entry entry = entries.get(index);
+    int col = rows.get(index).col();
+    List<Link> result = new ArrayList<>();
+    for (int k = 0; k < index; k++) {
+      int at = entries.get(k).parents().indexOf(entry.id());
+      if (at > 0) result.add(new Link(LinkKind.MERGED_INTO, entries.get(k)));
+      else if (at == 0 && rows.get(k).col() != col) result.add(new Link(LinkKind.BRANCHED_TO, entries.get(k)));
+    }
+    for (int p = 1; p < entry.parents().size(); p++) {
+      String id = entry.parents().get(p);
+      Entry parent = null;
+      for (int k = index + 1; k < entries.size() && parent == null; k++) if (entries.get(k).id().equals(id)) parent = entries.get(k);
+      result.add(new Link(LinkKind.MERGED_FROM, parent != null ? parent : new Entry(id, List.of(), "", Instant.EPOCH, List.of(), "", List.of())));
+    }
+    return result;
+  }
+
+  /**
+   * index 줄에서 lane 칸을 곧게 지나가는 선이 닿는 아래쪽 커밋의 줄 번호. 그 칸에 지나가는 선이 없거나
+   * 목록 안에서 닿지 않으면(목록 밖 커밋을 기다림) -1.
+   */
+  static int passingTarget(List<Row> rows, int index, int lane) {
+    if (!passes(rows.get(index), lane)) return -1;
+    for (int k = index + 1; k < rows.size(); k++) {
+      for (Seg s : rows.get(k).top()) if (s.from() == lane && s.to() == rows.get(k).col()) return k;
+    }
+    return -1;
+  }
+
+  private static boolean passes(Row row, int lane) {
+    for (Seg s : row.bottom()) if (s.from() == lane && s.to() == lane && lane != row.col()) return true;
+    return false;
   }
 
   // git log --format 의 구분자. 커밋 메시지에 나오지 않는 제어 문자를 쓴다. BODY_END 뒤에 --name-status 줄이 온다.
