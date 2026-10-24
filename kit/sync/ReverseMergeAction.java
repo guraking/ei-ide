@@ -28,6 +28,7 @@ import com.intellij.openapi.vfs.VfsUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.ui.JBColor;
 import com.intellij.ui.ScrollPaneFactory;
+import com.intellij.ui.SimpleListCellRenderer;
 import com.intellij.ui.components.JBCheckBox;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.table.JBTable;
@@ -158,6 +159,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
       intoBox = new ComboBox<>(names.toArray(String[]::new));
       fromBox.setSelectedItem(from);
       intoBox.setSelectedItem(into);
+      fromBox.setRenderer(SimpleListCellRenderer.create("", name -> remote + "/" + name));
       fromBox.setMinimumAndPreferredWidth(JBUI.scale(COMBO_W));
       intoBox.setMinimumAndPreferredWidth(JBUI.scale(COMBO_W));
       push.setSelected(true);
@@ -178,8 +180,6 @@ public final class ReverseMergeAction extends DumbAwareAction {
       where.add(new JBLabel(root.getPath(), UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER));
       JPanel pick = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0));
       pick.add(new JBLabel(SyncBundle.message("rmerge.from")));
-      // From 은 로컬이 아니라 서버 브랜치를 합친다는 것을 상자 앞에 적는다.
-      pick.add(new JBLabel(SyncBundle.message("rmerge.server", remote)));
       pick.add(fromBox);
       pick.add(new JBLabel(SyncBundle.message("rmerge.into")));
       pick.add(intoBox);
@@ -212,6 +212,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
       JPanel rows = new JPanel(new GridLayout(0, 1, 0, JBUI.scale(6)));
       rows.add(where);
       rows.add(pick);
+      // From 은 로컬이 아니라 서버 브랜치를 합친다. 상자에는 origin/ 을 붙여 보이고 아래 줄에 적는다.
+      rows.add(new JBLabel(SyncBundle.message("rmerge.from.server", remote), UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER));
       top.add(rows, BorderLayout.NORTH);
       JPanel lines = new JPanel(new GridLayout(0, 1, 0, JBUI.scale(2)));
       lines.add(summary);
