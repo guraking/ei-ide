@@ -5,6 +5,7 @@ import com.intellij.diff.DiffManager;
 import com.intellij.diff.DiffRequestPanel;
 import com.intellij.diff.requests.MessageDiffRequest;
 import com.intellij.diff.requests.SimpleDiffRequest;
+import com.intellij.dvcs.repo.Repository;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.actionSystem.ActionManager;
 import com.intellij.ide.DataManager;
@@ -53,7 +54,9 @@ import org.jetbrains.annotations.NotNull;
 import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.treeStructure.Tree;
 import com.intellij.util.ui.tree.TreeUtil;
+import git4idea.branch.GitBrancher;
 import git4idea.repo.GitRepository;
+import git4idea.repo.GitRepositoryManager;
 import git4idea.repo.GitRepositoryChangeListener;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
@@ -121,8 +124,24 @@ final class SyncPanel extends SimpleToolWindowPanel {
     @Override public String toString() { return root.getName() + " (" + label() + ")"; }
   }
 
-  record Change(Kind kind, String status, String path, Repo repo) {
+  /** Git 나갈 변경이 스테이징(색인)에 있는지. NONE 은 커밋만 하고 안 올린 파일이거나 SVN. BOTH 는 일부 줄만 담은 파일로, 커밋 창처럼 두 묶음에 다 보인다. */
+  enum Stage { NONE, STAGED, UNSTAGED, BOTH }
+
+  record Change(Kind kind, String status, String path, Repo repo, Stage stage) {
+    Change(Kind kind, String status, String path, Repo repo) { this(kind, status, path, repo, Stage.NONE); }
     @Override public String toString() { return "[" + status + "] " + path; }
+  }
+
+  /** 나갈 변경 아래 묶음 줄: Staged · Unstaged · 커밋만 하고 안 올림(NONE)과 그 파일 수. */
+  record StageGroup(Stage stage, int count) {
+    @Override public String toString() {
+      String key = switch (stage) {
+        case STAGED -> "sync.stage.group.staged";
+        case UNSTAGED, BOTH -> "sync.stage.group.unstaged";
+        case NONE -> "sync.stage.group.committed";
+      };
+      return SyncBundle.message(key) + " " + count;
+    }
   }
 
   /** 트리 묶음 줄: 종류와 그 종류 파일 수. */
@@ -181,6 +200,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static final String MARK_OUTGOING = "↑";
   private static final String MARK_CONFLICT = "⚠";
   private static final String SUMMARY_SEP = " · ";
+  // Staged 글자색(밝은 테마 · 어두운 테마). 이 창의 파랑(들어올) · 보라(나갈) · 빨강(충돌)과 IDE 의 초록(새 파일)에 겹치지 않는 주황.
+  private static final Color STAGED_COLOR = new JBColor(0xB45F06, 0xFF9F0A);
   private static final Set<String> UNMERGED = Set.of("DD", "AU", "UD", "UA", "DU", "AA", "UU");
   // ProjectLevelVcsManager 가 주는 AbstractVcs.getName() 값. GitVcs.NAME · SvnVcs.VCS_NAME 과 같다.
   private static final String VCS_NAME_GIT = "Git";
@@ -190,6 +211,9 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static final String ACTION_BRANCHES = "Git.Branches";
   private static final String ACTION_STASH = "Git.Stash";
   private static final String ACTION_UNSTASH = "Git.Unstash";
+  // IntelliJ 커밋 창(모든 저장소의 변경을 한 창에서 커밋)과 올리기 창. 올리기 창은 VIRTUAL_FILE_ARRAY 의 저장소들을 체크한 채로 열린다.
+  private static final String ACTION_COMMIT = "CheckinProject";
+  private static final String ACTION_PUSH = "Vcs.Push";
   // IDE 의 「Update Project」(Ctrl+T). 프로젝트의 모든 VCS 루트를 받는다(Git 은 받기 방식을 묻고, SVN 은 svn update).
   private static final String ACTION_UPDATE_ALL = "Vcs.UpdateProject";
   // 설치본에 같이 넣은 VisualSVN 명령줄 도구(apply_defaults 19 의 SVN 기본 경로와 같은 곳).
@@ -263,6 +287,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     actions.add(new GitAction("sync.git.branches", AllIcons.Vcs.Branch, ACTION_BRANCHES));
     actions.add(new GitAction("sync.git.stash", AllIcons.Vcs.ShelveSilent, ACTION_STASH));
     actions.add(new GitAction("sync.git.unstash", AllIcons.Vcs.Unshelve, ACTION_UNSTASH));
+    actions.add(DumbAwareAction.create(SyncBundle.message("sync.git.undo"), AllIcons.Actions.Undo, e -> undoLastGitAction()));
     ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar(TOOLBAR_PLACE, actions, true);
     toolbar.setTargetComponent(this);
     title.setOpaque(false);
@@ -295,6 +320,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
     bottom.add(actionButton(SyncBundle.message("sync.button.update.all"), AllIcons.Vcs.ShelveSilent, ACTION_UPDATE_ALL, false));
     bottom.add(pull);
     bottom.add(actionButton(SyncBundle.message("sync.button.resolve"), AllIcons.Vcs.Merge, "Git.ResolveConflicts", false));
+    bottom.add(actionButton(SyncBundle.message("sync.button.commit"), AllIcons.Actions.Commit, ACTION_COMMIT, false));
+    JButton pushAll = new JButton(SyncBundle.message("sync.button.push.all"), AllIcons.Vcs.Push);
+    pushAll.addActionListener(e -> pushAll(pushAll.getText()));
+    bottom.add(pushAll);
     JPanel content = new JPanel(new BorderLayout());
     content.add(splitter, BorderLayout.CENTER);
     content.add(bottom, BorderLayout.SOUTH);
@@ -309,14 +338,21 @@ final class SyncPanel extends SimpleToolWindowPanel {
       @Override
       public void customizeCellRenderer(JTree t, Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus) {
         DefaultMutableTreeNode node = (DefaultMutableTreeNode) value;
+        // Staged 묶음과 그 아래 파일은 STAGED_COLOR 로, Unstaged · 안 올린 커밋은 나갈 변경 색 그대로 그린다.
         FileStatus fileStatus = statusColorOf(kindOf(node));
-        Color color = fileStatus == null ? null : fileStatus.getColor();
+        Color color = inStaged(node) ? STAGED_COLOR : fileStatus == null ? null : fileStatus.getColor();
         Object item = node.getUserObject();
         setToolTipText(null);
         if (item instanceof Group group) {
           setIcon(iconOf(group.kind()));
           append(group.kind().label(), new SimpleTextAttributes(SimpleTextAttributes.STYLE_BOLD, color));
           append(" " + group.count(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+        }
+        else if (item instanceof StageGroup group) {
+          String text = group.toString();
+          int space = text.lastIndexOf(' ');
+          append(text.substring(0, space), new SimpleTextAttributes(SimpleTextAttributes.STYLE_BOLD, color));
+          append(text.substring(space), SimpleTextAttributes.GRAYED_ATTRIBUTES);
         }
         else if (item instanceof Change change) {
           String path = change.path();
@@ -431,6 +467,25 @@ final class SyncPanel extends SimpleToolWindowPanel {
       JMenuItem ignoreFolders = new JMenuItem(SyncBundle.message("sync.menu.ignore.folders", ignoreName, String.join(", ", folders)));
       ignoreFolders.addActionListener(a -> ignore(selected, true));
       menu.add(ignoreFolders);
+    }
+
+    // Git 의 나갈 변경은 스테이징(커밋 창의 Staged)에 담거나 뺄 수 있다. 커밋만 하고 안 올린 파일(NONE)은 대상이 아니다.
+    // 일부 줄만 담은 파일(BOTH)은 Staged · Unstaged 양쪽 줄로 보이므로 같은 파일이 두 번 골렸을 수 있어 한 번만 센다.
+    List<Change> unique = selected.stream().distinct().toList();
+    List<Change> toStage = unique.stream().filter(c -> c.stage() == Stage.UNSTAGED || c.stage() == Stage.BOTH).toList();
+    // 새 경로(A · R · C)는 아래 「Unstage Only, Keep Files」가 맡는다.
+    List<Change> toUnstage = unique.stream()
+      .filter(c -> (c.stage() == Stage.STAGED || c.stage() == Stage.BOTH) && undoOf(c) == Undo.REVERT).toList();
+    if (!toStage.isEmpty() || !toUnstage.isEmpty()) menu.addSeparator();
+    if (!toStage.isEmpty()) {
+      JMenuItem stage = new JMenuItem(SyncBundle.message("sync.menu.stage", toStage.size()));
+      stage.addActionListener(a -> runOnRepos(toStage, repo -> List.of("add", "--"), SyncBundle.message("sync.stage.done", toStage.size())));
+      menu.add(stage);
+    }
+    if (!toUnstage.isEmpty()) {
+      JMenuItem unstageFiles = new JMenuItem(SyncBundle.message("sync.menu.unstage.files", toUnstage.size()));
+      unstageFiles.addActionListener(a -> unstage(toUnstage));
+      menu.add(unstageFiles);
     }
 
     // 되돌리기는 HEAD 에 있는 파일의 내 변경만 대상이다. 새 파일 · 이름 바꾼 파일 · 복사한 파일은 지우지 않고 스테이징만 풀 수 있다.
@@ -941,6 +996,128 @@ final class SyncPanel extends SimpleToolWindowPanel {
     return button;
   }
 
+  /** 모든 Git 저장소를 체크한 채로 IntelliJ 올리기 창을 연다. 저장소마다 올릴 커밋 · 원격 브랜치를 그 창에서 보고 고른다. */
+  private void pushAll(String text) {
+    List<VirtualFile> roots = new ArrayList<>();
+    for (Repo repo : repos) {
+      if (repo.vcs() != Vcs.GIT) continue;
+      VirtualFile root = LocalFileSystem.getInstance().findFileByIoFile(repo.root());
+      if (root != null) roots.add(root);
+    }
+    if (roots.isEmpty()) {
+      showStatus(SyncBundle.message("sync.push.none"));
+      return;
+    }
+    DataContext context = SimpleDataContext.builder().setParent(DataManager.getInstance().getDataContext(this))
+      .add(CommonDataKeys.VIRTUAL_FILE, roots.get(0))
+      .add(CommonDataKeys.VIRTUAL_FILE_ARRAY, roots.toArray(VirtualFile[]::new))
+      .build();
+    runAction(text, ACTION_PUSH, context);
+  }
+
+  /**
+   * 고른 Git 저장소(Git 저장소가 하나뿐이면 그것)의 마지막 Git 동작을 reflog 로 되돌린다. 무엇을 어떻게 되돌리는지 먼저 확인받는다.
+   * 커밋은 커밋만 없애고 변경은 Staged 로 남긴다(reset --soft). 합치기 · 받기 · 리베이스 · reset · cherry-pick 은 그 전 위치로 옮기되
+   * 작업본 변경은 지킨다(reset --keep, 지킬 수 없으면 git 이 아무것도 바꾸지 않고 멈춘다). 브랜치 바꾸기는 IntelliJ 브랜치 바꾸기로 앞 브랜치로 간다.
+   * 합치기 · 리베이스가 진행 중(충돌 해결 중)이면 IntelliJ 의 Abort 로 끝내야 하므로 하지 않는다.
+   */
+  private void undoLastGitAction() {
+    List<Repo> gitRepos = new ArrayList<>();
+    for (Repo repo : buttonTargets()) {
+      if (repo.vcs() == Vcs.GIT) gitRepos.add(repo);
+    }
+    if (gitRepos.size() != 1) {
+      showStatus(SyncBundle.message(gitRepos.isEmpty() ? "sync.undo.no.git" : "sync.undo.pick.repo"));
+      return;
+    }
+    Repo repo = gitRepos.get(0);
+    VirtualFile rootFile = LocalFileSystem.getInstance().findFileByIoFile(repo.root());
+    GitRepository gitRepository = rootFile == null ? null : GitRepositoryManager.getInstance(project).getRepositoryForRootQuick(rootFile);
+    if (gitRepository == null) {
+      showStatus(SyncBundle.message("sync.undo.no.git"));
+      return;
+    }
+    Repository.State state = gitRepository.getState();
+    if (state != Repository.State.NORMAL && state != Repository.State.DETACHED) {
+      showStatus(SyncBundle.message("sync.undo.in.progress", repo.root().getName()));
+      return;
+    }
+    String branch = gitRepository.getCurrentBranchName();
+    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+      String headTop;
+      String branchTop;
+      boolean pushed;
+      try {
+        headTop = git(repo.root(), "reflog", "-1", "--format=%gs", "HEAD").trim();
+        branchTop = branch == null ? null : git(repo.root(), "reflog", "-1", "--format=%gs", "refs/heads/" + branch).trim();
+        pushed = isPushed(repo.root());
+      }
+      catch (IOException ex) {
+        SwingUtilities.invokeLater(() -> showStatus(ex.getMessage()));
+        return;
+      }
+      catch (InterruptedException ex) {
+        Thread.currentThread().interrupt();
+        return;
+      }
+      GitUndo.Plan plan = GitUndo.plan(headTop, branch, branchTop);
+      String last = branchTop != null && plan != null && plan.way() != GitUndo.Way.SWITCH_BACK ? branchTop : headTop;
+      SwingUtilities.invokeLater(() -> confirmUndo(repo, gitRepository, plan, last, pushed));
+    });
+  }
+
+  /** HEAD 커밋이 이미 추적 브랜치에 있는지(git merge-base --is-ancestor 의 종료 코드 0). 추적 브랜치가 없거나 아니면 거짓. */
+  private static boolean isPushed(File root) throws InterruptedException {
+    try {
+      git(root, "merge-base", "--is-ancestor", "HEAD", "@{u}");
+      return true;
+    }
+    catch (IOException ex) {
+      return false;
+    }
+  }
+
+  private void confirmUndo(Repo repo, GitRepository gitRepository, GitUndo.Plan plan, String last, boolean pushed) {
+    String name = repo.root().getName();
+    if (plan == null) {
+      showStatus(SyncBundle.message("sync.undo.nothing", name, last));
+      return;
+    }
+    String how = switch (plan.way()) {
+      case SWITCH_BACK -> SyncBundle.message("sync.undo.way.switch", plan.target());
+      case SOFT -> SyncBundle.message("sync.undo.way.soft");
+      case KEEP -> SyncBundle.message("sync.undo.way.keep");
+    };
+    String note = pushed && plan.way() == GitUndo.Way.SOFT ? "\n\n" + SyncBundle.message("sync.undo.pushed") : "";
+    int answer = Messages.showYesNoDialog(project, SyncBundle.message("sync.undo.confirm", name, last, how) + note,
+                                          SyncBundle.message("sync.undo.title"), Messages.getQuestionIcon());
+    if (answer != Messages.YES) return;
+    if (plan.way() == GitUndo.Way.SWITCH_BACK) {
+      GitBrancher.getInstance(project).checkout(plan.target(), false, List.of(gitRepository), null);
+      return;
+    }
+    String mode = plan.way() == GitUndo.Way.SOFT ? "--soft" : "--keep";
+    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+      String message;
+      try {
+        git(repo.root(), "reset", mode, plan.target());
+        message = SyncBundle.message("sync.undo.done", name, last);
+      }
+      catch (IOException ex) {
+        message = ex.getMessage();
+      }
+      catch (InterruptedException ex) {
+        Thread.currentThread().interrupt();
+        return;
+      }
+      // reset 은 IDE 밖에서 파일과 .git 을 바꾸므로 열린 편집기 · 커밋 창이 따라오도록 저장소 폴더를 새로 읽는다.
+      LocalFileSystem.getInstance().refreshIoFiles(List.of(repo.root()), true, true, null);
+      gitRepository.update();
+      String m = message;
+      SwingUtilities.invokeLater(() -> { showStatus(m); recompare(); });
+    });
+  }
+
   /** 단추가 다룰 저장소: 트리에서 고른 것, 없으면 전부. */
   private List<Repo> buttonTargets() {
     List<Repo> targets = selectedRepos();
@@ -1004,7 +1181,17 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static Kind kindOf(DefaultMutableTreeNode node) {
     Object value = node.getUserObject();
     if (value instanceof Group g) return g.kind();
+    if (value instanceof StageGroup) return Kind.OUTGOING;
     return value instanceof Change c ? c.kind() : null;
+  }
+
+  /** 줄이 Staged 묶음이거나 그 아래 파일이면 참. */
+  private static boolean inStaged(DefaultMutableTreeNode node) {
+    Object parent = node.getParent() instanceof DefaultMutableTreeNode p ? p.getUserObject() : null;
+    for (Object value : new Object[]{node.getUserObject(), parent}) {
+      if (value instanceof StageGroup g && g.stage() == Stage.STAGED) return true;
+    }
+    return false;
   }
 
   /** 위쪽 상태 글: 진행 · 오류 · 알림은 회색 글 한 조각. */
@@ -1378,6 +1565,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     Map<String, String> incoming = parseNameStatus(out.get(0));
     Map<String, String> outgoing = parseNameStatus(out.get(1));
     Set<String> unmerged = new TreeSet<>();
+    Map<String, Stage> stages = new HashMap<>();
     // 새 파일은 폴더 단위로만 받는다(-unormal). 무시되지 않은 큰 폴더 속을 다 훑으면 느려진다.
     // 폴더는 ".idea/" 처럼 끝이 / 인 한 줄로 나오며, 그대로 .gitignore 에 넣을 수 있다.
     for (String line : out.get(2).split("\n")) {
@@ -1389,15 +1577,32 @@ final class SyncPanel extends SimpleToolWindowPanel {
       path = unquote(path);
       // 작업본 상태가 커밋된 상태보다 우선한다. 첫 글자(HEAD ↔ 색인)가 A · R · C 인지로 되돌리기 대상을 가르기 때문이다(undoOf).
       if (UNMERGED.contains(xy)) unmerged.add(path);
-      else outgoing.put(path, xy.trim().isEmpty() ? "M" : xy.trim());
+      else {
+        outgoing.put(path, xy.trim().isEmpty() ? "M" : xy.trim());
+        stages.put(path, stageOf(xy));
+      }
     }
     List<Change> result = merge(repo, incoming, outgoing, unmerged);
+    for (int i = 0; i < result.size(); i++) {
+      Change c = result.get(i);
+      Stage stage = stages.get(c.path());
+      if (c.kind() == Kind.OUTGOING && stage != null) result.set(i, new Change(c.kind(), c.status(), c.path(), repo, stage));
+    }
     if (!assumed) return result;
     // 부분 체크아웃(sparse checkout)이 밖으로 뺀 파일도 skip-worktree 지만 디스크에 없으므로, 디스크에 있는 것만 모른 척 중으로 본다.
     for (String path : parseAssumed(out.get(3), p -> new File(root, p).exists())) {
       result.add(new Change(Kind.ASSUMED, "Assume Unchanged", path, repo));
     }
     return result;
+  }
+
+  /** git status --porcelain 의 두 글자(XY): X 는 HEAD ↔ 색인(Staged), Y 는 색인 ↔ 작업본(Unstaged). 새 파일(??)은 Unstaged. */
+  static Stage stageOf(String xy) {
+    if (UNTRACKED_STATUS.contains(xy)) return Stage.UNSTAGED;
+    boolean staged = xy.charAt(0) != ' ';
+    boolean unstaged = xy.charAt(1) != ' ';
+    if (staged && unstaged) return Stage.BOTH;
+    return staged ? Stage.STAGED : unstaged ? Stage.UNSTAGED : Stage.NONE;
   }
 
   /**
@@ -1543,7 +1748,19 @@ final class SyncPanel extends SimpleToolWindowPanel {
       List<Change> ofKind = source.stream().filter(c -> c.kind() == kind).toList();
       if (ofKind.isEmpty()) continue;
       DefaultMutableTreeNode group = new DefaultMutableTreeNode(new Group(kind, ofKind.size()));
-      for (Change c : ofKind) group.add(new DefaultMutableTreeNode(c));
+      if (kind == Kind.OUTGOING && ofKind.stream().anyMatch(c -> c.stage() != Stage.NONE)) addStageGroups(group, ofKind);
+      else for (Change c : ofKind) group.add(new DefaultMutableTreeNode(c));
+      parent.add(group);
+    }
+  }
+
+  /** Git 나갈 변경을 Staged · Unstaged · 안 올린 커밋 묶음으로 나눈다. 일부 줄만 담은 파일(BOTH)은 Staged · Unstaged 양쪽에 둔다. */
+  private static void addStageGroups(DefaultMutableTreeNode parent, List<Change> outgoing) {
+    for (Stage stage : List.of(Stage.STAGED, Stage.UNSTAGED, Stage.NONE)) {
+      List<Change> part = outgoing.stream().filter(c -> c.stage() == stage || (c.stage() == Stage.BOTH && stage != Stage.NONE)).toList();
+      if (part.isEmpty()) continue;
+      DefaultMutableTreeNode group = new DefaultMutableTreeNode(new StageGroup(stage, part.size()));
+      for (Change c : part) group.add(new DefaultMutableTreeNode(c));
       parent.add(group);
     }
   }
