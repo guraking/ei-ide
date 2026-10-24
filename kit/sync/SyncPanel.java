@@ -306,12 +306,12 @@ final class SyncPanel extends SimpleToolWindowPanel {
     pull.putClientProperty(DarculaButtonUI.DEFAULT_STYLE_KEY, Boolean.TRUE);
     bottom.add(actionButton(SyncBundle.message("sync.button.update.all"), AllIcons.Vcs.ShelveSilent, ACTION_UPDATE_ALL, false));
     bottom.add(pull);
-    bottom.add(actionButton(SyncBundle.message("sync.button.resolve"), AllIcons.Vcs.Merge, "Git.ResolveConflicts", false));
-    // 고른 저장소(없으면 지금 저장소)로 Reverse Merge 창을 연다.
-    bottom.add(actionButton(SyncBundle.message("sync.button.reverse"), AllIcons.Vcs.Branch, ACTION_REVERSE_MERGE, true));
     // 올리기: 고른 저장소(없으면 전부)로 IntelliJ Push 창. 커밋하고 올리기: 커밋 창을 연다(그 창의 Commit and Push 로 한 번에).
     bottom.add(actionButton(SyncBundle.message("sync.button.push"), AllIcons.Vcs.Push, ACTION_PUSH, true));
     bottom.add(actionButton(SyncBundle.message("sync.button.commit.push"), AllIcons.Actions.Commit, ACTION_COMMIT, false));
+    bottom.add(actionButton(SyncBundle.message("sync.button.resolve"), AllIcons.Vcs.Merge, "Git.ResolveConflicts", false));
+    // 고른 저장소(없으면 지금 저장소)로 Merge Branches 창을 연다.
+    bottom.add(actionButton(SyncBundle.message("sync.button.reverse"), AllIcons.Vcs.Branch, ACTION_REVERSE_MERGE, true));
     JPanel content = new JPanel(new BorderLayout());
     content.add(splitter, BorderLayout.CENTER);
     content.add(bottom, BorderLayout.SOUTH);
