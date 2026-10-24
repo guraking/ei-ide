@@ -111,7 +111,9 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
         if (action == null || project.isDisposed()) return;
         var context = SimpleDataContext.builder().add(CommonDataKeys.PROJECT, project).add(CommonDataKeys.VIRTUAL_FILE, vf).build();
         AnActionEvent event = AnActionEvent.createFromAnAction(action, null, ActionPlaces.UNKNOWN, context);
-        ActionUtil.performActionDumbAwareWithCallbacks(action, event);
+        // update 가 이미 연결된 파일이면 숨긴다. 그때 실행하면 Maven 은 다시 읽고 같은 폴더의 다른 빌드 도구 연결을 끊는다.
+        ActionUtil.updateAction(action, event);
+        if (event.getPresentation().isEnabledAndVisible()) ActionUtil.performAction(action, event);
       });
     }
   }

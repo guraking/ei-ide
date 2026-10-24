@@ -9,10 +9,7 @@ import com.intellij.openapi.actionSystem.Constraints;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.actionSystem.Separator;
 import com.intellij.openapi.actionSystem.impl.ActionConfigurationCustomizer;
-import com.intellij.openapi.module.Module;
-import com.intellij.openapi.module.ModuleManager;
-import com.intellij.openapi.project.Project;
-import com.intellij.openapi.roots.ModuleRootManager;
+import com.intellij.openapi.project.ProjectUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 
 import java.util.ArrayList;
@@ -93,9 +90,13 @@ final class KingGuraMainMenuCustomizer implements ActionConfigurationCustomizer,
     }
   }
 
-  /** 모듈 콘텐츠 루트 어디에도 Gradle 파일이 없으면 숨긴다. */
+  /**
+   * 프로젝트 폴더와 그 아래 GRADLE_DEPTH 단계 어디에도 Gradle 파일이 없으면 숨긴다(Clone 이 자동 연결하는 깊이와 같다).
+   * shortcut: 연결 여부가 아니라 파일 유무로 본다. 이 모듈은 projectModel(ModuleManager)에 의존하지 않아 모듈 목록을 못 읽는다.
+   */
   private static final class GradleOnly extends AnActionWrapper {
     private static final List<String> GRADLE_FILES = List.of("settings.gradle", "settings.gradle.kts", "build.gradle", "build.gradle.kts");
+    private static final int GRADLE_DEPTH = 2;
 
     GradleOnly(AnAction action) {
       super(action);
@@ -104,22 +105,26 @@ final class KingGuraMainMenuCustomizer implements ActionConfigurationCustomizer,
     @Override
     public void update(AnActionEvent e) {
       super.update(e);
-      if (e.getPresentation().isVisible() && !hasGradleRoot(e.getProject())) {
+      if (e.getPresentation().isVisible() && !hasGradleFile(e.getProject() == null ? null : ProjectUtil.guessProjectDir(e.getProject()), 0)) {
         e.getPresentation().setEnabledAndVisible(false);
       }
     }
 
-    private static boolean hasGradleRoot(Project project) {
-      if (project == null) {
+    private static boolean hasGradleFile(VirtualFile dir, int depth) {
+      if (dir == null || !dir.isDirectory()) {
         return false;
       }
-      for (Module module : ModuleManager.getInstance(project).getModules()) {
-        for (VirtualFile root : ModuleRootManager.getInstance(module).getContentRoots()) {
-          for (String name : GRADLE_FILES) {
-            if (root.findChild(name) != null) {
-              return true;
-            }
-          }
+      for (String name : GRADLE_FILES) {
+        if (dir.findChild(name) != null) {
+          return true;
+        }
+      }
+      if (depth == GRADLE_DEPTH) {
+        return false;
+      }
+      for (VirtualFile child : dir.getChildren()) {
+        if (!child.getName().startsWith(".") && hasGradleFile(child, depth + 1)) {
+          return true;
         }
       }
       return false;

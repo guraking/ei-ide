@@ -160,7 +160,12 @@ public final class ReverseMergeAction extends DumbAwareAction {
       fromBox.setSelectedItem(from);
       intoBox.setSelectedItem(into);
       // 두 상자 모두 서버 브랜치를 가리키므로 origin/ 을 붙여 보인다.
-      SimpleListCellRenderer<String> remoteName = SimpleListCellRenderer.create((label, name, index) -> label.setText(remote + "/" + name));
+      SimpleListCellRenderer<String> remoteName = new SimpleListCellRenderer<>() {
+        @Override
+        public void customize(@NotNull JList<? extends String> list, String name, int index, boolean selected, boolean hasFocus) {
+          setText(remote + "/" + name);
+        }
+      };
       fromBox.setRenderer(remoteName);
       intoBox.setRenderer(remoteName);
       fromBox.setMinimumAndPreferredWidth(JBUI.scale(COMBO_W));
