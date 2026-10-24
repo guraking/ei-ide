@@ -1046,11 +1046,12 @@ final class SyncPanel extends SimpleToolWindowPanel {
     if (list.size() == 1 && list.get(0).vcs() == Vcs.GIT) {
       Repo repo = list.get(0);
       title.setIcon(AllIcons.Vcs.Branch);
-      title.append(repo.branch(), SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES);
+      title.append(repo.root().getName() + "  ", SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES);
+      title.append(repo.branch(), SimpleTextAttributes.REGULAR_ATTRIBUTES);
       title.append(" ↔ " + repo.upstream(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
       return;
     }
-    title.append(list.size() == 1 ? list.get(0).label() : SyncBundle.message("sync.repo.count", list.size()));
+    title.append(list.size() == 1 ? list.get(0).toString() : SyncBundle.message("sync.repo.count", list.size()));
   }
 
   /** 묶음 줄 아이콘. 도구줄 보기 거르기와 같은 그림을 쓰고, 충돌은 경고 표시. */
@@ -1092,7 +1093,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     return path == null ? null : repoOf(path);
   }
 
-  /** 줄 하나가 속한 저장소. 저장소가 하나뿐이라 저장소 줄이 없는 트리에서는 파일 줄에서만 알 수 있다. */
+  /** 줄 하나가 속한 저장소. 저장소 줄 · 그 아래 묶음 줄 · 파일 줄이면 그 저장소, 아니면 null. */
   private static Repo repoOf(TreePath path) {
     for (Object part : path.getPath()) {
       Object value = ((DefaultMutableTreeNode) part).getUserObject();
@@ -1521,15 +1522,13 @@ final class SyncPanel extends SimpleToolWindowPanel {
   /** 저장소가 하나면 종류별 묶음만, 둘 이상이면 저장소 → 종류별 묶음으로 보인다. */
   private void rebuildTree() {
     DefaultMutableTreeNode root = new DefaultMutableTreeNode();
-    if (repos.size() <= 1) {
-      addKindGroups(root, changes);
-    }
-    else {
-      for (Repo repo : repos) {
-        DefaultMutableTreeNode repoNode = new DefaultMutableTreeNode(repo);
-        addKindGroups(repoNode, changes.stream().filter(c -> c.repo().equals(repo)).toList());
-        root.add(repoNode);
-      }
+    // 저장소가 하나여도 저장소 줄을 두어 파일이 어느 저장소 것인지 보이게 한다.
+    // 하나뿐인 저장소에 변경이 없으면 빈 트리로 두어 「변경 없음」 안내가 보이게 한다.
+    for (Repo repo : repos) {
+      DefaultMutableTreeNode repoNode = new DefaultMutableTreeNode(repo);
+      addKindGroups(repoNode, changes.stream().filter(c -> c.repo().equals(repo)).toList());
+      if (repos.size() == 1 && repoNode.getChildCount() == 0) continue;
+      root.add(repoNode);
     }
     tree.setModel(new DefaultTreeModel(root));
     TreeUtil.expandAll(tree);
