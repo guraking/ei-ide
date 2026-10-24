@@ -1022,7 +1022,8 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
     <p class="lead">GitLab 사이트에서 하던 「develop → 내 개인 브랜치」 머지를 IDE 에서 합니다. 내 PC 가 개인 브랜치만 받도록 설정돼 있어도 서버에 직접 브랜치 목록을 물어 고르게 하고, 고른 브랜치만 받아 옵니다. 합치기 전에 들어올 파일을 먼저 보여 주고, Merge 를 눌러야 합칩니다.</p>
     <table class="keys map" style="margin-bottom:18px">
       <tr><th>창의 칸</th><th>하는 일</th></tr>
-      <tr><td>From · Into</td><td>From 은 가져올 서버 브랜치(develop · main 등), Into 는 내 개인 브랜치. 고른 값은 저장소마다 기억합니다. Into 가 지금 브랜치가 아니면 그 브랜치로 옮긴 뒤 합칩니다.</td></tr>
+      <tr><td>Repository</td><td>합칠 저장소 이름과 폴더(IntelliJ Pull 창처럼)</td></tr>
+      <tr><td>From · Into</td><td>From 은 가져올 서버 브랜치(origin/ 뒤)(develop · main 등), Into 는 내 개인 브랜치. 고른 값은 저장소마다 기억합니다. Into 가 지금 브랜치가 아니면 그 브랜치로 옮긴 뒤 합칩니다.</td></tr>
       <tr><td>들어올 파일 표</td><td>파일 · 마지막으로 바꾼 사람 · 때 · 커밋 제목. 파일을 두 번 누르면 Into(왼쪽) ↔ From(오른쪽) 비교 창.</td></tr>
       <tr><td>주황 줄 · ⚠</td><td>내 파일을 다른 사람이 From 에서 고친 것. 충돌 없이 조용히 합쳐져 내 소스가 바뀔 수 있으니 먼저 비교해 보세요. 내 파일은 개인 브랜치에서 바꾼 파일 · 고치는 중인 파일 · 최근 30일 안에 내 Git 이메일로 커밋한 파일입니다.</td></tr>
       <tr><td>Push to … after merge</td><td>켜 두면(기본) 합친 뒤 서버의 개인 브랜치로 바로 올립니다.</td></tr>

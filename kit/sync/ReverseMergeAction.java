@@ -31,6 +31,7 @@ import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.components.JBCheckBox;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.table.JBTable;
+import com.intellij.util.ui.JBFont;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
 import git4idea.branch.GitBranchUtil;
@@ -164,8 +165,14 @@ public final class ReverseMergeAction extends DumbAwareAction {
 
     @Override
     protected @Nullable JComponent createCenterPanel() {
+      // IntelliJ Pull 창처럼 어느 저장소 · 원격에서 받는지 먼저 보인다. From 은 원격 브랜치, Into 는 로컬 브랜치다.
+      JPanel where = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0));
+      where.add(new JBLabel(SyncBundle.message("rmerge.repository")));
+      where.add(new JBLabel(root.getName()).withFont(JBFont.label().asBold()));
+      where.add(new JBLabel(root.getPath(), UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER));
       JPanel pick = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0));
       pick.add(new JBLabel(SyncBundle.message("rmerge.from")));
+      pick.add(new JBLabel(remote + "/"));
       pick.add(fromBox);
       pick.add(new JBLabel(SyncBundle.message("rmerge.into")));
       pick.add(intoBox);
@@ -195,7 +202,10 @@ public final class ReverseMergeAction extends DumbAwareAction {
       scroll.setPreferredSize(JBUI.size(TABLE_W, TABLE_H));
 
       JPanel top = new JPanel(new BorderLayout(0, JBUI.scale(8)));
-      top.add(pick, BorderLayout.NORTH);
+      JPanel rows = new JPanel(new GridLayout(0, 1, 0, JBUI.scale(6)));
+      rows.add(where);
+      rows.add(pick);
+      top.add(rows, BorderLayout.NORTH);
       JPanel lines = new JPanel(new GridLayout(0, 1, 0, JBUI.scale(2)));
       lines.add(summary);
       lines.add(warn);
