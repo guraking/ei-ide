@@ -31,14 +31,15 @@ import java.util.List;
 
 /**
  * Clone 이 끝난 폴더를 새 창 프로젝트로 열지 않고 지금 열린 프로젝트에 모듈로 붙인다(이클립스 워크스페이스처럼).
- * 모듈 파일은 받은 폴더의 「폴더이름.iml」(ExcludeIdeFiles 가 *.iml 을 Git 에서 감춘다), SDK 는 프로젝트 것을 따른다.
+ * 모듈 파일은 프로젝트의 .idea/modules/「폴더이름.iml」(받은 저장소 안에 IDE 파일을 만들지 않는다), SDK 는 프로젝트 것을 따른다.
  * 프로젝트 VCS 매핑이 <Project> 기본값이 아니면 받은 폴더에 Git 매핑을 더한다.
  * 다음이면 false 를 돌려 IntelliJ 기본 동작(새 프로젝트로 열기)에 맡긴다:
  * 시작 화면(기본 프로젝트)에서 받았을 때, 같은 이름 모듈이 이미 있을 때.
  * 받은 폴더가 프로젝트 폴더 안이어도 따로 모듈로 붙인다.
  * 워크스페이스 프로젝트(C:\dev\git 처럼 Git 저장소 밖 폴더를 연 것)는 열 때와 Clone 뒤에 그 폴더 자체 모듈(「git」)을 빼고,
- * 프로젝트 창 맨 위의 프로젝트 폴더 줄은 HideWorkspaceRoot 가 그리기 전에 거른다(IntelliJ 가 열 때마다 다시 등록하므로 등록을 빼지 않는다).
- * 그러면 「git」 줄 없이 받은 저장소 모듈들만 이클립스처럼 나란히 보인다(빈 워크스페이스면 빈 트리, .idea 는 그대로).
+ * 프로젝트 창 맨 위의 프로젝트 폴더 줄은 HideWorkspaceRoot 가 그 안의 줄들(.idea 빼고)로 바꿔 그린다
+ * (IntelliJ 가 열 때마다 다시 등록하므로 등록은 빼지 않는다. 받은 저장소 모듈은 이 폴더 줄 아래에 그려지므로 줄만 지우면 같이 사라진다).
+ * 그러면 「git」 줄 없이 받은 저장소 모듈들만 이클립스처럼 나란히 보인다(빈 워크스페이스면 빈 트리, .idea 는 디스크에 그대로).
  * 워크스페이스 판정(isWorkspace): 프로젝트 폴더와 그 위 어디에도 .git 이 없고,
  * 프로젝트 폴더를 콘텐츠 루트로 가진 모듈이 없거나 있어도 그 루트 하나뿐이며 소스 폴더가 없다.
  */
@@ -51,7 +52,8 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
 
   @Override
   public boolean processCheckedOutDirectory(@NotNull Project project, @NotNull Path directory) {
-    if (project.isDefault() || project.isDisposed()) return false;
+    String base = project.isDefault() || project.isDisposed() ? null : project.getBasePath();
+    if (base == null) return false;
     VirtualFile dir = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(directory);
     if (dir == null) return false;
     String name = dir.getName();
@@ -60,7 +62,7 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
     ApplicationManager.getApplication().invokeAndWait(() -> {
       if (project.isDisposed()) return;
       Module module = WriteAction.compute(() -> ModuleManager.getInstance(project)
-        .newModule(directory.resolve(name + ".iml"), ModuleTypeManager.getInstance().getDefaultModuleType().getId()));
+        .newModule(Path.of(base, Project.DIRECTORY_STORE_FOLDER, "modules", name + ".iml"), ModuleTypeManager.getInstance().getDefaultModuleType().getId()));
       ModuleRootModificationUtil.addContentRoot(module, dir);
       ModuleRootModificationUtil.setSdkInherited(module);
       addGitMapping(project, directory);
@@ -100,7 +102,7 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
     }
   }
 
-  /** 워크스페이스 프로젝트의 프로젝트 창 맨 위에서 프로젝트 폴더 줄을 거른다. */
+  /** 워크스페이스 프로젝트의 프로젝트 창 맨 위에서 프로젝트 폴더 줄을 그 안의 줄들(.idea 빼고)로 바꾼다. */
   public static final class HideWorkspaceRoot implements TreeStructureProvider, com.intellij.openapi.project.DumbAware {
     @Override
     public @NotNull Collection<AbstractTreeNode<?>> modify(@NotNull AbstractTreeNode<?> parent,
@@ -111,8 +113,16 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
       if (baseDir == null) return children;
       List<AbstractTreeNode<?>> shown = new ArrayList<>();
       for (AbstractTreeNode<?> child : children) {
-        if (child.getValue() instanceof PsiDirectory dir && baseDir.equals(dir.getVirtualFile())) continue;
-        shown.add(child);
+        if (!(child.getValue() instanceof PsiDirectory dir && baseDir.equals(dir.getVirtualFile()))) {
+          shown.add(child);
+          continue;
+        }
+        VirtualFile store = baseDir.findChild(Project.DIRECTORY_STORE_FOLDER);
+        for (AbstractTreeNode<?> inner : child.getChildren()) {
+          if (inner.getValue() instanceof PsiDirectory innerDir && innerDir.getVirtualFile().equals(store)) continue;
+          inner.setParent(parent);
+          shown.add(inner);
+        }
       }
       return shown;
     }
