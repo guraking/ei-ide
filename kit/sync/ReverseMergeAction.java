@@ -159,7 +159,15 @@ public final class ReverseMergeAction extends DumbAwareAction {
       intoBox = new ComboBox<>(names.toArray(String[]::new));
       fromBox.setSelectedItem(from);
       intoBox.setSelectedItem(into);
-      fromBox.setRenderer(SimpleListCellRenderer.create("", name -> remote + "/" + name));
+      // 두 상자 모두 서버 브랜치를 가리키므로 origin/ 을 붙여 보인다.
+      SimpleListCellRenderer<String> remoteName = new SimpleListCellRenderer<>() {
+        @Override
+        public void customize(@NotNull JList<? extends String> list, String name, int index, boolean selected, boolean hasFocus) {
+          setText(remote + "/" + name);
+        }
+      };
+      fromBox.setRenderer(remoteName);
+      intoBox.setRenderer(remoteName);
       fromBox.setMinimumAndPreferredWidth(JBUI.scale(COMBO_W));
       intoBox.setMinimumAndPreferredWidth(JBUI.scale(COMBO_W));
       push.setSelected(true);
@@ -173,7 +181,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
 
     @Override
     protected @Nullable JComponent createCenterPanel() {
-      // IntelliJ Pull 창처럼 어느 저장소 · 원격에서 받는지 먼저 보인다. From 은 원격 브랜치, Into 는 로컬 브랜치다.
+      // IntelliJ Pull 창처럼 어느 저장소 · 원격에서 받는지 먼저 보인다.
+      // From 은 원격 브랜치를 합치고, Into 는 원격 브랜치에 맞춘 로컬 브랜치에 합친 뒤 같은 원격 브랜치로 푸시한다.
       JPanel where = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0));
       where.add(new JBLabel(SyncBundle.message("rmerge.repository")));
       where.add(new JBLabel(root.getName()).withFont(JBFont.label().asBold()));
@@ -212,7 +221,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
       JPanel rows = new JPanel(new GridLayout(0, 1, 0, JBUI.scale(6)));
       rows.add(where);
       rows.add(pick);
-      // From 은 로컬이 아니라 서버 브랜치를 합친다. 상자에는 origin/ 을 붙여 보이고 아래 줄에 적는다.
+      // 로컬이 아니라 서버 브랜치끼리 합친다는 것을 아래 줄에 적는다.
       rows.add(new JBLabel(SyncBundle.message("rmerge.from.server", remote), UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER));
       top.add(rows, BorderLayout.NORTH);
       JPanel lines = new JPanel(new GridLayout(0, 1, 0, JBUI.scale(2)));

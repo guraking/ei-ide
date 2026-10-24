@@ -43,6 +43,7 @@ public class SyncCheck {
     }
 
     checkUnmappedVcs();
+    checkBuildFiles();
     checkRun();
     checkReverseMerge();
     System.out.println("SyncCheck 통과");
@@ -50,6 +51,29 @@ public class SyncCheck {
 
   private static SyncPanel.Change out(String status, SyncPanel.Repo repo) {
     return new SyncPanel.Change(SyncPanel.Kind.OUTGOING, status, "p", repo);
+  }
+
+  /** 빌드 파일 찾기: 두 단계까지, pom.xml 이 Gradle 보다 앞, 찾은 폴더 아래 · 점 폴더 · 빌드 결과 폴더는 보지 않는다. */
+  private static void checkBuildFiles() throws IOException {
+    java.nio.file.Path repo = java.nio.file.Files.createTempDirectory("clone");
+    eq(CloneIntoProject.buildFiles(repo), List.of());
+    java.nio.file.Path eclipse = java.nio.file.Files.createDirectories(repo.resolve("jpa-mybatis-multi"));
+    java.nio.file.Files.writeString(eclipse.resolve("pom.xml"), "");
+    java.nio.file.Files.writeString(eclipse.resolve("build.gradle"), "");
+    java.nio.file.Files.createDirectories(eclipse.resolve("child"));
+    java.nio.file.Files.writeString(eclipse.resolve("child/pom.xml"), "");
+    java.nio.file.Path app = java.nio.file.Files.createDirectories(repo.resolve("apps/web"));
+    java.nio.file.Files.writeString(app.resolve("build.gradle.kts"), "");
+    java.nio.file.Files.writeString(app.resolve("settings.gradle.kts"), "");
+    java.nio.file.Files.createDirectories(repo.resolve("a/b/c"));
+    java.nio.file.Files.writeString(repo.resolve("a/b/c/pom.xml"), "");
+    java.nio.file.Files.createDirectories(repo.resolve(".idea/x"));
+    java.nio.file.Files.writeString(repo.resolve(".idea/x/pom.xml"), "");
+    java.nio.file.Files.createDirectories(repo.resolve("target"));
+    java.nio.file.Files.writeString(repo.resolve("target/pom.xml"), "");
+    eq(CloneIntoProject.buildFiles(repo), List.of(app.resolve("settings.gradle.kts"), eclipse.resolve("pom.xml")));
+    java.nio.file.Files.writeString(repo.resolve("pom.xml"), "");
+    eq(CloneIntoProject.buildFiles(repo), List.of(repo.resolve("pom.xml")));
   }
 
   /** 루트 미등록 폴더: 가장 가까운 .svn · .git 을 따르고, 폴더 이름의 "git" 은 보지 않는다. */

@@ -3,10 +3,14 @@ package com.intellij.ide.customization.java;
 
 import com.intellij.openapi.actionSystem.ActionManager;
 import com.intellij.openapi.actionSystem.AnAction;
+import com.intellij.openapi.actionSystem.AnActionEvent;
+import com.intellij.openapi.actionSystem.AnActionWrapper;
 import com.intellij.openapi.actionSystem.Constraints;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.actionSystem.Separator;
 import com.intellij.openapi.actionSystem.impl.ActionConfigurationCustomizer;
+import com.intellij.openapi.project.ProjectUtil;
+import com.intellij.openapi.vfs.VirtualFile;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -66,13 +70,16 @@ final class KingGuraMainMenuCustomizer implements ActionConfigurationCustomizer,
     if (!(actionManager.getAction("ProjectViewPopupMenu") instanceof DefaultActionGroup treePopup)) {
       return;
     }
-    // Maven.ReimportProject: 고른 프로젝트만 다시 읽기, ExternalSystem.RefreshAllProjects: 그래들 프로젝트 전체 다시 읽기
+    // Maven.ReimportProject: 고른 프로젝트만 다시 읽기(Maven 프로젝트가 아니면 스스로 숨는다),
+    // ExternalSystem.RefreshAllProjects: 그래들 프로젝트 전체 다시 읽기(연결된 프로젝트가 없어도 보이므로 GradleOnly 로 감싼다)
     List<AnAction> refresh = new ArrayList<>();
-    for (String id : List.of("Maven.ReimportProject", "ExternalSystem.RefreshAllProjects")) {
-      AnAction action = actionManager.getAction(id);
-      if (action != null) {
-        refresh.add(action);
-      }
+    AnAction maven = actionManager.getAction("Maven.ReimportProject");
+    if (maven != null) {
+      refresh.add(maven);
+    }
+    AnAction gradle = actionManager.getAction("ExternalSystem.RefreshAllProjects");
+    if (gradle != null) {
+      refresh.add(new GradleOnly(gradle));
     }
     if (refresh.isEmpty()) {
       return;
@@ -80,6 +87,47 @@ final class KingGuraMainMenuCustomizer implements ActionConfigurationCustomizer,
     treePopup.add(Separator.getInstance(), Constraints.FIRST, actionManager);
     for (int i = refresh.size() - 1; i >= 0; i--) {
       treePopup.add(refresh.get(i), Constraints.FIRST, actionManager);
+    }
+  }
+
+  /**
+   * 프로젝트 폴더와 그 아래 GRADLE_DEPTH 단계 어디에도 Gradle 파일이 없으면 숨긴다(Clone 이 자동 연결하는 깊이와 같다).
+   * shortcut: 연결 여부가 아니라 파일 유무로 본다. 이 모듈은 projectModel(ModuleManager)에 의존하지 않아 모듈 목록을 못 읽는다.
+   */
+  private static final class GradleOnly extends AnActionWrapper {
+    private static final List<String> GRADLE_FILES = List.of("settings.gradle", "settings.gradle.kts", "build.gradle", "build.gradle.kts");
+    private static final int GRADLE_DEPTH = 2;
+
+    GradleOnly(AnAction action) {
+      super(action);
+    }
+
+    @Override
+    public void update(AnActionEvent e) {
+      super.update(e);
+      if (e.getPresentation().isVisible() && !hasGradleFile(e.getProject() == null ? null : ProjectUtil.guessProjectDir(e.getProject()), 0)) {
+        e.getPresentation().setEnabledAndVisible(false);
+      }
+    }
+
+    private static boolean hasGradleFile(VirtualFile dir, int depth) {
+      if (dir == null || !dir.isDirectory()) {
+        return false;
+      }
+      for (String name : GRADLE_FILES) {
+        if (dir.findChild(name) != null) {
+          return true;
+        }
+      }
+      if (depth == GRADLE_DEPTH) {
+        return false;
+      }
+      for (VirtualFile child : dir.getChildren()) {
+        if (!child.getName().startsWith(".") && hasGradleFile(child, depth + 1)) {
+          return true;
+        }
+      }
+      return false;
     }
   }
 
