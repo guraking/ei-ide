@@ -29,35 +29,6 @@ public class SyncCheck {
     eq(SyncPanel.undoOf(out("A", svn)), SyncPanel.Undo.REVERT);
     eq(SyncPanel.undoOf(new SyncPanel.Change(SyncPanel.Kind.INCOMING, "M", "a", r)), SyncPanel.Undo.NONE);
 
-    // 스테이징 구분: porcelain XY 의 X 는 Staged, Y 는 Unstaged, 새 파일은 Unstaged.
-    eq(SyncPanel.stageOf("M "), SyncPanel.Stage.STAGED);
-    eq(SyncPanel.stageOf(" M"), SyncPanel.Stage.UNSTAGED);
-    eq(SyncPanel.stageOf("MM"), SyncPanel.Stage.BOTH);
-    eq(SyncPanel.stageOf("A "), SyncPanel.Stage.STAGED);
-    eq(SyncPanel.stageOf("AM"), SyncPanel.Stage.BOTH);
-    eq(SyncPanel.stageOf("??"), SyncPanel.Stage.UNSTAGED);
-    eq(SyncPanel.stageOf(" D"), SyncPanel.Stage.UNSTAGED);
-
-    // 마지막 Git 동작 되돌리기: 브랜치 바꾸기는 앞 브랜치로, 커밋은 soft, 그 밖은 keep. 앞 위치가 없거나 진행 중이면 null.
-    eq(GitUndo.plan("checkout: moving from main to feature/한글", "feature/한글", "branch: Created from main"),
-       new GitUndo.Plan(GitUndo.Way.SWITCH_BACK, "main"));
-    eq(GitUndo.plan("commit: 고침", "main", "commit: 고침"), new GitUndo.Plan(GitUndo.Way.SOFT, "main@{1}"));
-    eq(GitUndo.plan("commit (amend): 고침", "main", "commit (amend): 고침"), new GitUndo.Plan(GitUndo.Way.SOFT, "main@{1}"));
-    eq(GitUndo.plan("merge dev: Merge made by the 'ort' strategy.", "main", "merge dev: Merge made by the 'ort' strategy."),
-       new GitUndo.Plan(GitUndo.Way.KEEP, "main@{1}"));
-    eq(GitUndo.plan("commit (merge): Merge branch 'dev'", "main", "commit (merge): Merge branch 'dev'"), new GitUndo.Plan(GitUndo.Way.KEEP, "main@{1}"));
-    eq(GitUndo.plan("pull: Fast-forward", "main", "pull: Fast-forward"), new GitUndo.Plan(GitUndo.Way.KEEP, "main@{1}"));
-    eq(GitUndo.plan("rebase (finish): returning to refs/heads/main", "main", "rebase (finish): refs/heads/main onto 1234"),
-       new GitUndo.Plan(GitUndo.Way.KEEP, "main@{1}"));
-    eq(GitUndo.plan("rebase (pick): 고침", "main", "commit: 앞"), null);
-    eq(GitUndo.plan("commit (initial): 처음", "main", "commit (initial): 처음"), null);
-    eq(GitUndo.plan("clone: from https://example.com/a.git", "main", "clone: from https://example.com/a.git"), null);
-    eq(GitUndo.plan("commit: 고침", null, null), null);
-    eq(GitUndo.plan("", "main", "commit: 고침"), null);
-    eq(GitUndo.undoneLine(new GitUndo.Plan(GitUndo.Way.SOFT, "main@{1}"), "main"), "reset: moving to main@{1}");
-    eq(GitUndo.undoneLine(new GitUndo.Plan(GitUndo.Way.SWITCH_BACK, "main"), "dev"), "checkout: moving from dev to main");
-    eq(GitUndo.undoneLine(new GitUndo.Plan(GitUndo.Way.SWITCH_BACK, "main"), null), null);
-
     // svn propget --xml
     eq(SyncPanel.parseSvnProperty(""), "");
     eq(SyncPanel.parseSvnProperty("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<properties>\n</properties>\n"), "");

@@ -4,6 +4,8 @@ import com.intellij.diff.DiffContentFactory;
 import com.intellij.diff.DiffManager;
 import com.intellij.diff.requests.SimpleDiffRequest;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.WriteIntentReadAction;
+import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.fileTypes.FileType;
 import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.ide.CopyPasteManager;
@@ -671,16 +673,27 @@ final class ProjectHistoryPanel extends JPanel {
         return;
       }
       reloadOnRepoChange = true;
-      SyncPanel.saveAllThen(() -> GitBrancher.getInstance(project).merge(target, GitBrancher.DeleteOnMergeOption.NOTHING, List.of(repository)));
+      saveAllThen(() -> GitBrancher.getInstance(project).merge(target, GitBrancher.DeleteOnMergeOption.NOTHING, List.of(repository)));
     });
     JMenuItem rebase = new JMenuItem(SyncBundle.message("history.branch.rebase", current, branchName));
     rebase.addActionListener(a -> {
       reloadOnRepoChange = true;
-      SyncPanel.saveAllThen(() -> GitBrancher.getInstance(project).rebase(List.of(repository), branchName));
+      saveAllThen(() -> GitBrancher.getInstance(project).rebase(List.of(repository), branchName));
     });
     menu.add(merge);
     menu.add(rebase);
     menu.show(commits, e.getX(), e.getY());
+  }
+
+  /**
+   * 열린 편집기의 저장 안 한 내용을 디스크에 쓴 뒤 then 을 돌린다. git 은 디스크 파일만 보므로 합치기 · 리베이스 전에 부른다.
+   * Swing 클릭에는 쓰기 의도 락이 없어(262) 저장과 IntelliJ 브랜치 동작을 WriteIntentReadAction 안에서 한다. EDT 에서만 부른다.
+   */
+  private static void saveAllThen(Runnable then) {
+    WriteIntentReadAction.run(() -> {
+      FileDocumentManager.getInstance().saveAllDocuments();
+      then.run();
+    });
   }
 
   /** 고른 파일의 커밋 직전 내용과 커밋 내용을 비교 창으로 연다. 한쪽에 없으면(추가 · 삭제 · 첫 커밋) 빈 내용. */
