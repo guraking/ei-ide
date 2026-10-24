@@ -186,10 +186,6 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static final String VCS_NAME_GIT = "Git";
   private static final String VCS_NAME_SVN = "svn";
   private static final String ACTION_PULL = "Git.Pull";
-  // IntelliJ 기본 브랜치 창(만들기 · 바꾸기 · 지우기)과 Stash · Unstash 창. 셋 다 VIRTUAL_FILE 로 저장소를 고른다.
-  private static final String ACTION_BRANCHES = "Git.Branches";
-  private static final String ACTION_STASH = "Git.Stash";
-  private static final String ACTION_UNSTASH = "Git.Unstash";
   private static final String ACTION_REVERSE_MERGE = "KingGura.ReverseMerge";
   // IDE 의 「Update Project」(Ctrl+T). 프로젝트의 모든 VCS 루트를 받는다(Git 은 받기 방식을 묻고, SVN 은 svn update).
   private static final String ACTION_UPDATE_ALL = "Vcs.UpdateProject";
@@ -265,10 +261,6 @@ final class SyncPanel extends SimpleToolWindowPanel {
     actions.add(new ModeAction("sync.mode.incoming", AllIcons.Actions.Download, Kind.INCOMING));
     actions.add(new ModeAction("sync.mode.outgoing", AllIcons.Actions.Upload, Kind.OUTGOING));
     actions.add(new ModeAction("sync.mode.conflict", AllIcons.Vcs.Merge, Kind.CONFLICT));
-    actions.addSeparator();
-    actions.add(new GitAction("sync.git.branches", AllIcons.Vcs.Branch, ACTION_BRANCHES));
-    actions.add(new GitAction("sync.git.stash", AllIcons.Vcs.ShelveSilent, ACTION_STASH));
-    actions.add(new GitAction("sync.git.unstash", AllIcons.Vcs.Unshelve, ACTION_UNSTASH));
     ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar(TOOLBAR_PLACE, actions, true);
     toolbar.setTargetComponent(this);
     title.setOpaque(false);
@@ -884,38 +876,6 @@ final class SyncPanel extends SimpleToolWindowPanel {
       if (!state) return;  // 눌린 것을 다시 눌러도 거르기는 풀리지 않는다.
       modeFilter = kind;
       rebuildTree();
-    }
-  }
-
-  /** 도구줄의 Git 동작(IntelliJ 기본 창을 연다). 트리에서 고른 Git 저장소로 열고, Git 저장소가 없으면(SVN 만) 숨는다. */
-  private final class GitAction extends DumbAwareAction {
-    private final String actionId;
-
-    GitAction(String key, Icon icon, String actionId) {
-      super(SyncBundle.message(key), null, icon);
-      this.actionId = actionId;
-    }
-
-    @Override public @NotNull ActionUpdateThread getActionUpdateThread() { return ActionUpdateThread.EDT; }
-
-    @Override
-    public void update(@NotNull AnActionEvent e) {
-      boolean git = false;
-      for (Repo repo : repos) git |= repo.vcs() == Vcs.GIT;
-      e.getPresentation().setVisible(git);
-    }
-
-    @Override
-    public void actionPerformed(@NotNull AnActionEvent e) {
-      DataContext context = DataManager.getInstance().getDataContext(SyncPanel.this);
-      for (Repo repo : selectedRepos()) {
-        if (repo.vcs() != Vcs.GIT) continue;
-        VirtualFile root = LocalFileSystem.getInstance().findFileByIoFile(repo.root());
-        if (root == null) continue;
-        context = SimpleDataContext.builder().setParent(context).add(CommonDataKeys.VIRTUAL_FILE, root).build();
-        break;
-      }
-      runAction(getTemplatePresentation().getText(), actionId, context);
     }
   }
 
