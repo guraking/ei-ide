@@ -4,8 +4,6 @@ import com.intellij.diff.DiffContentFactory;
 import com.intellij.diff.DiffManager;
 import com.intellij.diff.requests.SimpleDiffRequest;
 import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.application.WriteIntentReadAction;
-import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.fileTypes.FileType;
 import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.ide.CopyPasteManager;
@@ -14,7 +12,6 @@ import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.ModuleRootManager;
-import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowFactory;
@@ -42,11 +39,6 @@ import com.intellij.ui.components.JBList;
 import com.intellij.ui.content.ContentFactory;
 import com.intellij.util.IconUtil;
 import com.intellij.util.ui.JBUI;
-import git4idea.branch.GitBrancher;
-import git4idea.GitBranch;
-import git4idea.repo.GitRepository;
-import git4idea.repo.GitRepositoryChangeListener;
-import git4idea.repo.GitRepositoryManager;
 import org.jetbrains.annotations.NotNull;
 
 import javax.swing.*;
@@ -131,8 +123,6 @@ final class ProjectHistoryPanel extends JPanel {
   private static final int PILL_FILL_ALPHA = 0x22;
   private static final int PILL_BORDER_ALPHA = 0x66;
   private static final String TAG_PREFIX = "tag: ";
-  // git rev-parse --abbrev-ref HEAD 가 브랜치 없이(detached) 내는 이름.
-  private static final String DETACHED_HEAD = "HEAD";
   // 바뀐 파일 이름 색은 IDE 의 파일 상태 색(테마를 따름). 이름 바꿈(R)은 IntelliJ 변경 목록처럼 수정 색.
   private static final Map<String, FileStatus> FILE_STATUS = Map.of(
     "M", FileStatus.MODIFIED, "A", FileStatus.ADDED, "D", FileStatus.DELETED, "R", FileStatus.MODIFIED);
@@ -178,8 +168,6 @@ final class ProjectHistoryPanel extends JPanel {
   private final TitledSeparator filesTitle = new TitledSeparator();
   private Loaded loaded;
   private boolean loadingMore;
-  // 끌어 놓기로 합치기 · 리베이스를 시작했으면 참(EDT 에서만). 그 뒤 첫 저장소 알림에 목록을 한 번 다시 읽는다.
-  private boolean reloadOnRepoChange;
   private boolean graph;
   private int graphWidth;
 
@@ -196,55 +184,6 @@ final class ProjectHistoryPanel extends JPanel {
     commits.setFixedCellHeight(JBUI.scale(ROW_H));
     commits.setCellRenderer(new CommitRenderer());
     commits.addListSelectionListener(e -> { if (!e.getValueIsAdjusting()) showDetail(); });
-    // 브랜치 알약이 있는 줄을 끌어 현재 브랜치(HEAD) 줄에 놓으면 합치기 · 리베이스 메뉴가 뜬다. 그 줄을 오른쪽 클릭해도 같은 메뉴다.
-    MouseAdapter branchDrag = new MouseAdapter() {
-      private int from = -1;
-
-      @Override
-      public void mousePressed(MouseEvent e) {
-        int index = commits.locationToIndex(e.getPoint());
-        from = draggableBranch(index) == null ? -1 : index;
-        branchMenu(e, from);
-      }
-
-      @Override
-      public void mouseDragged(MouseEvent e) {
-        if (from < 0) return;
-        commits.setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
-        // 목록은 끄는 대로 선택을 옮기므로(이 처리기보다 먼저 돈다) 끄는 동안 선택과 오른쪽 칸을 끌기 시작한 줄에 묶어 둔다.
-        if (commits.getSelectedIndex() != from) commits.setSelectedIndex(from);
-      }
-
-      @Override
-      public void mouseReleased(MouseEvent e) {
-        commits.setCursor(Cursor.getDefaultCursor());
-        int source = from;
-        from = -1;
-        if (branchMenu(e, source) || source < 0) return;
-        int to = commits.locationToIndex(e.getPoint());
-        if (to < 0 || to == source || !commits.getCellBounds(to, to).contains(e.getPoint())) return;
-        if (!commitModel.get(to).refs().contains(loaded.branch())) {
-          status.setText(SyncBundle.message("history.drop.head", loaded.branch()));
-          return;
-        }
-        showBranchMenu(draggableBranch(source), e);
-      }
-
-      /** 오른쪽 클릭이면 그 줄 브랜치의 메뉴를 띄우고 참. */
-      private boolean branchMenu(MouseEvent e, int index) {
-        if (!e.isPopupTrigger()) return false;
-        if (index >= 0) showBranchMenu(draggableBranch(index), e);
-        return true;
-      }
-    };
-    commits.addMouseListener(branchDrag);
-    commits.addMouseMotionListener(branchDrag);
-    project.getMessageBus().connect(project).subscribe(GitRepository.GIT_REPO_CHANGE, (GitRepositoryChangeListener) repository ->
-      SwingUtilities.invokeLater(() -> {
-        if (!reloadOnRepoChange) return;
-        reloadOnRepoChange = false;
-        load();
-      }));
     files.setCellRenderer(new FileRenderer());
     files.addMouseListener(new MouseAdapter() {
       @Override public void mouseClicked(MouseEvent e) { if (e.getClickCount() == 2) showDiff(); }
@@ -632,68 +571,6 @@ final class ProjectHistoryPanel extends JPanel {
     filesTitle.setVisible(true);
     files.setListData(entry.files().toArray(History.FileChange[]::new));
     files.getEmptyText().setText(SyncBundle.message("history.empty.files"));
-  }
-
-  /**
-   * index 줄에서 끌거나 오른쪽 클릭으로 합칠 수 있는 브랜치: Git 기록에서 그 커밋을 가리키는 첫 브랜치(태그 · 현재 브랜치 제외).
-   * 현재 브랜치가 없으면(detached HEAD) 합칠 곳이 없어 null.
-   */
-  private String draggableBranch(int index) {
-    Loaded source = loaded;
-    if (index < 0 || index >= commitModel.size() || source == null || source.target().vcs() != SyncPanel.Vcs.GIT
-        || source.branch() == null || source.branch().isEmpty() || source.branch().equals(DETACHED_HEAD)) {
-      return null;
-    }
-    for (String ref : commitModel.get(index).refs()) {
-      if (!ref.startsWith(TAG_PREFIX) && !ref.equals(source.branch())) return ref;
-    }
-    return null;
-  }
-
-  /**
-   * 브랜치 하나를 현재 브랜치에 합치거나, 현재 브랜치를 그 위로 옮기는 메뉴. 실제 일은 IntelliJ 브랜치 동작(GitBrancher)이 하므로
-   * 내 변경이 걸리면 묻고 충돌이 나면 IntelliJ 충돌 창이 뜬다. 끝나고 저장소가 바뀌면 목록을 다시 읽는다.
-   */
-  private void showBranchMenu(String branchName, MouseEvent e) {
-    Loaded source = loaded;
-    if (branchName == null || source == null) return;
-    VirtualFile dir = LocalFileSystem.getInstance().findFileByIoFile(source.target().dir());
-    GitRepository repository = dir == null ? null : GitRepositoryManager.getInstance(project).getRepositoryForFileQuick(dir);
-    if (repository == null) {
-      status.setText(SyncBundle.message("history.branch.no.repo"));
-      return;
-    }
-    String current = source.branch();
-    JPopupMenu menu = new JPopupMenu();
-    JMenuItem merge = new JMenuItem(SyncBundle.message("history.branch.merge", branchName, current));
-    merge.addActionListener(a -> {
-      GitBranch target = repository.getBranches().findBranchByName(branchName);
-      if (target == null) {
-        status.setText(SyncBundle.message("history.branch.missing", branchName));
-        return;
-      }
-      reloadOnRepoChange = true;
-      saveAllThen(() -> GitBrancher.getInstance(project).merge(target, GitBrancher.DeleteOnMergeOption.NOTHING, List.of(repository)));
-    });
-    JMenuItem rebase = new JMenuItem(SyncBundle.message("history.branch.rebase", current, branchName));
-    rebase.addActionListener(a -> {
-      reloadOnRepoChange = true;
-      saveAllThen(() -> GitBrancher.getInstance(project).rebase(List.of(repository), branchName));
-    });
-    menu.add(merge);
-    menu.add(rebase);
-    menu.show(commits, e.getX(), e.getY());
-  }
-
-  /**
-   * 열린 편집기의 저장 안 한 내용을 디스크에 쓴 뒤 then 을 돌린다. git 은 디스크 파일만 보므로 합치기 · 리베이스 전에 부른다.
-   * Swing 클릭에는 쓰기 의도 락이 없어(262) 저장과 IntelliJ 브랜치 동작을 WriteIntentReadAction 안에서 한다. EDT 에서만 부른다.
-   */
-  private static void saveAllThen(Runnable then) {
-    WriteIntentReadAction.run(() -> {
-      FileDocumentManager.getInstance().saveAllDocuments();
-      then.run();
-    });
   }
 
   /** 고른 파일의 커밋 직전 내용과 커밋 내용을 비교 창으로 연다. 한쪽에 없으면(추가 · 삭제 · 첫 커밋) 빈 내용. */
