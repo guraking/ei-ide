@@ -464,8 +464,8 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
     <table class="keys map">
       <tr><th>창 (자리)</th><th>단추 · 우클릭</th></tr>
       <tr><td>Servers (아래)</td><td>Start · Start in Debug · Restart · Stop · Stop All · Add WAS… · Server Groups(New Group… · Start Group · Stop Group) · ⋯ More(Duplicate Server · Publish (Rebuild) · Remove WAS · Show Log Files…) · Refresh Server List. 줄 우클릭에 Open in Browser · Show Console · Edit Settings… (<a href="#servers">서버 창</a>)</td></tr>
-      <tr><td>Synchronize (아래)</td><td>Show All · Incoming · Outgoing · Conflicts · Refresh All · Selected Repository Only · Branches · Stash Changes · Unstash Changes, 아래 Pull All · Pull Selected · Resolve Conflicts. 파일 우클릭 Add to .gitignore · Revert My Changes · Unstage Only, Keep Files · Assume Unchanged (<a href="#sync">Git · SVN</a>)</td></tr>
-      <tr><td>Git Log (아래)</td><td>모듈 목록 · 찾기 칸 · Refresh · 「?」 (<a href="#sync">Git · SVN</a>)</td></tr>
+      <tr><td>Synchronize (아래)</td><td>Show All · Incoming · Outgoing · Conflicts · Refresh All · Selected Repository Only · Branches · Stash Changes · Unstash Changes · Undo Last Git Action, 아래 Pull All · Pull Selected · Resolve Conflicts · Commit… · Push All. 파일 우클릭 Stage · Unstage · Add to .gitignore · Revert My Changes · Unstage Only, Keep Files · Assume Unchanged (<a href="#sync">Git · SVN</a>)</td></tr>
+      <tr><td>Git Log (아래)</td><td>모듈 목록 · 찾기 칸 · Refresh · 「?」, 브랜치 줄 끌어 놓기 · 우클릭 Merge · Rebase (<a href="#sync">Git · SVN</a>)</td></tr>
       <tr><td>Database (오른쪽)</td><td>Refresh · New Console · Connect · Disconnect · Edit · Delete · Find · More(Export · Import Connections). 표 우클릭 View Data · Generate SELECT · INSERT · UPDATE Statement · Generate Mapper Skeleton · Generate Feature Set… · Open ERD · Table Specification Excel…, 접속 우클릭 View Sessions · View Locks · Open ERD (All), 프로그램 우클릭 Open Source · View Compilation Errors (<a href="#db">데이터베이스</a>)</td></tr>
       <tr><td>Result (아래)</td><td>Fetch · Apply · Revert · CSV · Excel · INSERT · UPDATE · DTO · enum · 찾기(<kbd>Ctrl</kbd>+<kbd>F</kbd>). 칸 우클릭 Copy Value · Copy Selected Rows · Copy Column Values as IN List · Sort (<a href="#db">데이터베이스</a>)</td></tr>
       <tr><td>API (아래)</td><td>Reload · Save as openapi.yaml… (<a href="#servers">서버 창</a>)</td></tr>
@@ -971,6 +971,8 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
       <tr><td>Pull All</td><td>고른 것과 상관없이 모든 저장소를 한 번에 받기(IDE 의 Update Project)</td></tr>
       <tr><td>Pull Selected</td><td>트리에서 고른 저장소만 받기. SVN 은 svn update</td></tr>
       <tr><td>Resolve Conflicts</td><td>충돌 해결 창</td></tr>
+      <tr><td>Commit… · Push All</td><td>Commit… 은 커밋 창(Alt+0)을 엽니다. 저장소가 여러 개여도 한 창에서 같이 커밋됩니다. Push All 은 모든 Git 저장소를 체크한 올리기 창을 열어, 저장소마다 올릴 커밋을 보고 한 번에 올립니다.</td></tr>
+      <tr><td>Undo Last Git Action</td><td>위 도구줄 맨 오른쪽 되돌리기 아이콘. 고른 저장소(하나뿐이면 그것)의 마지막 Git 동작을 무엇을 어떻게 되돌릴지 보여 주고 확인받은 뒤 되돌립니다. 커밋은 커밋만 없애고 변경은 Staged 로 남기고, 합치기 · 받기 · 리베이스 · reset 은 그 전 위치로 돌리되 아직 커밋 안 한 내 변경은 지킵니다. 브랜치를 바꾼 직후면 앞 브랜치로 다시 바꿉니다. 브랜치 지우기는 지운 직후 오른쪽 아래 알림의 Restore 로 되살립니다.</td></tr>
     </table>
 
     <div class="figure">
@@ -1015,6 +1017,8 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
     </div>
     <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note"><b>SVN</b>svn 명령줄 도구(VisualSVN)가 본체에 같이 들어 있어 따로 설치하지 않아도 SVN 저장소가 함께 보입니다.</div></div>
 
+    <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note"><b>나갈 변경 안의 Staged · Unstaged</b>Git 저장소의 나갈 변경은 Staged(주황) · Unstaged(보라) · Committed, Not Pushed(커밋만 하고 안 올림, 보라) 세 묶음으로 나뉩니다. 일부 줄만 담은 파일은 Staged · Unstaged 양쪽에 보입니다. 파일 우클릭 Stage 로 담고 Unstage 로 뺍니다.</div></div>
+
     <h3>스테이징 · 커밋 창 Staged · Unstaged</h3>
     <p class="lead">스테이징은 「이번 커밋에 넣을 것」을 미리 골라 담아 두는 칸입니다. 고친 파일이 열 개여도 담아 둔 것만 커밋되고, 나머지는 고친 그대로 작업본에 남습니다. 한 파일 안에서도 바뀐 덩어리(줄)별로 골라 담을 수 있어, 버그 수정과 실험 코드를 따로 커밋할 수 있습니다. 처음부터 켜져 있고, 끄려면 설정 → Version Control → Git → Enable staging area 를 풉니다.</p>
     <table class="keys map" style="margin-bottom:18px">
@@ -1033,6 +1037,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
       <tr><td>커밋 목록</td><td>최근 200개, 맨 아래까지 내리면 다음 200개를 이어 읽습니다. 가지마다 색이 다른 꺾인 선 위에 커밋 점(합치기 커밋은 속이 빈 점 · 흐린 글자), 브랜치 · 태그는 알약, 오른쪽은 굵은 작성자와 날짜.</td></tr>
       <tr><td>위쪽 줄</td><td>찾기 칸(제목 · 작성자, 찾으면 한 줄로 그림) · Refresh · 「?」(점 · 선 · 색 설명). 커밋을 고르면 「?」 오른쪽에 그 커밋의 꺾인 선이 어느 커밋과 이어지는지(합쳐 들인 커밋 · 여기서 갈라져 나간 가지 · 이 커밋을 합쳐 간 커밋)가 한 줄로 보입니다.</td></tr>
       <tr><td>오른쪽 칸</td><td>작성자 · 해시(누르면 복사) · 전체 메시지 · 바뀐 파일. 파일을 두 번 누르면 커밋 전 · 후 비교 창.</td></tr>
+      <tr><td>끌어서 합치기 · 리베이스</td><td>브랜치 알약이 있는 줄을 끌어 현재 브랜치 줄에 놓으면 「Merge 그 브랜치 into 현재 브랜치」 · 「Rebase 현재 브랜치 onto 그 브랜치」 메뉴가 뜹니다. 그 줄을 우클릭해도 같습니다. 실제 일은 IntelliJ 브랜치 동작이 하므로 내 변경이 걸리면 묻고, 충돌이 나면 충돌 창이 뜹니다. 끝나면 목록을 다시 읽습니다.</td></tr>
     </table>
   </div>
 </section>
