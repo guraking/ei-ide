@@ -29,7 +29,7 @@ import java.util.List;
  * 다음이면 false 를 돌려 IntelliJ 기본 동작(새 프로젝트로 열기)에 맡긴다:
  * 시작 화면(기본 프로젝트)에서 받았을 때, 같은 이름 모듈이 이미 있을 때.
  * 받은 폴더가 프로젝트 폴더 안이어도 따로 모듈로 붙인다.
- * 프로젝트 폴더가 Git 저장소가 아니면(C:\\dev\\git 같은 워크스페이스 폴더) 그 폴더 자체를 콘텐츠 루트로 가진 모듈을 뺀다.
+ * 프로젝트 폴더가 Git 저장소가 아니면(C:\dev\git 같은 워크스페이스 폴더) 그 폴더 자체를 콘텐츠 루트로 가진 모듈을 뺀다.
  * 그러면 프로젝트 창 맨 위에 「git」 줄 없이 받은 저장소 모듈들만 이클립스처럼 나란히 보인다(.idea 는 그대로).
  */
 public final class CloneIntoProject implements CheckoutListener {
