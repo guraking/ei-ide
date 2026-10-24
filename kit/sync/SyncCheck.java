@@ -62,6 +62,10 @@ public class SyncCheck {
     File gitInSvn = new File(svnTop, "sub");
     eq(new File(gitInSvn, ".git").mkdirs(), true);
     eq(SyncPanel.unmappedVcs(gitInSvn), SyncPanel.Vcs.GIT);
+    eq(SyncPanel.underVcs(svnInner), true);
+    File plain = tmp.resolve("workspace").toFile();
+    eq(plain.mkdir(), true);
+    eq(SyncPanel.underVcs(plain), false);
   }
 
   /** run: 출력 · 실패 · 중단 시 프로세스 종료. */
