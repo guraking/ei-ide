@@ -1,5 +1,6 @@
 package kinggura.sync;
 
+import com.intellij.ide.RecentProjectsManager;
 import com.intellij.ide.projectView.TreeStructureProvider;
 import com.intellij.ide.projectView.ViewSettings;
 import com.intellij.ide.util.treeView.AbstractTreeNode;
@@ -28,6 +29,7 @@ import com.intellij.openapi.vcs.VcsDirectoryMapping;
 import com.intellij.openapi.vcs.checkout.CheckoutListener;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.openapi.wm.impl.welcomeScreen.cloneableProjects.CloneableProjectsService;
 import com.intellij.psi.PsiDirectory;
 import git4idea.GitVcs;
 import org.jetbrains.annotations.NotNull;
@@ -40,6 +42,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Clone 이 끝난 폴더를 새 창 프로젝트로 열지 않고 지금 열린 프로젝트에 모듈로 붙인다(이클립스 워크스페이스처럼).
@@ -90,6 +93,7 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
       addGitMapping(project, directory);
       removeWorkspaceModule(project);
     });
+    ForgetRecent.ATTACHED.add(directory.toString().replace('\\', '/'));
     linkBuildFiles(project, directory);
     return true;
   }
@@ -145,6 +149,22 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
     for (Path child : children) {
       String name = child.getFileName().toString();
       if (!name.startsWith(".") && !SKIP_DIRS.contains(name)) collectBuildFiles(child, depth + 1, found);
+    }
+  }
+
+  /**
+   * IntelliJ Clone 은 CheckoutListener 처리가 끝난 뒤 받은 폴더를 최근 프로젝트 목록에 올린다(CloneableProjectsService.onSuccess).
+   * 워크스페이스에 모듈로 붙인 폴더는 따로 연 프로젝트가 아니므로, 그 뒤 EDT 로 오는 onCloneSuccess 에서 목록에서 뺀다.
+   */
+  public static final class ForgetRecent implements CloneableProjectsService.CloneProjectListener {
+    static final Set<String> ATTACHED = ConcurrentHashMap.newKeySet();
+
+    @Override
+    public void onCloneSuccess() {
+      for (String path : ATTACHED) {
+        RecentProjectsManager.getInstance().removePath(path);
+        ATTACHED.remove(path);
+      }
     }
   }
 
