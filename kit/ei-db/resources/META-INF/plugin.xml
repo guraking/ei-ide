@@ -33,6 +33,10 @@
     <!-- MyBatis: include refid → sql, resultMap · extends → resultMap -->
     <gotoDeclarationHandler implementation="ei.db.mybatis.MapperRefNav"/>
     <externalAnnotator language="XML" implementationClass="ei.db.mybatis.ParamFieldAnnotator"/>
+    <!-- MyBatis: 매퍼 XML 의 #{} 매개변수 · select AS 별칭 자동 완성, #{} 에서 필드 · 매개변수로 이동 -->
+    <completion.contributor language="XML" order="first" implementationClass="ei.db.mybatis.MapperCompletion"/>
+    <typedHandler implementation="ei.db.mybatis.MapperAutoPopup"/>
+    <gotoDeclarationHandler implementation="ei.db.mybatis.ParamNav"/>
     <!-- MyBatis: 컨트롤러 · 서비스 메서드 → 서비스 → 매퍼 → XML 계층 이동, 매퍼 인터페이스 ↔ XML 빠진 짝 -->
     <codeInsight.lineMarkerProvider language="JAVA" implementationClass="ei.db.mybatis.LayerNav"/>
     <localInspection language="XML" shortName="EiMapperXmlMissingMethod" bundle="messages.EiDbBundle" key="inspection.EiMapperXmlMissingMethod.display.name"
@@ -90,6 +94,9 @@
     </action>
     <action id="EiDb.MyBatis.Paging" class="ei.db.mybatis.PagingAction" icon="/icons/ei/paging.svg">
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EiDb.MyBatis.DynamicWhere"/>
+    </action>
+    <action id="EiDb.MyBatis.ResultMap" class="ei.db.mybatis.ResultMapAction" icon="AllIcons.Nodes.Field">
+      <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EiDb.MyBatis.Paging"/>
     </action>
     <group id="EiDb.MyBatis.Tags" class="ei.db.mybatis.TagGroup" popup="true" icon="AllIcons.FileTypes.Xml">
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EiDb.MyBatis.Paging"/>

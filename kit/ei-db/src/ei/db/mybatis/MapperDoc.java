@@ -85,6 +85,32 @@ public final class MapperDoc {
     return fragments.get(refid);
   }
 
+  /**
+   * n 안의 글 조각을 문서 차례로 이은 것(요소 경계마다 빈칸 하나). 같은 파일의 &lt;include&gt; 는 그 sql 조각의 글로 바꾸고,
+   * 자기 자신을 다시 부르는 조각은 한 번만 편다.
+   */
+  public String plainText(Node n) {
+    StringBuilder b = new StringBuilder();
+    appendText(n, b, new ArrayList<>());
+    return b.toString();
+  }
+
+  private void appendText(Node n, StringBuilder b, List<Node> open) {
+    for (Node c : n.children) {
+      if (c.name == null) {
+        b.append(c.text);
+        continue;
+      }
+      Node target = "include".equals(c.name) ? fragment(c.attr("refid")) : c;
+      if (target != null && !open.contains(target)) {
+        open.add(target);
+        appendText(target, b, open);
+        open.remove(open.size() - 1);
+      }
+      b.append(' ');
+    }
+  }
+
   public static String decodeEntities(String s) {
     if (s.indexOf('&') < 0) return s;
     StringBuilder b = new StringBuilder(s.length());
