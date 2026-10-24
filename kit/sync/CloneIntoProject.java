@@ -93,7 +93,10 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
       addGitMapping(project, directory);
       removeWorkspaceModule(project);
     });
-    ForgetRecent.ATTACHED.add(directory.toString().replace('\\', '/'));
+    // SVN 은 최근 목록에 올린 뒤 이 리스너를 부르고, Git 은 이 리스너 뒤에 올린다. 지금 한 번 빼고, Git 은 onCloneSuccess 에서 한 번 더 뺀다.
+    String path = directory.toString().replace('\\', '/');
+    RecentProjectsManager.getInstance().removePath(path);
+    ForgetRecent.ATTACHED.add(path);
     linkBuildFiles(project, directory);
     return true;
   }
@@ -153,7 +156,7 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
   }
 
   /**
-   * IntelliJ Clone 은 CheckoutListener 처리가 끝난 뒤 받은 폴더를 최근 프로젝트 목록에 올린다(CloneableProjectsService.onSuccess).
+   * IntelliJ Git Clone 은 CheckoutListener 처리가 끝난 뒤 받은 폴더를 최근 프로젝트 목록에 올린다(CloneableProjectsService.onSuccess).
    * 워크스페이스에 모듈로 붙인 폴더는 따로 연 프로젝트가 아니므로, 그 뒤 EDT 로 오는 onCloneSuccess 에서 목록에서 뺀다.
    */
   public static final class ForgetRecent implements CloneableProjectsService.CloneProjectListener {
