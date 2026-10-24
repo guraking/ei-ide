@@ -47,7 +47,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Clone 이 끝난 폴더를 새 창 프로젝트로 열지 않고 지금 열린 프로젝트에 모듈로 붙인다(이클립스 워크스페이스처럼).
  * 모듈 파일은 프로젝트의 .idea/modules/「폴더이름.iml」(받은 저장소 안에 IDE 파일을 만들지 않는다), SDK 는 프로젝트 것을 따른다.
- * 프로젝트 VCS 매핑이 <Project> 기본값이 아니면 받은 폴더에 Git 매핑을 더한다.
+ * 프로젝트 VCS 매핑이 <Project> 기본값이 아니면 받은 폴더에 Git · SVN 매핑을 더한다.
  * 받은 폴더와 그 아래 두 단계의 pom.xml · Gradle 파일은 Maven · Gradle 프로젝트로 연결한다(linkBuildFiles).
  * 다음이면 false 를 돌려 IntelliJ 기본 동작(새 프로젝트로 열기)에 맡긴다:
  * 시작 화면(기본 프로젝트)에서 받았을 때, 같은 이름 모듈이 이미 있을 때.
@@ -90,7 +90,7 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
         .newModule(Path.of(base, Project.DIRECTORY_STORE_FOLDER, "modules", name + ".iml"), ModuleTypeManager.getInstance().getDefaultModuleType().getId()));
       ModuleRootModificationUtil.addContentRoot(module, dir);
       ModuleRootModificationUtil.setSdkInherited(module);
-      addGitMapping(project, directory);
+      addVcsMapping(project, directory);
       removeWorkspaceModule(project);
     });
     // SVN 은 최근 목록에 올린 뒤 이 리스너를 부르고, Git 은 이 리스너 뒤에 올린다. 지금 한 번 빼고, Git 은 onCloneSuccess 에서 한 번 더 뺀다.
@@ -229,12 +229,15 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
   }
 
   /**
-   * 받은 폴더에 Git 매핑을 넣는다. 프로젝트 폴더 안에 받으면 IntelliJ Clone 이 VFS 가 폴더를 알기 전에 같은 매핑을 먼저 넣어
+   * 받은 폴더에 .git 이면 Git, .svn 이면 SVN 매핑을 넣는다(SVN Checkout 은 IntelliJ 가 매핑을 넣지 않는다).
+   * 프로젝트 폴더 안에 Git 으로 받으면 IntelliJ Clone 이 VFS 가 폴더를 알기 전에 같은 매핑을 먼저 넣어
    * 「Invalid mapping」 으로 버리고, 같은 목록을 다시 넣으면 다시 계산하지 않는다(NewMappings.updateVcsMappings).
    * 그래서 그 매핑을 뺀 목록을 한 번 넣었다가 다시 넣어, VFS 에 올라온 뒤 루트를 바로 다시 계산하게 한다.
    */
-  private static void addGitMapping(Project project, Path directory) {
-    if (!Files.isDirectory(directory.resolve(".git"))) return;
+  private static void addVcsMapping(Project project, Path directory) {
+    String vcsName = Files.exists(directory.resolve(".git")) ? GitVcs.NAME
+                     : Files.isDirectory(directory.resolve(".svn")) ? SyncPanel.VCS_NAME_SVN : null;
+    if (vcsName == null) return;
     ProjectLevelVcsManager vcs = ProjectLevelVcsManager.getInstance(project);
     String path = directory.toString().replace('\\', '/');
     List<VcsDirectoryMapping> mappings = new ArrayList<>();
@@ -245,7 +248,7 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
       else mappings.add(mapping);
     }
     if (present) vcs.setDirectoryMappings(new ArrayList<>(mappings));
-    mappings.add(new VcsDirectoryMapping(path, GitVcs.NAME));
+    mappings.add(new VcsDirectoryMapping(path, vcsName));
     vcs.setDirectoryMappings(mappings);
   }
 }
