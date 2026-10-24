@@ -127,6 +127,22 @@ public final class ResultColumns {
     return -1;
   }
 
+  /**
+   * offset 바로 앞이 「AS 빈칸」(뒤에 이름 글자가 이어져도 된다)이면 그 이름 글자의 시작, 아니면 -1. AS 는 대소문자를 가리지 않고 낱말로 서야 한다.
+   * shortcut: 괄호 깊이를 보지 않아 CAST(x AS |) 안에서도 시작을 돌려준다. 거슬리면 문장 처음부터 괄호를 센다.
+   */
+  static int aliasPrefixStart(CharSequence text, int offset) {
+    int start = Math.min(offset, text.length());
+    while (start > 0 && isNameChar(text.charAt(start - 1))) start--;
+    int i = start;
+    while (i > 0 && Character.isWhitespace(text.charAt(i - 1))) i--;
+    if (i == start || i < 2) return -1;
+    if (Character.toUpperCase(text.charAt(i - 2)) != 'A' || Character.toUpperCase(text.charAt(i - 1)) != 'S') return -1;
+    return i > 2 && isNameChar(text.charAt(i - 3)) ? -1 : start;
+  }
+
+  private static boolean isNameChar(char c) { return Character.isLetterOrDigit(c) || c == '_'; }
+
   /** ORDER_ID → orderId. 이미 소문자가 섞인 이름(따옴표 별칭)은 그대로. */
   public static String camel(String column) {
     if (!column.equals(column.toUpperCase(Locale.ROOT))) return column;
@@ -143,7 +159,7 @@ public final class ResultColumns {
     return b.toString();
   }
 
-  private static String key(String name) { return name.replace("_", "").toLowerCase(Locale.ROOT); }
+  static String key(String name) { return name.replace("_", "").toLowerCase(Locale.ROOT); }
 
   /** 칼럼 → 필드 없음을 먼저, 그다음 SELECT 에 없는 필드를 필드 차례로. */
   public static List<Issue> compare(List<String> columns, List<String> fields) {
