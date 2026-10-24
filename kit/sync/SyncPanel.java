@@ -186,6 +186,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static final String VCS_NAME_GIT = "Git";
   private static final String VCS_NAME_SVN = "svn";
   private static final String ACTION_PULL = "Git.Pull";
+  // IntelliJ 기본 브랜치 창(만들기 · 바꾸기 · 지우기)과 Stash · Unstash 창. 셋 다 VIRTUAL_FILE 로 저장소를 고른다.
+  private static final String ACTION_BRANCHES = "Git.Branches";
+  private static final String ACTION_STASH = "Git.Stash";
+  private static final String ACTION_UNSTASH = "Git.Unstash";
   // IDE 의 「Update Project」(Ctrl+T). 프로젝트의 모든 VCS 루트를 받는다(Git 은 받기 방식을 묻고, SVN 은 svn update).
   private static final String ACTION_UPDATE_ALL = "Vcs.UpdateProject";
   // 설치본에 같이 넣은 VisualSVN 명령줄 도구(apply_defaults 19 의 SVN 기본 경로와 같은 곳).
@@ -224,6 +228,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
   // 알림을 모아 두었다가 다시 비교할 저장소(EDT 에서만). Git 알림이 온 루트, 변경 목록에서 경로가 달라진 곳(Git · SVN).
   private final Set<File> pendingRoots = new HashSet<>();
   private final Set<String> pendingPaths = new HashSet<>();
+  // 알림 때 브랜치가 목록의 것과 달라진 Git 루트(EDT 에서만). 추적 브랜치도 바뀌므로 저장소 정보부터 다시 읽는다.
+  private final Set<File> switchedRoots = new HashSet<>();
+  // Git 루트별 마지막 알림 때의 브랜치(EDT 에서만).
+  private final Map<File, String> lastBranch = new HashMap<>();
   // 이 창이 fetch 중인 Git 루트. 그동안 오는 저장소 알림은 fetch 가 낸 것이라 다시 비교하지 않는다.
   private final Set<File> fetching = ConcurrentHashMap.newKeySet();
   // SVN 루트별 마지막 서버 확인(svn status -u)의 들어올 변경(경로 → 상태 글자). 작업본만 다시 비교할 때 들어올 변경을 이것으로 가른다.
@@ -251,6 +259,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
     actions.add(new ModeAction("sync.mode.incoming", AllIcons.Actions.Download, Kind.INCOMING));
     actions.add(new ModeAction("sync.mode.outgoing", AllIcons.Actions.Upload, Kind.OUTGOING));
     actions.add(new ModeAction("sync.mode.conflict", AllIcons.Vcs.Merge, Kind.CONFLICT));
+    actions.addSeparator();
+    actions.add(new GitAction("sync.git.branches", AllIcons.Vcs.Branch, ACTION_BRANCHES));
+    actions.add(new GitAction("sync.git.stash", AllIcons.Vcs.ShelveSilent, ACTION_STASH));
+    actions.add(new GitAction("sync.git.unstash", AllIcons.Vcs.Unshelve, ACTION_UNSTASH));
     ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar(TOOLBAR_PLACE, actions, true);
     toolbar.setTargetComponent(this);
     title.setOpaque(false);
@@ -343,7 +355,17 @@ final class SyncPanel extends SimpleToolWindowPanel {
       (GitRepositoryChangeListener) repository -> {
         File root = new File(repository.getRoot().getPath());
         if (fetching.contains(root)) return;
-        SwingUtilities.invokeLater(() -> { pendingRoots.add(root); debounce.restart(); });
+        // 브랜치가 없는(detached) HEAD 는 rev-parse --abbrev-ref 처럼 "HEAD" 로 본다.
+        String branch = Objects.requireNonNullElse(repository.getCurrentBranchName(), "HEAD");
+        SwingUtilities.invokeLater(() -> {
+          // 같은 브랜치로 또 온 알림은 다시 읽지 않는다. 추적 브랜치가 없어 다시 읽기가 실패한 브랜치에서 알림마다 fetch 하지 않게 한다.
+          boolean moved = !branch.equals(lastBranch.put(root, branch));
+          for (Repo repo : repos) {
+            if (moved && repo.vcs() == Vcs.GIT && repo.root().equals(root) && !branch.equals(repo.branch())) switchedRoots.add(root);
+          }
+          pendingRoots.add(root);
+          debounce.restart();
+        });
       });
     project.getMessageBus().connect(parent).subscribe(ChangeListListener.TOPIC, new ChangeListListener() {
       @Override public void changeListUpdateDone() {
@@ -704,6 +726,11 @@ final class SyncPanel extends SimpleToolWindowPanel {
 
   /** 모아 둔 알림에 해당하는 저장소만 서버에 묻지 않고 다시 비교하고 모은 것을 비운다. 창이 숨어 있으면 비교하지 않고 stale 만 세운다. */
   private void recomparePending() {
+    for (File root : switchedRoots) {
+      pendingRoots.remove(root);
+      refreshRepo(root, Vcs.GIT);
+    }
+    switchedRoots.clear();
     if (hidden) {
       stale = true;
       pendingRoots.clear();
@@ -838,6 +865,38 @@ final class SyncPanel extends SimpleToolWindowPanel {
       if (!state) return;  // 눌린 것을 다시 눌러도 거르기는 풀리지 않는다.
       modeFilter = kind;
       rebuildTree();
+    }
+  }
+
+  /** 도구줄의 Git 동작(IntelliJ 기본 창을 연다). 트리에서 고른 Git 저장소로 열고, Git 저장소가 없으면(SVN 만) 숨는다. */
+  private final class GitAction extends DumbAwareAction {
+    private final String actionId;
+
+    GitAction(String key, Icon icon, String actionId) {
+      super(SyncBundle.message(key), null, icon);
+      this.actionId = actionId;
+    }
+
+    @Override public @NotNull ActionUpdateThread getActionUpdateThread() { return ActionUpdateThread.EDT; }
+
+    @Override
+    public void update(@NotNull AnActionEvent e) {
+      boolean git = false;
+      for (Repo repo : repos) git |= repo.vcs() == Vcs.GIT;
+      e.getPresentation().setVisible(git);
+    }
+
+    @Override
+    public void actionPerformed(@NotNull AnActionEvent e) {
+      DataContext context = DataManager.getInstance().getDataContext(SyncPanel.this);
+      for (Repo repo : selectedRepos()) {
+        if (repo.vcs() != Vcs.GIT) continue;
+        VirtualFile root = LocalFileSystem.getInstance().findFileByIoFile(repo.root());
+        if (root == null) continue;
+        context = SimpleDataContext.builder().setParent(context).add(CommonDataKeys.VIRTUAL_FILE, root).build();
+        break;
+      }
+      runAction(getTemplatePresentation().getText(), actionId, context);
     }
   }
 
