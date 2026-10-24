@@ -190,6 +190,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static final String ACTION_BRANCHES = "Git.Branches";
   private static final String ACTION_STASH = "Git.Stash";
   private static final String ACTION_UNSTASH = "Git.Unstash";
+  private static final String ACTION_REVERSE_MERGE = "KingGura.ReverseMerge";
   // IDE 의 「Update Project」(Ctrl+T). 프로젝트의 모든 VCS 루트를 받는다(Git 은 받기 방식을 묻고, SVN 은 svn update).
   private static final String ACTION_UPDATE_ALL = "Vcs.UpdateProject";
   // 설치본에 같이 넣은 VisualSVN 명령줄 도구(apply_defaults 19 의 SVN 기본 경로와 같은 곳).
@@ -242,6 +243,11 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private volatile boolean stale;
   // 지난 변경 목록 알림 때 IDE 가 알던 작업본 변경 · 새 파일 경로. 다음 알림과 비교해 달라진 경로만 본다(알림 스레드에서만).
   private volatile Set<String> lastLocalPaths = Set.of();
+  // Git 루트별 역머지 기준 브랜치와의 차이(「develop 보다 3개 뒤 · 내 파일 2개 겹침」). 기준 브랜치를 고른 적 없거나 같으면 없다.
+  private final Map<File, ReverseNote> reverseNotes = new ConcurrentHashMap<>();
+
+  /** 위쪽 줄 · 저장소 줄 끝에 붙는 역머지 안내. warn 이면 내 파일과 겹쳐 주황으로 보인다. */
+  record ReverseNote(String text, boolean warn) {}
 
   SyncPanel(Project project, Disposable parent) {
     super(true, true);
@@ -268,6 +274,18 @@ final class SyncPanel extends SimpleToolWindowPanel {
     title.setOpaque(false);
     status.setOpaque(false);
     title.append(SyncBundle.message("sync.title"));
+    // 위쪽 줄의 역머지 안내(「develop 보다 3개 뒤」)를 누르면 Reverse Merge 창을 그 저장소로 연다.
+    title.addMouseListener(new MouseAdapter() {
+      @Override
+      public void mouseClicked(MouseEvent e) {
+        if (repos.size() != 1 || !reverseNotes.containsKey(repos.get(0).root())) return;
+        VirtualFile root = LocalFileSystem.getInstance().findFileByIoFile(repos.get(0).root());
+        if (root == null) return;
+        DataContext context = SimpleDataContext.builder().setParent(DataManager.getInstance().getDataContext(SyncPanel.this))
+          .add(CommonDataKeys.VIRTUAL_FILE, root).build();
+        runAction(SyncBundle.message("rmerge.title"), ACTION_REVERSE_MERGE, context);
+      }
+    });
     JPanel labels = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(GAP), 0));
     labels.add(title);
     labels.add(status);
@@ -334,6 +352,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
         }
         else {
           append(Objects.toString(item, ""));
+          if (item instanceof Repo repo) appendReverseNote(this, repo);
         }
       }
     });
@@ -1043,12 +1062,15 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private void showTitle(List<Repo> list) {
     title.clear();
     title.setIcon(null);
+    title.setCursor(null);
     if (list.size() == 1 && list.get(0).vcs() == Vcs.GIT) {
       Repo repo = list.get(0);
       title.setIcon(AllIcons.Vcs.Branch);
       title.append(repo.root().getName() + "  ", SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES);
       title.append(repo.branch(), SimpleTextAttributes.REGULAR_ATTRIBUTES);
       title.append(" ↔ " + repo.upstream(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+      appendReverseNote(title, repo);
+      title.setCursor(Cursor.getPredefinedCursor(reverseNotes.containsKey(repo.root()) ? Cursor.HAND_CURSOR : Cursor.DEFAULT_CURSOR));
       return;
     }
     title.append(list.size() == 1 ? list.get(0).toString() : SyncBundle.message("sync.repo.count", list.size()));
@@ -1199,6 +1221,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       String errorText = errors.isEmpty() ? null : String.join(" / ", errors);
       SwingUtilities.invokeLater(() -> {
         busy = false;
+        showTitle(repos);
         // 그사이 다시 비교(recompare)가 시작됐으면 목록은 그쪽 결과를 따르고, 원격 확인 결과 · 오류는 그대로 알린다.
         if (errorText != null) showStatus(errorText);
         else showSummary(finalResult, checkedTail);
@@ -1251,6 +1274,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
         updated = vcs == Vcs.GIT ? gitRepo(root) : svnRepo(root);
         if (updated.vcs() == Vcs.GIT) {
           fetch(updated.root());
+          updateReverseNote(updated);
           fresh = compare(updated);
         }
         else {
@@ -1300,6 +1324,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     try {
       if (repo.vcs() == Vcs.GIT) {
         fetch(repo.root());
+        updateReverseNote(repo);
         return compare(repo);
       }
       return compareSvnRemote(repo);
@@ -1321,6 +1346,44 @@ final class SyncPanel extends SimpleToolWindowPanel {
     finally {
       fetching.remove(root);
     }
+  }
+
+  /**
+   * 역머지 기준 브랜치(Git 메뉴 Reverse Merge 에서 고른 From)가 있으면 그 브랜치만 받아 와 지금 브랜치와의 차이를 reverseNotes 에 남긴다.
+   * 실패해도(서버에서 지워짐 등) 동기화 비교는 계속하고 안내만 지운다.
+   */
+  private void updateReverseNote(Repo repo) throws InterruptedException {
+    File root = repo.root();
+    String from = ReverseMerge.config(root, ReverseMerge.CONFIG_FROM);
+    if (from == null || from.equals(repo.branch())) {
+      reverseNotes.remove(root);
+      return;
+    }
+    fetching.add(root);
+    try {
+      String remote = ReverseMerge.remoteOf(root, repo.branch());
+      ReverseMerge.fetch(root, remote, from);
+      ReverseMerge.Preview preview = ReverseMerge.preview(root, remote, from, repo.branch(), repo.branch());
+      int mine = preview.mineCount();
+      if (preview.commits() == 0) reverseNotes.remove(root);
+      else reverseNotes.put(root, new ReverseNote(mine > 0 ? SyncBundle.message("rmerge.note.mine", from, preview.commits(), mine)
+                                                           : SyncBundle.message("rmerge.note", from, preview.commits()), mine > 0));
+    }
+    catch (IOException e) {
+      reverseNotes.remove(root);
+    }
+    finally {
+      fetching.remove(root);
+    }
+  }
+
+  /** 역머지 안내가 있으면 component 끝에 붙인다. */
+  private void appendReverseNote(SimpleColoredComponent component, Repo repo) {
+    ReverseNote note = reverseNotes.get(repo.root());
+    if (note == null) return;
+    component.append("   " + note.text(), note.warn()
+                                         ? new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, ReverseMergeAction.MINE_COLOR)
+                                         : SimpleTextAttributes.GRAYED_ATTRIBUTES);
   }
 
   /** 서버에 물어 SVN 저장소를 비교하고, 받은 들어올 변경을 svnIncoming 에 남긴다. 서버에 닿지 못하면 IOException(남긴 것은 그대로). */

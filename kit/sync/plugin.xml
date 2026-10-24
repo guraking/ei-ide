@@ -51,5 +51,10 @@
       <add-to-group group-id="Git.MainMenu" anchor="first"/>
       <add-to-group group-id="Git.ContextMenu" anchor="first"/>
     </action>
+    <!-- 서버의 기준 브랜치(develop 등)를 개인 브랜치에 합치는 역머지. 합치기 전에 들어올 파일 · 내 파일과 겹치는 파일을 보여 준다. -->
+    <action id="KingGura.ReverseMerge" class="kinggura.sync.ReverseMergeAction" icon="AllIcons.Vcs.Merge">
+      <add-to-group group-id="Git.MainMenu" anchor="after" relative-to-action="KingGura.SynchronizeWorkspace"/>
+      <add-to-group group-id="Git.ContextMenu" anchor="after" relative-to-action="KingGura.SynchronizeWorkspace"/>
+    </action>
   </actions>
 </idea-plugin>

@@ -44,6 +44,7 @@ public class SyncCheck {
 
     checkUnmappedVcs();
     checkRun();
+    checkReverseMerge();
     System.out.println("SyncCheck 통과");
   }
 
@@ -94,5 +95,61 @@ public class SyncCheck {
     Thread.sleep(1000);
     Process ps = new ProcessBuilder("sh", "-c", "pgrep -af '[s]leep 300' || true").start();
     eq(new String(ps.getInputStream().readAllBytes()).trim(), "");
+  }
+
+  /**
+   * 역머지: 서버(bare) · 개인 브랜치만 받는 내 clone · 다른 개발자 clone 으로 실제 git 을 돌려 본다.
+   * 다른 개발자가 develop 에서 내 파일(A.java)과 남의 파일(B.java)을 고치면 A 만 「내 파일」로 잡히고, 합치고 푸시까지 되는지.
+   */
+  private static void checkReverseMerge() throws Exception {
+    eq(ReverseMerge.parseHeads("abc\trefs/heads/develop\ndef\trefs/heads/feature/kim\n"), List.of("develop", "feature/kim"));
+    eq(ReverseMerge.pick(List.of("main", "develop"), null, ReverseMerge.FROM_CANDIDATES), "develop");
+    eq(ReverseMerge.pick(List.of("main", "develop"), "main", ReverseMerge.FROM_CANDIDATES), "main");
+    eq(ReverseMerge.pick(List.of("main"), "gone", List.of("x")), null);
+    var log = ReverseMerge.parseLog("\u0001이개발\u001f10-23 17:42\u001f두 번째\nA.java\n\n\u0001박개발\u001f10-22 09:10\u001f첫 번째\nA.java\nB.java\n");
+    eq(log.get("A.java")[0], "이개발");
+    eq(log.get("B.java")[2], "첫 번째");
+
+    java.nio.file.Path tmp = java.nio.file.Files.createTempDirectory("rmerge");
+    File server = tmp.resolve("server.git").toFile();
+    File other = tmp.resolve("other").toFile();
+    File mine = tmp.resolve("mine").toFile();
+    sh(tmp.toFile(), "git init -q --bare -b develop server.git && git clone -q server.git other");
+    sh(other, "git config user.email other@x && git config user.name 이개발 && echo a > A.java && echo b > B.java && git add . && git commit -qm init"
+              + " && git push -q origin develop && git push -q origin develop:feature/kim");
+    // 개인 브랜치만 받는 clone(사용자 회사 설정과 같다).
+    sh(tmp.toFile(), "git clone -q --single-branch -b feature/kim server.git mine");
+    sh(mine, "git config user.email me@x && git config user.name 나 && echo mine >> A.java && git commit -qam 내작업 && git push -q");
+    sh(other, "echo theirs > A.java.tmp && printf 'a\\n' > A.java && echo x >> B.java && echo c > C.java && git add . && git rm -q --cached A.java.tmp"
+              + " && git commit -qm 남의작업 && git push -q origin develop");
+    eq(ReverseMerge.serverBranches(mine, "origin"), List.of("develop", "feature/kim"));
+    ReverseMerge.fetch(mine, "origin", "develop", "feature/kim");
+    ReverseMerge.Preview p = ReverseMerge.preview(mine, "origin", "develop", "feature/kim", "feature/kim");
+    eq(p.commits(), 1);
+    eq(p.files().size(), 2);  // A.java 는 내용이 같아 diff 에 없다 → B, C
+    eq(p.mineCount(), 0);
+    // 다른 개발자가 내 파일 A.java 를 실제로 바꾸면 내 파일로 잡힌다.
+    sh(other, "echo changed > A2.java && git add A2.java && echo z > A.java && git commit -qam A수정 && git push -q origin develop");
+    ReverseMerge.fetch(mine, "origin", "develop", "feature/kim");
+    p = ReverseMerge.preview(mine, "origin", "develop", "feature/kim", "feature/kim");
+    eq(p.files().get(0).path(), "A.java");
+    eq(p.files().get(0).mine(), true);
+    eq(p.files().get(0).author(), "이개발");
+    eq(p.mineCount(), 1);
+    eq(ReverseMerge.merge(mine, "origin", "develop", "feature/kim", "feature/kim", true), ReverseMerge.Result.CONFLICT);
+    sh(mine, "git merge --abort");
+    // 충돌 없는 쪽: 다른 개발자가 내 파일을 건드리지 않은 develop 을 새 개인 브랜치로 합치고 푸시.
+    sh(other, "git push -q origin develop~1:refs/heads/feature/new");
+    ReverseMerge.fetch(mine, "origin", "develop", "feature/new");
+    eq(ReverseMerge.merge(mine, "origin", "develop", "feature/new", "feature/kim", true), ReverseMerge.Result.MERGED);
+    eq(SyncPanel.git(mine, "rev-parse", "--abbrev-ref", "HEAD").trim(), "feature/new");
+    eq(SyncPanel.git(mine, "rev-parse", "HEAD").trim(), SyncPanel.git(server, "rev-parse", "feature/new").trim());
+    ReverseMerge.saveConfig(mine, ReverseMerge.CONFIG_FROM, "develop");
+    eq(ReverseMerge.config(mine, ReverseMerge.CONFIG_FROM), "develop");
+    eq(ReverseMerge.config(mine, ReverseMerge.CONFIG_INTO), null);
+  }
+
+  private static void sh(File dir, String command) throws Exception {
+    SyncPanel.run(dir, "sh", "-c", command);
   }
 }
