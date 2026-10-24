@@ -405,6 +405,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
         }
       }
     });
+    // IDE 를 켠 직후에는 VCS 매핑이 잡히기 전에 창이 먼저 비교를 시작해 프로젝트 폴더로 대신 비교할 수 있다
+    // (워크스페이스 폴더는 저장소가 아니라 rev-parse 가 실패한다). 매핑이 잡히거나 바뀌면 다시 비교한다.
+    project.getMessageBus().connect(parent).subscribe(ProjectLevelVcsManager.VCS_CONFIGURATION_CHANGED,
+      (com.intellij.openapi.vcs.VcsMappingListener) () -> SwingUtilities.invokeLater(this::refresh));
   }
 
   /** 이클립스 Synchronize 의 파일 우클릭 메뉴: 무시 목록에 넣기 · 변경 되돌리기. 여러 파일(여러 저장소)을 골라도 된다. */
