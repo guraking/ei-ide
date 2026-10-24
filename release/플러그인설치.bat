@@ -1,9 +1,9 @@
 @echo off
 chcp 949 >nul
 rem EI IDE 를 새로 설치하거나 판을 올린 뒤 한 번 실행한다.
-rem 본체에 들어 있지 않은 플러그인(한국어 언어 팩 · Claude Code · One Dark 테마)을 사용자 플러그인 폴더에 넣고,
-rem 예전에 사용자 폴더에 따로 넣었던 플러그인(서버 창 · Synchronize · 롬복 · 화면 묶음)은 본체와 겹치지 않게 치운다.
-rem 옆의 plugins 폴더에 없는 것은 내려받는다: 한국어 팩은 GitHub 릴리스 「plugins」, Claude Code 는 JetBrains 마켓.
+rem 본체에 들어 있지 않은 플러그인(Claude Code · One Dark 테마)을 사용자 플러그인 폴더에 넣고,
+rem 예전에 사용자 폴더에 따로 넣었던 플러그인(서버 창 · Synchronize · 롬복 · 화면 묶음 · 한국어 언어 팩)은 본체와 겹치지 않게 치운다.
+rem 옆의 plugins 폴더에 없는 것은 JetBrains 마켓에서 내려받는다. 한국어 언어 팩은 메뉴 · 단추를 영어로 깎은 판이 본체에 들어 있다(kit\ko\apply_ko.py).
 rem 옆의 jdk · gradle · drivers 폴더에 있는 것은 사용자 폴더에 풀어 둔다(인터넷 없이). 이미 있으면 건너뛴다.
 rem   jdk\*.zip      → %USERPROFILE%\.jdks\<압축 속 폴더>  (EI IDE 가 켤 때 SDK 목록에 자동 등록)
 rem   gradle\*.zip   → Gradle wrapper 가 같은 판을 찾는 자리 (%USERPROFILE%\.gradle\wrapper\dists)
@@ -14,7 +14,6 @@ setlocal
 set "HERE=%~dp0"
 set "DEST=%APPDATA%\JetBrains\EIIDE2026.2\plugins"
 set "SRC=%HERE%plugins"
-set "KO_ZIP=https://github.com/guraking/ei-ide/releases/download/plugins/localization-ko-262.10968.63.zip"
 set "CC_ZIP=https://plugins.jetbrains.com/pluginManager?action=download&id=com.anthropic.code.plugin&build=IC-262.10968.63"
 rem Gradle wrapper 의 배포판 폴더 이름은 distributionUrl 의 MD5 를 36진수로 쓴 값이다. 판을 바꾸면 함께 바꾼다.
 set "GRADLE_VER=8.14.6"
@@ -28,13 +27,15 @@ tasklist /fi "imagename eq idea64.exe" | find /i "idea64.exe" >nul && (
 )
 if not exist "%SRC%" mkdir "%SRC%"
 
-call :fetch localization-ko "%KO_ZIP%" "한국어 언어 팩" || goto :netfail
 call :fetch claude-code-jetbrains-plugin "%CC_ZIP%" "Claude Code 플러그인" || goto :netfail
 call :fetch one-dark-theme "%OD_ZIP%" "One Dark 테마" || echo One Dark 테마는 건너뜁니다.
 
 if not exist "%DEST%" mkdir "%DEST%"
 rem 예전에 사용자 폴더에 넣었던 플러그인은 jar 하나이거나 같은 이름 폴더다. 지금은 본체에 들어 있으므로 둘 다 치운다.
-for %%n in (boot-servers kinggura-sync kinggura-perspectives ei-db lombok) do call :remove_old %%n
+for %%n in (boot-servers kinggura-sync kinggura-perspectives ei-db lombok localization-ko) do call :remove_old %%n
+rem 예전에 옆 plugins 폴더로 받아 둔 깎지 않은 한국어 팩은 설치하지 않고 옆으로 옮겨 둔다(빌드 때 kit\ko\apply_ko.py 가 깎는 원본).
+if exist "%SRC%\localization-ko\" if not exist "%HERE%localization-ko\" move "%SRC%\localization-ko" "%HERE%localization-ko" >nul
+if exist "%SRC%\localization-ko\" rmdir /s /q "%SRC%\localization-ko"
 rem 판이 바뀌면 jar 이름도 바뀌어 덮어쓰기만으로는 옛 jar 가 남는다. 넣을 플러그인 폴더는 먼저 통째로 지운다.
 for /d %%p in ("%SRC%\*") do if exist "%DEST%\%%~nxp\" (rmdir /s /q "%DEST%\%%~nxp" || goto :copyfail)
 rem rmdir 은 잠긴 파일이 있어 일부만 지워도 성공으로 끝날 수 있어 남았는지 다시 본다.
