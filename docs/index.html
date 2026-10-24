@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <style>
-/* 배치: 머리 → 위 목차(고정) → 설치 → 기본값 → 서버 창 → Synchronize → 데이터베이스 → 단축키 → 빌드 */
+/* 배치: 머리 → 위 목차(고정) → 설치 · 기본값 → 기능 찾기 · 단축키 → 기능별 절(서버 · Git · DB · MyBatis · 코드 도구 · 메모) → 설정 · 빌드 */
 :root{
   --bg:#f4f6fa; --panel:#ffffff; --panel-2:#eef1f7; --line:#d9dfea; --fg:#141a29; --muted:#5b6680;
   --accent:#d92a3c; --accent-soft:#fbe3e6; --ok:#1d8a5a; --ok-soft:#dcf3e8; --info:#2f6fd6; --info-soft:#e2ecfc;
@@ -183,6 +183,8 @@ table.keys th,table.keys td{padding:9px 14px; border-bottom:1px solid var(--line
 table.keys th{background:var(--panel-2); color:var(--muted); font-weight:500; font-size:13px}
 table.keys td:first-child{white-space:nowrap}
 table.keys td.where{color:var(--muted); font-size:13px}
+/* 기능 찾기 · 기능 표: 첫 칸(메뉴 경로)이 길어 줄을 바꾼다 */
+table.keys.map td:first-child{white-space:normal; width:42%}
 
 /* 명령 */
 pre.cmd{margin:0; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px; font:13px/1.8 var(--f-mono); overflow-x:auto}
@@ -290,9 +292,9 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
   <div class="wrap">
     <div class="eyebrow">EI IDE · 사용 설명서</div>
     <h1>설치하고, 서버 띄우고, DB 까지<br>한 화면씩 따라 하기</h1>
-    <p>인텔리제이 커뮤니티를 바탕으로 이클립스 흐름을 얹은 가벼운 자바 개발 도구입니다. 설치 순서와 직접 만든 기능 세 가지(서버 창 · Synchronize · 데이터베이스)를 실제 화면 모양으로 정리했습니다.</p>
+    <p>인텔리제이 커뮤니티를 바탕으로 이클립스 흐름을 얹은 가벼운 자바 개발 도구입니다. 설치 순서와 직접 만든 기능(서버 창 · Git · 데이터베이스 · MyBatis · 코드 도구)을 기능별로 나누고, 어느 메뉴에 무엇이 있는지와 단축키를 앞쪽에 모았습니다.</p>
     <div class="chips">
-      <span class="chip">판 <b>262.10968.1030</b></span>
+      <span class="chip">판 <b>262.10968.1053</b></span>
       <span class="chip">바탕 <b>IntelliJ Community 2026.2.3</b></span>
       <a class="chip" href="https://github.com/guraking/ei-ide/releases/latest">최신 설치 파일 받기 →</a>
       <a class="chip" href="https://github.com/guraking/ei-ide">저장소</a>
@@ -303,24 +305,26 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
 <nav class="toc" aria-label="목차">
   <div class="wrap">
     <a href="#install">설치</a>
-    <a href="#defaults">달라진 기본값</a>
+    <a href="#defaults">기본값</a>
+    <a href="#find">기능 찾기</a>
+    <a href="#keys">단축키</a>
     <a href="#project">Maven · Gradle</a>
     <a href="#servers">서버 창</a>
-    <a href="#sync">Synchronize</a>
+    <a href="#sync">Git · SVN</a>
     <a href="#db">데이터베이스</a>
-    <a href="#keys">단축키</a>
-    <a href="#build">빌드</a>
-    <a href="#menus">메뉴 지도</a>
+    <a href="#mybatis">MyBatis</a>
+    <a href="#code">코드 도구</a>
+    <a href="#extras">메모 · 테마</a>
     <a href="#plugins">플러그인</a>
     <a href="#settings">설정</a>
     <a href="#trouble">막혔을 때</a>
-    <a href="#code">코드 도구</a>
+    <a href="#build">빌드</a>
     <span class="sp"></span>
     <button id="theme" type="button" aria-label="밝게 · 어둡게 바꾸기">밝게 · 어둡게</button>
   </div>
 </nav>
 
-<!-- 1. 설치 -->
+<!-- 01. 설치 -->
 <section id="install">
   <div class="wrap">
     <h2><span class="no">01</span>설치</h2>
@@ -375,12 +379,13 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
   </div>
 </section>
 
-<!-- 2. 기본값 -->
+<!-- 02. 기본값 -->
 <section id="defaults">
   <div class="wrap">
     <h2><span class="no">02</span>처음 켰을 때 달라진 것</h2>
     <p class="lead">설정을 손대지 않아도 처음부터 이렇게 켜집니다.</p>
     <div class="cards">
+      <div class="card"><h4>메뉴는 영어, 안내는 한국어</h4><p>한국어를 고르면 메뉴 · 단추 · 탭 이름은 영어, 오류 · 알림 · 대화 상자 글은 한국어로 나옵니다. 이 설명서도 메뉴 이름을 영어로 적었습니다.</p><span class="was">전부 한국어 또는 전부 영어</span></div>
       <div class="card"><h4>이클립스 단축키 · 메뉴</h4><p>File · Edit · Source · Refactor · Navigate · Search · Project · Run · Git · Window · Help</p><span class="was">Windows 단축키, View · Code · Build · Tools</span></div>
       <div class="card"><h4>저장하면 자동 빌드</h4><p>자바 import 정리, 바뀐 줄만 서식. Gradle 빌드 · 실행도 IDE 가 직접.</p><span class="was">끔, Gradle 에 위임</span></div>
       <div class="card"><h4>한글 폭이 맞는 글꼴</h4><p>JetBrainsMonoHangul 내장. 한글이 영문 두 칸에 딱 맞아 열이 어긋나지 않습니다.</p><span class="was">JetBrains Mono, 한글 폭 어긋남</span></div>
@@ -398,10 +403,199 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
   </div>
 </section>
 
-<!-- 3. 프로젝트 열기 · Maven · Gradle -->
+<!-- 03. 기능 찾기 -->
+<section id="find">
+  <div class="wrap">
+    <h2><span class="no">03</span>기능 찾기 · 메뉴 지도</h2>
+    <p class="lead">EI IDE 가 더한 기능이 어느 메뉴 · 우클릭 · 창에 있는지 모았습니다. 메뉴 이름은 화면에 보이는 영어 그대로입니다. 우클릭 항목은 쓸 수 있는 파일 · 자리에서만 보입니다. 이름을 알면 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd> 로 쳐서 바로 실행할 수도 있습니다.</p>
+
+    <h3>위 메뉴줄</h3>
+    <table class="keys map">
+      <tr><th>메뉴 → 항목</th><th>하는 일</th></tr>
+      <tr><td>Source → Generate Feature Set…</td><td>표 하나로 DTO · 매퍼 · 서비스 · 컨트롤러 한 벌 (<a href="#mybatis">MyBatis</a>)</td></tr>
+      <tr><td>Source → Bundle Request Parameters into DTO…</td><td><code>@RequestParam</code> 여러 개를 DTO 하나로 (<a href="#code">코드 도구</a>)</td></tr>
+      <tr><td>Source → Generate DTO from JSON…</td><td>붙여 넣은 JSON 으로 DTO (<a href="#code">코드 도구</a>)</td></tr>
+      <tr><td>Source → Add Input Validation…</td><td>칼럼 정의로 <code>@NotBlank</code> · <code>@Size</code> 붙이기 (<a href="#code">코드 도구</a>)</td></tr>
+      <tr><td>Source → Rename Column…</td><td>모든 매퍼 XML · DTO 에서 칼럼 이름 바꾸기 (<a href="#mybatis">MyBatis</a>)</td></tr>
+      <tr><td>Navigate → Find URL… · Search → Find URL…</td><td>URL 로 컨트롤러 메서드 찾기 <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>U</kbd> (<a href="#servers">서버 창</a>)</td></tr>
+      <tr><td>Project → Export Program List to Excel…</td><td>파일 목록 · URL 목록 엑셀 (<a href="#servers">서버 창</a>)</td></tr>
+      <tr><td>Run → API Test (Swagger)…</td><td>아래쪽 「API」 창에 Swagger UI (<a href="#servers">서버 창</a>)</td></tr>
+      <tr><td>Git → Synchronize Workspace (맨 위)</td><td>Synchronize 창 열기 (<a href="#sync">Git · SVN</a>)</td></tr>
+      <tr><td>Window → Show View</td><td>아래 「도구 창」 표의 창을 다시 열기</td></tr>
+    </table>
+
+    <h3>프로젝트 트리 우클릭</h3>
+    <table class="keys map">
+      <tr><th>항목</th><th>하는 일</th></tr>
+      <tr><td>Spring Boot Server ▸ Start Server · Start in Debug · Restart · Stop (맨 위)</td><td>고른 모듈의 스프링 부트 서버 (<a href="#servers">서버 창</a>)</td></tr>
+      <tr><td>Workspace ▸ Module from Existing Sources · Get from Version Control · Create Git Repository · Manage Remotes</td><td>다른 프로젝트 추가 · Git 연결 (<a href="#project">Maven · Gradle</a>)</td></tr>
+      <tr><td>Export Program List to Excel…</td><td>프로그램 목록 엑셀</td></tr>
+      <tr><td>Generate DTO from JSON…</td><td>고른 패키지에 DTO 만들기</td></tr>
+      <tr><td>Git ▸ Synchronize Workspace · Subversion ▸ Synchronize Workspace</td><td>그 저장소만 비교하는 Synchronize 창</td></tr>
+      <tr><td>Assume Unchanged · No Assume Unchanged (맨 아래)</td><td>내 PC 에서만 고친 파일을 변경 목록에서 숨기기 · 되돌리기</td></tr>
+      <tr><td><kbd>F5</kbd> (Reload from Disk)</td><td>고른 프로젝트 · 폴더 · 파일을 디스크에서 다시 읽기</td></tr>
+    </table>
+
+    <h3>편집기 우클릭</h3>
+    <table class="keys map">
+      <tr><th>항목 · 보이는 곳</th><th>하는 일</th></tr>
+      <tr><td>Run · Run All · Explain Plan · Format SQL · To Upper Case · To Lower Case<br>SQL 콘솔 (맨 위)</td><td>문장 실행 · 전체 실행 · 실행 계획 · 정렬 · 대소문자 (<a href="#db">데이터베이스</a>)</td></tr>
+      <tr><td>Run MyBatis Query · Generate Layer Code… · Copy Call Code · Rename Column… · Generate Dynamic Conditions… · Generate Paging Query · Generate resultMap from SELECT · Insert MyBatis Tag ▸<br>매퍼 XML (맨 위)</td><td>매퍼 문장 실행과 코드 만들기 (<a href="#mybatis">MyBatis</a>)</td></tr>
+      <tr><td>Generate Layer Code…<br>매퍼 인터페이스 메서드</td><td>컨트롤러 · 서비스 · 매퍼 코드</td></tr>
+      <tr><td>Clean Up String SQL…<br>자바</td><td>이어 붙인 문자열 SQL 을 매퍼 문장으로 (<a href="#code">코드 도구</a>)</td></tr>
+      <tr><td>Go to Controller<br>JSP (맨 위)</td><td>그 JSP 를 돌려주는 컨트롤러 메서드로</td></tr>
+      <tr><td>Change Case ▸ Camel · Pascal · Snake · Upper Snake<br>어디서나 (맨 아래)</td><td>고른 식별자 표기 바꾸기 (<a href="#extras">메모 · 테마</a>)</td></tr>
+      <tr><td>AI ▸ Explain · Fix · Ask…<br>어디서나 (맨 아래)</td><td>고른 코드를 터미널의 Claude Code 로 (<a href="#servers">서버 창</a>)</td></tr>
+      <tr><td>Bundle Request Parameters into DTO… · Add Input Validation… · Sync Enum<br>컨트롤러 · DTO · enum 안 (맨 아래)</td><td>코드 도구 (<a href="#code">코드 도구</a>)</td></tr>
+    </table>
+
+    <h3>콘솔 · 커밋 창 · 탭 우클릭</h3>
+    <table class="keys map">
+      <tr><th>자리 → 항목</th><th>하는 일</th></tr>
+      <tr><td>실행 · 서버 콘솔 → Run in Database Console · Send to Query Console (맨 위)</td><td>SQL 로그에 값을 채워 실행 · 콘솔로 보내기 (<a href="#mybatis">MyBatis</a>)</td></tr>
+      <tr><td>실행 · 서버 콘솔 → Filter Log (맨 위)</td><td>ERROR · WARN · 글자로 거른 줄 목록 (<a href="#servers">서버 창</a>)</td></tr>
+      <tr><td>실행 · 서버 콘솔 → AI ▸ Find Cause of This Error (맨 아래)</td><td>고른 오류 글을 Claude Code 로</td></tr>
+      <tr><td>실행 · 서버 콘솔 → <kbd>Ctrl</kbd>+<kbd>F</kbd> (Find in Console)</td><td>콘솔 출력 검색</td></tr>
+      <tr><td>커밋 창 · 변경 목록 파일 → Assume Unchanged (맨 아래)</td><td>그 파일을 변경 목록에서 숨기기</td></tr>
+      <tr><td>Result 창 탭 → Compare with Another Result…</td><td>결과 두 개 비교 (<a href="#db">데이터베이스</a>)</td></tr>
+    </table>
+
+    <h3>도구 창</h3>
+    <table class="keys map">
+      <tr><th>창 (자리)</th><th>단추 · 우클릭</th></tr>
+      <tr><td>Servers (아래)</td><td>Start · Start in Debug · Restart · Stop · Stop All · Add WAS… · Server Groups(New Group… · Start Group · Stop Group) · ⋯ More(Duplicate Server · Publish (Rebuild) · Remove WAS · Show Log Files…) · Refresh Server List. 줄 우클릭에 Open in Browser · Show Console · Edit Settings… (<a href="#servers">서버 창</a>)</td></tr>
+      <tr><td>Synchronize (아래)</td><td>Show All · Incoming · Outgoing · Conflicts · Refresh All · Selected Repository Only · Branches · Stash Changes · Unstash Changes, 아래 Pull All · Pull Selected · Resolve Conflicts. 파일 우클릭 Add to .gitignore · Revert My Changes · Unstage Only, Keep Files · Assume Unchanged (<a href="#sync">Git · SVN</a>)</td></tr>
+      <tr><td>Git Log (아래)</td><td>모듈 목록 · 찾기 칸 · Refresh · 「?」 (<a href="#sync">Git · SVN</a>)</td></tr>
+      <tr><td>Database (오른쪽)</td><td>Refresh · New Console · Connect · Disconnect · Edit · Delete · Find · More(Export · Import Connections). 표 우클릭 View Data · Generate SELECT · INSERT · UPDATE Statement · Generate Mapper Skeleton · Generate Feature Set… · Open ERD · Table Specification Excel…, 접속 우클릭 View Sessions · View Locks · Open ERD (All), 프로그램 우클릭 Open Source · View Compilation Errors (<a href="#db">데이터베이스</a>)</td></tr>
+      <tr><td>Result (아래)</td><td>Fetch · Apply · Revert · CSV · Excel · INSERT · UPDATE · DTO · enum · 찾기(<kbd>Ctrl</kbd>+<kbd>F</kbd>). 칸 우클릭 Copy Value · Copy Selected Rows · Copy Column Values as IN List · Sort (<a href="#db">데이터베이스</a>)</td></tr>
+      <tr><td>API (아래)</td><td>Reload · Save as openapi.yaml… (<a href="#servers">서버 창</a>)</td></tr>
+      <tr><td>Secure Memo (오른쪽)</td><td>Set New Password… · Lock · Change Password… · Preview · Reset… (<a href="#extras">메모 · 테마</a>)</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- 04. 단축키 -->
+<section id="keys">
+  <div class="wrap">
+    <h2><span class="no">04</span>단축키 모음</h2>
+    <p class="lead">Eclipse 키맵이 기본입니다. 아래 첫 표는 EI IDE 가 더한 키(각 플러그인 <code>plugin.xml</code> 에 적힌 값)와 우리 기능에서 쓰는 마우스 · 자동 완성 동작입니다.</p>
+    <table class="keys">
+      <tr><th>키</th><th>하는 일</th><th class="where">어디서</th></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td><td>커서 문장(또는 선택 영역) 실행 (Run)</td><td class="where">SQL 콘솔</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd></td><td>모든 문장 차례로 실행 (Run All)</td><td class="where">SQL 콘솔</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd></td><td>실행 계획, 실행하지 않음 (Explain Plan)</td><td class="where">SQL 콘솔</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></td><td>SQL 정렬 (Format SQL). 콘솔 밖에서는 원래 서식 맞추기</td><td class="where">SQL 콘솔</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> · <kbd>Y</kbd></td><td>대문자 · 소문자 (문자열 · 주석은 그대로)</td><td class="where">SQL 콘솔</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td><td>결과 안에서 찾기</td><td class="where">Result 창</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Enter</kbd></td><td>커서가 있는 MyBatis 문장 실행 (Run MyBatis Query)</td><td class="where">매퍼 XML</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+클릭 · <kbd>F3</kbd></td><td>매퍼 메서드 ↔ XML 문장, <code>include</code> → <code>sql</code>, <code>resultMap</code> → <code>resultMap</code>, <code>#{이름}</code> → DTO 필드 · 매개변수</td><td class="where">자바 매퍼 · 매퍼 XML</td></tr>
+      <tr><td><code>#{</code> · <code>${</code> · <code>AS </code> 치기</td><td>쓸 수 있는 이름 · 별칭이 바로 뜸 (<kbd>Ctrl</kbd>+<kbd>Space</kbd> 로 다시 띄우기)</td><td class="where">매퍼 XML</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd> · <kbd>Enter</kbd></td><td>고른 쿼리 실행 · 콘솔로 보내기</td><td class="where">「보낼 쿼리」 창</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>U</kbd></td><td>URL 로 스프링 컨트롤러 메서드 찾기 (Find URL…)</td><td class="where">어디서나</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+클릭</td><td>뷰 이름 → JSP, <code>${설정.키}</code> → application*.yml · properties 의 키</td><td class="where">컨트롤러 · 자바</td></tr>
+      <tr><td><kbd>Alt</kbd>+<kbd>Enter</kbd> · <kbd>Ctrl</kbd>+<kbd>1</kbd></td><td>빈 catch · printStackTrace · System.out 을 로거로 바꾸기</td><td class="where">자바</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td><td>콘솔 출력 검색 (Find in Console)</td><td class="where">실행 · 서버 콘솔</td></tr>
+      <tr><td><kbd>F5</kbd></td><td>고른 프로젝트 · 폴더 · 파일 디스크에서 다시 읽기 (Reload from Disk)</td><td class="where">프로젝트 창</td></tr>
+      <tr><td><kbd>Tab</kbd></td><td>회색 한 줄 제안 받기 (Full Line)</td><td class="where">편집기</td></tr>
+    </table>
+
+    <h3>이클립스 기본 단축키</h3>
+    <p class="lead">위 표 말고는 IntelliJ 에 들어 있는 Eclipse 키맵 그대로입니다. 아래는 그 키맵(<code>Eclipse.xml</code>)에서 자주 쓰는 것을 모았습니다. † 표시는 Eclipse 키맵이 건드리지 않아 IntelliJ 기본 키가 그대로 남은 것입니다.</p>
+    <h3>찾기 · 이동</h3>
+    <table class="keys">
+      <tr><th>키</th><th>하는 일</th></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd></td><td>파일 열기 (Open Resource)</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd></td><td>클래스 열기 (Open Type)</td></tr>
+      <tr><td>Shift 두 번</td><td>어디서나 찾기 (파일 · 클래스 · 메뉴 · 설정) †</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd></td><td>동작 이름으로 찾아 실행 (메뉴 위치를 모를 때) †</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>E</kbd></td><td>최근 파일 †</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>O</kbd> · <kbd>Ctrl</kbd>+<kbd>F3</kbd></td><td>파일 구조 (Quick Outline)</td></tr>
+      <tr><td><kbd>F3</kbd> · <kbd>Ctrl</kbd>+클릭</td><td>선언으로 이동</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>T</kbd> · <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>B</kbd></td><td>구현으로 이동</td></tr>
+      <tr><td><kbd>F4</kbd></td><td>타입 계층</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>G</kbd> · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd></td><td>사용처 찾기 · 이 파일 안에서 사용처</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>O</kbd></td><td>이 파일에서 사용처 강조</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>H</kbd></td><td>경로에서 찾기 (Search)</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td><td>편집기에서 찾기 · 바꾸기</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>K</kbd> · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>K</kbd></td><td>다음 · 이전 찾기</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>J</kbd></td><td>치면서 찾기 (Incremental Find)</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>L</kbd></td><td>줄 번호로 이동</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Q</kbd></td><td>마지막으로 고친 곳</td></tr>
+      <tr><td><kbd>Alt</kbd>+<kbd>←</kbd> · <kbd>Alt</kbd>+<kbd>→</kbd></td><td>뒤로 · 앞으로 (마우스 뒤로 · 앞으로 단추도)</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>↑</kbd> · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>↓</kbd></td><td>이전 · 다음 메서드</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd></td><td>짝 괄호로</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>F1</kbd></td><td>이전 오류로</td></tr>
+      <tr><td><kbd>F2</kbd> · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd></td><td>빠른 문서 보기</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>F2</kbd></td><td>외부 Javadoc</td></tr>
+    </table>
+    <h3>편집</h3>
+    <table class="keys">
+      <tr><th>키</th><th>하는 일</th></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Space</kbd></td><td>자동 완성 †</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>Space</kbd></td><td>타입 맞춤 자동 완성</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>1</kbd> · <kbd>Alt</kbd>+<kbd>Enter</kbd></td><td>빠른 수정 (Quick Fix)</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>줄 지우기</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>↓</kbd></td><td>줄 복제</td></tr>
+      <tr><td><kbd>Alt</kbd>+<kbd>↑</kbd> · <kbd>Alt</kbd>+<kbd>↓</kbd></td><td>줄 · 문장 옮기기</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>/</kbd></td><td>줄 주석 †</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>/</kbd></td><td>블록 주석</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd> · <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>L</kbd></td><td>서식 맞추기 (SQL 콘솔 안에서는 SQL 정렬)</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>I</kbd></td><td>들여쓰기 맞추기</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd></td><td>import 정리</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>↑</kbd> · <kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>↓</kbd></td><td>선택 넓히기 · 줄이기</td></tr>
+      <tr><td><kbd>Alt</kbd>+<kbd>Y</kbd> · <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Y</kbd></td><td>같은 글 다음 것 · 모두 함께 고르기 (여러 커서)</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Y</kbd></td><td>대소문자 바꾸기</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Delete</kbd></td><td>줄 끝까지 지우기</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>Z</kbd></td><td>감싸기 (try · if …)</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>J</kbd></td><td>라이브 템플릿 넣기</td></tr>
+      <tr><td><kbd>Alt</kbd>+<kbd>Insert</kbd></td><td>생성 (getter · setter · 생성자) †</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>P</kbd></td><td>메서드 구현</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> · <kbd>Ctrl</kbd>+<kbd>Y</kbd></td><td>되돌리기 · 다시</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>-</kbd> · <kbd>Ctrl</kbd>+<kbd>=</kbd></td><td>글자 작게 · 크게</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>W</kbd> · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>W</kbd></td><td>탭 닫기 · 모두 닫기</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>PgDn</kbd> · <kbd>Ctrl</kbd>+<kbd>PgUp</kbd></td><td>다음 · 이전 탭 (Ctrl+F6 도)</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F11</kbd></td><td>북마크</td></tr>
+    </table>
+    <h3>리팩터</h3>
+    <table class="keys">
+      <tr><th>키</th><th>하는 일</th></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>R</kbd></td><td>이름 바꾸기 (사용처까지)</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>M</kbd></td><td>메서드로 빼기</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>L</kbd></td><td>변수로 빼기</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>I</kbd></td><td>인라인</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>V</kbd></td><td>옮기기</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>C</kbd></td><td>메서드 시그니처 바꾸기</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd> · <kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>T</kbd></td><td>우클릭 메뉴 열기</td></tr>
+    </table>
+    <h3>실행 · 디버그</h3>
+    <table class="keys">
+      <tr><th>키</th><th>하는 일</th></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>X</kbd> · <kbd>Shift</kbd>+<kbd>F10</kbd></td><td>실행</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>D</kbd> · <kbd>Shift</kbd>+<kbd>F9</kbd></td><td>디버그</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>F11</kbd></td><td>마지막 실행 다시</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>G</kbd></td><td>테스트 다시 실행</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>B</kbd> · <kbd>Ctrl</kbd>+<kbd>F9</kbd></td><td>빌드 (바뀐 것만)</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd> · <kbd>Ctrl</kbd>+<kbd>F8</kbd></td><td>중단점 켜기 · 끄기</td></tr>
+      <tr><td><kbd>F5</kbd> · <kbd>F6</kbd> · <kbd>F7</kbd></td><td>안으로 · 다음 줄 · 밖으로</td></tr>
+      <tr><td><kbd>F8</kbd></td><td>계속</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>R</kbd></td><td>커서까지 실행</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>F5</kbd></td><td>골라서 안으로</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>U</kbd> · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd></td><td>식 계산 · 값 보기</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>H</kbd></td><td>서비스 창</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd></td><td>설정 열기 †</td></tr>
+    </table>
+    <div class="notes">
+      <div class="note warn"><b>커밋 · Update Project 키는 없음</b>Eclipse 키맵은 이 둘의 키를 지웁니다. <kbd>Ctrl</kbd>+<kbd>K</kbd> 는 다음 찾기, <kbd>Ctrl</kbd>+<kbd>T</kbd> 는 구현으로 이동입니다. 커밋은 Git 메뉴, 전체 받기는 Git 메뉴나 동기화 창 단추로 합니다.</div>
+      <div class="note"><b>키를 바꾸려면</b>설정(<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd>) → Keymap 에서 Eclipse 를 복제한 뒤 동작 이름(예: Commit)에 키를 붙입니다.</div>
+      <div class="note ok"><b>Full Line 제안 받기</b>편집기에 회색으로 뜬 한 줄은 <kbd>Tab</kbd> 으로 받습니다.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 05. Maven · Gradle -->
 <section id="project">
   <div class="wrap">
-    <h2><span class="no">03</span>프로젝트 열기 · Maven · Gradle</h2>
+    <h2><span class="no">05</span>프로젝트 열기 · Maven · Gradle</h2>
     <p class="lead">이클립스 작업공간처럼 여러 프로젝트가 든 상위 폴더를 통째로 열면 됩니다. 빌드 파일을 찾아 Maven · Gradle 프로젝트로 알아서 연결하고, 저장할 때마다 IDE 가 직접 빌드합니다.</p>
 
     <div class="steps">
@@ -477,10 +671,10 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
   </div>
 </section>
 
-<!-- 4. 서버 창 -->
+<!-- 06. 서버 창 -->
 <section id="servers">
   <div class="wrap">
-    <h2><span class="no">04</span>서버 창</h2>
+    <h2><span class="no">06</span>서버 창</h2>
     <p class="lead">아래쪽 「서버」 창. STS 부트 대시보드와 이클립스 Servers 뷰를 합친 것입니다. <code>@SpringBootApplication</code> 모듈은 저절로 한 줄씩 잡히고, Tomcat 같은 WAS 는 직접 추가합니다.</p>
 
     <div class="figure">
@@ -520,16 +714,16 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
         <li><span class="mark">1</span><div><b>여러 줄 한꺼번에</b> <span class="t">Ctrl 로 여러 서버를 고르고 시작 · 디버그 · 재시작 · 중지. 디버그로 시작하면 디버거가 자동으로 붙습니다. 중지 뒤 10초 안에 안 꺼지면 강제로 끝냅니다.</span></div></li>
         <li><span class="mark">2</span><div><b>서버 복제 · WAS 추가</b> <span class="t">같은 모듈을 다른 프로필 · 포트로 하나 더. WAS 는 Tomcat · JBoss/WildFly · WebLogic · JEUS, 설치 폴더는 건드리지 않습니다.</span></div></li>
         <li><span class="mark">3</span><div><b>포트를 누르면 브라우저</b> <span class="t">콘솔 출력에서 포트를 찾아 보여 줍니다.</span></div></li>
-        <li><span class="mark">L</span><div><b>로그 거르기</b> <span class="t">실행 · 서버 콘솔 우클릭 「로그 거르기」 → ERROR · WARN · INFO · DEBUG 와 글자로 거른 줄 목록. 스택 줄은 앞 오류에 붙여 함께, 「따라가기」면 새 로그도 반영, 두 번 누르면 콘솔의 그 줄로.</span></div></li>
-        <li><span class="mark">G</span><div><b>서버 묶음</b> <span class="t">도구 모음 · 우클릭 「서버 묶음」 → 「새 묶음…」으로 서버와 순서를 정하고 「묶음 시작」. 앞 서버가 실행 중이 되면 다음 서버를 띄우고, 실패하면 멈추고 알립니다.</span></div></li>
-        <li><span class="mark">F</span><div><b>로그 파일 보기</b> <span class="t">WAS 줄 우클릭 「로그 파일 보기…」 → 로그 파일을 골라 실행 창 탭으로 열고 끝을 따라 읽습니다. 「로그 거르기」도 됩니다.</span></div></li>
-        <li><span class="mark">U</span><div><b>URL 찾기</b> <span class="t">Navigate 또는 Search → 「URL 찾기…」(<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>U</kbd>). 스프링 <code>@RequestMapping</code> · <code>@GetMapping</code> … 을 모두 모아 HTTP 방식 · URL · 클래스.메서드로 보입니다. <code>/api/order/123</code> 처럼 실제 주소를 쳐도 <code>/api/order/{id}</code> 가 걸리고, Enter 로 그 메서드로 갑니다.</span></div></li>
-        <li><span class="mark">S</span><div><b>API 테스트(Swagger)</b> <span class="t">Run → 「API 테스트(Swagger)…」(또는 URL 찾기의 「요청 보내기」). 아래쪽 「API」 창에 컨트롤러로 만든 API 목록이 Swagger UI 로 뜨고, 「Try it out」 으로 실행 중인 서버에 보냅니다. 「Authorize」 에 넣은 토큰은 기억합니다. openapi.yaml 을 열면 편집기 옆에 같은 미리보기와 자동 완성이 붙습니다. 인터넷 없이 됩니다.</span></div></li>
+        <li><span class="mark">L</span><div><b>로그 거르기</b> <span class="t">실행 · 서버 콘솔 우클릭 「Filter Log」 → ERROR · WARN · INFO · DEBUG 와 글자로 거른 줄 목록. 스택 줄은 앞 오류에 붙여 함께, 「따라가기」면 새 로그도 반영, 두 번 누르면 콘솔의 그 줄로.</span></div></li>
+        <li><span class="mark">G</span><div><b>서버 묶음</b> <span class="t">도구 모음 · 우클릭 「Server Groups」 → 「New Group…」으로 서버와 순서를 정하고 「Start Group」. 앞 서버가 실행 중이 되면 다음 서버를 띄우고, 실패하면 멈추고 알립니다.</span></div></li>
+        <li><span class="mark">F</span><div><b>로그 파일 보기</b> <span class="t">WAS 줄 우클릭 「Show Log Files…」 → 로그 파일을 골라 실행 창 탭으로 열고 끝을 따라 읽습니다. 「Filter Log」도 됩니다.</span></div></li>
+        <li><span class="mark">U</span><div><b>URL 찾기</b> <span class="t">Navigate 또는 Search → 「Find URL…」(<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>U</kbd>). 스프링 <code>@RequestMapping</code> · <code>@GetMapping</code> … 을 모두 모아 HTTP 방식 · URL · 클래스.메서드로 보입니다. <code>/api/order/123</code> 처럼 실제 주소를 쳐도 <code>/api/order/{id}</code> 가 걸리고, Enter 로 그 메서드로 갑니다.</span></div></li>
+        <li><span class="mark">S</span><div><b>API 테스트(Swagger)</b> <span class="t">Run → 「API Test (Swagger)…」(또는 URL 찾기의 「요청 보내기」). 아래쪽 「API」 창에 컨트롤러로 만든 API 목록이 Swagger UI 로 뜨고, 「Try it out」 으로 실행 중인 서버에 보냅니다. 「Authorize」 에 넣은 토큰은 기억합니다. openapi.yaml 을 열면 편집기 옆에 같은 미리보기와 자동 완성이 붙습니다. 인터넷 없이 됩니다.</span></div></li>
         <li><span class="mark">J</span><div><b>JavaScript · TypeScript · Vue</b> <span class="t">.js · .ts · .tsx · .vue 를 열면 언어 서버가 붙어 자동 완성 · 정의로 이동 · 이름 바꾸기 · 오류 표시가 됩니다. 처음 한 번 알림의 「Node.js 받기」 · 「언어 서버 받기」 를 누릅니다.</span></div></li>
-        <li><span class="mark">A</span><div><b>AI(Claude Code)</b> <span class="t">편집기 우클릭 「AI」 → 「설명해 줘」 · 「고쳐 줘」 · 「질문하기…」, 콘솔에서 오류를 골라 우클릭 「AI」 → 「이 오류 원인 찾기」. 아래 터미널의 Claude Code 에 고른 코드와 위치를 넘깁니다.</span></div></li>
-        <li><span class="mark">T</span><div><b>표기법 바꾸기</b> <span class="t">글을 골라 우클릭 「표기법 바꾸기」 → 카멜 · 파스칼 · 스네이크 · 대문자 스네이크. 고른 글 안의 식별자만 바꾸고 문자열 · 주석 · 키워드 · 타입 이름은 둡니다.</span></div></li>
-        <li><span class="mark">N</span><div><b>뷰 · 설정 이동</b> <span class="t">컨트롤러의 <code>return "order/list"</code> 를 <kbd>Ctrl</kbd>+클릭하면 그 JSP 로(prefix · suffix 는 설정에서, 없으면 <code>/WEB-INF/views/ … .jsp</code>). JSP 우클릭 「컨트롤러로 이동」은 반대로. <code>${db.url}</code> 을 <kbd>Ctrl</kbd>+클릭하면 application*.yml · properties 의 그 키로(프로필 파일마다 따로).</span></div></li>
-        <li><span class="mark">X</span><div><b>프로그램 목록 엑셀</b> <span class="t">Project 메뉴 또는 프로젝트 트리 우클릭 「프로그램 목록 엑셀로 내보내기…」. 소스 · 리소스 · 웹 폴더의 전체 파일(구분 · 경로 · 클래스 · 설명 · 줄 수 · 수정일)과 URL 목록을 시트 두 장으로 저장합니다.</span></div></li>
+        <li><span class="mark">A</span><div><b>AI(Claude Code)</b> <span class="t">편집기 우클릭 「AI」 → 「Explain」 · 「Fix」 · 「Ask…」, 콘솔에서 오류를 골라 우클릭 「AI」 → 「Find Cause of This Error」. 아래 터미널의 Claude Code 에 고른 코드와 위치를 넘깁니다.</span></div></li>
+        <li><span class="mark">T</span><div><b>표기법 바꾸기</b> <span class="t">글을 골라 우클릭 「Change Case」 → 카멜 · 파스칼 · 스네이크 · 대문자 스네이크. 고른 글 안의 식별자만 바꾸고 문자열 · 주석 · 키워드 · 타입 이름은 둡니다.</span></div></li>
+        <li><span class="mark">N</span><div><b>뷰 · 설정 이동</b> <span class="t">컨트롤러의 <code>return "order/list"</code> 를 <kbd>Ctrl</kbd>+클릭하면 그 JSP 로(prefix · suffix 는 설정에서, 없으면 <code>/WEB-INF/views/ … .jsp</code>). JSP 우클릭 「Go to Controller」은 반대로. <code>${db.url}</code> 을 <kbd>Ctrl</kbd>+클릭하면 application*.yml · properties 의 그 키로(프로필 파일마다 따로).</span></div></li>
+        <li><span class="mark">X</span><div><b>프로그램 목록 엑셀</b> <span class="t">Project 메뉴 또는 프로젝트 트리 우클릭 「Export Program List to Excel…」. 소스 · 리소스 · 웹 폴더의 전체 파일(구분 · 경로 · 클래스 · 설명 · 줄 수 · 수정일)과 URL 목록을 시트 두 장으로 저장합니다.</span></div></li>
         <li><span class="mark">4</span><div><b>오른쪽 칸에서 바로 고치기</b> <span class="t">프로필 · VM 옵션 · 포트를 고치고 「적용」. 프로젝트 트리의 모듈 옆에도 상태 · 포트가 나오고 우클릭으로 시작 · 중지할 수 있습니다.</span></div></li>
       </ol>
     </div>
@@ -553,12 +747,12 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
         <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
       </div>
       <ol class="legend">
-        <li><span class="mark">1</span><div><b>실제 주소로 찾기</b> <span class="t">Navigate 또는 Search → 「URL 찾기…」. URL · 클래스 · 메서드 이름 어느 것을 쳐도 걸리고, <code>/api/order/123</code> 같은 실제 주소는 <code>{id}</code> 자리에 맞춰 찾습니다.</span></div></li>
+        <li><span class="mark">1</span><div><b>실제 주소로 찾기</b> <span class="t">Navigate 또는 Search → 「Find URL…」. URL · 클래스 · 메서드 이름 어느 것을 쳐도 걸리고, <code>/api/order/123</code> 같은 실제 주소는 <code>{id}</code> 자리에 맞춰 찾습니다.</span></div></li>
         <li><span class="mark">2</span><div><b>이동 · 요청 보내기</b> <span class="t">Enter(「이동」)는 그 컨트롤러 메서드로 갑니다. 「요청 보내기」는 아래 「API」 창을 열고 그 API 를 펼쳐 둡니다. 목록 우클릭에도 같은 두 가지가 있습니다.</span></div></li>
       </ol>
     </div>
 
-    <h3>API 테스트(Swagger) · Run → 「API 테스트(Swagger)…」</h3>
+    <h3>API 테스트(Swagger) · Run → 「API Test (Swagger)…」</h3>
     <div class="figure">
       <div>
         <div class="scroll">
@@ -630,7 +824,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
         <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
       </div>
       <ol class="legend">
-        <li><span class="mark">X</span><div><b>어디서</b> <span class="t">Project 메뉴 또는 프로젝트 트리 우클릭 「프로그램 목록 엑셀로 내보내기…」 → 저장 위치 고르기. 다 되면 알림의 「열기」 · 「폴더 열기」.</span></div></li>
+        <li><span class="mark">X</span><div><b>어디서</b> <span class="t">Project 메뉴 또는 프로젝트 트리 우클릭 「Export Program List to Excel…」 → 저장 위치 고르기. 다 되면 알림의 「열기」 · 「폴더 열기」.</span></div></li>
         <li><span class="mark">1</span><div><b>시트 두 장</b> <span class="t">「프로그램 목록」은 소스 · 리소스 · 웹 폴더의 전체 파일(구분 · 경로 · 패키지 · 클래스 · 설명 · 줄 수 · 수정일), 「URL 목록」은 HTTP 방식 · URL · 클래스 · 메서드 · 설명. 프로그램 사양서 바탕으로 씁니다.</span></div></li>
       </ol>
     </div>
@@ -669,8 +863,8 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
         <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
       </div>
       <ol class="legend">
-        <li><span class="mark">1</span><div><b>편집기 우클릭 「AI」</b> <span class="t">「설명해 줘」 · 「고쳐 줘」 · 「질문하기…」. 고른 코드(없으면 커서 줄)와 파일 위치를 넘깁니다.</span></div></li>
-        <li><span class="mark">C</span><div><b>콘솔 오류</b> <span class="t">실행 · 서버 콘솔에서 오류 글을 골라 우클릭 「AI」 → 「이 오류 원인 찾기」.</span></div></li>
+        <li><span class="mark">1</span><div><b>편집기 우클릭 「AI」</b> <span class="t">「Explain」 · 「Fix」 · 「Ask…」. 고른 코드(없으면 커서 줄)와 파일 위치를 넘깁니다.</span></div></li>
+        <li><span class="mark">C</span><div><b>콘솔 오류</b> <span class="t">실행 · 서버 콘솔에서 오류 글을 골라 우클릭 「AI」 → 「Find Cause of This Error」.</span></div></li>
         <li><span class="mark">2</span><div><b>아래 터미널의 Claude Code</b> <span class="t">요청이 터미널에서 도는 Claude Code 로 들어갑니다. PC 에 Claude Code(<code>claude</code>)가 설치돼 있어야 합니다.</span></div></li>
       </ol>
     </div>
@@ -697,7 +891,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
     </table>
     <div class="notes">
       <div class="note"><b>적용은 다음 시작부터</b>「적용」을 누르면 실행 설정에 적힙니다. 떠 있는 서버는 재시작해야 바뀐 값으로 뜹니다.</div>
-      <div class="note ok"><b>프로필 둘을 동시에</b>「서버 복제」 → 「이름 (복제)」 줄의 프로필 · 포트를 바꾸고 적용 → 두 줄을 같이 골라 시작.</div>
+      <div class="note ok"><b>프로필 둘을 동시에</b>「Duplicate Server」 → 「이름 (복제)」 줄의 프로필 · 포트를 바꾸고 적용 → 두 줄을 같이 골라 시작.</div>
       <div class="note"><b>더 세밀하게</b>「설정 편집…」 은 인텔리제이 실행 설정 창을 엽니다. 환경 변수 · 프로그램 인자 · JDK 는 여기서.</div>
     </div>
 
@@ -705,7 +899,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
     <table class="keys">
       <tr><th>알림</th><th>할 일</th></tr>
       <tr><td>색인이 끝난 뒤 다시 시도하세요</td><td>프로젝트를 막 열었을 때입니다. 오른쪽 아래 진행 막대가 끝나면 다시 누릅니다.</td></tr>
-      <tr><td>프로젝트에 스프링 부트 의존성이 없습니다</td><td>Maven · Gradle 프로젝트로 연결이 안 된 것입니다. 위 03 의 「막혔을 때」 를 봅니다.</td></tr>
+      <tr><td>프로젝트에 스프링 부트 의존성이 없습니다</td><td>Maven · Gradle 프로젝트로 연결이 안 된 것입니다. 05 의 「막혔을 때」 를 봅니다.</td></tr>
       <tr><td>@SpringBootApplication 클래스가 없습니다</td><td>그 모듈은 서버가 아닙니다(라이브러리 모듈). 서버 모듈에서 누릅니다.</td></tr>
       <tr><td>@SpringBootApplication 클래스가 N개 있습니다</td><td>어느 것을 띄울지 모르는 경우입니다. 모듈 이름과 같은 이름으로 실행 설정을 직접 만들면 그 설정으로 시작합니다.</td></tr>
       <tr><td>상태가 「실패」, 이유 <code>Address already in use</code></td><td>포트를 다른 서버가 쓰고 있습니다. 포트 칸을 바꾸거나 떠 있는 서버를 중지합니다.</td></tr>
@@ -738,7 +932,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
       <ol class="legend">
         <li><span class="mark">1</span><div><b>종류 · 설치 폴더</b> <span class="t">폴더를 고르면 판을 읽어 「✓ … 을(를) 찾았습니다」 로 맞는 폴더인지 알려 줍니다.</span></div></li>
         <li><span class="mark">2</span><div><b>포트 세 개</b> <span class="t">종류를 고르면 기본값이 채워집니다(아래 표). 두 번째 포트는 Tomcat 은 종료, WildFly · JEUS 는 관리 포트입니다.</span></div></li>
-        <li><span class="mark">3</span><div><b>바로 반영</b> <span class="t">켜 두면 저장 → 자동 빌드될 때 바뀐 앱만 다시 올립니다. 끄면 서버 우클릭 「반영 (다시 빌드)」 로 직접.</span></div></li>
+        <li><span class="mark">3</span><div><b>바로 반영</b> <span class="t">켜 두면 저장 → 자동 빌드될 때 바뀐 앱만 다시 올립니다. 끄면 서버 우클릭 「Publish (Rebuild)」 로 직접.</span></div></li>
         <li><span class="mark">4</span><div><b>올릴 프로젝트</b> <span class="t">체크한 프로젝트를 그 컨텍스트 경로로 올립니다. 시작할 때 먼저 빌드합니다.</span></div></li>
         <li><span class="mark">D</span><div><b>디버그로 시작</b> <span class="t">디버그 포트로 띄우고, 대기 문구가 나오면 디버거를 자동으로 붙입니다.</span></div></li>
       </ol>
@@ -761,11 +955,23 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
   </div>
 </section>
 
-<!-- 5. Synchronize -->
+<!-- 07. Git · SVN -->
 <section id="sync">
   <div class="wrap">
-    <h2><span class="no">05</span>Synchronize</h2>
-    <p class="lead">이클립스 Team → Synchronize Workspace 와 같은 창입니다. 프로젝트 안의 Git 저장소 여러 개와 SVN 을 저장소별로 묶어, 들어올 변경 · 나갈 변경 · 충돌을 한눈에 봅니다. 커밋 · 올리기(Push) 뒤에는 자동으로 다시 비교합니다. 창 아래 단추는 전체 받기 · 받기(Pull) · 충돌 해결입니다. 커밋 · 올리기는 Git 메뉴(SVN 은 Subversion 메뉴)에서 합니다. 전체 받기는 고른 것과 상관없이 모든 저장소를 한 번에 받습니다(IDE 의 Update Project). 받기는 트리에서 고른 저장소로 창이 열립니다. SVN 저장소에서는 받기가 svn update 를 돌립니다. 충돌은 빨강, 들어올 변경은 파랑, 나갈 변경은 보라로 보입니다. 「고른 저장소만」은 고른 저장소 하나만 새로고침합니다. 프로젝트 트리 우클릭 → Git(SVN 은 Subversion) → 「작업 공간 동기화」로 열면 그 저장소만 비교합니다. 위 도구줄 오른쪽 세 아이콘은 Git 저장소에서만 보이며, Branches(브랜치 만들기 · 바꾸기) · Stash Changes(변경 치워 두기) · Unstash Changes(치운 변경 꺼내기) 를 IntelliJ 기본 창으로 엽니다. 트리에서 저장소를 골라 두면 그 저장소로 열립니다. 브랜치를 바꾸면 그 브랜치의 추적 브랜치와 다시 비교합니다.</p>
+    <h2><span class="no">07</span>Git · SVN</h2>
+    <p class="lead">아래쪽 「Synchronize」 창과 「Git Log」 창 두 개입니다. 커밋 · 올리기(Push)는 Git 메뉴(SVN 은 Subversion 메뉴)의 기본 기능을 그대로 씁니다.</p>
+
+    <h3>Synchronize · Git → Synchronize Workspace</h3>
+    <p class="lead">이클립스 Team → Synchronize Workspace 와 같은 창입니다. 프로젝트 안의 Git 저장소 여러 개와 SVN 을 저장소별로 묶어 들어올 변경(파랑) · 나갈 변경(보라) · 충돌(빨강)을 한눈에 봅니다. 커밋 · 올리기 뒤에는 자동으로 다시 비교합니다. 프로젝트 트리 우클릭 → Git(SVN 은 Subversion) → Synchronize Workspace 로 열면 그 저장소만 비교합니다.</p>
+    <table class="keys map" style="margin-bottom:18px">
+      <tr><th>단추</th><th>하는 일</th></tr>
+      <tr><td>Show All · Incoming · Outgoing · Conflicts</td><td>보기 거르기</td></tr>
+      <tr><td>Refresh All · Selected Repository Only</td><td>모든 저장소 · 고른 저장소 하나만 원격과 다시 비교</td></tr>
+      <tr><td>Branches · Stash Changes · Unstash Changes</td><td>위 도구줄 오른쪽 세 아이콘(Git 저장소에서만). 브랜치 만들기 · 바꾸기, 변경 치워 두기 · 꺼내기를 IntelliJ 기본 창으로 엽니다. 트리에서 저장소를 골라 두면 그 저장소로 열립니다. 브랜치를 바꾸면 새 추적 브랜치와 다시 비교하고, 추적 브랜치가 없으면 「먼저 올리기(Push)」 안내가 보입니다.</td></tr>
+      <tr><td>Pull All</td><td>고른 것과 상관없이 모든 저장소를 한 번에 받기(IDE 의 Update Project)</td></tr>
+      <tr><td>Pull Selected</td><td>트리에서 고른 저장소만 받기. SVN 은 svn update</td></tr>
+      <tr><td>Resolve Conflicts</td><td>충돌 해결 창</td></tr>
+    </table>
 
     <div class="figure">
       <div>
@@ -807,14 +1013,23 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
         <li><span class="mark">+</span><div><b>IDE 파일은 처음부터 안 뜸</b> <span class="t">프로젝트를 열면 저장소마다 <code>.git/info/exclude</code> 에 <code>*.iml</code> · <code>.idea/</code> · <code>.project</code> · <code>.classpath</code> · <code>.settings/</code> 를 넣습니다. 팀 <code>.gitignore</code> 와 서버에는 영향이 없습니다.</span></div></li>
       </ol>
     </div>
-    <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note"><b>SVN</b>svn 명령줄 도구(VisualSVN)가 본체에 같이 들어 있어 따로 설치하지 않아도 SVN 저장소가 함께 보입니다.</div><div class="note"><b>Git Log 창</b>아래쪽 「Git Log」 창 왼쪽에서 프로젝트(모듈)를 고르면 그 폴더를 바꾼 최근 커밋 100개를 IntelliJ 기본 Log 탭처럼 보여 줍니다. 가지마다 색이 다른 꺾인 선 위에 커밋 점이 찍히고(합치기 커밋은 속이 빈 점 · 흐린 글자), 브랜치 · 태그는 알약, 오른쪽은 굵은 작성자와 날짜입니다. 커밋을 누르면 오른쪽에 작성자 · 해시(누르면 복사) · 전체 메시지 · 바뀐 파일, 파일을 두 번 누르면 커밋 전 · 후 비교 창이 열립니다. 위쪽은 찾기 칸(제목 · 작성자)과 새로고침뿐이고, 찾으면 한 줄로 그립니다. Git · SVN(한 줄) 모두 되고, 기존 Git 로그 창은 그대로입니다.</div></div>
+    <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note"><b>SVN</b>svn 명령줄 도구(VisualSVN)가 본체에 같이 들어 있어 따로 설치하지 않아도 SVN 저장소가 함께 보입니다.</div></div>
+
+    <h3>Git Log · 아래쪽 「Git Log」 창</h3>
+    <p class="lead">왼쪽에서 프로젝트(모듈)를 고르면 그 폴더를 바꾼 커밋을 IntelliJ 기본 Log 탭처럼 보여 줍니다. Git · SVN(한 줄) 모두 되고, 기존 Git 로그 창은 그대로입니다.</p>
+    <table class="keys map">
+      <tr><th>자리</th><th>하는 일</th></tr>
+      <tr><td>커밋 목록</td><td>최근 200개, 맨 아래까지 내리면 다음 200개를 이어 읽습니다. 가지마다 색이 다른 꺾인 선 위에 커밋 점(합치기 커밋은 속이 빈 점 · 흐린 글자), 브랜치 · 태그는 알약, 오른쪽은 굵은 작성자와 날짜.</td></tr>
+      <tr><td>위쪽 줄</td><td>찾기 칸(제목 · 작성자, 찾으면 한 줄로 그림) · Refresh · 「?」(점 · 선 · 색 설명). 커밋을 고르면 「?」 오른쪽에 그 커밋의 꺾인 선이 어느 커밋과 이어지는지(합쳐 들인 커밋 · 여기서 갈라져 나간 가지 · 이 커밋을 합쳐 간 커밋)가 한 줄로 보입니다.</td></tr>
+      <tr><td>오른쪽 칸</td><td>작성자 · 해시(누르면 복사) · 전체 메시지 · 바뀐 파일. 파일을 두 번 누르면 커밋 전 · 후 비교 창.</td></tr>
+    </table>
   </div>
 </section>
 
-<!-- 6. 데이터베이스 -->
+<!-- 08. 데이터베이스 -->
 <section id="db">
   <div class="wrap">
-    <h2><span class="no">06</span>데이터베이스</h2>
+    <h2><span class="no">08</span>데이터베이스</h2>
     <p class="lead">DataGrip 은 커뮤니티 판에 넣을 수 없어 직접 만든 DB 도구입니다. 오른쪽 「데이터베이스」 창(탐색기) → 콘솔 → 아래 「결과」 창 순서로 씁니다. Oracle · MySQL · PostgreSQL.</p>
 
     <h3>① 접속 추가 · 탐색기</h3>
@@ -854,8 +1069,8 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
         <li><span class="mark">2</span><div><b>표 우클릭</b> <span class="t">데이터 보기(더블클릭과 같음), SELECT · INSERT · UPDATE 문 만들기, 매퍼 뼈대, ERD.</span></div></li>
         <li><span class="mark">X</span><div><b>테이블 정의서 엑셀</b> <span class="t">표 · 뷰(여럿) 또는 스키마 우클릭 「테이블 정의서 엑셀…」 → 칼럼 · 형 · 길이 · NULL · PK · 기본값 · 주석을 엑셀 한 장으로 저장. 진행 막대에서 취소할 수 있습니다.</span></div></li>
         <li><span class="mark">4</span><div><b>찾기 · ⋯</b> <span class="t">「찾기」는 칼럼 이름 · 한글 주석 · 표 이름 · 표 주석으로 표와 칼럼을 찾습니다(최대 500건, 두 번 누르면 그 표로). 「⋯」 에는 접속 내보내기 · 가져오기(JSON, 비밀번호 빼고).</span></div></li>
-        <li><span class="mark">J</span><div><b>표 여러 개 → 조인 SELECT</b> <span class="t">Ctrl 로 표를 여러 개 고르고 우클릭 「SELECT 문 만들기 (표 N개 조인)」. FK 로 조건을 만들고, FK 가 없으면 PK 와 이름이 같은 칼럼으로 추정합니다(줄 끝에 「추정」 주석). 못 이은 표는 직접 쓰라는 줄을 남깁니다.</span></div></li>
-        <li><span class="mark">P</span><div><b>Oracle 프로그램</b> <span class="t">스키마 아래 「프로그램」에 패키지 · 프로시저 · 함수(깨진 것은 INVALID 빨간 글씨). 두 번 누르면 소스를 <code>CREATE OR REPLACE … /</code> 로 콘솔에 붙이고, 고쳐 실행하면 컴파일됩니다. 우클릭 「컴파일 오류 보기」로 줄 · 위치 · 오류를 결과 창에.</span></div></li>
+        <li><span class="mark">J</span><div><b>표 여러 개 → 조인 SELECT</b> <span class="t">Ctrl 로 표를 여러 개 고르고 우클릭 「Generate SELECT Statement (Join of N Tables)」. FK 로 조건을 만들고, FK 가 없으면 PK 와 이름이 같은 칼럼으로 추정합니다(줄 끝에 「추정」 주석). 못 이은 표는 직접 쓰라는 줄을 남깁니다.</span></div></li>
+        <li><span class="mark">P</span><div><b>Oracle 프로그램</b> <span class="t">스키마 아래 「프로그램」에 패키지 · 프로시저 · 함수(깨진 것은 INVALID 빨간 글씨). 두 번 누르면 소스를 <code>CREATE OR REPLACE … /</code> 로 콘솔에 붙이고, 고쳐 실행하면 컴파일됩니다. 우클릭 「View Compilation Errors」로 줄 · 위치 · 오류를 결과 창에.</span></div></li>
         <li><span class="mark">S</span><div><b>세션 · 잠금 보기</b> <span class="t">접속 우클릭. 잠금 보기는 누가 어떤 표를 잡고 있는지와 끝낼 때 쓸 문장(KILL_SQL)을 함께 보입니다. 끝내기는 콘솔에서 직접 실행합니다. Oracle 은 V$ 뷰 조회 권한이 있어야 합니다.</span></div></li>
         <li><span class="mark">3</span><div><b>새 콘솔</b> <span class="t">누를 때마다 새 탭(<code>콘솔 · dev.sql</code>, <code>콘솔 · dev (2).sql</code>). 같은 접속의 콘솔은 연결 하나를 같이 씁니다.</span></div></li>
       </ol>
@@ -892,8 +1107,8 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
         <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
       </div>
       <ol class="legend" style="grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:14px">
-        <li><span class="mark">1</span><div><b>프로그램</b> <span class="t">두 번 누르면 소스를 <code>CREATE OR REPLACE … /</code> 로 콘솔에 붙입니다. 고쳐서 실행하면 컴파일되고, 깨진 것은 INVALID 로 보입니다. 우클릭 「컴파일 오류 보기」는 줄 · 위치 · 오류를 결과 창에.</span></div></li>
-        <li><span class="mark">2</span><div><b>잠금 · 세션</b> <span class="t">접속 우클릭 「잠금 보기」 · 「세션 보기」. KILL_SQL 을 복사해 콘솔에서 직접 실행합니다. Oracle 은 V$ 뷰 조회 권한이 필요하고, PostgreSQL · MySQL 도 됩니다.</span></div></li>
+        <li><span class="mark">1</span><div><b>프로그램</b> <span class="t">두 번 누르면 소스를 <code>CREATE OR REPLACE … /</code> 로 콘솔에 붙입니다. 고쳐서 실행하면 컴파일되고, 깨진 것은 INVALID 로 보입니다. 우클릭 「View Compilation Errors」는 줄 · 위치 · 오류를 결과 창에.</span></div></li>
+        <li><span class="mark">2</span><div><b>잠금 · 세션</b> <span class="t">접속 우클릭 「View Locks」 · 「View Sessions」. KILL_SQL 을 복사해 콘솔에서 직접 실행합니다. Oracle 은 V$ 뷰 조회 권한이 필요하고, PostgreSQL · MySQL 도 됩니다.</span></div></li>
       </ol>
     </div>
 
@@ -1004,18 +1219,18 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
         <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
       </div>
       <ol class="legend" style="grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:14px">
-        <li><span class="mark">1</span><div><b>결과 탭</b> <span class="t">실행마다 하나씩, 10개가 넘으면 오래된 것부터 닫힙니다. 탭의 ✕, 가운데 단추, 우클릭 「다른 탭 닫기 · 모든 탭 닫기」.</span></div></li>
+        <li><span class="mark">1</span><div><b>결과 탭</b> <span class="t">실행마다 하나씩, 10개가 넘으면 오래된 것부터 닫힙니다. 탭의 ✕, 가운데 단추, 우클릭 「Close Other Tabs · Close All Tabs」.</span></div></li>
         <li><span class="mark">2</span><div><b>더 보기</b> <span class="t">잘렸을 때만 나옵니다. 「500건 더」 또는 건수를 쓰고 「조회」(Enter). 같은 문장을 처음부터 다시 읽어 이 탭을 바꿉니다.</span></div></li>
         <li><span class="mark">3</span><div><b>꺼내 쓰기</b> <span class="t">탭 구분 복사 · CSV · 엑셀(.xlsx, 머리 굵게 · 틀 고정 · 한글 주석 행) · INSERT · UPDATE(앞 쉼표, PK 로 WHERE) · DTO.</span></div></li>
         <li><span class="mark">4</span><div><b>칼럼 단위로</b> <span class="t">머리를 누르면 칼럼 전체 선택(Ctrl 로 더하기), 머리 아래 한글 주석. 우클릭으로 칼럼 값 · IN 목록 · 칼럼 이름 복사.</span></div></li>
         <li><span class="mark">5</span><div><b>정렬</b> <span class="t">머리를 두 번 누르면 오름 · 내림차순이 번갈아 바뀝니다. 우클릭 「오름차순 · 내림차순 정렬 · 정렬 풀기」. 복사 · CSV 는 정렬된 순서로.</span></div></li>
         <li><span class="mark">6</span><div><b>찾기 · 거르기</b> <span class="t">검색칸(결과 창에서 <kbd>Ctrl</kbd>+<kbd>F</kbd>)에 글자를 넣으면 그 글자가 든 행만 보입니다. 복사 · 내보내기도 보이는 행만.</span></div></li>
         <li><span class="mark">E</span><div><b>칸 바로 고치기</b> <span class="t">표 하나만 읽은 단순 조회에서 칸을 두 번 눌러 고치면 노란색 → 「반영 (N)」 → 문장 미리보기 확인 → PK 조건 UPDATE 실행(운영 보호 그대로). 별칭 · 조인 · UNION · 하위 조회 결과는 고칠 수 없습니다.</span></div></li>
-        <li><span class="mark">C</span><div><b>결과 비교</b> <span class="t">탭 우클릭 「다른 결과와 비교…」 → 다른 탭 고르기. 기준 칼럼으로 행을 맞춰 같음 · 다름 · 왼쪽에만 · 오른쪽에만을 세고, 다른 칸은 <code>a → b</code> 로 색칠합니다. 불러온 행만 비교합니다.</span></div></li>
+        <li><span class="mark">C</span><div><b>결과 비교</b> <span class="t">탭 우클릭 「Compare with Another Result…」 → 다른 탭 고르기. 기준 칼럼으로 행을 맞춰 같음 · 다름 · 왼쪽에만 · 오른쪽에만을 세고, 다른 칸은 <code>a → b</code> 로 색칠합니다. 불러온 행만 비교합니다.</span></div></li>
       </ol>
     </div>
 
-    <h3>결과 두 개 비교 · 탭 우클릭 「다른 결과와 비교…」</h3>
+    <h3>결과 두 개 비교 · 탭 우클릭 「Compare with Another Result…」</h3>
     <div class="figure">
       <div>
         <div class="scroll">
@@ -1064,6 +1279,32 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       </ul>
     </div>
 
+  </div>
+</section>
+
+<!-- 09. MyBatis -->
+<section id="mybatis">
+  <div class="wrap">
+    <h2><span class="no">09</span>MyBatis</h2>
+    <p class="lead">매퍼 인터페이스와 매퍼 XML 을 오가며 쓰는 기능입니다. 우클릭 항목은 커서가 매퍼 XML 문장(또는 매퍼 인터페이스 메서드) 안에 있을 때만 보입니다.</p>
+    <table class="keys map">
+      <tr><th>기능 · 자리</th><th>하는 일</th></tr>
+      <tr><td>인터페이스 ↔ XML 이동<br>줄 옆 아이콘 · <kbd>Ctrl</kbd>+클릭</td><td>매퍼 메서드에서 같은 namespace XML 의 같은 id 문장으로, XML 문장에서 메서드로 갑니다. <code>&lt;include refid&gt;</code> · <code>resultMap</code> · <code>extends</code> 도 <kbd>Ctrl</kbd>+클릭으로 갑니다.</td></tr>
+      <tr><td><code>#{</code> 자동 완성 · 이동<br>매퍼 XML 문장 안</td><td><code>#{</code> · <code>${</code> 를 치면 parameterType DTO 필드, 없으면 매퍼 메서드 매개변수(<code>@Param</code> 이름 우선)와 bind · foreach 이름이 뜹니다. 이름에서 <kbd>Ctrl</kbd>+클릭 · <kbd>Ctrl</kbd>+<kbd>B</kbd> → 그 필드 · 매개변수로. DTO 에 없는 이름은 경고합니다.</td></tr>
+      <tr><td><code>AS</code> 별칭 자동 완성<br>매퍼 XML select 안</td><td><code>AS </code> 를 치면 resultType DTO 필드 가운데 SELECT 에 아직 없는 것이 뜹니다. <code>ORDER_ID</code> 처럼 쳐도 찾고, 필드 이름 그대로 넣습니다.</td></tr>
+      <tr><td>Run MyBatis Query <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Enter</kbd><br>매퍼 XML 우클릭 · 문장 옆 ▶</td><td>매개변수를 넣으면 <code>&lt;if&gt;</code> · <code>&lt;foreach&gt;</code> 를 푼 SQL 을 보여 주고 실행해 결과 창에 띄웁니다.</td></tr>
+      <tr><td>Run in Database Console · Send to Query Console<br>실행 · 서버 콘솔 우클릭 맨 위</td><td>MyBatis · log4jdbc 로그의 <code>?</code> 에 값을 채운 SQL 을 바로 실행하거나 콘솔에 붙입니다.</td></tr>
+      <tr><td>Generate Layer Code…<br>매퍼 XML 문장 · 매퍼 메서드 우클릭</td><td>그 문장을 부르는 컨트롤러 · 서비스 · 매퍼 코드, 문장 두 개면 부모-자식 코드를 만듭니다.</td></tr>
+      <tr><td>Generate Mapper Skeleton · Generate Feature Set…<br>데이터베이스 창 표 우클릭 · Source 메뉴</td><td>표 하나로 매퍼 XML · 인터페이스(뼈대), 또는 DTO · 매퍼 · 서비스 · 컨트롤러 한 벌을 만듭니다.</td></tr>
+      <tr><td>Generate Dynamic Conditions…<br>동적 조건 · 매퍼 XML 문장 안</td><td>DTO 필드를 고르면 <code>&lt;where&gt;</code> · <code>&lt;if test="x != null and x != ''"&gt;</code> 조건을 넣습니다. 비교는 = · LIKE · &gt;= · &lt;=(CDATA).</td></tr>
+      <tr><td>Generate Paging Query<br>페이징 쿼리 · 매퍼 XML select 안</td><td>그 select 아래에 Oracle ROWNUM 페이징 문장(<code>…Page</code>, startRow · endRow)과 건수 문장(<code>…Count</code>)을 더하고, 매퍼 인터페이스에 메서드 두 줄을 더합니다.</td></tr>
+      <tr><td>Generate resultMap from SELECT<br>매퍼 XML select 안</td><td>SELECT 칼럼과 resultType DTO 필드를 대소문자 · 밑줄 무시로 짝지어 그 select 위에 <code>&lt;resultMap id="…ResultMap"&gt;</code> 을 넣고, 문장의 <code>resultType</code> 을 <code>resultMap</code> 으로 바꿉니다. 받을 필드가 없는 칼럼은 주석(비슷한 필드 이름 함께)으로 남깁니다. <code>SELECT *</code> 는 만들지 않습니다.</td></tr>
+      <tr><td>Insert MyBatis Tag ▸<br>MyBatis 태그 넣기 · 매퍼 XML 우클릭</td><td>줄을 고르고 태그를 누르면 그 줄을 태그로 감싸 한 단계 들이고, 고른 것이 없으면 커서 자리에 빈 틀을 넣고 커서를 <code>id</code> · <code>test</code> 칸에 둡니다. select · insert · update · delete · MERGE 틀 · resultMap · sql · include · if · choose(when · otherwise) · when · otherwise · where · set · trim · foreach · bind · selectKey · CDATA. CDATA 는 고른 글자(예: <code>&lt;=</code>)만 감쌉니다.</td></tr>
+      <tr><td>Copy Call Code<br>호출 코드 복사 · 매퍼 XML 문장 안</td><td>그 문장을 부르는 서비스 쪽 코드(매개변수 객체 채우기 + 호출 줄)를 클립보드에 복사합니다.</td></tr>
+      <tr><td>Rename Column…<br>칼럼 이름 바꾸기 · 매퍼 XML 우클릭 · Source 메뉴</td><td>모든 매퍼 XML 에서 옛 칼럼 이름을 찾아 미리보기에서 골라 바꾸고, 짝인 DTO 필드 · getter · setter 와 <code>#{}</code> · property 도 함께 바꿉니다. <code>&lt;if test&gt;</code> 안 이름은 바꾸지 않습니다.</td></tr>
+      <tr><td>서비스 자동 완성 · 빠진 짝<br>서비스 클래스 · 매퍼 XML</td><td>서비스에서 매퍼 문장 이름을 치면 메서드가 통째로 들어갑니다. XML 문장과 인터페이스 메서드 짝이 없으면 노란 밑줄.</td></tr>
+    </table>
+
     <h3>MyBatis 인터페이스 ↔ XML</h3>
     <div class="flow" style="margin-bottom:8px">
       <div class="box"><b>인터페이스 메서드</b><span>옆 아이콘이나 <kbd>Ctrl</kbd>+클릭 → 같은 namespace XML 의 같은 id 문장으로.</span></div>
@@ -1080,7 +1321,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       <div class="box"><b>AS 별칭 자동 완성</b><span>select 에서 <code>AS </code> 를 치면 resultType DTO 필드 중 SELECT 에 아직 없는 것이 뜹니다. <code>ORDER_ID</code> 처럼 쳐도 찾고, 필드 이름 그대로 넣습니다. Map · resultMap 문장은 내지 않습니다.</span></div>
     </div>
 
-    <h3>⑤ MyBatis 바로 실행 <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Enter</kbd></h3>
+    <h3>MyBatis 바로 실행 <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Enter</kbd></h3>
     <div class="flow">
       <div class="box"><b>매퍼 XML 문장 옆 ▶</b><span>select · insert · update · delete 어디서든 커서를 두고 단축키.</span></div>
       <div class="arrow">→</div>
@@ -1091,22 +1332,22 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       <div class="box"><b>실행</b><span>결과 창으로. resultType DTO 와 SELECT 칼럼이 안 맞으면 경고.</span></div>
     </div>
 
-    <h3>⑥ SQL 로그 → 실행 SQL</h3>
+    <h3>SQL 로그 → 실행 SQL</h3>
     <div class="ba">
       <div class="side"><h5>서버 콘솔 로그 (우클릭)</h5><pre>==&gt;  Preparing: SELECT * FROM ORDERS WHERE ORDER_NO = ? AND ST = ?
 ==&gt; Parameters: O100(String), A(String)</pre></div>
       <div class="side"><h5>값을 채운 SQL</h5><pre><span class="kw">SELECT</span> * <span class="kw">FROM</span> ORDERS <span class="kw">WHERE</span> ORDER_NO = <span class="st">'O100'</span> <span class="kw">AND</span> ST = <span class="st">'A'</span></pre></div>
     </div>
-    <p class="lead" style="margin-top:10px">우클릭 메뉴: 「데이터베이스 콘솔에서 실행」 · 「쿼리 콘솔로 보내기」.</p>
-    <p class="lead">「쿼리 콘솔로 보내기」는 실행하지 않고 콘솔에 붙입니다. 로그가 아닌 선택 글도 보냅니다. 붙는 SQL 은 콘솔 「정렬」과 같은 모양으로 정렬됩니다. MyBatis 로그와 log4jdbc(<code>jdbc.sqltiming</code>) 로그를 모두 읽고, 같은 쿼리는 가장 최근 것 하나만 목록에 보입니다. 쿼리가 여럿이면 「보낼 쿼리」 창이 뜹니다. 왼쪽 거르기 칸 · 목록에서 고르면 오른쪽에 값을 채우고 정렬한 쿼리가 보이고, 「복사」 · 「실행」(Ctrl+Enter) · 「콘솔로 보내기」(Enter)로 끝냅니다.</p>
+    <p class="lead" style="margin-top:10px">우클릭 메뉴: 「Run in Database Console」 · 「Send to Query Console」.</p>
+    <p class="lead">「Send to Query Console」는 실행하지 않고 콘솔에 붙입니다. 로그가 아닌 선택 글도 보냅니다. 붙는 SQL 은 콘솔 「정렬」과 같은 모양으로 정렬됩니다. MyBatis 로그와 log4jdbc(<code>jdbc.sqltiming</code>) 로그를 모두 읽고, 같은 쿼리는 가장 최근 것 하나만 목록에 보입니다. 쿼리가 여럿이면 「보낼 쿼리」 창이 뜹니다. 왼쪽 거르기 칸 · 목록에서 고르면 오른쪽에 값을 채우고 정렬한 쿼리가 보이고, 「복사」 · 「실행」(Ctrl+Enter) · 「콘솔로 보내기」(Enter)로 끝냅니다.</p>
     <p class="lead">로그에 쿼리가 여럿이면 보낼 쿼리를 목록에서 고르고, 이어서 보낼 콘솔 탭(또는 「새 콘솔…」)을 고릅니다. 실행도 고른 콘솔에서 합니다.</p>
 
-    <h3>⑦ 매퍼 뼈대 · DTO · ERD</h3>
+    <h3>매퍼 뼈대 · DTO · ERD</h3>
     <div class="cards">
       <div class="card"><h4>매퍼 뼈대 만들기</h4><p>표 우클릭 → resultMap · select · insert · update · delete · MERGE(있으면 수정 · 없으면 등록, 기본 꺼짐) · 인터페이스. 구식 조인, 부등호 CDATA, <code>WHERE 1 = 1</code>, 표 · 칼럼 이름 대문자 · 별칭 소문자. 있는 파일은 덮어쓰지 않고 덧붙입니다.</p></div>
       <div class="card"><h4>DTO 만들기</h4><p>결과 창 「DTO 만들기」 → 결과 칼럼으로 자바 DTO 와 resultMap. 칼럼 이름은 낙타 표기 필드로.</p></div>
       <div class="card"><h4>기능 한 벌 만들기</h4><p>표 우클릭 → DTO · 매퍼 XML · 매퍼 인터페이스 · 서비스(인터페이스 + Impl 선택) · 컨트롤러를 한 창에서 미리 보고 한 번에. 있는 파일은 덮어쓰지 않습니다.</p></div>
-      <div class="card"><h4>계층 코드 · 부모-자식</h4><p>매퍼 문장 우클릭 「계층 코드 만들기…」 → 컨트롤러 · 서비스 · 매퍼 코드를 복사하거나 넣기. 문장 두 개를 고르면 자식 목록을 부모에 넣는 코드.</p></div>
+      <div class="card"><h4>계층 코드 · 부모-자식</h4><p>매퍼 문장 우클릭 「Generate Layer Code…」 → 컨트롤러 · 서비스 · 매퍼 코드를 복사하거나 넣기. 문장 두 개를 고르면 자식 목록을 부모에 넣는 코드.</p></div>
       <div class="card"><h4>서비스 자동 완성 · 계층 이동</h4><p>서비스에서 매퍼 문장 이름을 치면 메서드 통째로. 컨트롤러 · 서비스 옆 아이콘 → 서비스 → 매퍼 → XML. 빠진 짝은 노란 밑줄.</p></div>
       <div class="card"><h4>ERD</h4><p>표 카드(한글 주석) + FK 선(직각으로 꺾여 다른 표를 피해 돌고, 「FK:PK」 이름표). 끌어 옮기기 · 확대 · PNG 저장, 카드 더블클릭 → 데이터 보기.</p></div>
     </div>
@@ -1206,262 +1447,65 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       <li><span class="mark">2</span><div><b>계층 이동</b> <span class="t">컨트롤러 · 서비스 메서드 옆 아이콘을 누르면 그 메서드가 부르는 서비스 → 매퍼 → XML 문장으로 갑니다.</span></div></li>
       <li><span class="mark">3</span><div><b>빠진 짝</b> <span class="t">XML 문장에 인터페이스 메서드가 없거나 그 반대면 노란 밑줄. 설정 → 검사 → MyBatis 에서 끌 수 있습니다.</span></div></li>
     </ol>
-  </div>
-</section>
 
-<!-- 7. 단축키 -->
-<section id="keys">
-  <div class="wrap">
-    <h2><span class="no">07</span>단축키 모음</h2>
-    <p class="lead">이클립스 단축키가 기본입니다. 아래는 EI IDE 에서 더한 것만 모았습니다.</p>
-    <table class="keys">
-      <tr><th>키</th><th>하는 일</th><th class="where">어디서</th></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td><td>커서 문장(또는 선택 영역) 실행</td><td class="where">SQL 콘솔</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd></td><td>모든 문장 차례로 실행</td><td class="where">SQL 콘솔</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></td><td>SQL 정렬 (콘솔 밖에서는 원래 기능)</td><td class="where">SQL 콘솔</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> · <kbd>Y</kbd></td><td>대문자 · 소문자</td><td class="where">SQL 콘솔</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd></td><td>실행 계획 (실행하지 않음)</td><td class="where">SQL 콘솔</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+클릭</td><td>매퍼 인터페이스 → XML 문장</td><td class="where">자바 매퍼</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Enter</kbd></td><td>커서가 있는 MyBatis 문장 실행</td><td class="where">매퍼 XML</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>U</kbd></td><td>URL 로 스프링 컨트롤러 메서드 찾기</td><td class="where">어디서나</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td><td>콘솔 출력 검색</td><td class="where">실행 · 서버 콘솔</td></tr>
-      <tr><td><kbd>F5</kbd></td><td>고른 프로젝트 · 폴더 · 파일 디스크에서 다시 읽기</td><td class="where">프로젝트 창</td></tr>
-    </table>
-
-    <h3>이클립스 기본 단축키</h3>
-    <p class="lead">위 표 말고는 IntelliJ 에 들어 있는 Eclipse 키맵 그대로입니다. 아래는 그 키맵(<code>Eclipse.xml</code>)에서 자주 쓰는 것을 모았습니다. † 표시는 Eclipse 키맵이 건드리지 않아 IntelliJ 기본 키가 그대로 남은 것입니다.</p>
-    <h3>찾기 · 이동</h3>
-    <table class="keys">
-      <tr><th>키</th><th>하는 일</th></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd></td><td>파일 열기 (Open Resource)</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd></td><td>클래스 열기 (Open Type)</td></tr>
-      <tr><td>Shift 두 번</td><td>어디서나 찾기 (파일 · 클래스 · 메뉴 · 설정) †</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd></td><td>동작 이름으로 찾아 실행 (메뉴 위치를 모를 때) †</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>E</kbd></td><td>최근 파일 †</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>O</kbd> · <kbd>Ctrl</kbd>+<kbd>F3</kbd></td><td>파일 구조 (Quick Outline)</td></tr>
-      <tr><td><kbd>F3</kbd> · <kbd>Ctrl</kbd>+클릭</td><td>선언으로 이동</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>T</kbd> · <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>B</kbd></td><td>구현으로 이동</td></tr>
-      <tr><td><kbd>F4</kbd></td><td>타입 계층</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>G</kbd> · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd></td><td>사용처 찾기 · 이 파일 안에서 사용처</td></tr>
-      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>O</kbd></td><td>이 파일에서 사용처 강조</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>H</kbd></td><td>경로에서 찾기 (Search)</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td><td>편집기에서 찾기 · 바꾸기</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>K</kbd> · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>K</kbd></td><td>다음 · 이전 찾기</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>J</kbd></td><td>치면서 찾기 (Incremental Find)</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>L</kbd></td><td>줄 번호로 이동</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>Q</kbd></td><td>마지막으로 고친 곳</td></tr>
-      <tr><td><kbd>Alt</kbd>+<kbd>←</kbd> · <kbd>Alt</kbd>+<kbd>→</kbd></td><td>뒤로 · 앞으로 (마우스 뒤로 · 앞으로 단추도)</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>↑</kbd> · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>↓</kbd></td><td>이전 · 다음 메서드</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd></td><td>짝 괄호로</td></tr>
-      <tr><td><kbd>Shift</kbd>+<kbd>F1</kbd></td><td>이전 오류로</td></tr>
-      <tr><td><kbd>F2</kbd> · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd></td><td>빠른 문서 보기</td></tr>
-      <tr><td><kbd>Shift</kbd>+<kbd>F2</kbd></td><td>외부 Javadoc</td></tr>
-    </table>
-    <h3>편집</h3>
-    <table class="keys">
-      <tr><th>키</th><th>하는 일</th></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>Space</kbd></td><td>자동 완성 †</td></tr>
-      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>Space</kbd></td><td>타입 맞춤 자동 완성</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>1</kbd> · <kbd>Alt</kbd>+<kbd>Enter</kbd></td><td>빠른 수정 (Quick Fix)</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>줄 지우기</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>↓</kbd></td><td>줄 복제</td></tr>
-      <tr><td><kbd>Alt</kbd>+<kbd>↑</kbd> · <kbd>Alt</kbd>+<kbd>↓</kbd></td><td>줄 · 문장 옮기기</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>/</kbd></td><td>줄 주석 †</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>/</kbd></td><td>블록 주석</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd> · <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>L</kbd></td><td>서식 맞추기 (SQL 콘솔 안에서는 SQL 정렬)</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>I</kbd></td><td>들여쓰기 맞추기</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd></td><td>import 정리</td></tr>
-      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>↑</kbd> · <kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>↓</kbd></td><td>선택 넓히기 · 줄이기</td></tr>
-      <tr><td><kbd>Alt</kbd>+<kbd>Y</kbd> · <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Y</kbd></td><td>같은 글 다음 것 · 모두 함께 고르기 (여러 커서)</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Y</kbd></td><td>대소문자 바꾸기</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Delete</kbd></td><td>줄 끝까지 지우기</td></tr>
-      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>Z</kbd></td><td>감싸기 (try · if …)</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>J</kbd></td><td>라이브 템플릿 넣기</td></tr>
-      <tr><td><kbd>Alt</kbd>+<kbd>Insert</kbd></td><td>생성 (getter · setter · 생성자) †</td></tr>
-      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>P</kbd></td><td>메서드 구현</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> · <kbd>Ctrl</kbd>+<kbd>Y</kbd></td><td>되돌리기 · 다시</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>-</kbd> · <kbd>Ctrl</kbd>+<kbd>=</kbd></td><td>글자 작게 · 크게</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>W</kbd> · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>W</kbd></td><td>탭 닫기 · 모두 닫기</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>PgDn</kbd> · <kbd>Ctrl</kbd>+<kbd>PgUp</kbd></td><td>다음 · 이전 탭 (Ctrl+F6 도)</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F11</kbd></td><td>북마크</td></tr>
-    </table>
-    <h3>리팩터</h3>
-    <table class="keys">
-      <tr><th>키</th><th>하는 일</th></tr>
-      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>R</kbd></td><td>이름 바꾸기 (사용처까지)</td></tr>
-      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>M</kbd></td><td>메서드로 빼기</td></tr>
-      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>L</kbd></td><td>변수로 빼기</td></tr>
-      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>I</kbd></td><td>인라인</td></tr>
-      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>V</kbd></td><td>옮기기</td></tr>
-      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>C</kbd></td><td>메서드 시그니처 바꾸기</td></tr>
-      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd> · <kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>T</kbd></td><td>우클릭 메뉴 열기</td></tr>
-    </table>
-    <h3>실행 · 디버그</h3>
-    <table class="keys">
-      <tr><th>키</th><th>하는 일</th></tr>
-      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>X</kbd> · <kbd>Shift</kbd>+<kbd>F10</kbd></td><td>실행</td></tr>
-      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>D</kbd> · <kbd>Shift</kbd>+<kbd>F9</kbd></td><td>디버그</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>F11</kbd></td><td>마지막 실행 다시</td></tr>
-      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>G</kbd></td><td>테스트 다시 실행</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>B</kbd> · <kbd>Ctrl</kbd>+<kbd>F9</kbd></td><td>빌드 (바뀐 것만)</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd> · <kbd>Ctrl</kbd>+<kbd>F8</kbd></td><td>중단점 켜기 · 끄기</td></tr>
-      <tr><td><kbd>F5</kbd> · <kbd>F6</kbd> · <kbd>F7</kbd></td><td>안으로 · 다음 줄 · 밖으로</td></tr>
-      <tr><td><kbd>F8</kbd></td><td>계속</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>R</kbd></td><td>커서까지 실행</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>F5</kbd></td><td>골라서 안으로</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>U</kbd> · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd></td><td>식 계산 · 값 보기</td></tr>
-      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>H</kbd></td><td>서비스 창</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd></td><td>설정 열기 †</td></tr>
-    </table>
-    <div class="notes">
-      <div class="note warn"><b>커밋 · Update Project 키는 없음</b>Eclipse 키맵은 이 둘의 키를 지웁니다. <kbd>Ctrl</kbd>+<kbd>K</kbd> 는 다음 찾기, <kbd>Ctrl</kbd>+<kbd>T</kbd> 는 구현으로 이동입니다. 커밋은 Git 메뉴, 전체 받기는 Git 메뉴나 동기화 창 단추로 합니다.</div>
-      <div class="note"><b>키를 바꾸려면</b>설정(<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd>) → Keymap 에서 Eclipse 를 복제한 뒤 동작 이름(예: Commit)에 키를 붙입니다.</div>
-      <div class="note ok"><b>Full Line 제안 받기</b>편집기에 회색으로 뜬 한 줄은 <kbd>Tab</kbd> 으로 받습니다.</div>
+    <h3>동적 조건 · 페이징 · 호출 코드 · 매퍼 XML 문장 안</h3>
+    <div class="cols2">
+      <div class="scroll">
+        <div class="ide" style="min-width:560px">
+          <div class="title"><span class="dots"><i></i><i></i><i></i></span><span class="mark">1</span> 동적 조건 만들기 — 넣은 결과</div>
+          <pre class="sql nolig"><span class="ln">&lt;<span class="kw">where</span>&gt;</span><span class="ln">  &lt;<span class="kw">if</span> test=<span class="st">"userName != null and userName != ''"</span>&gt;</span><span class="ln">    <span class="kw">AND</span> u.USER_NAME <span class="kw">LIKE</span> '%' || #{userName} || '%'</span><span class="ln">  &lt;/<span class="kw">if</span>&gt;</span><span class="ln">  &lt;<span class="kw">if</span> test=<span class="st">"amt != null"</span>&gt;</span><span class="ln">    <span class="kw">AND</span> u.AMT &lt;![CDATA[ &gt;= ]]&gt; #{amt}</span><span class="ln">  &lt;/<span class="kw">if</span>&gt;</span><span class="ln">&lt;/<span class="kw">where</span>&gt;</span></pre>
+        </div>
+      </div>
+      <div class="scroll">
+        <div class="ide" style="min-width:560px">
+          <div class="title"><span class="dots"><i></i><i></i><i></i></span><span class="mark">2</span> 페이징 쿼리 만들기 — selectUserListPage</div>
+          <pre class="sql nolig"><span class="ln"><span class="kw">SELECT</span></span><span class="ln">       *</span><span class="ln">  <span class="kw">FROM</span> (</span><span class="ln">        <span class="kw">SELECT</span></span><span class="ln">               ROWNUM <span class="kw">AS</span> RNUM</span><span class="ln">             , a.*</span><span class="ln">          <span class="kw">FROM</span> ( <span class="cm">원래 select</span> ) a</span><span class="ln">         <span class="kw">WHERE</span> ROWNUM &lt;![CDATA[&lt;=]]&gt; #{endRow}</span><span class="ln">       )</span><span class="ln"> <span class="kw">WHERE</span> RNUM &lt;![CDATA[&gt;]]&gt; #{startRow}</span></pre>
+        </div>
+      </div>
     </div>
-  </div>
-</section>
-
-<!-- 8. 빌드 -->
-<section id="build">
-  <div class="wrap">
-    <h2><span class="no">08</span>직접 빌드하기</h2>
-    <p class="lead">Windows cmd 기준입니다. 처음은 30분 안팎, 그 뒤 바뀐 부분만 다시 컴파일할 때는 10분 안팎 걸립니다. 소스를 고치는 대본은 두 번 돌려도 결과가 같고, 고치기 전 원본을 <code>backup\</code> 에 남깁니다.</p>
-    <div class="flow" style="margin-bottom:14px">
-      <div class="box"><b>소스 받기</b><span>태그 <code>idea/262.10968.63</code></span></div>
-      <div class="arrow">→</div>
-      <div class="box"><b>이름 · 덜어 내기</b><span>제품 이름, 번들 플러그인 정리</span></div>
-      <div class="arrow">→</div>
-      <div class="box"><b>메뉴 · 기본값</b><span>이클립스식 메뉴, 위 02 의 기본값</span></div>
-      <div class="arrow">→</div>
-      <div class="box"><b>빌드</b><span><code>eiide-262.10968.N.exe</code></span></div>
+    <div class="scroll" style="margin-top:14px">
+      <div class="ide" style="min-width:560px">
+        <div class="title"><span class="dots"><i></i><i></i><i></i></span><span class="mark">3</span> 호출 코드 복사 — selectUserList</div>
+        <pre class="sql nolig"><span class="ln">UserDto param = <span class="kw">new</span> UserDto();</span><span class="ln">param.setUserId(<span class="kw">null</span>);</span><span class="ln">param.setUserNm(<span class="kw">null</span>);</span><span class="ln">List&lt;UserDto&gt; list = userMapper.selectUserList(param);</span></pre>
+      </div>
     </div>
-<pre class="cmd">get-source.bat
-python kit\customize.py intellij-community "EI IDE" brand
-python kit\customize.py intellij-community "EI IDE" slim
-python kit\menu\apply_menu.py intellij-community
-python kit\defaults\apply_defaults.py intellij-community
-build-windows.bat
-<span class="cm">rem 결과: intellij-community\out\idea-ce\artifacts\eiide-262.10968.N.exe</span></pre>
-    <div class="notes">
-      <div class="note"><b>판 번호 N</b>GitHub 마지막 릴리스 번호 다음 번호입니다(이 PC 의 <code>build-number.txt</code> 가 더 크면 그 다음). 데스크탑 · 노트북 어디서 빌드해도 이어집니다.</div>
-      <div class="note warn"><b>N 은 1000 부터</b>바탕 판(.63)보다 작으면 JetBrains 마켓의 Java · Gradle 등 번들 플러그인을 새 판으로 보고 내려받아 본체를 덮어 버립니다.</div>
-      <div class="note ok"><b>플러그인만 고쳤을 때</b>빌드 없이 jar 를 <code>release\plugins</code> 에 넣고 설치 3번만 다시 돌리면 됩니다.</div>
+    <ol class="legend" style="grid-template-columns:repeat(3,minmax(0,1fr)); margin-top:14px">
+      <li><span class="mark">1</span><div><b>동적 조건</b> <span class="t">parameterType 의 DTO 필드를 고르고 비교(= · LIKE · &gt;= · &lt;=)를 정합니다. 칼럼 이름은 필드 이름을 대문자 밑줄로, 별칭은 FROM 에서 짐작합니다. <code>&lt;where&gt;</code> 가 있으면 그 안에 더합니다.</span></div></li>
+      <li><span class="mark">2</span><div><b>페이징</b> <span class="t">select 아래에 <code>…Page</code> · <code>…Count</code> 두 문장을 더합니다. 건수 문장은 원래 select 에서 맨 바깥 <code>ORDER BY</code> 만 뺍니다. 같은 id 가 있으면 만들지 않습니다.</span></div></li>
+      <li><span class="mark">3</span><div><b>호출 코드</b> <span class="t">문장 안의 <code>#{}</code> 이름으로 매개변수를 채우는 줄을 만들어 클립보드에 넣습니다. map 이면 <code>param.put(…)</code>, 단건 값이면 변수 하나입니다.</span></div></li>
+    </ol>
+
+    <h3>칼럼 이름 바꾸기 · 매퍼 XML 우클릭</h3>
+    <div class="scroll">
+      <div class="ide" style="min-width:560px">
+        <div class="title"><span class="dots"><i></i><i></i><i></i></span>칼럼 이름 바꾸기 — 미리보기 · USER_NM → USER_NAME · 4곳</div>
+        <table class="grid">
+          <tr><th>바꿈</th><th>파일</th><th>줄</th><th>내용</th></tr>
+          <tr><td>☑</td><td>UserMapper.xml</td><td>12</td><td>&lt;result column="USER_NM" property="userNm"/&gt;</td></tr>
+          <tr><td>☑</td><td>UserMapper.xml</td><td>31</td><td>AND u.USER_NM = #{userNm}</td></tr>
+          <tr><td>☑</td><td>UserDto.java</td><td>9</td><td>private String userNm;</td></tr>
+          <tr><td>☑</td><td>UserDto.java</td><td>20</td><td>getUserNm · setUserNm</td></tr>
+        </table>
+        <div class="statusline" style="border-top:1px solid var(--line); border-bottom:0"><span class="m">&lt;if test&gt; 안의 이름은 바꾸지 않습니다</span><span class="gap"></span><span class="btn">취소</span><span class="btn pri">바꾸기</span></div>
+      </div>
     </div>
+    <p class="lead" style="margin-top:10px">먼저 옛 칼럼 이름 · 새 칼럼 이름 · 표 이름(비우면 모든 매퍼)을 넣고, 「DTO 필드도 바꾸기」를 끄면 XML 만 바꿉니다. 미리보기에서 체크를 푼 줄은 그대로 둡니다.</p>
   </div>
 </section>
 
-<!-- 09. 메뉴 · 우클릭 지도 -->
-<section id="menus">
-  <div class="wrap">
-    <h2><span class="no">09</span>메뉴 · 우클릭 지도</h2>
-    <p class="lead">EI IDE 기능이 어느 메뉴에 붙어 있는지 모았습니다.</p>
-    <table class="keys">
-      <tr><th>자리</th><th>들어 있는 것</th></tr>
-      <tr><td>Source 메뉴</td><td>기능 한 벌 만들기…</td></tr>
-      <tr><td>Navigate · Search 메뉴</td><td>URL 찾기…</td></tr>
-      <tr><td>Project 메뉴</td><td>프로그램 목록 엑셀로 내보내기…</td></tr>
-      <tr><td>Run 메뉴</td><td>API 테스트(Swagger)…</td></tr>
-      <tr><td>오른쪽 옆줄(데이터베이스 아래)</td><td>보안 메모 — 내가 정한 비밀번호로만 열리는 메모장 하나. 처음 열 때 비밀번호를 정하고(4자 이상), 내용은 그 비밀번호로 암호화해 설정 폴더 <code>ei-secure-memo.bin</code> 에 둡니다. 「잠그기」나 IDE 를 닫으면 저장하고 잠깁니다. 비밀번호는 어디에도 저장하지 않으므로 잊으면 되살릴 수 없고, 「초기화」로 지우고 새로 시작합니다. 「미리보기」를 누르면 메모를 Markdown(표 · 목록 · 코드 · 링크)으로 그려 보여 줍니다</td></tr>
-      <tr><td>Git 메뉴 · Git · Subversion 우클릭</td><td>작업 공간 동기화 (맨 위)</td></tr>
-      <tr><td>프로젝트 트리 우클릭</td><td>맨 위 Maven 다시 읽기 · Gradle 다시 읽기, 스프링 부트 서버(시작 · 디버그 · 재시작 · 중지), 작업공간(Module from Existing Sources · Get from VCS · Create Git Repository · Manage Remotes), 프로그램 목록 엑셀, Assume Unchanged · No Assume Unchanged</td></tr>
-      <tr><td>편집기 우클릭</td><td>맨 위 MyBatis 쿼리 실행 · 계층 코드 만들기… · 컨트롤러로 이동(JSP), SQL 콘솔이면 실행 · 전체 실행 · 정렬 · 실행 계획 · 대문자 · 소문자. 맨 아래 표기법 바꾸기, AI(설명해 줘 · 고쳐 줘 · 질문하기…)</td></tr>
-      <tr><td>실행 · 서버 콘솔 우클릭</td><td>맨 위 데이터베이스 콘솔에서 실행 · 쿼리 콘솔로 보내기 · 로그 거르기, 맨 아래 AI → 이 오류 원인 찾기</td></tr>
-      <tr><td>서버 창 우클릭</td><td>시작 · 디버그 · 재시작 · 중지, 서버 묶음, WAS 줄은 반영(다시 빌드) · 로그 파일 보기…</td></tr>
-      <tr><td>데이터베이스 탐색기 우클릭</td><td>표: SELECT · INSERT · UPDATE 문, 매퍼 뼈대, 기능 한 벌, ERD, 테이블 정의서 엑셀. 접속: 세션 · 잠금 보기. 프로그램: 컴파일 오류 보기</td></tr>
-      <tr><td>결과 탭 우클릭</td><td>다른 결과와 비교…, 다른 탭 닫기 · 모든 탭 닫기</td></tr>
-      <tr><td>커밋 창 파일 우클릭</td><td>Assume Unchanged</td></tr>
-      <tr><td>코드 도구(편집기 우클릭 · Source 메뉴)</td><td>요청 값을 DTO 로 묶기 · 입력 검증 붙이기 · enum 다시 맞추기 · JSON 으로 DTO(트리 우클릭도) · 칼럼 이름 바꾸기. 매퍼 XML 우클릭: 호출 코드 복사 · 동적 조건 · 페이징 쿼리 · SELECT 로 resultMap 만들기 · MyBatis 태그 넣기. 자바 우클릭: 문자열 SQL 정리. 결과 창: enum 단추. 자세한 것은 13 절</td></tr>
-    </table>
-  </div>
-</section>
-
-<!-- 10. 함께 넣은 플러그인 -->
-<section id="plugins">
-  <div class="wrap">
-    <h2><span class="no">10</span>함께 넣은 플러그인</h2>
-    <p class="lead">본체에 들어가는 외부 플러그인과, 설치 3번 bat 이 넣는 플러그인입니다.</p>
-    <table class="keys">
-      <tr><th>플러그인</th><th>쓰는 법 · 설정</th></tr>
-      <tr><td>Full Line Code Completion</td><td>치는 중에 한 줄 전체를 회색으로 제안하고 <kbd>Tab</kbd> 으로 받습니다. PC 안 모델이라 코드를 밖으로 보내지 않습니다. 설정 → Editor → General → Code Completion ▸ 펼쳐 「Inline」(ML Completion).</td></tr>
-      <tr><td>Rainbow Brackets Lite</td><td>짝 괄호를 깊이마다 다른 색으로 보여 줍니다(무료 공개판).</td></tr>
-      <tr><td>POJO to JSON</td><td>클래스 이름 우클릭 → 「Copy JSON」 으로 필드 구조를 JSON 으로 복사합니다. API 테스트의 요청 본문 만들 때 씁니다.</td></tr>
-      <tr><td>Grep Console</td><td>콘솔 줄을 글자 · 정규식으로 색칠하고 거릅니다. 우리 「로그 거르기」와 함께 씁니다.</td></tr>
-      <tr><td>한국어 언어 팩 (본체)</td><td>설정 → Language and Region → Korean. 메뉴 · 단추는 영어, 오류 · 알림 · 대화 상자 글은 한국어.</td></tr>
-      <tr><td>Claude Code (bat)</td><td>터미널의 <code>claude</code> 와 연결합니다. 우리 AI 우클릭 메뉴도 이것을 씁니다.</td></tr>
-      <tr><td>One Dark 테마 (bat)</td><td>설정 → Appearance 의 Theme, Editor → Color Scheme 에서 One Dark.</td></tr>
-    </table>
-    <div class="notes">
-      <div class="note"><b>넣지 않은 것</b>Codota(지원 끝) · DTO generator(2022.3 까지) · Styled Components(유료 JavaScript 플러그인 필요).</div>
-    </div>
-  </div>
-</section>
-
-<!-- 11. 설정 바꾸는 곳 -->
-<section id="settings">
-  <div class="wrap">
-    <h2><span class="no">11</span>설정 바꾸는 곳</h2>
-    <p class="lead">설정 창은 <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd>. 설정 창 검색칸에 이름을 치면 바로 찾아갑니다. 설정 파일은 <code>%APPDATA%\JetBrains\EIIDE2026.2</code> 에 있어 다시 설치해도 남습니다.</p>
-    <table class="keys">
-      <tr><th>바꾸고 싶은 것</th><th>위치</th></tr>
-      <tr><td>단축키</td><td>Keymap (Eclipse 를 복제한 뒤 고치기)</td></tr>
-      <tr><td>언어</td><td>Appearance &amp; Behavior → System Settings → Language and Region</td></tr>
-      <tr><td>테마 · UI 글꼴</td><td>Appearance &amp; Behavior → Appearance. 우리 테마: EI Glass(기본, 숯색 · 분홍) · EI Gray(밝은 회색 · 파랑). 편집기 색은 테마와 같은 이름으로 따라 바뀝니다.</td></tr>
-      <tr><td>편집기 글꼴</td><td>Editor → Font (JetBrainsMonoHangul)</td></tr>
-      <tr><td>여백선(120자)</td><td>Editor → General → Appearance 「시각적 안내선 표시」</td></tr>
-      <tr><td>콘솔에 남는 글 양</td><td>Editor → General → Console 「Override console cycle buffer size」 (30720 KB)</td></tr>
-      <tr><td>저장할 때 import 정리 · 서식</td><td>Tools → Actions on Save</td></tr>
-      <tr><td>자동 빌드</td><td>Build, Execution, Deployment → Compiler 「Build project automatically」</td></tr>
-      <tr><td>Maven · Gradle</td><td>Build, Execution, Deployment → Build Tools → Maven · Gradle (위 03)</td></tr>
-      <tr><td>다른 프로젝트 여는 창</td><td>Appearance &amp; Behavior → System Settings 「Open project in」</td></tr>
-      <tr><td>커밋 전 검사 (Analyze code · Check TODO)</td><td>커밋 창 톱니</td></tr>
-      <tr><td>바뀐 파일이 든 패키지 색 (이름 · 아이콘)</td><td>Version Control 「Show directories with changed descendants」</td></tr>
-      <tr><td>svn 경로</td><td>Version Control → Subversion</td></tr>
-      <tr><td>properties 한글</td><td>Editor → File Encodings 「Transparent native-to-ascii conversion」</td></tr>
-      <tr><td>JDK 등록</td><td>File → Project Structure → SDKs (<code>~\.jdks</code> 의 Temurin 은 자동 등록)</td></tr>
-      <tr><td>Full Line 켜기 · 끄기</td><td>Editor → General → Code Completion ▸ 펼쳐 「Inline」(ML Completion)</td></tr>
-      <tr><td>도구 창 배치 저장</td><td>Window → Layout → 현재 레이아웃에 변경 저장</td></tr>
-    </table>
-  </div>
-</section>
-
-<!-- 12. 그 밖에 막혔을 때 -->
-<section id="trouble">
-  <div class="wrap">
-    <h2><span class="no">12</span>그 밖에 막혔을 때</h2>
-    <p class="lead">Maven · Gradle 은 03 의 「막혔을 때」, 서버 시작은 04 의 「시작이 안 될 때 뜨는 말」을 먼저 봅니다.</p>
-    <table class="keys">
-      <tr><th>이런 글 · 증상</th><th>먼저 볼 것</th></tr>
-      <tr><td>Lombok 오류로 컴파일 실패</td><td>프로젝트 JDK 를 17 · 21 로 둡니다(Lombok 1.18.30 은 24 이상에서 깨짐).</td></tr>
-      <tr><td>SVN 이 「svn cleanup 하라」</td><td>트리 우클릭 Subversion → Cleanup 뒤 다시 받습니다.</td></tr>
-      <tr><td>SVN 프로젝트인데 동기화 창에 「git rev-parse 실패」</td><td>디렉터리 매핑이 비어 Git 으로 본 것. 다음 빌드부터는 .svn 을 찾아 SVN 으로 봄. 그 전 빌드는 설정 → 버전 관리 → 디렉터리 매핑에 프로젝트 폴더를 Subversion 으로 추가.</td></tr>
-      <tr><td>받기가 Assume Unchanged 파일 때문에 멈춤</td><td>동기화 창에서 그 파일을 No Assume Unchanged → 받기 → 다시 Assume Unchanged.</td></tr>
-      <tr><td>Swagger 창이 빈 화면</td><td>창을 닫았다 다시 엽니다. Try it out 은 서버가 떠 있어야 됩니다.</td></tr>
-      <tr><td>JS · Vue 자동 완성이 없음</td><td>알림의 「Node.js 받기」 · 「언어 서버 받기」를 한 번 눌렀는지 봅니다.</td></tr>
-      <tr><td>AI 메뉴를 눌러도 Claude 탭에서 오류</td><td>터미널에서 <code>claude</code> 가 실행되는지(PATH) 봅니다.</td></tr>
-      <tr><td>우리 메뉴가 안 보임</td><td>설정 → Plugins 에서 서버 창 · EI Synchronize · EI Database 가 켜져 있는지, 시험용 jar 가 두 판 겹쳐 있지 않은지 봅니다.</td></tr>
-    </table>
-  </div>
-</section>
-
-<!-- 13. 코드 도구 -->
+<!-- 10. 코드 도구 -->
 <section id="code">
   <div class="wrap">
-    <h2><span class="no">13</span>코드 도구</h2>
-    <p class="lead">자바 · 매퍼 XML 을 쓰면서 손으로 치던 코드를 만들어 주거나 바꿔 주는 기능입니다. 모두 편집기 우클릭에 있고, 대부분 Source 메뉴에도 있습니다.</p>
+    <h2><span class="no">10</span>코드 도구</h2>
+    <p class="lead">자바를 쓰면서 손으로 치던 코드를 만들어 주거나 바꿔 주는 기능입니다. 편집기 우클릭에 있고, 대부분 Source 메뉴에도 있습니다. 매퍼 XML 쪽 도구는 <a href="#mybatis">MyBatis</a> 절에 있습니다.</p>
     <table class="keys">
       <tr><th>기능 · 자리</th><th>하는 일</th></tr>
       <tr><td>빈 catch · printStackTrace · System.out 검사</td><td>세 가지를 노란 줄로 표시합니다. 클래스에 로거 필드나 <code>@Slf4j</code> 가 있으면 <kbd>Alt</kbd>+<kbd>Enter</kbd> 로 <code>log.error(…)</code> · <code>log.info(…)</code> 로 바꿉니다. 테스트 폴더 · main 메서드는 건너뜁니다.</td></tr>
-      <tr><td>요청 값을 DTO 로 묶기…<br>컨트롤러 메서드 안</td><td><code>@RequestParam</code> 여러 개를 <code>@ModelAttribute</code> DTO 하나로 묶고, 본문의 참조를 <code>req.getX()</code> 로 바꿉니다.</td></tr>
-      <tr><td>입력 검증 붙이기…<br>DTO 안</td><td>접속 · 표를 고르면 칼럼의 NULL · 길이 · 자릿수로 <code>@NotBlank</code> · <code>@NotNull</code> · <code>@Size</code> · <code>@Digits</code> 를 필드에 붙입니다. 이미 있는 주석은 그대로 둡니다.</td></tr>
-      <tr><td>enum 만들기 · 다시 맞추기<br>결과 창 「enum」 단추, enum 안 우클릭</td><td>코드 표 조회 결과의 두 칼럼(코드 · 이름)으로 enum 을 만듭니다. SQL 과 접속 이름을 Javadoc 에 남겨 두어, 표가 바뀌면 「enum 다시 맞추기」로 상수를 새로 만듭니다(손으로 더한 메서드는 사라짐).</td></tr>
-      <tr><td>JSON 으로 DTO 만들기…<br>트리 우클릭 · Source 메뉴</td><td>붙여 넣은 JSON 으로 DTO 를 만듭니다. 중첩 객체는 안쪽 static 클래스, 배열은 List, 이름이 다른 키는 <code>@JsonProperty</code>.</td></tr>
-      <tr><td>문자열 SQL 정리…<br>자바 우클릭</td><td><code>+</code> · <code>StringBuilder</code> · <code>+=</code> 로 이어 붙인 SQL 을 정렬해 보여 주고, 변수는 <code>#{이름}</code> 으로 바꾼 매퍼 XML 문장을 복사합니다.</td></tr>
-      <tr><td>동적 조건 만들기…<br>매퍼 XML 문장 안</td><td>DTO 필드를 고르면 <code>&lt;where&gt;</code> · <code>&lt;if test="x != null and x != ''"&gt;</code> 조건을 넣습니다. 비교는 = · LIKE · &gt;= · &lt;=(CDATA).</td></tr>
-      <tr><td>페이징 쿼리 만들기<br>매퍼 XML select 안</td><td>그 select 아래에 Oracle ROWNUM 페이징 문장(<code>…Page</code>, startRow · endRow)과 건수 문장(<code>…Count</code>)을 더하고, 매퍼 인터페이스에 메서드 두 줄을 더합니다.</td></tr>
-      <tr><td>SELECT 로 resultMap 만들기<br>매퍼 XML select 안</td><td>SELECT 칼럼과 resultType DTO 필드를 대소문자 · 밑줄 무시로 짝지어 그 select 위에 <code>&lt;resultMap id="…ResultMap"&gt;</code> 을 넣고, 문장의 <code>resultType</code> 을 <code>resultMap</code> 으로 바꿉니다. 받을 필드가 없는 칼럼은 주석(비슷한 필드 이름 함께)으로 남깁니다. <code>SELECT *</code> 는 만들지 않습니다.</td></tr>
-      <tr><td>MyBatis 태그 넣기<br>매퍼 XML 우클릭</td><td>줄을 고르고 태그를 누르면 그 줄을 태그로 감싸 한 단계 들이고, 고른 것이 없으면 커서 자리에 빈 틀을 넣고 커서를 <code>id</code> · <code>test</code> 칸에 둡니다. select · insert · update · delete · MERGE 틀 · resultMap · sql · include · if · choose(when · otherwise) · when · otherwise · where · set · trim · foreach · bind · selectKey · CDATA. CDATA 는 고른 글자(예: <code>&lt;=</code>)만 감쌉니다.</td></tr>
-      <tr><td>호출 코드 복사<br>매퍼 XML 문장 안</td><td>그 문장을 부르는 서비스 쪽 코드(매개변수 객체 채우기 + 호출 줄)를 클립보드에 복사합니다.</td></tr>
-      <tr><td>칼럼 이름 바꾸기…<br>매퍼 XML 우클릭 · Source 메뉴</td><td>모든 매퍼 XML 에서 옛 칼럼 이름을 찾아 미리보기에서 골라 바꾸고, 짝인 DTO 필드 · getter · setter 와 <code>#{}</code> · property 도 함께 바꿉니다. <code>&lt;if test&gt;</code> 안 이름은 바꾸지 않습니다.</td></tr>
+      <tr><td>Bundle Request Parameters into DTO…<br>요청 값을 DTO 로 묶기 · 컨트롤러 메서드 안</td><td><code>@RequestParam</code> 여러 개를 <code>@ModelAttribute</code> DTO 하나로 묶고, 본문의 참조를 <code>req.getX()</code> 로 바꿉니다.</td></tr>
+      <tr><td>Add Input Validation…<br>입력 검증 붙이기 · DTO 안</td><td>접속 · 표를 고르면 칼럼의 NULL · 길이 · 자릿수로 <code>@NotBlank</code> · <code>@NotNull</code> · <code>@Size</code> · <code>@Digits</code> 를 필드에 붙입니다. 이미 있는 주석은 그대로 둡니다.</td></tr>
+      <tr><td>enum · Sync Enum<br>결과 창 「enum」 단추, enum 안 우클릭</td><td>코드 표 조회 결과의 두 칼럼(코드 · 이름)으로 enum 을 만듭니다. SQL 과 접속 이름을 Javadoc 에 남겨 두어, 표가 바뀌면 「Sync Enum」로 상수를 새로 만듭니다(손으로 더한 메서드는 사라짐).</td></tr>
+      <tr><td>Generate DTO from JSON…<br>트리 우클릭 · Source 메뉴</td><td>붙여 넣은 JSON 으로 DTO 를 만듭니다. 중첩 객체는 안쪽 static 클래스, 배열은 List, 이름이 다른 키는 <code>@JsonProperty</code>.</td></tr>
+      <tr><td>Clean Up String SQL…<br>문자열 SQL 정리 · 자바 우클릭</td><td><code>+</code> · <code>StringBuilder</code> · <code>+=</code> 로 이어 붙인 SQL 을 정렬해 보여 주고, 변수는 <code>#{이름}</code> 으로 바꾼 매퍼 XML 문장을 복사합니다.</td></tr>
     </table>
 
     <h3>요청 값을 DTO 로 묶기 · 컨트롤러 메서드 안</h3>
@@ -1540,7 +1584,7 @@ build-windows.bat
         </div>
       </div>
     </div>
-    <p class="lead" style="margin-top:10px">코드가 숫자로 시작하면 <code>C01</code> 처럼 앞에 C 를 붙이고, 겹치는 이름은 <code>_2</code> 를 붙입니다. 표의 코드가 바뀌면 enum 안에서 우클릭 → 「enum 다시 맞추기」: Javadoc 의 SQL 을 그 접속으로 다시 돌려 상수를 새로 씁니다.</p>
+    <p class="lead" style="margin-top:10px">코드가 숫자로 시작하면 <code>C01</code> 처럼 앞에 C 를 붙이고, 겹치는 이름은 <code>_2</code> 를 붙입니다. 표의 코드가 바뀌면 enum 안에서 우클릭 → 「Sync Enum」: Javadoc 의 SQL 을 그 접속으로 다시 돌려 상수를 새로 씁니다.</p>
 
     <h3>JSON 으로 DTO 만들기 · 트리 우클릭</h3>
     <div class="cols2">
@@ -1575,48 +1619,120 @@ build-windows.bat
     </div>
     <p class="lead" style="margin-top:10px">커서를 SQL 문자열 위에 두고 우클릭합니다. <code>dto.getUserId()</code> 는 <code>#{userId}</code> 로 바꾸고, 문장 종류(select · insert · update · delete)는 SQL 첫 낱말로 정합니다. 부등호가 있으면 CDATA 로 감쌉니다. 자바 코드는 바꾸지 않고 창에서 보여 주고 복사만 합니다.</p>
 
-    <h3>동적 조건 · 페이징 · 호출 코드 · 매퍼 XML 문장 안</h3>
-    <div class="cols2">
-      <div class="scroll">
-        <div class="ide" style="min-width:560px">
-          <div class="title"><span class="dots"><i></i><i></i><i></i></span><span class="mark">1</span> 동적 조건 만들기 — 넣은 결과</div>
-          <pre class="sql nolig"><span class="ln">&lt;<span class="kw">where</span>&gt;</span><span class="ln">  &lt;<span class="kw">if</span> test=<span class="st">"userName != null and userName != ''"</span>&gt;</span><span class="ln">    <span class="kw">AND</span> u.USER_NAME <span class="kw">LIKE</span> '%' || #{userName} || '%'</span><span class="ln">  &lt;/<span class="kw">if</span>&gt;</span><span class="ln">  &lt;<span class="kw">if</span> test=<span class="st">"amt != null"</span>&gt;</span><span class="ln">    <span class="kw">AND</span> u.AMT &lt;![CDATA[ &gt;= ]]&gt; #{amt}</span><span class="ln">  &lt;/<span class="kw">if</span>&gt;</span><span class="ln">&lt;/<span class="kw">where</span>&gt;</span></pre>
-        </div>
-      </div>
-      <div class="scroll">
-        <div class="ide" style="min-width:560px">
-          <div class="title"><span class="dots"><i></i><i></i><i></i></span><span class="mark">2</span> 페이징 쿼리 만들기 — selectUserListPage</div>
-          <pre class="sql nolig"><span class="ln"><span class="kw">SELECT</span></span><span class="ln">       *</span><span class="ln">  <span class="kw">FROM</span> (</span><span class="ln">        <span class="kw">SELECT</span></span><span class="ln">               ROWNUM <span class="kw">AS</span> RNUM</span><span class="ln">             , a.*</span><span class="ln">          <span class="kw">FROM</span> ( <span class="cm">원래 select</span> ) a</span><span class="ln">         <span class="kw">WHERE</span> ROWNUM &lt;![CDATA[&lt;=]]&gt; #{endRow}</span><span class="ln">       )</span><span class="ln"> <span class="kw">WHERE</span> RNUM &lt;![CDATA[&gt;]]&gt; #{startRow}</span></pre>
-        </div>
-      </div>
-    </div>
-    <div class="scroll" style="margin-top:14px">
-      <div class="ide" style="min-width:560px">
-        <div class="title"><span class="dots"><i></i><i></i><i></i></span><span class="mark">3</span> 호출 코드 복사 — selectUserList</div>
-        <pre class="sql nolig"><span class="ln">UserDto param = <span class="kw">new</span> UserDto();</span><span class="ln">param.setUserId(<span class="kw">null</span>);</span><span class="ln">param.setUserNm(<span class="kw">null</span>);</span><span class="ln">List&lt;UserDto&gt; list = userMapper.selectUserList(param);</span></pre>
-      </div>
-    </div>
-    <ol class="legend" style="grid-template-columns:repeat(3,minmax(0,1fr)); margin-top:14px">
-      <li><span class="mark">1</span><div><b>동적 조건</b> <span class="t">parameterType 의 DTO 필드를 고르고 비교(= · LIKE · &gt;= · &lt;=)를 정합니다. 칼럼 이름은 필드 이름을 대문자 밑줄로, 별칭은 FROM 에서 짐작합니다. <code>&lt;where&gt;</code> 가 있으면 그 안에 더합니다.</span></div></li>
-      <li><span class="mark">2</span><div><b>페이징</b> <span class="t">select 아래에 <code>…Page</code> · <code>…Count</code> 두 문장을 더합니다. 건수 문장은 원래 select 에서 맨 바깥 <code>ORDER BY</code> 만 뺍니다. 같은 id 가 있으면 만들지 않습니다.</span></div></li>
-      <li><span class="mark">3</span><div><b>호출 코드</b> <span class="t">문장 안의 <code>#{}</code> 이름으로 매개변수를 채우는 줄을 만들어 클립보드에 넣습니다. map 이면 <code>param.put(…)</code>, 단건 값이면 변수 하나입니다.</span></div></li>
-    </ol>
+  </div>
+</section>
 
-    <h3>칼럼 이름 바꾸기 · 매퍼 XML 우클릭</h3>
-    <div class="scroll">
-      <div class="ide" style="min-width:560px">
-        <div class="title"><span class="dots"><i></i><i></i><i></i></span>칼럼 이름 바꾸기 — 미리보기 · USER_NM → USER_NAME · 4곳</div>
-        <table class="grid">
-          <tr><th>바꿈</th><th>파일</th><th>줄</th><th>내용</th></tr>
-          <tr><td>☑</td><td>UserMapper.xml</td><td>12</td><td>&lt;result column="USER_NM" property="userNm"/&gt;</td></tr>
-          <tr><td>☑</td><td>UserMapper.xml</td><td>31</td><td>AND u.USER_NM = #{userNm}</td></tr>
-          <tr><td>☑</td><td>UserDto.java</td><td>9</td><td>private String userNm;</td></tr>
-          <tr><td>☑</td><td>UserDto.java</td><td>20</td><td>getUserNm · setUserNm</td></tr>
-        </table>
-        <div class="statusline" style="border-top:1px solid var(--line); border-bottom:0"><span class="m">&lt;if test&gt; 안의 이름은 바꾸지 않습니다</span><span class="gap"></span><span class="btn">취소</span><span class="btn pri">바꾸기</span></div>
-      </div>
+<!-- 11. 메모 · 테마 -->
+<section id="extras">
+  <div class="wrap">
+    <h2><span class="no">11</span>보안 메모 · 테마 · 새 판 알림</h2>
+    <p class="lead">어느 창에서나 쓰는 작은 기능들입니다.</p>
+    <table class="keys map">
+      <tr><th>기능 · 자리</th><th>하는 일</th></tr>
+      <tr><td>보안 메모<br>오른쪽 옆줄 「Secure Memo」</td><td>내가 정한 비밀번호로만 열리는 메모장 하나. 처음 열 때 비밀번호를 정하고(4자 이상), 내용은 그 비밀번호로 암호화해 설정 폴더 <code>ei-secure-memo.bin</code> 에 둡니다. 「Lock」 이나 IDE 를 닫으면 저장하고 잠깁니다. 비밀번호는 어디에도 저장하지 않으므로 잊으면 되살릴 수 없고, 「Reset…」 으로 지우고 새로 시작합니다. 「Preview」 는 메모를 Markdown(표 · 목록 · 코드 · 링크)으로 그려 보여 줍니다.</td></tr>
+      <tr><td>테마 EI Glass · EI Gray<br>Settings → Appearance → Theme</td><td>EI Glass(기본, 숯색 판 · 분홍 강조)와 EI Gray(차분한 밝은 회색 판 · 파랑 강조). 편집기 색도 테마와 같은 이름으로 따라 바뀝니다.</td></tr>
+      <tr><td>새 판 알림<br>IDE 를 켤 때</td><td>이 저장소의 최신 릴리스를 보고 새 판이 있으면 오른쪽 아래에 「지금 업데이트」 풍선이 뜹니다. 누르면 설치 파일을 받고, IDE 를 닫은 뒤 설치 화면이 뜹니다. JetBrains 서버에는 묻지 않습니다.</td></tr>
+      <tr><td>Change Case ▸<br>편집기 우클릭 맨 아래</td><td>고른 글 안의 식별자를 Camel(userName) · Pascal(UserName) · Snake(user_name) · Upper Snake(USER_NAME) 로. 문자열 · 주석 · 키워드 · 타입 이름은 둡니다.</td></tr>
+      <tr><td>메뉴 · 폴더 · 파일 아이콘</td><td>아이콘이 없던 메뉴 · 우클릭 항목, 이름으로 고른 폴더 · 패키지(mapper · controller · service · dto …), 매퍼 XML · application.yml · 엑셀 · 한글 같은 파일에 아이콘이 붙습니다.</td></tr>
+      <tr><td>바뀐 폴더 색<br>프로젝트 트리</td><td>바뀐 파일 · 새 파일이 아래에 있는 폴더 · 패키지는 이름과 아이콘이 그 색으로 칠해집니다.</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- 12. 플러그인 -->
+<section id="plugins">
+  <div class="wrap">
+    <h2><span class="no">12</span>함께 넣은 플러그인</h2>
+    <p class="lead">본체에 들어가는 외부 플러그인과, 설치 3번 bat 이 넣는 플러그인입니다.</p>
+    <table class="keys">
+      <tr><th>플러그인</th><th>쓰는 법 · 설정</th></tr>
+      <tr><td>Full Line Code Completion</td><td>치는 중에 한 줄 전체를 회색으로 제안하고 <kbd>Tab</kbd> 으로 받습니다. PC 안 모델이라 코드를 밖으로 보내지 않습니다. 설정 → Editor → General → Code Completion ▸ 펼쳐 「Inline」(ML Completion).</td></tr>
+      <tr><td>Rainbow Brackets Lite</td><td>짝 괄호를 깊이마다 다른 색으로 보여 줍니다(무료 공개판).</td></tr>
+      <tr><td>POJO to JSON</td><td>클래스 이름 우클릭 → 「Copy JSON」 으로 필드 구조를 JSON 으로 복사합니다. API 테스트의 요청 본문 만들 때 씁니다.</td></tr>
+      <tr><td>Grep Console</td><td>콘솔 줄을 글자 · 정규식으로 색칠하고 거릅니다. 우리 「Filter Log」와 함께 씁니다.</td></tr>
+      <tr><td>한국어 언어 팩 (본체)</td><td>설정 → Language and Region → Korean. 메뉴 · 단추는 영어, 오류 · 알림 · 대화 상자 글은 한국어.</td></tr>
+      <tr><td>Claude Code (bat)</td><td>터미널의 <code>claude</code> 와 연결합니다. 우리 AI 우클릭 메뉴도 이것을 씁니다.</td></tr>
+      <tr><td>One Dark 테마 (bat)</td><td>설정 → Appearance 의 Theme, Editor → Color Scheme 에서 One Dark.</td></tr>
+    </table>
+    <div class="notes">
+      <div class="note"><b>넣지 않은 것</b>Codota(지원 끝) · DTO generator(2022.3 까지) · Styled Components(유료 JavaScript 플러그인 필요).</div>
     </div>
-    <p class="lead" style="margin-top:10px">먼저 옛 칼럼 이름 · 새 칼럼 이름 · 표 이름(비우면 모든 매퍼)을 넣고, 「DTO 필드도 바꾸기」를 끄면 XML 만 바꿉니다. 미리보기에서 체크를 푼 줄은 그대로 둡니다.</p>
+  </div>
+</section>
+
+<!-- 13. 설정 -->
+<section id="settings">
+  <div class="wrap">
+    <h2><span class="no">13</span>설정 바꾸는 곳</h2>
+    <p class="lead">설정 창은 <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd>. 설정 창 검색칸에 이름을 치면 바로 찾아갑니다. 설정 파일은 <code>%APPDATA%\JetBrains\EIIDE2026.2</code> 에 있어 다시 설치해도 남습니다.</p>
+    <table class="keys">
+      <tr><th>바꾸고 싶은 것</th><th>위치</th></tr>
+      <tr><td>단축키</td><td>Keymap (Eclipse 를 복제한 뒤 고치기)</td></tr>
+      <tr><td>언어</td><td>Appearance &amp; Behavior → System Settings → Language and Region</td></tr>
+      <tr><td>테마 · UI 글꼴</td><td>Appearance &amp; Behavior → Appearance. 우리 테마: EI Glass(기본, 숯색 · 분홍) · EI Gray(밝은 회색 · 파랑). 편집기 색은 테마와 같은 이름으로 따라 바뀝니다.</td></tr>
+      <tr><td>편집기 글꼴</td><td>Editor → Font (JetBrainsMonoHangul)</td></tr>
+      <tr><td>여백선(120자)</td><td>Editor → General → Appearance 「시각적 안내선 표시」</td></tr>
+      <tr><td>콘솔에 남는 글 양</td><td>Editor → General → Console 「Override console cycle buffer size」 (30720 KB)</td></tr>
+      <tr><td>저장할 때 import 정리 · 서식</td><td>Tools → Actions on Save</td></tr>
+      <tr><td>자동 빌드</td><td>Build, Execution, Deployment → Compiler 「Build project automatically」</td></tr>
+      <tr><td>Maven · Gradle</td><td>Build, Execution, Deployment → Build Tools → Maven · Gradle (05)</td></tr>
+      <tr><td>다른 프로젝트 여는 창</td><td>Appearance &amp; Behavior → System Settings 「Open project in」</td></tr>
+      <tr><td>커밋 전 검사 (Analyze code · Check TODO)</td><td>커밋 창 톱니</td></tr>
+      <tr><td>바뀐 파일이 든 패키지 색 (이름 · 아이콘)</td><td>Version Control 「Show directories with changed descendants」</td></tr>
+      <tr><td>svn 경로</td><td>Version Control → Subversion</td></tr>
+      <tr><td>properties 한글</td><td>Editor → File Encodings 「Transparent native-to-ascii conversion」</td></tr>
+      <tr><td>JDK 등록</td><td>File → Project Structure → SDKs (<code>~\.jdks</code> 의 Temurin 은 자동 등록)</td></tr>
+      <tr><td>Full Line 켜기 · 끄기</td><td>Editor → General → Code Completion ▸ 펼쳐 「Inline」(ML Completion)</td></tr>
+      <tr><td>도구 창 배치 저장</td><td>Window → Layout → 현재 레이아웃에 변경 저장</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- 14. 막혔을 때 -->
+<section id="trouble">
+  <div class="wrap">
+    <h2><span class="no">14</span>그 밖에 막혔을 때</h2>
+    <p class="lead">Maven · Gradle 은 05 의 「막혔을 때」, 서버 시작은 06 의 「시작이 안 될 때 뜨는 말」을 먼저 봅니다.</p>
+    <table class="keys">
+      <tr><th>이런 글 · 증상</th><th>먼저 볼 것</th></tr>
+      <tr><td>Lombok 오류로 컴파일 실패</td><td>프로젝트 JDK 를 17 · 21 로 둡니다(Lombok 1.18.30 은 24 이상에서 깨짐).</td></tr>
+      <tr><td>SVN 이 「svn cleanup 하라」</td><td>트리 우클릭 Subversion → Cleanup 뒤 다시 받습니다.</td></tr>
+      <tr><td>SVN 프로젝트인데 동기화 창에 「git rev-parse 실패」</td><td>디렉터리 매핑이 비어 Git 으로 본 것. 다음 빌드부터는 .svn 을 찾아 SVN 으로 봄. 그 전 빌드는 설정 → 버전 관리 → 디렉터리 매핑에 프로젝트 폴더를 Subversion 으로 추가.</td></tr>
+      <tr><td>받기가 Assume Unchanged 파일 때문에 멈춤</td><td>동기화 창에서 그 파일을 No Assume Unchanged → 받기 → 다시 Assume Unchanged.</td></tr>
+      <tr><td>Swagger 창이 빈 화면</td><td>창을 닫았다 다시 엽니다. Try it out 은 서버가 떠 있어야 됩니다.</td></tr>
+      <tr><td>JS · Vue 자동 완성이 없음</td><td>알림의 「Node.js 받기」 · 「언어 서버 받기」를 한 번 눌렀는지 봅니다.</td></tr>
+      <tr><td>AI 메뉴를 눌러도 Claude 탭에서 오류</td><td>터미널에서 <code>claude</code> 가 실행되는지(PATH) 봅니다.</td></tr>
+      <tr><td>우리 메뉴가 안 보임</td><td>설정 → Plugins 에서 서버 창 · EI Synchronize · EI Database 가 켜져 있는지, 시험용 jar 가 두 판 겹쳐 있지 않은지 봅니다.</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- 15. 빌드 -->
+<section id="build">
+  <div class="wrap">
+    <h2><span class="no">15</span>직접 빌드하기</h2>
+    <p class="lead">Windows cmd 기준입니다. 처음은 30분 안팎, 그 뒤 바뀐 부분만 다시 컴파일할 때는 10분 안팎 걸립니다. 소스를 고치는 대본은 두 번 돌려도 결과가 같고, 고치기 전 원본을 <code>backup\</code> 에 남깁니다.</p>
+    <div class="flow" style="margin-bottom:14px">
+      <div class="box"><b>소스 받기</b><span>태그 <code>idea/262.10968.63</code></span></div>
+      <div class="arrow">→</div>
+      <div class="box"><b>이름 · 덜어 내기</b><span>제품 이름, 번들 플러그인 정리</span></div>
+      <div class="arrow">→</div>
+      <div class="box"><b>메뉴 · 기본값</b><span>이클립스식 메뉴, 02 의 기본값</span></div>
+      <div class="arrow">→</div>
+      <div class="box"><b>빌드</b><span><code>eiide-262.10968.N.exe</code></span></div>
+    </div>
+<pre class="cmd">get-source.bat
+python kit\customize.py intellij-community "EI IDE" brand
+python kit\customize.py intellij-community "EI IDE" slim
+python kit\menu\apply_menu.py intellij-community
+python kit\defaults\apply_defaults.py intellij-community
+build-windows.bat
+<span class="cm">rem 결과: intellij-community\out\idea-ce\artifacts\eiide-262.10968.N.exe</span></pre>
+    <div class="notes">
+      <div class="note"><b>판 번호 N</b>GitHub 마지막 릴리스 번호 다음 번호입니다(이 PC 의 <code>build-number.txt</code> 가 더 크면 그 다음). 데스크탑 · 노트북 어디서 빌드해도 이어집니다.</div>
+      <div class="note warn"><b>N 은 1000 부터</b>바탕 판(.63)보다 작으면 JetBrains 마켓의 Java · Gradle 등 번들 플러그인을 새 판으로 보고 내려받아 본체를 덮어 버립니다.</div>
+      <div class="note ok"><b>플러그인만 고쳤을 때</b>빌드 없이 jar 를 <code>release\plugins</code> 에 넣고 설치 3번만 다시 돌리면 됩니다.</div>
+    </div>
   </div>
 </section>
 
