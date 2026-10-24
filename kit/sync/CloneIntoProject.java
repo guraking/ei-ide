@@ -31,7 +31,7 @@ import java.util.List;
 
 /**
  * Clone 이 끝난 폴더를 새 창 프로젝트로 열지 않고 지금 열린 프로젝트에 모듈로 붙인다(이클립스 워크스페이스처럼).
- * 모듈 파일은 받은 폴더의 「폴더이름.iml」(ExcludeIdeFiles 가 *.iml 을 Git 에서 감춘다), SDK 는 프로젝트 것을 따른다.
+ * 모듈 파일은 프로젝트의 .idea/modules/「폴더이름.iml」(받은 저장소 안에 IDE 파일을 만들지 않는다), SDK 는 프로젝트 것을 따른다.
  * 프로젝트 VCS 매핑이 <Project> 기본값이 아니면 받은 폴더에 Git 매핑을 더한다.
  * 다음이면 false 를 돌려 IntelliJ 기본 동작(새 프로젝트로 열기)에 맡긴다:
  * 시작 화면(기본 프로젝트)에서 받았을 때, 같은 이름 모듈이 이미 있을 때.
@@ -52,7 +52,8 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
 
   @Override
   public boolean processCheckedOutDirectory(@NotNull Project project, @NotNull Path directory) {
-    if (project.isDefault() || project.isDisposed()) return false;
+    String base = project.isDefault() || project.isDisposed() ? null : project.getBasePath();
+    if (base == null) return false;
     VirtualFile dir = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(directory);
     if (dir == null) return false;
     String name = dir.getName();
@@ -61,7 +62,7 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
     ApplicationManager.getApplication().invokeAndWait(() -> {
       if (project.isDisposed()) return;
       Module module = WriteAction.compute(() -> ModuleManager.getInstance(project)
-        .newModule(directory.resolve(name + ".iml"), ModuleTypeManager.getInstance().getDefaultModuleType().getId()));
+        .newModule(Path.of(base, Project.DIRECTORY_STORE_FOLDER, "modules", name + ".iml"), ModuleTypeManager.getInstance().getDefaultModuleType().getId()));
       ModuleRootModificationUtil.addContentRoot(module, dir);
       ModuleRootModificationUtil.setSdkInherited(module);
       addGitMapping(project, directory);
