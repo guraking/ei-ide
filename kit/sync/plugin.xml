@@ -37,6 +37,11 @@
          topic 은 VCS_CONFIGURATION_CHANGED 가 쓰는 VcsMappingListener 여야 한다(VcsListener 이름으로는 알림이 오지 않는다). -->
     <listener class="kinggura.sync.ExcludeIdeFiles" topic="com.intellij.openapi.vcs.VcsMappingListener"/>
   </projectListeners>
+  <applicationListeners>
+    <!-- Clone 해 워크스페이스에 붙인 폴더를 IntelliJ 가 최근 목록에 올린 뒤 뺀다 -->
+    <listener class="kinggura.sync.CloneIntoProject$ForgetRecent"
+              topic="com.intellij.openapi.wm.impl.welcomeScreen.cloneableProjects.CloneableProjectsService$CloneProjectListener"/>
+  </applicationListeners>
 
   <actions>
     <!-- 커밋 창 · 변경 목록 우클릭에도 동기화 창과 같은 「Assume Unchanged」 를 둔다. -->

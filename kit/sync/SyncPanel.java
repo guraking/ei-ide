@@ -184,7 +184,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static final Set<String> UNMERGED = Set.of("DD", "AU", "UD", "UA", "DU", "AA", "UU");
   // ProjectLevelVcsManager 가 주는 AbstractVcs.getName() 값. GitVcs.NAME · SvnVcs.VCS_NAME 과 같다.
   private static final String VCS_NAME_GIT = "Git";
-  private static final String VCS_NAME_SVN = "svn";
+  static final String VCS_NAME_SVN = "svn";
   private static final String ACTION_PULL = "Git.Pull";
   private static final String ACTION_REVERSE_MERGE = "KingGura.ReverseMerge";
   private static final String ACTION_PUSH = "Vcs.Push";
