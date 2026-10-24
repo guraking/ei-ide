@@ -19,7 +19,6 @@
   22) 첫 실행 기본 어두운 테마를 EI Glass(boot-servers 플러그인)로 한다.
   23) EI Glass 테마가 켜는 유리 그리기: 창 전체 빛 배경, 트리 · 목록 선택 테두리, 툴바 알약, 열린 툴 창 단추 색.
   24) 프로젝트 머리글자 아이콘에 한글 같은 JetBrains Mono 에 없는 글자가 오면 대체 글꼴이 있는 Dialog 글꼴로 그린다.
-  25) Git 스테이징 영역(Staged · Unstaged)을 기본으로 켠다.
 고치기 전 원본은 <intellij-community>/../backup/<시각>-before/ 에 같은 상대경로로 남긴다.
 모든 원문을 먼저 찾아 본 뒤에 쓴다. 하나라도 못 찾으면 아무 파일도 바꾸지 않는다. 줄끝(LF · CRLF)은 파일마다 원래대로 둔다.
 두 번 실행해도 같은 결과가 된다.
@@ -282,12 +281,7 @@ EDITS = [
     ("platform/util/ui/src/com/intellij/util/ui/AvatarUtils.kt",
      "    g2.font = getFont(size)\n",
      "    val font = getFont(size)\n"
-     "    g2.font = if (font.canDisplayUpTo(presentation.shortName) == -1) font else Font(Font.DIALOG, Font.BOLD, font.size)\n"),    # 25) Git 스테이징 영역을 켠다(설정 → Version Control → Git → Enable staging area). 커밋 창이 Staged · Unstaged 로 나뉘고
-    #     파일 · 줄 단위로 올려 커밋한다. 변경 목록(changelist)은 Git 저장소에서 쓰지 않게 된다(SVN 은 그대로).
-    #     비모달 커밋 창일 때만 적용되며 git.xml 에는 기본값과 다른 값만 남으므로, 이 칸을 건드린 적 없는 기존 설정에도 적용된다.
-    ("plugins/git4idea/backend/src/config/GitVcsApplicationSettings.java",
-     "public boolean STAGING_AREA_ENABLED = false;",
-     "public boolean STAGING_AREA_ENABLED = true;"),
+     "    g2.font = if (font.canDisplayUpTo(presentation.shortName) == -1) font else Font(Font.DIALOG, Font.BOLD, font.size)\n"),
 ]
 
 

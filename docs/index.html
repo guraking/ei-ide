@@ -391,7 +391,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
       <div class="card"><h4>한글 폭이 맞는 글꼴</h4><p>JetBrainsMonoHangul 내장. 한글이 영문 두 칸에 딱 맞아 열이 어긋나지 않습니다.</p><span class="was">JetBrains Mono, 한글 폭 어긋남</span></div>
       <div class="card"><h4>실행 설정 창</h4><p>VM 옵션 칸이 처음부터 보입니다.</p><span class="was">「Modify options」로 꺼내야 함</span></div>
       <div class="card"><h4>프론트 파일 색</h4><p>JS · JSX · TS · TSX · HTML · CSS · SCSS · LESS · JSON · Vue · Svelte · Astro</p><span class="was">Vue · Svelte · Astro 없음</span></div>
-      <div class="card"><h4>형상 관리</h4><p>Git · GitHub · GitLab · SVN. IDE 파일(<code>*.iml</code> · <code>.idea/</code> · <code>.project</code> · <code>.classpath</code> · <code>.settings/</code>)은 변경 목록에 안 뜸. 커밋 전 코드 분석 · TODO 검사 끔. Git 스테이징(Staged · Unstaged) 켬.</p><span class="was">SVN 없음, 커밋 전 검사 켬, 스테이징 끔</span></div>
+      <div class="card"><h4>형상 관리</h4><p>Git · GitHub · GitLab · SVN. IDE 파일(<code>*.iml</code> · <code>.idea/</code> · <code>.project</code> · <code>.classpath</code> · <code>.settings/</code>)은 변경 목록에 안 뜸. 커밋 전 코드 분석 · TODO 검사 끔.</p><span class="was">SVN 없음, 커밋 전 검사 켬</span></div>
       <div class="card"><h4>콘솔 검색</h4><p>실행 창 콘솔에서 <kbd>Ctrl</kbd>+<kbd>F</kbd>.</p><span class="was">이클립스 단축키에서는 없음</span></div>
       <div class="card"><h4>편집기</h4><p>오른쪽 「세로로 분할」 단추, 120자 여백선 숨김, 커밋 뒤 메시지 비움.</p><span class="was">분할 단추 없음, 여백선 보임</span></div>
       <div class="card"><h4>다른 프로젝트는 새 창</h4><p>Recent Projects · Open… 으로 고른 프로젝트를 지금 창은 둔 채 새 창에 엽니다.</p><span class="was">매번 묻기</span></div>
@@ -1020,7 +1020,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
     <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note"><b>나갈 변경 안의 Staged · Unstaged</b>Git 저장소의 나갈 변경은 Staged(주황) · Unstaged(보라) · Committed, Not Pushed(커밋만 하고 안 올림, 보라) 세 묶음으로 나뉩니다. 일부 줄만 담은 파일은 Staged · Unstaged 양쪽에 보입니다. 파일 우클릭 Stage 로 담고 Unstage 로 뺍니다.</div></div>
 
     <h3>스테이징 · 커밋 창 Staged · Unstaged</h3>
-    <p class="lead">스테이징은 「이번 커밋에 넣을 것」을 미리 골라 담아 두는 칸입니다. 고친 파일이 열 개여도 담아 둔 것만 커밋되고, 나머지는 고친 그대로 작업본에 남습니다. 한 파일 안에서도 바뀐 덩어리(줄)별로 골라 담을 수 있어, 버그 수정과 실험 코드를 따로 커밋할 수 있습니다. 처음부터 켜져 있고, 끄려면 설정 → Version Control → Git → Enable staging area 를 풉니다.</p>
+    <p class="lead">스테이징은 「이번 커밋에 넣을 것」을 미리 골라 담아 두는 칸입니다. 고친 파일이 열 개여도 담아 둔 것만 커밋되고, 나머지는 고친 그대로 작업본에 남습니다. 한 파일 안에서도 바뀐 덩어리(줄)별로 골라 담을 수 있어, 버그 수정과 실험 코드를 따로 커밋할 수 있습니다. 기본은 꺼져 있어 커밋 창에서 파일 체크 상자를 고르고 바로 커밋합니다. 쓰려면 설정 → Version Control → Git → Enable staging area 를 켭니다. 아래는 켰을 때의 사용법입니다.</p>
     <table class="keys map" style="margin-bottom:18px">
       <tr><th>하려는 일</th><th>하는 법</th></tr>
       <tr><td>파일 담기 · 빼기</td><td>커밋 창(Alt+0) Unstaged 의 파일에 마우스를 올려 「+」(Stage), Staged 에서 「−」(Unstage). 끌어서 옮기거나 우클릭 Stage · Unstage 도 됩니다. 묶음 이름 줄의 「+」 「−」 는 전부 담기 · 빼기입니다. 우클릭 Rollback 은 고친 것을 버립니다.</td></tr>
