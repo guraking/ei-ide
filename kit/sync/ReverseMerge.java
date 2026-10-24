@@ -196,6 +196,12 @@ final class ReverseMerge {
     return Result.MERGED;
   }
 
+  /** 내 PC 의 branch 에만 있고 서버(remote/branch)에는 없는 커밋 수. 내 PC 에 그 브랜치가 없으면 0. */
+  static int unpushed(File root, String remote, String branch) throws IOException, InterruptedException {
+    if (!hasRef(root, HEADS + branch)) return 0;
+    return Integer.parseInt(git(root, "rev-list", "--count", remoteRef(remote, branch) + ".." + HEADS + branch).trim());
+  }
+
   private static boolean hasRef(File root, String ref) throws InterruptedException {
     try {
       git(root, "rev-parse", "--verify", "--quiet", ref);

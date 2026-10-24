@@ -33,6 +33,7 @@ import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.JBFont;
 import com.intellij.util.ui.JBUI;
+import com.intellij.util.ui.NamedColorUtil;
 import com.intellij.util.ui.UIUtil;
 import git4idea.branch.GitBranchUtil;
 import git4idea.repo.GitRepository;
@@ -52,7 +53,7 @@ import java.util.List;
 import static kinggura.sync.SyncPanel.git;
 
 /**
- * Git 메뉴 「Reverse Merge…」. 서버 브랜치 목록을 읽어 From(기준 브랜치) · Into(개인 브랜치)를 고르게 하고,
+ * Git 메뉴 「Merge Branches…」(역머지, 반대 방향도 된다). 서버 브랜치 목록을 읽어 From(기준 브랜치) · Into(개인 브랜치)를 고르게 하고,
  * 합치기 전에 들어올 파일 · 내 파일과 겹치는 파일을 보여 준다. Merge 를 눌러야 합친다.
  * 고른 두 브랜치는 저장소의 .git/config 에 남겨 다음에 그대로 고른다(ReverseMerge.CONFIG_*).
  */
@@ -139,6 +140,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
     private final ComboBox<String> intoBox;
     private final JBLabel summary = new JBLabel();
     private final JBLabel warn = new JBLabel();
+    private final JBLabel unpushed = new JBLabel();
     private final RowModel model = new RowModel();
     private final JBCheckBox push = new JBCheckBox();
     // 미리 보기를 다시 읽을 때마다 하나 올린다(EDT 에서만). 늦게 끝난 옛 계산이 새 결과를 덮지 않게 한다.
@@ -176,7 +178,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
       where.add(new JBLabel(root.getPath(), UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER));
       JPanel pick = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0));
       pick.add(new JBLabel(SyncBundle.message("rmerge.from")));
-      pick.add(new JBLabel(remote + "/"));
+      // From 은 로컬이 아니라 서버 브랜치를 합친다는 것을 상자 앞에 적는다.
+      pick.add(new JBLabel(SyncBundle.message("rmerge.server", remote)));
       pick.add(fromBox);
       pick.add(new JBLabel(SyncBundle.message("rmerge.into")));
       pick.add(intoBox);
@@ -213,6 +216,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
       JPanel lines = new JPanel(new GridLayout(0, 1, 0, JBUI.scale(2)));
       lines.add(summary);
       lines.add(warn);
+      lines.add(unpushed);
+      unpushed.setForeground(NamedColorUtil.getErrorForeground());
       top.add(lines, BorderLayout.SOUTH);
       warn.setForeground(MINE_COLOR);
       JPanel hints = new JPanel(new GridLayout(0, 1, 0, JBUI.scale(2)));
@@ -237,6 +242,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
       ready = false;
       setOKActionEnabled(false);
       warn.setText(" ");
+      unpushed.setText(" ");
       model.set(List.of());
       String from = from();
       String into = into();
@@ -249,9 +255,11 @@ public final class ReverseMergeAction extends DumbAwareAction {
       ApplicationManager.getApplication().executeOnPooledThread(() -> {
         ReverseMerge.Preview preview = null;
         String error = null;
+        int localOnly = 0;
         try {
           ReverseMerge.fetch(root, remote, from, into);
           preview = ReverseMerge.preview(root, remote, from, into, current);
+          localOnly = ReverseMerge.unpushed(root, remote, from);
         }
         catch (IOException ex) {
           error = ex.getMessage();
@@ -262,6 +270,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
         }
         ReverseMerge.Preview result = preview;
         String failure = error;
+        int notOnServer = localOnly;
         SwingUtilities.invokeLater(() -> {
           if (mySeq != seq || isDisposed()) return;
           if (failure != null) {
@@ -270,6 +279,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
             return;
           }
           model.set(result.files());
+          if (notOnServer > 0) unpushed.setText(SyncBundle.message("rmerge.unpushed", remote, from, notOnServer));
           if (result.commits() == 0) {
             summary.setText(SyncBundle.message("rmerge.up.to.date", into, from));
             return;
