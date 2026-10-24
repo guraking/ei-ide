@@ -1089,7 +1089,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
     return null;
   }
 
-  /** 프로젝트에 등록된 VCS 루트(Git · SVN). 하나도 없으면 프로젝트 폴더를 unmappedVcs 가 고른 종류로 본다(등록 전 프로젝트도 쓸 수 있게). */
+  /**
+   * 프로젝트에 등록된 VCS 루트(Git · SVN). 하나도 없으면 프로젝트 폴더를 unmappedVcs 가 고른 종류로 본다(등록 전 프로젝트도 쓸 수 있게).
+   * 프로젝트 폴더와 그 위에 .git · .svn 이 없으면(워크스페이스 폴더) 넣지 않는다. 저장소가 아니라 비교가 실패한다.
+   */
   private List<Map.Entry<File, Vcs>> vcsRoots() {
     List<Map.Entry<File, Vcs>> result = new ArrayList<>();
     for (VcsRoot root : ProjectLevelVcsManager.getInstance(project).getAllVcsRoots()) {
@@ -1101,7 +1104,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     }
     if (result.isEmpty() && project.getBasePath() != null) {
       File base = new File(project.getBasePath());
-      result.add(Map.entry(base, unmappedVcs(base)));
+      if (underVcs(base)) result.add(Map.entry(base, unmappedVcs(base)));
     }
     return result;
   }
@@ -1110,6 +1113,14 @@ final class SyncPanel extends SimpleToolWindowPanel {
    * VCS 루트가 등록되지 않은 폴더의 종류. dir 부터 위로 올라가며 가장 가까운 .svn 또는 .git 을 따른다.
    * SVN 1.7 부터는 작업본 맨 위에만 .svn 이 있어 프로젝트 폴더가 작업본 안쪽이면 위에서 찾아야 한다. 둘 다 없으면 Git.
    */
+  /** dir 이나 그 위 폴더에 .svn 폴더 또는 .git 이 있으면 true. */
+  static boolean underVcs(File dir) {
+    for (File d = dir.getAbsoluteFile(); d != null; d = d.getParentFile()) {
+      if (new File(d, ".svn").isDirectory() || new File(d, ".git").exists()) return true;
+    }
+    return false;
+  }
+
   static Vcs unmappedVcs(File dir) {
     for (File d = dir.getAbsoluteFile(); d != null; d = d.getParentFile()) {
       if (new File(d, ".svn").isDirectory()) return Vcs.SVN;
@@ -1128,7 +1139,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
   void refresh() {
     List<Map.Entry<File, Vcs>> roots = vcsRoots();
     if (roots.isEmpty()) {
-      showStatus(SyncBundle.message("sync.no.project"));
+      // 워크스페이스 폴더는 VCS 매핑이 잡히기 전이거나 받은 저장소가 없으면 루트가 비어 있다. 오류가 아니라 저장소 0개로 보인다.
+      showStatus(project.getBasePath() == null ? SyncBundle.message("sync.no.project") : SyncBundle.message("sync.repo.count", 0));
       return;
     }
     busy = true;
