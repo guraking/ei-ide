@@ -23,7 +23,18 @@ final class GitUndo {
   private static final String INITIAL = "commit (initial)";
   private static final String PREVIOUS = "@{1}";
 
+  private static final String RESET = "reset: moving to ";
+
   private GitUndo() {}
+
+  /**
+   * plan 대로 되돌린 뒤 HEAD reflog 맨 위에 남을 줄. 같은 줄이 맨 위면 이미 되돌린 것이다.
+   * 브랜치 바꾸기는 지금 브랜치(branch)에서 떠나는 줄이라 브랜치가 없으면(detached) 알 수 없어 null.
+   */
+  static String undoneLine(Plan plan, String branch) {
+    if (plan.way() != Way.SWITCH_BACK) return RESET + plan.target();
+    return branch == null ? null : CHECKOUT + branch + CHECKOUT_TO + plan.target();
+  }
 
   /**
    * headTop 은 HEAD reflog 맨 위 줄, branch 는 현재 브랜치(브랜치가 없으면 null), branchTop 은 그 브랜치 reflog 맨 위 줄(없으면 null).
