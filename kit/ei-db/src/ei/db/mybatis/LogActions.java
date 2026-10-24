@@ -40,9 +40,9 @@ public final class LogActions {
   private static final int LOOK_BACK = 200;
   private static final int LOOK_AHEAD = 20;
   /** 쿼리 목록에 띄울 최대 수(최근 것부터). */
-  private static final int MAX_PICK = 50;
+  private static final int MAX_PICK = 100;
   /** 같은 쿼리를 한 줄로 줄이기 전에 콘솔 끝에서부터 읽는 쿼리 로그 수. */
-  private static final int MAX_SCAN = 1000;
+  private static final int MAX_SCAN = 2000;
   /** 고르기 창 강조 테두리 두께(px). */
   private static final int POPUP_BORDER = 2;
 
