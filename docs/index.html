@@ -466,7 +466,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
     <table class="keys map">
       <tr><th>창 (자리)</th><th>단추 · 우클릭</th></tr>
       <tr><td>Servers (아래)</td><td>Start · Start in Debug · Restart · Stop · Stop All · Add WAS… · Server Groups(New Group… · Start Group · Stop Group) · ⋯ More(Duplicate Server · Publish (Rebuild) · Remove WAS · Show Log Files…) · Refresh Server List. 줄 우클릭에 Open in Browser · Show Console · Edit Settings… (<a href="#servers">서버 창</a>)</td></tr>
-      <tr><td>Synchronize (아래)</td><td>Show All · Incoming · Outgoing · Conflicts · Refresh All · Selected Repository Only, 아래 Pull All · Pull Selected · Resolve Conflicts. 파일 우클릭 Add to .gitignore · Revert My Changes · Unstage Only, Keep Files · Assume Unchanged (<a href="#sync">Git · SVN</a>)</td></tr>
+      <tr><td>Synchronize (아래)</td><td>Show All · Incoming · Outgoing · Conflicts · Refresh All · Selected Repository Only, 아래 Pull All · Pull Selected · Resolve Conflicts · Reverse Merge. 파일 우클릭 Add to .gitignore · Revert My Changes · Unstage Only, Keep Files · Assume Unchanged (<a href="#sync">Git · SVN</a>)</td></tr>
       <tr><td>Git Log (아래)</td><td>모듈 목록 · 찾기 칸 · Refresh · 「?」 (<a href="#sync">Git · SVN</a>)</td></tr>
       <tr><td>Database (오른쪽)</td><td>Refresh · New Console · Connect · Disconnect · Edit · Delete · Find · More(Export · Import Connections). 표 우클릭 View Data · Generate SELECT · INSERT · UPDATE Statement · Generate Mapper Skeleton · Generate Feature Set… · Open ERD · Table Specification Excel…, 접속 우클릭 View Sessions · View Locks · Open ERD (All), 프로그램 우클릭 Open Source · View Compilation Errors (<a href="#db">데이터베이스</a>)</td></tr>
       <tr><td>Result (아래)</td><td>Fetch · Apply · Revert · CSV · Excel · INSERT · UPDATE · DTO · enum · 찾기(<kbd>Ctrl</kbd>+<kbd>F</kbd>). 칸 우클릭 Copy Value · Copy Selected Rows · Copy Column Values as IN List · Sort (<a href="#db">데이터베이스</a>)</td></tr>
@@ -973,6 +973,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
       <tr><td>Pull All</td><td>고른 것과 상관없이 모든 저장소를 한 번에 받기(IDE 의 Update Project)</td></tr>
       <tr><td>Pull Selected</td><td>트리에서 고른 저장소만 받기. SVN 은 svn update</td></tr>
       <tr><td>Resolve Conflicts</td><td>충돌 해결 창</td></tr>
+      <tr><td>Reverse Merge</td><td>고른 저장소(없으면 지금 저장소)로 역머지 창</td></tr>
     </table>
 
     <div class="figure">
@@ -1017,7 +1018,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
     </div>
     <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note"><b>SVN</b>svn 명령줄 도구(VisualSVN)가 본체에 같이 들어 있어 따로 설치하지 않아도 SVN 저장소가 함께 보입니다.</div></div>
 
-    <h3>역머지 · Git → Reverse Merge…</h3>
+    <h3>역머지 · Git → Reverse Merge… · Synchronize 창 아래 Reverse Merge 단추</h3>
     <p class="lead">GitLab 사이트에서 하던 「develop → 내 개인 브랜치」 머지를 IDE 에서 합니다. 내 PC 가 개인 브랜치만 받도록 설정돼 있어도 서버에 직접 브랜치 목록을 물어 고르게 하고, 고른 브랜치만 받아 옵니다. 합치기 전에 들어올 파일을 먼저 보여 주고, Merge 를 눌러야 합칩니다.</p>
     <table class="keys map" style="margin-bottom:18px">
       <tr><th>창의 칸</th><th>하는 일</th></tr>
