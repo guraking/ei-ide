@@ -305,6 +305,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
     bottom.add(actionButton(SyncBundle.message("sync.button.update.all"), AllIcons.Vcs.ShelveSilent, ACTION_UPDATE_ALL, false));
     bottom.add(pull);
     bottom.add(actionButton(SyncBundle.message("sync.button.resolve"), AllIcons.Vcs.Merge, "Git.ResolveConflicts", false));
+    // 고른 저장소(없으면 지금 저장소)로 Reverse Merge 창을 연다.
+    bottom.add(actionButton(SyncBundle.message("sync.button.reverse"), AllIcons.Vcs.Merge, ACTION_REVERSE_MERGE, true));
     JPanel content = new JPanel(new BorderLayout());
     content.add(splitter, BorderLayout.CENTER);
     content.add(bottom, BorderLayout.SOUTH);
