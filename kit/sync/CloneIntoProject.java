@@ -22,10 +22,10 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.ModuleRootManager;
 import com.intellij.openapi.roots.ModuleRootModificationUtil;
 import com.intellij.openapi.startup.StartupActivity;
+import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vcs.ProjectLevelVcsManager;
 import com.intellij.openapi.vcs.VcsDirectoryMapping;
 import com.intellij.openapi.vcs.checkout.CheckoutListener;
-import com.intellij.openapi.vcs.ex.ProjectLevelVcsManagerEx;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiDirectory;
@@ -88,9 +88,6 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
       ModuleRootModificationUtil.addContentRoot(module, dir);
       ModuleRootModificationUtil.setSdkInherited(module);
       addGitMapping(project, directory);
-      // IntelliJ Clone 은 VFS 가 새 폴더를 알기 전에 같은 매핑을 넣어 「Invalid mapping」 으로 버린다.
-      // 매핑 목록이 같으면 다시 계산하지 않으므로, 위에서 VFS 에 올린 뒤 루트 계산을 한 번 더 시킨다.
-      ((ProjectLevelVcsManagerEx) ProjectLevelVcsManager.getInstance(project)).scheduleMappedRootsUpdate();
       removeWorkspaceModule(project);
     });
     linkBuildFiles(project, directory);
@@ -208,14 +205,24 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
     }
   }
 
+  /**
+   * 받은 폴더에 Git 매핑을 넣는다. 프로젝트 폴더 안에 받으면 IntelliJ Clone 이 VFS 가 폴더를 알기 전에 같은 매핑을 먼저 넣어
+   * 「Invalid mapping」 으로 버리고, 같은 목록을 다시 넣으면 다시 계산하지 않는다(NewMappings.updateVcsMappings).
+   * 그래서 그 매핑을 뺀 목록을 한 번 넣었다가 다시 넣어, VFS 에 올라온 뒤 루트를 바로 다시 계산하게 한다.
+   */
   private static void addGitMapping(Project project, Path directory) {
     if (!Files.isDirectory(directory.resolve(".git"))) return;
     ProjectLevelVcsManager vcs = ProjectLevelVcsManager.getInstance(project);
-    List<VcsDirectoryMapping> mappings = new ArrayList<>(vcs.getDirectoryMappings());
-    for (VcsDirectoryMapping mapping : mappings) {
+    String path = directory.toString().replace('\\', '/');
+    List<VcsDirectoryMapping> mappings = new ArrayList<>();
+    boolean present = false;
+    for (VcsDirectoryMapping mapping : vcs.getDirectoryMappings()) {
       if (mapping.isDefaultMapping()) return;
+      if (FileUtil.pathsEqual(mapping.getDirectory(), path)) present = true;
+      else mappings.add(mapping);
     }
-    mappings.add(new VcsDirectoryMapping(directory.toString().replace('\\', '/'), GitVcs.NAME));
+    if (present) vcs.setDirectoryMappings(new ArrayList<>(mappings));
+    mappings.add(new VcsDirectoryMapping(path, GitVcs.NAME));
     vcs.setDirectoryMappings(mappings);
   }
 }
