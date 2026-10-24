@@ -1,9 +1,0 @@
--proc:none
--Xmaxerrs
-5000
--d
-/tmp/claude-0/-home-user-ei-ide/5ac53c6f-daec-5edf-96d0-81d0a4c36ffc/scratchpad/out
--cp
-../../bundled-plugins/kinggura-sync/lib/kinggura-sync.jar
-SyncPanel.java
-SyncBundle.java

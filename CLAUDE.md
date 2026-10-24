@@ -10,6 +10,7 @@
   - `kit/ei-db` 데이터베이스(접속 · 콘솔 · 결과 · MyBatis · 생성 · ERD), 점검 `kit/ei-db/test/**/*Check.java`
   - `kit/boot-servers` 서버 창(스프링 부트 · WAS), 점검 `src/test/java`
   - `kit/sync` 동기화 창(Git · SVN), 점검 `SyncCheck.java`
+  - `kit/ko/apply_ko.py` 한국어 팩을 메뉴 · 단추만 영어로 깎아 `bundled-plugins/localization-ko` 에 넣음(우리 번역은 `kit/ko/override/<jar 안 경로>`), 점검 `apply_ko_check.py`
   - `kit/customize.py`(brand · slim) · `kit/menu/apply_menu.py` · `kit/defaults/apply_defaults.py` · `kit/brand/apply_brand.bat` · `kit/check_update.py`(새 판 점검)
 - `bundled-plugins/<이름>/lib/*.jar` 는 빌드 때 본체에 들어간다. `release/플러그인설치.bat` 은 노트북 설치 대본.
 
@@ -38,10 +39,11 @@ python kit\customize.py intellij-community "EI IDE" brand
 python kit\customize.py intellij-community "EI IDE" slim
 python kit\menu\apply_menu.py intellij-community
 python kit\defaults\apply_defaults.py intellij-community
+python kit\ko\apply_ko.py
 kit\brand\apply_brand.bat
 build-windows.bat
 ```
-- 판 번호 `262.10968.N`, N 은 `build-number.txt`(1000 이상). 결과 `release\eiide-262.10968.N.exe`, 끝나면 GitHub 릴리스로 올림.
+- 판 번호 `262.10968.N`, N 은 GitHub 마지막 릴리스 번호와 이 PC 의 `build-number.txt` 중 큰 쪽 + 1(1000 이상, 성공한 빌드만 기록). 노트북에서 빌드하는 법은 `docs/노트북-빌드.md`. 결과 `release\eiide-262.10968.N.exe`, 끝나면 GitHub 릴리스로 올림.
 - 커뮤니티 새 판: `python kit\check_update.py` (새 소스를 `intellij-community-new` 에 받아 kit 적용 · 플러그인 컴파일 · 판 번호 박힌 곳 보고).
 
 ## 플러그인 컴파일 · 점검

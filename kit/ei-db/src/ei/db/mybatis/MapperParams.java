@@ -5,6 +5,7 @@ import ei.db.mybatis.MapperDoc.Node;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -74,6 +75,47 @@ final class MapperParams {
       }
     }
     return out;
+  }
+
+  /** offset 을 감싸는 #{} 의 첫 마디. 문장 안 #{} 가 아니거나 bind · foreach · 예약 이름이면 null. */
+  static Ref refAt(CharSequence text, Node statement, int offset) {
+    for (Ref r : refs(text, statement)) {
+      if (offset >= r.start() && offset <= r.end()) return r;
+    }
+    return null;
+  }
+
+  /**
+   * offset 바로 앞이 「#{」 또는 「${」(뒤에 빈칸 · 이름 글자가 이어져도 된다)이면 그 이름 글자의 시작, 아니면 -1.
+   * 점 · 쉼표 뒤(user.name, jdbcType=…)는 첫 마디가 아니므로 -1.
+   */
+  static int paramPrefixStart(CharSequence text, int offset) {
+    int start = Math.min(offset, text.length());
+    while (start > 0 && Character.isJavaIdentifierPart(text.charAt(start - 1))) start--;
+    int i = start;
+    while (i > 0 && Character.isWhitespace(text.charAt(i - 1))) i--;
+    if (i < 2 || text.charAt(i - 1) != '{') return -1;
+    char mark = text.charAt(i - 2);
+    return mark == '#' || mark == '$' ? start : -1;
+  }
+
+  /** 문장 안에서 MyBatis 가 따로 만드는 이름: bind 의 name, foreach 의 item · index(문서 차례, 중복 없음). */
+  static List<String> localNames(Node statement) {
+    Set<String> out = new LinkedHashSet<>();
+    collectLocals(statement, out);
+    return new ArrayList<>(out);
+  }
+
+  private static void collectLocals(Node n, Set<String> out) {
+    for (Node c : n.children) {
+      if (c.name == null) continue;
+      if ("bind".equals(c.name)) addAttr(c, "name", out);
+      if ("foreach".equals(c.name)) {
+        addAttr(c, "item", out);
+        addAttr(c, "index", out);
+      }
+      collectLocals(c, out);
+    }
   }
 
   private static void collectBinds(Node n, Set<String> skip) {

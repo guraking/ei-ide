@@ -1,8 +1,0 @@
--proc:none
--Xmaxerrs
-5000
--d
-/tmp/x
--cp
-../../bundled-plugins/kinggura-sync/lib/kinggura-sync.jar
-SyncPanel.java

@@ -343,7 +343,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
       <div class="step">
         <div class="n">3</div>
         <h4>플러그인설치.bat</h4>
-        <p>IDE 가 꺼진 상태에서 두 번 누릅니다. 한국어 팩 · Claude Code · One Dark 를 넣고, JDK · Gradle · DB 드라이버를 사용자 폴더에 풀어 둡니다. 시험용 본체 플러그인 사본은 치웁니다.</p>
+        <p>IDE 가 꺼진 상태에서 두 번 누릅니다. Claude Code · One Dark 를 넣고, JDK · Gradle · DB 드라이버를 사용자 폴더에 풀어 둡니다. 시험용 본체 플러그인 사본은 치웁니다.</p>
         <div class="file">release\플러그인설치.bat</div>
       </div>
       <div class="step">
@@ -365,7 +365,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
 ├─ <span class="hl">eiide-262.10968.N.exe</span>        <span class="c">설치 파일</span>
 ├─ <span class="hl">플러그인설치.bat</span>               <span class="c">3번 단계</span>
 ├─ plugins\
-│  ├─ localization-ko\              <span class="c">한국어 팩 (262 판은 마켓에 없어 릴리스에 따로 올려 둠)</span>
+│  ├─ localization-ko\              <span class="c">한국어 팩 원본 (빌드 때 kit\ko\apply_ko.py 가 깎아 본체에 넣음)</span>
 │  ├─ claude-code-jetbrains-plugin\ <span class="c">Claude Code</span>
 │  └─ one-dark-theme\               <span class="c">VS Code 색감 테마 + 편집기 색</span>
 ├─ jdk\                             <span class="c">Temurin JDK 17 · 21 · 27 zip → %USERPROFILE%\.jdks 에 풀고, IDE 를 켜면 SDK 목록에 자동 등록</span>
@@ -765,7 +765,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
 <section id="sync">
   <div class="wrap">
     <h2><span class="no">05</span>Synchronize</h2>
-    <p class="lead">이클립스 Team → Synchronize Workspace 와 같은 창입니다. 프로젝트 안의 Git 저장소 여러 개와 SVN 을 저장소별로 묶어, 들어올 변경 · 나갈 변경 · 충돌을 한눈에 봅니다. 커밋 · 올리기(Push) 뒤에는 자동으로 다시 비교합니다. 창 아래 단추는 전체 받기 · 받기(Pull) · 충돌 해결입니다. 커밋 · 올리기는 Git 메뉴(SVN 은 Subversion 메뉴)에서 합니다. 전체 받기는 고른 것과 상관없이 모든 저장소를 한 번에 받습니다(IDE 의 Update Project). 받기는 트리에서 고른 저장소로 창이 열립니다. SVN 저장소에서는 받기가 svn update 를 돌립니다. 충돌은 빨강, 들어올 변경은 파랑, 나갈 변경은 보라로 보입니다. 「고른 저장소만」은 고른 저장소 하나만 새로고침합니다. 프로젝트 트리 우클릭 → Git(SVN 은 Subversion) → 「작업 공간 동기화」로 열면 그 저장소만 비교합니다. 위 도구줄 오른쪽 세 아이콘은 Git 저장소에서만 보이며, 브랜치(만들기 · 바꾸기) · 변경 치워 두기(Stash) · 치운 변경 꺼내기(Unstash) 를 IntelliJ 기본 창으로 엽니다. 트리에서 저장소를 골라 두면 그 저장소로 열립니다. 브랜치를 바꾸면 그 브랜치의 추적 브랜치와 다시 비교합니다.</p>
+    <p class="lead">이클립스 Team → Synchronize Workspace 와 같은 창입니다. 프로젝트 안의 Git 저장소 여러 개와 SVN 을 저장소별로 묶어, 들어올 변경 · 나갈 변경 · 충돌을 한눈에 봅니다. 커밋 · 올리기(Push) 뒤에는 자동으로 다시 비교합니다. 창 아래 단추는 전체 받기 · 받기(Pull) · 충돌 해결입니다. 커밋 · 올리기는 Git 메뉴(SVN 은 Subversion 메뉴)에서 합니다. 전체 받기는 고른 것과 상관없이 모든 저장소를 한 번에 받습니다(IDE 의 Update Project). 받기는 트리에서 고른 저장소로 창이 열립니다. SVN 저장소에서는 받기가 svn update 를 돌립니다. 충돌은 빨강, 들어올 변경은 파랑, 나갈 변경은 보라로 보입니다. 「고른 저장소만」은 고른 저장소 하나만 새로고침합니다. 프로젝트 트리 우클릭 → Git(SVN 은 Subversion) → 「작업 공간 동기화」로 열면 그 저장소만 비교합니다. 위 도구줄 오른쪽 세 아이콘은 Git 저장소에서만 보이며, Branches(브랜치 만들기 · 바꾸기) · Stash Changes(변경 치워 두기) · Unstash Changes(치운 변경 꺼내기) 를 IntelliJ 기본 창으로 엽니다. 트리에서 저장소를 골라 두면 그 저장소로 열립니다. 브랜치를 바꾸면 그 브랜치의 추적 브랜치와 다시 비교합니다.</p>
 
     <div class="figure">
       <div>
@@ -1074,6 +1074,11 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       <div class="arrow">·</div>
       <div class="box"><b>#{필드} 검사</b><span>parameterType DTO 에 없는 필드면 경고: 「ProductDto 에 productNm 필드가 없습니다」.</span></div>
     </div>
+    <div class="flow" style="margin-bottom:8px">
+      <div class="box"><b>#{ 자동 완성 · 이동</b><span><code>#{</code> · <code>${</code> 를 치면 parameterType DTO 필드, 없으면 매퍼 메서드 매개변수(<code>@Param</code> 이름 우선)와 bind · foreach 이름이 목록으로 뜹니다. 이름에서 <kbd>Ctrl</kbd>+클릭 → 그 필드 · 매개변수로.</span></div>
+      <div class="arrow">·</div>
+      <div class="box"><b>AS 별칭 자동 완성</b><span>select 에서 <code>AS </code> 를 치면 resultType DTO 필드 중 SELECT 에 아직 없는 것이 뜹니다. <code>ORDER_ID</code> 처럼 쳐도 찾고, 필드 이름 그대로 넣습니다. Map · resultMap 문장은 내지 않습니다.</span></div>
+    </div>
 
     <h3>⑤ MyBatis 바로 실행 <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Enter</kbd></h3>
     <div class="flow">
@@ -1338,7 +1343,7 @@ python kit\defaults\apply_defaults.py intellij-community
 build-windows.bat
 <span class="cm">rem 결과: intellij-community\out\idea-ce\artifacts\eiide-262.10968.N.exe</span></pre>
     <div class="notes">
-      <div class="note"><b>판 번호 N</b><code>build-number.txt</code> 에서 빌드마다 하나씩 올라갑니다.</div>
+      <div class="note"><b>판 번호 N</b>GitHub 마지막 릴리스 번호 다음 번호입니다(이 PC 의 <code>build-number.txt</code> 가 더 크면 그 다음). 데스크탑 · 노트북 어디서 빌드해도 이어집니다.</div>
       <div class="note warn"><b>N 은 1000 부터</b>바탕 판(.63)보다 작으면 JetBrains 마켓의 Java · Gradle 등 번들 플러그인을 새 판으로 보고 내려받아 본체를 덮어 버립니다.</div>
       <div class="note ok"><b>플러그인만 고쳤을 때</b>빌드 없이 jar 를 <code>release\plugins</code> 에 넣고 설치 3번만 다시 돌리면 됩니다.</div>
     </div>
@@ -1365,7 +1370,7 @@ build-windows.bat
       <tr><td>데이터베이스 탐색기 우클릭</td><td>표: SELECT · INSERT · UPDATE 문, 매퍼 뼈대, 기능 한 벌, ERD, 테이블 정의서 엑셀. 접속: 세션 · 잠금 보기. 프로그램: 컴파일 오류 보기</td></tr>
       <tr><td>결과 탭 우클릭</td><td>다른 결과와 비교…, 다른 탭 닫기 · 모든 탭 닫기</td></tr>
       <tr><td>커밋 창 파일 우클릭</td><td>Assume Unchanged</td></tr>
-      <tr><td>코드 도구(편집기 우클릭 · Source 메뉴)</td><td>요청 값을 DTO 로 묶기 · 입력 검증 붙이기 · enum 다시 맞추기 · JSON 으로 DTO(트리 우클릭도) · 칼럼 이름 바꾸기. 매퍼 XML 우클릭: 호출 코드 복사 · 동적 조건 · 페이징 쿼리 · MyBatis 태그 넣기. 자바 우클릭: 문자열 SQL 정리. 결과 창: enum 단추. 자세한 것은 13 절</td></tr>
+      <tr><td>코드 도구(편집기 우클릭 · Source 메뉴)</td><td>요청 값을 DTO 로 묶기 · 입력 검증 붙이기 · enum 다시 맞추기 · JSON 으로 DTO(트리 우클릭도) · 칼럼 이름 바꾸기. 매퍼 XML 우클릭: 호출 코드 복사 · 동적 조건 · 페이징 쿼리 · SELECT 로 resultMap 만들기 · MyBatis 태그 넣기. 자바 우클릭: 문자열 SQL 정리. 결과 창: enum 단추. 자세한 것은 13 절</td></tr>
     </table>
   </div>
 </section>
@@ -1381,7 +1386,7 @@ build-windows.bat
       <tr><td>Rainbow Brackets Lite</td><td>짝 괄호를 깊이마다 다른 색으로 보여 줍니다(무료 공개판).</td></tr>
       <tr><td>POJO to JSON</td><td>클래스 이름 우클릭 → 「Copy JSON」 으로 필드 구조를 JSON 으로 복사합니다. API 테스트의 요청 본문 만들 때 씁니다.</td></tr>
       <tr><td>Grep Console</td><td>콘솔 줄을 글자 · 정규식으로 색칠하고 거릅니다. 우리 「로그 거르기」와 함께 씁니다.</td></tr>
-      <tr><td>한국어 언어 팩 (bat)</td><td>설정 → Language and Region → Korean.</td></tr>
+      <tr><td>한국어 언어 팩 (본체)</td><td>설정 → Language and Region → Korean. 메뉴 · 단추는 영어, 오류 · 알림 · 대화 상자 글은 한국어.</td></tr>
       <tr><td>Claude Code (bat)</td><td>터미널의 <code>claude</code> 와 연결합니다. 우리 AI 우클릭 메뉴도 이것을 씁니다.</td></tr>
       <tr><td>One Dark 테마 (bat)</td><td>설정 → Appearance 의 Theme, Editor → Color Scheme 에서 One Dark.</td></tr>
     </table>
@@ -1453,6 +1458,7 @@ build-windows.bat
       <tr><td>문자열 SQL 정리…<br>자바 우클릭</td><td><code>+</code> · <code>StringBuilder</code> · <code>+=</code> 로 이어 붙인 SQL 을 정렬해 보여 주고, 변수는 <code>#{이름}</code> 으로 바꾼 매퍼 XML 문장을 복사합니다.</td></tr>
       <tr><td>동적 조건 만들기…<br>매퍼 XML 문장 안</td><td>DTO 필드를 고르면 <code>&lt;where&gt;</code> · <code>&lt;if test="x != null and x != ''"&gt;</code> 조건을 넣습니다. 비교는 = · LIKE · &gt;= · &lt;=(CDATA).</td></tr>
       <tr><td>페이징 쿼리 만들기<br>매퍼 XML select 안</td><td>그 select 아래에 Oracle ROWNUM 페이징 문장(<code>…Page</code>, startRow · endRow)과 건수 문장(<code>…Count</code>)을 더하고, 매퍼 인터페이스에 메서드 두 줄을 더합니다.</td></tr>
+      <tr><td>SELECT 로 resultMap 만들기<br>매퍼 XML select 안</td><td>SELECT 칼럼과 resultType DTO 필드를 대소문자 · 밑줄 무시로 짝지어 그 select 위에 <code>&lt;resultMap id="…ResultMap"&gt;</code> 을 넣고, 문장의 <code>resultType</code> 을 <code>resultMap</code> 으로 바꿉니다. 받을 필드가 없는 칼럼은 주석(비슷한 필드 이름 함께)으로 남깁니다. <code>SELECT *</code> 는 만들지 않습니다.</td></tr>
       <tr><td>MyBatis 태그 넣기<br>매퍼 XML 우클릭</td><td>줄을 고르고 태그를 누르면 그 줄을 태그로 감싸 한 단계 들이고, 고른 것이 없으면 커서 자리에 빈 틀을 넣고 커서를 <code>id</code> · <code>test</code> 칸에 둡니다. select · insert · update · delete · MERGE 틀 · resultMap · sql · include · if · choose(when · otherwise) · when · otherwise · where · set · trim · foreach · bind · selectKey · CDATA. CDATA 는 고른 글자(예: <code>&lt;=</code>)만 감쌉니다.</td></tr>
       <tr><td>호출 코드 복사<br>매퍼 XML 문장 안</td><td>그 문장을 부르는 서비스 쪽 코드(매개변수 객체 채우기 + 호출 줄)를 클립보드에 복사합니다.</td></tr>
       <tr><td>칼럼 이름 바꾸기…<br>매퍼 XML 우클릭 · Source 메뉴</td><td>모든 매퍼 XML 에서 옛 칼럼 이름을 찾아 미리보기에서 골라 바꾸고, 짝인 DTO 필드 · getter · setter 와 <code>#{}</code> · property 도 함께 바꿉니다. <code>&lt;if test&gt;</code> 안 이름은 바꾸지 않습니다.</td></tr>
