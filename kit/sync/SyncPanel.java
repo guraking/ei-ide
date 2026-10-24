@@ -187,6 +187,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static final String VCS_NAME_SVN = "svn";
   private static final String ACTION_PULL = "Git.Pull";
   private static final String ACTION_REVERSE_MERGE = "KingGura.ReverseMerge";
+  private static final String ACTION_PUSH = "Vcs.Push";
+  private static final String ACTION_COMMIT = "CheckinProject";
   // IDE 의 「Update Project」(Ctrl+T). 프로젝트의 모든 VCS 루트를 받는다(Git 은 받기 방식을 묻고, SVN 은 svn update).
   private static final String ACTION_UPDATE_ALL = "Vcs.UpdateProject";
   // 설치본에 같이 넣은 VisualSVN 명령줄 도구(apply_defaults 19 의 SVN 기본 경로와 같은 곳).
@@ -307,6 +309,9 @@ final class SyncPanel extends SimpleToolWindowPanel {
     bottom.add(actionButton(SyncBundle.message("sync.button.resolve"), AllIcons.Vcs.Merge, "Git.ResolveConflicts", false));
     // 고른 저장소(없으면 지금 저장소)로 Reverse Merge 창을 연다.
     bottom.add(actionButton(SyncBundle.message("sync.button.reverse"), AllIcons.Vcs.Branch, ACTION_REVERSE_MERGE, true));
+    // 올리기: 고른 저장소(없으면 전부)로 IntelliJ Push 창. 커밋하고 올리기: 커밋 창을 연다(그 창의 Commit and Push 로 한 번에).
+    bottom.add(actionButton(SyncBundle.message("sync.button.push"), AllIcons.Vcs.Push, ACTION_PUSH, true));
+    bottom.add(actionButton(SyncBundle.message("sync.button.commit.push"), AllIcons.Actions.Commit, ACTION_COMMIT, false));
     JPanel content = new JPanel(new BorderLayout());
     content.add(splitter, BorderLayout.CENTER);
     content.add(bottom, BorderLayout.SOUTH);
