@@ -15,6 +15,9 @@ import com.intellij.openapi.vcs.VcsDirectoryMapping;
 import com.intellij.openapi.vcs.checkout.CheckoutListener;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.platform.backend.workspace.WorkspaceModel;
+import com.intellij.platform.workspace.storage.url.VirtualFileUrl;
+import com.intellij.workspaceModel.ide.ProjectRootEntityKt;
 import git4idea.GitVcs;
 import org.jetbrains.annotations.NotNull;
 
@@ -72,15 +75,18 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
     for (Module module : ModuleManager.getInstance(project).getModules()) {
       ModuleRootManager rootManager = ModuleRootManager.getInstance(module);
       VirtualFile[] roots = rootManager.getContentRoots();
-      if (roots.length == 1 && roots[0].equals(baseDir) && rootManager.getSourceRoots().length == 0) {
-        WriteAction.run(() -> {
-          ModifiableModuleModel model = ModuleManager.getInstance(project).getModifiableModel();
-          model.disposeModule(module);
-          model.commit();
-        });
-        return;
-      }
+      if (!List.of(roots).contains(baseDir)) continue;
+      if (roots.length != 1 || rootManager.getSourceRoots().length != 0) return;
+      WriteAction.run(() -> {
+        ModifiableModuleModel model = ModuleManager.getInstance(project).getModifiableModel();
+        model.disposeModule(module);
+        model.commit();
+      });
+      break;
     }
+    // 모듈이 없어도 프로젝트 창은 프로젝트 폴더(ProjectRootEntity)를 따로 보여 주므로 그 등록도 뺀다.
+    VirtualFileUrl url = WorkspaceModel.getInstance(project).getVirtualFileUrlManager().getOrCreateFromUrl(baseDir.getUrl());
+    ProjectRootEntityKt.unregisterProjectRootBlocking(project, url);
   }
 
   private static void addGitMapping(Project project, Path directory) {
