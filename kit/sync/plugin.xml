@@ -28,6 +28,8 @@
     <checkoutListener implementation="kinggura.sync.CloneIntoProject" order="first, before ProjectDirCheckoutListener"/>
     <!-- 워크스페이스 폴더 프로젝트를 열 때 그 폴더 자체 모듈(「git」 줄)을 뺀다. -->
     <postStartupActivity implementation="kinggura.sync.CloneIntoProject"/>
+    <!-- 워크스페이스 폴더 프로젝트는 프로젝트 창 맨 위의 프로젝트 폴더 줄을 그리기 전에 거른다(깜빡임 없음). -->
+    <treeStructureProvider implementation="kinggura.sync.CloneIntoProject$HideWorkspaceRoot"/>
   </extensions>
 
   <projectListeners>
