@@ -41,7 +41,7 @@ import com.intellij.ui.content.ContentFactory;
 import com.intellij.util.IconUtil;
 import com.intellij.util.ui.JBUI;
 import git4idea.branch.GitBrancher;
-import git4idea.branch.GitBranch;
+import git4idea.GitBranch;
 import git4idea.repo.GitRepository;
 import git4idea.repo.GitRepositoryChangeListener;
 import git4idea.repo.GitRepositoryManager;
