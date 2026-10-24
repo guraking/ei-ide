@@ -63,6 +63,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
   private static final int TABLE_W = 760;
   private static final int TABLE_H = 320;
   private static final int PATH_COL_W = 360;
+  // From · Into 상자 너비. 「fe-기능이름/날짜/아이디」 같은 긴 브랜치 이름이 잘리지 않게 두 상자가 표 너비를 나눠 쓴다.
+  private static final int COMBO_W = 300;
 
   @Override public @NotNull ActionUpdateThread getActionUpdateThread() { return ActionUpdateThread.BGT; }
 
@@ -154,6 +156,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
       intoBox = new ComboBox<>(names.toArray(String[]::new));
       fromBox.setSelectedItem(from);
       intoBox.setSelectedItem(into);
+      fromBox.setMinimumAndPreferredWidth(JBUI.scale(COMBO_W));
+      intoBox.setMinimumAndPreferredWidth(JBUI.scale(COMBO_W));
       push.setSelected(true);
       setTitle(SyncBundle.message("rmerge.title"));
       setOKButtonText(SyncBundle.message("rmerge.button.merge"));
