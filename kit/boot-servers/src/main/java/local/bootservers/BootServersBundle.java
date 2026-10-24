@@ -1,13 +1,19 @@
 package local.bootservers;
 
+import com.intellij.AbstractBundle;
 import com.intellij.DynamicBundle;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.PropertyKey;
 
-/** 화면 글 묶음(resources/messages/BootServersBundle*.properties). 기본은 영어, IDE 언어가 한국어면 _ko. */
+import java.util.Locale;
+import java.util.ResourceBundle;
+
+/** 화면 글 묶음(resources/messages/BootServersBundle*.properties). 기본은 영어, IDE 언어가 한국어면 _ko.
+ * 오류 · 확인 · 알림 · 진행 · 안내 글은 messages/BootServersMessages.properties 에 두고 IDE 언어와 상관없이 그 한국어 글을 쓴다. */
 public final class BootServersBundle extends DynamicBundle {
     private static final String BUNDLE = "messages.BootServersBundle";
+    private static final ResourceBundle KOREAN = ResourceBundle.getBundle("messages.BootServersMessages", Locale.ROOT, BootServersBundle.class.getClassLoader());
     private static final BootServersBundle INSTANCE = new BootServersBundle();
 
     private BootServersBundle() {
@@ -15,6 +21,6 @@ public final class BootServersBundle extends DynamicBundle {
     }
 
     public static @Nls @NotNull String message(@NotNull @PropertyKey(resourceBundle = BUNDLE) String key, Object @NotNull ... params) {
-        return INSTANCE.getMessage(key, params);
+        return KOREAN.containsKey(key) ? AbstractBundle.message(KOREAN, key, params) : INSTANCE.getMessage(key, params);
     }
 }
