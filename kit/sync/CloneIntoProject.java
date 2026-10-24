@@ -9,6 +9,7 @@ import com.intellij.openapi.module.ModuleTypeManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.ModuleRootManager;
 import com.intellij.openapi.roots.ModuleRootModificationUtil;
+import com.intellij.openapi.startup.StartupActivity;
 import com.intellij.openapi.vcs.ProjectLevelVcsManager;
 import com.intellij.openapi.vcs.VcsDirectoryMapping;
 import com.intellij.openapi.vcs.checkout.CheckoutListener;
@@ -29,10 +30,16 @@ import java.util.List;
  * 다음이면 false 를 돌려 IntelliJ 기본 동작(새 프로젝트로 열기)에 맡긴다:
  * 시작 화면(기본 프로젝트)에서 받았을 때, 같은 이름 모듈이 이미 있을 때.
  * 받은 폴더가 프로젝트 폴더 안이어도 따로 모듈로 붙인다.
- * 프로젝트 폴더가 Git 저장소가 아니면(C:\dev\git 같은 워크스페이스 폴더) 그 폴더 자체를 콘텐츠 루트로 가진 모듈을 뺀다.
- * 그러면 프로젝트 창 맨 위에 「git」 줄 없이 받은 저장소 모듈들만 이클립스처럼 나란히 보인다(.idea 는 그대로).
+ * 워크스페이스 프로젝트(C:\dev\git 처럼 Git 저장소 밖 폴더를 연 것)는 열 때와 Clone 뒤에 그 폴더 자체 모듈(「git」)을 뺀다.
+ * 그러면 프로젝트 창에 「git」 줄 없이 받은 저장소 모듈들만 이클립스처럼 나란히 보인다(빈 워크스페이스면 빈 트리, .idea 는 그대로).
+ * 워크스페이스 판정: 프로젝트 폴더와 그 위 어디에도 .git 이 없고, 그 폴더 모듈의 콘텐츠 루트가 프로젝트 폴더 하나뿐이며 소스 폴더가 없다.
  */
-public final class CloneIntoProject implements CheckoutListener {
+public final class CloneIntoProject implements CheckoutListener, StartupActivity.DumbAware {
+
+  @Override
+  public void runActivity(@NotNull Project project) {
+    ApplicationManager.getApplication().invokeLater(() -> removeWorkspaceModule(project), project.getDisposed());
+  }
 
   @Override
   public boolean processCheckedOutDirectory(@NotNull Project project, @NotNull Path directory) {
@@ -56,12 +63,16 @@ public final class CloneIntoProject implements CheckoutListener {
 
   private static void removeWorkspaceModule(Project project) {
     String base = project.getBasePath();
-    if (base == null || Files.exists(Path.of(base, ".git"))) return;
+    if (base == null) return;
+    for (Path dir = Path.of(base); dir != null; dir = dir.getParent()) {
+      if (Files.exists(dir.resolve(".git"))) return;
+    }
     VirtualFile baseDir = LocalFileSystem.getInstance().findFileByNioFile(Path.of(base));
     if (baseDir == null) return;
     for (Module module : ModuleManager.getInstance(project).getModules()) {
-      VirtualFile[] roots = ModuleRootManager.getInstance(module).getContentRoots();
-      if (roots.length == 1 && roots[0].equals(baseDir)) {
+      ModuleRootManager rootManager = ModuleRootManager.getInstance(module);
+      VirtualFile[] roots = rootManager.getContentRoots();
+      if (roots.length == 1 && roots[0].equals(baseDir) && rootManager.getSourceRoots().length == 0) {
         WriteAction.run(() -> {
           ModifiableModuleModel model = ModuleManager.getInstance(project).getModifiableModel();
           model.disposeModule(module);
