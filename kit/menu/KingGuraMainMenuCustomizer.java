@@ -3,10 +3,17 @@ package com.intellij.ide.customization.java;
 
 import com.intellij.openapi.actionSystem.ActionManager;
 import com.intellij.openapi.actionSystem.AnAction;
+import com.intellij.openapi.actionSystem.AnActionEvent;
+import com.intellij.openapi.actionSystem.AnActionWrapper;
 import com.intellij.openapi.actionSystem.Constraints;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.actionSystem.Separator;
 import com.intellij.openapi.actionSystem.impl.ActionConfigurationCustomizer;
+import com.intellij.openapi.module.Module;
+import com.intellij.openapi.module.ModuleManager;
+import com.intellij.openapi.project.Project;
+import com.intellij.openapi.roots.ModuleRootManager;
+import com.intellij.openapi.vfs.VirtualFile;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -66,13 +73,16 @@ final class KingGuraMainMenuCustomizer implements ActionConfigurationCustomizer,
     if (!(actionManager.getAction("ProjectViewPopupMenu") instanceof DefaultActionGroup treePopup)) {
       return;
     }
-    // Maven.ReimportProject: 고른 프로젝트만 다시 읽기, ExternalSystem.RefreshAllProjects: 그래들 프로젝트 전체 다시 읽기
+    // Maven.ReimportProject: 고른 프로젝트만 다시 읽기(Maven 프로젝트가 아니면 스스로 숨는다),
+    // ExternalSystem.RefreshAllProjects: 그래들 프로젝트 전체 다시 읽기(연결된 프로젝트가 없어도 보이므로 GradleOnly 로 감싼다)
     List<AnAction> refresh = new ArrayList<>();
-    for (String id : List.of("Maven.ReimportProject", "ExternalSystem.RefreshAllProjects")) {
-      AnAction action = actionManager.getAction(id);
-      if (action != null) {
-        refresh.add(action);
-      }
+    AnAction maven = actionManager.getAction("Maven.ReimportProject");
+    if (maven != null) {
+      refresh.add(maven);
+    }
+    AnAction gradle = actionManager.getAction("ExternalSystem.RefreshAllProjects");
+    if (gradle != null) {
+      refresh.add(new GradleOnly(gradle));
     }
     if (refresh.isEmpty()) {
       return;
@@ -80,6 +90,39 @@ final class KingGuraMainMenuCustomizer implements ActionConfigurationCustomizer,
     treePopup.add(Separator.getInstance(), Constraints.FIRST, actionManager);
     for (int i = refresh.size() - 1; i >= 0; i--) {
       treePopup.add(refresh.get(i), Constraints.FIRST, actionManager);
+    }
+  }
+
+  /** 모듈 콘텐츠 루트 어디에도 Gradle 파일이 없으면 숨긴다. */
+  private static final class GradleOnly extends AnActionWrapper {
+    private static final List<String> GRADLE_FILES = List.of("settings.gradle", "settings.gradle.kts", "build.gradle", "build.gradle.kts");
+
+    GradleOnly(AnAction action) {
+      super(action);
+    }
+
+    @Override
+    public void update(AnActionEvent e) {
+      super.update(e);
+      if (e.getPresentation().isVisible() && !hasGradleRoot(e.getProject())) {
+        e.getPresentation().setEnabledAndVisible(false);
+      }
+    }
+
+    private static boolean hasGradleRoot(Project project) {
+      if (project == null) {
+        return false;
+      }
+      for (Module module : ModuleManager.getInstance(project).getModules()) {
+        for (VirtualFile root : ModuleRootManager.getInstance(module).getContentRoots()) {
+          for (String name : GRADLE_FILES) {
+            if (root.findChild(name) != null) {
+              return true;
+            }
+          }
+        }
+      }
+      return false;
     }
   }
 

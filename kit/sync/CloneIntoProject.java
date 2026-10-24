@@ -3,12 +3,21 @@ package kinggura.sync;
 import com.intellij.ide.projectView.TreeStructureProvider;
 import com.intellij.ide.projectView.ViewSettings;
 import com.intellij.ide.util.treeView.AbstractTreeNode;
+import com.intellij.openapi.actionSystem.ActionManager;
+import com.intellij.openapi.actionSystem.ActionPlaces;
+import com.intellij.openapi.actionSystem.AnAction;
+import com.intellij.openapi.actionSystem.AnActionEvent;
+import com.intellij.openapi.actionSystem.CommonDataKeys;
+import com.intellij.openapi.actionSystem.ex.ActionUtil;
+import com.intellij.openapi.actionSystem.impl.SimpleDataContext;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.WriteAction;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.module.ModifiableModuleModel;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.module.ModuleTypeManager;
+import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.ModuleRootManager;
 import com.intellij.openapi.roots.ModuleRootModificationUtil;
@@ -16,6 +25,7 @@ import com.intellij.openapi.startup.StartupActivity;
 import com.intellij.openapi.vcs.ProjectLevelVcsManager;
 import com.intellij.openapi.vcs.VcsDirectoryMapping;
 import com.intellij.openapi.vcs.checkout.CheckoutListener;
+import com.intellij.openapi.vcs.ex.ProjectLevelVcsManagerEx;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiDirectory;
@@ -23,16 +33,19 @@ import git4idea.GitVcs;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Clone 이 끝난 폴더를 새 창 프로젝트로 열지 않고 지금 열린 프로젝트에 모듈로 붙인다(이클립스 워크스페이스처럼).
  * 모듈 파일은 프로젝트의 .idea/modules/「폴더이름.iml」(받은 저장소 안에 IDE 파일을 만들지 않는다), SDK 는 프로젝트 것을 따른다.
  * 프로젝트 VCS 매핑이 <Project> 기본값이 아니면 받은 폴더에 Git 매핑을 더한다.
+ * 받은 폴더와 그 아래 두 단계의 pom.xml · Gradle 파일은 Maven · Gradle 프로젝트로 연결한다(linkBuildFiles).
  * 다음이면 false 를 돌려 IntelliJ 기본 동작(새 프로젝트로 열기)에 맡긴다:
  * 시작 화면(기본 프로젝트)에서 받았을 때, 같은 이름 모듈이 이미 있을 때.
  * 받은 폴더가 프로젝트 폴더 안이어도 따로 모듈로 붙인다.
@@ -44,6 +57,15 @@ import java.util.List;
  * 프로젝트 폴더를 콘텐츠 루트로 가진 모듈이 없거나 있어도 그 루트 하나뿐이며 소스 폴더가 없다.
  */
 public final class CloneIntoProject implements CheckoutListener, StartupActivity.DumbAware {
+  private static final Logger LOG = Logger.getInstance(CloneIntoProject.class);
+  // 「Add as Maven Project」(pom.xml 우클릭) · 「Link Gradle Project」(build.gradle 우클릭) 동작 ID, 2026.2 intellij.maven.xml · intellij.gradle.xml
+  private static final String ACTION_LINK_MAVEN = "Maven.AddFileAsMavenProject";
+  private static final String ACTION_LINK_GRADLE = "Gradle.ImportExternalProject";
+  private static final String POM = "pom.xml";
+  private static final List<String> BUILD_FILES = List.of(POM, "settings.gradle", "settings.gradle.kts", "build.gradle", "build.gradle.kts");
+  private static final Set<String> SKIP_DIRS = Set.of("target", "build", "out", "bin", "node_modules");
+  // 받은 폴더(0) 아래 몇 단계까지 빌드 파일을 찾는가. 저장소 안 한 단계 아래 이클립스 프로젝트(basic\jpa-mybatis-multi)와 그 아래 한 단계를 덮는다.
+  private static final int BUILD_DEPTH = 2;
 
   @Override
   public void runActivity(@NotNull Project project) {
@@ -66,9 +88,65 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
       ModuleRootModificationUtil.addContentRoot(module, dir);
       ModuleRootModificationUtil.setSdkInherited(module);
       addGitMapping(project, directory);
+      // IntelliJ Clone 은 VFS 가 새 폴더를 알기 전에 같은 매핑을 넣어 「Invalid mapping」 으로 버린다.
+      // 매핑 목록이 같으면 다시 계산하지 않으므로, 위에서 VFS 에 올린 뒤 루트 계산을 한 번 더 시킨다.
+      ((ProjectLevelVcsManagerEx) ProjectLevelVcsManager.getInstance(project)).scheduleMappedRootsUpdate();
       removeWorkspaceModule(project);
     });
+    linkBuildFiles(project, directory);
     return true;
+  }
+
+  /**
+   * 받은 폴더와 그 아래 BUILD_DEPTH 단계에서 찾은 pom.xml · Gradle 파일을 IntelliJ 의 「Add as Maven Project」 · 「Link Gradle Project」 로 연결한다
+   * (이클립스의 Import existing Maven project 처럼). 인덱싱이 끝난 뒤 EDT 에서 부른다. 동작이 없거나(플러그인 꺼짐) 이미 연결된 파일이면 건너뛴다.
+   */
+  private static void linkBuildFiles(Project project, Path directory) {
+    for (Path file : buildFiles(directory)) {
+      VirtualFile vf = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(file);
+      if (vf == null) continue;
+      String actionId = file.getFileName().toString().equals(POM) ? ACTION_LINK_MAVEN : ACTION_LINK_GRADLE;
+      DumbService.getInstance(project).smartInvokeLater(() -> {
+        AnAction action = ActionManager.getInstance().getAction(actionId);
+        if (action == null || project.isDisposed()) return;
+        var context = SimpleDataContext.builder().add(CommonDataKeys.PROJECT, project).add(CommonDataKeys.VIRTUAL_FILE, vf).build();
+        AnActionEvent event = AnActionEvent.createFromAnAction(action, null, ActionPlaces.UNKNOWN, context);
+        ActionUtil.performActionDumbAwareWithCallbacks(action, event);
+      });
+    }
+  }
+
+  /**
+   * 빌드 파일 목록. 한 폴더에 pom.xml 이 있으면 그것을, 없으면 settings.gradle(.kts) · build.gradle(.kts) 중 앞의 것을 고르고 그 아래로는 내려가지 않는다
+   * (다중 모듈은 맨 위 파일 하나가 아래 모듈까지 읽는다). 점으로 시작하는 폴더와 빌드 결과 폴더는 보지 않는다.
+   */
+  static List<Path> buildFiles(Path dir) {
+    List<Path> found = new ArrayList<>();
+    collectBuildFiles(dir, 0, found);
+    return found;
+  }
+
+  private static void collectBuildFiles(Path dir, int depth, List<Path> found) {
+    for (String name : BUILD_FILES) {
+      if (Files.isRegularFile(dir.resolve(name))) {
+        found.add(dir.resolve(name));
+        return;
+      }
+    }
+    if (depth == BUILD_DEPTH) return;
+    List<Path> children = new ArrayList<>();
+    try (var stream = Files.newDirectoryStream(dir, Files::isDirectory)) {
+      for (Path child : stream) children.add(child);
+    }
+    catch (IOException e) {
+      LOG.warn("빌드 파일을 찾다가 폴더를 읽지 못했습니다: " + dir, e);
+      return;
+    }
+    children.sort(null);
+    for (Path child : children) {
+      String name = child.getFileName().toString();
+      if (!name.startsWith(".") && !SKIP_DIRS.contains(name)) collectBuildFiles(child, depth + 1, found);
+    }
   }
 
   /** 워크스페이스면 프로젝트 폴더를 돌려준다. 아니면 null. */
