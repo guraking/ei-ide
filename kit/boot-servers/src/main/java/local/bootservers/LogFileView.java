@@ -7,13 +7,13 @@ import com.intellij.execution.ui.ConsoleViewContentType;
 import com.intellij.execution.ui.RunContentDescriptor;
 import com.intellij.execution.ui.RunContentManager;
 import com.intellij.icons.AllIcons;
+import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import local.bootservers.was.WasLogFiles;
 
 import javax.swing.JPanel;
-import java.awt.BorderLayout;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.file.Path;
@@ -42,8 +42,9 @@ final class LogFileView {
     /** 화면 스레드에서 부른다. */
     static void open(Project project, String serverName, Path file) {
         ConsoleView console = TextConsoleBuilderFactory.getInstance().createBuilder(project).filters(new LogLevelFilter()).getConsole();
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.add(console.getComponent(), BorderLayout.CENTER);
+        DefaultActionGroup actions = new DefaultActionGroup();
+        JPanel panel = ConsolePanel.create(console, actions);
+        ConsolePanel.addConsoleActions(console, actions);
         // 프로세스가 없는 탭은 실행 창이 끝난 탭으로 보고 다음 실행에 다시 쓰거나(닫아 버리거나) 이 탭이 끝난 다른 탭을 차지하므로 다시 쓰기를 막는다.
         RunContentDescriptor descriptor = new RunContentDescriptor(console, null, panel, serverName + " · " + file.getFileName(), AllIcons.FileTypes.Text) {
             @Override

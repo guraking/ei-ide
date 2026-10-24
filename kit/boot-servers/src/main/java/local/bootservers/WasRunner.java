@@ -4,7 +4,24 @@ import com.intellij.credentialStore.CredentialAttributes;
 import com.intellij.credentialStore.CredentialAttributesKt;
 import com.intellij.execution.ExecutionException;
 import com.intellij.execution.ProgramRunnerUtil;
-import com.intellij.execution.RunContentExecutor;
+import com.intellij.CommonBundle;
+import com.intellij.execution.ExecutionBundle;
+import com.intellij.execution.Executor;
+import com.intellij.execution.executors.DefaultRunExecutor;
+import com.intellij.execution.filters.TextConsoleBuilderFactory;
+import com.intellij.execution.ui.ConsoleView;
+import com.intellij.execution.ui.RunContentDescriptor;
+import com.intellij.execution.ui.RunContentManager;
+import com.intellij.execution.ui.actions.CloseAction;
+import com.intellij.icons.AllIcons;
+import com.intellij.openapi.actionSystem.ActionUpdateThread;
+import com.intellij.openapi.actionSystem.AnAction;
+import com.intellij.openapi.actionSystem.AnActionEvent;
+import com.intellij.openapi.actionSystem.CommonShortcuts;
+import com.intellij.openapi.actionSystem.DefaultActionGroup;
+import com.intellij.openapi.fileEditor.FileDocumentManager;
+import com.intellij.openapi.project.DumbAwareAction;
+import com.intellij.openapi.util.Disposer;
 import com.intellij.execution.RunManager;
 import com.intellij.execution.RunnerAndConfigurationSettings;
 import com.intellij.execution.configurations.GeneralCommandLine;
@@ -51,6 +68,8 @@ import local.bootservers.was.WasSettings;
 import local.bootservers.was.WeblogicBase;
 import local.bootservers.was.WildflyBase;
 import org.jetbrains.annotations.NotNull;
+
+import javax.swing.JPanel;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -357,13 +376,50 @@ public final class WasRunner {
                 handler.destroyProcess();
                 return;
             }
-            new RunContentExecutor(project, handler)
-                    .withTitle(server.name)
-                    .withActivateToolWindow(true)
-                    .withStop(() -> stop(server), () -> !handler.isProcessTerminated())
-                    .withRerun(() -> restart(server))
-                    .run();
+            showConsole(server, handler);
         });
+    }
+
+    /**
+     * 실행 창에 서버 탭을 띄우고 출력을 붙인다. IntelliJ RunContentExecutor 와 같되, 재실행 · 정지 · 닫기 아래에 콘솔 기본 동작을 붙인다.
+     * 화면 스레드에서 부른다.
+     */
+    private void showConsole(WasSettings.Server server, ProcessHandler handler) {
+        FileDocumentManager.getInstance().saveAllDocuments();
+        ConsoleView console = TextConsoleBuilderFactory.getInstance().createBuilder(project).getConsole();
+        Executor executor = DefaultRunExecutor.getRunExecutorInstance();
+        DefaultActionGroup actions = new DefaultActionGroup();
+        JPanel panel = ConsolePanel.create(console, actions);
+        RunContentDescriptor descriptor = new RunContentDescriptor(console, handler, panel, server.name);
+        descriptor.setActivateToolWindowWhenAdded(true);
+        Disposer.register(descriptor, console);
+
+        AnAction rerun = DumbAwareAction.create(CommonBundle.message("action.text.rerun"), AllIcons.Actions.Restart, e -> restart(server));
+        rerun.registerCustomShortcutSet(CommonShortcuts.getRerun(), panel);
+        actions.add(rerun);
+        actions.add(new DumbAwareAction(ExecutionBundle.messagePointer("action.AnAction.text.stop"),
+                ExecutionBundle.messagePointer("action.AnAction.description.stop"), AllIcons.Actions.Suspend) {
+            @Override
+            public void actionPerformed(@NotNull AnActionEvent e) {
+                stop(server);
+            }
+
+            @Override
+            public void update(@NotNull AnActionEvent e) {
+                e.getPresentation().setEnabled(!handler.isProcessTerminated());
+            }
+
+            @Override
+            public @NotNull ActionUpdateThread getActionUpdateThread() {
+                return ActionUpdateThread.EDT;
+            }
+        });
+        actions.add(new CloseAction(executor, descriptor, project));
+        ConsolePanel.addConsoleActions(console, actions);
+
+        RunContentManager.getInstance(project).showRunContent(executor, descriptor);
+        console.attachToProcess(handler);
+        handler.startNotify();
     }
 
     /** 이 서버가 쓸 포트 중 이미 쓰이는 것(예: "HTTP 8080, 관리 9990"). 모두 비었으면 null. 디버그 포트는 디버그로 띄울 때만 본다. */
