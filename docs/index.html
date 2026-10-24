@@ -972,7 +972,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
       <tr><td>Pull Selected</td><td>트리에서 고른 저장소만 받기. SVN 은 svn update</td></tr>
       <tr><td>Resolve Conflicts</td><td>충돌 해결 창</td></tr>
       <tr><td>Commit… · Push All</td><td>Commit… 은 커밋 창(Alt+0)을 엽니다. 저장소가 여러 개여도 한 창에서 같이 커밋됩니다. Push All 은 모든 Git 저장소를 체크한 올리기 창을 열어, 저장소마다 올릴 커밋을 보고 한 번에 올립니다.</td></tr>
-      <tr><td>Undo Last Git Action</td><td>위 도구줄 맨 오른쪽 되돌리기 아이콘. 고른 저장소(하나뿐이면 그것)의 마지막 Git 동작을 무엇을 어떻게 되돌릴지 보여 주고 확인받은 뒤 되돌립니다. 커밋은 커밋만 없애고 변경은 Staged 로 남기고, 합치기 · 받기 · 리베이스 · reset 은 그 전 위치로 돌리되 아직 커밋 안 한 내 변경은 지킵니다. 브랜치를 바꾼 직후면 앞 브랜치로 다시 바꿉니다. 브랜치 지우기는 지운 직후 오른쪽 아래 알림의 Restore 로 되살립니다.</td></tr>
+      <tr><td>Undo Last Git Action</td><td>위 도구줄 맨 오른쪽 되돌리기 아이콘. 고른 저장소(하나뿐이면 그것)의 마지막 Git 동작을 무엇을 어떻게 되돌릴지 보여 주고 확인받은 뒤 되돌립니다. 커밋은 커밋만 없애고 변경은 Staged 로 남기고, 합치기 · 받기 · 리베이스 · reset 은 그 전 위치로 돌리되 아직 커밋 안 한 내 변경은 지킵니다. 브랜치를 바꾼 직후면 앞 브랜치로 다시 바꿉니다. 브랜치 지우기는 지운 직후 오른쪽 아래 알림의 Restore 로 되살립니다. 되돌리기는 한 번만 되고, 실행 전에 저장 안 한 편집 내용을 먼저 저장합니다. Git 저장소가 있을 때만 보입니다.</td></tr>
     </table>
 
     <div class="figure">
@@ -1028,7 +1028,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
       <tr><td>커밋</td><td>Staged 에 담긴 것만 커밋됩니다. 메시지를 쓰고 Commit(또는 Commit and Push…). 고른 것 없이 전부 커밋하려면 Commit All.</td></tr>
       <tr><td>새 파일</td><td>Untracked 에 있는 새 파일도 「+」로 담으면 함께 커밋됩니다.</td></tr>
     </table>
-    <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note"><b>Stash 와 다른 점</b>스테이징은 「이번 커밋에 넣을 것」을 고르는 칸이고, 작업본은 그대로입니다. Stash(Synchronize 창 Stash Changes)는 고친 것을 통째로 치워 작업본을 깨끗하게 만들어 두었다가 나중에 Unstash 로 꺼내는 것입니다. 급한 다른 일을 먼저 할 때는 Stash, 고친 것 중 일부만 커밋할 때는 스테이징을 씁니다.</div><div class="note warn"><b>변경 목록(changelist)</b>스테이징을 켜면 Git 저장소에서는 변경 목록 대신 Staged · Unstaged 로 나뉩니다. SVN 저장소는 그대로 변경 목록을 씁니다.</div></div>
+    <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note"><b>Stash 와 다른 점</b>스테이징은 「이번 커밋에 넣을 것」을 고르는 칸이고, 작업본은 그대로입니다. Stash(Synchronize 창 Stash Changes)는 고친 것을 통째로 치워 작업본을 깨끗하게 만들어 두었다가 나중에 Unstash 로 꺼내는 것입니다. 급한 다른 일을 먼저 할 때는 Stash, 고친 것 중 일부만 커밋할 때는 스테이징을 씁니다.</div><div class="note warn"><b>변경 목록(changelist)</b>스테이징을 켜면 Git 저장소에서는 변경 목록 대신 Staged · Unstaged 로 나뉩니다. SVN 저장소는 그대로 변경 목록을 씁니다. 파일 우클릭 Assume Unchanged 는 Staged · Unstaged 목록에서도 됩니다.</div></div>
 
     <h3>Git Log · 아래쪽 「Git Log」 창</h3>
     <p class="lead">왼쪽에서 프로젝트(모듈)를 고르면 그 폴더를 바꾼 커밋을 IntelliJ 기본 Log 탭처럼 보여 줍니다. Git · SVN(한 줄) 모두 되고, 기존 Git 로그 창은 그대로입니다.</p>

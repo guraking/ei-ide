@@ -207,7 +207,10 @@ final class ProjectHistoryPanel extends JPanel {
 
       @Override
       public void mouseDragged(MouseEvent e) {
-        if (from >= 0) commits.setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
+        if (from < 0) return;
+        commits.setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
+        // 목록은 끄는 대로 선택을 옮기므로(이 처리기보다 먼저 돈다) 끄는 동안 선택과 오른쪽 칸을 끌기 시작한 줄에 묶어 둔다.
+        if (commits.getSelectedIndex() != from) commits.setSelectedIndex(from);
       }
 
       @Override
@@ -668,12 +671,12 @@ final class ProjectHistoryPanel extends JPanel {
         return;
       }
       reloadOnRepoChange = true;
-      GitBrancher.getInstance(project).merge(target, GitBrancher.DeleteOnMergeOption.NOTHING, List.of(repository));
+      SyncPanel.saveAllThen(() -> GitBrancher.getInstance(project).merge(target, GitBrancher.DeleteOnMergeOption.NOTHING, List.of(repository)));
     });
     JMenuItem rebase = new JMenuItem(SyncBundle.message("history.branch.rebase", current, branchName));
     rebase.addActionListener(a -> {
       reloadOnRepoChange = true;
-      GitBrancher.getInstance(project).rebase(List.of(repository), branchName);
+      SyncPanel.saveAllThen(() -> GitBrancher.getInstance(project).rebase(List.of(repository), branchName));
     });
     menu.add(merge);
     menu.add(rebase);

@@ -17,6 +17,8 @@ import com.intellij.openapi.actionSystem.impl.SimpleDataContext;
 import com.intellij.openapi.actionSystem.ex.ActionUtil;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.PathManager;
+import com.intellij.openapi.application.WriteIntentReadAction;
+import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.fileTypes.FileType;
 import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.project.Project;
@@ -50,6 +52,7 @@ import com.intellij.ui.JBColor;
 import com.intellij.ui.OnePixelSplitter;
 import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.util.ui.JBUI;
+import com.intellij.util.ui.WrapLayout;
 import org.jetbrains.annotations.NotNull;
 import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.treeStructure.Tree;
@@ -256,6 +259,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private final Set<File> switchedRoots = new HashSet<>();
   // Git 루트별 마지막 알림 때의 브랜치(EDT 에서만).
   private final Map<File, String> lastBranch = new HashMap<>();
+  // Git 루트별로 이 창의 되돌리기가 남긴 reflog 줄(EDT 에서만). 맨 위가 이 줄이면 또 되돌리지 않는다.
+  private final Map<File, String> lastUndone = new HashMap<>();
   // 이 창이 fetch 중인 Git 루트. 그동안 오는 저장소 알림은 fetch 가 낸 것이라 다시 비교하지 않는다.
   private final Set<File> fetching = ConcurrentHashMap.newKeySet();
   // SVN 루트별 마지막 서버 확인(svn status -u)의 들어올 변경(경로 → 상태 글자). 작업본만 다시 비교할 때 들어올 변경을 이것으로 가른다.
@@ -287,7 +292,11 @@ final class SyncPanel extends SimpleToolWindowPanel {
     actions.add(new GitAction("sync.git.branches", AllIcons.Vcs.Branch, ACTION_BRANCHES));
     actions.add(new GitAction("sync.git.stash", AllIcons.Vcs.ShelveSilent, ACTION_STASH));
     actions.add(new GitAction("sync.git.unstash", AllIcons.Vcs.Unshelve, ACTION_UNSTASH));
-    actions.add(DumbAwareAction.create(SyncBundle.message("sync.git.undo"), AllIcons.Actions.Undo, e -> undoLastGitAction()));
+    actions.add(new DumbAwareAction(SyncBundle.message("sync.git.undo"), null, AllIcons.Actions.Undo) {
+      @Override public @NotNull ActionUpdateThread getActionUpdateThread() { return ActionUpdateThread.EDT; }
+      @Override public void update(@NotNull AnActionEvent e) { e.getPresentation().setVisible(hasGitRepo()); }
+      @Override public void actionPerformed(@NotNull AnActionEvent e) { undoLastGitAction(); }
+    });
     ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar(TOOLBAR_PLACE, actions, true);
     toolbar.setTargetComponent(this);
     title.setOpaque(false);
@@ -311,8 +320,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
     splitter.setFirstComponent(ScrollPaneFactory.createScrollPane(tree, true));
     splitter.setSecondComponent(diffPanel.getComponent());
 
-    // 아래 단추 줄: 위쪽 1픽셀 선으로 목록과 가르고, 단추 사이 · 가장자리는 IntelliJ 기본 간격.
-    JPanel bottom = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(GAP), JBUI.scale(GAP / 2)));
+    // 아래 단추 줄: 위쪽 1픽셀 선으로 목록과 가르고, 단추 사이 · 가장자리는 IntelliJ 기본 간격. 창이 좁으면 다음 줄로 넘긴다.
+    JPanel bottom = new JPanel(new WrapLayout(FlowLayout.LEFT, JBUI.scale(GAP), JBUI.scale(GAP / 2)));
     bottom.setBorder(JBUI.Borders.customLineTop(JBColor.border()));
     // 받기(Pull)는 이 창의 주된 동작이라 기본 단추 모양으로 둔다.
     JButton pull = actionButton(SyncBundle.message("sync.button.pull"), IconLoader.getIcon(PULL_SELECTED_ICON, SyncPanel.class), ACTION_PULL, true);
@@ -470,16 +479,14 @@ final class SyncPanel extends SimpleToolWindowPanel {
     }
 
     // Git 의 나갈 변경은 스테이징(커밋 창의 Staged)에 담거나 뺄 수 있다. 커밋만 하고 안 올린 파일(NONE)은 대상이 아니다.
-    // 일부 줄만 담은 파일(BOTH)은 Staged · Unstaged 양쪽 줄로 보이므로 같은 파일이 두 번 골렸을 수 있어 한 번만 센다.
-    List<Change> unique = selected.stream().distinct().toList();
-    List<Change> toStage = unique.stream().filter(c -> c.stage() == Stage.UNSTAGED || c.stage() == Stage.BOTH).toList();
+    List<Change> toStage = selected.stream().filter(c -> c.stage() == Stage.UNSTAGED || c.stage() == Stage.BOTH).toList();
     // 새 경로(A · R · C)는 아래 「Unstage Only, Keep Files」가 맡는다.
-    List<Change> toUnstage = unique.stream()
+    List<Change> toUnstage = selected.stream()
       .filter(c -> (c.stage() == Stage.STAGED || c.stage() == Stage.BOTH) && undoOf(c) == Undo.REVERT).toList();
     if (!toStage.isEmpty() || !toUnstage.isEmpty()) menu.addSeparator();
     if (!toStage.isEmpty()) {
       JMenuItem stage = new JMenuItem(SyncBundle.message("sync.menu.stage", toStage.size()));
-      stage.addActionListener(a -> runOnRepos(toStage, repo -> List.of("add", "--"), SyncBundle.message("sync.stage.done", toStage.size())));
+      stage.addActionListener(a -> saveAllThen(() -> runOnRepos(toStage, repo -> List.of("add", "--"), SyncBundle.message("sync.stage.done", toStage.size()))));
       menu.add(stage);
     }
     if (!toUnstage.isEmpty()) {
@@ -531,7 +538,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
     TreePath[] paths = tree.getSelectionPaths();
     if (paths == null) return result;
     for (TreePath path : paths) {
-      if (path.getLastPathComponent() instanceof DefaultMutableTreeNode node && node.getUserObject() instanceof Change c) {
+      // 일부 줄만 담은 파일(BOTH)은 Staged · Unstaged 두 줄로 보이므로 같은 파일을 두 번 넣지 않는다.
+      if (path.getLastPathComponent() instanceof DefaultMutableTreeNode node && node.getUserObject() instanceof Change c && !result.contains(c)) {
         result.add(c);
       }
     }
@@ -936,9 +944,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
 
     @Override
     public void update(@NotNull AnActionEvent e) {
-      boolean git = false;
-      for (Repo repo : repos) git |= repo.vcs() == Vcs.GIT;
-      e.getPresentation().setVisible(git);
+      e.getPresentation().setVisible(hasGitRepo());
     }
 
     @Override
@@ -1060,9 +1066,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
         Thread.currentThread().interrupt();
         return;
       }
-      GitUndo.Plan plan = GitUndo.plan(headTop, branch, branchTop);
+      // 이 창이 방금 되돌린 결과가 맨 위면 또 되돌리지 않는다(다시 하기가 되므로).
+      GitUndo.Plan plan = headTop.equals(lastUndone.get(repo.root())) ? null : GitUndo.plan(headTop, branch, branchTop);
       String last = branchTop != null && plan != null && plan.way() != GitUndo.Way.SWITCH_BACK ? branchTop : headTop;
-      SwingUtilities.invokeLater(() -> confirmUndo(repo, gitRepository, plan, last, pushed));
+      SwingUtilities.invokeLater(() -> confirmUndo(repo, gitRepository, branch, plan, last, pushed));
     });
   }
 
@@ -1077,10 +1084,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
     }
   }
 
-  private void confirmUndo(Repo repo, GitRepository gitRepository, GitUndo.Plan plan, String last, boolean pushed) {
+  private void confirmUndo(Repo repo, GitRepository gitRepository, String branch, GitUndo.Plan plan, String last, boolean pushed) {
     String name = repo.root().getName();
     if (plan == null) {
-      showStatus(SyncBundle.message("sync.undo.nothing", name, last));
+      showStatus(SyncBundle.message(last.equals(lastUndone.get(repo.root())) ? "sync.undo.already" : "sync.undo.nothing", name, last));
       return;
     }
     String how = switch (plan.way()) {
@@ -1092,16 +1099,25 @@ final class SyncPanel extends SimpleToolWindowPanel {
     int answer = Messages.showYesNoDialog(project, SyncBundle.message("sync.undo.confirm", name, last, how) + note,
                                           SyncBundle.message("sync.undo.title"), Messages.getQuestionIcon());
     if (answer != Messages.YES) return;
+    String undone = GitUndo.undoneLine(plan, branch);
     if (plan.way() == GitUndo.Way.SWITCH_BACK) {
-      GitBrancher.getInstance(project).checkout(plan.target(), false, List.of(gitRepository), null);
+      if (undone != null) lastUndone.put(repo.root(), undone);
+      saveAllThen(() -> GitBrancher.getInstance(project).checkout(plan.target(), false, List.of(gitRepository), null));
       return;
     }
+    saveAllThen(() -> reset(repo, gitRepository, plan, last, undone));
+  }
+
+  /** reset --soft · --keep 을 작업 스레드에서 돌리고, 성공하면 그 결과 줄을 lastUndone 에 남긴다. */
+  private void reset(Repo repo, GitRepository gitRepository, GitUndo.Plan plan, String last, String undone) {
+    String name = repo.root().getName();
     String mode = plan.way() == GitUndo.Way.SOFT ? "--soft" : "--keep";
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       String message;
       try {
         git(repo.root(), "reset", mode, plan.target());
         message = SyncBundle.message("sync.undo.done", name, last);
+        SwingUtilities.invokeLater(() -> lastUndone.put(repo.root(), undone));
       }
       catch (IOException ex) {
         message = ex.getMessage();
@@ -1116,6 +1132,24 @@ final class SyncPanel extends SimpleToolWindowPanel {
       String m = message;
       SwingUtilities.invokeLater(() -> { showStatus(m); recompare(); });
     });
+  }
+
+  /**
+   * 열린 편집기의 저장 안 한 내용을 디스크에 쓴 뒤 then 을 돌린다. git 은 디스크 파일만 보므로 Stage · reset · 브랜치 동작 전에 부른다.
+   * Swing 클릭에는 쓰기 의도 락이 없어(262) 저장과 IntelliJ 브랜치 동작을 WriteIntentReadAction 안에서 한다. EDT 에서만 부른다.
+   */
+  static void saveAllThen(Runnable then) {
+    WriteIntentReadAction.run(() -> {
+      FileDocumentManager.getInstance().saveAllDocuments();
+      then.run();
+    });
+  }
+
+  private boolean hasGitRepo() {
+    for (Repo repo : repos) {
+      if (repo.vcs() == Vcs.GIT) return true;
+    }
+    return false;
   }
 
   /** 단추가 다룰 저장소: 트리에서 고른 것, 없으면 전부. */

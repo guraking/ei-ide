@@ -54,6 +54,9 @@ public class SyncCheck {
     eq(GitUndo.plan("clone: from https://example.com/a.git", "main", "clone: from https://example.com/a.git"), null);
     eq(GitUndo.plan("commit: 고침", null, null), null);
     eq(GitUndo.plan("", "main", "commit: 고침"), null);
+    eq(GitUndo.undoneLine(new GitUndo.Plan(GitUndo.Way.SOFT, "main@{1}"), "main"), "reset: moving to main@{1}");
+    eq(GitUndo.undoneLine(new GitUndo.Plan(GitUndo.Way.SWITCH_BACK, "main"), "dev"), "checkout: moving from dev to main");
+    eq(GitUndo.undoneLine(new GitUndo.Plan(GitUndo.Way.SWITCH_BACK, "main"), null), null);
 
     // svn propget --xml
     eq(SyncPanel.parseSvnProperty(""), "");
