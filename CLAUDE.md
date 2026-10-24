@@ -43,7 +43,7 @@ python kit\ko\apply_ko.py
 kit\brand\apply_brand.bat
 build-windows.bat
 ```
-- 판 번호 `262.10968.N`, N 은 `build-number.txt`(1000 이상). 결과 `release\eiide-262.10968.N.exe`, 끝나면 GitHub 릴리스로 올림.
+- 판 번호 `262.10968.N`, N 은 GitHub 마지막 릴리스 번호와 이 PC 의 `build-number.txt` 중 큰 쪽 + 1(1000 이상, 성공한 빌드만 기록). 노트북에서 빌드하는 법은 `docs/노트북-빌드.md`. 결과 `release\eiide-262.10968.N.exe`, 끝나면 GitHub 릴리스로 올림.
 - 커뮤니티 새 판: `python kit\check_update.py` (새 소스를 `intellij-community-new` 에 받아 kit 적용 · 플러그인 컴파일 · 판 번호 박힌 곳 보고).
 
 ## 플러그인 컴파일 · 점검

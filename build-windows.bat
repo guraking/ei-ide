@@ -26,11 +26,18 @@ set "SKIP=maven_artifacts,sources_archive,search_index,cross_platform_dist,doc_a
 if not exist logs mkdir logs
 set "LOG=%CD%\logs\build-windows.log"
 
-rem 빌드마다 판 번호 마지막 자리를 하나 올린다(262.10968.N). 번호는 build-number.txt 에 남는다.
-if not exist build-number.txt >build-number.txt echo 0
-set /p N=<build-number.txt
+rem 판 번호 마지막 자리 N(262.10968.N)은 GitHub 마지막 릴리스 번호와 이 PC 의 build-number.txt 가운데 큰 쪽에 1 을 더한다.
+rem 데스크탑 · 노트북 어느 쪽에서 빌드해도 다른 PC 가 올린 릴리스 다음 번호가 된다. build-number.txt 는 빌드가 성공했을 때만 올린다(멈추거나 실패한 빌드는 번호를 쓰지 않는다).
+set "LAST=0"
+if exist build-number.txt set /p LAST=<build-number.txt
+set "REL=0"
+for /f "tokens=3 delims=." %%a in ('gh release view --repo guraking/ei-ide --json tagName -q .tagName 2^>nul') do set "REL=%%a"
+rem 숫자가 아닌 값은 set /a 에서 0 이 된다.
+set /a LAST=LAST, REL=REL
+if %REL%==0 echo GitHub 마지막 릴리스 번호를 읽지 못해 이 PC 의 build-number.txt(%LAST%) 다음 번호로 매깁니다. 다른 PC 와 번호가 겹칠 수 있습니다.
+set /a N=LAST
+if %REL% GTR %N% set /a N=REL
 set /a N+=1
->build-number.txt echo %N%
 set "BUILD_NUMBER=262.10968.%N%"
 echo 판 번호: %BUILD_NUMBER%
 echo 빌드를 시작합니다. 기록: %LOG%
@@ -47,6 +54,7 @@ if not "%BUILD_RC%"=="0" (
     exit /b 1
 )
 echo 완료. 결과물은 %CD%\out\idea-ce\artifacts 에 있습니다.
+>"%~dp0build-number.txt" echo %N%
 rem 노트북에 가져갈 수 있게 설치 파일을 release 폴더에도 둔다.
 copy /Y "%~dp0intellij-community\out\idea-ce\artifacts\eiide-*.exe" "%~dp0release\" >nul && echo 설치 파일을 release 폴더에도 복사했습니다.
 rem 릴리스 설명은 수정내역.md 의 맨 위 절(「## 」 줄부터 다음 「## 」 줄 전까지)이다. 읽지 못하면 판 번호만 적는다.
