@@ -22,6 +22,8 @@
     <!-- 「Git Log」: 프로젝트(모듈)를 골라 그 폴더의 커밋만 GitKraken 처럼 본다. 기존 Git 로그 창은 그대로 둔다. -->
     <toolWindow id="ProjectHistory" anchor="bottom" icon="AllIcons.Vcs.History"
                 factoryClass="kinggura.sync.ProjectHistoryPanel$Factory"/>
+    <!-- Clone 창 Directory 기본값을 프로젝트 안이 아니라 프로젝트 옆(상위 폴더)으로. -->
+    <clonePathProvider implementation="kinggura.sync.CloneNextToProject"/>
   </extensions>
 
   <projectListeners>
