@@ -50,6 +50,7 @@ public class SyncCheck {
 
     checkUnmappedVcs();
     checkBuildFiles();
+    checkInSvn();
     checkRun();
     checkReverseMerge();
     System.out.println("SyncCheck 통과");
@@ -80,6 +81,20 @@ public class SyncCheck {
     eq(CloneIntoProject.buildFiles(repo), List.of(app.resolve("settings.gradle.kts"), eclipse.resolve("pom.xml")));
     java.nio.file.Files.writeString(repo.resolve("pom.xml"), "");
     eq(CloneIntoProject.buildFiles(repo), List.of(repo.resolve("pom.xml")));
+  }
+
+  /** SVN 작업본 판정: 그 폴더나 위 어디에 .svn 폴더가 있으면 SVN 이다(.svn 파일은 아니다). */
+  private static void checkInSvn() throws IOException {
+    java.nio.file.Path tmp = java.nio.file.Files.createTempDirectory("insvn");
+    java.nio.file.Path inner = java.nio.file.Files.createDirectories(tmp.resolve("wc/src/main"));
+    eq(CloneIntoProject.inSvn(inner), false);
+    java.nio.file.Files.writeString(tmp.resolve("wc/.svn"), "");
+    eq(CloneIntoProject.inSvn(inner), false);
+    java.nio.file.Files.delete(tmp.resolve("wc/.svn"));
+    java.nio.file.Files.createDirectories(tmp.resolve("wc/.svn"));
+    eq(CloneIntoProject.inSvn(inner), true);
+    eq(CloneIntoProject.inSvn(tmp.resolve("wc")), true);
+    eq(CloneIntoProject.inSvn(tmp), false);
   }
 
   /** 루트 미등록 폴더: 가장 가까운 .svn · .git 을 따르고, 폴더 이름의 "git" 은 보지 않는다. */
