@@ -4,17 +4,14 @@ import com.intellij.diff.DiffContentFactory;
 import com.intellij.diff.DiffManager;
 import com.intellij.diff.requests.SimpleDiffRequest;
 import com.intellij.icons.AllIcons;
-import com.intellij.openapi.actionSystem.ActionManager;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
-import com.intellij.openapi.actionSystem.CommonDataKeys;
-import com.intellij.openapi.actionSystem.ex.ActionUtil;
-import com.intellij.openapi.actionSystem.impl.SimpleDataContext;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ex.ApplicationUtil;
 import com.intellij.openapi.application.WriteIntentReadAction;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
-import com.intellij.openapi.fileTypes.FileTypeManager;
+import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
@@ -23,7 +20,10 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.ComboBox;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.openapi.ui.Messages;
+import com.intellij.openapi.vcs.AbstractVcsHelper;
+import com.intellij.openapi.vcs.FilePath;
 import com.intellij.openapi.vcs.changes.VcsDirtyScopeManager;
+import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VfsUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.ui.JBColor;
@@ -35,7 +35,10 @@ import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.JBFont;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.NamedColorUtil;
+import com.intellij.util.concurrency.AppExecutorUtil;
 import com.intellij.util.ui.UIUtil;
+import com.intellij.vcsUtil.VcsUtil;
+import git4idea.GitVcs;
 import git4idea.branch.GitBranchUtil;
 import git4idea.repo.GitRepository;
 import org.jetbrains.annotations.NotNull;
@@ -49,9 +52,12 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
-
-import static kinggura.sync.SyncPanel.git;
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 
 /**
  * Git 메뉴 「Merge Branches…」(역머지, 반대 방향도 된다). 서버 브랜치 목록을 읽어 From(기준 브랜치) · Into(개인 브랜치)를 고르게 하고,
@@ -59,7 +65,6 @@ import static kinggura.sync.SyncPanel.git;
  * 고른 두 브랜치는 저장소의 .git/config 에 남겨 다음에 그대로 고른다(ReverseMerge.CONFIG_*).
  */
 public final class ReverseMergeAction extends DumbAwareAction {
-  private static final String ACTION_RESOLVE = "Git.ResolveConflicts";
   /** 내 파일 줄 글자색. 동기화 창 · 설명서에서 「주의」에 쓰는 주황. */
   static final JBColor MINE_COLOR = new JBColor(0xB45F06, 0xFF9F0A);
   private static final int TABLE_W = 760;
@@ -96,18 +101,24 @@ public final class ReverseMergeAction extends DumbAwareAction {
 
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
-        try {
+        // 서버가 느릴 때 취소를 누르면 기다리던 git 을 끝낸다(작업 스레드를 끊으면 SyncPanel.run 이 프로세스를 죽인다).
+        Future<?> work = ApplicationManager.getApplication().executeOnPooledThread(() -> {
           remote = ReverseMerge.remoteOf(root, current);
           names = ReverseMerge.serverBranches(root, remote);
           savedFrom = ReverseMerge.config(root, ReverseMerge.CONFIG_FROM);
           savedInto = ReverseMerge.config(root, ReverseMerge.CONFIG_INTO);
+          return null;
+        });
+        try {
+          ApplicationUtil.runWithCheckCanceled(work, indicator);
         }
-        catch (IOException ex) {
-          throw new RuntimeException(ex.getMessage(), ex);
+        catch (ProcessCanceledException canceled) {
+          work.cancel(true);
+          throw canceled;
         }
-        catch (InterruptedException ex) {
-          Thread.currentThread().interrupt();
-          throw new RuntimeException(SyncBundle.message("sync.interrupted"), ex);
+        catch (ExecutionException ex) {
+          Throwable cause = ex.getCause();
+          throw new RuntimeException(cause instanceof InterruptedException ? SyncBundle.message("sync.interrupted") : cause.getMessage(), cause);
         }
       }
 
@@ -142,10 +153,13 @@ public final class ReverseMergeAction extends DumbAwareAction {
     private final JBLabel summary = new JBLabel();
     private final JBLabel warn = new JBLabel();
     private final JBLabel unpushed = new JBLabel();
+    private final JBLabel intoUnpushed = new JBLabel();
+    // 미리 보기 계산을 하나씩 차례로 돌린다. 같은 저장소에 fetch 가 겹치면 「cannot lock ref」로 실패한다.
+    private final ExecutorService worker = AppExecutorUtil.createBoundedApplicationPoolExecutor("EI Merge Branches", 1);
     private final RowModel model = new RowModel();
     private final JBCheckBox push = new JBCheckBox();
-    // 미리 보기를 다시 읽을 때마다 하나 올린다(EDT 에서만). 늦게 끝난 옛 계산이 새 결과를 덮지 않게 한다.
-    private int seq;
+    // 미리 보기를 다시 읽을 때마다 하나 올린다(EDT 에서만 쓰고 worker 가 읽는다). 늦게 끝난 옛 계산이 새 결과를 덮지 않게 한다.
+    private volatile int seq;
     private boolean ready;
 
     PreviewDialog(Project project, GitRepository repo, File root, String remote, String current, List<String> names, String from, String into) {
@@ -228,7 +242,9 @@ public final class ReverseMergeAction extends DumbAwareAction {
       lines.add(summary);
       lines.add(warn);
       lines.add(unpushed);
+      lines.add(intoUnpushed);
       unpushed.setForeground(NamedColorUtil.getErrorForeground());
+      intoUnpushed.setForeground(NamedColorUtil.getErrorForeground());
       top.add(lines, BorderLayout.SOUTH);
       warn.setForeground(MINE_COLOR);
       JPanel hints = new JPanel(new GridLayout(0, 1, 0, JBUI.scale(2)));
@@ -254,23 +270,31 @@ public final class ReverseMergeAction extends DumbAwareAction {
       setOKActionEnabled(false);
       warn.setText(" ");
       unpushed.setText(" ");
+      intoUnpushed.setText(" ");
       model.set(List.of());
       String from = from();
       String into = into();
       push.setText(SyncBundle.message("rmerge.push", remote + "/" + into));
-      if (from == null || into == null || from.equals(into)) {
+      if (from == null || into == null) {
+        summary.setText(SyncBundle.message("rmerge.pick"));
+        return;
+      }
+      if (from.equals(into)) {
         summary.setText(SyncBundle.message("rmerge.same"));
         return;
       }
       summary.setText(SyncBundle.message("rmerge.loading"));
-      ApplicationManager.getApplication().executeOnPooledThread(() -> {
+      worker.execute(() -> {
+        if (mySeq != seq || isDisposed()) return;  // 그사이 다른 브랜치를 골랐거나 창을 닫았다. 새 계산만 돌린다.
         ReverseMerge.Preview preview = null;
         String error = null;
         int localOnly = 0;
+        int intoLocalOnly = 0;
         try {
           ReverseMerge.fetch(root, remote, from, into);
           preview = ReverseMerge.preview(root, remote, from, into, current);
           localOnly = ReverseMerge.unpushed(root, remote, from);
+          intoLocalOnly = ReverseMerge.unpushed(root, remote, into);
         }
         catch (IOException ex) {
           error = ex.getMessage();
@@ -282,6 +306,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
         ReverseMerge.Preview result = preview;
         String failure = error;
         int notOnServer = localOnly;
+        int intoNotOnServer = intoLocalOnly;
         SwingUtilities.invokeLater(() -> {
           if (mySeq != seq || isDisposed()) return;
           if (failure != null) {
@@ -291,6 +316,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
           }
           model.set(result.files());
           if (notOnServer > 0) unpushed.setText(SyncBundle.message("rmerge.unpushed", remote, from, notOnServer));
+          if (intoNotOnServer > 0) intoUnpushed.setText(SyncBundle.message("rmerge.unpushed.into", into, intoNotOnServer));
           if (result.commits() == 0) {
             summary.setText(SyncBundle.message("rmerge.up.to.date", into, from));
             return;
@@ -309,8 +335,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
       String into = into();
       String intoTip = ReverseMerge.intoTip(remote, into, current);
       ApplicationManager.getApplication().executeOnPooledThread(() -> {
-        String left;
-        String right;
+        byte[] left;
+        byte[] right;
         try {
           left = show(intoTip, item.path());
           right = show(ReverseMerge.remoteRef(remote, from), item.path());
@@ -320,20 +346,26 @@ public final class ReverseMergeAction extends DumbAwareAction {
           return;
         }
         SwingUtilities.invokeLater(() -> {
-          var type = FileTypeManager.getInstance().getFileTypeByFileName(new File(item.path()).getName());
+          // 바이트로 넘겨 IDE 가 파일 인코딩(프로젝트 설정 · BOM)으로 읽게 한다. MS949 파일의 한글이 깨지지 않는다.
+          FilePath path = VcsUtil.getFilePath(new File(root, item.path()), false);
           DiffContentFactory factory = DiffContentFactory.getInstance();
-          DiffManager.getInstance().showDiff(project, new SimpleDiffRequest(item.path(), factory.create(project, left, type),
-                                                                            factory.create(project, right, type), into, from));
+          try {
+            DiffManager.getInstance().showDiff(project, new SimpleDiffRequest(item.path(), factory.createFromBytes(project, left, path),
+                                                                              factory.createFromBytes(project, right, path), into, from));
+          }
+          catch (IOException ex) {
+            Messages.showErrorDialog(project, ex.getMessage(), SyncBundle.message("rmerge.title"));
+          }
         });
       });
     }
 
-    private String show(String ref, String path) throws InterruptedException {
+    private byte[] show(String ref, String path) throws InterruptedException {
       try {
-        return git(root, "show", ref + ":" + path);
+        return SyncPanel.gitBytes(root, "show", ref + ":" + path);
       }
       catch (IOException missing) {
-        return "";  // 그 브랜치에 없는 파일(새로 생겼거나 지워짐)
+        return new byte[0];  // 그 브랜치에 없는 파일(새로 생겼거나 지워짐)
       }
     }
 
@@ -348,6 +380,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
       WriteIntentReadAction.run((Runnable) () -> FileDocumentManager.getInstance().saveAllDocuments());
       ProgressManager.getInstance().run(new Task.Backgroundable(project, SyncBundle.message("rmerge.running", from, into), false) {
         private ReverseMerge.Result result;
+        private Set<String> conflicts = Set.of();
 
         @Override
         public void run(@NotNull ProgressIndicator indicator) {
@@ -355,6 +388,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
             ReverseMerge.saveConfig(root, ReverseMerge.CONFIG_FROM, from);
             ReverseMerge.saveConfig(root, ReverseMerge.CONFIG_INTO, into);
             result = ReverseMerge.merge(root, remote, from, into, current, pushAfter);
+            if (result == ReverseMerge.Result.CONFLICT) conflicts = ReverseMerge.conflicts(root);
           }
           catch (IOException ex) {
             throw new RuntimeException(ex.getMessage(), ex);
@@ -364,10 +398,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
             throw new RuntimeException(SyncBundle.message("sync.interrupted"), ex);
           }
           finally {
-            // 성공 · 실패 모두 브랜치 · 파일이 바뀌었을 수 있어 IDE 가 알던 상태를 새로 읽는다.
-            VfsUtil.markDirtyAndRefresh(false, true, true, repo.getRoot());
-            repo.update();
-            VcsDirtyScopeManager.getInstance(project).markEverythingDirty();
+            refreshIde();
           }
         }
 
@@ -375,11 +406,10 @@ public final class ReverseMergeAction extends DumbAwareAction {
         public void onSuccess() {
           if (result == ReverseMerge.Result.CONFLICT) {
             Messages.showWarningDialog(project, SyncBundle.message("rmerge.conflict", from, into), SyncBundle.message("rmerge.title"));
-            resolveConflicts(repo.getRoot());
+            resolveThenFinish(conflicts, from, into, pushAfter);
             return;
           }
-          Messages.showInfoMessage(project, pushAfter ? SyncBundle.message("rmerge.done.pushed", from, into, remote)
-                                                      : SyncBundle.message("rmerge.done", from, into), SyncBundle.message("rmerge.title"));
+          showDone(from, into, pushAfter);
         }
 
         @Override
@@ -389,13 +419,62 @@ public final class ReverseMergeAction extends DumbAwareAction {
       });
     }
 
-    /** IntelliJ 충돌 해결 창을 이 저장소로 연다. */
-    private void resolveConflicts(VirtualFile rootFile) {
-      AnAction action = ActionManager.getInstance().getAction(ACTION_RESOLVE);
-      if (action == null) return;
-      var context = SimpleDataContext.builder().add(CommonDataKeys.PROJECT, project).add(CommonDataKeys.VIRTUAL_FILE, rootFile).build();
-      AnActionEvent event = AnActionEvent.createFromAnAction(action, null, "KingGuraReverseMerge", context);
-      ActionUtil.performActionDumbAwareWithCallbacks(action, event);
+    /** 합치기가 끝났다는 알림. */
+    private void showDone(String from, String into, boolean pushAfter) {
+      Messages.showInfoMessage(project, pushAfter ? SyncBundle.message("rmerge.done.pushed", from, into, remote)
+                                                  : SyncBundle.message("rmerge.done", from, into), SyncBundle.message("rmerge.title"));
+    }
+
+    /** 성공 · 실패 모두 브랜치 · 파일이 바뀌었을 수 있어 IDE 가 알던 상태를 새로 읽는다. 작업 스레드에서 부른다. */
+    private void refreshIde() {
+      VfsUtil.markDirtyAndRefresh(false, true, true, repo.getRoot());
+      repo.update();
+      VcsDirtyScopeManager.getInstance(project).markEverythingDirty();
+    }
+
+    /**
+     * 충돌 파일을 IntelliJ 충돌 해결 창(3-way)으로 연다. 창을 닫은 뒤 충돌이 모두 풀렸으면 합치기 커밋 · 푸시 · 원래 브랜치로 돌아오기를 이어서 한다.
+     * Git 메뉴의 Resolve Conflicts 는 변경 목록이 충돌을 알아챈 뒤에만 파일을 찾으므로, 막 끝난 합치기에서는 git 이 알려 준 충돌 파일을 직접 넘긴다.
+     * 충돌이 남았거나 합치기를 취소했으면 마무리하지 않고 안내만 한다.
+     */
+    private void resolveThenFinish(Set<String> paths, String from, String into, boolean pushAfter) {
+      List<VirtualFile> files = new ArrayList<>();
+      for (String path : paths) {
+        VirtualFile file = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(new File(root, path));
+        if (file != null) files.add(file);
+      }
+      WriteIntentReadAction.run((Runnable) () -> AbstractVcsHelper.getInstance(project).showMergeDialog(files, GitVcs.getInstance(project).getMergeProvider()));
+      ProgressManager.getInstance().run(new Task.Backgroundable(project, SyncBundle.message("rmerge.finishing", from, into), false) {
+        private boolean finished;
+
+        @Override
+        public void run(@NotNull ProgressIndicator indicator) {
+          try {
+            finished = ReverseMerge.finish(root, remote, into, current, pushAfter);
+          }
+          catch (IOException ex) {
+            throw new RuntimeException(ex.getMessage(), ex);
+          }
+          catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(SyncBundle.message("sync.interrupted"), ex);
+          }
+          finally {
+            refreshIde();
+          }
+        }
+
+        @Override
+        public void onSuccess() {
+          if (finished) showDone(from, into, pushAfter);
+          else Messages.showWarningDialog(project, SyncBundle.message("rmerge.conflict.left", into), SyncBundle.message("rmerge.title"));
+        }
+
+        @Override
+        public void onThrowable(@NotNull Throwable error) {
+          Messages.showErrorDialog(project, error.getMessage(), SyncBundle.message("rmerge.title"));
+        }
+      });
     }
   }
 

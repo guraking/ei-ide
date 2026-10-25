@@ -28,6 +28,7 @@ import com.intellij.openapi.vcs.ProjectLevelVcsManager;
 import com.intellij.openapi.vcs.VcsDirectoryMapping;
 import com.intellij.openapi.vcs.checkout.CheckoutListener;
 import com.intellij.openapi.vfs.LocalFileSystem;
+import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.wm.impl.welcomeScreen.cloneableProjects.CloneableProjectsService;
 import com.intellij.psi.PsiDirectory;
@@ -43,6 +44,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Clone 이 끝난 폴더를 새 창 프로젝트로 열지 않고 지금 열린 프로젝트에 모듈로 붙인다(이클립스 워크스페이스처럼).
@@ -56,8 +58,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * 프로젝트 창 맨 위의 프로젝트 폴더 줄은 HideWorkspaceRoot 가 그 안의 줄들(.idea 빼고)로 바꿔 그린다
  * (IntelliJ 가 열 때마다 다시 등록하므로 등록은 빼지 않는다. 받은 저장소 모듈은 이 폴더 줄 아래에 그려지므로 줄만 지우면 같이 사라진다).
  * 그러면 「git」 줄 없이 받은 저장소 모듈들만 이클립스처럼 나란히 보인다(빈 워크스페이스면 빈 트리, .idea 는 디스크에 그대로).
- * 워크스페이스 판정(isWorkspace): 프로젝트 폴더와 그 위 어디에도 .git 이 없고,
+ * 워크스페이스 판정(workspaceDir): 프로젝트 폴더와 그 위 어디에도 .git · .svn 이 없고, 프로젝트 폴더 아래에 모듈로 붙은 폴더가 하나 이상 있으며,
  * 프로젝트 폴더를 콘텐츠 루트로 가진 모듈이 없거나 있어도 그 루트 하나뿐이며 소스 폴더가 없다.
+ * 그래서 빈 워크스페이스는 첫 Clone 전까지 폴더 줄이 보인다.
  */
 public final class CloneIntoProject implements CheckoutListener, StartupActivity.DumbAware {
   private static final Logger LOG = Logger.getInstance(CloneIntoProject.class);
@@ -84,15 +87,30 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
     String name = dir.getName();
     if (ModuleManager.getInstance(project).findModuleByName(name) != null) return false;
 
-    ApplicationManager.getApplication().invokeAndWait(() -> {
-      if (project.isDisposed()) return;
-      Module module = WriteAction.compute(() -> ModuleManager.getInstance(project)
-        .newModule(Path.of(base, Project.DIRECTORY_STORE_FOLDER, "modules", name + ".iml"), ModuleTypeManager.getInstance().getDefaultModuleType().getId()));
-      ModuleRootModificationUtil.addContentRoot(module, dir);
-      ModuleRootModificationUtil.setSdkInherited(module);
-      addVcsMapping(project, directory);
-      removeWorkspaceModule(project);
-    });
+    // 이 리스너는 Clone 작업 스레드에서 불린다(CloneableProjectsService.runCloneTask). 모듈 · 매핑은 EDT 에서 바꾼다.
+    // 붙이다 실패하면 만든 모듈을 지우고 false 를 돌려 IntelliJ 기본 동작(새 프로젝트로 열기)에 맡긴다. 반쯤 붙은 모듈을 남기지 않는다.
+    AtomicReference<Module> created = new AtomicReference<>();
+    try {
+      ApplicationManager.getApplication().invokeAndWait(() -> {
+        if (project.isDisposed()) return;
+        created.set(WriteAction.compute(() -> ModuleManager.getInstance(project)
+          .newModule(Path.of(base, Project.DIRECTORY_STORE_FOLDER, "modules", name + ".iml"), ModuleTypeManager.getInstance().getDefaultModuleType().getId())));
+        ModuleRootModificationUtil.addContentRoot(created.get(), dir);
+        ModuleRootModificationUtil.setSdkInherited(created.get());
+        addVcsMapping(project, directory);
+        removeWorkspaceModule(project);
+      });
+    }
+    catch (RuntimeException e) {
+      LOG.warn("Clone 한 폴더를 모듈로 붙이지 못해 새 프로젝트로 엽니다: " + directory, e);
+      Module module = created.get();
+      if (module != null) {
+        ApplicationManager.getApplication().invokeAndWait(() -> {
+          if (!project.isDisposed() && !module.isDisposed()) disposeModule(project, module);
+        });
+      }
+      return false;
+    }
     // SVN 은 최근 목록에 올린 뒤 이 리스너를 부르고, Git 은 이 리스너 뒤에 올린다. 지금 한 번 빼고, Git 은 onCloneSuccess 에서 한 번 더 뺀다.
     String path = directory.toString().replace('\\', '/');
     RecentProjectsManager.getInstance().removePath(path);
@@ -171,21 +189,28 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
     }
   }
 
-  /** 워크스페이스면 프로젝트 폴더를 돌려준다. 아니면 null. */
+  /**
+   * 워크스페이스면 프로젝트 폴더를 돌려준다. 아니면 null.
+   * Git · SVN 저장소 안이거나, 그 폴더 아래에 모듈로 붙은 폴더가 하나도 없으면(그냥 폴더 · SVN 작업본 · 소스 폴더를 아직 안 정한 프로젝트) 워크스페이스가 아니다.
+   */
   private static @Nullable VirtualFile workspaceDir(Project project) {
     String base = project.isDefault() ? null : project.getBasePath();
     if (base == null) return null;
     for (Path dir = Path.of(base); dir != null; dir = dir.getParent()) {
-      if (Files.exists(dir.resolve(".git"))) return null;
+      if (Files.exists(dir.resolve(".git")) || Files.isDirectory(dir.resolve(".svn"))) return null;
     }
     VirtualFile baseDir = LocalFileSystem.getInstance().findFileByNioFile(Path.of(base));
     if (baseDir == null) return null;
+    boolean attached = false;
     for (Module module : ModuleManager.getInstance(project).getModules()) {
       ModuleRootManager rootManager = ModuleRootManager.getInstance(module);
       VirtualFile[] roots = rootManager.getContentRoots();
       if (List.of(roots).contains(baseDir) && (roots.length != 1 || rootManager.getSourceRoots().length != 0)) return null;
+      for (VirtualFile root : roots) {
+        if (VfsUtilCore.isAncestor(baseDir, root, true)) attached = true;
+      }
     }
-    return baseDir;
+    return attached ? baseDir : null;
   }
 
   private static void removeWorkspaceModule(Project project) {
@@ -193,13 +218,18 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
     if (baseDir == null) return;
     for (Module module : ModuleManager.getInstance(project).getModules()) {
       if (!List.of(ModuleRootManager.getInstance(module).getContentRoots()).contains(baseDir)) continue;
-      WriteAction.run(() -> {
-        ModifiableModuleModel model = ModuleManager.getInstance(project).getModifiableModel();
-        model.disposeModule(module);
-        model.commit();
-      });
+      disposeModule(project, module);
       return;
     }
+  }
+
+  /** 모듈을 프로젝트에서 뺀다. EDT 에서 부른다. */
+  private static void disposeModule(Project project, Module module) {
+    WriteAction.run(() -> {
+      ModifiableModuleModel model = ModuleManager.getInstance(project).getModifiableModel();
+      model.disposeModule(module);
+      model.commit();
+    });
   }
 
   /** 워크스페이스 프로젝트의 프로젝트 창 맨 위에서 프로젝트 폴더 줄을 그 안의 줄들(.idea 빼고)로 바꾼다. */
