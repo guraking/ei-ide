@@ -1018,7 +1018,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
         <li><span class="mark">+</span><div><b>IDE 파일은 처음부터 안 뜸</b> <span class="t">프로젝트를 열면 저장소마다 <code>.git/info/exclude</code> 에 <code>*.iml</code> · <code>.idea/</code> · <code>.project</code> · <code>.classpath</code> · <code>.settings/</code> 를 넣습니다. 팀 <code>.gitignore</code> 와 서버에는 영향이 없습니다.</span></div></li>
       </ol>
     </div>
-    <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note"><b>SVN</b>svn 명령줄 도구(VisualSVN)가 본체에 같이 들어 있어 따로 설치하지 않아도 SVN 저장소가 함께 보입니다.</div></div>
+    <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note"><b>SVN</b>svn 명령줄 도구(VisualSVN)가 본체에 같이 들어 있어 따로 설치하지 않아도 SVN 저장소가 함께 보입니다. SVN 은 Checkout 하면 새 창 프로젝트로 열립니다(Git 과 한 프로젝트에 섞이면 Commit 창 대신 커밋 대화상자가 뜸).</div></div>
 
     <h3>역머지 · Git → Merge Branches… · Synchronize 창 아래 Merge Branches 단추</h3>
     <p class="lead">GitLab 사이트에서 하던 「develop → 내 개인 브랜치」 머지를 IDE 에서 합니다. 내 PC 가 개인 브랜치만 받도록 설정돼 있어도 서버에 직접 브랜치 목록을 물어 고르게 하고, 고른 브랜치만 받아 옵니다. 합치기 전에 들어올 파일을 먼저 보여 주고, Merge 를 눌러야 합칩니다.</p>

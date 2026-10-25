@@ -52,7 +52,9 @@ import java.util.concurrent.atomic.AtomicReference;
  * 프로젝트 VCS 매핑이 <Project> 기본값이 아니면 받은 폴더에 Git · SVN 매핑을 더한다.
  * 받은 폴더와 그 아래 두 단계의 pom.xml · Gradle 파일은 Maven · Gradle 프로젝트로 연결한다(linkBuildFiles).
  * 다음이면 false 를 돌려 IntelliJ 기본 동작(새 프로젝트로 열기)에 맡긴다:
- * 시작 화면(기본 프로젝트)에서 받았을 때, 같은 이름 모듈이 이미 있을 때.
+ * 시작 화면(기본 프로젝트)에서 받았을 때, 같은 이름 모듈이 이미 있을 때,
+ * SVN 으로 받았을 때, 열린 프로젝트가 SVN 프로젝트일 때(svnProject).
+ * IntelliJ 는 SVN 이 하나라도 섞이면 Commit 창 대신 커밋 대화상자를 쓰므로(CommitModeManager.canSetNonModal) Git 과 SVN 을 한 프로젝트에 섞지 않는다.
  * 받은 폴더가 프로젝트 폴더 안이어도 따로 모듈로 붙인다.
  * 워크스페이스 프로젝트(C:\dev\git 처럼 Git 저장소 밖 폴더를 연 것)는 열 때와 Clone 뒤에 그 폴더 자체 모듈(「git」)을 빼고,
  * 프로젝트 창 맨 위의 프로젝트 폴더 줄은 HideWorkspaceRoot 가 그 안의 줄들(.idea 빼고)로 바꿔 그린다
@@ -86,6 +88,7 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
     if (dir == null) return false;
     String name = dir.getName();
     if (ModuleManager.getInstance(project).findModuleByName(name) != null) return false;
+    if (Files.isDirectory(directory.resolve(".svn")) || svnProject(project)) return false;
 
     // 이 리스너는 Clone 작업 스레드에서 불린다(CloneableProjectsService.runCloneTask). 모듈 · 매핑은 EDT 에서 바꾼다.
     // 붙이다 실패하면 만든 모듈을 지우고 false 를 돌려 IntelliJ 기본 동작(새 프로젝트로 열기)에 맡긴다. 반쯤 붙은 모듈을 남기지 않는다.
@@ -111,7 +114,7 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
       }
       return false;
     }
-    // SVN 은 최근 목록에 올린 뒤 이 리스너를 부르고, Git 은 이 리스너 뒤에 올린다. 지금 한 번 빼고, Git 은 onCloneSuccess 에서 한 번 더 뺀다.
+    // Git Clone 은 이 리스너 뒤에 최근 목록에 올리므로 onCloneSuccess 에서 한 번 더 뺀다.
     String path = directory.toString().replace('\\', '/');
     RecentProjectsManager.getInstance().removePath(path);
     ForgetRecent.ATTACHED.add(path);
@@ -187,6 +190,22 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
         ATTACHED.remove(path);
       }
     }
+  }
+
+  /** 프로젝트에 SVN 매핑이 있거나 프로젝트 폴더가 SVN 작업본 안이면 true. */
+  private static boolean svnProject(Project project) {
+    for (VcsDirectoryMapping mapping : ProjectLevelVcsManager.getInstance(project).getDirectoryMappings()) {
+      if (SyncPanel.VCS_NAME_SVN.equals(mapping.getVcs())) return true;
+    }
+    return inSvn(Path.of(project.getBasePath()));
+  }
+
+  /** 이 폴더나 그 위 어디에 .svn 폴더가 있으면 true. */
+  static boolean inSvn(Path dir) {
+    for (Path d = dir; d != null; d = d.getParent()) {
+      if (Files.isDirectory(d.resolve(".svn"))) return true;
+    }
+    return false;
   }
 
   /**
