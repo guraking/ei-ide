@@ -11,7 +11,8 @@ import java.nio.file.Path;
 
 /**
  * Clone 창(Git · GitHub 탭)의 Directory 기본값.
- * 프로젝트 폴더가 Git 저장소 안이면 그 저장소(위로 올라가며 .git 이 있는 가장 바깥 폴더)의 상위 폴더:
+ * 프로젝트 폴더가 Git 저장소 안이면 그 저장소(위로 올라가며 처음 .git 이 있는 폴더)의 상위 폴더.
+ * 가장 가까운 것을 쓰므로 C:\ 나 사용자 폴더에 우연히 있는 .git 은 보지 않는다:
  * 프로젝트 C:\dev\git\supp-backend\supp, 저장소 C:\dev\git\supp-backend → C:\dev\git\basic.
  * 저장소 밖이면 프로젝트 폴더를 워크스페이스로 보고 그 안: 프로젝트 C:\dev\git → C:\dev\git\basic.
  * 프로젝트가 없거나(시작 화면) 상위 폴더가 없으면 null 을 돌려 IntelliJ 기본값(마지막 Clone 폴더)을 쓴다.
@@ -24,7 +25,10 @@ public final class CloneNextToProject extends ClonePathProvider {
     if (base == null) return null;
     Path repo = null;
     for (Path dir = Path.of(base); dir != null; dir = dir.getParent()) {
-      if (Files.exists(dir.resolve(".git"))) repo = dir;
+      if (Files.exists(dir.resolve(".git"))) {
+        repo = dir;
+        break;
+      }
     }
     if (repo == null) return base;
     Path parent = repo.getParent();

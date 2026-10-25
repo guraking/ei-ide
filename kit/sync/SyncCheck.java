@@ -42,6 +42,12 @@ public class SyncCheck {
       // 덮어쓰지 않도록 예외가 나야 맞다.
     }
 
+    // git 이 감싼 경로: 이스케이프 · 8진수 UTF-8 바이트.
+    eq(SyncPanel.unquote("\"a\\\"b\\\\c\\td\""), "a\"b\\c\td");
+    eq(SyncPanel.unquote("\"\\355\\225\\234.txt\""), "한.txt");
+    eq(SyncPanel.unquote("plain.txt"), "plain.txt");
+    checkNestedRepo();
+
     checkUnmappedVcs();
     checkBuildFiles();
     checkRun();
@@ -164,17 +170,60 @@ public class SyncCheck {
     eq(p.files().get(0).mine(), true);
     eq(p.files().get(0).author(), "이개발");
     eq(p.mineCount(), 1);
+    // 커밋 안 한 변경이 있으면 아무것도 하지 않고 멈춘다.
+    sh(mine, "echo dirty >> B.java");
+    try {
+      ReverseMerge.merge(mine, "origin", "develop", "feature/kim", "feature/kim", true);
+      throw new AssertionError("커밋 안 한 변경이 있으면 합치지 않아야 한다");
+    }
+    catch (IOException expected) {
+      eq(ReverseMerge.conflicts(mine), Set.of());
+    }
+    sh(mine, "git checkout -q -- B.java");
     eq(ReverseMerge.merge(mine, "origin", "develop", "feature/kim", "feature/kim", true), ReverseMerge.Result.CONFLICT);
-    sh(mine, "git merge --abort");
+    eq(ReverseMerge.conflicts(mine), Set.of("A.java"));
+    // 충돌이 남았으면 마무리하지 않는다. 해결하면 합치기 커밋 · 푸시까지 한다.
+    eq(ReverseMerge.finish(mine, "origin", "feature/kim", "feature/kim", true), false);
+    sh(mine, "echo resolved > A.java && git add A.java");
+    eq(ReverseMerge.finish(mine, "origin", "feature/kim", "feature/kim", true), true);
+    eq(SyncPanel.git(mine, "rev-parse", "HEAD").trim(), SyncPanel.git(server, "rev-parse", "feature/kim").trim());
+    eq(ReverseMerge.finish(mine, "origin", "feature/kim", "feature/kim", true), false);  // 이미 마무리됨(MERGE_HEAD 없음)
     // 충돌 없는 쪽: 다른 개발자가 내 파일을 건드리지 않은 develop 을 새 개인 브랜치로 합치고 푸시.
     sh(other, "git push -q origin develop~1:refs/heads/feature/new");
     ReverseMerge.fetch(mine, "origin", "develop", "feature/new");
     eq(ReverseMerge.merge(mine, "origin", "develop", "feature/new", "feature/kim", true), ReverseMerge.Result.MERGED);
-    eq(SyncPanel.git(mine, "rev-parse", "--abbrev-ref", "HEAD").trim(), "feature/new");
-    eq(SyncPanel.git(mine, "rev-parse", "HEAD").trim(), SyncPanel.git(server, "rev-parse", "feature/new").trim());
+    // 다른 브랜치에 합쳤으면 원래 브랜치로 돌아온다.
+    eq(SyncPanel.git(mine, "rev-parse", "--abbrev-ref", "HEAD").trim(), "feature/kim");
+    eq(SyncPanel.git(mine, "rev-parse", "feature/new").trim(), SyncPanel.git(server, "rev-parse", "feature/new").trim());
+    // 서버와 갈라져 멈춰도 원래 브랜치로 돌아온다.
+    sh(other, "git fetch -q origin feature/new && git checkout -q -b fnew origin/feature/new && echo o > O.java && git add O.java && git commit -qm o && git push -q origin fnew:feature/new");
+    sh(mine, "git checkout -q feature/new && echo l > L.java && git add L.java && git commit -qm l && git checkout -q feature/kim");
+    ReverseMerge.fetch(mine, "origin", "develop", "feature/new");
+    try {
+      ReverseMerge.merge(mine, "origin", "develop", "feature/new", "feature/kim", true);
+      throw new AssertionError("갈라진 개인 브랜치는 멈춰야 한다");
+    }
+    catch (IOException expected) {
+      eq(SyncPanel.git(mine, "rev-parse", "--abbrev-ref", "HEAD").trim(), "feature/kim");
+    }
+    eq(ReverseMerge.unpushed(mine, "origin", "feature/new"), 1);
     ReverseMerge.saveConfig(mine, ReverseMerge.CONFIG_FROM, "develop");
     eq(ReverseMerge.config(mine, ReverseMerge.CONFIG_FROM), "develop");
     eq(ReverseMerge.config(mine, ReverseMerge.CONFIG_INTO), null);
+  }
+
+  /** 저장소 안의 다른 저장소 폴더는 바깥 저장소의 새 파일로 보이지 않는다. 일반 새 폴더는 보인다. */
+  private static void checkNestedRepo() throws Exception {
+    java.nio.file.Path tmp = java.nio.file.Files.createTempDirectory("nested");
+    File server = tmp.resolve("server.git").toFile();
+    sh(tmp.toFile(), "git init -q --bare -b main server.git && git clone -q server.git outer && cd outer && git config user.email a@x && git config user.name a"
+                     + " && echo a > a.txt && git add . && git commit -qm init && git push -q -u origin main"
+                     + " && git init -q inner && mkdir plain && echo p > plain/p.txt");
+    File outer = tmp.resolve("outer").toFile();
+    List<SyncPanel.Change> changes = SyncPanel.compare(SyncPanel.gitRepo(outer));
+    eq(changes.size(), 1);
+    eq(changes.get(0).path(), "plain/");
+    eq(server.isDirectory(), true);
   }
 
   private static void sh(File dir, String command) throws Exception {
