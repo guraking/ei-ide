@@ -212,18 +212,15 @@ public class SyncCheck {
     eq(ReverseMerge.config(mine, ReverseMerge.CONFIG_INTO), null);
   }
 
-  /** 저장소 안의 다른 저장소 폴더는 바깥 저장소의 새 파일로 보이지 않는다. 일반 새 폴더는 보인다. */
+  /** 저장소 안의 다른 저장소 폴더(.git 이 있는 폴더)만 중첩 저장소로 본다. compare 는 IDE 작업 스레드를 써서 여기서는 판정만 본다. */
   private static void checkNestedRepo() throws Exception {
     java.nio.file.Path tmp = java.nio.file.Files.createTempDirectory("nested");
-    File server = tmp.resolve("server.git").toFile();
-    sh(tmp.toFile(), "git init -q --bare -b main server.git && git clone -q server.git outer && cd outer && git config user.email a@x && git config user.name a"
-                     + " && echo a > a.txt && git add . && git commit -qm init && git push -q -u origin main"
-                     + " && git init -q inner && mkdir plain && echo p > plain/p.txt");
+    sh(tmp.toFile(), "git init -q outer && cd outer && git init -q inner && mkdir plain && echo p > plain/p.txt");
     File outer = tmp.resolve("outer").toFile();
-    List<SyncPanel.Change> changes = SyncPanel.compare(SyncPanel.gitRepo(outer));
-    eq(changes.size(), 1);
-    eq(changes.get(0).path(), "plain/");
-    eq(server.isDirectory(), true);
+    eq(SyncPanel.isNestedRepo(new File(outer, "inner/")), true);
+    eq(SyncPanel.isNestedRepo(new File(outer, "plain/")), false);
+    // git 은 중첩 저장소를 「?? inner/」 로 보고하므로 compare 가 이 줄을 거른다.
+    eq(SyncPanel.git(outer, "status", "--porcelain=v1", "-unormal").contains("?? inner/"), true);
   }
 
   private static void sh(File dir, String command) throws Exception {
