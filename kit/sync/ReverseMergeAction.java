@@ -67,10 +67,10 @@ import java.util.concurrent.Future;
 public final class ReverseMergeAction extends DumbAwareAction {
   /** 내 파일 줄 글자색. 동기화 창 · 설명서에서 「주의」에 쓰는 주황. */
   static final JBColor MINE_COLOR = new JBColor(0xB45F06, 0xFF9F0A);
-  private static final int TABLE_W = 760;
-  private static final int TABLE_H = 320;
-  private static final int PATH_COL_W = 360;
-  // From · Into 상자 너비. 「fe-기능이름/날짜/아이디」 같은 긴 브랜치 이름이 잘리지 않게 두 상자가 표 너비를 나눠 쓴다.
+  private static final int TABLE_W = 1000;
+  private static final int TABLE_H = 420;
+  private static final int PATH_COL_W = 480;
+  // From · Into 상자의 최소 너비. 두 상자는 창 너비를 반씩 나눠 꽉 채우고, 창을 늘리면 같이 늘어난다(「fe-기능이름/날짜/아이디」 같은 긴 이름).
   private static final int COMBO_W = 300;
 
   @Override public @NotNull ActionUpdateThread getActionUpdateThread() { return ActionUpdateThread.BGT; }
@@ -201,11 +201,18 @@ public final class ReverseMergeAction extends DumbAwareAction {
       where.add(new JBLabel(SyncBundle.message("rmerge.repository")));
       where.add(new JBLabel(root.getName()).withFont(JBFont.label().asBold()));
       where.add(new JBLabel(root.getPath(), UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER));
-      JPanel pick = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0));
-      pick.add(new JBLabel(SyncBundle.message("rmerge.from")));
-      pick.add(fromBox);
-      pick.add(new JBLabel(SyncBundle.message("rmerge.into")));
-      pick.add(intoBox);
+      JPanel pick = new JPanel(new GridBagLayout());
+      GridBagConstraints c = new GridBagConstraints();
+      c.fill = GridBagConstraints.HORIZONTAL;
+      c.insets = JBUI.insetsRight(8);
+      pick.add(new JBLabel(SyncBundle.message("rmerge.from")), c);
+      c.weightx = 1;
+      pick.add(fromBox, c);
+      c.weightx = 0;
+      pick.add(new JBLabel(SyncBundle.message("rmerge.into")), c);
+      c.weightx = 1;
+      c.insets = JBUI.emptyInsets();
+      pick.add(intoBox, c);
 
       JBTable table = new JBTable(model);
       table.setShowGrid(false);
