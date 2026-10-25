@@ -206,7 +206,7 @@ final class ProjectHistoryPanel extends JPanel {
     ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar(TOOLBAR_PLACE, actions, true);
     toolbar.setTargetComponent(this);
     projectName.setFont(JBUI.Fonts.label().asBold());
-    // 왼쪽에 이름 · 브랜치 · 찾기 · 새로고침, 오른쪽 끝에 「최근 N개」.
+    // 왼쪽에 이름 · 브랜치 · 찾기 · 새로고침, 오른쪽 끝에 「최근 N개」, 그 아래 줄 전체에 꺾임 설명.
     JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(GAP), JBUI.scale(GAP / 2)));
     left.add(projectName);
     left.add(branch);
@@ -214,9 +214,19 @@ final class ProjectHistoryPanel extends JPanel {
     left.add(toolbar.getComponent());
     JPanel top = new JPanel(new BorderLayout());
     top.setBorder(JBUI.Borders.empty(GAP / 2, GAP / 2, 0, GAP));
+    // 설명이 빈 때(고른 커밋 없음 · 찾기 중)에도 한 줄 높이를 지켜 아래 목록이 위아래로 뛰지 않게 한다.
+    JPanel bendRow = new JPanel(new BorderLayout()) {
+      @Override
+      public Dimension getPreferredSize() {
+        Dimension size = super.getPreferredSize();
+        size.height = Math.max(size.height, bend.getFontMetrics(bend.getFont()).getHeight());
+        return size;
+      }
+    };
+    bendRow.add(bend, BorderLayout.CENTER);
     top.add(left, BorderLayout.WEST);
-    top.add(bend, BorderLayout.CENTER);
     top.add(status, BorderLayout.EAST);
+    top.add(bendRow, BorderLayout.SOUTH);
     bend.setBorder(JBUI.Borders.emptyLeft(GAP));
     status.setForeground(DIM);
 
