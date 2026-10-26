@@ -1034,7 +1034,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
     <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note"><b>Synchronize 창 위쪽 줄</b>한 번 역머지하면 그 뒤로는 Synchronize 창을 새로 고칠 때 From 브랜치도 받아 와서 「develop 보다 3개 뒤 · 내 파일 2개 겹침」을 보여 줍니다(겹치면 주황). 그 글을 누르면 Merge Branches 창이 열립니다.</div></div>
 
     <h3>스테이징 · 커밋 창 Staged · Unstaged</h3>
-    <p class="lead">스테이징은 「이번 커밋에 넣을 것」을 미리 골라 담아 두는 칸입니다. 고친 파일이 열 개여도 담아 둔 것만 커밋되고, 나머지는 고친 그대로 작업본에 남습니다. 한 파일 안에서도 바뀐 덩어리(줄)별로 골라 담을 수 있어, 버그 수정과 실험 코드를 따로 커밋할 수 있습니다. 기본은 꺼져 있어 커밋 창에서 파일 체크 상자를 고르고 바로 커밋합니다. 쓰려면 설정 → Version Control → Git → Enable staging area 를 켭니다. 아래는 켰을 때의 사용법입니다.</p>
+    <p class="lead">스테이징은 「이번 커밋에 넣을 것」을 미리 골라 담아 두는 칸입니다. 고친 파일이 열 개여도 담아 둔 것만 커밋되고, 나머지는 고친 그대로 작업본에 남습니다. 한 파일 안에서도 바뀐 덩어리(줄)별로 골라 담을 수 있어, 버그 수정과 실험 코드를 따로 커밋할 수 있습니다. 기본은 꺼져 있어 커밋 창에서 파일 체크 상자를 고르고 바로 커밋합니다. 1054 판에서 켜진 설치도 새 판을 처음 열 때 한 번 꺼집니다. 쓰려면 설정 → Version Control → Git → Enable staging area 를 켭니다. 아래는 켰을 때의 사용법입니다.</p>
     <table class="keys map" style="margin-bottom:18px">
       <tr><th>하려는 일</th><th>하는 법</th></tr>
       <tr><td>파일 담기 · 빼기</td><td>커밋 창(Alt+0) Unstaged 의 파일에 마우스를 올려 「+」(Stage), Staged 에서 「−」(Unstage). 끌어서 옮기거나 우클릭 Stage · Unstage 도 됩니다. 묶음 이름 줄의 「+」 「−」 는 전부 담기 · 빼기입니다. 우클릭 Rollback 은 고친 것을 버립니다.</td></tr>
