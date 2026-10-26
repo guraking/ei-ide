@@ -26,6 +26,7 @@ import com.intellij.openapi.vcs.changes.VcsDirtyScopeManager;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VfsUtil;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.ui.ComboboxSpeedSearch;
 import com.intellij.ui.JBColor;
 import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.SimpleListCellRenderer;
@@ -182,6 +183,9 @@ public final class ReverseMergeAction extends DumbAwareAction {
       };
       fromBox.setRenderer(remoteName);
       intoBox.setRenderer(remoteName);
+      // 브랜치가 수십 개라 상자를 연 채 글자를 치면 이름이 맞는 브랜치로 건너뛴다(origin/ 은 빼고 맞춘다).
+      ComboboxSpeedSearch.installOn(fromBox);
+      ComboboxSpeedSearch.installOn(intoBox);
       fromBox.setMinimumAndPreferredWidth(JBUI.scale(COMBO_W));
       intoBox.setMinimumAndPreferredWidth(JBUI.scale(COMBO_W));
       push.setSelected(true);
