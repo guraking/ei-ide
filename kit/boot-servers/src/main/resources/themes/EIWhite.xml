@@ -616,12 +616,14 @@
         </option>
         <option name="HTML_TAG">
             <value>
-                <option name="FOREGROUND" value="0B7285" />
+                <option name="FOREGROUND" value="0033B3" />
+                <option name="FONT_TYPE" value="1" />
             </value>
         </option>
         <option name="HTML_TAG_NAME">
             <value>
-                <option name="FOREGROUND" value="0B7285" />
+                <option name="FOREGROUND" value="0033B3" />
+                <option name="FONT_TYPE" value="1" />
             </value>
         </option>
         <option name="INLINE_PARAMETER_HINT_CURRENT">
@@ -716,12 +718,14 @@
         </option>
         <option name="XML_TAG">
             <value>
-                <option name="FOREGROUND" value="0B7285" />
+                <option name="FOREGROUND" value="0033B3" />
+                <option name="FONT_TYPE" value="1" />
             </value>
         </option>
         <option name="XML_TAG_NAME">
             <value>
-                <option name="FOREGROUND" value="0B7285" />
+                <option name="FOREGROUND" value="0033B3" />
+                <option name="FONT_TYPE" value="1" />
             </value>
         </option>
         <option name="ABSTRACT_CLASS_NAME_ATTRIBUTES" baseAttributes="DEFAULT_CLASS_REFERENCE" />
@@ -1068,7 +1072,8 @@
         </option>
         <option name="DEFAULT_TAG">
             <value>
-                <option name="FOREGROUND" value="0B7285" />
+                <option name="FOREGROUND" value="0033B3" />
+                <option name="FONT_TYPE" value="1" />
             </value>
         </option>
         <option name="XML_NS_PREFIX">
