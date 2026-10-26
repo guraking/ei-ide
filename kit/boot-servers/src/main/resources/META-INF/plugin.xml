@@ -42,12 +42,12 @@
         <fileEditorProvider implementation="local.bootservers.OpenApiEditorProvider"/>
         <!-- JDK 24 이상 실행에 sun-misc-unsafe-memory-access=allow 옵션을 더해 Unsafe 경고를 끈다 -->
         <java.programPatcher implementation="local.bootservers.UnsafeWarningPatcher"/>
-        <!-- EI Glass: Islands Dark 위에 숯색 판 · 분홍 강조색을 얹은 테마와 그 에디터 색. 첫 실행 기본 테마는 apply_defaults 22번 -->
-        <themeProvider id="EI Glass" path="/themes/EIGlass.theme.json" targetUi="islands"/>
-        <bundledColorScheme id="EI Glass" path="/themes/EIGlass.xml"/>
-        <!-- EI Gray: EI Glass 와 같은 키 구조로 Islands Light 위에 차분한 밝은 회색 판 · 파란 강조색을 얹은 테마와 그 에디터 색(부모 Default) -->
-        <themeProvider id="EI Gray" path="/themes/EIGray.theme.json" targetUi="islands"/>
-        <bundledColorScheme id="EI Gray" path="/themes/EIGray.xml"/>
+        <!-- EI Graphite: Islands Dark 위에 회색 판 · 흰 글자 · 회색 선택 줄(강조색 없음)을 얹은 테마와 그 에디터 색. 첫 실행 기본 테마는 apply_defaults 22번 -->
+        <themeProvider id="EI Graphite" path="/themes/EIGraphite.theme.json" targetUi="islands"/>
+        <bundledColorScheme id="EI Graphite" path="/themes/EIGraphite.xml"/>
+        <!-- EI White: 같은 키 구조로 Islands Light 위에 흰 편집기 · 연회색 창 · 회색 선택 줄을 얹은 테마와 그 에디터 색(부모 Default) -->
+        <themeProvider id="EI White" path="/themes/EIWhite.theme.json" targetUi="islands"/>
+        <bundledColorScheme id="EI White" path="/themes/EIWhite.xml"/>
     </extensions>
 
     <extensions defaultExtensionNs="JavaScript">

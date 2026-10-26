@@ -16,8 +16,8 @@
   19) SVN 실행 파일 기본 경로를 설치본에 같이 넣은 svn.exe(plugins/kinggura-sync/svn/bin)로 한다.
   20) 콘솔에 남기는 글 양(cycle buffer)을 기본 1 MB 에서 30 MB 로 늘린다.
   21) 프로젝트 창에서 바뀐 파일 · 새 파일이 든 폴더 · 패키지 이름도 그 색으로 보인다.
-  22) 첫 실행 기본 어두운 테마를 EI Glass(boot-servers 플러그인)로 한다.
-  23) EI Glass 테마가 켜는 유리 그리기: 창 전체 빛 배경, 트리 · 목록 선택 테두리, 툴바 알약, 열린 툴 창 단추 색.
+  22) 첫 실행 기본 어두운 테마를 EI Graphite(boot-servers 플러그인)로 한다.
+  23) 테마 키가 있을 때만 켜지는 그리기: 창 전체 빛 배경, 트리 · 목록 선택 테두리, 툴바 알약, 열린 툴 창 단추 색(EI Graphite · EI White 는 키를 두지 않아 그리지 않는다).
   24) 프로젝트 머리글자 아이콘에 한글 같은 JetBrains Mono 에 없는 글자가 오면 대체 글꼴이 있는 Dialog 글꼴로 그린다.
   26) 프로젝트 창 모듈 줄을 모두 폴더 이름만 굵게 그린다(뒤의 [모듈 이름] 을 뺀다).
 고치기 전 원본은 <intellij-community>/../backup/<시각>-before/ 에 같은 상대경로로 남긴다.
@@ -206,15 +206,14 @@ EDITS = [
     ("platform/vcs-api/shared/src/com/intellij/openapi/vcs/VcsConfiguration.java",
      "public boolean SHOW_DIRTY_RECURSIVELY = false;",
      "public boolean SHOW_DIRTY_RECURSIVELY = true;"),
-    # 22) 새 UI 의 기본 어두운 테마는 제품 정보의 default-laf dark 값이다(없으면 Islands Dark). EI Glass 는 boot-servers 의
+    # 22) 새 UI 의 기본 어두운 테마는 제품 정보의 default-laf dark 값이다(없으면 Islands Dark). EI Graphite 는 boot-servers 의
     #     themeProvider 로 들어온다. 그 테마를 못 찾으면 IDE 가 오류를 남기고 Islands Dark 로 연다.
     #     이미 고른 테마가 laf.xml 에 남아 있는 설정 폴더는 그 테마를 따른다.
     ("community-resources/resources/idea/IdeaApplicationInfo.xml",
      '  <icon-eap svg="/idea-ce-eap.svg" svg-small="/idea-ce-eap_16.svg"/>\n',
      '  <icon-eap svg="/idea-ce-eap.svg" svg-small="/idea-ce-eap_16.svg"/>\n'
-     '  <default-laf dark="EI Glass"/>\n'),
-    # 23) EI Glass 유리 그리기. 모두 테마 키가 있을 때만 그리므로, 키를 두지 않은 다른 테마는 원래 모습 그대로다.
-    #     키는 boot-servers 의 themes/EIGlass.theme.json 에 둔다.
+     '  <default-laf dark="EI Graphite"/>\n'),
+    # 23) 테마 키로 켜는 그리기. 모두 테마 키가 있을 때만 그리므로, 키를 두지 않은 테마(EI Graphite · EI White 포함)는 원래 모습 그대로다.
     #  23-1) 창 전체 빛 배경: Island.colorGradient 가 참이면 레지스트리 idea.islands.color.gradient.enabled 를 켠 것과 같이
     #        창 바탕 · 툴바 · 옆줄 · 상태 줄에 ProjectGradients 색을 깐다. 테마를 바꾼 뒤에는 IDE 를 다시 켜야 툴 창 바탕까지 맞는다.
     ("platform/platform-impl/src/com/intellij/openapi/application/impl/islands/IslandsGradientPainter.kt",
