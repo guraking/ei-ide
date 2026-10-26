@@ -372,7 +372,7 @@
         </option>
         <option name="DEFAULT_TAG">
             <value>
-                <option name="FOREGROUND" value="5FD3D3" />
+                <option name="FOREGROUND" value="6FA8FF" />
             </value>
         </option>
         <option name="DEFAULT_TEMPLATE_LANGUAGE_COLOR">
@@ -457,12 +457,12 @@
         </option>
         <option name="HTML_TAG">
             <value>
-                <option name="FOREGROUND" value="5FD3D3" />
+                <option name="FOREGROUND" value="6FA8FF" />
             </value>
         </option>
         <option name="HTML_TAG_NAME">
             <value>
-                <option name="FOREGROUND" value="5FD3D3" />
+                <option name="FOREGROUND" value="6FA8FF" />
             </value>
         </option>
         <option name="HYPERLINK_ATTRIBUTES">
@@ -852,12 +852,12 @@
         </option>
         <option name="XML_TAG">
             <value>
-                <option name="FOREGROUND" value="5FD3D3" />
+                <option name="FOREGROUND" value="6FA8FF" />
             </value>
         </option>
         <option name="XML_TAG_NAME">
             <value>
-                <option name="FOREGROUND" value="5FD3D3" />
+                <option name="FOREGROUND" value="6FA8FF" />
             </value>
         </option>
         <option name="ABSTRACT_CLASS_NAME_ATTRIBUTES" baseAttributes="DEFAULT_CLASS_REFERENCE" />
@@ -911,7 +911,7 @@
         </option>
         <option name="XML_NS_PREFIX">
             <value>
-                <option name="FOREGROUND" value="5FD3D3" />
+                <option name="FOREGROUND" value="6FA8FF" />
                 <option name="FONT_TYPE" value="2" />
             </value>
         </option>

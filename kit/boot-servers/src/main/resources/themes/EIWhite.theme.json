@@ -5,7 +5,7 @@
   "parentTheme": "Islands Light",
   "editorScheme": "EI White",
   "colors": {
-    "main-window-bg": "#EDEDED",
+    "main-window-bg": "#E4E4E4",
     "layer-0-bg": "#F5F5F5",
     "layer-0-bg-inline": "#FFFFFF",
     "layer-0-border": "#D6D6D6",
@@ -25,6 +25,8 @@
     "tab-selected-bg-inactive": "#F5F5F5",
     "tab-selected-border-inactive": "#B0B0B0",
     "control-brand-border": "#1A5FD0",
-    "popup-completion-match-text": "#1A5FD0"
+    "popup-completion-match-text": "#1A5FD0",
+    "tool-window-bg": "#F2F2F2",
+    "tool-window-bg-inline": "#FFFFFF"
   }
 }
