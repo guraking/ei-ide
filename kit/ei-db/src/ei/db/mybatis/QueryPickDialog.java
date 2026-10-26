@@ -1,9 +1,9 @@
 package ei.db.mybatis;
 
+
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CustomShortcutSet;
 import com.intellij.openapi.editor.EditorFactory;
-import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.ide.CopyPasteManager;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
@@ -23,6 +23,7 @@ import com.intellij.ui.components.JBScrollPane;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
 import ei.db.EiDbBundle;
+import ei.db.FileTypes;
 import ei.db.Notify;
 import ei.db.console.SqlFormatter;
 import org.jetbrains.annotations.NotNull;
@@ -79,7 +80,7 @@ final class QueryPickDialog extends DialogWrapper {
     list.setCellRenderer(new EntryRenderer());
     list.setEmptyText(EiDbBundle.message("querypick.empty"));
     preview = new EditorTextField(EditorFactory.getInstance().createDocument(""), project,
-                                  FileTypeManager.getInstance().getFileTypeByExtension("sql"), true, false);
+                                  FileTypes.byExtension("sql"), true, false);
     preview.addSettingsProvider(e -> {
       e.setVerticalScrollbarVisible(true);
       e.setHorizontalScrollbarVisible(true);
