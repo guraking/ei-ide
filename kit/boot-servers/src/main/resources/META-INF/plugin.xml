@@ -70,6 +70,8 @@
     <applicationListeners>
         <listener class="local.bootservers.UpdateCheck" topic="com.intellij.ide.AppLifecycleListener"/>
         <listener class="local.bootservers.BundledFonts" topic="com.intellij.ide.AppLifecycleListener"/>
+        <!-- 없어진 테마(EI Glass · EI Gray)를 고른 설정을 EI Graphite · EI White 로 한 번 옮김 -->
+        <listener class="local.bootservers.ThemeMigration" topic="com.intellij.ide.AppLifecycleListener"/>
         <!-- 사용자 폴더 .jdks 의 JDK(플러그인설치.bat 이 푼 것)를 SDK 목록에 등록 -->
         <listener class="local.bootservers.JdkAutoRegister" topic="com.intellij.ide.AppLifecycleListener"/>
         <!-- 아이콘 없는 기본 메뉴 · 우클릭 동작에 아이콘(/icons/ei/menu-icons.properties) -->
