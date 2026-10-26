@@ -215,12 +215,12 @@
         </option>
         <option name="DEFAULT_BRACES">
             <value>
-                <option name="FOREGROUND" value="E0E0E0" />
+                <option name="FOREGROUND" value="EDEDED" />
             </value>
         </option>
         <option name="DEFAULT_BRACKETS">
             <value>
-                <option name="FOREGROUND" value="E0E0E0" />
+                <option name="FOREGROUND" value="EDEDED" />
             </value>
         </option>
         <option name="DEFAULT_CLASS_REFERENCE">
@@ -230,13 +230,13 @@
         </option>
         <option name="DEFAULT_COMMA">
             <value>
-                <option name="FOREGROUND" value="E0E0E0" />
+                <option name="FOREGROUND" value="EDEDED" />
             </value>
         </option>
         <option name="DEFAULT_CONSTANT">
             <value>
-                <option name="FOREGROUND" value="D9A6FF" deuteranopia="828eba" protanopia="828eba" />
-                <option name="FONT_TYPE" value="2" deuteranopia="bold" protanopia="bold"/>
+                <option name="FOREGROUND" value="D9A6FF" />
+                <option name="FONT_TYPE" value="2" />
             </value>
         </option>
         <option name="DEFAULT_DOC_COMMENT">
@@ -248,26 +248,28 @@
         <option name="DEFAULT_DOC_COMMENT_TAG">
             <value>
                 <option name="FOREGROUND" value="4CD964" />
-                <option name="EFFECT_TYPE" value="1" />
             </value>
         </option>
         <option name="DEFAULT_DOC_COMMENT_TAG_VALUE">
             <value>
-                <option name="FOREGROUND" value="abadb3" />
+                <option name="FOREGROUND" value="A6A6A6" />
             </value>
         </option>
         <option name="DEFAULT_DOC_MARKUP">
             <value>
                 <option name="FOREGROUND" value="4CD964" />
-                <option name="BACKGROUND" deuteranopia="2B2B2B" protanopia="2B2B2B"/>
             </value>
         </option>
         <option name="DEFAULT_DOT">
             <value>
-                <option name="FOREGROUND" value="E0E0E0" />
+                <option name="FOREGROUND" value="EDEDED" />
             </value>
         </option>
-        <option name="DEFAULT_FUNCTION_CALL" baseAttributes="DEFAULT_IDENTIFIER" />
+        <option name="DEFAULT_FUNCTION_CALL">
+            <value>
+                <option name="FOREGROUND" value="FFD27A" />
+            </value>
+        </option>
         <option name="DEFAULT_FUNCTION_DECLARATION">
             <value>
                 <option name="FOREGROUND" value="FFD27A" />
@@ -281,13 +283,12 @@
         </option>
         <option name="DEFAULT_IDENTIFIER">
             <value>
-                <option name="FOREGROUND" value="E0E0E0" />
+                <option name="FOREGROUND" value="EDEDED" />
             </value>
         </option>
         <option name="DEFAULT_INSTANCE_FIELD">
             <value>
-                <option name="FOREGROUND" value="D9A6FF" deuteranopia="828eba" protanopia="828eba" />
-              <option name="FONT_TYPE" deuteranopia="bold" protanopia="bold"/>
+                <option name="FOREGROUND" value="D9A6FF" />
             </value>
         </option>
         <option name="DEFAULT_INSTANCE_METHOD">
@@ -325,12 +326,12 @@
         </option>
         <option name="DEFAULT_OPERATION_SIGN">
             <value>
-                <option name="FOREGROUND" value="E0E0E0" />
+                <option name="FOREGROUND" value="EDEDED" />
             </value>
         </option>
         <option name="DEFAULT_PARENTHS">
             <value>
-                <option name="FOREGROUND" value="E0E0E0" />
+                <option name="FOREGROUND" value="EDEDED" />
             </value>
         </option>
         <option name="DEFAULT_REASSIGNED_LOCAL_VARIABLE">
@@ -349,18 +350,18 @@
         </option>
         <option name="DEFAULT_SEMICOLON">
             <value>
-                <option name="FOREGROUND" value="E0E0E0" />
+                <option name="FOREGROUND" value="EDEDED" />
             </value>
         </option>
         <option name="DEFAULT_STATIC_FIELD">
             <value>
-                <option name="FOREGROUND" value="D9A6FF" deuteranopia="828eba" protanopia="828eba" />
-                <option name="FONT_TYPE" value="2" deuteranopia="bold" protanopia="bold"/>
+                <option name="FOREGROUND" value="D9A6FF" />
+                <option name="FONT_TYPE" value="2" />
             </value>
         </option>
         <option name="DEFAULT_STATIC_METHOD">
             <value>
-                <option name="FOREGROUND" value="FFD27A" deuteranopia="ffc66d" protanopia="ffc66d" />
+                <option name="FOREGROUND" value="FFD27A" />
                 <option name="FONT_TYPE" value="2" />
             </value>
         </option>
@@ -371,17 +372,17 @@
         </option>
         <option name="DEFAULT_TAG">
             <value>
-                <option name="FOREGROUND" value="E0E0E0" />
+                <option name="FOREGROUND" value="5FD3D3" />
             </value>
         </option>
         <option name="DEFAULT_TEMPLATE_LANGUAGE_COLOR">
             <value>
-                <option name="BACKGROUND" value="202020" />
+                <option name="BACKGROUND" value="242424" />
             </value>
         </option>
         <option name="DEFAULT_VALID_STRING_ESCAPE">
             <value>
-                <option name="FOREGROUND" value="E5C07B" deuteranopia="597cc2" protanopia="597cc2" />
+                <option name="FOREGROUND" value="E5C07B" />
             </value>
         </option>
         <option name="DEPRECATED_ATTRIBUTES">
@@ -439,7 +440,11 @@
                 <option name="FOREGROUND" value="6FA8FF" />
             </value>
         </option>
-        <option name="HTML_ATTRIBUTE_VALUE" baseAttributes="DEFAULT_STRING" />
+        <option name="HTML_ATTRIBUTE_VALUE">
+            <value>
+                <option name="FOREGROUND" value="4CD964" />
+            </value>
+        </option>
         <option name="HTML_CUSTOM_TAG_NAME">
             <value>
                 <option name="FOREGROUND" value="FFD27A" />
@@ -447,7 +452,7 @@
         </option>
         <option name="HTML_ENTITY_REFERENCE">
             <value>
-                <option name="FOREGROUND" value="5FD3D3" />
+                <option name="FOREGROUND" value="FF9F0A" />
             </value>
         </option>
         <option name="HTML_TAG">
@@ -551,8 +556,7 @@
         </option>
         <option name="JSP_DIRECTIVE_NAME">
             <value>
-                <option name="FOREGROUND" value="6FA8FF" deuteranopia="597cc2" protanopia="597cc2" />
-                <option name="FONT_TYPE" value="1" />
+                <option name="FOREGROUND" value="E5C07B" />
             </value>
         </option>
         <option name="KOTLIN_LABEL">
@@ -638,9 +642,7 @@
         </option>
         <option name="MARKDOWN_AUTO_LINK">
             <value>
-                <option name="FOREGROUND" value="5FD3D3" />
-                <option name="EFFECT_COLOR" value="56a8f5" />
-                <option name="EFFECT_TYPE" value="1" />
+                <option name="FOREGROUND" value="6FA8FF" />
             </value>
         </option>
         <option name="MARKDOWN_IMAGE">
@@ -648,9 +650,7 @@
         </option>
         <option name="MARKDOWN_LINK_TEXT">
             <value>
-                <option name="FOREGROUND" value="5FD3D3" />
-                <option name="EFFECT_COLOR" value="56a8f5" />
-                <option name="EFFECT_TYPE" value="1" />
+                <option name="FOREGROUND" value="6FA8FF" />
             </value>
         </option>
         <option name="MARKED_FOR_REMOVAL_ATTRIBUTES">
@@ -689,8 +689,7 @@
         </option>
         <option name="PROPERTIES.KEY">
             <value>
-                <option name="FOREGROUND" value="D9A6FF" deuteranopia="597cc2" protanopia="597cc2" />
-                <option name="EFFECT_TYPE" value="1" />
+                <option name="FOREGROUND" value="D9A6FF" />
             </value>
         </option>
         <option name="QUTE_BACKGROUND">
@@ -781,7 +780,7 @@
         </option>
         <option name="TYPE_PARAMETER_NAME_ATTRIBUTES">
             <value>
-                <option name="FOREGROUND" value="4CD964" />
+                <option name="FOREGROUND" value="5FD3D3" />
             </value>
         </option>
         <option name="TYPO">
@@ -833,7 +832,7 @@
         </option>
         <option name="XML_ATTRIBUTE_NAME">
             <value>
-                <option name="FOREGROUND" value="E0E0E0" />
+                <option name="FOREGROUND" value="D9A6FF" />
             </value>
         </option>
         <option name="XML_CUSTOM_TAG_NAME">
@@ -843,12 +842,12 @@
         </option>
         <option name="XML_ENTITY_REFERENCE">
             <value>
-                <option name="FOREGROUND" value="5FD3D3" />
+                <option name="FOREGROUND" value="FF9F0A" />
             </value>
         </option>
         <option name="XML_PROLOGUE">
             <value>
-                <option name="FOREGROUND" value="FF9F0A" />
+                <option name="FOREGROUND" value="E5C07B" />
             </value>
         </option>
         <option name="XML_TAG">
@@ -865,5 +864,261 @@
         <option name="CLASS_NAME_ATTRIBUTES" baseAttributes="DEFAULT_CLASS_REFERENCE" />
         <option name="ENUM_NAME_ATTRIBUTES" baseAttributes="DEFAULT_CLASS_REFERENCE" />
         <option name="INTERFACE_NAME_ATTRIBUTES" baseAttributes="DEFAULT_CLASS_REFERENCE" />
+        <option name="DEFAULT_CLASS_NAME">
+            <value>
+                <option name="FOREGROUND" value="5FD3D3" />
+            </value>
+        </option>
+        <option name="DEFAULT_INTERFACE_NAME">
+            <value>
+                <option name="FOREGROUND" value="5FD3D3" />
+            </value>
+        </option>
+        <option name="DEFAULT_PREDEFINED_SYMBOL">
+            <value>
+                <option name="FOREGROUND" value="5FD3D3" />
+            </value>
+        </option>
+        <option name="DEFAULT_GLOBAL_VARIABLE">
+            <value>
+                <option name="FOREGROUND" value="D9A6FF" />
+            </value>
+        </option>
+        <option name="DEFAULT_PARAMETER">
+            <value>
+                <option name="FOREGROUND" value="EDEDED" />
+            </value>
+        </option>
+        <option name="DEFAULT_LOCAL_VARIABLE">
+            <value>
+                <option name="FOREGROUND" value="EDEDED" />
+            </value>
+        </option>
+        <option name="DEFAULT_LABEL">
+            <value>
+                <option name="FOREGROUND" value="FF9F0A" />
+            </value>
+        </option>
+        <option name="DEFAULT_ATTRIBUTE">
+            <value>
+                <option name="FOREGROUND" value="D9A6FF" />
+            </value>
+        </option>
+        <option name="DEFAULT_ENTITY">
+            <value>
+                <option name="FOREGROUND" value="FF9F0A" />
+            </value>
+        </option>
+        <option name="XML_NS_PREFIX">
+            <value>
+                <option name="FOREGROUND" value="5FD3D3" />
+                <option name="FONT_TYPE" value="2" />
+            </value>
+        </option>
+        <option name="XML_ATTRIBUTE_VALUE">
+            <value>
+                <option name="FOREGROUND" value="4CD964" />
+            </value>
+        </option>
+        <option name="XML_COMMENT">
+            <value>
+                <option name="FOREGROUND" value="8A8A8A" />
+                <option name="FONT_TYPE" value="2" />
+            </value>
+        </option>
+        <option name="HTML_ATTRIBUTE_NAME">
+            <value>
+                <option name="FOREGROUND" value="D9A6FF" />
+            </value>
+        </option>
+        <option name="HTML_COMMENT">
+            <value>
+                <option name="FOREGROUND" value="8A8A8A" />
+                <option name="FONT_TYPE" value="2" />
+            </value>
+        </option>
+        <option name="JSP_ATTRIBUTE_NAME">
+            <value>
+                <option name="FOREGROUND" value="D9A6FF" />
+            </value>
+        </option>
+        <option name="JSP_ATTRIBUTE_VALUE">
+            <value>
+                <option name="FOREGROUND" value="4CD964" />
+            </value>
+        </option>
+        <option name="JSP_COMMENT">
+            <value>
+                <option name="FOREGROUND" value="8A8A8A" />
+                <option name="FONT_TYPE" value="2" />
+            </value>
+        </option>
+        <option name="PROPERTIES.VALUE">
+            <value>
+                <option name="FOREGROUND" value="4CD964" />
+            </value>
+        </option>
+        <option name="PROPERTIES.KEY_VALUE_SEPARATOR">
+            <value>
+                <option name="FOREGROUND" value="EDEDED" />
+            </value>
+        </option>
+        <option name="PROPERTIES.LINE_COMMENT">
+            <value>
+                <option name="FOREGROUND" value="8A8A8A" />
+                <option name="FONT_TYPE" value="2" />
+            </value>
+        </option>
+        <option name="YAML_SCALAR_KEY">
+            <value>
+                <option name="FOREGROUND" value="D9A6FF" />
+            </value>
+        </option>
+        <option name="YAML_SCALAR_VALUE">
+            <value>
+                <option name="FOREGROUND" value="EDEDED" />
+            </value>
+        </option>
+        <option name="YAML_SCALAR_STRING">
+            <value>
+                <option name="FOREGROUND" value="4CD964" />
+            </value>
+        </option>
+        <option name="YAML_SCALAR_DSTRING">
+            <value>
+                <option name="FOREGROUND" value="4CD964" />
+            </value>
+        </option>
+        <option name="YAML_SCALAR_LIST">
+            <value>
+                <option name="FOREGROUND" value="4CD964" />
+            </value>
+        </option>
+        <option name="YAML_COMMENT">
+            <value>
+                <option name="FOREGROUND" value="8A8A8A" />
+                <option name="FONT_TYPE" value="2" />
+            </value>
+        </option>
+        <option name="YAML_SIGN">
+            <value>
+                <option name="FOREGROUND" value="EDEDED" />
+            </value>
+        </option>
+        <option name="YAML_ANCHOR">
+            <value>
+                <option name="FOREGROUND" value="FF9F0A" />
+            </value>
+        </option>
+        <option name="JSON.PROPERTY_KEY">
+            <value>
+                <option name="FOREGROUND" value="D9A6FF" />
+            </value>
+        </option>
+        <option name="JSON.STRING">
+            <value>
+                <option name="FOREGROUND" value="4CD964" />
+            </value>
+        </option>
+        <option name="JSON.NUMBER">
+            <value>
+                <option name="FOREGROUND" value="FF9F0A" />
+            </value>
+        </option>
+        <option name="JSON.KEYWORD">
+            <value>
+                <option name="FOREGROUND" value="6FA8FF" />
+            </value>
+        </option>
+        <option name="JSON.LINE_COMMENT">
+            <value>
+                <option name="FOREGROUND" value="8A8A8A" />
+                <option name="FONT_TYPE" value="2" />
+            </value>
+        </option>
+        <option name="JSON.BLOCK_COMMENT">
+            <value>
+                <option name="FOREGROUND" value="8A8A8A" />
+                <option name="FONT_TYPE" value="2" />
+            </value>
+        </option>
+        <option name="MARKDOWN_HEADER_LEVEL_1">
+            <value>
+                <option name="FOREGROUND" value="6FA8FF" />
+                <option name="FONT_TYPE" value="1" />
+            </value>
+        </option>
+        <option name="MARKDOWN_HEADER_LEVEL_2">
+            <value>
+                <option name="FOREGROUND" value="6FA8FF" />
+                <option name="FONT_TYPE" value="1" />
+            </value>
+        </option>
+        <option name="MARKDOWN_HEADER_LEVEL_3">
+            <value>
+                <option name="FOREGROUND" value="6FA8FF" />
+                <option name="FONT_TYPE" value="1" />
+            </value>
+        </option>
+        <option name="MARKDOWN_HEADER_LEVEL_4">
+            <value>
+                <option name="FOREGROUND" value="6FA8FF" />
+                <option name="FONT_TYPE" value="1" />
+            </value>
+        </option>
+        <option name="MARKDOWN_HEADER_LEVEL_5">
+            <value>
+                <option name="FOREGROUND" value="6FA8FF" />
+                <option name="FONT_TYPE" value="1" />
+            </value>
+        </option>
+        <option name="MARKDOWN_HEADER_LEVEL_6">
+            <value>
+                <option name="FOREGROUND" value="6FA8FF" />
+                <option name="FONT_TYPE" value="1" />
+            </value>
+        </option>
+        <option name="MARKDOWN_BOLD">
+            <value>
+                <option name="FOREGROUND" value="EDEDED" />
+                <option name="FONT_TYPE" value="1" />
+            </value>
+        </option>
+        <option name="MARKDOWN_ITALIC">
+            <value>
+                <option name="FOREGROUND" value="EDEDED" />
+                <option name="FONT_TYPE" value="2" />
+            </value>
+        </option>
+        <option name="MARKDOWN_CODE_SPAN">
+            <value>
+                <option name="FOREGROUND" value="4CD964" />
+            </value>
+        </option>
+        <option name="MARKDOWN_CODE_BLOCK">
+            <value>
+                <option name="FOREGROUND" value="4CD964" />
+            </value>
+        </option>
+        <option name="MARKDOWN_CODE_FENCE">
+            <value>
+                <option name="FOREGROUND" value="4CD964" />
+            </value>
+        </option>
+        <option name="MARKDOWN_LINK_DESTINATION">
+            <value>
+                <option name="FOREGROUND" value="A6A6A6" />
+            </value>
+        </option>
+        <option name="MARKDOWN_BLOCK_QUOTE">
+            <value>
+                <option name="FOREGROUND" value="8A8A8A" />
+            </value>
+        </option>
+        <option name="MARKDOWN_LIST_MARKER">
+            <value>
+                <option name="FOREGROUND" value="FF9F0A" />
+            </value>
+        </option>
     </attributes>
 </scheme>
