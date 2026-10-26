@@ -29,9 +29,12 @@
         <toolWindow id="Servers" anchor="bottom" icon="AllIcons.Nodes.Services"
                     factoryClass="local.bootservers.ServersToolWindowFactory"/>
         <defaultToolWindowLayout implementation="local.bootservers.ToolWindowOrder" order="last"/>
+        <!-- 모든 메뉴에서 GitHub 「Create Gist…」를 뺀다(당사 소스를 GitHub 에 올리지 않는다) -->
+        <actionConfigurationCustomizer implementation="local.bootservers.GistMenuOff"/>
         <notificationGroup id="EI IDE 새 판" key="notification.group.update" displayType="STICKY_BALLOON"/>
         <notificationGroup id="서버 실행" key="notification.group.servers" displayType="BALLOON"/>
         <notificationGroup id="프로그램 목록" key="notification.group.programs" displayType="BALLOON"/>
+        <notificationGroup id="IDE 메모리" key="notification.group.memory" displayType="STICKY_BALLOON"/>
         <!-- @Controller 뷰 이름 글 Ctrl+클릭 → JSP, 주석 속성 ${키} Ctrl+클릭 → application*.yml · properties 의 키 줄 -->
         <gotoDeclarationHandler implementation="local.bootservers.ViewNameGotoHandler"/>
         <gotoDeclarationHandler implementation="local.bootservers.ConfigKeyGotoHandler"/>
@@ -74,6 +77,8 @@
         <listener class="local.bootservers.BundledFonts" topic="com.intellij.ide.AppLifecycleListener"/>
         <!-- 없어진 테마(EI Glass · EI Gray)를 고른 설정을 EI Graphite · EI White 로 한 번 옮김 -->
         <listener class="local.bootservers.ThemeMigration" topic="com.intellij.ide.AppLifecycleListener"/>
+        <!-- 실제 메모리 16 GB 이상인 PC 는 IDE 최대 메모리를 4096 MB 로 한 번 올림 -->
+        <listener class="local.bootservers.MemoryDefault" topic="com.intellij.ide.AppLifecycleListener"/>
         <!-- 커뮤니티의 「syntax highlighting only」 자리표시 파일 종류(JSP · SQL · JavaScript · CSS 등) 연결을 첫 실행 때 한 번 풀어 TextMate 가 맡게 한다 -->
         <listener class="local.bootservers.PlaceholderFileTypes" topic="com.intellij.ide.AppLifecycleListener"/>
         <!-- 사용자 폴더 .jdks 의 JDK(플러그인설치.bat 이 푼 것)를 SDK 목록에 등록 -->
@@ -141,13 +146,13 @@
         <action id="KingGura.GoToController" class="local.bootservers.GoToControllerAction" icon="AllIcons.Nodes.Class">
             <add-to-group group-id="EditorPopupMenu" anchor="first"/>
         </action>
-        <!-- 편집기 우클릭 「표기법 바꾸기」: 고른 글 안의 식별자를 카멜 · 파스칼 · 스네이크 · 대문자 스네이크로 바꾼다. 문자열 · 주석은 둔다. -->
+        <!-- 편집기 우클릭 「표기법 바꾸기」(붙여넣기 묶음 바로 아래): 고른 글 안의 식별자를 카멜 · 파스칼 · 스네이크 · 대문자 스네이크로 바꾼다. 문자열 · 주석은 둔다. -->
         <group id="KingGura.CaseConvert" popup="true" icon="/icons/ei/caseConvert.svg">
             <action id="KingGura.CaseCamel" class="local.bootservers.CaseConvertActions$Camel" icon="/icons/ei/caseCamel.svg"/>
             <action id="KingGura.CasePascal" class="local.bootservers.CaseConvertActions$Pascal" icon="/icons/ei/casePascal.svg"/>
             <action id="KingGura.CaseSnake" class="local.bootservers.CaseConvertActions$Snake" icon="/icons/ei/caseSnake.svg"/>
             <action id="KingGura.CaseUpperSnake" class="local.bootservers.CaseConvertActions$UpperSnake" icon="/icons/ei/caseUpperSnake.svg"/>
-            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EditorToggleColumnMode"/>
         </group>
         <!-- 편집기 · 콘솔 우클릭 「AI」: 고른 코드 · 로그를 프롬프트 파일로 만들어 터미널 새 탭에서 Claude Code 를 시작한다 -->
         <group id="KingGura.AiEditor" popup="true" icon="AllIcons.Toolwindows.ToolWindowAskAI">
