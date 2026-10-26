@@ -140,7 +140,7 @@
         <option name="CUSTOM_STRING_ATTRIBUTES" baseAttributes="DEFAULT_STRING" />
         <option name="DEFAULT_ATTRIBUTE">
             <value>
-                <option name="FOREGROUND" value="7A1FA2" />
+                <option name="FOREGROUND" value="6A1B9A" />
             </value>
         </option>
         <option name="DEFAULT_BLOCK_COMMENT">
@@ -616,12 +616,12 @@
         </option>
         <option name="HTML_TAG">
             <value>
-                <option name="FOREGROUND" value="0B7285" />
+                <option name="FOREGROUND" value="1A5FD0" />
             </value>
         </option>
         <option name="HTML_TAG_NAME">
             <value>
-                <option name="FOREGROUND" value="0B7285" />
+                <option name="FOREGROUND" value="1A5FD0" />
             </value>
         </option>
         <option name="INLINE_PARAMETER_HINT_CURRENT">
@@ -716,12 +716,12 @@
         </option>
         <option name="XML_TAG">
             <value>
-                <option name="FOREGROUND" value="0B7285" />
+                <option name="FOREGROUND" value="1A5FD0" />
             </value>
         </option>
         <option name="XML_TAG_NAME">
             <value>
-                <option name="FOREGROUND" value="0B7285" />
+                <option name="FOREGROUND" value="1A5FD0" />
             </value>
         </option>
         <option name="ABSTRACT_CLASS_NAME_ATTRIBUTES" baseAttributes="DEFAULT_CLASS_REFERENCE" />
@@ -1068,18 +1068,18 @@
         </option>
         <option name="DEFAULT_TAG">
             <value>
-                <option name="FOREGROUND" value="0B7285" />
+                <option name="FOREGROUND" value="1A5FD0" />
             </value>
         </option>
         <option name="XML_NS_PREFIX">
             <value>
-                <option name="FOREGROUND" value="0B7285" />
+                <option name="FOREGROUND" value="1A5FD0" />
                 <option name="FONT_TYPE" value="2" />
             </value>
         </option>
         <option name="XML_ATTRIBUTE_NAME">
             <value>
-                <option name="FOREGROUND" value="7A1FA2" />
+                <option name="FOREGROUND" value="6A1B9A" />
             </value>
         </option>
         <option name="XML_ATTRIBUTE_VALUE">
@@ -1095,7 +1095,7 @@
         </option>
         <option name="HTML_ATTRIBUTE_NAME">
             <value>
-                <option name="FOREGROUND" value="7A1FA2" />
+                <option name="FOREGROUND" value="6A1B9A" />
             </value>
         </option>
         <option name="HTML_ATTRIBUTE_VALUE">
@@ -1111,7 +1111,7 @@
         </option>
         <option name="JSP_ATTRIBUTE_NAME">
             <value>
-                <option name="FOREGROUND" value="7A1FA2" />
+                <option name="FOREGROUND" value="6A1B9A" />
             </value>
         </option>
         <option name="JSP_ATTRIBUTE_VALUE">

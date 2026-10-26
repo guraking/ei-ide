@@ -20,6 +20,7 @@
   23) 테마 키가 있을 때만 켜지는 그리기: 창 전체 빛 배경, 트리 · 목록 선택 테두리, 툴바 알약, 열린 툴 창 단추 색(EI Graphite · EI White 는 키를 두지 않아 그리지 않는다).
   24) 프로젝트 머리글자 아이콘에 한글 같은 JetBrains Mono 에 없는 글자가 오면 대체 글꼴이 있는 Dialog 글꼴로 그린다.
   26) 프로젝트 창 모듈 줄을 모두 폴더 이름만 굵게 그린다(뒤의 [모듈 이름] 을 뺀다).
+  27) TextMate html 번들이 .jsp 를 잡지 않게 하여 .jsp 는 언제나 jsp 번들(지시문 · 스크립틀릿 · ${} 을 아는 쪽)이 맡는다.
 고치기 전 원본은 <intellij-community>/../backup/<시각>-before/ 에 같은 상대경로로 남긴다.
 모든 원문을 먼저 찾아 본 뒤에 쓴다. 하나라도 못 찾으면 아무 파일도 바꾸지 않는다. 줄끝(LF · CRLF)은 파일마다 원래대로 둔다.
 두 번 실행해도 같은 결과가 된다.
@@ -288,6 +289,12 @@ EDITS = [
     ("platform/util/resources/misc/registry.properties",
      "ide.hide.real.module.name=false\n",
      "ide.hide.real.module.name=true\n"),
+    # 27) TextMate 는 내장 번들을 병렬로 등록해 같은 확장자를 둘이 가지면 나중에 끝난 쪽이 이긴다. html 번들과 jsp 번들이 둘 다 .jsp 를
+    #     가져서 실행마다 html 문법이 걸리기도 하는데, html 문법은 <%@ · <% 를 잘못된 꺾쇠(빨강)로 보고 지시문 · 스크립틀릿 · ${} 안을
+    #     칠하지 못한다. html 번들에서 .jsp 를 빼 jsp 번들만 맡게 한다. 커뮤니티판은 .jsp 에 다른 파일 종류가 없다(boot-servers PlaceholderFileTypes 가 자리표시 종류를 푼다).
+    ("plugins/textmate/lib/bundles/html/package.json",
+     '".mdoc",".jsp",".asp"',
+     '".mdoc",".asp"'),
 ]
 
 
