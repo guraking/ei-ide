@@ -22,6 +22,7 @@ import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.vcs.ProjectLevelVcsManager;
+import com.intellij.openapi.vcs.VcsDataKeys;
 import com.intellij.openapi.vcs.VcsRoot;
 import com.intellij.openapi.util.IconLoader;
 import com.intellij.openapi.util.io.FileUtil;
@@ -197,6 +198,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static final String ACTION_REVERSE_MERGE = "KingGura.ReverseMerge";
   private static final String ACTION_PUSH = "Vcs.Push";
   private static final String ACTION_COMMIT = "CheckinProject";
+  // 고른 파일만 체크된 채로 커밋 창을 연다(CommonCheckinFilesAction, VcsDataKeys.FILE_PATHS 를 읽는다).
+  private static final String ACTION_COMMIT_FILES = "CheckinFiles";
   // IDE 의 「Update Project」(Ctrl+T). 프로젝트의 모든 VCS 루트를 받는다(Git 은 받기 방식을 묻고, SVN 은 svn update).
   private static final String ACTION_UPDATE_ALL = "Vcs.UpdateProject";
   // 설치본에 같이 넣은 VisualSVN 명령줄 도구(apply_defaults 19 의 SVN 기본 경로와 같은 곳).
@@ -224,6 +227,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private final DiffRequestPanel diffPanel;
   private final SimpleColoredComponent title = new SimpleColoredComponent();
   private final SimpleColoredComponent status = new SimpleColoredComponent();
+  // 목록 우클릭 메뉴가 아래 단추와 같은 동작을 하도록 단추를 눌러 부른다.
+  private JButton pullButton;
+  private JButton pushButton;
+  private JButton resolveButton;
   // 새로고침이 도는 동안 참(EDT 에서만). 도구줄의 새로고침 동작은 이 값이 참이면 꺼진다.
   private boolean busy;
   // 새로고침이 도는 동안 VCS 매핑이 바뀌었다(EDT 에서만). 끝나면 한 번만 다시 새로고침한다(fetch 가 겹치지 않게).
@@ -315,13 +322,16 @@ final class SyncPanel extends SimpleToolWindowPanel {
     bottom.setBorder(JBUI.Borders.customLineTop(JBColor.border()));
     // 받기(Pull)는 이 창의 주된 동작이라 기본 단추 모양으로 둔다.
     JButton pull = actionButton(SyncBundle.message("sync.button.pull"), IconLoader.getIcon(PULL_SELECTED_ICON, SyncPanel.class), ACTION_PULL, true);
+    pullButton = pull;
     pull.putClientProperty(DarculaButtonUI.DEFAULT_STYLE_KEY, Boolean.TRUE);
     bottom.add(actionButton(SyncBundle.message("sync.button.update.all"), AllIcons.Vcs.ShelveSilent, ACTION_UPDATE_ALL, false));
     bottom.add(pull);
     // 올리기: 고른 저장소(없으면 전부)로 IntelliJ Push 창. 커밋하고 올리기: 커밋 창을 연다(그 창의 Commit and Push 로 한 번에).
-    bottom.add(actionButton(SyncBundle.message("sync.button.push"), AllIcons.Vcs.Push, ACTION_PUSH, true));
+    pushButton = actionButton(SyncBundle.message("sync.button.push"), AllIcons.Vcs.Push, ACTION_PUSH, true);
+    bottom.add(pushButton);
     bottom.add(actionButton(SyncBundle.message("sync.button.commit.push"), AllIcons.Actions.Commit, ACTION_COMMIT, false));
-    bottom.add(actionButton(SyncBundle.message("sync.button.resolve"), AllIcons.Vcs.Merge, "Git.ResolveConflicts", false));
+    resolveButton = actionButton(SyncBundle.message("sync.button.resolve"), AllIcons.Vcs.Merge, "Git.ResolveConflicts", false);
+    bottom.add(resolveButton);
     // 고른 저장소(없으면 지금 저장소)로 Merge Branches 창을 연다.
     bottom.add(actionButton(SyncBundle.message("sync.button.reverse"), AllIcons.Vcs.Branch, ACTION_REVERSE_MERGE, true));
     JPanel content = new JPanel(new BorderLayout());
@@ -433,14 +443,34 @@ final class SyncPanel extends SimpleToolWindowPanel {
       }));
   }
 
-  /** 이클립스 Synchronize 의 파일 우클릭 메뉴: 무시 목록에 넣기 · 변경 되돌리기. 여러 파일(여러 저장소)을 골라도 된다. */
+  /**
+   * 이클립스 Synchronize 의 우클릭 메뉴. 여러 파일(여러 저장소)을 골라도 된다.
+   * 파일 줄: 받기 · 커밋 · 올리기 · 충돌 해결, 무시 목록에 넣기 · 변경 되돌리기.
+   * 묶음 줄(들어올 · 나갈 · 충돌): 그 묶음의 파일 전부로 받기 · 커밋 · 올리기 · 충돌 해결 · 변경 되돌리기.
+   */
   private void showPopup(MouseEvent e) {
     if (!e.isPopupTrigger()) return;
     TreePath clicked = tree.getPathForLocation(e.getX(), e.getY());
     if (clicked != null && !tree.isPathSelected(clicked)) tree.setSelectionPath(clicked);
     List<Change> all = selectedChanges();
-    if (all.isEmpty()) return;
+    List<Change> grouped = selectedGroupChanges();
+    if (all.isEmpty() && grouped.isEmpty()) return;
     JPopupMenu menu = new JPopupMenu();
+    addSyncItems(menu, grouped.isEmpty() ? all : grouped);
+    // 묶음 줄만 골랐으면 무시 목록 · 모른 척하기 없이 되돌리기만 둔다(수십 개 파일을 한 번에 무시하지 않게).
+    if (all.isEmpty()) {
+      List<Change> revertable = grouped.stream().filter(c -> undoOf(c) == Undo.REVERT).toList();
+      if (!revertable.isEmpty()) {
+        int skipped = (int) grouped.stream().filter(c -> undoOf(c) == Undo.UNSTAGE).count();
+        if (menu.getComponentCount() > 0) menu.addSeparator();
+        JMenuItem revert = new JMenuItem(SyncBundle.message("sync.menu.revert", revertable.size()));
+        revert.addActionListener(a -> revert(revertable, skipped));
+        menu.add(revert);
+      }
+      if (menu.getComponentCount() > 0) menu.show(tree, e.getX(), e.getY());
+      return;
+    }
+    if (menu.getComponentCount() > 0) menu.addSeparator();
     // 모른 척 중인 파일은 변경이 아니므로 무시 · 되돌리기 대신 풀기만 둔다.
     List<Change> assumed = all.stream().filter(c -> c.kind() == Kind.ASSUMED).toList();
     if (!assumed.isEmpty()) {
@@ -506,6 +536,68 @@ final class SyncPanel extends SimpleToolWindowPanel {
       if (GIT_NEW_PATH_LETTERS.indexOf(letter) >= 0) return Undo.UNSTAGE;
     }
     return Undo.REVERT;
+  }
+
+  /**
+   * 받기 · 커밋 · 올리기 · 충돌 해결 항목. 받기 · 올리기 · 충돌 해결은 아래 단추를 눌러 같은 코드로 한다(고른 줄의 저장소가 대상).
+   * SVN 은 들어올 파일만 svn update 할 수 있고, 커밋하면 바로 서버라 올리기가 없다. Git 은 파일 단위 받기가 없다.
+   */
+  private void addSyncItems(JPopupMenu menu, List<Change> targets) {
+    List<Change> incoming = targets.stream().filter(c -> c.kind() == Kind.INCOMING).toList();
+    List<Change> outgoing = targets.stream().filter(c -> c.kind() == Kind.OUTGOING).toList();
+    boolean conflict = targets.stream().anyMatch(c -> c.kind() == Kind.CONFLICT);
+    if (!incoming.isEmpty() || conflict) {
+      JMenuItem pull = new JMenuItem(SyncBundle.message("sync.menu.pull"), pullButton.getIcon());
+      pull.addActionListener(a -> pullButton.doClick());
+      menu.add(pull);
+    }
+    List<Change> svnIncoming = incoming.stream().filter(c -> c.repo().vcs() == Vcs.SVN).toList();
+    if (!svnIncoming.isEmpty()) {
+      JMenuItem update = new JMenuItem(SyncBundle.message("sync.menu.update.files", svnIncoming.size()));
+      update.addActionListener(a -> runOnRepos(svnIncoming, repo -> List.of("update", "--non-interactive", "--"),
+                                               done -> SyncBundle.message("sync.update.files.done", done)));
+      menu.add(update);
+    }
+    if (!outgoing.isEmpty()) {
+      JMenuItem commit = new JMenuItem(SyncBundle.message("sync.menu.commit", outgoing.size()), AllIcons.Actions.Commit);
+      commit.addActionListener(a -> commitFiles(commit.getText(), outgoing));
+      menu.add(commit);
+    }
+    if (outgoing.stream().anyMatch(c -> c.repo().vcs() == Vcs.GIT)) {
+      JMenuItem push = new JMenuItem(SyncBundle.message("sync.menu.push"), pushButton.getIcon());
+      push.addActionListener(a -> pushButton.doClick());
+      menu.add(push);
+    }
+    if (conflict) {
+      JMenuItem resolve = new JMenuItem(SyncBundle.message("sync.menu.resolve"), resolveButton.getIcon());
+      resolve.addActionListener(a -> resolveButton.doClick());
+      menu.add(resolve);
+    }
+  }
+
+  /** 고른 파일만 체크된 채로 IDE 커밋 창을 연다. 지운 파일도 넘기도록 VirtualFile 대신 FilePath 로 넘긴다. */
+  private void commitFiles(String text, List<Change> targets) {
+    List<FilePath> paths = new ArrayList<>();
+    for (Change c : targets) paths.add(VcsUtil.getFilePath(new File(c.repo().root(), c.path()), false));
+    DataContext context = SimpleDataContext.builder().setParent(DataManager.getInstance().getDataContext(this))
+      .add(VcsDataKeys.FILE_PATHS, paths)
+      .build();
+    runAction(text, ACTION_COMMIT_FILES, context);
+  }
+
+  /** 고른 묶음 줄(들어올 · 나갈 · 충돌) 아래 파일 전부. */
+  private List<Change> selectedGroupChanges() {
+    List<Change> result = new ArrayList<>();
+    TreePath[] paths = tree.getSelectionPaths();
+    if (paths == null) return result;
+    for (TreePath path : paths) {
+      if (path.getLastPathComponent() instanceof DefaultMutableTreeNode node && node.getUserObject() instanceof Group) {
+        for (int i = 0; i < node.getChildCount(); i++) {
+          if (((DefaultMutableTreeNode) node.getChildAt(i)).getUserObject() instanceof Change c) result.add(c);
+        }
+      }
+    }
+    return result;
   }
 
   private List<Change> selectedChanges() {
