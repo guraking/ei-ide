@@ -19,6 +19,7 @@
   22) 첫 실행 기본 어두운 테마를 EI Glass(boot-servers 플러그인)로 한다.
   23) EI Glass 테마가 켜는 유리 그리기: 창 전체 빛 배경, 트리 · 목록 선택 테두리, 툴바 알약, 열린 툴 창 단추 색.
   24) 프로젝트 머리글자 아이콘에 한글 같은 JetBrains Mono 에 없는 글자가 오면 대체 글꼴이 있는 Dialog 글꼴로 그린다.
+  26) 프로젝트 창 모듈 줄을 모두 폴더 이름만 굵게 그린다(뒤의 [모듈 이름] 을 뺀다).
 고치기 전 원본은 <intellij-community>/../backup/<시각>-before/ 에 같은 상대경로로 남긴다.
 모든 원문을 먼저 찾아 본 뒤에 쓴다. 하나라도 못 찾으면 아무 파일도 바꾸지 않는다. 줄끝(LF · CRLF)은 파일마다 원래대로 둔다.
 두 번 실행해도 같은 결과가 된다.
@@ -282,6 +283,12 @@ EDITS = [
      "    g2.font = getFont(size)\n",
      "    val font = getFont(size)\n"
      "    g2.font = if (font.canDisplayUpTo(presentation.shortName) == -1) font else Font(Font.DIALOG, Font.BOLD, font.size)\n"),
+    # 26) 프로젝트 창은 모듈 이름을 굵게 쓴다. 폴더 이름과 모듈 이름이 같으면 이름 전체가 굵고, 다르면 「폴더 [모듈]」 중 [모듈] 만 굵어
+    #     줄마다 굵기가 달라 보인다(PsiDirectoryNode.updateImpl). 레지스트리 ide.hide.real.module.name 이 켜지면 모든 모듈 줄을
+    #     폴더 이름만 굵게 그린다. 레지스트리는 기본값과 다른 값만 저장하므로 이 값을 건드린 적 없는 기존 설정에도 적용된다.
+    ("platform/util/resources/misc/registry.properties",
+     "ide.hide.real.module.name=false\n",
+     "ide.hide.real.module.name=true\n"),
 ]
 
 
