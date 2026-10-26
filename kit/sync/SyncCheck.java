@@ -50,6 +50,7 @@ public class SyncCheck {
 
     checkUnmappedVcs();
     checkBuildFiles();
+    checkOutputDirs();
     checkInSvn();
     checkRun();
     checkReverseMerge();
@@ -81,6 +82,35 @@ public class SyncCheck {
     eq(CloneIntoProject.buildFiles(repo), List.of(app.resolve("settings.gradle.kts"), eclipse.resolve("pom.xml")));
     java.nio.file.Files.writeString(repo.resolve("pom.xml"), "");
     eq(CloneIntoProject.buildFiles(repo), List.of(repo.resolve("pom.xml")));
+  }
+
+  /** 빌드 결과 폴더: pom · Gradle · package.json 옆 폴더와 .classpath 출력 폴더, 없는 폴더도 고르고 고른 폴더 · 점 폴더 아래는 보지 않는다. */
+  private static void checkOutputDirs() throws IOException {
+    eq(CloneIntoProject.eclipseOutput("<classpath><classpathentry kind=\"src\" path=\"src\"/><classpathentry path=\"WebContent/WEB-INF/classes/\" kind=\"output\"/></classpath>"), "WebContent/WEB-INF/classes");
+    eq(CloneIntoProject.eclipseOutput("<classpathentry kind=\"src\" path=\"src\" sourcepath=\"x\"/><classpathentry kind=\"output\" path=\"bin\"/>"), "bin");
+    eq(CloneIntoProject.eclipseOutput("<classpathentry kind=\"output\" path=\".\"/>"), null);
+    eq(CloneIntoProject.eclipseOutput("<classpathentry kind=\"output\" path=\"../out\"/>"), null);
+    eq(CloneIntoProject.eclipseOutput("<classpathentry kind=\"output\" path=\"C:/out\"/>"), null);
+    eq(CloneIntoProject.eclipseOutput("<classpathentry kind=\"src\" path=\"src\"/>"), null);
+    java.nio.file.Path repo = java.nio.file.Files.createTempDirectory("output");
+    eq(CloneIntoProject.outputDirs(repo), List.of());
+    java.nio.file.Path eclipse = java.nio.file.Files.createDirectories(repo.resolve("jpa-mybatis-multi"));
+    java.nio.file.Files.writeString(eclipse.resolve("pom.xml"), "");
+    java.nio.file.Files.writeString(eclipse.resolve(".classpath"), "<classpathentry kind=\"output\" path=\"bin\"/>");
+    java.nio.file.Files.createDirectories(eclipse.resolve("target/sub"));
+    java.nio.file.Files.writeString(eclipse.resolve("target/sub/package.json"), "");
+    java.nio.file.Path front = java.nio.file.Files.createDirectories(repo.resolve("front"));
+    java.nio.file.Files.writeString(front.resolve("package.json"), "");
+    java.nio.file.Files.createDirectories(front.resolve("node_modules/lib"));
+    java.nio.file.Files.writeString(front.resolve("node_modules/lib/package.json"), "");
+    java.nio.file.Files.createDirectories(repo.resolve(".idea/x"));
+    java.nio.file.Files.writeString(repo.resolve(".idea/x/pom.xml"), "");
+    java.nio.file.Path app = java.nio.file.Files.createDirectories(repo.resolve("app"));
+    java.nio.file.Files.writeString(app.resolve("build.gradle"), "");
+    java.nio.file.Files.writeString(app.resolve("settings.gradle"), "");
+    java.nio.file.Files.createDirectories(repo.resolve("a/b/c"));
+    java.nio.file.Files.writeString(repo.resolve("a/b/c/pom.xml"), "");
+    eq(CloneIntoProject.outputDirs(repo), List.of(app.resolve("build"), front.resolve("node_modules"), eclipse.resolve("bin"), eclipse.resolve("target")));
   }
 
   /** SVN 작업본 판정: 그 폴더나 위 어디에 .svn 폴더가 있으면 SVN 이다(.svn 파일은 아니다). */

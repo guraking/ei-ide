@@ -12,6 +12,7 @@ import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.actionSystem.ex.ActionUtil;
 import com.intellij.openapi.actionSystem.impl.SimpleDataContext;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.application.WriteAction;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.module.ModifiableModuleModel;
@@ -20,6 +21,7 @@ import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.module.ModuleTypeManager;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.roots.ContentEntry;
 import com.intellij.openapi.roots.ModuleRootManager;
 import com.intellij.openapi.roots.ModuleRootModificationUtil;
 import com.intellij.openapi.startup.StartupActivity;
@@ -41,16 +43,21 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Clone 이 끝난 폴더를 새 창 프로젝트로 열지 않고 지금 열린 프로젝트에 모듈로 붙인다(이클립스 워크스페이스처럼).
  * 모듈 파일은 프로젝트의 .idea/modules/「폴더이름.iml」(받은 저장소 안에 IDE 파일을 만들지 않는다), SDK 는 프로젝트 것을 따른다.
  * 프로젝트 VCS 매핑이 <Project> 기본값이 아니면 받은 폴더에 Git · SVN 매핑을 더한다.
  * 받은 폴더와 그 아래 두 단계의 pom.xml · Gradle 파일은 Maven · Gradle 프로젝트로 연결한다(linkBuildFiles).
+ * 열 때와 Clone 뒤에 모듈마다 빌드 결과 · 내려받은 라이브러리 폴더를 제외 폴더로 표시한다(excludeBuildOutput). 인덱스 · 검색 · TODO 가 읽지 않는다.
  * 다음이면 false 를 돌려 IntelliJ 기본 동작(새 프로젝트로 열기)에 맡긴다:
  * 시작 화면(기본 프로젝트)에서 받았을 때, 같은 이름 모듈이 이미 있을 때,
  * SVN 으로 받았을 때, 열린 프로젝트가 SVN 프로젝트일 때(svnProject).
@@ -74,9 +81,18 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
   private static final Set<String> SKIP_DIRS = Set.of("target", "build", "out", "bin", "node_modules");
   // 받은 폴더(0) 아래 몇 단계까지 빌드 파일을 찾는가. 저장소 안 한 단계 아래 이클립스 프로젝트(basic\jpa-mybatis-multi)와 그 아래 한 단계를 덮는다.
   private static final int BUILD_DEPTH = 2;
+  // 이 파일이 있는 폴더 → 그 옆의 빌드 결과 · 라이브러리 폴더(Maven · Gradle · npm 기본 위치).
+  private static final Map<String, String> OUTPUT_DIRS = Map.of(
+    POM, "target",
+    "build.gradle", "build", "build.gradle.kts", "build", "settings.gradle", "build", "settings.gradle.kts", "build",
+    "package.json", "node_modules");
+  private static final String ECLIPSE_CLASSPATH = ".classpath";
+  private static final Pattern CLASSPATH_ENTRY = Pattern.compile("<classpathentry\\b[^>]*>");
+  private static final Pattern ENTRY_PATH = Pattern.compile("\\bpath=\"([^\"]*)\"");
 
   @Override
   public void runActivity(@NotNull Project project) {
+    excludeBuildOutput(project);
     ApplicationManager.getApplication().invokeLater(() -> removeWorkspaceModule(project), project.getDisposed());
   }
 
@@ -100,6 +116,7 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
           .newModule(Path.of(base, Project.DIRECTORY_STORE_FOLDER, "modules", name + ".iml"), ModuleTypeManager.getInstance().getDefaultModuleType().getId())));
         ModuleRootModificationUtil.addContentRoot(created.get(), dir);
         ModuleRootModificationUtil.setSdkInherited(created.get());
+        excludeDirs(created.get(), outputDirs(directory));
         addVcsMapping(project, directory);
         removeWorkspaceModule(project);
       });
@@ -174,6 +191,123 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
       String name = child.getFileName().toString();
       if (!name.startsWith(".") && !SKIP_DIRS.contains(name)) collectBuildFiles(child, depth + 1, found);
     }
+  }
+
+  /**
+   * 모듈마다 콘텐츠 루트 아래의 빌드 결과 폴더를 제외로 표시한다. 폴더 찾기는 이 스레드(시작 작업, EDT 아님)에서, 표시는 EDT 에서 한다.
+   */
+  private static void excludeBuildOutput(Project project) {
+    Map<Module, List<Path>> found = new LinkedHashMap<>();
+    // 워크스페이스 폴더 자체 모듈은 removeWorkspaceModule 이 뺀다. 그 모듈에 저장소 안 폴더를 제외로 넣지 않는다.
+    VirtualFile workspace = ReadAction.compute(() -> project.isDisposed() ? null : workspaceDir(project));
+    for (Module module : ModuleManager.getInstance(project).getModules()) {
+      VirtualFile[] roots = ReadAction.compute(() -> module.isDisposed() ? VirtualFile.EMPTY_ARRAY : ModuleRootManager.getInstance(module).getContentRoots());
+      List<Path> dirs = new ArrayList<>();
+      for (VirtualFile root : roots) {
+        if (root.isInLocalFileSystem() && !root.equals(workspace)) dirs.addAll(outputDirs(root.toNioPath()));
+      }
+      if (!dirs.isEmpty()) found.put(module, dirs);
+    }
+    if (found.isEmpty()) return;
+    ApplicationManager.getApplication().invokeLater(() -> {
+      for (Map.Entry<Module, List<Path>> entry : found.entrySet()) excludeDirs(entry.getKey(), entry.getValue());
+    }, project.getDisposed());
+  }
+
+  /**
+   * 아직 제외가 아닌 폴더를 그 폴더를 품은 콘텐츠 루트의 제외 폴더로 더한다. EDT 에서 부른다.
+   * 소스 폴더이거나 소스 폴더를 품은 폴더는 건너뛴다(이클립스 출력 폴더를 소스 폴더와 같게 둔 프로젝트). 더할 것이 없으면 모듈을 고치지 않는다.
+   */
+  static void excludeDirs(Module module, List<Path> dirs) {
+    if (module.isDisposed()) return;
+    ModuleRootManager rootManager = ModuleRootManager.getInstance(module);
+    List<String> have = List.of(rootManager.getExcludeRootUrls());
+    List<String> sources = List.of(rootManager.getSourceRootUrls());
+    List<String> add = new ArrayList<>();
+    for (Path dir : dirs) {
+      String url = VfsUtilCore.pathToUrl(FileUtil.toSystemIndependentName(dir.toString()));
+      if (have.contains(url) || add.contains(url) || coversAny(url, sources)) continue;
+      add.add(url);
+    }
+    if (add.isEmpty()) return;
+    ModuleRootModificationUtil.updateModel(module, model -> {
+      for (ContentEntry entry : model.getContentEntries()) {
+        for (String url : add) {
+          if (!url.equals(entry.getUrl()) && VfsUtilCore.isEqualOrAncestor(entry.getUrl(), url)) entry.addExcludeFolder(url);
+        }
+      }
+    });
+  }
+
+  private static boolean coversAny(String url, List<String> sources) {
+    for (String source : sources) {
+      if (VfsUtilCore.isEqualOrAncestor(url, source)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * 빌드 결과 · 라이브러리 폴더 목록. 루트와 그 아래 BUILD_DEPTH 단계의 폴더마다
+   * pom.xml 옆 target, Gradle 파일 옆 build, package.json 옆 node_modules, 이클립스 .classpath 의 출력 폴더(kind="output")를 고른다.
+   * 아직 없는 폴더도 고른다(받은 직후에는 빌드 전이라 없다). 점 폴더와 고른 폴더 · 빌드 결과 폴더 아래로는 내려가지 않는다.
+   */
+  static List<Path> outputDirs(Path root) {
+    List<Path> found = new ArrayList<>();
+    collectOutputDirs(root, 0, found);
+    return found;
+  }
+
+  private static void collectOutputDirs(Path dir, int depth, List<Path> found) {
+    List<Path> here = new ArrayList<>();
+    for (Map.Entry<String, String> entry : OUTPUT_DIRS.entrySet()) {
+      Path out = dir.resolve(entry.getValue());
+      if (Files.isRegularFile(dir.resolve(entry.getKey())) && !here.contains(out)) here.add(out);
+    }
+    Path classpath = dir.resolve(ECLIPSE_CLASSPATH);
+    if (Files.isRegularFile(classpath)) {
+      try {
+        String output = eclipseOutput(Files.readString(classpath));
+        if (output != null && !here.contains(dir.resolve(output))) here.add(dir.resolve(output));
+      }
+      catch (IOException | RuntimeException e) {
+        LOG.warn("이클립스 .classpath 를 읽지 못했습니다: " + classpath, e);
+      }
+    }
+    here.sort(null);
+    found.addAll(here);
+    if (depth == BUILD_DEPTH) return;
+    List<Path> children = new ArrayList<>();
+    try (var stream = Files.newDirectoryStream(dir, Files::isDirectory)) {
+      for (Path child : stream) children.add(child);
+    }
+    catch (IOException e) {
+      LOG.warn("빌드 결과 폴더를 찾다가 폴더를 읽지 못했습니다: " + dir, e);
+      return;
+    }
+    children.sort(null);
+    for (Path child : children) {
+      String name = child.getFileName().toString();
+      if (!name.startsWith(".") && !SKIP_DIRS.contains(name) && !here.contains(child)) collectOutputDirs(child, depth + 1, found);
+    }
+  }
+
+  /**
+   * .classpath 의 출력 폴더(<classpathentry kind="output" path="bin"/>)를 상대 경로로 돌려준다.
+   * 없거나 프로젝트 폴더 자신(「.」 · 빈 값)이거나 절대 경로 · 위로 나가는 경로면 null.
+   */
+  static @Nullable String eclipseOutput(String classpath) {
+    Matcher tag = CLASSPATH_ENTRY.matcher(classpath);
+    while (tag.find()) {
+      String entry = tag.group();
+      if (!entry.matches("(?s).*\\bkind=\"output\".*")) continue;
+      Matcher path = ENTRY_PATH.matcher(entry);
+      if (!path.find()) return null;
+      String value = path.group(1).replace('\\', '/');
+      while (value.endsWith("/")) value = value.substring(0, value.length() - 1);
+      if (value.isEmpty() || value.equals(".") || value.startsWith("/") || value.contains(":") || value.equals("..") || value.startsWith("../") || value.contains("/../")) return null;
+      return value;
+    }
+    return null;
   }
 
   /**
