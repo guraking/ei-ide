@@ -1,7 +1,7 @@
 package ei.db.mybatis;
 
+
 import com.intellij.openapi.editor.EditorFactory;
-import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.ide.CopyPasteManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
@@ -9,6 +9,7 @@ import com.intellij.ui.EditorTextField;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.util.ui.JBUI;
 import ei.db.EiDbBundle;
+import ei.db.FileTypes;
 import ei.db.Notify;
 import org.jetbrains.annotations.NotNull;
 
@@ -55,7 +56,7 @@ final class StringSqlDialog extends DialogWrapper {
 
   private JComponent section(String title, String copyText, String extension, String text) {
     EditorTextField editor = new EditorTextField(EditorFactory.getInstance().createDocument(text), project,
-                                                 FileTypeManager.getInstance().getFileTypeByExtension(extension), true, false);
+                                                 FileTypes.byExtension(extension), true, false);
     editor.setPreferredSize(JBUI.size(CODE_WIDTH, CODE_HEIGHT));
     editor.addSettingsProvider(e -> {
       e.setVerticalScrollbarVisible(true);

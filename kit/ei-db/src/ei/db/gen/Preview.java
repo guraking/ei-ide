@@ -7,9 +7,9 @@ import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.editor.EditorFactory;
 import com.intellij.openapi.editor.ex.EditorEx;
 import com.intellij.openapi.editor.highlighter.EditorHighlighterFactory;
-import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Disposer;
+import ei.db.FileTypes;
 
 import javax.swing.JComponent;
 
@@ -23,7 +23,7 @@ final class Preview {
     editor = EditorFactory.getInstance().createViewer(doc, project);
     if (editor instanceof EditorEx ex) {
       ex.setHighlighter(EditorHighlighterFactory.getInstance()
-                            .createEditorHighlighter(project, FileTypeManager.getInstance().getFileTypeByExtension(extension)));
+                            .createEditorHighlighter(project, FileTypes.byExtension(extension)));
     }
     editor.getSettings().setLineNumbersShown(true);
     editor.getSettings().setFoldingOutlineShown(false);
