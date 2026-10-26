@@ -1,0 +1,30 @@
+{
+  "name": "EI White",
+  "dark": false,
+  "author": "EI IDE",
+  "parentTheme": "Islands Light",
+  "editorScheme": "EI White",
+  "colors": {
+    "main-window-bg": "#EDEDED",
+    "layer-0-bg": "#F5F5F5",
+    "layer-0-bg-inline": "#FFFFFF",
+    "layer-0-border": "#D6D6D6",
+    "layer-0-border-inline": "#D6D6D6",
+    "layer-1-bg": "#FFFFFF",
+    "layer-1-border": "#C8C8C8",
+    "layer-1-bg-inline": "#FFFFFF",
+    "layer-1-border-inline": "#C8C8C8",
+    "layer-2-bg": "#FFFFFF",
+    "layer-2-border": "#C8C8C8",
+    "selection-bg-active": "#DADADA",
+    "selection-bg-active-muted": "#E6E6E6",
+    "toolbar-selected-bg": "#DADADA",
+    "toolbar-selected-bg-hovered": "#D0D0D0",
+    "tab-selected-bg-active": "#FFFFFF",
+    "tab-selected-border-active": "#1A5FD0",
+    "tab-selected-bg-inactive": "#F5F5F5",
+    "tab-selected-border-inactive": "#B0B0B0",
+    "control-brand-border": "#1A5FD0",
+    "popup-completion-match-text": "#1A5FD0"
+  }
+}
