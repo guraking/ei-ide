@@ -77,6 +77,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
   private static final int PATH_COL_W = 480;
   // From · Into 상자의 최소 너비. 두 상자는 창 너비를 반씩 나눠 꽉 채우고, 창을 늘리면 같이 늘어난다(「fe-기능이름/날짜/아이디」 같은 긴 이름).
   private static final int COMBO_W = 300;
+  // 찾기 칸 모서리 둥글기(px). 새 UI 콤보 상자 · 펼친 목록의 모서리와 비슷하게 맞춘다.
+  private static final int SEARCH_ARC = 8;
 
   @Override public @NotNull ActionUpdateThread getActionUpdateThread() { return ActionUpdateThread.BGT; }
 
@@ -194,8 +196,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
       intoBox.setRenderer(remoteName);
       // 브랜치가 수십 개라 상자를 연 채 글자를 치면 이름이 맞는 브랜치로 건너뛴다(origin/ 은 빼고 맞춘다).
       // 찾기 칸은 IntelliJ 기본으로 Enter · Esc · 포커스 이동에만 닫힌다. 펼친 목록에서 브랜치를 고르면 목록과 함께 닫는다.
-      hideSearchWithList(fromBox, ComboboxSpeedSearch.installOn(fromBox));
-      hideSearchWithList(intoBox, ComboboxSpeedSearch.installOn(intoBox));
+      hideSearchWithList(fromBox, roundSearch(fromBox));
+      hideSearchWithList(intoBox, roundSearch(intoBox));
       fromBox.setMinimumAndPreferredWidth(JBUI.scale(COMBO_W));
       intoBox.setMinimumAndPreferredWidth(JBUI.scale(COMBO_W));
       push.setSelected(true);
@@ -232,6 +234,44 @@ public final class ReverseMergeAction extends DumbAwareAction {
           }
         });
       });
+    }
+
+    /**
+     * ComboboxSpeedSearch.installOn 과 같고, 찾기 칸만 상자 · 펼친 목록처럼 모서리를 둥글게 그린다.
+     * IntelliJ 찾기 칸은 각진 선 테두리를 코드로 박아 두어 테마 키로는 둥글게 할 수 없다.
+     */
+    private static ComboboxSpeedSearch roundSearch(ComboBox<String> box) {
+      ComboboxSpeedSearch search = new ComboboxSpeedSearch(box, null) {
+        @Override
+        protected @NotNull SearchPopup createPopup(String s) {
+          SearchPopup popup = new SearchPopup(s) {
+            @Override
+            protected void paintComponent(Graphics g) {
+              Graphics2D g2 = (Graphics2D)g.create();
+              g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+              g2.setColor(getBackground());
+              int arc = JBUI.scale(SEARCH_ARC);
+              g2.fillRoundRect(0, 0, getWidth(), getHeight(), arc, arc);
+              g2.dispose();
+            }
+
+            @Override
+            protected void paintBorder(Graphics g) {
+              Graphics2D g2 = (Graphics2D)g.create();
+              g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+              g2.setColor(BORDER_COLOR);
+              int arc = JBUI.scale(SEARCH_ARC);
+              g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, arc, arc);
+              g2.dispose();
+            }
+          };
+          // 둥근 모서리 바깥은 뒤 화면이 보이게 한다.
+          popup.setOpaque(false);
+          return popup;
+        }
+      };
+      search.setupListeners();
+      return search;
     }
 
     private static void hideSearchWithList(ComboBox<String> box, ComboboxSpeedSearch search) {
