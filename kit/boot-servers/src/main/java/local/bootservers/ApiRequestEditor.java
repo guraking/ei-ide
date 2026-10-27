@@ -35,6 +35,7 @@ import com.intellij.ui.components.JBTextField;
 import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.JBFont;
+import com.intellij.util.ui.JBInsets;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
 import org.jetbrains.annotations.NotNull;
@@ -203,12 +204,15 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         top.setBorder(JBUI.Borders.empty(8));
 
         JBTabbedPane requestTabs = new JBTabbedPane();
+        // 탭이 넣는 안쪽 여백은 바탕색 틀로 보이므로 뺀다. addTab 보다 먼저 정해야 한다.
+        requestTabs.setTabComponentInsets(JBInsets.emptyInsets());
         requestTabs.addTab(BootServersBundle.message("api.tab.query"), rowsPanel(queryModel, row -> false));
         requestTabs.addTab(BootServersBundle.message("api.tab.headers"), rowsPanel(headerModel, this::isAuthRow));
         requestTabs.addTab(BootServersBundle.message("api.tab.body"), bodyField);
         requestTabs.addTab(BootServersBundle.message("api.tab.auth"), authPanel());
 
         JBTabbedPane responseTabs = new JBTabbedPane();
+        responseTabs.setTabComponentInsets(JBInsets.emptyInsets());
         responseTabs.addTab(BootServersBundle.message("api.tab.body"), responseBody);
         responseTabs.addTab(BootServersBundle.message("api.tab.headers"), responseHeaders);
         JBLabel emptyResponse = new JBLabel(BootServersBundle.message("api.response.empty"), SwingConstants.CENTER);
@@ -220,7 +224,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         JPanel responseHead = new JPanel(new BorderLayout(JBUI.scale(12), 0));
         responseHead.add(responseTitle, BorderLayout.WEST);
         responseHead.add(statusLabel, BorderLayout.EAST);
-        responseHead.setBorder(JBUI.Borders.empty(6, 8));
+        responseHead.setBorder(JBUI.Borders.empty(10, 10, 4, 10));
         JPanel response = new JPanel(new BorderLayout());
         response.add(responseHead, BorderLayout.NORTH);
         response.add(responseCards, BorderLayout.CENTER);
@@ -286,9 +290,12 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
                 return c;
             }
         });
-        // 탭이 이미 틀을 그리므로 표 바깥 틀은 뺀다(겹치면 두 줄로 보인다).
+        // 탭 · 위아래 나눔 선이 이미 틀을 그리므로 표 바깥 틀과 스크롤 틀은 뺀다(겹치면 두 줄로 보인다).
+        // 세로 칸 선은 머리글 칸 선과 1픽셀 어긋나므로 그리지 않는다.
+        table.setShowVerticalLines(false);
         return ToolbarDecorator.createDecorator(table)
                 .setPanelBorder(JBUI.Borders.empty())
+                .setScrollPaneBorder(JBUI.Borders.empty())
                 .setAddAction(b -> model.addRow(new Object[]{true, "", ""}))
                 .setRemoveAction(b -> {
                     int[] rows = table.getSelectedRows();
