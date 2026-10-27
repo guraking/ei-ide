@@ -158,6 +158,24 @@ final class ReverseMerge {
     return parseHeads(git(root, GIT_LONG_TIMEOUT_SEC, "ls-remote", "--heads", remote));
   }
 
+  /** 지금까지 받아 둔 원격 브랜치 이름들(refs/remotes/<원격>/*). 서버에 가지 않아 바로 나온다. 이름순. */
+  static List<String> knownBranches(File root, String remote) throws IOException, InterruptedException {
+    return parseRefs(git(root, "for-each-ref", "--format=%(refname)", remoteRef(remote, "")), remote);
+  }
+
+  /** for-each-ref 가 낸 refs/remotes/<원격>/<이름> 줄에서 이름만. <원격>/HEAD 는 브랜치가 아니라 뺀다. */
+  static List<String> parseRefs(String output, String remote) {
+    String prefix = remoteRef(remote, "");
+    List<String> names = new ArrayList<>();
+    for (String line : output.split("\n")) {
+      String ref = line.trim();
+      if (!ref.startsWith(prefix)) continue;
+      String name = ref.substring(prefix.length());
+      if (!name.isEmpty() && !name.equals("HEAD")) names.add(name);
+    }
+    return names;
+  }
+
   /** 브랜치들을 이름으로 받아 remoteRef 에 둔다. 서버에서 브랜치가 지워졌으면 IOException. */
   static void fetch(File root, String remote, String... branches) throws IOException, InterruptedException {
     List<String> args = new ArrayList<>(List.of("fetch", "--quiet", remote));

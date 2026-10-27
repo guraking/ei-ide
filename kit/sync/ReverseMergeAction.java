@@ -57,6 +57,7 @@ import java.awt.event.MouseEvent;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -108,9 +109,12 @@ public final class ReverseMergeAction extends DumbAwareAction {
         // 서버가 느릴 때 취소를 누르면 기다리던 git 을 끝낸다(작업 스레드를 끊으면 SyncPanel.run 이 프로세스를 죽인다).
         Future<?> work = ApplicationManager.getApplication().executeOnPooledThread(() -> {
           remote = ReverseMerge.remoteOf(root, current);
-          names = ReverseMerge.serverBranches(root, remote);
           savedFrom = ReverseMerge.config(root, ReverseMerge.CONFIG_FROM);
           savedInto = ReverseMerge.config(root, ReverseMerge.CONFIG_INTO);
+          // 받아 둔 브랜치 목록으로 바로 열고 서버 목록은 창이 뜬 뒤 합친다(VPN 에서 ls-remote 는 몇 초 걸린다).
+          // 아직 기준 브랜치를 받은 적이 없으면(처음 쓰는 저장소) 서버에 물어야 From 을 채울 수 있다.
+          names = ReverseMerge.knownBranches(root, remote);
+          if (ReverseMerge.pick(names, savedFrom, ReverseMerge.FROM_CANDIDATES) == null) names = ReverseMerge.serverBranches(root, remote);
           return null;
         });
         try {
@@ -165,6 +169,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
     // 미리 보기를 다시 읽을 때마다 하나 올린다(EDT 에서만 쓰고 worker 가 읽는다). 늦게 끝난 옛 계산이 새 결과를 덮지 않게 한다.
     private volatile int seq;
     private boolean ready;
+    // 이 창에서 이미 받아 온 브랜치. 같은 브랜치를 다시 고르면 fetch 하지 않는다(worker 스레드에서만 쓴다).
+    private final Set<String> fetched = new HashSet<>();
 
     PreviewDialog(Project project, GitRepository repo, File root, String remote, String current, List<String> names, String from, String into) {
       super(project, true);
@@ -199,6 +205,33 @@ public final class ReverseMergeAction extends DumbAwareAction {
       fromBox.addActionListener(e -> reload());
       intoBox.addActionListener(e -> reload());
       reload();
+      addServerBranches();
+    }
+
+    /** 서버 브랜치 목록을 뒤에서 받아 받아 둔 목록에 없던 것을 두 상자에 더한다. 서버에 닿지 못하면 받아 둔 목록만 남는다(미리 보기의 fetch 가 그 오류를 보인다). */
+    private void addServerBranches() {
+      worker.execute(() -> {
+        List<String> names;
+        try {
+          names = ReverseMerge.serverBranches(root, remote);
+        }
+        catch (IOException unreachable) {
+          return;
+        }
+        catch (InterruptedException ex) {
+          Thread.currentThread().interrupt();
+          return;
+        }
+        SwingUtilities.invokeLater(() -> {
+          if (isDisposed()) return;
+          for (ComboBox<String> box : List.of(fromBox, intoBox)) {
+            DefaultComboBoxModel<String> items = (DefaultComboBoxModel<String>) box.getModel();
+            for (String name : names) {
+              if (items.getIndexOf(name) < 0) items.addElement(name);
+            }
+          }
+        });
+      });
     }
 
     private static void hideSearchWithList(ComboBox<String> box, ComboboxSpeedSearch search) {
@@ -314,7 +347,14 @@ public final class ReverseMergeAction extends DumbAwareAction {
         int localOnly = 0;
         int intoLocalOnly = 0;
         try {
-          ReverseMerge.fetch(root, remote, from, into);
+          List<String> missing = new ArrayList<>();
+          for (String b : List.of(from, into)) {
+            if (!fetched.contains(b)) missing.add(b);
+          }
+          if (!missing.isEmpty()) {
+            ReverseMerge.fetch(root, remote, missing.toArray(String[]::new));
+            fetched.addAll(missing);
+          }
           preview = ReverseMerge.preview(root, remote, from, into, current);
           localOnly = ReverseMerge.unpushed(root, remote, from);
           intoLocalOnly = ReverseMerge.unpushed(root, remote, into);
