@@ -7,12 +7,17 @@ import com.intellij.openapi.actionSystem.ActionManager;
 import com.intellij.openapi.actionSystem.ActionToolbar;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnActionEvent;
+import com.intellij.openapi.actionSystem.DataContext;
+import com.intellij.openapi.actionSystem.DataSink;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
+import com.intellij.openapi.actionSystem.PlatformDataKeys;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.ide.CopyProvider;
 import com.intellij.openapi.fileChooser.FileChooser;
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory;
 import com.intellij.openapi.fileChooser.FileChooserFactory;
 import com.intellij.openapi.fileChooser.FileSaverDescriptor;
+import com.intellij.openapi.ide.CopyPasteManager;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.DumbAwareAction;
@@ -494,6 +499,41 @@ final class DbExplorer extends SimpleToolWindowPanel {
     return c != null && DbSessions.get(project).isOpen(c.id);
   }
 
+  /** 고른 표 · 칼럼의 이름을 한 줄에 하나씩(나무 순서). 표 · 칼럼이 없으면 빈 글. */
+  private String selectedNames() {
+    StringBuilder out = new StringBuilder();
+    TreePath[] paths = tree.getSelectionPaths();
+    if (paths != null) {
+      for (TreePath p : paths) {
+        Object o = node(p).getUserObject();
+        String name = o instanceof TableItem t ? t.table.name() : o instanceof Meta.Column col ? col.name() : null;
+        if (name == null) continue;
+        if (!out.isEmpty()) out.append('\n');
+        out.append(name);
+      }
+    }
+    return out.toString();
+  }
+
+  private void copyNames() {
+    String names = selectedNames();
+    if (!names.isEmpty()) CopyPasteManager.copyTextToClipboard(names);
+  }
+
+  /** 나무에서 Ctrl+C(IDE 의 Copy)는 고른 표 · 칼럼 이름을 복사한다. */
+  @Override
+  public void uiDataSnapshot(@NotNull DataSink sink) {
+    super.uiDataSnapshot(sink);
+    String names = selectedNames();
+    if (names.isEmpty()) return;
+    sink.set(PlatformDataKeys.COPY_PROVIDER, new CopyProvider() {
+      @Override public void performCopy(@NotNull DataContext dataContext) { CopyPasteManager.copyTextToClipboard(names); }
+      @Override public boolean isCopyEnabled(@NotNull DataContext dataContext) { return true; }
+      @Override public boolean isCopyVisible(@NotNull DataContext dataContext) { return true; }
+      @Override public @NotNull ActionUpdateThread getActionUpdateThread() { return ActionUpdateThread.BGT; }
+    });
+  }
+
   /** 고른 표 중 기준 표와 같은 접속 · 스키마인 것의 이름(기준 표 포함). */
   private List<String> selectedTables(TableItem base) {
     List<String> out = new ArrayList<>();
@@ -538,7 +578,13 @@ final class DbExplorer extends SimpleToolWindowPanel {
           () -> SqlRunner.run(project, p.c(), ProgramSql.ERRORS, List.of(p.schema(), p.item().name()))));
       return g;
     }
+    if (o instanceof Meta.Column) {
+      g.add(new Act(EiDbBundle.message("explorer.copy.column"), AllIcons.Actions.Copy, () -> true, this::copyNames));
+      return g;
+    }
     if (o instanceof TableItem t) {
+      g.add(new Act(EiDbBundle.message("explorer.copy.table"), AllIcons.Actions.Copy, () -> true, this::copyNames));
+      g.addSeparator();
       g.add(new Act(EiDbBundle.message("explorer.view.data"), AllIcons.Actions.Execute, () -> true, () -> viewData(t)));
       List<String> picked = selectedTables(t);
       if (picked.size() > 1) {
