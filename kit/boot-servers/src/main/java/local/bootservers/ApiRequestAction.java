@@ -43,6 +43,9 @@ public final class ApiRequestAction extends AnAction {
 
     private static final String JSON_MEDIA_TYPE = "application/json";
     private static final String CONTENT_TYPE = "Content-Type";
+    private static final String ACCEPT = "Accept";
+    /** JSON API 와 JSP 화면을 모두 받는다. */
+    private static final String ACCEPT_ANY = "application/json, text/html, */*";
     private static final String BODY_NAME = "body";
 
     @Override
@@ -120,6 +123,7 @@ public final class ApiRequestAction extends AnAction {
         Map<String, String> pathValues = new HashMap<>();
         List<Map.Entry<String, String>> query = new ArrayList<>();
         List<Map.Entry<String, String>> headers = new ArrayList<>();
+        headers.add(Map.entry(ACCEPT, ACCEPT_ANY));
         if (body != null) {
             headers.add(Map.entry(CONTENT_TYPE, JSON_MEDIA_TYPE));
         }
