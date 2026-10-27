@@ -142,13 +142,12 @@ final class UrlMappingDialog extends DialogWrapper {
         }};
     }
 
-    /** 고른 줄(없으면 첫 줄)의 방식 · URL 로 HTTP 요청 창을 연다. 이 창은 그대로 둔다. */
+    /** 고른 줄(없으면 첫 줄)의 방식 · URL 로 API 요청 화면(편집기 탭)을 연다. */
     private void sendRequest() {
         UrlMappingAction.Endpoint chosen = chosen();
         if (chosen != null) {
-            // 펼칠 API 는 OpenApiCollector 가 붙이는 「컨트롤러 클래스/메서드」(태그/operationId).
             close(OK_EXIT_CODE);
-            SwaggerToolWindow.open(project, chosen.owner().replace('.', '/'), chosen.target());
+            ApiRequestAction.open(project, chosen);
         }
     }
 

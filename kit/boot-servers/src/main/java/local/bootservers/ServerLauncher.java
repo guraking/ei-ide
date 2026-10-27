@@ -311,7 +311,7 @@ final class ServerLauncher {
     }
 
     /** Gradle 은 소스 묶음마다 「폴더 모듈.main」 모듈을 만든다. 서버 이름은 우클릭하는 폴더 모듈 이름으로 맞춘다. */
-    private static Module folderModule(ModuleManager moduleManager, Module module) {
+    static Module folderModule(ModuleManager moduleManager, Module module) {
         String name = module.getName();
         if (name.endsWith(".main")) {
             Module folder = moduleManager.findModuleByName(name.substring(0, name.length() - ".main".length()));
