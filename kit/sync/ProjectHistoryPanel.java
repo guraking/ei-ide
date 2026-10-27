@@ -103,23 +103,24 @@ final class ProjectHistoryPanel extends JPanel {
   // 동그라미 지름 대비 머리글자 크기.
   private static final float AVATAR_FONT_RATIO = 0.4f;
 
-  // 색. 가지 선 · 작성자 동그라미는 EI Glass 분홍을 첫 색으로 한 고정 팔레트, 알약은 글자색 + 옅은 바탕 · 테두리.
-  // 유리 디자인 분류 색 10개. 이웃한 가지끼리 비슷한 색이 붙지 않도록 분홍 · 파랑 · 초록 · 주황 … 순으로 둔다.
-  private static final Color[] PALETTE = {
-    new Color(0xFF375F), new Color(0x0A84FF), new Color(0x30D158), new Color(0xFF9F0A), new Color(0xBF5AF2),
-    new Color(0x40C8C0), new Color(0xFFD60A), new Color(0x64D2FF), new Color(0x7D7AFF), new Color(0xFF6482)};
-  // 동그라미 글자는 팔레트 바탕 위에 그리므로 테마와 무관하게 어둡게 둔다.
-  private static final Color AVATAR_TEXT = new Color(0x111111);
+  // 색. 가지 선 · 작성자 동그라미는 테마 밝기에 맞춘 고정 팔레트, 알약은 글자색 + 옅은 바탕 · 테두리.
+  // 이웃한 가지끼리 비슷한 색이 붙지 않도록 파랑 · 초록 · 주황 · 보라 · 청록 … 순으로 둔다. 밝은 테마는 흰 바탕에서 읽히는 진한 색,
+  // 어두운 테마는 같은 색상을 밝게 한 색(EI White · EI Graphite 의 코드 색과 같은 계열).
+  private static final Color[] LIGHT_PALETTE = {
+    new Color(0x3B6FB6), new Color(0x2F8F5B), new Color(0xC0612B), new Color(0x7A5BB5), new Color(0x2A8C8C),
+    new Color(0xA8862A), new Color(0xB0475E), new Color(0x4E7FA8), new Color(0x6B8E23), new Color(0x8A6A4F)};
+  private static final Color[] DARK_PALETTE = {
+    new Color(0x6FA8FF), new Color(0x5FCF8F), new Color(0xF0A060), new Color(0xB49AF0), new Color(0x5FD3D3),
+    new Color(0xE0C060), new Color(0xE88A9C), new Color(0x8FB8E0), new Color(0xA8C860), new Color(0xC8A080)};
+  // 동그라미 글자는 팔레트 바탕 위에 그린다. 밝은 테마 팔레트는 진하므로 흰 글자, 어두운 테마 팔레트는 밝으므로 검은 글자.
+  private static final Color AVATAR_TEXT = new JBColor(0xFFFFFF, 0x111111);
   // 알약 글자색. 밝은 테마(첫 값)에서는 흰 바탕에서 읽히도록 어둡게, 어두운 테마(둘째 값)에서는 밝게.
-  private static final Color LOCAL_BRANCH = new JBColor(0x2A8A4E, 0x5FE39B);
-  private static final Color REMOTE_BRANCH = new JBColor(0x3A6FD8, 0x8FB3FF);
-  private static final Color TAG = new JBColor(0x9A6B00, 0xFFD36B);
-  private static final Color HEAD_BRANCH = new JBColor(0xD6265A, 0xFF6482);
-  // 알약 글자색은 IntelliJ Log 탭과 같은 테마 키를 따르고, 키가 없는 테마에서는 위 색을 쓴다. 현재 브랜치(HEAD)는 강조 색 + 브랜치 아이콘.
-  private static final Color HEAD_COLOR = JBColor.namedColor("VersionControl.GitLog.headIconColor", HEAD_BRANCH);
-  private static final Color LOCAL_COLOR = JBColor.namedColor("VersionControl.GitLog.localBranchIconColor", LOCAL_BRANCH);
-  private static final Color REMOTE_COLOR = JBColor.namedColor("VersionControl.GitLog.remoteBranchIconColor", REMOTE_BRANCH);
-  private static final Color TAG_COLOR = JBColor.namedColor("VersionControl.GitLog.tagIconColor", TAG);
+  // IntelliJ Log 탭의 테마 키(VersionControl.GitLog.*)는 따르지 않는다. 밝은 테마 기본값이 노랑 · 보라라 EI White 와 어울리지 않는다.
+  // 현재 브랜치(HEAD)는 테마 강조 파랑 + 브랜치 아이콘, 로컬 브랜치는 초록, 원격(origin/*)은 회색, 태그는 황토.
+  private static final Color HEAD_COLOR = new JBColor(0x1A5FD0, 0x6FA8FF);
+  private static final Color LOCAL_COLOR = new JBColor(0x2F8F5B, 0x5FCF8F);
+  private static final Color REMOTE_COLOR = new JBColor(0x6B6B6B, 0xA0A0A0);
+  private static final Color TAG_COLOR = new JBColor(0x9A6B00, 0xE0C060);
   private static final int PILL_FILL_ALPHA = 0x22;
   private static final int PILL_BORDER_ALPHA = 0x66;
   private static final String TAG_PREFIX = "tag: ";
@@ -215,12 +216,17 @@ final class ProjectHistoryPanel extends JPanel {
     JPanel top = new JPanel(new BorderLayout());
     top.setBorder(JBUI.Borders.empty(GAP / 2, GAP / 2, 0, GAP));
     // 설명이 빈 때(고른 커밋 없음 · 찾기 중)에도 한 줄 높이를 지켜 아래 목록이 위아래로 뛰지 않게 한다.
+    // 폭은 요구하지 않는다(0). 합치기 커밋 설명이 길어도 가운데 칸을 줄일 수 있고, 넘치는 글은 「…」로 잘린다(전체는 풍선 도움말).
     JPanel bendRow = new JPanel(new BorderLayout()) {
       @Override
       public Dimension getPreferredSize() {
         Dimension size = super.getPreferredSize();
-        size.height = Math.max(size.height, bend.getFontMetrics(bend.getFont()).getHeight());
-        return size;
+        return new Dimension(0, Math.max(size.height, bend.getFontMetrics(bend.getFont()).getHeight()));
+      }
+
+      @Override
+      public Dimension getMinimumSize() {
+        return new Dimension(0, getPreferredSize().height);
       }
     };
     bendRow.add(bend, BorderLayout.CENTER);
@@ -253,12 +259,11 @@ final class ProjectHistoryPanel extends JPanel {
     reloadTargets();
   }
 
-  /** 오른쪽: 굵은 제목, 회색 본문, 작성자 동그라미 · 이름 · 시간, 고정폭 해시(누르면 복사), 이 커밋의 알약, 바뀐 파일. */
+  /** 오른쪽: 굵은 제목, 본문, 작성자 동그라미 · 이름 · 시간, 고정폭 해시(누르면 복사), 이 커밋의 알약, 바뀐 파일. */
   private JComponent detailPanel() {
     subject.setFont(JBUI.Fonts.label().biggerOn(1).asBold());
     author.setFont(JBUI.Fonts.label().asBold());
     authorTime.setFont(JBUI.Fonts.smallFont());
-    authorTime.setForeground(DIM);
     JPanel names = new JPanel(new GridLayout(0, 1));
     names.add(author);
     names.add(authorTime);
@@ -273,7 +278,6 @@ final class ProjectHistoryPanel extends JPanel {
     message.setWrapStyleWord(true);
     message.setOpaque(false);
     message.setFont(JBUI.Fonts.label());
-    message.setForeground(DIM);
     message.setBorder(JBUI.Borders.empty());
     JLabel hint = new JLabel(SyncBundle.message("history.hint"));
     hint.setForeground(DIM);
@@ -544,6 +548,7 @@ final class ProjectHistoryPanel extends JPanel {
 
   private void clearDetail() {
     bend.setText("");
+    bend.setToolTipText(null);
     subject.setText("");
     message.setText("");
     message.setVisible(false);
@@ -568,6 +573,7 @@ final class ProjectHistoryPanel extends JPanel {
     subject.setText(entry.subject());
     // 찾기로 줄인 목록은 가지 선이 없어 꺾임도 없다. 가지 선을 그릴 때는 목록 순서가 읽어 온 순서와 같다.
     bend.setText(graph ? bendText(commits.getSelectedIndex()) : "");
+    bend.setToolTipText(bend.getText().isEmpty() ? null : bend.getText());
     message.setText(body);
     message.setVisible(!body.isEmpty());
     avatar.setIcon(new Avatar(entry.author(), JBUI.scale(AVATAR_BIG)));
@@ -646,12 +652,19 @@ final class ProjectHistoryPanel extends JPanel {
     return trimmed.substring(0, end);
   }
 
+  /** 그릴 때마다 고른다. 테마를 바꾸면 다시 그릴 때 바로 바뀐다. */
+  private static Color[] palette() {
+    return JBColor.isBright() ? LIGHT_PALETTE : DARK_PALETTE;
+  }
+
   private static Color colorOf(String key) {
-    return PALETTE[Math.floorMod(key.hashCode(), PALETTE.length)];
+    Color[] palette = palette();
+    return palette[Math.floorMod(key.hashCode(), palette.length)];
   }
 
   private static Color laneColor(int lane) {
-    return PALETTE[lane % PALETTE.length];
+    Color[] palette = palette();
+    return palette[lane % palette.length];
   }
 
   private static Color refColor(String ref, boolean head) {
