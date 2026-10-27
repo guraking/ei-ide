@@ -26,18 +26,28 @@ import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.EditorTextField;
 import com.intellij.ui.JBColor;
 import com.intellij.ui.OnePixelSplitter;
-import com.intellij.ui.ToolbarDecorator;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBPasswordField;
 import com.intellij.ui.components.JBRadioButton;
-import com.intellij.ui.components.JBTabbedPane;
 import com.intellij.ui.components.JBTextField;
 import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.JBFont;
-import com.intellij.util.ui.JBInsets;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
+import com.intellij.ide.ui.laf.darcula.ui.DarculaButtonUI;
+import com.intellij.openapi.actionSystem.CustomShortcutSet;
+import com.intellij.openapi.editor.colors.EditorColorsManager;
+import com.intellij.openapi.keymap.KeymapUtil;
+import com.intellij.openapi.project.DumbAwareAction;
+import com.intellij.openapi.util.text.StringUtil;
+import com.intellij.ui.AnimatedIcon;
+import com.intellij.ui.SimpleListCellRenderer;
+import com.intellij.ui.components.ActionLink;
+import com.intellij.ui.components.JBScrollPane;
+import com.intellij.util.IconUtil;
+import local.bootservers.ui.Pill;
+import local.bootservers.ui.TabStrip;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -56,6 +66,18 @@ import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Component;
 import java.awt.FlowLayout;
+import javax.swing.AbstractAction;
+import javax.swing.JList;
+import javax.swing.KeyStroke;
+import javax.swing.Timer;
+import javax.swing.event.TableModelListener;
+import java.awt.Color;
+import java.awt.Font;
+import java.awt.GridBagLayout;
+import java.awt.GridLayout;
+import java.awt.event.ActionEvent;
+import java.awt.event.KeyEvent;
+import java.awt.font.TextAttribute;
 import java.beans.PropertyChangeListener;
 import java.io.IOException;
 import java.net.ConnectException;
@@ -89,8 +111,11 @@ import java.util.regex.Pattern;
 final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
 
     /** 화면을 열 때 채울 값. title 은 탭 이름(같은 이름의 탭이 열려 있으면 그 탭으로 간다). */
-    record Request(String title, String method, String url, List<Map.Entry<String, String>> query,
-                   List<Map.Entry<String, String>> headers, String body) {
+    record Request(String title, String method, String url, List<Row> query, List<Row> headers, String body) {
+    }
+
+    /** 표 한 줄의 시험 값. source 는 값이 온 곳(VO 이름 · @RequestParam 기본값 · 자동). */
+    record Row(String name, String value, String source) {
     }
 
     private static final Key<Request> REQUEST = Key.create("ei.api.request");
@@ -107,6 +132,35 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
     private static final int MAX_SHOWN_CHARS = 2_000_000;
     private static final int HTTP_ERROR_STATUS = 400;
     private static final float REQUEST_RESPONSE_SPLIT = 0.5f;
+    private static final String SEND_SHORTCUT = "control ENTER";
+    /** 보내는 중 지난 시간을 고쳐 쓰는 간격(ms). */
+    private static final int ELAPSED_TICK_MS = 100;
+    private static final double MS_PER_SECOND = 1000.0;
+    private static final Pattern NUMBER = Pattern.compile("-?\\d+(\\.\\d+)?");
+    private static final int TABLE_ROW_HEIGHT = 30;
+    private static final int TAB_QUERY = 0;
+    private static final int TAB_HEADERS = 1;
+    private static final int TAB_BODY = 2;
+    private static final int TAB_AUTH = 3;
+    private static final JBColor METHOD_GET = new JBColor(0x1F8A4C, 0x5FCF8F);
+    private static final JBColor METHOD_POST = new JBColor(0xB8620E, 0xF0A060);
+    private static final JBColor METHOD_PUT = new JBColor(0x1750B8, 0x6FA8FF);
+    private static final JBColor METHOD_PATCH = new JBColor(0x7A5BB5, 0xB49AF0);
+    private static final JBColor METHOD_DELETE = new JBColor(0xC23B3B, 0xF07070);
+    private static final JBColor VALUE_NUMBER = new JBColor(0xB8620E, 0xF0A060);
+    private static final JBColor VALUE_TEXT = new JBColor(0x1F7A3A, 0x7FBF73);
+    private static final JBColor STATUS_OK = new JBColor(0x1F8A4C, 0x5FCF8F);
+    private static final JBColor STATUS_OK_BG = new JBColor(0xE4F4EA, 0x1E3A28);
+    private static final JBColor STATUS_ERROR = new JBColor(0xC23B3B, 0xF07070);
+    private static final JBColor STATUS_ERROR_BG = new JBColor(0xFBE7E7, 0x4A2222);
+    /** 흔한 상태 코드의 이름(RFC 9110 15절). 없는 코드는 숫자만 보인다. */
+    private static final Map<Integer, String> REASONS = Map.ofEntries(
+            Map.entry(200, "OK"), Map.entry(201, "Created"), Map.entry(204, "No Content"),
+            Map.entry(301, "Moved Permanently"), Map.entry(302, "Found"), Map.entry(304, "Not Modified"),
+            Map.entry(400, "Bad Request"), Map.entry(401, "Unauthorized"), Map.entry(403, "Forbidden"),
+            Map.entry(404, "Not Found"), Map.entry(405, "Method Not Allowed"), Map.entry(409, "Conflict"),
+            Map.entry(415, "Unsupported Media Type"), Map.entry(500, "Internal Server Error"),
+            Map.entry(502, "Bad Gateway"), Map.entry(503, "Service Unavailable"));
     private static final Pattern HTTP_URL = Pattern.compile("(?i)https?://.+");
     private static final String PSEUDO_HEADER_PREFIX = ":";
     private static final String CONTENT_TYPE = "content-type";
@@ -115,9 +169,13 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
     private static final int ENABLED_COLUMN = 0;
     private static final int NAME_COLUMN = 1;
     private static final int VALUE_COLUMN = 2;
+    private static final int SOURCE_COLUMN = 3;
+    private static final String REMOVE_ROWS = "ei.api.removeRows";
     /** 헤더 표의 인증 줄에 보일 값 길이. 넘으면 「…」 로 줄인다. */
     private static final int AUTH_SHOWN_CHARS = 24;
     private static final String RESPONSE_EMPTY_CARD = "empty";
+    private static final String RESPONSE_SENDING_CARD = "sending";
+    private static final String RESPONSE_ERROR_CARD = "error";
     private static final String RESPONSE_SHOWN_CARD = "shown";
 
     private final Project project;
@@ -125,7 +183,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
     private final JPanel root = new JPanel(new BorderLayout());
     private final ComboBox<String> methodBox = new ComboBox<>(HttpText.METHODS);
     private final JBTextField urlField = new JBTextField();
-    private final JButton sendButton = new JButton(BootServersBundle.message("api.send"), AllIcons.Actions.Execute);
+    private final JButton sendButton = new JButton(BootServersBundle.message("api.send"));
     private final DefaultTableModel queryModel = rowsModel(row -> false);
     /** 인증 탭 값으로 만든 헤더 줄이 헤더 표 맨 위(0번)에 있는가. 그 줄은 체크만 고칠 수 있다. */
     private boolean authRowShown;
@@ -139,8 +197,16 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
     private final JBTextField userField = new JBTextField();
     private final JBPasswordField passwordField = new JBPasswordField();
     private final JBTextField cookieField = new JBTextField();
-    private final JBLabel statusLabel = new JBLabel(" ");
+    private final TabStrip requestTabs = new TabStrip(false);
+    private final JPanel responseHead = new JPanel(new BorderLayout(JBUI.scale(10), 0));
+    private final Pill statusPill = new Pill();
+    private final JBLabel metaLabel = new JBLabel();
+    private final TabStrip responseTabs = new TabStrip(true);
+    private final JBLabel errorTitle = new JBLabel();
+    private final JBLabel errorText = new JBLabel();
     private final JPanel responseCards = new JPanel(new CardLayout());
+    private final Timer elapsedTimer = new Timer(ELAPSED_TICK_MS, null);
+    private long sendStart;
     private final EditorTextField responseBody;
     private final EditorTextField responseHeaders;
     /** 저장소에서 읽은(또는 마지막으로 쓴) 값. 바뀐 것만 다시 쓴다. 읽기 전에는 null. */
@@ -191,50 +257,108 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         bodyField.setPlaceholder(BootServersBundle.message("api.body.empty"));
         bodyField.setShowPlaceholderWhenFocused(true);
         responseBody = textField(byExtension(PLAIN_TEXT), true);
+        responseBody.addSettingsProvider(editor -> editor.getSettings().setLineNumbersShown(true));
         responseHeaders = textField(byExtension(PLAIN_TEXT), true);
 
-        JPanel top = new JPanel(new BorderLayout(JBUI.scale(6), 0));
+        methodBox.setRenderer(new SimpleListCellRenderer<>() {
+            @Override
+            public void customize(@NotNull JList<? extends String> list, String method, int index, boolean selected, boolean focused) {
+                setText(method);
+                setFont(monoFont().deriveFont(Font.BOLD));
+                if (!selected) {
+                    setForeground(methodColor(method));
+                }
+            }
+        });
+        // 콤보 상자의 고른 값은 렌더러 글자 색을 따르지 않으므로 상자 글자 색을 방식에 맞춰 바꾼다.
+        methodBox.addItemListener(e -> methodBox.setForeground(methodColor((String) methodBox.getSelectedItem())));
+        methodBox.setFont(monoFont().deriveFont(Font.BOLD));
+        JPanel top = new JPanel(new BorderLayout(JBUI.scale(8), 0));
         top.add(methodBox, BorderLayout.WEST);
+        urlField.setFont(monoFont());
         top.add(urlField, BorderLayout.CENTER);
         JButton reset = new JButton(BootServersBundle.message("api.reset"), AllIcons.Actions.Rollback);
-        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(6), 0));
+        sendButton.putClientProperty(DarculaButtonUI.DEFAULT_STYLE_KEY, true);
+        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0));
         buttons.add(sendButton);
         buttons.add(reset);
         top.add(buttons, BorderLayout.EAST);
-        top.setBorder(JBUI.Borders.empty(8));
+        top.setBorder(JBUI.Borders.compound(JBUI.Borders.customLineBottom(JBColor.border()), JBUI.Borders.empty(10, 14)));
 
-        JBTabbedPane requestTabs = new JBTabbedPane();
-        // 탭이 넣는 안쪽 여백은 바탕색 틀로 보이므로 뺀다. addTab 보다 먼저 정해야 한다.
-        requestTabs.setTabComponentInsets(JBInsets.emptyInsets());
         requestTabs.addTab(BootServersBundle.message("api.tab.query"), rowsPanel(queryModel, row -> false));
         requestTabs.addTab(BootServersBundle.message("api.tab.headers"), rowsPanel(headerModel, this::isAuthRow));
         requestTabs.addTab(BootServersBundle.message("api.tab.body"), bodyField);
         requestTabs.addTab(BootServersBundle.message("api.tab.auth"), authPanel());
+        ActionLink addRow = new ActionLink(BootServersBundle.message("api.row.add"), e -> {
+            DefaultTableModel model = requestTabs.selected() == TAB_QUERY ? queryModel : headerModel;
+            model.addRow(new Object[]{true, "", "", ""});
+        });
+        requestTabs.onSelect(() -> addRow.setVisible(requestTabs.selected() == TAB_QUERY || requestTabs.selected() == TAB_HEADERS));
+        JPanel requestHead = new JPanel(new BorderLayout());
+        requestHead.add(requestTabs, BorderLayout.WEST);
+        requestHead.add(addRow, BorderLayout.EAST);
+        requestHead.setBorder(JBUI.Borders.compound(JBUI.Borders.customLineBottom(JBColor.border()), JBUI.Borders.empty(0, 14)));
+        JPanel request = new JPanel(new BorderLayout());
+        request.add(requestHead, BorderLayout.NORTH);
+        request.add(requestTabs.cards(), BorderLayout.CENTER);
+        TableModelListener counts = e -> refreshHints();
+        queryModel.addTableModelListener(counts);
+        headerModel.addTableModelListener(counts);
+        bodyField.addDocumentListener(new com.intellij.openapi.editor.event.DocumentListener() {
+            @Override
+            public void documentChanged(@NotNull com.intellij.openapi.editor.event.DocumentEvent event) {
+                refreshHints();
+            }
+        });
 
-        JBTabbedPane responseTabs = new JBTabbedPane();
-        responseTabs.setTabComponentInsets(JBInsets.emptyInsets());
         responseTabs.addTab(BootServersBundle.message("api.tab.body"), responseBody);
         responseTabs.addTab(BootServersBundle.message("api.tab.headers"), responseHeaders);
-        JBLabel emptyResponse = new JBLabel(BootServersBundle.message("api.response.empty"), SwingConstants.CENTER);
-        emptyResponse.setForeground(UIUtil.getContextHelpForeground());
-        responseCards.add(emptyResponse, RESPONSE_EMPTY_CARD);
-        responseCards.add(responseTabs, RESPONSE_SHOWN_CARD);
-        JBLabel responseTitle = new JBLabel(BootServersBundle.message("api.response"));
-        responseTitle.setFont(JBFont.label().asBold());
-        JPanel responseHead = new JPanel(new BorderLayout(JBUI.scale(12), 0));
-        responseHead.add(responseTitle, BorderLayout.WEST);
-        responseHead.add(statusLabel, BorderLayout.EAST);
-        responseHead.setBorder(JBUI.Borders.empty(10, 10, 4, 10));
+        statusPill.setFont(monoFont().deriveFont(Font.BOLD));
+        metaLabel.setForeground(UIUtil.getContextHelpForeground());
+        JPanel status = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(10), 0));
+        status.add(statusPill);
+        status.add(metaLabel);
+        responseHead.add(status, BorderLayout.WEST);
+        responseHead.add(responseTabs, BorderLayout.EAST);
+        responseHead.setBorder(JBUI.Borders.compound(JBUI.Borders.customLineBottom(JBColor.border()), JBUI.Borders.empty(8, 14)));
+        responseHead.setVisible(false);
+
+        responseCards.add(centered(new JBLabel(BootServersBundle.message("api.response.empty"), AllIcons.Actions.Execute, SwingConstants.CENTER),
+                dim(new JBLabel(KeymapUtil.getFirstKeyboardShortcutText(CustomShortcutSet.fromString(SEND_SHORTCUT))))), RESPONSE_EMPTY_CARD);
+        responseCards.add(centered(dim(new JBLabel(BootServersBundle.message("api.sending.wait", REQUEST_TIMEOUT.toSeconds())))),
+                RESPONSE_SENDING_CARD);
+        errorTitle.setFont(JBFont.label().asBold());
+        errorText.setAllowAutoWrapping(true);
+        errorTitle.setForeground(STATUS_ERROR);
+        JPanel errorBox = new JPanel(new BorderLayout(0, JBUI.scale(4)));
+        errorBox.setBackground(STATUS_ERROR_BG);
+        errorBox.setBorder(JBUI.Borders.compound(JBUI.Borders.customLine(STATUS_ERROR), JBUI.Borders.empty(10, 12)));
+        errorBox.add(errorTitle, BorderLayout.NORTH);
+        errorBox.add(errorText, BorderLayout.CENTER);
+        JPanel errorCard = new JPanel(new BorderLayout());
+        errorCard.setBorder(JBUI.Borders.empty(12, 14));
+        errorCard.add(errorBox, BorderLayout.NORTH);
+        responseCards.add(errorCard, RESPONSE_ERROR_CARD);
+        responseCards.add(responseTabs.cards(), RESPONSE_SHOWN_CARD);
         JPanel response = new JPanel(new BorderLayout());
         response.add(responseHead, BorderLayout.NORTH);
         response.add(responseCards, BorderLayout.CENTER);
 
-        OnePixelSplitter split = new OnePixelSplitter(true, REQUEST_RESPONSE_SPLIT);
-        split.setFirstComponent(requestTabs);
+        // 넓은 화면을 살려 요청(왼쪽) · 응답(오른쪽)을 나란히 둔다.
+        OnePixelSplitter split = new OnePixelSplitter(false, REQUEST_RESPONSE_SPLIT);
+        // 칸 안 글(긴 안내 · 표 머리)의 최소 너비에 나눔 선이 묶이지 않게 한다.
+        split.setHonorComponentsMinimumSize(false);
+        split.setFirstComponent(request);
         split.setSecondComponent(response);
         root.add(top, BorderLayout.NORTH);
         root.add(split, BorderLayout.CENTER);
 
+        // 파란 기본 단추 위에서는 아이콘 · 글자를 기본 단추 글자 색(테마)으로 맞춘다.
+        sendButton.setIcon(IconUtil.colorize(AllIcons.Actions.Execute, JBUI.CurrentTheme.Button.defaultButtonForeground()));
+        sendButton.setToolTipText(KeymapUtil.getFirstKeyboardShortcutText(CustomShortcutSet.fromString(SEND_SHORTCUT)));
+        DumbAwareAction.create(e -> sendOrCancel()).registerCustomShortcutSet(CustomShortcutSet.fromString(SEND_SHORTCUT), root, this);
+        elapsedTimer.addActionListener(e -> metaLabel.setText(BootServersBundle.message("api.sending.elapsed",
+                String.format(Locale.ROOT, "%.1f", (System.nanoTime() - sendStart) / 1_000_000 / MS_PER_SECOND))));
         sendButton.addActionListener(e -> sendOrCancel());
         reset.addActionListener(e -> fill());
         urlField.addActionListener(e -> sendOrCancel());
@@ -249,8 +373,10 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         field.addSettingsProvider(editor -> {
             editor.setVerticalScrollbarVisible(true);
             editor.setHorizontalScrollbarVisible(true);
-            editor.setBorder(JBUI.Borders.empty());
-            editor.getScrollPane().setBorder(JBUI.Borders.empty());
+            // 탭 줄 · 표와 같은 왼쪽 14px 줄에 글이 오도록 안쪽 여백을 둔다.
+            // EditorImpl.setBorder 는 스크롤 칸 틀을 바꾸므로 스크롤 칸 틀을 따로 다시 정하지 않는다. 여백 바탕은 편집기 바탕과 같게.
+            editor.setBorder(JBUI.Borders.empty(10, 14));
+            editor.getScrollPane().setBackground(editor.getBackgroundColor());
             editor.getSettings().setLineNumbersShown(false);
         });
         return field;
@@ -260,10 +386,63 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         return FileTypeManager.getInstance().getFileTypeByExtension(extension);
     }
 
+    /** 편집기 글꼴(코드 글꼴)을 화면 글자 크기로. */
+    private static Font monoFont() {
+        return new Font(EditorColorsManager.getInstance().getGlobalScheme().getEditorFontName(), Font.PLAIN, JBFont.label().getSize());
+    }
+
+    private static Color methodColor(String method) {
+        return switch (method == null ? "" : method) {
+            case "GET" -> METHOD_GET;
+            case "POST" -> METHOD_POST;
+            case "PUT" -> METHOD_PUT;
+            case "PATCH" -> METHOD_PATCH;
+            case "DELETE" -> METHOD_DELETE;
+            default -> UIUtil.getLabelForeground();
+        };
+    }
+
+    private static JBLabel dim(JBLabel label) {
+        label.setForeground(UIUtil.getContextHelpForeground());
+        return label;
+    }
+
+    /** 칸 한가운데에 위아래로 쌓는다. */
+    private static JComponent centered(JComponent... lines) {
+        JPanel column = new JPanel(new GridLayout(lines.length, 1, 0, JBUI.scale(6)));
+        for (JComponent line : lines) {
+            if (line instanceof JBLabel label) {
+                label.setHorizontalAlignment(SwingConstants.CENTER);
+            }
+            column.add(line);
+        }
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.add(column);
+        return panel;
+    }
+
+    /** 요청 탭 이름 옆 보조 글: 쿼리 · 헤더 줄 수, 본문 유무, 인증 방식. */
+    private void refreshHints() {
+        requestTabs.setHint(TAB_QUERY, String.valueOf(queryModel.getRowCount()));
+        requestTabs.setHint(TAB_HEADERS, String.valueOf(headerModel.getRowCount()));
+        requestTabs.setHint(TAB_BODY, bodyField.getText().isBlank()
+                ? BootServersBundle.message("api.hint.none") : BootServersBundle.message("api.hint.json"));
+        requestTabs.setHint(TAB_AUTH, switch (authKind()) {
+            case ApiText.AUTH_BEARER -> "Bearer";
+            case ApiText.AUTH_BASIC -> "Basic";
+            case ApiText.AUTH_COOKIE -> BootServersBundle.message("api.auth.cookie");
+            default -> BootServersBundle.message("api.hint.none");
+        });
+    }
+
+    private void showCard(String card) {
+        ((CardLayout) responseCards.getLayout()).show(responseCards, card);
+    }
+
     /** locked 줄은 체크만 고칠 수 있다. */
     private static DefaultTableModel rowsModel(IntPredicate locked) {
         return new DefaultTableModel(new Object[]{"", BootServersBundle.message("api.column.name"),
-                BootServersBundle.message("api.column.value")}, 0) {
+                BootServersBundle.message("api.column.value"), BootServersBundle.message("api.column.source")}, 0) {
             @Override
             public Class<?> getColumnClass(int column) {
                 return column == ENABLED_COLUMN ? Boolean.class : String.class;
@@ -271,42 +450,75 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
 
             @Override
             public boolean isCellEditable(int row, int column) {
-                return column == ENABLED_COLUMN || !locked.test(row);
+                return column == ENABLED_COLUMN || column != SOURCE_COLUMN && !locked.test(row);
             }
         };
     }
 
-    /** 체크 · 이름 · 값 표와 줄 더하기 · 빼기 단추. 체크를 끈 줄은 보내지 않는다. locked 줄은 흐린 글자로 보인다. */
+    /**
+     * 체크 · 이름 · 값 · 어디서 표. 체크를 끈 줄은 보내지 않고 흐리게 줄을 그어 보인다. 이름 · 값은 코드 글꼴, 값은 숫자 · 글을 색으로 가른다.
+     * locked 줄은 흐린 글자. Delete 키로 고른 줄(locked 제외)을 뺀다. 줄 더하기는 탭 줄 오른쪽 링크.
+     */
     private static JComponent rowsPanel(DefaultTableModel model, IntPredicate locked) {
         JBTable table = new JBTable(model);
+        table.setRowHeight(JBUI.scale(TABLE_ROW_HEIGHT));
         table.getColumnModel().getColumn(ENABLED_COLUMN).setMaxWidth(JBUI.scale(32));
+        table.getColumnModel().getColumn(NAME_COLUMN).setPreferredWidth(JBUI.scale(180));
+        table.getColumnModel().getColumn(VALUE_COLUMN).setPreferredWidth(JBUI.scale(220));
+        table.getColumnModel().getColumn(SOURCE_COLUMN).setPreferredWidth(JBUI.scale(120));
+        Font mono = monoFont();
+        // 값은 한글이 많아 화면 글꼴로 둔다(코드 글꼴은 한글 칸 너비가 벌어져 보인다).
+        Font text = JBFont.label();
+        Map<TextAttribute, Object> strike = Map.of(TextAttribute.STRIKETHROUGH, TextAttribute.STRIKETHROUGH_ON);
         table.setDefaultRenderer(String.class, new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable t, Object value, boolean selected, boolean focused, int row, int column) {
                 Component c = super.getTableCellRendererComponent(t, value, selected, focused, row, column);
-                if (!selected) {
-                    c.setForeground(locked.test(row) ? UIUtil.getContextHelpForeground() : t.getForeground());
+                setBorder(JBUI.Borders.empty(0, 8));
+                boolean on = Boolean.TRUE.equals(t.getValueAt(row, ENABLED_COLUMN));
+                if (column == SOURCE_COLUMN) {
+                    c.setFont(JBFont.small());
+                    if (!selected) {
+                        c.setForeground(UIUtil.getContextHelpForeground());
+                    }
+                    return c;
+                }
+                Font font = column == VALUE_COLUMN ? text : mono;
+                c.setFont(on ? font : font.deriveFont(strike));
+                if (selected) {
+                    return c;
+                }
+                if (!on || locked.test(row)) {
+                    c.setForeground(UIUtil.getContextHelpForeground());
+                } else if (column == VALUE_COLUMN) {
+                    c.setForeground(value != null && NUMBER.matcher(value.toString().strip()).matches() ? VALUE_NUMBER : VALUE_TEXT);
+                } else {
+                    c.setForeground(t.getForeground());
                 }
                 return c;
             }
         });
-        // 탭 · 위아래 나눔 선이 이미 틀을 그리므로 표 바깥 틀과 스크롤 틀은 뺀다(겹치면 두 줄로 보인다).
+        // 탭 줄 · 좌우 나눔 선이 이미 틀을 그리므로 스크롤 틀은 뺀다(겹치면 두 줄로 보인다).
         // 세로 칸 선은 머리글 칸 선과 1픽셀 어긋나므로 그리지 않는다.
         table.setShowVerticalLines(false);
-        return ToolbarDecorator.createDecorator(table)
-                .setPanelBorder(JBUI.Borders.empty())
-                .setScrollPaneBorder(JBUI.Borders.empty())
-                .setAddAction(b -> model.addRow(new Object[]{true, "", ""}))
-                .setRemoveAction(b -> {
-                    int[] rows = table.getSelectedRows();
-                    for (int i = rows.length - 1; i >= 0; i--) {
-                        if (!locked.test(rows[i])) {
-                            model.removeRow(rows[i]);
-                        }
+        table.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke(KeyEvent.VK_DELETE, 0), REMOVE_ROWS);
+        table.getActionMap().put(REMOVE_ROWS, new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (table.isEditing()) {
+                    return;
+                }
+                int[] rows = table.getSelectedRows();
+                for (int i = rows.length - 1; i >= 0; i--) {
+                    if (!locked.test(rows[i])) {
+                        model.removeRow(rows[i]);
                     }
-                })
-                .disableUpDownActions()
-                .createPanel();
+                }
+            }
+        });
+        JBScrollPane scroll = new JBScrollPane(table);
+        scroll.setBorder(JBUI.Borders.empty());
+        return scroll;
     }
 
     private JComponent authPanel() {
@@ -335,7 +547,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
                 .addLabeledComponent(BootServersBundle.message("api.auth.cookie.value"), cookieField)
                 .addComponent(new JBLabel(BootServersBundle.message("api.auth.note")))
                 .getPanel();
-        form.setBorder(JBUI.Borders.empty(8));
+        form.setBorder(JBUI.Borders.empty(12, 14));
         JPanel panel = new JPanel(new BorderLayout());
         panel.add(form, BorderLayout.NORTH);
         return panel;
@@ -359,6 +571,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         passwordField.setEnabled(ApiText.AUTH_BASIC.equals(kind));
         cookieField.setEnabled(ApiText.AUTH_COOKIE.equals(kind));
         refreshAuthRow();
+        refreshHints();
     }
 
     private boolean isAuthRow(int row) {
@@ -391,7 +604,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         if (auth != null) {
             String value = auth.getValue().length() > AUTH_SHOWN_CHARS
                     ? auth.getValue().substring(0, AUTH_SHOWN_CHARS) + "…" : auth.getValue();
-            headerModel.insertRow(0, new Object[]{checked, auth.getKey(), value});
+            headerModel.insertRow(0, new Object[]{checked, auth.getKey(), value, BootServersBundle.message("api.source.auth")});
             authRowShown = true;
         }
     }
@@ -411,10 +624,10 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         bodyField.setText(request.body());
     }
 
-    private static void setRows(DefaultTableModel model, List<Map.Entry<String, String>> rows) {
+    private static void setRows(DefaultTableModel model, List<Row> rows) {
         model.setRowCount(0);
-        for (Map.Entry<String, String> row : rows) {
-            model.addRow(new Object[]{true, row.getKey(), row.getValue()});
+        for (Row row : rows) {
+            model.addRow(new Object[]{true, row.name(), row.value(), row.source()});
         }
     }
 
@@ -504,7 +717,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         }
         String url = urlField.getText().strip();
         if (!HTTP_URL.matcher(url).matches()) {
-            showError(BootServersBundle.message("api.error.url"));
+            showError(BootServersBundle.message("api.error.title.request"), BootServersBundle.message("api.error.url"));
             return;
         }
         String method = String.valueOf(methodBox.getSelectedItem());
@@ -533,13 +746,19 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
                     : HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));
             request = builder.build();
         } catch (IllegalArgumentException e) {
-            showError(buildErrorMessage(e));
+            showError(BootServersBundle.message("api.error.title.request"), buildErrorMessage(e));
             return;
         }
         saveAuth(kind, secrets);
-        statusLabel.setText(BootServersBundle.message("api.sending", REQUEST_TIMEOUT.toSeconds()));
-        statusLabel.setForeground(JBColor.foreground());
         long start = System.nanoTime();
+        sendStart = start;
+        statusPill.clear();
+        metaLabel.setIcon(AnimatedIcon.Default.INSTANCE);
+        metaLabel.setText(BootServersBundle.message("api.sending.elapsed", "0.0"));
+        responseTabs.setVisible(false);
+        responseHead.setVisible(true);
+        showCard(RESPONSE_SENDING_CARD);
+        elapsedTimer.start();
         CompletableFuture<HttpResponse<String>> future = client(project).sendAsync(request, HttpResponse.BodyHandlers.ofString());
         pending = future;
         sendButton.setText(BootServersBundle.message("api.cancel"));
@@ -555,15 +774,20 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
             return;
         }
         pending = null;
+        elapsedTimer.stop();
+        metaLabel.setIcon(null);
         sendButton.setText(BootServersBundle.message("api.send"));
         if (error != null) {
-            showError(responseErrorMessage(error) + " (" + elapsedMs + " ms)");
+            metaLabel.setText(BootServersBundle.message("api.meta.time", elapsedMs));
+            showError(BootServersBundle.message("api.error.title"), responseErrorMessage(error));
             return;
         }
         String body = response.body() == null ? "" : response.body();
-        statusLabel.setText(BootServersBundle.message("api.status", response.statusCode(), elapsedMs,
-                body.getBytes(StandardCharsets.UTF_8).length));
-        statusLabel.setForeground(response.statusCode() >= HTTP_ERROR_STATUS ? JBColor.RED : JBColor.foreground());
+        int code = response.statusCode();
+        boolean failed = code >= HTTP_ERROR_STATUS;
+        String reason = REASONS.get(code);
+        statusPill.show(reason == null ? String.valueOf(code) : code + " " + reason,
+                failed ? STATUS_ERROR : STATUS_OK, failed ? STATUS_ERROR_BG : STATUS_OK_BG);
         StringBuilder headerText = new StringBuilder();
         String contentType = "";
         for (Map.Entry<String, List<String>> header : response.headers().map().entrySet()) {
@@ -577,6 +801,16 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
             }
         }
         responseHeaders.setText(headerText.toString());
+        String size = StringUtil.formatFileSize(body.getBytes(StandardCharsets.UTF_8).length);
+        String mediaType = contentType.split(";")[0].strip();
+        metaLabel.setText(mediaType.isEmpty() ? BootServersBundle.message("api.meta", elapsedMs, size)
+                : BootServersBundle.message("api.meta.type", elapsedMs, size, mediaType));
+        responseTabs.setHint(1, String.valueOf(response.headers().map().size()));
+        if (body.isBlank()) {
+            showError(BootServersBundle.message("api.body.blank"),
+                    BootServersBundle.message(failed ? "api.body.blank.error" : "api.body.blank.ok"));
+            return;
+        }
         String shownType = PLAIN_TEXT;
         for (String type : RESPONSE_TYPES) {
             if (contentType.contains(type)) {
@@ -590,12 +824,16 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         }
         responseBody.setFileType(byExtension(shownType));
         responseBody.setText(shown);
-        ((CardLayout) responseCards.getLayout()).show(responseCards, RESPONSE_SHOWN_CARD);
+        responseTabs.setVisible(true);
+        showCard(RESPONSE_SHOWN_CARD);
     }
 
-    private void showError(String message) {
-        statusLabel.setText(message);
-        statusLabel.setForeground(JBColor.RED);
+    /** 응답 칸에 빨간 안내 상자. 머리 줄(상태 · 시간)은 그대로 둔다. */
+    private void showError(String title, String message) {
+        errorTitle.setText(title);
+        errorText.setText(UIUtil.toHtml(StringUtil.escapeXmlEntities(message)));
+        responseTabs.setVisible(false);
+        showCard(RESPONSE_ERROR_CARD);
     }
 
     private static String buildErrorMessage(IllegalArgumentException e) {
@@ -676,6 +914,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
 
     @Override
     public void dispose() {
+        elapsedTimer.stop();
         if (pending != null) {
             pending.cancel(true);
             pending = null;
