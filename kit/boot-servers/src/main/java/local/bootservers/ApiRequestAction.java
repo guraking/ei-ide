@@ -47,6 +47,8 @@ public final class ApiRequestAction extends AnAction {
     /** JSON API 와 JSP 화면을 모두 받는다. */
     private static final String ACCEPT_ANY = "application/json, text/html, */*";
     private static final String BODY_NAME = "body";
+    private static final String REQUEST_PARAM_LABEL = "@RequestParam";
+    private static final String REQUEST_HEADER_LABEL = "@RequestHeader";
 
     @Override
     public void update(@NotNull AnActionEvent e) {
@@ -104,6 +106,8 @@ public final class ApiRequestAction extends AnAction {
         Map<String, Map<String, Schema>> components = new LinkedHashMap<>();
         List<Param> params = new ArrayList<>();
         Map<String, String> defaults = new HashMap<>();
+        // 요청 값마다 온 곳: @RequestParam · @RequestHeader 면 그 주석, 아니면 매개변수 형식 이름(VO 등).
+        List<String> sources = new ArrayList<>();
         Schema body = null;
         for (PsiParameter parameter : method.getParameterList().getParameters()) {
             if (AnnotationUtil.findAnnotation(parameter, OpenApiCollector.REQUEST_BODY) != null) {
@@ -112,6 +116,10 @@ public final class ApiRequestAction extends AnAction {
                 OpenApiCollector.addParams(parameter, params, components);
             }
             PsiAnnotation requestParam = AnnotationUtil.findAnnotation(parameter, OpenApiCollector.REQUEST_PARAM);
+            for (int i = sources.size(); i < params.size(); i++) {
+                sources.add(OpenApiSpec.IN_HEADER.equals(params.get(i).in()) ? REQUEST_HEADER_LABEL
+                        : requestParam != null ? REQUEST_PARAM_LABEL : parameter.getType().getPresentableText());
+            }
             String defaultValue = requestParam == null ? null
                     : AnnotationUtil.getDeclaredStringAttributeValue(requestParam, OpenApiCollector.ATTR_DEFAULT_VALUE);
             if (defaultValue != null) {
@@ -121,18 +129,22 @@ public final class ApiRequestAction extends AnAction {
 
         String today = LocalDate.now().toString();
         Map<String, String> pathValues = new HashMap<>();
-        List<Map.Entry<String, String>> query = new ArrayList<>();
-        List<Map.Entry<String, String>> headers = new ArrayList<>();
-        headers.add(Map.entry(ACCEPT, ACCEPT_ANY));
+        List<ApiRequestEditor.Row> query = new ArrayList<>();
+        List<ApiRequestEditor.Row> headers = new ArrayList<>();
+        String auto = BootServersBundle.message("api.source.auto");
+        headers.add(new ApiRequestEditor.Row(ACCEPT, ACCEPT_ANY, auto));
         if (body != null) {
-            headers.add(Map.entry(CONTENT_TYPE, JSON_MEDIA_TYPE));
+            headers.add(new ApiRequestEditor.Row(CONTENT_TYPE, JSON_MEDIA_TYPE, auto));
         }
-        for (Param p : params) {
-            String value = ApiText.sample(p.name(), p.schema(), defaults.get(p.name()), today);
+        for (int i = 0; i < params.size(); i++) {
+            Param p = params.get(i);
+            String defaultValue = defaults.get(p.name());
+            String value = ApiText.sample(p.name(), p.schema(), defaultValue, today);
+            String source = defaultValue == null ? sources.get(i) : BootServersBundle.message("api.source.default", sources.get(i));
             switch (p.in()) {
                 case OpenApiSpec.IN_PATH -> pathValues.put(p.name(), value);
-                case OpenApiSpec.IN_HEADER -> headers.add(Map.entry(p.name(), value));
-                default -> query.add(Map.entry(p.name(), value));
+                case OpenApiSpec.IN_HEADER -> headers.add(new ApiRequestEditor.Row(p.name(), value, source));
+                default -> query.add(new ApiRequestEditor.Row(p.name(), value, source));
             }
         }
         Module module = ModuleUtilCore.findModuleForPsiElement(method);
