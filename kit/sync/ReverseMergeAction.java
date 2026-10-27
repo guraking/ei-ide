@@ -8,6 +8,7 @@ import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.application.ex.ApplicationUtil;
 import com.intellij.openapi.application.WriteIntentReadAction;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
@@ -46,6 +47,8 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
+import javax.swing.event.PopupMenuEvent;
+import javax.swing.event.PopupMenuListener;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
 import java.awt.*;
@@ -184,8 +187,9 @@ public final class ReverseMergeAction extends DumbAwareAction {
       fromBox.setRenderer(remoteName);
       intoBox.setRenderer(remoteName);
       // 브랜치가 수십 개라 상자를 연 채 글자를 치면 이름이 맞는 브랜치로 건너뛴다(origin/ 은 빼고 맞춘다).
-      ComboboxSpeedSearch.installOn(fromBox);
-      ComboboxSpeedSearch.installOn(intoBox);
+      // 찾기 칸은 IntelliJ 기본으로 Enter · Esc · 포커스 이동에만 닫힌다. 펼친 목록에서 브랜치를 고르면 목록과 함께 닫는다.
+      hideSearchWithList(fromBox, ComboboxSpeedSearch.installOn(fromBox));
+      hideSearchWithList(intoBox, ComboboxSpeedSearch.installOn(intoBox));
       fromBox.setMinimumAndPreferredWidth(JBUI.scale(COMBO_W));
       intoBox.setMinimumAndPreferredWidth(JBUI.scale(COMBO_W));
       push.setSelected(true);
@@ -195,6 +199,14 @@ public final class ReverseMergeAction extends DumbAwareAction {
       fromBox.addActionListener(e -> reload());
       intoBox.addActionListener(e -> reload());
       reload();
+    }
+
+    private static void hideSearchWithList(ComboBox<String> box, ComboboxSpeedSearch search) {
+      box.addPopupMenuListener(new PopupMenuListener() {
+        @Override public void popupMenuWillBecomeVisible(PopupMenuEvent e) {}
+        @Override public void popupMenuWillBecomeInvisible(PopupMenuEvent e) { search.hidePopup(); }
+        @Override public void popupMenuCanceled(PopupMenuEvent e) {}
+      });
     }
 
     @Override
@@ -356,7 +368,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
           Thread.currentThread().interrupt();
           return;
         }
-        SwingUtilities.invokeLater(() -> {
+        // 이 대화상자의 모달 상태로 연다. SwingUtilities.invokeLater 로 열면 IDE 가 쓰기 안전하지 않은 문맥으로 본다.
+        ApplicationManager.getApplication().invokeLater(() -> {
           // 바이트로 넘겨 IDE 가 파일 인코딩(프로젝트 설정 · BOM)으로 읽게 한다. MS949 파일의 한글이 깨지지 않는다.
           FilePath path = VcsUtil.getFilePath(new File(root, item.path()), false);
           DiffContentFactory factory = DiffContentFactory.getInstance();
@@ -367,7 +380,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
           catch (IOException ex) {
             Messages.showErrorDialog(project, ex.getMessage(), SyncBundle.message("rmerge.title"));
           }
-        });
+        }, ModalityState.stateForComponent(getContentPanel()));
       });
     }
 

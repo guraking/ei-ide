@@ -188,6 +188,11 @@ public class SyncCheck {
     var log = ReverseMerge.parseLog("\u0001이개발\u001f10-23 17:42\u001f두 번째\nA.java\n\n\u0001박개발\u001f10-22 09:10\u001f첫 번째\nA.java\nB.java\n");
     eq(log.get("A.java")[0], "이개발");
     eq(log.get("B.java")[2], "첫 번째");
+    // 들어올 커밋이 모두 내 것(이름 또는 이메일이 같음)이면 남이 고친 파일은 없다. 남의 커밋이 고친 파일만 잡힌다.
+    String authors = "\u0001나\u001fme@x\nA.java\n\n\u0001나\u001fME@X\nB.java\n\n\u0001이개발\u001fother@x\nC.java\n";
+    eq(ReverseMerge.touchedByOthers(authors, "나", "me@x"), Set.of("C.java"));
+    eq(ReverseMerge.touchedByOthers(authors, "다른이름", "me@x"), Set.of("C.java"));
+    eq(ReverseMerge.touchedByOthers(authors, null, null), Set.of("A.java", "B.java", "C.java"));
 
     java.nio.file.Path tmp = java.nio.file.Files.createTempDirectory("rmerge");
     File server = tmp.resolve("server.git").toFile();

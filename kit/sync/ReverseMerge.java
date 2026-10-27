@@ -17,7 +17,8 @@ import static kinggura.sync.SyncPanel.git;
  * 「내 파일」은 둘을 합친 것이다.
  *  1) 개인 브랜치가 기준 브랜치와 마지막으로 맞춰진 시점(merge-base) 뒤 개인 브랜치에서 바뀐 파일, 지금 브랜치면 커밋 안 한 변경까지.
  *  2) 내 Git 이메일(user.email)로 MINE_DAYS 일 안에 커밋한 파일(두 브랜치 어디에 있든). 이미 develop 에 들어간 내 작업을 남이 고친 경우를 잡는다.
- * 들어올 파일 가운데 내 파일과 겹치는 것은 충돌이 나든 조용히 합쳐지든 내 작업에 영향이 있어 미리 보기에서 먼저 보여 준다.
+ * 들어올 파일 가운데 내 파일과 겹치고, 들어올 커밋 중 남(이름 · 이메일이 둘 다 내 user.name · user.email 과 다름)의 커밋이 고친 것은
+ * 충돌이 나든 조용히 합쳐지든 내 작업에 영향이 있어 미리 보기에서 먼저 보여 준다. 들어올 커밋이 모두 내 것이면 경고하지 않는다.
  *
  * 명령은 모두 작업 스레드에서 부른다. IntelliJ 클래스는 쓰지 않는다(점검: SyncCheck).
  */
@@ -35,6 +36,7 @@ final class ReverseMerge {
   private static final char LOG_SEP = '\u001f';
   private static final String LOG_FORMAT = "--format=%x01%an%x1f%ad%x1f%s";
   private static final String LOG_DATE = "--date=format:%m-%d %H:%M";
+  private static final String AUTHOR_FORMAT = "--format=%x01%an%x1f%ae";
 
   /** 들어올 파일 하나. author · when · subject 는 기준 브랜치에서 이 파일을 마지막으로 바꾼 커밋. */
   record Incoming(String path, String author, String when, String subject, boolean mine) {}
@@ -89,6 +91,27 @@ final class ReverseMerge {
       }
     }
     return latest;
+  }
+
+  /**
+   * AUTHOR_FORMAT · --name-only 로그 → 남의 커밋이 고친 경로. 이름이나 이메일 가운데 하나라도 내 것과 같으면 내 커밋이다.
+   * 내 이름 · 이메일을 모르면(null) 모든 커밋을 남의 것으로 본다.
+   */
+  static Set<String> touchedByOthers(String output, String myName, String myEmail) {
+    Set<String> paths = new HashSet<>();
+    boolean others = false;
+    for (String line : output.split("\n")) {
+      if (line.isEmpty()) continue;
+      if (line.charAt(0) == LOG_START) {
+        String[] parts = line.substring(1).split(String.valueOf(LOG_SEP), -1);
+        boolean byMe = parts.length == 2 && (parts[0].equals(myName) || (myEmail != null && parts[1].equalsIgnoreCase(myEmail)));
+        others = !byMe;
+      }
+      else if (others) {
+        paths.add(line.trim());
+      }
+    }
+    return paths;
   }
 
   /** 줄마다 경로 하나인 출력 → 경로 집합. */
@@ -158,6 +181,9 @@ final class ReverseMerge {
     String email = config(root, "user.email");
     if (email != null) {
       mine.addAll(lines(git(root, "log", "--author=" + email, "--since=" + MINE_DAYS + ".days", "--format=", "--name-only", f, i)));
+    }
+    if (!mine.isEmpty() && !theirs.isEmpty()) {
+      mine.retainAll(touchedByOthers(git(root, "log", AUTHOR_FORMAT, "--name-only", i + ".." + f), config(root, "user.name"), email));
     }
     Map<String, String[]> log = theirs.isEmpty() ? Map.of() : parseLog(git(root, "log", LOG_FORMAT, LOG_DATE, "--name-only", i + ".." + f));
     return new Preview(commits, plan(theirs, mine, log));

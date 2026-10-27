@@ -15,6 +15,7 @@ import com.intellij.openapi.actionSystem.DataContext;
 import com.intellij.openapi.actionSystem.impl.SimpleDataContext;
 import com.intellij.openapi.actionSystem.ex.ActionUtil;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.application.WriteIntentReadAction;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
@@ -1121,10 +1122,12 @@ final class SyncPanel extends SimpleToolWindowPanel {
         SwingUtilities.invokeLater(() -> button.setEnabled(true));
       }
       boolean found = ahead;
-      SwingUtilities.invokeLater(() -> {
+      // IDE 의 invokeLater 로 연다. SwingUtilities.invokeLater 로 연 Push 창은 쓰기 안전하지 않은 문맥이 되어,
+      // 창의 Push 단추가 파일을 저장할 때 「Write-unsafe context」 오류가 난다.
+      ApplicationManager.getApplication().invokeLater(() -> {
         if (found) runPush(text);
         else Messages.showInfoMessage(project, SyncBundle.message("sync.nothing.to.push"), text);
-      });
+      }, ModalityState.nonModal(), project.getDisposed());
     });
   }
 
