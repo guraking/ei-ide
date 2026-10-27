@@ -35,9 +35,9 @@ final class OpenApiCollector {
 
     private static final String WEB = "org.springframework.web.bind.annotation.";
     private static final String PATH_VARIABLE = WEB + "PathVariable";
-    private static final String REQUEST_PARAM = WEB + "RequestParam";
+    static final String REQUEST_PARAM = WEB + "RequestParam";
     private static final String REQUEST_HEADER = WEB + "RequestHeader";
-    private static final String REQUEST_BODY = WEB + "RequestBody";
+    static final String REQUEST_BODY = WEB + "RequestBody";
     private static final String MODEL_ATTRIBUTE = WEB + "ModelAttribute";
     private static final String SPRING_PACKAGE = "org.springframework.";
     private static final String JDK_PACKAGE = "java.";
@@ -47,7 +47,7 @@ final class OpenApiCollector {
     private static final String ATTR_VALUE = "value";
     private static final String ATTR_NAME = "name";
     private static final String ATTR_REQUIRED = "required";
-    private static final String ATTR_DEFAULT_VALUE = "defaultValue";
+    static final String ATTR_DEFAULT_VALUE = "defaultValue";
     private static final String FORMAT_INT64 = "int64";
     private static final String FORMAT_DATE = "date";
     private static final String FORMAT_DATE_TIME = "date-time";
@@ -122,7 +122,7 @@ final class OpenApiCollector {
     }
 
     /** @RequestBody 가 아닌 매개변수 하나를 요청 값으로 옮긴다. 요청 값이 아닌 매개변수는 넣지 않는다. */
-    private static void addParams(PsiParameter parameter, List<Param> params, Map<String, Map<String, Schema>> components) {
+    static void addParams(PsiParameter parameter, List<Param> params, Map<String, Map<String, Schema>> components) {
         PsiType type = parameter.getType();
         String[][] annotated = {{PATH_VARIABLE, OpenApiSpec.IN_PATH}, {REQUEST_PARAM, OpenApiSpec.IN_QUERY},
                 {REQUEST_HEADER, OpenApiSpec.IN_HEADER}};
@@ -159,7 +159,7 @@ final class OpenApiCollector {
     }
 
     /** value · name 속성, 둘 다 없으면 자바 매개변수 이름. */
-    private static String paramName(PsiAnnotation annotation, PsiParameter parameter) {
+    static String paramName(PsiAnnotation annotation, PsiParameter parameter) {
         for (String attribute : new String[]{ATTR_VALUE, ATTR_NAME}) {
             String value = AnnotationUtil.getDeclaredStringAttributeValue(annotation, attribute);
             if (value != null && !value.isBlank()) {
@@ -220,7 +220,7 @@ final class OpenApiCollector {
      * 먼저 이름을 올려 두므로 서로 참조하는 클래스도 끝난다.
      * shortcut: 패키지가 달라도 단순 이름이 같으면 먼저 본 클래스 하나로 합친다, 겹치는 프로젝트가 나오면 정규 이름으로 가린다.
      */
-    private static Schema schema(PsiType type, Map<String, Map<String, Schema>> components) {
+    static Schema schema(PsiType type, Map<String, Map<String, Schema>> components) {
         ProgressManager.checkCanceled();
         if (type instanceof PsiArrayType array) {
             return Schema.array(schema(array.getComponentType(), components));

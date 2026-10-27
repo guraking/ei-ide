@@ -24,8 +24,6 @@
 
 ![URL 찾기 Ctrl+Alt+Shift+U](docs/img/readme-url-finder.png)
 
-![API 테스트](docs/img/readme-api-test.png)
-
 ![함께 들어 있는 것](docs/img/readme-bundled.png)
 
 ![설치: 설치 파일 실행 → 한 번 켰다 끄기 → release\플러그인설치.bat → Language and Region 에서 Korean](docs/img/readme-install.png)

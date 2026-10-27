@@ -38,13 +38,13 @@
         <!-- @Controller 뷰 이름 글 Ctrl+클릭 → JSP, 주석 속성 ${키} Ctrl+클릭 → application*.yml · properties 의 키 줄 -->
         <gotoDeclarationHandler implementation="local.bootservers.ViewNameGotoHandler"/>
         <gotoDeclarationHandler implementation="local.bootservers.ConfigKeyGotoHandler"/>
-        <!-- OpenAPI: 아래쪽 「API」 창(컨트롤러로 만든 사양의 Swagger UI), 사양 파일 옆 미리보기, 사양 파일 자동 완성 · 오류 표시 -->
-        <toolWindow id="API" anchor="bottom" icon="AllIcons.Nodes.PpWeb" doNotActivateOnStart="true"
-                    factoryClass="local.bootservers.SwaggerToolWindow"/>
+        <!-- OpenAPI: 사양 파일 옆 Swagger 미리보기, 사양 파일 자동 완성 · 오류 표시 -->
         <!-- 오른쪽 옆줄 「보안 메모」: 내가 정한 비밀번호로만 열리는 암호화 메모장 -->
         <toolWindow id="Secure Memo" anchor="right" icon="AllIcons.Ide.Readonly" doNotActivateOnStart="true"
                     factoryClass="local.bootservers.memo.SecureMemoToolWindowFactory"/>
         <fileEditorProvider implementation="local.bootservers.OpenApiEditorProvider"/>
+        <!-- 편집기 우클릭 「Send API Request」 가 여는 요청 화면 -->
+        <fileEditorProvider implementation="local.bootservers.ApiRequestEditor$Provider"/>
         <!-- JDK 24 이상 실행에 sun-misc-unsafe-memory-access=allow 옵션을 더해 Unsafe 경고를 끈다 -->
         <java.programPatcher implementation="local.bootservers.UnsafeWarningPatcher"/>
         <!-- EI Graphite: Islands Dark 위에 회색 판 · 흰 글자 · 회색 선택 줄(강조색 없음)을 얹은 테마와 그 에디터 색. 첫 실행 기본 테마는 apply_defaults 22번 -->
@@ -133,9 +133,9 @@
             <add-to-group group-id="GoToMenu" anchor="first"/>
             <add-to-group group-id="KG.SearchMenu" anchor="last"/>
         </action>
-        <!-- Run 메뉴: 아래쪽 「API」 창을 열어 컨트롤러 API 를 Swagger UI 로 시험한다. -->
-        <action id="KingGura.ApiTest" class="local.bootservers.SwaggerToolWindow$OpenAction" icon="AllIcons.Nodes.PpWeb">
-            <add-to-group group-id="RunMenu" anchor="last"/>
+        <!-- 편집기 우클릭: 커서가 있는 컨트롤러 메서드의 요청 화면(편집기 탭)을 시험 값으로 채워 연다. 매핑 메서드에서만 보인다. -->
+        <action id="KingGura.ApiRequest" class="local.bootservers.ApiRequestAction" icon="AllIcons.Nodes.PpWeb">
+            <add-to-group group-id="EditorPopupMenu" anchor="first"/>
         </action>
         <!-- Project 메뉴 · 프로젝트 창 우클릭: 소스 · 리소스 · 웹 폴더의 전체 파일과 URL 매핑을 엑셀 한 파일로 저장한다(프로그램 사양서용). -->
         <action id="KingGura.ExportProgramList" class="local.bootservers.ProgramListAction" icon="AllIcons.ToolbarDecorator.Export">

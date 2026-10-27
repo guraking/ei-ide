@@ -148,6 +148,33 @@ public final class UrlMappingAction extends DumbAwareAction {
         return result;
     }
 
+    /** 읽기 동작 안에서 부른다. 메서드 하나의 매핑 줄들(collect 와 같은 규칙). 매핑 주석이 없으면 빈 목록. */
+    static List<Endpoint> of(PsiMethod method) {
+        List<Endpoint> result = new ArrayList<>();
+        PsiClass owner = method.getContainingClass();
+        if (owner == null) {
+            return result;
+        }
+        PsiConstantEvaluationHelper evaluator = JavaPsiFacade.getInstance(method.getProject()).getConstantEvaluationHelper();
+        SmartPsiElementPointer<PsiMethod> target = null;
+        for (Map.Entry<String, String> mapping : MAPPINGS.entrySet()) {
+            PsiAnnotation annotation = method.getModifierList().findAnnotation(mapping.getKey());
+            if (annotation == null) {
+                continue;
+            }
+            if (target == null) {
+                target = SmartPointerManager.getInstance(method.getProject()).createSmartPsiElementPointer(method);
+            }
+            String httpMethod = mapping.getValue() != null ? mapping.getValue() : requestMethods(annotation);
+            for (String classPath : classPaths(owner, evaluator)) {
+                for (String methodPath : paths(annotation, evaluator)) {
+                    result.add(new Endpoint(httpMethod, UrlPattern.join(classPath, methodPath), owner.getName() + "." + method.getName(), target));
+                }
+            }
+        }
+        return result;
+    }
+
     /** 클래스(또는 상위 클래스 · 인터페이스)의 @RequestMapping 경로들. 없으면 빈 경로 하나. */
     private static Set<String> classPaths(PsiClass owner, PsiConstantEvaluationHelper evaluator) {
         PsiAnnotation annotation = AnnotationUtil.findAnnotationInHierarchy(owner, Set.of(REQUEST_MAPPING));
