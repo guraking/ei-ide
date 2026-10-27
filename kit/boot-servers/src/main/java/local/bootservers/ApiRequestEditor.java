@@ -22,6 +22,7 @@ import com.intellij.openapi.util.Key;
 import com.intellij.openapi.util.UserDataHolderBase;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.testFramework.LightVirtualFile;
+import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.EditorTextField;
 import com.intellij.ui.JBColor;
 import com.intellij.ui.OnePixelSplitter;
@@ -33,7 +34,9 @@ import com.intellij.ui.components.JBTabbedPane;
 import com.intellij.ui.components.JBTextField;
 import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.FormBuilder;
+import com.intellij.util.ui.JBFont;
 import com.intellij.util.ui.JBUI;
+import com.intellij.util.ui.UIUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -42,8 +45,15 @@ import javax.swing.ButtonGroup;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
+import javax.swing.JTable;
+import javax.swing.SwingConstants;
+import javax.swing.event.DocumentEvent;
+import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.text.JTextComponent;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
+import java.awt.CardLayout;
+import java.awt.Component;
 import java.awt.FlowLayout;
 import java.beans.PropertyChangeListener;
 import java.io.IOException;
@@ -67,6 +77,7 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
+import java.util.function.IntPredicate;
 import java.util.regex.Pattern;
 
 /**
@@ -103,6 +114,10 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
     private static final int ENABLED_COLUMN = 0;
     private static final int NAME_COLUMN = 1;
     private static final int VALUE_COLUMN = 2;
+    /** 헤더 표의 인증 줄에 보일 값 길이. 넘으면 「…」 로 줄인다. */
+    private static final int AUTH_SHOWN_CHARS = 24;
+    private static final String RESPONSE_EMPTY_CARD = "empty";
+    private static final String RESPONSE_SHOWN_CARD = "shown";
 
     private final Project project;
     private final VirtualFile file;
@@ -110,8 +125,10 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
     private final ComboBox<String> methodBox = new ComboBox<>(HttpText.METHODS);
     private final JBTextField urlField = new JBTextField();
     private final JButton sendButton = new JButton(BootServersBundle.message("api.send"), AllIcons.Actions.Execute);
-    private final DefaultTableModel queryModel = rowsModel();
-    private final DefaultTableModel headerModel = rowsModel();
+    private final DefaultTableModel queryModel = rowsModel(row -> false);
+    /** 인증 탭 값으로 만든 헤더 줄이 헤더 표 맨 위(0번)에 있는가. 그 줄은 체크만 고칠 수 있다. */
+    private boolean authRowShown;
+    private final DefaultTableModel headerModel = rowsModel(this::isAuthRow);
     private final EditorTextField bodyField;
     private final JBRadioButton authNone = new JBRadioButton(BootServersBundle.message("api.auth.none"));
     private final JBRadioButton authBearer = new JBRadioButton(BootServersBundle.message("api.auth.bearer"));
@@ -122,6 +139,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
     private final JBPasswordField passwordField = new JBPasswordField();
     private final JBTextField cookieField = new JBTextField();
     private final JBLabel statusLabel = new JBLabel(" ");
+    private final JPanel responseCards = new JPanel(new CardLayout());
     private final EditorTextField responseBody;
     private final EditorTextField responseHeaders;
     /** 저장소에서 읽은(또는 마지막으로 쓴) 값. 바뀐 것만 다시 쓴다. 읽기 전에는 null. */
@@ -169,6 +187,8 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         this.project = project;
         this.file = file;
         bodyField = textField(byExtension(RESPONSE_TYPES[0]), false);
+        bodyField.setPlaceholder(BootServersBundle.message("api.body.empty"));
+        bodyField.setShowPlaceholderWhenFocused(true);
         responseBody = textField(byExtension(PLAIN_TEXT), true);
         responseHeaders = textField(byExtension(PLAIN_TEXT), true);
 
@@ -183,18 +203,27 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         top.setBorder(JBUI.Borders.empty(8));
 
         JBTabbedPane requestTabs = new JBTabbedPane();
-        requestTabs.addTab(BootServersBundle.message("api.tab.query"), rowsPanel(queryModel));
-        requestTabs.addTab(BootServersBundle.message("api.tab.headers"), rowsPanel(headerModel));
+        requestTabs.addTab(BootServersBundle.message("api.tab.query"), rowsPanel(queryModel, row -> false));
+        requestTabs.addTab(BootServersBundle.message("api.tab.headers"), rowsPanel(headerModel, this::isAuthRow));
         requestTabs.addTab(BootServersBundle.message("api.tab.body"), bodyField);
         requestTabs.addTab(BootServersBundle.message("api.tab.auth"), authPanel());
 
         JBTabbedPane responseTabs = new JBTabbedPane();
         responseTabs.addTab(BootServersBundle.message("api.tab.body"), responseBody);
         responseTabs.addTab(BootServersBundle.message("api.tab.headers"), responseHeaders);
+        JBLabel emptyResponse = new JBLabel(BootServersBundle.message("api.response.empty"), SwingConstants.CENTER);
+        emptyResponse.setForeground(UIUtil.getContextHelpForeground());
+        responseCards.add(emptyResponse, RESPONSE_EMPTY_CARD);
+        responseCards.add(responseTabs, RESPONSE_SHOWN_CARD);
+        JBLabel responseTitle = new JBLabel(BootServersBundle.message("api.response"));
+        responseTitle.setFont(JBFont.label().asBold());
+        JPanel responseHead = new JPanel(new BorderLayout(JBUI.scale(12), 0));
+        responseHead.add(responseTitle, BorderLayout.WEST);
+        responseHead.add(statusLabel, BorderLayout.EAST);
+        responseHead.setBorder(JBUI.Borders.empty(6, 8));
         JPanel response = new JPanel(new BorderLayout());
-        statusLabel.setBorder(JBUI.Borders.empty(4, 8));
-        response.add(statusLabel, BorderLayout.NORTH);
-        response.add(responseTabs, BorderLayout.CENTER);
+        response.add(responseHead, BorderLayout.NORTH);
+        response.add(responseCards, BorderLayout.CENTER);
 
         OnePixelSplitter split = new OnePixelSplitter(true, REQUEST_RESPONSE_SPLIT);
         split.setFirstComponent(requestTabs);
@@ -211,10 +240,14 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
 
     private EditorTextField textField(FileType type, boolean viewer) {
         EditorTextField field = new EditorTextField(EditorFactory.getInstance().createDocument(""), project, type, viewer, false);
+        // 탭 안에 넣으므로 편집기 틀 · 줄 번호 없이 평평하게 둔다.
+        field.setBorder(JBUI.Borders.empty());
         field.addSettingsProvider(editor -> {
             editor.setVerticalScrollbarVisible(true);
             editor.setHorizontalScrollbarVisible(true);
-            editor.getSettings().setLineNumbersShown(true);
+            editor.setBorder(JBUI.Borders.empty());
+            editor.getScrollPane().setBorder(JBUI.Borders.empty());
+            editor.getSettings().setLineNumbersShown(false);
         });
         return field;
     }
@@ -223,26 +256,46 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         return FileTypeManager.getInstance().getFileTypeByExtension(extension);
     }
 
-    private static DefaultTableModel rowsModel() {
+    /** locked 줄은 체크만 고칠 수 있다. */
+    private static DefaultTableModel rowsModel(IntPredicate locked) {
         return new DefaultTableModel(new Object[]{"", BootServersBundle.message("api.column.name"),
                 BootServersBundle.message("api.column.value")}, 0) {
             @Override
             public Class<?> getColumnClass(int column) {
                 return column == ENABLED_COLUMN ? Boolean.class : String.class;
             }
+
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return column == ENABLED_COLUMN || !locked.test(row);
+            }
         };
     }
 
-    /** 체크 · 이름 · 값 표와 줄 더하기 · 빼기 단추. 체크를 끈 줄은 보내지 않는다. */
-    private static JComponent rowsPanel(DefaultTableModel model) {
+    /** 체크 · 이름 · 값 표와 줄 더하기 · 빼기 단추. 체크를 끈 줄은 보내지 않는다. locked 줄은 흐린 글자로 보인다. */
+    private static JComponent rowsPanel(DefaultTableModel model, IntPredicate locked) {
         JBTable table = new JBTable(model);
         table.getColumnModel().getColumn(ENABLED_COLUMN).setMaxWidth(JBUI.scale(32));
+        table.setDefaultRenderer(String.class, new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable t, Object value, boolean selected, boolean focused, int row, int column) {
+                Component c = super.getTableCellRendererComponent(t, value, selected, focused, row, column);
+                if (!selected) {
+                    c.setForeground(locked.test(row) ? UIUtil.getContextHelpForeground() : t.getForeground());
+                }
+                return c;
+            }
+        });
+        // 탭이 이미 틀을 그리므로 표 바깥 틀은 뺀다(겹치면 두 줄로 보인다).
         return ToolbarDecorator.createDecorator(table)
+                .setPanelBorder(JBUI.Borders.empty())
                 .setAddAction(b -> model.addRow(new Object[]{true, "", ""}))
                 .setRemoveAction(b -> {
                     int[] rows = table.getSelectedRows();
                     for (int i = rows.length - 1; i >= 0; i--) {
-                        model.removeRow(rows[i]);
+                        if (!locked.test(rows[i])) {
+                            model.removeRow(rows[i]);
+                        }
                     }
                 })
                 .disableUpDownActions()
@@ -256,6 +309,15 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
             group.add(radio);
             kinds.add(radio);
             radio.addActionListener(e -> applyAuthKind());
+        }
+        DocumentAdapter refresh = new DocumentAdapter() {
+            @Override
+            protected void textChanged(@NotNull DocumentEvent e) {
+                refreshAuthRow();
+            }
+        };
+        for (JTextComponent field : new JTextComponent[]{tokenField, userField, passwordField, cookieField}) {
+            field.getDocument().addDocumentListener(refresh);
         }
         cookieField.getEmptyText().setText(BootServersBundle.message("api.auth.cookie.hint"));
         JPanel form = FormBuilder.createFormBuilder()
@@ -289,6 +351,42 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         userField.setEnabled(ApiText.AUTH_BASIC.equals(kind));
         passwordField.setEnabled(ApiText.AUTH_BASIC.equals(kind));
         cookieField.setEnabled(ApiText.AUTH_COOKIE.equals(kind));
+        refreshAuthRow();
+    }
+
+    private boolean isAuthRow(int row) {
+        return authRowShown && row == 0;
+    }
+
+    /** 고른 인증 방식의 비밀 값(토큰 · 비밀번호 · 쿠키). */
+    private Map<String, String> secrets() {
+        return Map.of(ApiText.AUTH_BEARER, new String(tokenField.getPassword()),
+                ApiText.AUTH_BASIC, new String(passwordField.getPassword()),
+                ApiText.AUTH_COOKIE, cookieField.getText());
+    }
+
+    private @Nullable Map.Entry<String, String> currentAuth() {
+        return ApiText.authHeader(authKind(), userField.getText(), secrets().get(authKind()));
+    }
+
+    /**
+     * 인증 탭 값을 헤더 표 맨 위 흐린 줄로 다시 보인다(값은 앞부분만). 인증이 없으면 그 줄을 뺀다.
+     * 그 줄의 체크 상태는 값이 바뀌어도 유지한다.
+     */
+    private void refreshAuthRow() {
+        boolean checked = true;
+        if (authRowShown) {
+            checked = Boolean.TRUE.equals(headerModel.getValueAt(0, ENABLED_COLUMN));
+            authRowShown = false;
+            headerModel.removeRow(0);
+        }
+        Map.Entry<String, String> auth = currentAuth();
+        if (auth != null) {
+            String value = auth.getValue().length() > AUTH_SHOWN_CHARS
+                    ? auth.getValue().substring(0, AUTH_SHOWN_CHARS) + "…" : auth.getValue();
+            headerModel.insertRow(0, new Object[]{checked, auth.getKey(), value});
+            authRowShown = true;
+        }
     }
 
     /** 처음 받은 값(시험 값)으로 방식 · 주소 · 쿼리 · 헤더 · 본문을 다시 채운다. 인증은 두고, 응답은 비운다. */
@@ -300,7 +398,9 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         methodBox.setSelectedItem(request.method());
         urlField.setText(request.url());
         setRows(queryModel, request.query());
+        authRowShown = false;
         setRows(headerModel, request.headers());
+        refreshAuthRow();
         bodyField.setText(request.body());
     }
 
@@ -311,10 +411,10 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         }
     }
 
-    /** 체크한 줄의 이름 · 값. 이름이 빈 줄은 건너뛴다. */
-    private static List<Map.Entry<String, String>> checkedRows(DefaultTableModel model) {
+    /** from 번째 줄부터 체크한 줄의 이름 · 값. 이름이 빈 줄은 건너뛴다. */
+    private static List<Map.Entry<String, String>> checkedRows(DefaultTableModel model, int from) {
         List<Map.Entry<String, String>> result = new ArrayList<>();
-        for (int i = 0; i < model.getRowCount(); i++) {
+        for (int i = from; i < model.getRowCount(); i++) {
             Object name = model.getValueAt(i, NAME_COLUMN);
             Object value = model.getValueAt(i, VALUE_COLUMN);
             if (Boolean.TRUE.equals(model.getValueAt(i, ENABLED_COLUMN)) && name != null && !name.toString().isBlank()) {
@@ -401,16 +501,16 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
             return;
         }
         String method = String.valueOf(methodBox.getSelectedItem());
-        List<Map.Entry<String, String>> headers = checkedRows(headerModel);
+        List<Map.Entry<String, String>> headers = checkedRows(headerModel, authRowShown ? 1 : 0);
         String kind = authKind();
-        Map<String, String> secrets = Map.of(ApiText.AUTH_BEARER, new String(tokenField.getPassword()),
-                ApiText.AUTH_BASIC, new String(passwordField.getPassword()),
-                ApiText.AUTH_COOKIE, cookieField.getText());
-        Map.Entry<String, String> auth = ApiText.authHeader(kind, userField.getText(), secrets.get(kind));
+        Map<String, String> secrets = secrets();
+        // 헤더 표 맨 위 인증 줄의 체크를 끄면 이번 요청에는 인증을 붙이지 않는다.
+        Map.Entry<String, String> auth = isAuthRow(0) && Boolean.TRUE.equals(headerModel.getValueAt(0, ENABLED_COLUMN))
+                ? currentAuth() : null;
         String body = bodyField.getText();
         HttpRequest request;
         try {
-            HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(ApiText.withQuery(url, checkedRows(queryModel))))
+            HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(ApiText.withQuery(url, checkedRows(queryModel, 0))))
                     .timeout(REQUEST_TIMEOUT);
             boolean authInHeaders = false;
             for (Map.Entry<String, String> header : headers) {
@@ -483,6 +583,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         }
         responseBody.setFileType(byExtension(shownType));
         responseBody.setText(shown);
+        ((CardLayout) responseCards.getLayout()).show(responseCards, RESPONSE_SHOWN_CARD);
     }
 
     private void showError(String message) {
