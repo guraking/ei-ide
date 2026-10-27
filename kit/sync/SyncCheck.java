@@ -207,7 +207,12 @@ public class SyncCheck {
     sh(other, "echo theirs > A.java.tmp && printf 'a\\n' > A.java && echo x >> B.java && echo c > C.java && git add . && git rm -q --cached A.java.tmp"
               + " && git commit -qm 남의작업 && git push -q origin develop");
     eq(ReverseMerge.serverBranches(mine, "origin"), List.of("develop", "feature/kim"));
+    eq(ReverseMerge.parseRefs("refs/remotes/origin/HEAD\nrefs/remotes/origin/develop\nrefs/remotes/upstream/x\nrefs/remotes/origin/feature/kim\n", "origin"),
+       List.of("develop", "feature/kim"));
+    // 개인 브랜치만 받은 clone 은 받아 둔 브랜치만 안다. 서버 목록은 뒤에서 따로 합친다.
+    eq(ReverseMerge.knownBranches(mine, "origin"), List.of("feature/kim"));
     ReverseMerge.fetch(mine, "origin", "develop", "feature/kim");
+    eq(ReverseMerge.knownBranches(mine, "origin"), List.of("develop", "feature/kim"));
     ReverseMerge.Preview p = ReverseMerge.preview(mine, "origin", "develop", "feature/kim", "feature/kim");
     eq(p.commits(), 1);
     eq(p.files().size(), 2);  // A.java 는 내용이 같아 diff 에 없다 → B, C

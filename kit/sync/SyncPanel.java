@@ -18,6 +18,7 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.application.WriteIntentReadAction;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.project.Project;
@@ -85,6 +86,7 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -176,6 +178,11 @@ final class SyncPanel extends SimpleToolWindowPanel {
   static final long GIT_LONG_TIMEOUT_SEC = TimeUnit.MINUTES.toSeconds(30);
   private static final int PATH_LIST_MAX = 10;
   private static final int REPO_CHANGE_DELAY_MS = 500;
+  // 동시에 비교하는 저장소 수. 저장소마다 git 을 셋 넷 띄우므로, 저장소가 많은 작업 공간에서 git 수십 개가 한꺼번에 돌아 IDE 가 굼뜨지 않게 한다.
+  private static final int MAX_PARALLEL_REPOS = 3;
+  private static final Semaphore REPO_SLOTS = new Semaphore(MAX_PARALLEL_REPOS);
+  // 우리가 띄운 git · svn 명령마다 걸린 시간을 적는다. Help › Diagnostic Tools › Debug Log Settings 에 「#kinggura.sync.time」을 넣으면 idea.log 에 보인다.
+  private static final Logger TIME_LOG = Logger.getInstance("#kinggura.sync.time");
   private static final String TOOLBAR_PLACE = "KingGuraSynchronizeToolbar";
   // 기본(강조색) 단추 위에 놓는 흰 받기 아이콘. 테마마다 기본 단추 바탕이 강조색이고 글자가 흰색이다.
   private static final String PULL_SELECTED_ICON = "/icons/ei/pullSelected.svg";
@@ -904,22 +911,25 @@ final class SyncPanel extends SimpleToolWindowPanel {
       pendingPaths.clear();
       return;
     }
-    List<Repo> targets = new ArrayList<>();
+    // 커밋 · 브랜치 전환이 온 저장소는 역머지 안내도 다시 세고, 파일 저장만 온 저장소는 비교만 한다(안내 세기는 git 을 여섯 번 더 띄운다).
+    List<Repo> changed = new ArrayList<>();
+    List<Repo> saved = new ArrayList<>();
     for (Repo repo : repos) {
-      boolean hit = pendingRoots.contains(repo.root());
-      if (!hit) {
-        for (String path : pendingPaths) {
-          if (FileUtil.isAncestor(repo.root(), new File(path), false)) {
-            hit = true;
-            break;
-          }
+      if (pendingRoots.contains(repo.root())) {
+        changed.add(repo);
+        continue;
+      }
+      for (String path : pendingPaths) {
+        if (FileUtil.isAncestor(repo.root(), new File(path), false)) {
+          saved.add(repo);
+          break;
         }
       }
-      if (hit) targets.add(repo);
     }
     pendingRoots.clear();
     pendingPaths.clear();
-    recompare(targets, false, false);
+    recompare(changed, false, false, true);
+    recompare(saved, false, false, false);
   }
 
   /** 작업 스레드의 결과를 기다린다. 작업이 던진 IOException · InterruptedException 은 그대로 다시 던진다. */
@@ -953,6 +963,11 @@ final class SyncPanel extends SimpleToolWindowPanel {
    * assumed 가 거짓이면 git ls-files -v 를 건너뛰고 지금 목록에 있던 그 저장소의 모른 척 중 항목을 그대로 둔다.
    */
   private void recompare(List<Repo> targets, boolean full, boolean assumed) {
+    recompare(targets, full, assumed, true);
+  }
+
+  /** recompare 와 같고, note 가 거짓이면 저장소 줄의 역머지 안내(「develop 보다 N개 뒤」)를 다시 세지 않고 지난 것을 둔다. */
+  private void recompare(List<Repo> targets, boolean full, boolean assumed, boolean note) {
     if (targets.isEmpty()) return;
     int seq = full ? ++compareSeq : compareSeq;
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
@@ -960,19 +975,25 @@ final class SyncPanel extends SimpleToolWindowPanel {
       AtomicReference<String> error = new AtomicReference<>();
       try {
         for (List<Change> part : inParallel(targets, repo -> {
-          if (repo.vcs() == Vcs.GIT) {
-            // 커밋 · 브랜치 전환 뒤 위쪽 줄의 「develop 보다 N개 뒤 · 내 파일 N개 겹침」도 마지막으로 받아 둔 서버 상태로 다시 센다.
-            updateReverseNote(repo, false);
-            return compare(repo, assumed);
-          }
-          if (!full) return compareSvnLocal(repo);
+          REPO_SLOTS.acquire();
           try {
-            return compareSvnRemote(repo);
+            if (repo.vcs() == Vcs.GIT) {
+              // 커밋 · 브랜치 전환 뒤 위쪽 줄의 「develop 보다 N개 뒤 · 내 파일 N개 겹침」도 마지막으로 받아 둔 서버 상태로 다시 센다.
+              if (note) updateReverseNote(repo, false);
+              return compare(repo, assumed);
+            }
+            if (!full) return compareSvnLocal(repo);
+            try {
+              return compareSvnRemote(repo);
+            }
+            catch (IOException offline) {
+              error.set(offline.getMessage());
+              svnIncoming.remove(repo.root());
+              return compareSvn(repo, false);
+            }
           }
-          catch (IOException offline) {
-            error.set(offline.getMessage());
-            svnIncoming.remove(repo.root());
-            return compareSvn(repo, false);
+          finally {
+            REPO_SLOTS.release();
           }
         })) {
           result.addAll(part);
@@ -1090,7 +1111,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
 
   /**
    * 고른 Git 저장소(없으면 전부)에 원격보다 앞선 커밋이 있을 때만 IntelliJ Push 창을 연다. 없으면 Push 창 대신 알림 창을 띄운다.
-   * 커밋 수는 작업 스레드에서 git rev-list 로 센다. 세지 못한 저장소(추적 브랜치 없음 등)는 Push 창이 다루도록 앞선 것으로 본다.
+   * 커밋 수는 작업 스레드에서 저장소마다 동시에 git rev-list 로 센다(저장소가 많아도 하나만큼만 기다린다).
+   * 세지 못한 저장소(추적 브랜치 없음 등)는 Push 창이 다루도록 앞선 것으로 본다.
    */
   private void pushIfAhead(JButton button, String text, List<Repo> targets) {
     List<File> roots = new ArrayList<>();
@@ -1105,14 +1127,19 @@ final class SyncPanel extends SimpleToolWindowPanel {
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       boolean ahead = false;
       try {
-        for (File root : roots) {
+        for (Boolean one : inParallel(roots, root -> {
           try {
-            ahead |= Integer.parseInt(git(root, "rev-list", "--count", "@{u}..HEAD").trim()) > 0;
+            return Integer.parseInt(git(root, "rev-list", "--count", "@{u}..HEAD").trim()) > 0;
           }
           catch (IOException | NumberFormatException e) {
-            ahead = true;
+            return true;
           }
+        })) {
+          ahead |= one;
         }
+      }
+      catch (IOException e) {
+        ahead = true;
       }
       catch (InterruptedException e) {
         Thread.currentThread().interrupt();
@@ -1384,6 +1411,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       List<Future<List<Change>>> remotes = Collections.synchronizedList(new ArrayList<>());
       try {
         for (Scanned scanned : inParallel(roots, entry -> {
+          REPO_SLOTS.acquire();
           try {
             Repo repo = entry.getValue() == Vcs.GIT ? gitRepo(entry.getKey()) : svnRepo(entry.getKey());
             Future<List<Change>> remote = ApplicationManager.getApplication().executeOnPooledThread(() -> remoteCompare(repo, errors));
@@ -1393,6 +1421,9 @@ final class SyncPanel extends SimpleToolWindowPanel {
           catch (IOException e) {
             errors.add(e.getMessage());
             return null;
+          }
+          finally {
+            REPO_SLOTS.release();
           }
         })) {
           if (scanned == null) continue;
@@ -1960,6 +1991,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     String label = exe + " " + verb(args);
     File outFile = File.createTempFile("kinggura-sync", ".out");
     File errFile = File.createTempFile("kinggura-sync", ".err");
+    long started = System.currentTimeMillis();
     try {
       Process process = new ProcessBuilder(command).directory(dir).redirectOutput(outFile).redirectError(errFile).start();
       process.getOutputStream().close();
@@ -1972,6 +2004,9 @@ final class SyncPanel extends SimpleToolWindowPanel {
       catch (InterruptedException e) {
         kill(process);
         throw e;
+      }
+      if (TIME_LOG.isDebugEnabled()) {
+        TIME_LOG.debug("[" + dir.getName() + "] " + label + " " + (System.currentTimeMillis() - started) + " ms: " + String.join(" ", command));
       }
       if (process.exitValue() != 0) {
         Charset errCharset = "svn".equals(exe) ? NATIVE_CHARSET : StandardCharsets.UTF_8;
