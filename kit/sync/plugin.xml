@@ -60,6 +60,13 @@
       <separator/>
       <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
     </group>
+    <!-- 이클립스 Close Project · Open Project: 워크스페이스 안 저장소 하나만 내리고 다시 올린다. -->
+    <group id="KingGura.CloseRepoGroup">
+      <separator/>
+      <action id="KingGura.CloseRepo" class="kinggura.sync.CloseRepoAction" icon="AllIcons.Actions.Close"/>
+      <action id="KingGura.OpenRepo" class="kinggura.sync.CloseRepoAction$Open" icon="AllIcons.Actions.MenuOpen"/>
+      <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+    </group>
     <action id="KingGura.SynchronizeWorkspace" class="kinggura.sync.SyncToolWindowFactory$OpenAction" icon="AllIcons.Actions.Refresh">
       <add-to-group group-id="Git.MainMenu" anchor="first"/>
       <add-to-group group-id="Git.ContextMenu" anchor="first"/>
