@@ -156,6 +156,22 @@ final class ApiText {
         return base + "/" + p;
     }
 
+    /** 주소 앞 흐리게 보일 부분(scheme://host[:port])의 끝 자리. 「://」 가 없으면 0, 경로가 없으면 주소 길이. */
+    static int hostEnd(String url) {
+        int scheme = url.indexOf("://");
+        if (scheme < 0) {
+            return 0;
+        }
+        int slash = url.indexOf('/', scheme + 3);
+        return slash < 0 ? url.length() : slash;
+    }
+
+    /** 쿼리(「?」 부터)의 시작 자리. 없으면 주소 길이. 경로 앞의 「?」 는 쿼리로 치지 않는다. */
+    static int queryStart(String url) {
+        int q = url.indexOf('?', hostEnd(url));
+        return q < 0 ? url.length() : q;
+    }
+
     /** 주소 뒤에 쿼리(이름 · 값 쌍)를 인코딩해 붙인다. 주소에 이미 「?」 가 있으면 「&」 로 잇는다. 빈 이름은 건너뛴다. */
     static String withQuery(String url, List<Map.Entry<String, String>> query) {
         StringBuilder out = new StringBuilder(url);

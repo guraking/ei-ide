@@ -38,6 +38,7 @@ import com.intellij.util.ui.JBFont;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
 import com.intellij.ide.ui.laf.darcula.ui.DarculaButtonUI;
+import com.intellij.ide.ui.laf.darcula.ui.DarculaTextFieldUI;
 import com.intellij.openapi.actionSystem.CustomShortcutSet;
 import com.intellij.openapi.editor.colors.EditorColorsManager;
 import com.intellij.openapi.keymap.KeymapUtil;
@@ -62,7 +63,13 @@ import javax.swing.JTable;
 import javax.swing.SwingConstants;
 import javax.swing.event.DocumentEvent;
 import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.Element;
+import javax.swing.text.FieldView;
 import javax.swing.text.JTextComponent;
+import javax.swing.text.Segment;
+import javax.swing.text.Utilities;
+import javax.swing.text.View;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
@@ -76,6 +83,7 @@ import javax.swing.Timer;
 import javax.swing.event.TableModelListener;
 import java.awt.Color;
 import java.awt.Font;
+import java.awt.Graphics2D;
 import java.awt.GridBagLayout;
 import java.awt.GridLayout;
 import java.awt.event.ActionEvent;
@@ -141,6 +149,10 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
     private static final double MS_PER_SECOND = 1000.0;
     private static final Pattern NUMBER = Pattern.compile("-?\\d+(\\.\\d+)?");
     private static final int TABLE_ROW_HEIGHT = 30;
+    /** 체크 칸 너비. 표 끝 「줄 추가」 글을 이름 칸 첫 글자에 맞추는 데도 쓴다. */
+    private static final int CHECK_COLUMN_WIDTH = 32;
+    /** 표 칸 좌우 안쪽 여백. */
+    private static final int CELL_PADDING = 8;
     private static final int TAB_QUERY = 0;
     private static final int TAB_HEADERS = 1;
     private static final int TAB_BODY = 2;
@@ -185,8 +197,8 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
     private final VirtualFile file;
     private final JPanel root = new JPanel(new BorderLayout());
     private final ComboBox<String> methodBox = new ComboBox<>(HttpText.METHODS);
-    private final JBTextField urlField = new JBTextField();
-    private final JButton sendButton = new JButton(BootServersBundle.message("api.send"));
+    private final JBTextField urlField = new UrlField();
+    private final JButton sendButton = new JButton(sendLabel());
     private final DefaultTableModel queryModel = rowsModel(row -> false);
     /** 인증 탭 값으로 만든 헤더 줄이 헤더 표 맨 위(0번)에 있는가. 그 줄은 체크만 고칠 수 있다. */
     private boolean authRowShown;
@@ -469,7 +481,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
     private static JComponent rowsPanel(DefaultTableModel model, IntPredicate locked) {
         JBTable table = new JBTable(model);
         table.setRowHeight(JBUI.scale(TABLE_ROW_HEIGHT));
-        table.getColumnModel().getColumn(ENABLED_COLUMN).setMaxWidth(JBUI.scale(32));
+        table.getColumnModel().getColumn(ENABLED_COLUMN).setMaxWidth(JBUI.scale(CHECK_COLUMN_WIDTH));
         table.getColumnModel().getColumn(NAME_COLUMN).setPreferredWidth(JBUI.scale(180));
         table.getColumnModel().getColumn(VALUE_COLUMN).setPreferredWidth(JBUI.scale(220));
         table.getColumnModel().getColumn(SOURCE_COLUMN).setPreferredWidth(JBUI.scale(120));
@@ -481,7 +493,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
             @Override
             public Component getTableCellRendererComponent(JTable t, Object value, boolean selected, boolean focused, int row, int column) {
                 Component c = super.getTableCellRendererComponent(t, value, selected, focused, row, column);
-                setBorder(JBUI.Borders.empty(0, 8));
+                setBorder(JBUI.Borders.empty(0, CELL_PADDING));
                 boolean on = Boolean.TRUE.equals(t.getValueAt(row, ENABLED_COLUMN));
                 if (column == SOURCE_COLUMN) {
                     c.setFont(JBFont.small());
@@ -523,9 +535,82 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
                 }
             }
         });
-        JBScrollPane scroll = new JBScrollPane(table);
+        // 표 끝 줄: 누르면 빈 줄을 더하고 이름 칸을 바로 고치게 한다.
+        ActionLink addRow = new ActionLink(BootServersBundle.message("api.row.add.end"), e -> {
+            model.addRow(new Object[]{true, "", "", ""});
+            int row = model.getRowCount() - 1;
+            table.changeSelection(row, NAME_COLUMN, false, false);
+            if (table.editCellAt(row, NAME_COLUMN) && table.getEditorComponent() != null) {
+                table.getEditorComponent().requestFocusInWindow();
+            }
+        });
+        addRow.setForeground(UIUtil.getContextHelpForeground());
+        addRow.setBorder(JBUI.Borders.empty(6, CELL_PADDING + CHECK_COLUMN_WIDTH, 6, CELL_PADDING));
+        JPanel rows = new JPanel(new BorderLayout());
+        rows.setBackground(table.getBackground());
+        rows.add(table, BorderLayout.NORTH);
+        JPanel rest = new JPanel(new BorderLayout());
+        rest.setOpaque(false);
+        rest.add(addRow, BorderLayout.NORTH);
+        rows.add(rest, BorderLayout.CENTER);
+        JBScrollPane scroll = new JBScrollPane(rows);
+        // 표를 판 안에 넣었으므로 머리글은 스크롤 머리 자리에 따로 둔다.
+        scroll.setColumnHeaderView(table.getTableHeader());
+        scroll.getViewport().setBackground(table.getBackground());
         scroll.setBorder(JBUI.Borders.empty());
         return scroll;
+    }
+
+    /** 보내기 단추 글: 「보내기」 뒤에 작게 단축키(Ctrl+Enter). */
+    private static String sendLabel() {
+        return "<html>" + BootServersBundle.message("api.send") + "&nbsp;&nbsp;<small>"
+                + KeymapUtil.getFirstKeyboardShortcutText(CustomShortcutSet.fromString(SEND_SHORTCUT)) + "</small></html>";
+    }
+
+    /** 주소 칸. 서버 부분(scheme://host:port)과 쿼리(?…)는 흐리게, 경로만 보통 색으로 그린다. 고른 글은 기본 선택 색. */
+    private static final class UrlField extends JBTextField {
+        @Override
+        public void updateUI() {
+            // 테마가 바뀌어도 같은 그리기를 쓰도록 UI 를 다시 만들 때마다 우리 것으로 둔다.
+            setUI(new DarculaTextFieldUI() {
+                @Override
+                public View create(Element element) {
+                    return new UrlView(element);
+                }
+            });
+        }
+    }
+
+    private static final class UrlView extends FieldView {
+        UrlView(Element element) {
+            super(element);
+        }
+
+        @Override
+        protected float drawUnselectedText(Graphics2D g, float x, float y, int p0, int p1) throws BadLocationException {
+            if (!getContainer().isEnabled()) {
+                return super.drawUnselectedText(g, x, y, p0, p1);
+            }
+            String text = getDocument().getText(0, getDocument().getLength());
+            int host = ApiText.hostEnd(text);
+            int query = ApiText.queryStart(text);
+            float at = part(g, x, y, p0, Math.min(p1, host), true);
+            at = part(g, at, y, Math.max(p0, host), Math.min(p1, query), false);
+            return part(g, at, y, Math.max(p0, query), p1, true);
+        }
+
+        private float part(Graphics2D g, float x, float y, int from, int to, boolean dim) throws BadLocationException {
+            if (from >= to) {
+                return x;
+            }
+            if (!dim) {
+                return super.drawUnselectedText(g, x, y, from, to);
+            }
+            Segment segment = getLineBuffer();
+            getDocument().getText(from, to - from, segment);
+            g.setColor(UIUtil.getContextHelpForeground());
+            return Utilities.drawTabbedText(segment, x, y, g, this, from);
+        }
     }
 
     private JComponent authPanel() {
@@ -803,7 +888,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         pending = null;
         elapsedTimer.stop();
         metaLabel.setIcon(null);
-        sendButton.setText(BootServersBundle.message("api.send"));
+        sendButton.setText(sendLabel());
         if (error != null) {
             metaLabel.setText(BootServersBundle.message("api.meta.time", elapsedMs));
             showError(BootServersBundle.message("api.error.title"), responseErrorMessage(error));
