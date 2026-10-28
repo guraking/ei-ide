@@ -78,6 +78,11 @@ import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.DumbAwareToggleAction;
 import com.intellij.openapi.ui.SimpleToolWindowPanel;
 import com.intellij.ui.JBColor;
+import com.intellij.ui.components.ActionLink;
+import com.intellij.openapi.keymap.KeymapUtil;
+import com.intellij.openapi.actionSystem.CustomShortcutSet;
+import com.intellij.util.IconUtil;
+import com.intellij.util.ui.UIUtil;
 import com.intellij.ui.OnePixelSplitter;
 import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.util.ui.JBUI;
@@ -227,6 +232,11 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static final String PULL_SELECTED_ICON = "/icons/ei/pullSelected.svg";
   // 도구줄 글 사이 · 아래 단추 사이 간격(JBUI.scale 전).
   private static final int GAP = 8;
+  // 고른 저장소만 새로고침 아이콘. IntelliJ ForceRefresh 의 빨간 점을 빼고 다른 도구줄 아이콘과 같은 회색(새 UI 아이콘 색)으로 칠한다(시안).
+  private static final Icon SELECTED_REFRESH_ICON = IconUtil.colorize(AllIcons.Actions.ForceRefresh, new JBColor(0x6C707E, 0xCED0D6));
+  // 저장소 줄 우클릭 「이 저장소만 새로고침」과 목록에서 누르는 키(이클립스 새로고침 키).
+  private static final String REFRESH_SHORTCUT = "F5";
+  private static final String STOCK_PUSH = "Vcs.Push";
   // 파일 줄 앞 상태 글자 칸의 최소 폭(JBUI.scale 전). 「M」 · 「??」 · 「충돌」 뒤 파일 아이콘이 한 줄로 서게 한다.
   private static final int STATUS_COL_W = 24;
   // 위쪽 요약에서 종류별 숫자 앞에 붙는 표시.
@@ -300,6 +310,9 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private final Tree tree = new Tree(new DefaultTreeModel(new DefaultMutableTreeNode()));
   private final DiffRequestPanel diffPanel;
   private final SimpleColoredComponent title = new SimpleColoredComponent();
+  /** 비교 칸 머리: 파일 이름 · 「원격 ↔ 내 작업본」. 파일을 고르지 않았으면 머리 줄째 숨긴다. */
+  private final SimpleColoredComponent diffTitle = new SimpleColoredComponent();
+  private final JPanel diffHead = new JPanel(new BorderLayout());
   private final SimpleColoredComponent status = new SimpleColoredComponent();
   // 목록 우클릭 메뉴가 아래 단추와 같은 동작을 하도록 단추를 눌러 부른다.
   private JButton pullButton;
@@ -359,21 +372,22 @@ final class SyncPanel extends SimpleToolWindowPanel {
     // 창 머리 아래 선은 IntelliJ 가 그으므로 스크롤 상자는 테두리 없이, 칸막이는 1픽셀로 둔다.
     DefaultActionGroup actions = new DefaultActionGroup();
     actions.add(new RefreshAction("sync.refresh.all", AllIcons.Actions.Refresh, this::refresh));
-    actions.add(new RefreshAction("sync.refresh.selected", AllIcons.Actions.ForceRefresh, this::refreshSelected));
+    actions.add(new RefreshAction("sync.refresh.selected", SELECTED_REFRESH_ICON, this::refreshSelected));
     actions.addSeparator();
-    actions.add(new ModeAction("sync.mode.all", AllIcons.Actions.ListChanges, null));
-    actions.add(new ModeAction("sync.mode.incoming", AllIcons.Actions.Download, Kind.INCOMING));
-    actions.add(new ModeAction("sync.mode.outgoing", AllIcons.Actions.Upload, Kind.OUTGOING));
-    actions.add(new ModeAction("sync.mode.conflict", AllIcons.Vcs.Merge, Kind.CONFLICT));
-    // IntelliJ 변경 트리와 같은 모두 펼치기 · 모두 접기 · 폴더별 묶기, 비교 화면의 이전 · 다음 파일.
+    // 보기 거르기는 아이콘 없이 글만(시안). 눌린 것은 도구줄 눌림 바탕으로 보인다.
+    actions.add(new ModeAction("sync.mode.all", null));
+    actions.add(new ModeAction("sync.mode.incoming", Kind.INCOMING));
+    actions.add(new ModeAction("sync.mode.outgoing", Kind.OUTGOING));
+    actions.add(new ModeAction("sync.mode.conflict", Kind.CONFLICT));
+    // IntelliJ 변경 트리와 같은 모두 펼치기 · 모두 접기 · 폴더별 묶기. 이전 · 다음 파일은 비교 칸 머리에 둔다.
     actions.addSeparator();
     DefaultTreeExpander expander = new DefaultTreeExpander(tree);
     actions.add(CommonActionsManager.getInstance().createExpandAllAction(expander, tree));
     actions.add(CommonActionsManager.getInstance().createCollapseAllAction(expander, tree));
     actions.add(new GroupByFolderAction());
-    actions.addSeparator();
-    for (AnAction step : List.of(new FileStepAction(ACTION_PREV_FILE, -1), new FileStepAction(ACTION_NEXT_FILE, 1))) {
-      actions.add(step);
+    FileStepAction prevFile = new FileStepAction(ACTION_PREV_FILE, -1);
+    FileStepAction nextFile = new FileStepAction(ACTION_NEXT_FILE, 1);
+    for (FileStepAction step : List.of(prevFile, nextFile)) {
       // 비교 화면에 포커스가 있어도 Alt+← · Alt+→ 로 넘어가게 창 전체에 건다.
       step.registerCustomShortcutSet(step.getShortcutSet(), this, parent);
     }
@@ -406,7 +420,20 @@ final class SyncPanel extends SimpleToolWindowPanel {
     OnePixelSplitter splitter = new OnePixelSplitter(false, 0.35f);
     // 트리에서 고른 파일을 IDE 에 알려 우클릭의 IntelliJ 기본 동작(Jump to Source · Show History 등)이 그 파일로 돈다.
     splitter.setFirstComponent(new TreeData(ScrollPaneFactory.createScrollPane(tree, true)));
-    splitter.setSecondComponent(diffPanel.getComponent());
+    // 비교 칸 머리(시안): 왼쪽에 파일 이름 · 「원격 ↔ 내 작업본」, 오른쪽에 이전 · 다음 파일과 단축키.
+    JPanel steps = new JPanel(new FlowLayout(FlowLayout.RIGHT, JBUI.scale(GAP * 2), 0));
+    steps.setOpaque(false);
+    steps.add(stepLink(SyncBundle.message("sync.diff.prev", KeymapUtil.getFirstKeyboardShortcutText(prevFile)), prevFile));
+    steps.add(stepLink(SyncBundle.message("sync.diff.next", KeymapUtil.getFirstKeyboardShortcutText(nextFile)), nextFile));
+    diffTitle.setOpaque(false);
+    diffHead.add(diffTitle, BorderLayout.CENTER);
+    diffHead.add(steps, BorderLayout.EAST);
+    diffHead.setBorder(JBUI.Borders.compound(JBUI.Borders.customLineBottom(JBColor.border()), JBUI.Borders.empty(GAP / 2, GAP)));
+    diffHead.setVisible(false);
+    JPanel diffSide = new JPanel(new BorderLayout());
+    diffSide.add(diffHead, BorderLayout.NORTH);
+    diffSide.add(diffPanel.getComponent(), BorderLayout.CENTER);
+    splitter.setSecondComponent(diffSide);
 
     // 아래 단추 줄: 위쪽 1픽셀 선으로 목록과 가르고, 단추 사이 · 가장자리는 IntelliJ 기본 간격.
     JPanel bottom = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(GAP), JBUI.scale(GAP / 2)));
@@ -468,13 +495,18 @@ final class SyncPanel extends SimpleToolWindowPanel {
         }
         else {
           if (item instanceof Repo repo) {
-            // 시안 모양: 저장소 이름은 굵게, 브랜치 ↔ 원격은 흐리게.
-            append(repo.root().getName(), SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES);
-            append("  " + repo.label(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
-            appendReverseNote(this, repo, (Runnable) () -> openReverseMerge(repo));
+            // 시안 모양: 저장소 이름은 굵게, 옆에 브랜치만 흐리게(Git). 원격 브랜치는 풍선 도움말로.
+            // 원격 확인에 실패한 저장소 줄은 글 뒤를 붉은 바탕으로 칠한다(시안). 고른 줄은 선택 색을 그대로 둔다.
             String error = repoErrors.get(repo.root());
+            Color errorBg = error != null && !selected ? JBUI.CurrentTheme.Banner.ERROR_BACKGROUND : null;
+            append(repo.root().getName(), new SimpleTextAttributes(errorBg, null, null, SimpleTextAttributes.STYLE_BOLD));
+            append("  " + (repo.vcs() == Vcs.GIT ? repo.branch() : repo.label()),
+                   new SimpleTextAttributes(errorBg, SimpleTextAttributes.GRAYED_ATTRIBUTES.getFgColor(), null, SimpleTextAttributes.STYLE_PLAIN));
+            setToolTipText(repo.label());
+            appendReverseNote(this, repo, (Runnable) () -> openReverseMerge(repo));
             if (error != null) {
-              append("   " + SyncBundle.message("sync.repo.failed"), SimpleTextAttributes.ERROR_ATTRIBUTES);
+              append("   " + SyncBundle.message("sync.repo.failed"),
+                     new SimpleTextAttributes(errorBg, SimpleTextAttributes.ERROR_ATTRIBUTES.getFgColor(), null, SimpleTextAttributes.STYLE_PLAIN));
               setToolTipText(error);
             }
           }
@@ -498,6 +530,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
     }.installOn(tree);
     DumbAwareAction.create(e -> openSelectedFiles())
       .registerCustomShortcutSet(new CompositeShortcutSet(CommonShortcuts.getEditSource(), CommonShortcuts.ENTER), tree, parent);
+    DumbAwareAction.create(e -> { if (!busy) refreshSelected(); })
+      .registerCustomShortcutSet(CustomShortcutSet.fromString(REFRESH_SHORTCUT), tree, parent);
     // 우클릭한 줄이 고른 줄이 아니면 그 줄을 고른 뒤 메뉴를 띄운다(메뉴 내용은 고른 줄로 정한다). 메뉴 키 · Shift+F10 도 같은 메뉴.
     tree.addMouseListener(new MouseAdapter() {
       @Override public void mousePressed(MouseEvent e) { selectClicked(e); }
@@ -621,6 +655,13 @@ final class SyncPanel extends SimpleToolWindowPanel {
     if (!e.isPopupTrigger()) return;
     TreePath clicked = tree.getPathForLocation(e.getX(), e.getY());
     if (clicked != null && !tree.isPathSelected(clicked)) tree.setSelectionPath(clicked);
+  }
+
+  /** 비교 칸 머리의 이전 · 다음 파일 글 링크. 흐린 글로 두고 누르면 step 을 고른다. */
+  private static ActionLink stepLink(String text, FileStepAction step) {
+    ActionLink link = new ActionLink(text, e -> step.go());
+    link.setForeground(UIUtil.getContextHelpForeground());
+    return link;
   }
 
   /** 메뉴 항목 하나. 누르면 run 을 부른다. */
@@ -754,8 +795,15 @@ final class SyncPanel extends SimpleToolWindowPanel {
     boolean git = repo.vcs() == Vcs.GIT;
     List<AnAction> items = new ArrayList<>();
     items.add(item(SyncBundle.message("sync.menu.pull"), pullButton.getIcon(), pullButton::doClick));
-    if (git) items.add(item(SyncBundle.message("sync.menu.push"), pushButton.getIcon(), pushButton::doClick));
-    AnAction refresh = item(SyncBundle.message("sync.menu.repo.refresh"), AllIcons.Actions.ForceRefresh, () -> refreshRepo(repo.root(), repo.vcs()));
+    if (git) {
+      // 메뉴 옆에 IntelliJ Push 단축키를 보인다(시안 「Push… Ctrl+Shift+K」).
+      AnAction push = item(SyncBundle.message("sync.menu.repo.push"), pushButton.getIcon(), pushButton::doClick);
+      AnAction stockPush = ActionManager.getInstance().getAction(STOCK_PUSH);
+      if (stockPush != null) push.setShortcutSet(stockPush.getShortcutSet());
+      items.add(push);
+    }
+    AnAction refresh = item(SyncBundle.message("sync.menu.repo.refresh"), SELECTED_REFRESH_ICON, () -> refreshRepo(repo.root(), repo.vcs()));
+    refresh.setShortcutSet(CustomShortcutSet.fromString(REFRESH_SHORTCUT));
     refresh.getTemplatePresentation().setEnabled(!busy);
     items.add(refresh);
     if (git) {
@@ -765,7 +813,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     }
     items.add(Separator.getInstance());
     if (git) items.add(item(SyncBundle.message("sync.menu.repo.log"), AllIcons.Vcs.History, () -> showGitLog(project)));
-    items.add(item(RevealFileAction.getActionName(), null, () -> RevealFileAction.openDirectory(repo.root())));
+    items.add(item(SyncBundle.message("sync.menu.reveal"), null, () -> RevealFileAction.openDirectory(repo.root())));
     return items;
   }
 
@@ -1378,12 +1426,12 @@ final class SyncPanel extends SimpleToolWindowPanel {
     @Override public void actionPerformed(@NotNull AnActionEvent e) { run.run(); }
   }
 
-  /** 도구줄 보기 거르기. 넷 중 하나만 눌린 상태(라디오)이고, kind 가 null 이면 전체. 아이콘 옆에 글도 보인다. */
+  /** 도구줄 보기 거르기. 넷 중 하나만 눌린 상태(라디오)이고, kind 가 null 이면 전체. 아이콘 없이 글만 보인다. */
   private final class ModeAction extends DumbAwareToggleAction {
     private final Kind kind;
 
-    ModeAction(String key, Icon icon, Kind kind) {
-      super(SyncBundle.message(key), null, icon);
+    ModeAction(String key, Kind kind) {
+      super(SyncBundle.message(key), null, null);
       this.kind = kind;
       getTemplatePresentation().putClientProperty(ActionUtil.SHOW_TEXT_IN_TOOLBAR, true);
     }
@@ -1433,7 +1481,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
     @Override public void update(@NotNull AnActionEvent e) { e.getPresentation().setEnabled(target() != null); }
 
     @Override
-    public void actionPerformed(@NotNull AnActionEvent e) {
+    public void actionPerformed(@NotNull AnActionEvent e) { go(); }
+
+    /** 앞 · 뒤 파일 줄을 고른다. 없으면 아무것도 하지 않는다. */
+    void go() {
       TreePath path = target();
       if (path == null) return;
       tree.setSelectionPath(path);
@@ -2498,7 +2549,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
       if (selected.contains(key)) reselect.add(path);
     }
     // 고른 파일이 남아 있으면 다시 고르고, 선택 알림이 비교 화면을 그 파일의 지금 내용으로 다시 그린다. 없으면 지난 비교가 남지 않게 비운다.
-    if (reselect.isEmpty()) diffPanel.setRequest(new MessageDiffRequest(SyncBundle.message("sync.diff.empty")));
+    if (reselect.isEmpty()) {
+      diffPanel.setRequest(new MessageDiffRequest(SyncBundle.message("sync.diff.empty")));
+      diffHead.setVisible(false);
+    }
     else tree.setSelectionPaths(reselect.toArray(TreePath[]::new));
     updateButtons();
   }
@@ -2579,10 +2633,15 @@ final class SyncPanel extends SimpleToolWindowPanel {
         FilePath path = VcsUtil.getFilePath(local, false);
         DiffContentFactory factory = DiffContentFactory.getInstance();
         try {
+          // 양쪽 제목 대신 머리 줄 하나에 「파일 · 원격 ↔ 내 작업본」을 쓴다(시안). 왼쪽이 원격, 오른쪽이 내 작업본.
           diffPanel.setRequest(new SimpleDiffRequest(change.path(),
                                                      factory.createFromBytes(project, remoteBytes, path),
                                                      factory.createFromBytes(project, mineBytes, path),
-                                                     SyncBundle.message("sync.diff.remote", repo.remoteName()), SyncBundle.message("sync.diff.local")));
+                                                     null, null));
+          diffTitle.clear();
+          diffTitle.append(local.getName());
+          diffTitle.append("   " + SyncBundle.message("sync.diff.title", repo.remoteName()), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+          diffHead.setVisible(true);
         }
         catch (IOException e) {
           diffPanel.setRequest(new MessageDiffRequest(e.getMessage()));
