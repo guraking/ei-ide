@@ -467,8 +467,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
           setToolTipText(path);
         }
         else {
-          append(Objects.toString(item, ""));
           if (item instanceof Repo repo) {
+            // 시안 모양: 저장소 이름은 굵게, 브랜치 ↔ 원격은 흐리게.
+            append(repo.root().getName(), SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES);
+            append("  " + repo.label(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
             appendReverseNote(this, repo, (Runnable) () -> openReverseMerge(repo));
             String error = repoErrors.get(repo.root());
             if (error != null) {
@@ -476,6 +478,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
               setToolTipText(error);
             }
           }
+          else append(Objects.toString(item, ""));
         }
       }
     };
