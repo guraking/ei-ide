@@ -9,9 +9,10 @@
   2. 그 플러그인의 *Check.java 를 컴파일해 모두 돌린다.
   3. 컴파일 결과 + 리소스를 tmpjars\\compile\\<이름>.jar 로 묶는다.
 모든 플러그인이 통과했을 때만 bundled-plugins\\<이름>\\lib\\<이름>.jar 를 바꾼다. 하나라도 실패하면 아무 jar 도 바꾸지 않는다.
-javac 는 check_update.py 와 같은 방법으로 찾는다(~/.jdks 의 jdk-2*, JAVA_HOME, PATH 순).
+javac 는 ~/.jdks 아래 JDK 21 이상(openjdk-27 처럼 이름이 jdk- 로 시작하지 않아도 됨) 중 가장 높은 판, 없으면 check_update.py 의 방법(JAVA_HOME, PATH)으로 찾는다.
 """
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -36,6 +37,24 @@ CHECK_SOURCES = {
     "boot-servers": KIT / "boot-servers/src/test/java",
     "kinggura-sync": KIT / "sync",
 }
+
+
+def jdk_major(home):
+    """JDK 폴더의 release 파일에서 주 판 번호를 읽는다. 없거나 못 읽으면 0."""
+    try:
+        m = re.search(r'^JAVA_VERSION="(?:1\.)?(\d+)', (home / "release").read_text(encoding="utf-8", errors="replace"), re.M)
+    except OSError:
+        return 0
+    return int(m.group(1)) if m else 0
+
+
+def javac_path():
+    exe = "javac.exe" if os.name == "nt" else "javac"
+    jdks = [(jdk_major(h), h) for h in Path.home().joinpath(".jdks").glob("*") if (h / "bin" / exe).is_file()]
+    usable = [(major, h) for major, h in jdks if major >= int(JAVA_RELEASE)]
+    if usable:
+        return max(usable)[1] / "bin" / exe
+    return find_javac()
 
 
 def platform_classpath():
@@ -126,7 +145,7 @@ def main():
     unknown = [n for n in names if n not in PLUGIN_SOURCES]
     if unknown:
         raise SystemExit(f"모르는 플러그인: {', '.join(unknown)} (있는 것: {', '.join(PLUGIN_SOURCES)})")
-    javac = find_javac()
+    javac = javac_path()
     jars = platform_classpath()
     WORK.mkdir(parents=True, exist_ok=True)
     print(f"javac: {javac}, classpath jar {len(jars)}개, 동시 {len(names)}개")
