@@ -54,6 +54,7 @@ public class SyncCheck {
     checkInSvn();
     checkRun();
     checkReverseMerge();
+    checkGitUndo();
     System.out.println("SyncCheck 통과");
   }
 
@@ -273,6 +274,90 @@ public class SyncCheck {
     eq(ReverseMerge.parseConfigs("user.name 나\nbranch.a.remote origin\nempty.key\n"), java.util.Map.of("user.name", "나", "branch.a.remote", "origin"));
     eq(ReverseMerge.gitAll(mine, List.of(new String[]{"rev-parse", "--abbrev-ref", "HEAD"}, new String[]{"config", "--get", "user.email"})),
        List.of("feature/kim\n", "me@x\n"));
+  }
+
+  /** 마지막 Git 동작 되돌리기: reflog 줄 해석, 실제 저장소에서 커밋 · 되돌리기의 되돌리기 · 체크아웃 · 합치기 되돌리기와 멈추는 경우. */
+  static void checkGitUndo() throws Exception {
+    String f = "\u001f";
+    eq(GitUndo.whenOf("main@{2026-10-28 22:10}"), "2026-10-28 22:10");
+    eq(GitUndo.whenOf("odd"), "odd");
+    GitUndo.Plan p = GitUndo.plan("h" + f + "HEAD@{t}" + f + "commit: 고침", "b" + f + "main@{t2}" + f + "commit: 고침\na" + f + "main@{t1}" + f + "commit: 앞", "main");
+    eq(p, new GitUndo.Plan(GitUndo.Mode.SOFT, "commit: 고침", "t2", "a", false));
+    eq(GitUndo.plan("", "b" + f + "x" + f + "commit (amend): 고침\na" + f + "x" + f + "commit: 앞", "main").mode(), GitUndo.Mode.SOFT);
+    eq(GitUndo.plan("", "b" + f + "x" + f + "merge dev: Fast-forward\na" + f + "x" + f + "commit: 앞", "main").mode(), GitUndo.Mode.KEEP);
+    eq(GitUndo.plan("h" + f + "HEAD@{t}" + f + "checkout: moving from dev to main", "", "main"),
+       new GitUndo.Plan(GitUndo.Mode.CHECKOUT, "checkout: moving from dev to main", "t", "dev", false));
+    // 다른 브랜치로 간 체크아웃은 이 브랜치의 되돌리기가 아니다.
+    eq(GitUndo.plan("h" + f + "x" + f + "checkout: moving from dev to other", "b" + f + "x" + f + "commit: c\na" + f + "x" + f + "commit: b", "main").mode(),
+       GitUndo.Mode.SOFT);
+    eq(GitUndo.plan("", "b" + f + "x" + f + "commit (initial): one", "main"), null);
+    eq(GitUndo.plan("", "b" + f + "x" + f + "branch: Created from HEAD\na" + f + "x" + f + "commit: 앞", "main"), null);
+
+    java.nio.file.Path tmp = java.nio.file.Files.createTempDirectory("undo");
+    File r = tmp.resolve("r").toFile();
+    sh(tmp.toFile(), "git init -q -b main r && cd r && git config user.email me@x && git config user.name 나"
+                     + " && echo 1 > a && git add a && git commit -qm one && echo 2 > a && git commit -qam two");
+    String one = SyncPanel.git(r, "rev-parse", "HEAD~1").trim();
+    String two = SyncPanel.git(r, "rev-parse", "HEAD").trim();
+    // 커밋 되돌리기: 커밋만 없어지고 바뀐 파일은 색인에 남는다.
+    p = GitUndo.read(r);
+    eq(p.mode(), GitUndo.Mode.SOFT);
+    eq(p.target(), one);
+    eq(p.onServer(), false);
+    GitUndo.run(r, p);
+    eq(SyncPanel.git(r, "rev-parse", "HEAD").trim(), one);
+    eq(SyncPanel.git(r, "diff", "--cached", "--name-only"), "a\n");
+    // 한 번 더 하면 되돌리기 전으로 돌아간다.
+    p = GitUndo.read(r);
+    eq(p.mode(), GitUndo.Mode.KEEP);
+    GitUndo.run(r, p);
+    eq(SyncPanel.git(r, "rev-parse", "HEAD").trim(), two);
+    eq(SyncPanel.git(r, "status", "--porcelain"), "");
+    // 체크아웃 되돌리기: 앞 브랜치로 다시 바꾼다.
+    sh(r, "git checkout -q -b dev && git checkout -q main");
+    p = GitUndo.read(r);
+    eq(p.mode(), GitUndo.Mode.CHECKOUT);
+    eq(p.target(), "dev");
+    GitUndo.run(r, p);
+    eq(SyncPanel.git(r, "rev-parse", "--abbrev-ref", "HEAD").trim(), "dev");
+    // 합치기 되돌리기: 겹치는 내 변경이 있으면 아무것도 바꾸지 않고 멈추고, 없으면 앞 위치로 돌린다.
+    sh(r, "git checkout -q main && git checkout -q -b side && echo 3 > a && git commit -qam three && git checkout -q main && git merge -q side");
+    p = GitUndo.read(r);
+    eq(p.mode(), GitUndo.Mode.KEEP);
+    eq(p.target(), two);
+    sh(r, "echo dirty > a");
+    try {
+      GitUndo.run(r, p);
+      throw new AssertionError("내 변경과 겹치면 멈춰야 한다");
+    }
+    catch (IOException expected) {
+      eq(java.nio.file.Files.readString(new File(r, "a").toPath()), "dirty\n");
+      eq(SyncPanel.git(r, "rev-parse", "HEAD").trim(), SyncPanel.git(r, "rev-parse", "side").trim());
+    }
+    sh(r, "git checkout -q -- a");
+    GitUndo.run(r, p);
+    eq(SyncPanel.git(r, "rev-parse", "HEAD").trim(), two);
+    // 서버에 있는 커밋을 없애면 알린다.
+    sh(tmp.toFile(), "git clone -q --bare r server.git && cd r && git remote add origin ../server.git && git fetch -q origin && git branch -q -u origin/main"
+                     + " && echo 4 > a && git commit -qam four && git push -q origin main");
+    eq(GitUndo.read(r).onServer(), true);
+    // 합치기가 진행 중이거나 브랜치가 없으면 하지 않는다.
+    sh(r, "touch .git/MERGE_HEAD");
+    try {
+      GitUndo.read(r);
+      throw new AssertionError("합치기 중에는 되돌리지 않아야 한다");
+    }
+    catch (IOException expected) {
+      sh(r, "rm .git/MERGE_HEAD");
+    }
+    sh(r, "git checkout -q --detach");
+    try {
+      GitUndo.read(r);
+      throw new AssertionError("detached HEAD 에서는 되돌리지 않아야 한다");
+    }
+    catch (IOException expected) {
+      // 멈춤.
+    }
   }
 
   /** 저장소 안의 다른 저장소 폴더(.git 이 있는 폴더)만 중첩 저장소로 본다. compare 는 IDE 작업 스레드를 써서 여기서는 판정만 본다. */
