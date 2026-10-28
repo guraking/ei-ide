@@ -2056,7 +2056,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
     File errFile = File.createTempFile("kinggura-sync", ".err");
     long started = System.currentTimeMillis();
     try {
-      Process process = new ProcessBuilder(command).directory(dir).redirectOutput(outFile).redirectError(errFile).start();
+      ProcessBuilder builder = new ProcessBuilder(command).directory(dir).redirectOutput(outFile).redirectError(errFile);
+      // 설정 → Git 로그인에 넣은 서버는 git 이 비밀번호 도우미를 띄우지 않게 인증을 미리 넘긴다.
+      if (GIT.equals(exe)) builder.environment().putAll(GitLogins.env(builder.environment()));
+      Process process = builder.start();
       process.getOutputStream().close();
       try {
         if (!process.waitFor(timeoutSec, TimeUnit.SECONDS)) {

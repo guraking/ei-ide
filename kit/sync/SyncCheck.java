@@ -54,6 +54,7 @@ public class SyncCheck {
     checkInSvn();
     checkRun();
     checkReverseMerge();
+    checkGitLogins();
     System.out.println("SyncCheck 통과");
   }
 
@@ -288,5 +289,44 @@ public class SyncCheck {
 
   private static void sh(File dir, String command) throws Exception {
     SyncPanel.run(dir, "sh", "-c", command);
+  }
+
+  /** Git 로그인: 서버 주소 다듬기, Basic 머리글, GIT_CONFIG_* 환경값, 저장 형식. */
+  private static void checkGitLogins() {
+    eq(GitLogins.serverOf("https://AXPLM-GitLab.example.com/pjt/a.git"), "https://axplm-gitlab.example.com");
+    eq(GitLogins.serverOf("gitlab.example.com:8443/x"), "https://gitlab.example.com:8443");
+    eq(GitLogins.serverOf("https://user@host.com/"), "https://host.com");
+    for (String bad : List.of("", "git@host.com:a/b.git", "ssh://host.com/a")) {
+      try {
+        GitLogins.serverOf(bad);
+        throw new AssertionError("https 가 아닌 주소는 거절해야 한다: " + bad);
+      }
+      catch (IllegalArgumentException expected) {
+        // 거절이 맞다.
+      }
+    }
+
+    GitLogins.Login pw = new GitLogins.Login("https://a.com", GitLogins.Kind.PASSWORD, "kim", "p:w");
+    GitLogins.Login token = new GitLogins.Login("https://b.com:8443", GitLogins.Kind.TOKEN, "", "glpat-1");
+    GitLogins.Login empty = new GitLogins.Login("https://c.com", GitLogins.Kind.TOKEN, "", "");
+    eq(GitLogins.header(pw), "Authorization: Basic " + java.util.Base64.getEncoder().encodeToString("kim:p:w".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    eq(GitLogins.header(token), "Authorization: Basic " + java.util.Base64.getEncoder().encodeToString("oauth2:glpat-1".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+
+    java.util.Map<String, String> env = GitLogins.env(List.of(pw, empty, token), java.util.Map.of());
+    eq(env.get("GIT_CONFIG_COUNT"), "2");
+    eq(env.get("GIT_CONFIG_KEY_0"), "http.https://a.com/.extraHeader");
+    eq(env.get("GIT_CONFIG_KEY_1"), "http.https://b.com:8443/.extraHeader");
+    eq(env.get("GIT_CONFIG_VALUE_1"), GitLogins.header(token));
+    // IDE 에 이미 GIT_CONFIG_COUNT 가 있으면 그 뒤에 잇는다.
+    java.util.Map<String, String> after = GitLogins.env(List.of(pw), java.util.Map.of("GIT_CONFIG_COUNT", "2"));
+    eq(after.get("GIT_CONFIG_KEY_2"), "http.https://a.com/.extraHeader");
+    eq(after.get("GIT_CONFIG_COUNT"), "3");
+    eq(GitLogins.env(List.of(empty), java.util.Map.of()), java.util.Map.of());
+
+    List<GitLogins.Login> parsed = GitLogins.parse(GitLogins.format(List.of(pw, token)) + "\nbroken\nhttps://d.com\tWHAT\tx");
+    eq(parsed.size(), 2);
+    eq(parsed.get(0), new GitLogins.Login("https://a.com", GitLogins.Kind.PASSWORD, "kim", null));
+    eq(parsed.get(1), new GitLogins.Login("https://b.com:8443", GitLogins.Kind.TOKEN, "", null));
+    eq(GitLogins.parse(""), List.of());
   }
 }
