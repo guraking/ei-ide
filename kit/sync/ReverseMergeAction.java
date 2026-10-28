@@ -59,6 +59,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -110,9 +111,10 @@ public final class ReverseMergeAction extends DumbAwareAction {
       public void run(@NotNull ProgressIndicator indicator) {
         // 서버가 느릴 때 취소를 누르면 기다리던 git 을 끝낸다(작업 스레드를 끊으면 SyncPanel.run 이 프로세스를 죽인다).
         Future<?> work = ApplicationManager.getApplication().executeOnPooledThread(() -> {
-          remote = ReverseMerge.remoteOf(root, current);
-          savedFrom = ReverseMerge.config(root, ReverseMerge.CONFIG_FROM);
-          savedInto = ReverseMerge.config(root, ReverseMerge.CONFIG_INTO);
+          Map<String, String> cfg = ReverseMerge.configs(root);
+          remote = ReverseMerge.remoteOf(cfg, current);
+          savedFrom = cfg.get(ReverseMerge.CONFIG_FROM);
+          savedInto = cfg.get(ReverseMerge.CONFIG_INTO);
           // 받아 둔 브랜치 목록으로 바로 열고 서버 목록은 창이 뜬 뒤 합친다(VPN 에서 ls-remote 는 몇 초 걸린다).
           // 아직 기준 브랜치를 받은 적이 없으면(처음 쓰는 저장소) 서버에 물어야 From 을 채울 수 있다.
           names = ReverseMerge.knownBranches(root, remote);

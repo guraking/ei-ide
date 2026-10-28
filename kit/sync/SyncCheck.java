@@ -265,6 +265,14 @@ public class SyncCheck {
     ReverseMerge.saveConfig(mine, ReverseMerge.CONFIG_FROM, "develop");
     eq(ReverseMerge.config(mine, ReverseMerge.CONFIG_FROM), "develop");
     eq(ReverseMerge.config(mine, ReverseMerge.CONFIG_INTO), null);
+    java.util.Map<String, String> cfg = ReverseMerge.configs(mine);
+    eq(cfg.get("user.email"), "me@x");
+    eq(cfg.get(ReverseMerge.CONFIG_FROM), "develop");
+    eq(cfg.get(ReverseMerge.CONFIG_INTO), null);
+    eq(ReverseMerge.remoteOf(cfg, "feature/kim"), "origin");
+    eq(ReverseMerge.parseConfigs("user.name 나\nbranch.a.remote origin\nempty.key\n"), java.util.Map.of("user.name", "나", "branch.a.remote", "origin"));
+    eq(ReverseMerge.gitAll(mine, List.of(new String[]{"rev-parse", "--abbrev-ref", "HEAD"}, new String[]{"config", "--get", "user.email"})),
+       List.of("feature/kim\n", "me@x\n"));
   }
 
   /** 저장소 안의 다른 저장소 폴더(.git 이 있는 폴더)만 중첩 저장소로 본다. compare 는 IDE 작업 스레드를 써서 여기서는 판정만 본다. */
