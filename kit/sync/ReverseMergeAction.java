@@ -320,7 +320,10 @@ public final class ReverseMergeAction extends DumbAwareAction {
     }
 
     // 저장소 이름 글자 크기: 기본 글자보다 키우는 단계.
-    private static final int REPO_FONT_STEP = 2;
+    private static final int REPO_FONT_STEP = 4;
+    /** 저장소 이름 띠의 위아래 · 좌우 안쪽 여백. */
+    private static final int REPO_BADGE_PAD_V = 4;
+    private static final int REPO_BADGE_PAD_H = 12;
 
     private static JBLabel dim(String text) {
       return new JBLabel(text, UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER);
@@ -331,7 +334,11 @@ public final class ReverseMergeAction extends DumbAwareAction {
       // 맨 위: 어느 저장소를 합치는지. 합치기 전에 꼭 확인할 값이라 Git Log 현재 브랜치와 같은 파랑 · 두 단계 큰 굵은 글씨로 눈에 띄게 하고, 경로는 옆에 작게.
       JPanel where = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0));
       JBLabel name = new JBLabel(root.getName()).withFont(JBFont.label().biggerOn(REPO_FONT_STEP).asBold());
-      name.setForeground(ProjectHistoryPanel.HEAD_COLOR);
+      // 파란 바탕 · 흰 글자 띠로 둘러 창을 열자마자 저장소가 보이게 한다(단계 번호 동그라미와 같은 색).
+      name.setForeground(STEP_TEXT);
+      name.setBackground(STEP_COLOR);
+      name.setOpaque(true);
+      name.setBorder(JBUI.Borders.empty(REPO_BADGE_PAD_V, REPO_BADGE_PAD_H));
       where.add(name);
       where.add(dim(root.getPath()));
 
