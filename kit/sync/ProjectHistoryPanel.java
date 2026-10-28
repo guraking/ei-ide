@@ -101,7 +101,8 @@ final class ProjectHistoryPanel extends JPanel {
   private static final float PILL_ICON_SCALE = 0.75f;
   private static final int PILL_H = 18;
   private static final int GAP = 8;
-  private static final int SEARCH_COLUMNS = 20;
+  // 찾기 칸 폭(px). 2026-10-29 사용자 요청으로 세 배쯤 넓혔다.
+  private static final int SEARCH_W = 400;
   private static final String TOOLBAR_PLACE = "KingGuraGitLogToolbar";
   private static final float LINE_WIDTH = 1.5f;
   // 표와 오른쪽 상세 칸의 폭 비율.
@@ -203,7 +204,8 @@ final class ProjectHistoryPanel extends JPanel {
     files.addMouseListener(new MouseAdapter() {
       @Override public void mouseClicked(MouseEvent e) { if (e.getClickCount() == 2) showDiff(); }
     });
-    filter.getTextEditor().setColumns(SEARCH_COLUMNS);
+    filter.setPreferredSize(new Dimension(JBUI.scale(SEARCH_W), filter.getPreferredSize().height));
+    filter.getTextEditor().setFont(JBUI.Fonts.label());
     filter.getTextEditor().getEmptyText().setText(SyncBundle.message("history.search.hint"));
     filter.addDocumentListener(new DocumentAdapter() {
       @Override protected void textChanged(@NotNull DocumentEvent e) { fillCommits(); }
