@@ -7,6 +7,7 @@ import com.intellij.execution.ui.ConsoleViewContentType;
 import com.intellij.execution.ui.RunContentDescriptor;
 import com.intellij.execution.ui.RunContentManager;
 import com.intellij.icons.AllIcons;
+import com.intellij.openapi.Disposable;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Disposer;
@@ -39,20 +40,35 @@ final class LogFileView {
     private LogFileView() {
     }
 
-    /** 화면 스레드에서 부른다. */
+    /** 콘솔 · 패널 · 따라 읽기 한 벌. 버리면 따라 읽기를 멈추고 콘솔을 버린다. */
+    record View(ConsoleView console, JPanel panel, ScheduledFuture<?> future) implements Disposable {
+        @Override
+        public void dispose() {
+            future.cancel(false);
+            Disposer.dispose(console);
+        }
+    }
+
+    /** 화면 스레드에서 부른다. 실행 창에 탭으로 띄운다. */
     static void open(Project project, String serverName, Path file) {
-        ConsoleView console = TextConsoleBuilderFactory.getInstance().createBuilder(project).filters(new LogLevelFilter()).getConsole();
-        DefaultActionGroup actions = new DefaultActionGroup();
-        JPanel panel = ConsolePanel.create(console, actions);
-        ConsolePanel.addConsoleActions(console, actions);
+        View view = view(project, file);
         // 프로세스가 없는 탭은 실행 창이 끝난 탭으로 보고 다음 실행에 다시 쓰거나(닫아 버리거나) 이 탭이 끝난 다른 탭을 차지하므로 다시 쓰기를 막는다.
-        RunContentDescriptor descriptor = new RunContentDescriptor(console, null, panel, serverName + " · " + file.getFileName(), AllIcons.FileTypes.Text) {
+        RunContentDescriptor descriptor = new RunContentDescriptor(view.console(), null, view.panel(), serverName + " · " + file.getFileName(), AllIcons.FileTypes.Text) {
             @Override
             public boolean isContentReuseProhibited() {
                 return true;
             }
         };
-        Disposer.register(descriptor, console);
+        Disposer.register(descriptor, view);
+        RunContentManager.getInstance(project).showRunContent(DefaultRunExecutor.getRunExecutorInstance(), descriptor);
+    }
+
+    /** 화면 스레드에서 부른다. 파일 끝을 따라가는 콘솔 패널을 만든다(서버 창 「로그 파일」 탭 · 실행 창 탭). */
+    static View view(Project project, Path file) {
+        ConsoleView console = TextConsoleBuilderFactory.getInstance().createBuilder(project).filters(new LogLevelFilter()).getConsole();
+        DefaultActionGroup actions = new DefaultActionGroup();
+        JPanel panel = ConsolePanel.create(console, actions);
+        ConsolePanel.addConsoleActions(console, actions);
         console.print(BootServersBundle.message("log.view.file", file) + "\n", ConsoleViewContentType.SYSTEM_OUTPUT);
 
         LogTail tail = new LogTail(file, FALLBACK, INITIAL_BYTES);
@@ -64,8 +80,7 @@ final class LogFileView {
                 noticeNewer(console, file, noticed);
             }
         }, 0, POLL_MILLIS, TimeUnit.MILLISECONDS);
-        Disposer.register(descriptor, () -> future.cancel(false));
-        RunContentManager.getInstance(project).showRunContent(DefaultRunExecutor.getRunExecutorInstance(), descriptor);
+        return new View(console, panel, future);
     }
 
     /** 날짜 이름 로그에 더 늦은 날짜 파일이 생겼으면 한 번 알린다. noticed[0] 은 마지막으로 알린 파일. */

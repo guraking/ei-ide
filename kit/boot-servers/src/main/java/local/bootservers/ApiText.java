@@ -190,6 +190,31 @@ final class ApiText {
     }
 
     /**
+     * 보낼 HTTP 요청 글: 요청줄(방식 · 경로+쿼리 · HTTP/1.1) · Host · 헤더, 본문이 있으면 빈 줄 뒤에 본문.
+     * 주소의 서버 부분은 Host 줄로 가고, scheme 이 없으면 Host 줄을 뺀다. 경로가 없으면 「/」.
+     */
+    static String requestText(String method, String url, List<Map.Entry<String, String>> query,
+                              List<Map.Entry<String, String>> headers, String body) {
+        String u = url == null ? "" : url.strip();
+        int scheme = u.indexOf("://");
+        int hostEnd = hostEnd(u);
+        String host = scheme < 0 ? "" : u.substring(scheme + 3, hostEnd);
+        String path = u.substring(hostEnd);
+        StringBuilder out = new StringBuilder();
+        out.append(method).append(' ').append(withQuery(path.isEmpty() ? "/" : path, query)).append(" HTTP/1.1\n");
+        if (!host.isEmpty()) {
+            out.append("Host: ").append(host).append('\n');
+        }
+        for (Map.Entry<String, String> header : headers) {
+            out.append(header.getKey()).append(": ").append(header.getValue()).append('\n');
+        }
+        if (body != null && !body.isBlank()) {
+            out.append('\n').append(body);
+        }
+        return out.toString();
+    }
+
+    /**
      * 인증 방식과 값으로 붙일 헤더(이름, 값). 없음 · 빈 값이면 null.
      * Bearer 는 「Authorization: Bearer 토큰」, Basic 은 「아이디:비밀번호」 UTF-8 Base64, 쿠키는 「Cookie: 값」 그대로.
      */

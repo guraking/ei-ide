@@ -51,13 +51,14 @@ public final class ResultView {
   public static void show(Project project, DbConfig c, QueryResult result) {
     String title = result.isQuery() ? firstTable(result.sql()) : EiDbBundle.message("result.tab.update");
     Icon icon = result.isQuery() ? AllIcons.Nodes.DataTables : AllIcons.Actions.Commit;
-    addTab(project, title == null ? EiDbBundle.message("result.tab.query") : title, icon, new ResultPanel(project, c, result, firstTable(result.sql())));
+    String tabTitle = tabTitle(project, title == null ? EiDbBundle.message("result.tab.query") : title);
+    addTab(project, tabTitle, icon, new ResultPanel(project, c, result, firstTable(result.sql()), tabTitle));
     ConsoleRun.finished(project, c, result.sql(), true);
   }
 
   public static void showError(Project project, DbConfig c, String sql, Exception error) {
     String message = message(error);
-    addTab(project, EiDbBundle.message("result.tab.error"), AllIcons.General.Error, ResultPanel.error(sql, message));
+    addTab(project, tabTitle(project, EiDbBundle.message("result.tab.error")), AllIcons.General.Error, ResultPanel.error(sql, message));
     Notify.error(project, EiDbBundle.message("result.run.failed", c.name, message));
     ConsoleRun.finished(project, c, sql, false);
   }
@@ -70,7 +71,7 @@ public final class ResultView {
     label.setBorder(JBUI.Borders.empty(10, 12));
     JPanel panel = new JPanel(new BorderLayout());
     panel.add(label, BorderLayout.NORTH);
-    addTab(project, EiDbBundle.message("result.tab.cancelled"), AllIcons.Actions.Suspend, panel);
+    addTab(project, tabTitle(project, EiDbBundle.message("result.tab.cancelled")), AllIcons.Actions.Suspend, panel);
     ConsoleRun.finished(project, c, sql, false);
   }
 
@@ -87,18 +88,23 @@ public final class ResultView {
     return name.substring(name.lastIndexOf('.') + 1);
   }
 
-  /** icon 은 탭 종류(조회 · 변경 · 오류 · 취소)를 탭 이름 앞에 보인다. */
+  /** 다음 번호를 붙인 탭 이름 「결과 N · 이름」. 결과 패널의 머리줄에도 같은 글을 쓴다. */
+  private static String tabTitle(Project project, String name) {
+    Integer last = project.getUserData(COUNTER);
+    int n = last == null ? 1 : last + 1;
+    project.putUserData(COUNTER, n);
+    return EiDbBundle.message("result.tab.title", n, name);
+  }
+
+  /** icon 은 탭 종류(조회 · 변경 · 오류 · 취소)를 탭 이름 앞에 보인다. title 은 tabTitle 로 번호를 붙인 글. */
   private static void addTab(Project project, String title, Icon icon, JComponent panel) {
     ToolWindow window = ToolWindowManager.getInstance(project).getToolWindow(TOOL_WINDOW_ID);
     if (window == null) {
       Notify.error(project, EiDbBundle.message("result.window.missing"));
       return;
     }
-    Integer last = project.getUserData(COUNTER);
-    int n = last == null ? 1 : last + 1;
-    project.putUserData(COUNTER, n);
     ContentManager contents = window.getContentManager();
-    Content content = ContentFactory.getInstance().createContent(panel, EiDbBundle.message("result.tab.title", n, title), false);
+    Content content = ContentFactory.getInstance().createContent(panel, title, false);
     content.setCloseable(true);
     content.setIcon(icon);
     content.putUserData(ToolWindow.SHOW_CONTENT_ICON, Boolean.TRUE);

@@ -187,6 +187,12 @@ public final class WasRunner {
         return launching.contains(server.id);
     }
 
+    /** 살아 있는 프로세스. 없거나 끝났으면 null. */
+    ProcessHandler handler(WasSettings.Server server) {
+        ProcessHandler handler = running.get(server.id);
+        return handler != null && !handler.isProcessTerminated() ? handler : null;
+    }
+
     ServerLauncher.State state(WasSettings.Server server) {
         ServerRegistry.Run run = ServerRegistry.getInstance(project).get(registryKey(server));
         ProcessHandler handler = running.get(server.id);

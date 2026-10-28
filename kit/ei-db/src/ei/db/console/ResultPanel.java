@@ -13,10 +13,10 @@ import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VirtualFileWrapper;
 import com.intellij.openapi.actionSystem.ActionToolbar;
 import com.intellij.openapi.actionSystem.AnActionEvent;
-import com.intellij.openapi.actionSystem.Separator;
 import com.intellij.openapi.ui.SimpleToolWindowPanel;
 import com.intellij.ui.ColorUtil;
 import com.intellij.ui.ScrollPaneFactory;
+import com.intellij.ui.components.ActionLink;
 import com.intellij.ui.components.panels.HorizontalLayout;
 import ei.db.BarAction;
 import com.intellij.ui.components.JBLabel;
@@ -114,11 +114,15 @@ final class ResultPanel extends SimpleToolWindowPanel {
   private static final int MILLIS_GAP = 6;
   private static final int ERROR_ICON_GAP = 8;
   private static final String NULL_TEXT = "NULL";
+  /** 머리줄 링크 사이 구분 글. */
+  private static final String LINK_DOT = " · ";
 
   private final Project project;
   private final DbConfig config;
   private final QueryResult result;
   private final String table;
+  /** 머리줄 제목(결과 탭 이름과 같다: 「결과 N · 표」). */
+  private final String title;
   private JBTable grid;
   private TableRowSorter<Model> sorter;
   private JBLabel count;
@@ -133,12 +137,13 @@ final class ResultPanel extends SimpleToolWindowPanel {
   private String editBlocked;
   private boolean loadingEdit;
 
-  ResultPanel(Project project, DbConfig c, QueryResult result, String table) {
+  ResultPanel(Project project, DbConfig c, QueryResult result, String table, String title) {
     super(true, true);
     this.project = project;
     this.config = c;
     this.result = result;
     this.table = table;
+    this.title = title;
     if (result.isQuery()) buildQuery(c);
     else buildUpdate(c);
   }
@@ -227,8 +232,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
     grid.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
     grid.setRowHeight(JBUI.scale(ROW_HEIGHT));
     grid.setStriped(true);
-    grid.setShowVerticalLines(true);
-    grid.setGridColor(JBColor.border());
+    grid.setShowGrid(false);
     grid.getEmptyText().setText(EiDbBundle.message("result.empty"));
     sorter = new TableRowSorter<>(model) {
       // 머리 한 번 누름은 칼럼 고르기라 정렬하지 않는다. 정렬은 머리 두 번 누름 · 우클릭 메뉴로 setSortKeys 를 부른다.
@@ -251,9 +255,15 @@ final class ResultPanel extends SimpleToolWindowPanel {
     });
     fitColumns(grid);
 
-    // 도구줄 아래 선은 SimpleToolWindowPanel 이 그린다(새 UI 는 표를 내렸을 때만). 칸 테두리를 따로 두면 선이 겹친다.
+    // 머리줄: 왼쪽 「결과 N · 표」(굵게) · 건수 꼬리표 · 실행 시간 · 더 읽기 · 찾기 칸, 오른쪽 반영 · 되돌리기 단추와 내보내기 링크.
+    // 머리줄 아래 선은 SimpleToolWindowPanel 이 그린다(새 UI 는 표를 내렸을 때만). 칸 테두리를 따로 두면 선이 겹친다.
     JPanel bar = new JPanel(new HorizontalLayout(0, SwingConstants.CENTER));
     bar.setBorder(JBUI.Borders.emptyLeft(BAR_INSET));
+    JBLabel heading = new JBLabel(title);
+    heading.setFont(heading.getFont().deriveFont(Font.BOLD));
+    heading.setToolTipText(result.sql());
+    heading.setBorder(JBUI.Borders.emptyRight(BAR_INSET));
+    bar.add(heading);
     count = new JBLabel();
     showCount(EiDbBundle.message("common.rows", result.rows().size()));
     JBLabel millis = new JBLabel(result.millis() + " ms", UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER);
@@ -280,7 +290,6 @@ final class ResultPanel extends SimpleToolWindowPanel {
     }
     bar.add(Box.createHorizontalStrut(JBUI.scale(BAR_INSET)));
     bar.add(searchField());
-    bar.add(Box.createHorizontalStrut(JBUI.scale(BAR_INSET)));
     BarAction apply = new BarAction(EiDbBundle.message("result.apply"), EiDbBundle.message("result.apply.tooltip"), AllIcons.Actions.Commit, this::applyEdits) {
       @Override
       public void update(@NotNull AnActionEvent e) {
@@ -291,22 +300,37 @@ final class ResultPanel extends SimpleToolWindowPanel {
     actions = BarAction.toolbar(TOOLBAR_PLACE, this,
         apply.visibleWhen(() -> !edits.isEmpty()).withText(),
         new BarAction(EiDbBundle.message("result.revert"), EiDbBundle.message("result.revert.tooltip"), AllIcons.Actions.Rollback, this::revertEdits)
-            .visibleWhen(() -> !edits.isEmpty()).withText(),
-        new BarAction(EiDbBundle.message("common.copy"), null, AllIcons.Actions.Copy, this::copyTsv),
-        new BarAction("CSV", EiDbBundle.message("result.csv.tooltip"), AllIcons.Actions.Download, this::exportCsv).withText(),
-        new BarAction(EiDbBundle.message("result.excel"), EiDbBundle.message("result.excel.tooltip"), AllIcons.Actions.Download, this::exportXlsx).withText(),
-        Separator.getInstance(),
-        new BarAction("INSERT", EiDbBundle.message("result.insert.tooltip"), null, this::copyInserts).withText(),
-        new BarAction("UPDATE", EiDbBundle.message("result.update.tooltip"), null, () -> copyUpdates(c)).withText(),
-        Separator.getInstance(),
-        new BarAction("DTO", EiDbBundle.message("dto.command"), AllIcons.Nodes.Class, () -> DtoDialog.show(project, c, result)).withText(),
-        new BarAction("enum", EiDbBundle.message("result.enum.tooltip"), AllIcons.Nodes.Enum, () -> EnumDialog.show(project, c, result)).withText());
-    bar.add(actions.getComponent());
+            .visibleWhen(() -> !edits.isEmpty()).withText());
+    // 내보내기 · 복사 · 생성은 흐린 글자 링크로, 「·」 로 나눈다.
+    JPanel links = new JPanel(new HorizontalLayout(0, SwingConstants.CENTER));
+    links.setBorder(JBUI.Borders.empty(0, BAR_INSET));
+    links.add(actions.getComponent());
+    addLink(links, EiDbBundle.message("common.copy"), null, this::copyTsv);
+    addLink(links, "CSV", EiDbBundle.message("result.csv.tooltip"), this::exportCsv);
+    addLink(links, EiDbBundle.message("result.excel"), EiDbBundle.message("result.excel.tooltip"), this::exportXlsx);
+    addLink(links, "INSERT", EiDbBundle.message("result.insert.tooltip"), this::copyInserts);
+    addLink(links, "UPDATE", EiDbBundle.message("result.update.tooltip"), () -> copyUpdates(c));
+    addLink(links, "DTO", EiDbBundle.message("dto.command"), () -> DtoDialog.show(project, c, result));
+    addLink(links, "enum", EiDbBundle.message("result.enum.tooltip"), () -> EnumDialog.show(project, c, result));
+    JPanel head = new JPanel(new BorderLayout());
+    head.add(bar, BorderLayout.WEST);
+    head.add(links, BorderLayout.EAST);
 
-    setToolbar(bar);
+    setToolbar(head);
     setContent(ScrollPaneFactory.createScrollPane(grid, true));
     // 결과 창 안에서 Ctrl+F(찾기 단축키)는 IDE 찾기 대신 검색칸으로 간다.
     DumbAwareAction.create(e -> searchBox.getTextEditor().requestFocusInWindow()).registerCustomShortcutSet(CommonShortcuts.getFind(), this);
+  }
+
+  /** 머리줄 오른쪽의 흐린 글자 링크 하나. 첫 링크가 아니면 앞에 「·」 를 둔다. */
+  private static void addLink(JPanel links, String text, String tooltip, Runnable action) {
+    if (links.getComponentCount() > 1) {
+      links.add(new JBLabel(LINK_DOT, UIUtil.ComponentStyle.REGULAR, UIUtil.FontColor.BRIGHTER));
+    }
+    ActionLink link = new ActionLink(text, e -> action.run());
+    link.setForeground(UIUtil.getContextHelpForeground());
+    link.setToolTipText(tooltip);
+    links.add(link);
   }
 
   /** 결과 안에서 찾기: 글자가 든 칸이 하나라도 있는 행만 보인다(대소문자 무시, null 칸 · 행 번호 제외). */
@@ -359,7 +383,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       try {
         QueryResult more = DbSessions.get(project).run(c, result.sql(), result.binds(), limit);
-        ApplicationManager.getApplication().invokeLater(() -> replaceWith(new ResultPanel(project, c, more, table)));
+        ApplicationManager.getApplication().invokeLater(() -> replaceWith(new ResultPanel(project, c, more, table, title)));
       } catch (Exception e) {
         Notify.error(project, EiDbBundle.message("result.more.failed", c.name, ResultView.message(e)));
       }
@@ -938,7 +962,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
   }
 
   /**
-   * NULL 은 작은 흐린 기울임 「NULL」, 숫자는 고정폭 · 천 단위 쉼표 · 숫자 색, 숫자 · 행 번호는 오른쪽 정렬.
+   * NULL 은 작은 흐린 기울임 「NULL」, 값은 고정폭(코드 글꼴), 숫자는 천 단위 쉼표 · 숫자 색, 숫자 · 행 번호는 오른쪽 정렬.
    * 쉼표는 화면 글(SqlText.display)에만 넣고 칸 값은 그대로라 복사 · 내보내기 · 고치기는 원래 값을 쓴다.
    */
   private static final class CellRenderer extends DefaultTableCellRenderer {
@@ -950,7 +974,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
       super.getTableCellRendererComponent(table, value == null ? NULL_TEXT : number ? SqlText.display(value) : text(value), selected, focused, row, column);
       Font font = table.getFont();
       if (value == null) font = font.deriveFont(Font.ITALIC, UIUtil.getFontSize(UIUtil.FontSize.SMALL));
-      else if (number) font = monoFont().deriveFont(font.getSize2D());
+      else if (!(value instanceof RowNumber)) font = monoFont().deriveFont(font.getSize2D());
       setFont(font);
       boolean muted = value == null || value instanceof RowNumber;
       // DefaultTableCellRenderer 는 지정한 글자색을 다음 칸에도 쓰므로 매번 정한다.
