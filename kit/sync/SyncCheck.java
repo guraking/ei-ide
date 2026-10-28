@@ -54,6 +54,8 @@ public class SyncCheck {
     checkInSvn();
     checkRun();
     checkReverseMerge();
+    checkGitLogins();
+    checkGitUndo();
     System.out.println("SyncCheck 통과");
   }
 
@@ -275,6 +277,90 @@ public class SyncCheck {
        List.of("feature/kim\n", "me@x\n"));
   }
 
+  /** 마지막 Git 동작 되돌리기: reflog 줄 해석, 실제 저장소에서 커밋 · 되돌리기의 되돌리기 · 체크아웃 · 합치기 되돌리기와 멈추는 경우. */
+  static void checkGitUndo() throws Exception {
+    String f = "\u001f";
+    eq(GitUndo.whenOf("main@{2026-10-28 22:10}"), "2026-10-28 22:10");
+    eq(GitUndo.whenOf("odd"), "odd");
+    GitUndo.Plan p = GitUndo.plan("h" + f + "HEAD@{t}" + f + "commit: 고침", "b" + f + "main@{t2}" + f + "commit: 고침\na" + f + "main@{t1}" + f + "commit: 앞", "main");
+    eq(p, new GitUndo.Plan(GitUndo.Mode.SOFT, "commit: 고침", "t2", "a", false));
+    eq(GitUndo.plan("", "b" + f + "x" + f + "commit (amend): 고침\na" + f + "x" + f + "commit: 앞", "main").mode(), GitUndo.Mode.SOFT);
+    eq(GitUndo.plan("", "b" + f + "x" + f + "merge dev: Fast-forward\na" + f + "x" + f + "commit: 앞", "main").mode(), GitUndo.Mode.KEEP);
+    eq(GitUndo.plan("h" + f + "HEAD@{t}" + f + "checkout: moving from dev to main", "", "main"),
+       new GitUndo.Plan(GitUndo.Mode.CHECKOUT, "checkout: moving from dev to main", "t", "dev", false));
+    // 다른 브랜치로 간 체크아웃은 이 브랜치의 되돌리기가 아니다.
+    eq(GitUndo.plan("h" + f + "x" + f + "checkout: moving from dev to other", "b" + f + "x" + f + "commit: c\na" + f + "x" + f + "commit: b", "main").mode(),
+       GitUndo.Mode.SOFT);
+    eq(GitUndo.plan("", "b" + f + "x" + f + "commit (initial): one", "main"), null);
+    eq(GitUndo.plan("", "b" + f + "x" + f + "branch: Created from HEAD\na" + f + "x" + f + "commit: 앞", "main"), null);
+
+    java.nio.file.Path tmp = java.nio.file.Files.createTempDirectory("undo");
+    File r = tmp.resolve("r").toFile();
+    sh(tmp.toFile(), "git init -q -b main r && cd r && git config user.email me@x && git config user.name 나"
+                     + " && echo 1 > a && git add a && git commit -qm one && echo 2 > a && git commit -qam two");
+    String one = SyncPanel.git(r, "rev-parse", "HEAD~1").trim();
+    String two = SyncPanel.git(r, "rev-parse", "HEAD").trim();
+    // 커밋 되돌리기: 커밋만 없어지고 바뀐 파일은 색인에 남는다.
+    p = GitUndo.read(r);
+    eq(p.mode(), GitUndo.Mode.SOFT);
+    eq(p.target(), one);
+    eq(p.onServer(), false);
+    GitUndo.run(r, p);
+    eq(SyncPanel.git(r, "rev-parse", "HEAD").trim(), one);
+    eq(SyncPanel.git(r, "diff", "--cached", "--name-only"), "a\n");
+    // 한 번 더 하면 되돌리기 전으로 돌아간다.
+    p = GitUndo.read(r);
+    eq(p.mode(), GitUndo.Mode.KEEP);
+    GitUndo.run(r, p);
+    eq(SyncPanel.git(r, "rev-parse", "HEAD").trim(), two);
+    eq(SyncPanel.git(r, "status", "--porcelain"), "");
+    // 체크아웃 되돌리기: 앞 브랜치로 다시 바꾼다.
+    sh(r, "git checkout -q -b dev && git checkout -q main");
+    p = GitUndo.read(r);
+    eq(p.mode(), GitUndo.Mode.CHECKOUT);
+    eq(p.target(), "dev");
+    GitUndo.run(r, p);
+    eq(SyncPanel.git(r, "rev-parse", "--abbrev-ref", "HEAD").trim(), "dev");
+    // 합치기 되돌리기: 겹치는 내 변경이 있으면 아무것도 바꾸지 않고 멈추고, 없으면 앞 위치로 돌린다.
+    sh(r, "git checkout -q main && git checkout -q -b side && echo 3 > a && git commit -qam three && git checkout -q main && git merge -q side");
+    p = GitUndo.read(r);
+    eq(p.mode(), GitUndo.Mode.KEEP);
+    eq(p.target(), two);
+    sh(r, "echo dirty > a");
+    try {
+      GitUndo.run(r, p);
+      throw new AssertionError("내 변경과 겹치면 멈춰야 한다");
+    }
+    catch (IOException expected) {
+      eq(java.nio.file.Files.readString(new File(r, "a").toPath()), "dirty\n");
+      eq(SyncPanel.git(r, "rev-parse", "HEAD").trim(), SyncPanel.git(r, "rev-parse", "side").trim());
+    }
+    sh(r, "git checkout -q -- a");
+    GitUndo.run(r, p);
+    eq(SyncPanel.git(r, "rev-parse", "HEAD").trim(), two);
+    // 서버에 있는 커밋을 없애면 알린다.
+    sh(tmp.toFile(), "git clone -q --bare r server.git && cd r && git remote add origin ../server.git && git fetch -q origin && git branch -q -u origin/main"
+                     + " && echo 4 > a && git commit -qam four && git push -q origin main");
+    eq(GitUndo.read(r).onServer(), true);
+    // 합치기가 진행 중이거나 브랜치가 없으면 하지 않는다.
+    sh(r, "touch .git/MERGE_HEAD");
+    try {
+      GitUndo.read(r);
+      throw new AssertionError("합치기 중에는 되돌리지 않아야 한다");
+    }
+    catch (IOException expected) {
+      sh(r, "rm .git/MERGE_HEAD");
+    }
+    sh(r, "git checkout -q --detach");
+    try {
+      GitUndo.read(r);
+      throw new AssertionError("detached HEAD 에서는 되돌리지 않아야 한다");
+    }
+    catch (IOException expected) {
+      // 멈춤.
+    }
+  }
+
   /** 저장소 안의 다른 저장소 폴더(.git 이 있는 폴더)만 중첩 저장소로 본다. compare 는 IDE 작업 스레드를 써서 여기서는 판정만 본다. */
   private static void checkNestedRepo() throws Exception {
     java.nio.file.Path tmp = java.nio.file.Files.createTempDirectory("nested");
@@ -288,5 +374,44 @@ public class SyncCheck {
 
   private static void sh(File dir, String command) throws Exception {
     SyncPanel.run(dir, "sh", "-c", command);
+  }
+
+  /** Git 로그인: 서버 주소 다듬기, Basic 머리글, GIT_CONFIG_* 환경값, 저장 형식. */
+  private static void checkGitLogins() {
+    eq(GitLogins.serverOf("https://AXPLM-GitLab.example.com/pjt/a.git"), "https://axplm-gitlab.example.com");
+    eq(GitLogins.serverOf("gitlab.example.com:8443/x"), "https://gitlab.example.com:8443");
+    eq(GitLogins.serverOf("https://user@host.com/"), "https://host.com");
+    for (String bad : List.of("", "git@host.com:a/b.git", "ssh://host.com/a")) {
+      try {
+        GitLogins.serverOf(bad);
+        throw new AssertionError("https 가 아닌 주소는 거절해야 한다: " + bad);
+      }
+      catch (IllegalArgumentException expected) {
+        // 거절이 맞다.
+      }
+    }
+
+    GitLogins.Login pw = new GitLogins.Login("https://a.com", GitLogins.Kind.PASSWORD, "kim", "p:w");
+    GitLogins.Login token = new GitLogins.Login("https://b.com:8443", GitLogins.Kind.TOKEN, "", "glpat-1");
+    GitLogins.Login empty = new GitLogins.Login("https://c.com", GitLogins.Kind.TOKEN, "", "");
+    eq(GitLogins.header(pw), "Authorization: Basic " + java.util.Base64.getEncoder().encodeToString("kim:p:w".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    eq(GitLogins.header(token), "Authorization: Basic " + java.util.Base64.getEncoder().encodeToString("oauth2:glpat-1".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+
+    java.util.Map<String, String> env = GitLogins.env(List.of(pw, empty, token), java.util.Map.of());
+    eq(env.get("GIT_CONFIG_COUNT"), "2");
+    eq(env.get("GIT_CONFIG_KEY_0"), "http.https://a.com/.extraHeader");
+    eq(env.get("GIT_CONFIG_KEY_1"), "http.https://b.com:8443/.extraHeader");
+    eq(env.get("GIT_CONFIG_VALUE_1"), GitLogins.header(token));
+    // IDE 에 이미 GIT_CONFIG_COUNT 가 있으면 그 뒤에 잇는다.
+    java.util.Map<String, String> after = GitLogins.env(List.of(pw), java.util.Map.of("GIT_CONFIG_COUNT", "2"));
+    eq(after.get("GIT_CONFIG_KEY_2"), "http.https://a.com/.extraHeader");
+    eq(after.get("GIT_CONFIG_COUNT"), "3");
+    eq(GitLogins.env(List.of(empty), java.util.Map.of()), java.util.Map.of());
+
+    List<GitLogins.Login> parsed = GitLogins.parse(GitLogins.format(List.of(pw, token)) + "\nbroken\nhttps://d.com\tWHAT\tx");
+    eq(parsed.size(), 2);
+    eq(parsed.get(0), new GitLogins.Login("https://a.com", GitLogins.Kind.PASSWORD, "kim", null));
+    eq(parsed.get(1), new GitLogins.Login("https://b.com:8443", GitLogins.Kind.TOKEN, "", null));
+    eq(GitLogins.parse(""), List.of());
   }
 }

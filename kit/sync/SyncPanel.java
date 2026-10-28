@@ -8,6 +8,7 @@ import com.intellij.diff.requests.SimpleDiffRequest;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.actionSystem.ActionManager;
 import com.intellij.ide.DataManager;
+import com.intellij.ide.actions.RevealFileAction;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
@@ -20,6 +21,7 @@ import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.application.WriteIntentReadAction;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
+import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
@@ -41,11 +43,16 @@ import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.openapi.wm.ex.ToolWindowManagerListener;
 import com.intellij.ide.ui.laf.darcula.ui.DarculaButtonUI;
 import com.intellij.ui.ColoredTreeCellRenderer;
+import com.intellij.ui.DoubleClickListener;
+import com.intellij.ui.TreeLinkMouseListener;
+import com.intellij.ui.TreeSpeedSearch;
 import com.intellij.ui.RowIcon;
 import com.intellij.ui.SimpleColoredComponent;
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.actionSystem.ActionToolbar;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
+import com.intellij.openapi.actionSystem.CommonShortcuts;
+import com.intellij.openapi.actionSystem.CompositeShortcutSet;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.DumbAwareToggleAction;
@@ -60,6 +67,7 @@ import com.intellij.ui.treeStructure.Tree;
 import com.intellij.util.ui.tree.TreeUtil;
 import git4idea.repo.GitRepository;
 import git4idea.repo.GitRepositoryChangeListener;
+import git4idea.repo.GitRepositoryManager;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
@@ -67,6 +75,7 @@ import org.xml.sax.InputSource;
 import javax.swing.*;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
+import javax.swing.tree.TreeNode;
 import javax.swing.tree.TreePath;
 import javax.swing.tree.TreeSelectionModel;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -195,6 +204,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static final String MARK_OUTGOING = "↑";
   private static final String MARK_CONFLICT = "⚠";
   private static final String SUMMARY_SEP = " · ";
+  // Pull Selected 글과 받을 파일 수 사이.
+  private static final String COUNT_GAP = "  ";
+  // 저장소 줄 · 위쪽 줄의 역머지 안내 끝에 붙여 눌러서 Merge Branches 를 연다는 것을 보인다.
+  private static final String NOTE_LINK_MARK = " ›";
   private static final Set<String> UNMERGED = Set.of("DD", "AU", "UD", "UA", "DU", "AA", "UU");
   // ProjectLevelVcsManager 가 주는 AbstractVcs.getName() 값. GitVcs.NAME · SvnVcs.VCS_NAME 과 같다.
   private static final String VCS_NAME_GIT = "Git";
@@ -299,12 +312,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     title.addMouseListener(new MouseAdapter() {
       @Override
       public void mouseClicked(MouseEvent e) {
-        if (repos.size() != 1 || !reverseNotes.containsKey(repos.get(0).root())) return;
-        VirtualFile root = LocalFileSystem.getInstance().findFileByIoFile(repos.get(0).root());
-        if (root == null) return;
-        DataContext context = SimpleDataContext.builder().setParent(DataManager.getInstance().getDataContext(SyncPanel.this))
-          .add(CommonDataKeys.VIRTUAL_FILE, root).build();
-        runAction(SyncBundle.message("rmerge.title"), ACTION_REVERSE_MERGE, context);
+        if (repos.size() == 1 && reverseNotes.containsKey(repos.get(0).root())) openReverseMerge(repos.get(0));
       }
     });
     JPanel labels = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(GAP), 0));
@@ -332,7 +340,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     JButton pull = actionButton(SyncBundle.message("sync.button.pull"), IconLoader.getIcon(PULL_SELECTED_ICON, SyncPanel.class), ACTION_PULL, true);
     pullButton = pull;
     pull.putClientProperty(DarculaButtonUI.DEFAULT_STYLE_KEY, Boolean.TRUE);
-    bottom.add(actionButton(SyncBundle.message("sync.button.update.all"), AllIcons.Vcs.ShelveSilent, ACTION_UPDATE_ALL, false));
+    bottom.add(actionButton(SyncBundle.message("sync.button.update.all"), AllIcons.Actions.CheckOut, ACTION_UPDATE_ALL, false));
     bottom.add(pull);
     // 올리기: 고른 저장소(없으면 전부)로 IntelliJ Push 창. 커밋하고 올리기: 커밋 창을 연다(그 창의 Commit and Push 로 한 번에).
     pushButton = actionButton(SyncBundle.message("sync.button.push"), AllIcons.Vcs.Push, ACTION_PUSH, true);
@@ -352,7 +360,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       .appendSecondaryText(SyncBundle.message("sync.empty.link"), SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES, e -> { if (!busy) refresh(); });
     // 묶음 줄과 파일 줄은 종류별로 IDE 의 파일 상태 색(테마를 따름)으로 그린다. 충돌 빨강 · 들어올 파랑(수정됨) · 나갈 보라(병합됨).
     // 묶음 줄: 종류 아이콘 · 굵은 이름 · 회색 개수. 파일 줄: 회색 상태 글자 · 파일 형식 아이콘 · 이름 · 회색 상위 폴더, 풍선 도움말은 전체 경로.
-    tree.setCellRenderer(new ColoredTreeCellRenderer() {
+    ColoredTreeCellRenderer renderer = new ColoredTreeCellRenderer() {
       @Override
       public void customizeCellRenderer(JTree t, Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus) {
         DefaultMutableTreeNode node = (DefaultMutableTreeNode) value;
@@ -381,13 +389,26 @@ final class SyncPanel extends SimpleToolWindowPanel {
         }
         else {
           append(Objects.toString(item, ""));
-          if (item instanceof Repo repo) appendReverseNote(this, repo);
+          if (item instanceof Repo repo) appendReverseNote(this, repo, (Runnable) () -> openReverseMerge(repo));
         }
       }
-    });
+    };
+    tree.setCellRenderer(renderer);
+    // 저장소 줄의 역머지 안내는 링크처럼 눌러 그 저장소로 Merge Branches 를 연다(조각의 tag 가 Runnable).
+    new TreeLinkMouseListener(renderer).installOn(tree);
     ToolTipManager.sharedInstance().registerComponent(tree);
     tree.getSelectionModel().setSelectionMode(TreeSelectionModel.DISCONTIGUOUS_TREE_SELECTION);
-    tree.addTreeSelectionListener(e -> showSelectedDiff());
+    tree.addTreeSelectionListener(e -> {
+      showSelectedDiff();
+      updateButtons();
+    });
+    // IntelliJ 변경 트리처럼 글자를 치면 이름으로 찾고, 파일 줄을 두 번 누르거나 F4(Edit Source) · Enter 로 편집기에 연다.
+    TreeSpeedSearch.installOn(tree, false, SyncPanel::speedSearchText);
+    new DoubleClickListener() {
+      @Override protected boolean onDoubleClick(@NotNull MouseEvent e) { return openSelectedFiles(); }
+    }.installOn(tree);
+    DumbAwareAction.create(e -> openSelectedFiles())
+      .registerCustomShortcutSet(new CompositeShortcutSet(CommonShortcuts.getEditSource(), CommonShortcuts.ENTER), tree, parent);
     tree.addMouseListener(new MouseAdapter() {
       @Override public void mousePressed(MouseEvent e) { showPopup(e); }
       @Override public void mouseReleased(MouseEvent e) { showPopup(e); }
@@ -462,7 +483,12 @@ final class SyncPanel extends SimpleToolWindowPanel {
     if (clicked != null && !tree.isPathSelected(clicked)) tree.setSelectionPath(clicked);
     List<Change> all = selectedChanges();
     List<Change> grouped = selectedGroupChanges();
-    if (all.isEmpty() && grouped.isEmpty()) return;
+    if (all.isEmpty() && grouped.isEmpty()) {
+      if (tree.getLastSelectedPathComponent() instanceof DefaultMutableTreeNode node && node.getUserObject() instanceof Repo repo) {
+        showRepoMenu(repo, e.getX(), e.getY());
+      }
+      return;
+    }
     JPopupMenu menu = new JPopupMenu();
     addSyncItems(menu, grouped.isEmpty() ? all : grouped);
     // 묶음 줄만 골랐으면 무시 목록 · 모른 척하기 없이 되돌리기만 둔다(수십 개 파일을 한 번에 무시하지 않게).
@@ -581,6 +607,161 @@ final class SyncPanel extends SimpleToolWindowPanel {
       resolve.addActionListener(a -> resolveButton.doClick());
       menu.add(resolve);
     }
+    Set<Repo> repoSet = byRepo(targets).keySet();
+    if (repoSet.size() == 1 && repoSet.iterator().next().vcs() == Vcs.GIT) {
+      if (menu.getComponentCount() > 0) menu.addSeparator();
+      addUndoItem(menu, repoSet.iterator().next());
+    }
+  }
+
+  /**
+   * 저장소 줄 우클릭 메뉴. 받기 · 올리기는 아래 단추와 같은 코드로(고른 저장소가 대상), 그 밖에는 이 저장소 하나로 한다.
+   * SVN 은 올리기 · Merge Branches · 되돌리기가 없다.
+   */
+  private void showRepoMenu(Repo repo, int x, int y) {
+    boolean git = repo.vcs() == Vcs.GIT;
+    JPopupMenu menu = new JPopupMenu();
+    JMenuItem pull = new JMenuItem(SyncBundle.message("sync.menu.pull"), pullButton.getIcon());
+    pull.addActionListener(a -> pullButton.doClick());
+    menu.add(pull);
+    if (git) {
+      JMenuItem push = new JMenuItem(SyncBundle.message("sync.menu.push"), pushButton.getIcon());
+      push.addActionListener(a -> pushButton.doClick());
+      menu.add(push);
+    }
+    JMenuItem refresh = new JMenuItem(SyncBundle.message("sync.menu.repo.refresh"), AllIcons.Actions.ForceRefresh);
+    refresh.setEnabled(!busy);
+    refresh.addActionListener(a -> refreshRepo(repo.root(), repo.vcs()));
+    menu.add(refresh);
+    if (git) {
+      menu.addSeparator();
+      JMenuItem merge = new JMenuItem(SyncBundle.message("sync.menu.merge"), AllIcons.Vcs.Branch);
+      merge.addActionListener(a -> openReverseMerge(repo));
+      menu.add(merge);
+      addUndoItem(menu, repo);
+    }
+    menu.addSeparator();
+    JMenuItem reveal = new JMenuItem(RevealFileAction.getActionName());
+    reveal.addActionListener(a -> RevealFileAction.openDirectory(repo.root()));
+    menu.add(reveal);
+    menu.show(tree, x, y);
+  }
+
+  private void addUndoItem(JPopupMenu menu, Repo repo) {
+    JMenuItem undo = new JMenuItem(SyncBundle.message("sync.menu.undo"), AllIcons.Actions.Undo);
+    undo.addActionListener(a -> undoLastGitAction(repo));
+    menu.add(undo);
+  }
+
+  /** 저장소의 마지막 Git 동작을 읽어 확인 창에 보이고, 확인하면 되돌린다(GitUndo). 되돌릴 수 없으면 그 이유를 알림 창으로 보인다. */
+  private void undoLastGitAction(Repo repo) {
+    String title = SyncBundle.message("undo.title");
+    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+      GitUndo.Plan plan = null;
+      String reason = null;
+      try {
+        plan = GitUndo.read(repo.root());
+      }
+      catch (IOException e) {
+        reason = e.getMessage();
+      }
+      catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        return;
+      }
+      GitUndo.Plan found = plan;
+      String why = reason;
+      ApplicationManager.getApplication().invokeLater(() -> {
+        if (found == null) {
+          Messages.showInfoMessage(project, why, title);
+          return;
+        }
+        if (Messages.showOkCancelDialog(project, GitUndo.confirmText(repo.root().getName(), found), title, SyncBundle.message("undo.ok"),
+                                        Messages.getCancelButton(), Messages.getWarningIcon()) != Messages.OK) {
+          return;
+        }
+        // reset --keep · checkout 은 디스크 파일을 보고 판단하므로 저장 안 한 편집 내용을 먼저 쓴다.
+        saveAllDocuments();
+        runUndo(repo, found, title);
+      }, ModalityState.nonModal(), project.getDisposed());
+    });
+  }
+
+  /** plan 을 작업 스레드에서 실행하고, 파일 보기 · IDE 의 저장소 상태를 새로 읽은 뒤 다시 비교한다. 실패하면 오류 창(작업본은 git 이 그대로 둔다). */
+  private void runUndo(Repo repo, GitUndo.Plan plan, String title) {
+    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+      String message;
+      String error = null;
+      try {
+        message = GitUndo.run(repo.root(), plan);
+      }
+      catch (IOException e) {
+        message = null;
+        error = e.getMessage();
+      }
+      catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        return;
+      }
+      LocalFileSystem.getInstance().refreshIoFiles(List.of(repo.root()), true, true, null);
+      VirtualFile root = LocalFileSystem.getInstance().findFileByIoFile(repo.root());
+      GitRepository repository = root == null ? null : GitRepositoryManager.getInstance(project).getRepositoryForRootQuick(root);
+      if (repository != null) repository.update();
+      String done = message;
+      String failed = error;
+      ApplicationManager.getApplication().invokeLater(() -> {
+        if (failed != null) {
+          Messages.showErrorDialog(project, failed, title);
+          return;
+        }
+        showStatus(done);
+        recompare();
+      }, ModalityState.nonModal(), project.getDisposed());
+    });
+  }
+
+  /** 저장소 하나로 Merge Branches 창을 연다. */
+  private void openReverseMerge(Repo repo) {
+    VirtualFile root = LocalFileSystem.getInstance().findFileByIoFile(repo.root());
+    if (root == null) return;
+    DataContext context = SimpleDataContext.builder().setParent(DataManager.getInstance().getDataContext(this))
+      .add(CommonDataKeys.VIRTUAL_FILE, root).build();
+    runAction(SyncBundle.message("rmerge.title"), ACTION_REVERSE_MERGE, context);
+  }
+
+  /** 글자 찾기에 쓸 줄 이름: 파일 줄은 파일 이름, 저장소 줄은 폴더 이름, 묶음 줄은 묶음 이름. */
+  private static String speedSearchText(TreePath path) {
+    Object value = ((DefaultMutableTreeNode) path.getLastPathComponent()).getUserObject();
+    if (value instanceof Change c) return c.path().substring(c.path().lastIndexOf('/') + 1);
+    if (value instanceof Repo r) return r.root().getName();
+    return value instanceof Group g ? g.kind().label() : "";
+  }
+
+  /** 고른 파일 줄의 파일을 편집기로 연다. 디스크에 없는 파일(서버에만 새로 생김 · 내가 지움)은 건너뛴다. 하나라도 열었으면 true. */
+  private boolean openSelectedFiles() {
+    boolean opened = false;
+    for (Change c : selectedChanges()) {
+      VirtualFile file = LocalFileSystem.getInstance().findFileByIoFile(new File(c.repo().root(), c.path()));
+      if (file == null || file.isDirectory()) continue;
+      WriteIntentReadAction.run((Runnable) () -> FileEditorManager.getInstance(project).openFile(file, true));
+      opened = true;
+    }
+    return opened;
+  }
+
+  /** 아래 단추를 지금 목록에 맞춘다: Pull Selected 끝에 받을 파일 수(고른 저장소, 없으면 전부), 충돌이 없으면 Resolve Conflicts 를 끈다. EDT 에서 부른다. */
+  private void updateButtons() {
+    List<Repo> targets = buttonTargets();
+    int incoming = 0;
+    boolean conflict = false;
+    for (Change c : changes) {
+      if (c.kind() == Kind.CONFLICT) conflict = true;
+      if ((c.kind() == Kind.INCOMING || c.kind() == Kind.CONFLICT) && targets.contains(c.repo())) incoming++;
+    }
+    String pull = SyncBundle.message("sync.button.pull");
+    pullButton.setText(incoming == 0 ? pull : pull + COUNT_GAP + incoming);
+    resolveButton.setEnabled(conflict);
+    resolveButton.setToolTipText(conflict ? null : SyncBundle.message("sync.resolve.none"));
   }
 
   /** 고른 파일만 체크된 채로 IDE 커밋 창을 연다. 지운 파일도 넘기도록 VirtualFile 대신 FilePath 로 넘긴다. */
@@ -1090,7 +1271,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
           Messages.showInfoMessage(project, SyncBundle.message("sync.nothing.to.pull"), text);
           return;
         }
-        if (!svnRepos.isEmpty()) svnUpdate(button, svnRepos);
+        if (!svnRepos.isEmpty()) svnUpdate(button, text, svnRepos);
         if (!gitRepos.isEmpty()) gitPull(button, text, gitRepos);
         return;
       }
@@ -1251,8 +1432,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
    * SVN 저장소마다 svn update 를 작업 스레드에서 돌리고, 파일 보기를 새로 읽은 뒤 다시 비교한다. 실패하면 그 오류를 상태 줄에 적는다.
    * 같은 작업본에 update 가 겹쳐 돌면 잠금 오류가 나므로 끝날 때까지(실패 · 중단 포함) 단추를 꺼 둔다.
    */
-  private void svnUpdate(JButton button, List<Repo> targets) {
-    String text = button.getText();
+  private void svnUpdate(JButton button, String text, List<Repo> targets) {
     button.setEnabled(false);
     showStatus(SyncBundle.message("sync.svn.updating", text));
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
@@ -1351,7 +1531,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       title.append(repo.root().getName() + "  ", SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES);
       title.append(repo.branch(), SimpleTextAttributes.REGULAR_ATTRIBUTES);
       title.append(" ↔ " + repo.upstream(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
-      appendReverseNote(title, repo);
+      appendReverseNote(title, repo, null);
       title.setCursor(Cursor.getPredefinedCursor(reverseNotes.containsKey(repo.root()) ? Cursor.HAND_CURSOR : Cursor.DEFAULT_CURSOR));
       return;
     }
@@ -1462,6 +1642,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       return;
     }
     busy = true;
+    tree.setPaintBusy(true);
     showStatus(SyncBundle.message("sync.comparing"));
     int seq = ++compareSeq;
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
@@ -1562,6 +1743,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private void refreshRepo(File root, Vcs vcs) {
     String name = root.getName();
     busy = true;
+    tree.setPaintBusy(true);
     showStatus(SyncBundle.message("sync.repo.fetching", name));
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       Repo updated = null;
@@ -1620,6 +1802,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
   /** 새로고침이 끝났다. 도는 동안 매핑이 바뀌었으면 이제 한 번 새로고침한다. EDT 에서 부른다. */
   private void endBusy() {
     busy = false;
+    tree.setPaintBusy(false);
     if (refreshAgain) {
       refreshAgain = false;
       refresh();
@@ -1687,13 +1870,16 @@ final class SyncPanel extends SimpleToolWindowPanel {
     }
   }
 
-  /** 역머지 안내가 있으면 component 끝에 붙인다. */
-  private void appendReverseNote(SimpleColoredComponent component, Repo repo) {
+  /**
+   * 역머지 안내가 있으면 component 끝에 밑줄 친 링크 모양으로 붙인다. 겹침이 있으면 주황, 없으면 회색.
+   * tag 는 그 조각에 거는 값이다(트리 줄은 누르면 Merge Branches 를 여는 Runnable, 위쪽 줄은 자체 클릭 처리라 null).
+   */
+  private void appendReverseNote(SimpleColoredComponent component, Repo repo, Object tag) {
     ReverseNote note = reverseNotes.get(repo.root());
     if (note == null) return;
-    component.append("   " + note.text(), note.warn()
-                                         ? new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, ReverseMergeAction.MINE_COLOR)
-                                         : SimpleTextAttributes.GRAYED_ATTRIBUTES);
+    Color color = note.warn() ? ReverseMergeAction.MINE_COLOR : SimpleTextAttributes.GRAYED_ATTRIBUTES.getFgColor();
+    component.append("   ");
+    component.append(note.text() + NOTE_LINK_MARK, new SimpleTextAttributes(SimpleTextAttributes.STYLE_UNDERLINE, color), tag);
   }
 
   /** 서버에 물어 SVN 저장소를 비교하고, 받은 들어올 변경을 svnIncoming 에 남긴다. 서버에 닿지 못하면 IOException(남긴 것은 그대로). */
@@ -1927,6 +2113,17 @@ final class SyncPanel extends SimpleToolWindowPanel {
 
   /** 저장소가 하나면 종류별 묶음만, 둘 이상이면 저장소 → 종류별 묶음으로 보인다. */
   private void rebuildTree() {
+    // IntelliJ 변경 트리처럼 다시 만들어도 고른 줄과 접어 둔 줄을 그대로 둔다. 줄은 저장소 · 묶음 · 파일 이름으로 이어 붙인 열쇠로 맞춘다.
+    Set<String> selected = new HashSet<>();
+    TreePath[] oldSelection = tree.getSelectionPaths();
+    if (oldSelection != null) {
+      for (TreePath path : oldSelection) selected.add(rowKey(path));
+    }
+    Set<String> collapsed = new HashSet<>();
+    for (int row = 0; row < tree.getRowCount(); row++) {
+      TreePath path = tree.getPathForRow(row);
+      if (!tree.getModel().isLeaf(path.getLastPathComponent()) && !tree.isExpanded(path)) collapsed.add(rowKey(path));
+    }
     DefaultMutableTreeNode root = new DefaultMutableTreeNode();
     // 저장소가 하나여도 저장소 줄을 두어 파일이 어느 저장소 것인지 보이게 한다.
     // 하나뿐인 저장소에 변경이 없으면 빈 트리로 두어 「변경 없음」 안내가 보이게 한다.
@@ -1938,8 +2135,30 @@ final class SyncPanel extends SimpleToolWindowPanel {
     }
     tree.setModel(new DefaultTreeModel(root));
     TreeUtil.expandAll(tree);
-    // 목록을 새로 만들면 고른 파일이 사라지므로, 지난 비교 내용이 남지 않게 비교 화면도 비운다.
-    diffPanel.setRequest(new MessageDiffRequest(SyncBundle.message("sync.diff.empty")));
+    List<TreePath> reselect = new ArrayList<>();
+    for (TreeNode node : Collections.list(root.preorderEnumeration())) {
+      TreePath path = new TreePath(((DefaultMutableTreeNode) node).getPath());
+      String key = rowKey(path);
+      if (collapsed.contains(key)) tree.collapsePath(path);
+      if (selected.contains(key)) reselect.add(path);
+    }
+    // 고른 파일이 남아 있으면 다시 고르고, 선택 알림이 비교 화면을 그 파일의 지금 내용으로 다시 그린다. 없으면 지난 비교가 남지 않게 비운다.
+    if (reselect.isEmpty()) diffPanel.setRequest(new MessageDiffRequest(SyncBundle.message("sync.diff.empty")));
+    else tree.setSelectionPaths(reselect.toArray(TreePath[]::new));
+    updateButtons();
+  }
+
+  /** 트리 줄 하나의 열쇠: 맨 위부터 저장소 폴더 · 묶음 종류 · 「종류:경로」를 이어 붙인다. 다시 만든 트리에서 같은 줄을 찾는 데 쓴다. */
+  private static String rowKey(TreePath path) {
+    StringBuilder key = new StringBuilder();
+    for (Object part : path.getPath()) {
+      Object value = ((DefaultMutableTreeNode) part).getUserObject();
+      if (value instanceof Repo r) key.append(r.root().getPath());
+      else if (value instanceof Group g) key.append(g.kind());
+      else if (value instanceof Change c) key.append(c.kind()).append(':').append(c.path());
+      key.append('\n');
+    }
+    return key.toString();
   }
 
   private void addKindGroups(DefaultMutableTreeNode parent, List<Change> source) {
@@ -2056,7 +2275,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
     File errFile = File.createTempFile("kinggura-sync", ".err");
     long started = System.currentTimeMillis();
     try {
-      Process process = new ProcessBuilder(command).directory(dir).redirectOutput(outFile).redirectError(errFile).start();
+      ProcessBuilder builder = new ProcessBuilder(command).directory(dir).redirectOutput(outFile).redirectError(errFile);
+      // 설정 → Git 로그인에 넣은 서버는 git 이 비밀번호 도우미를 띄우지 않게 인증을 미리 넘긴다.
+      if (GIT.equals(exe)) builder.environment().putAll(GitLogins.env(builder.environment()));
+      Process process = builder.start();
       process.getOutputStream().close();
       try {
         if (!process.waitFor(timeoutSec, TimeUnit.SECONDS)) {
