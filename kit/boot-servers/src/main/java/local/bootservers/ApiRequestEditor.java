@@ -501,7 +501,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
 
     /** 탭 줄 오른쪽 링크: 표에 빈 줄을 더한다. */
     private static JComponent addRowLink(DefaultTableModel model) {
-        ActionLink link = new ActionLink(BootServersBundle.message("api.row.add"), e -> model.addRow(new Object[]{true, "", "", ""}));
+        ActionLink link = new ActionLink(BootServersBundle.message("api.row.add"), e -> { model.addRow(new Object[]{true, "", "", ""}); });
         link.setBorder(JBUI.Borders.empty(0, 8));
         return link;
     }

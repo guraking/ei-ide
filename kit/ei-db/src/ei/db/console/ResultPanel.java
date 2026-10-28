@@ -327,7 +327,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
     if (links.getComponentCount() > 1) {
       links.add(new JBLabel(LINK_DOT, UIUtil.ComponentStyle.REGULAR, UIUtil.FontColor.BRIGHTER));
     }
-    ActionLink link = new ActionLink(text, e -> action.run());
+    ActionLink link = new ActionLink(text, e -> { action.run(); });
     link.setForeground(UIUtil.getContextHelpForeground());
     link.setToolTipText(tooltip);
     links.add(link);
