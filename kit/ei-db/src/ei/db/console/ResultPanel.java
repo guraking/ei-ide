@@ -256,7 +256,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
     bar.setBorder(JBUI.Borders.emptyLeft(BAR_INSET));
     count = new JBLabel();
     showCount(EiDbBundle.message("common.rows", result.rows().size()));
-    JBLabel millis = new JBLabel(result.millis() + " ms", UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER);
+    JBLabel millis = new JBLabel(result.millis() + " ms", UIUtil.ComponentStyle.REGULAR, UIUtil.FontColor.BRIGHTER);
     millis.setBorder(JBUI.Borders.emptyLeft(MILLIS_GAP));
     bar.add(count);
     bar.add(millis);
@@ -949,7 +949,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
       boolean number = value instanceof Number;
       super.getTableCellRendererComponent(table, value == null ? NULL_TEXT : number ? SqlText.display(value) : text(value), selected, focused, row, column);
       Font font = table.getFont();
-      if (value == null) font = font.deriveFont(Font.ITALIC, UIUtil.getFontSize(UIUtil.FontSize.SMALL));
+      if (value == null) font = font.deriveFont(Font.ITALIC);
       else if (number) font = monoFont().deriveFont(font.getSize2D());
       setFont(font);
       boolean muted = value == null || value instanceof RowNumber;

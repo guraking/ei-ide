@@ -379,9 +379,9 @@ final class SyncPanel extends SimpleToolWindowPanel {
           String name = path.substring(slash + 1);
           Icon fileIcon = FileTypeManager.getInstance().getFileTypeByFileName(name).getIcon();
           if (fileIcon == null) fileIcon = AllIcons.FileTypes.Unknown;
-          Font small = JBUI.Fonts.smallFont();
-          int statusWidth = Math.max(JBUI.scale(STATUS_COL_W), getFontMetrics(small).stringWidth(change.status()));
-          setIcon(new RowIcon(new StatusIcon(change.status(), SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES.getFgColor(), small,
+          Font label = JBUI.Fonts.label();
+          int statusWidth = Math.max(JBUI.scale(STATUS_COL_W), getFontMetrics(label).stringWidth(change.status()));
+          setIcon(new RowIcon(new StatusIcon(change.status(), SimpleTextAttributes.GRAYED_ATTRIBUTES.getFgColor(), label,
                                              statusWidth, fileIcon.getIconHeight()), fileIcon));
           append(name, new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, color));
           if (slash > 0) append("  " + path.substring(0, slash), SimpleTextAttributes.GRAYED_ATTRIBUTES);

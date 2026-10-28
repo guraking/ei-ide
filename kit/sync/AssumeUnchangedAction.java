@@ -7,8 +7,8 @@ import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.vcs.ProjectLevelVcsManager;
+import com.intellij.openapi.vcs.VcsNotifier;
 import com.intellij.openapi.vcs.VcsRoot;
 import com.intellij.openapi.vcs.changes.VcsDirtyScopeManager;
 import com.intellij.openapi.vcs.FilePath;
@@ -33,6 +33,9 @@ import java.util.Map;
  */
 public class AssumeUnchangedAction extends AnAction implements DumbAware {
 
+  /** 알림 설정(Settings → Notifications)에서 이 알림을 가려 끌 수 있게 붙이는 표시 ID. */
+  private static final String NOTIFICATION_ID = "kinggura.sync.assumeUnchanged";
+
   /** 프로젝트 트리 우클릭의 「No Assume Unchanged」. */
   public static final class Undo extends AssumeUnchangedAction {
     @Override boolean on() { return false; }
@@ -55,6 +58,7 @@ public class AssumeUnchangedAction extends AnAction implements DumbAware {
     if (project == null || byRoot.isEmpty()) return;
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       String message;
+      boolean failed = false;
       try {
         int count = 0;
         for (Map.Entry<File, List<String>> entry : byRoot.entrySet()) {
@@ -65,12 +69,14 @@ public class AssumeUnchangedAction extends AnAction implements DumbAware {
       }
       catch (IOException ex) {
         message = ex.getMessage();
+        failed = true;
       }
       catch (InterruptedException ex) {
         Thread.currentThread().interrupt();
         return;
       }
       String m = message;
+      boolean error = failed;
       ApplicationManager.getApplication().invokeLater(() -> {
         // 변경 목록은 바꾼 파일만 다시 읽는다. 동기화 창은 변경 목록 알림으로는 모른 척 목록을 다시 읽지 않으므로 따로 부른다.
         List<FilePath> touched = new ArrayList<>();
@@ -81,7 +87,10 @@ public class AssumeUnchangedAction extends AnAction implements DumbAware {
         ToolWindow window = ToolWindowManager.getInstance(project).getToolWindow(SyncToolWindowFactory.ID);
         Content content = window == null ? null : window.getContentManager().getContent(0);
         if (content != null && content.getComponent() instanceof SyncPanel panel) panel.recompareAssumed();
-        Messages.showInfoMessage(project, m, on() ? "Assume Unchanged" : "No Assume Unchanged");
+        // 결과는 IntelliJ VCS 알림 풍선으로 알린다(모달 창으로 작업을 막지 않는다). 실패는 오류 풍선.
+        String title = on() ? "Assume Unchanged" : "No Assume Unchanged";
+        if (error) VcsNotifier.getInstance(project).notifyError(NOTIFICATION_ID, title, m);
+        else VcsNotifier.getInstance(project).notifyInfo(NOTIFICATION_ID, title, m);
       });
     });
   }
