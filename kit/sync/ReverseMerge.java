@@ -37,6 +37,8 @@ final class ReverseMerge {
   private static final String LOG_FORMAT = "--format=%x01%an%x1f%ad%x1f%s";
   private static final String LOG_DATE = "--date=format:%m-%d %H:%M";
   private static final String AUTHOR_FORMAT = "--format=%x01%an%x1f%ae";
+  /** configs 가 한 번에 읽는 설정 키(git config --get-regexp). */
+  private static final String CONFIG_KEYS = "^(user\\.(name|email)|branch\\..*\\.remote|ei\\.reverseMerge\\..*)$";
 
   /** 들어올 파일 하나. author · when · subject 는 기준 브랜치에서 이 파일을 마지막으로 바꾼 커밋. */
   record Incoming(String path, String author, String when, String subject, boolean mine) {}
@@ -143,14 +145,71 @@ final class ReverseMerge {
     }
   }
 
+  /**
+   * 역머지가 쓰는 설정(user.* · branch.*.remote · ei.reverseMerge.*)을 git 한 번으로 다 읽는다. 하나씩 읽으면 git 을 넷 띄운다(회사 PC 는 하나에 0.8초).
+   * 맞는 키가 없으면(종료 코드 1) 빈 맵.
+   */
+  static Map<String, String> configs(File root) throws InterruptedException {
+    try {
+      return parseConfigs(git(root, "config", "--get-regexp", CONFIG_KEYS));
+    }
+    catch (IOException missing) {
+      return Map.of();
+    }
+  }
+
+  /** git config --get-regexp 출력(「키 값」 한 줄씩) → 맵. 값이 비어 있는 키는 뺀다. */
+  static Map<String, String> parseConfigs(String output) {
+    Map<String, String> result = new HashMap<>();
+    for (String line : output.split("\n")) {
+      int space = line.indexOf(' ');
+      if (space > 0 && space < line.trim().length()) result.put(line.substring(0, space), line.substring(space + 1).trim());
+    }
+    return result;
+  }
+
   static void saveConfig(File root, String key, String value) throws IOException, InterruptedException {
     git(root, "config", key, value);
   }
 
   /** branch 가 쓰는 원격 이름. 설정이 없으면 DEFAULT_REMOTE. */
   static String remoteOf(File root, String branch) throws InterruptedException {
-    String remote = branch == null ? null : config(root, "branch." + branch + ".remote");
+    return remoteOf(configs(root), branch);
+  }
+
+  /** remoteOf 와 같고 configs 로 읽어 둔 설정을 쓴다. */
+  static String remoteOf(Map<String, String> cfg, String branch) {
+    String remote = branch == null ? null : cfg.get("branch." + branch + ".remote");
     return remote == null ? DEFAULT_REMOTE : remote;
+  }
+
+  /**
+   * git 명령 여럿을 동시에 돌려 입력 순서대로 결과를 돌려준다. 서로 기다릴 필요 없는 명령을 차례로 띄우면 명령 수만큼 git 시작 시간이 쌓인다.
+   * 하나가 실패하면 그 예외를 던진다. IntelliJ 클래스 없이 돌아 SyncCheck 에서도 쓴다.
+   */
+  static List<String> gitAll(File root, List<String[]> commands) throws IOException, InterruptedException {
+    String[] out = new String[commands.size()];
+    Exception[] failed = new Exception[commands.size()];
+    List<Thread> threads = new ArrayList<>();
+    for (int k = 0; k < commands.size(); k++) {
+      int at = k;
+      Thread t = new Thread(() -> {
+        try {
+          out[at] = git(root, commands.get(at));
+        }
+        catch (IOException | InterruptedException e) {
+          failed[at] = e;
+        }
+      }, "ei-git");
+      t.start();
+      threads.add(t);
+    }
+    for (Thread t : threads) t.join();
+    for (Exception e : failed) {
+      if (e instanceof IOException io) throw io;
+      if (e instanceof InterruptedException ie) throw ie;
+    }
+    return Arrays.asList(out);
   }
 
   /** 서버에 있는 브랜치 이름들. 내 fetch 설정과 상관없이 서버에 직접 묻는다. */
@@ -190,21 +249,32 @@ final class ReverseMerge {
 
   /** from 을 into 에 합치면 들어올 것. 두 브랜치를 미리 fetch 해 두어야 한다. */
   static Preview preview(File root, String remote, String from, String into, String current) throws IOException, InterruptedException {
+    return preview(root, configs(root), remote, from, into, current);
+  }
+
+  /** preview 와 같고 configs 로 읽어 둔 설정을 쓴다. 명령은 두 묶음으로 동시에 돌린다(차례로 하면 여덟 번 git 시작 시간이 쌓인다). */
+  static Preview preview(File root, Map<String, String> cfg, String remote, String from, String into, String current)
+    throws IOException, InterruptedException {
     String f = remoteRef(remote, from);
     String i = intoTip(remote, into, current);
-    int commits = Integer.parseInt(git(root, "rev-list", "--count", i + ".." + f).trim());
-    Set<String> theirs = lines(git(root, "diff", "--name-only", i + "..." + f));
-    Set<String> mine = lines(git(root, "diff", "--name-only", f + "..." + i));
-    if (into.equals(current)) mine.addAll(lines(git(root, "diff", "--name-only", "HEAD")));
-    String email = config(root, "user.email");
-    if (email != null) {
-      mine.addAll(lines(git(root, "log", "--author=" + email, "--since=" + MINE_DAYS + ".days", "--format=", "--name-only", f, i)));
-    }
-    if (!mine.isEmpty() && !theirs.isEmpty()) {
-      mine.retainAll(touchedByOthers(git(root, "log", AUTHOR_FORMAT, "--name-only", i + ".." + f), config(root, "user.name"), email));
-    }
-    Map<String, String[]> log = theirs.isEmpty() ? Map.of() : parseLog(git(root, "log", LOG_FORMAT, LOG_DATE, "--name-only", i + ".." + f));
-    return new Preview(commits, plan(theirs, mine, log));
+    String email = cfg.get("user.email");
+    List<String[]> first = new ArrayList<>(List.of(
+      new String[]{"rev-list", "--count", i + ".." + f},
+      new String[]{"diff", "--name-only", i + "..." + f},
+      new String[]{"diff", "--name-only", f + "..." + i}));
+    if (into.equals(current)) first.add(new String[]{"diff", "--name-only", "HEAD"});
+    if (email != null) first.add(new String[]{"log", "--author=" + email, "--since=" + MINE_DAYS + ".days", "--format=", "--name-only", f, i});
+    List<String> out = gitAll(root, first);
+    int commits = Integer.parseInt(out.get(0).trim());
+    Set<String> theirs = lines(out.get(1));
+    Set<String> mine = lines(out.get(2));
+    for (int k = 3; k < out.size(); k++) mine.addAll(lines(out.get(k)));
+    if (theirs.isEmpty()) return new Preview(commits, plan(theirs, mine, Map.of()));
+    // 들어올 파일이 있을 때만: 누가 고쳤나(남의 커밋 가리기)와 파일별 마지막 커밋.
+    List<String> logs = gitAll(root, List.of(new String[]{"log", AUTHOR_FORMAT, "--name-only", i + ".." + f},
+                                             new String[]{"log", LOG_FORMAT, LOG_DATE, "--name-only", i + ".." + f}));
+    if (!mine.isEmpty()) mine.retainAll(touchedByOthers(logs.get(0), cfg.get("user.name"), email));
+    return new Preview(commits, plan(theirs, mine, parseLog(logs.get(1))));
   }
 
   /**

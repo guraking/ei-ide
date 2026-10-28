@@ -1077,28 +1077,81 @@ final class SyncPanel extends SimpleToolWindowPanel {
       // Git.Pull 은 Git 전용이라 SVN 저장소에서는 꺼져 있다. SVN 은 svn update 로 받는다.
       // Git 과 SVN 이 섞여 있으면 받기는 SVN 저장소를 svn update 로 받고 Git 저장소는 Git.Pull 로 이어 받는다.
       List<Repo> targets = forSelectedRepo ? buttonTargets() : List.of();
-      // 받을 변경이 없으면 받기 창(Update Project · Pull) 대신 알림 창을 띄운다. 마지막 원격 확인 결과로 본다.
-      if ((ACTION_PULL.equals(actionId) || ACTION_UPDATE_ALL.equals(actionId))
-          && !repos.isEmpty() && !hasIncoming(ACTION_UPDATE_ALL.equals(actionId) ? repos : targets)) {
-        Messages.showInfoMessage(project, SyncBundle.message("sync.nothing.to.pull"), text);
+      if ((ACTION_PULL.equals(actionId) || ACTION_UPDATE_ALL.equals(actionId)) && !repos.isEmpty()) {
+        // 받기는 IntelliJ 받기 창을 거치지 않고 저장소마다 직접 받는다. SVN 은 svn update, Git 은 git pull --ff-only(그냥 못 받는 저장소만 IntelliJ 받기 창).
+        // 마지막 원격 확인 결과로 들어올 변경 · 충돌이 있는 저장소만 받고, 하나도 없으면 알림 창만 띄운다.
+        List<Repo> svnRepos = new ArrayList<>();
+        List<Repo> gitRepos = new ArrayList<>();
+        for (Repo repo : forSelectedRepo ? targets : repos) {
+          if (!hasIncoming(List.of(repo))) continue;
+          (repo.vcs() == Vcs.SVN ? svnRepos : gitRepos).add(repo);
+        }
+        if (svnRepos.isEmpty() && gitRepos.isEmpty()) {
+          Messages.showInfoMessage(project, SyncBundle.message("sync.nothing.to.pull"), text);
+          return;
+        }
+        if (!svnRepos.isEmpty()) svnUpdate(button, svnRepos);
+        if (!gitRepos.isEmpty()) gitPull(button, text, gitRepos);
         return;
       }
       if (ACTION_PUSH.equals(actionId)) {
         pushIfAhead(button, text, targets);
         return;
       }
-      List<Repo> svnRepos = new ArrayList<>();
-      for (Repo repo : targets) {
-        if (repo.vcs() == Vcs.SVN) svnRepos.add(repo);
-      }
-      boolean svnOnly = !svnRepos.isEmpty() && svnRepos.size() == targets.size();
-      if (!svnRepos.isEmpty() && ACTION_PULL.equals(actionId)) {
-        svnUpdate(button, svnRepos);
-        if (svnOnly) return;
-      }
       runAction(text, actionId, forSelectedRepo ? selectedGitRootsContext() : DataManager.getInstance().getDataContext(this));
     });
     return button;
+  }
+
+  /**
+   * Git 저장소마다 git pull --ff-only 를 작업 스레드에서 동시에 돌린다.
+   * IntelliJ Update Project 는 저장소마다 확인 명령을 차례로 띄워 저장소 7개면 40초가 넘지만, 이렇게 하면 가장 느린 fetch 하나만큼 걸린다.
+   * 그냥 받지 못하는 저장소(내 커밋과 갈라짐 · 저장 안 한 변경과 겹침 · 충돌 중)는 전처럼 IntelliJ 받기 창(Git.Pull)으로 넘긴다.
+   * 받는 동안 그 루트를 fetching 에 두어 저장소 알림으로 따로 다시 비교하지 않게 하고, 끝나면 파일 보기를 새로 읽고 한 번 다시 비교한다.
+   */
+  private void gitPull(JButton button, String text, List<Repo> targets) {
+    List<File> roots = new ArrayList<>();
+    for (Repo repo : targets) roots.add(repo.root());
+    button.setEnabled(false);
+    showStatus(SyncBundle.message("sync.git.pulling", text, roots.size()));
+    fetching.addAll(roots);
+    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+      Map<File, String> failed = Collections.synchronizedMap(new LinkedHashMap<>());
+      try {
+        inParallel(roots, root -> {
+          try {
+            git(root, GIT_LONG_TIMEOUT_SEC, "pull", "--ff-only", "--quiet");
+          }
+          catch (IOException e) {
+            failed.put(root, e.getMessage());
+          }
+          return null;
+        });
+      }
+      catch (IOException unreachable) {
+        // 저장소별 실패는 failed 에 담겼다.
+      }
+      catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        fetching.removeAll(roots);
+        SwingUtilities.invokeLater(() -> button.setEnabled(true));
+        return;
+      }
+      fetching.removeAll(roots);
+      LocalFileSystem.getInstance().refreshIoFiles(roots, true, true, null);
+      List<String> names = new ArrayList<>();
+      for (File root : failed.keySet()) names.add(root.getName());
+      String message = failed.isEmpty()
+                       ? SyncBundle.message("sync.git.pulled", text, roots.size())
+                       : SyncBundle.message("sync.git.pulled.partly", text, roots.size() - failed.size(), String.join(", ", names));
+      // IDE 의 invokeLater 로 연다(SwingUtilities 로 연 받기 창은 쓰기 안전하지 않은 문맥이 된다. pushIfAhead 와 같다).
+      ApplicationManager.getApplication().invokeLater(() -> {
+        button.setEnabled(true);
+        showStatus(message);
+        recompare();
+        if (!failed.isEmpty()) runAction(text, ACTION_PULL, rootsContext(new ArrayList<>(failed.keySet())));
+      }, ModalityState.nonModal(), project.getDisposed());
+    });
   }
 
   /** repos 가운데 들어올 변경 · 충돌이 하나라도 있는 저장소가 있는가. */
@@ -1165,12 +1218,20 @@ final class SyncPanel extends SimpleToolWindowPanel {
 
   /** 트리에서 고른 Git 저장소 루트를 VIRTUAL_FILE(_ARRAY) 로 담은 동작 문맥. 고른 것이 없으면 이 창의 기본 문맥. */
   private DataContext selectedGitRootsContext() {
-    DataContext context = DataManager.getInstance().getDataContext(this);
-    List<VirtualFile> roots = new ArrayList<>();
+    List<File> files = new ArrayList<>();
     for (Repo repo : selectedRepos()) {
       // Git 동작에 SVN 루트를 넘기면 첫 루트가 SVN 일 때 받기 창이 저장소를 고르지 못한다.
-      if (repo.vcs() != Vcs.GIT) continue;
-      VirtualFile root = LocalFileSystem.getInstance().findFileByIoFile(repo.root());
+      if (repo.vcs() == Vcs.GIT) files.add(repo.root());
+    }
+    return rootsContext(files);
+  }
+
+  /** files 의 Git 루트를 VIRTUAL_FILE(_ARRAY) 로 담은 동작 문맥. 비어 있으면 이 창의 기본 문맥. */
+  private DataContext rootsContext(List<File> files) {
+    DataContext context = DataManager.getInstance().getDataContext(this);
+    List<VirtualFile> roots = new ArrayList<>();
+    for (File file : files) {
+      VirtualFile root = LocalFileSystem.getInstance().findFileByIoFile(file);
       if (root != null) roots.add(root);
     }
     if (roots.isEmpty()) return context;
@@ -1601,16 +1662,18 @@ final class SyncPanel extends SimpleToolWindowPanel {
    */
   private void updateReverseNote(Repo repo, boolean fetch) throws InterruptedException {
     File root = repo.root();
-    String from = ReverseMerge.config(root, ReverseMerge.CONFIG_FROM);
+    // 설정은 git 한 번으로 다 읽는다(From · 원격 이름 · 내 이름 · 이메일).
+    Map<String, String> cfg = ReverseMerge.configs(root);
+    String from = cfg.get(ReverseMerge.CONFIG_FROM);
     if (from == null || from.equals(repo.branch())) {
       reverseNotes.remove(root);
       return;
     }
     fetching.add(root);
     try {
-      String remote = ReverseMerge.remoteOf(root, repo.branch());
+      String remote = ReverseMerge.remoteOf(cfg, repo.branch());
       if (fetch) ReverseMerge.fetch(root, remote, from);
-      ReverseMerge.Preview preview = ReverseMerge.preview(root, remote, from, repo.branch(), repo.branch());
+      ReverseMerge.Preview preview = ReverseMerge.preview(root, cfg, remote, from, repo.branch(), repo.branch());
       int mine = preview.mineCount();
       if (preview.commits() == 0) reverseNotes.remove(root);
       else reverseNotes.put(root, new ReverseNote(mine > 0 ? SyncBundle.message("rmerge.note.mine", from, preview.commits(), mine)
