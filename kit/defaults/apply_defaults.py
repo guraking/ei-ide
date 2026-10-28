@@ -21,6 +21,7 @@
   24) 프로젝트 머리글자 아이콘에 한글 같은 JetBrains Mono 에 없는 글자가 오면 대체 글꼴이 있는 Dialog 글꼴로 그린다.
   26) 프로젝트 창 모듈 줄을 모두 폴더 이름만 굵게 그린다(뒤의 [모듈 이름] 을 뺀다).
   27) TextMate html 번들이 .jsp 를 잡지 않게 하여 .jsp 는 언제나 jsp 번들(지시문 · 스크립틀릿 · ${} 을 아는 쪽)이 맡는다.
+  28) 설치 파일(.exe) 압축을 lzma 에서 zlib 로 바꿔 빌드 시간을 줄인다.
 고치기 전 원본은 <intellij-community>/../backup/<시각>-before/ 에 같은 상대경로로 남긴다.
 모든 원문을 먼저 찾아 본 뒤에 쓴다. 하나라도 못 찾으면 아무 파일도 바꾸지 않는다. 줄끝(LF · CRLF)은 파일마다 원래대로 둔다.
 두 번 실행해도 같은 결과가 된다.
@@ -302,6 +303,10 @@ EDITS = [
     ("plugins/textmate/lib/bundles/html/package.json",
      '".mdoc",".jsp",".asp"',
      '".mdoc",".asp"'),
+    # 28) NSIS lzma 압축은 한 줄기로 돌아 빌드 1062 에서 9분 52초(전체의 60%)가 걸렸다. zlib 는 몇 배 빠르고 설치 파일이 커진다.
+    ("build/conf/nsis/idea.nsi",
+     "SetCompressor lzma\n",
+     "SetCompressor zlib\n"),
 ]
 
 

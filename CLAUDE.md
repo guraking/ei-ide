@@ -12,7 +12,7 @@
   - `kit/sync` 동기화 창(Git · SVN), 점검 `SyncCheck.java`
   - `kit/ko/apply_ko.py` 한국어 팩을 메뉴 · 단추만 영어로 깎아 `bundled-plugins/localization-ko` 에 넣음(우리 번역은 `kit/ko/override/<jar 안 경로>`), 점검 `apply_ko_check.py`
   - `kit/git-auth` IntelliJ Git 이 https 원격에 인증을 환경값으로 넘기는 손질(`apply_git_auth.py`), 점검 `EiGitAuthCheck.java`
-  - `kit/customize.py`(brand · slim) · `kit/menu/apply_menu.py` · `kit/defaults/apply_defaults.py` · `kit/brand/apply_brand.bat` · `kit/check_update.py`(새 판 점검)
+  - `kit/customize.py`(brand · slim) · `kit/menu/apply_menu.py` · `kit/defaults/apply_defaults.py` · `kit/brand/apply_brand.bat` · `kit/check_update.py`(새 판 점검) · `kit/compile_plugins.py`(플러그인 3개 동시 컴파일 · 점검 → 본체 jar)
 - `bundled-plugins/<이름>/lib/*.jar` 는 빌드 때 본체에 들어간다. `release/플러그인설치.bat` 은 노트북 설치 대본.
 
 ## 바꿀 때마다 반영할 곳 (빠짐없이)
@@ -48,6 +48,7 @@ python kit\defaults\apply_defaults.py intellij-community
 python kit\git-auth\apply_git_auth.py intellij-community
 python kit\ko\apply_ko.py
 kit\brand\apply_brand.bat
+python kit\compile_plugins.py
 build-windows.bat
 ```
 - 판 번호 `262.10968.N`, N 은 GitHub 마지막 릴리스 번호와 이 PC 의 `build-number.txt` 중 큰 쪽 + 1(1000 이상, 성공한 빌드만 기록). 노트북에서 빌드하는 법은 `docs/노트북-빌드.md`. 결과 `release\eiide-262.10968.N.exe`, 끝나면 GitHub 릴리스로 올림.
@@ -57,4 +58,5 @@ build-windows.bat
 - JDK 21 이상의 javac, `--release 21 -proc:none -XDaddTypeAnnotationsToSymbol=false`, classpath 는 같은 판 IDE 의 `lib/**/*.jar` 와 `plugins/**/lib/*.jar`
   (`kit/check_update.py` 의 `compile_plugins` 가 같은 일을 한다. 플랫폼 jar 는 `ideaIC-<판>.zip` 을 intellij-repository 에서 받을 수 있다).
 - 결과 jar: 컴파일 결과 + 리소스(`resources/` 또는 `src/main/resources/`)를 묶는다.
+- 빌드 전에는 `python kit\compile_plugins.py` 로 셋을 동시에 컴파일 · 점검해 본체 jar 를 바꾼다(지난 빌드 결과 `out\idea-ce\dist.all` 의 jar 를 classpath 로 씀, 하나라도 실패하면 아무 jar 도 안 바꿈).
 - 순수 논리(파서 · SQL 만들기 · 파일 형식)는 IntelliJ 클래스 없이 두고 `*Check.java`(main 자체 점검)로 확인. 모든 점검이 통과해야 반영한다.

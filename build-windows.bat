@@ -21,7 +21,7 @@ findstr /c:"EI IDE" "intellij-community\community-resources\resources\idea\IdeaA
 
 rem 개인용 설치 파일에 필요 없는 단계는 건너뛴다(메이븐 배포 묶음 · 소스 압축 · 검색 색인 · 다른 OS 용 묶음 등).
 rem 메이븐 배포 묶음 단계는 이 PC에서 멈춘 적이 있다.
-set "SKIP=maven_artifacts,sources_archive,search_index,cross_platform_dist,doc_authoring_assets,third_party_libraries,prebuild_shared_indexes,fus_metadata_bundle_step,repair_utility_bundle_step,lib_url_check,broken_plugins_list,windows_zip_archive"
+set "SKIP=maven_artifacts,sources_archive,search_index,cross_platform_dist,doc_authoring_assets,third_party_libraries,prebuild_shared_indexes,fus_metadata_bundle_step,repair_utility_bundle_step,lib_url_check,broken_plugins_list,windows_zip_archive,sbom"
 
 if not exist logs mkdir logs
 set "LOG=%CD%\logs\build-windows.log"
