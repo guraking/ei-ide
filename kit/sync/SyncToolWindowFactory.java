@@ -25,7 +25,7 @@ public final class SyncToolWindowFactory implements ToolWindowFactory, DumbAware
   /** 우클릭으로 창을 열 때 비교할 파일. 있으면 창을 처음 만들 때 전체 비교를 건너뛰고 그 저장소만 비교한다. */
   private static final Key<VirtualFile> ONLY_FILE = Key.create("kinggura.sync.onlyFile");
   // 처음 열릴 때 창 높이: IDE 창 내용 높이의 이 비율(2026-10-29 사용자 캡처). 한 번만 맞추고, 그 뒤는 IDE 가 기억하는 크기를 쓴다.
-  private static final float INITIAL_HEIGHT_RATIO = 0.35f;
+  private static final float INITIAL_HEIGHT_RATIO = 0.85f;
   private static final String INITIAL_SIZE_DONE_KEY = "kinggura.sync.initialSize";
 
   @Override
