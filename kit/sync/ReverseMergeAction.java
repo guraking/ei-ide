@@ -81,6 +81,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
   private static final JBColor MINE_BG = new JBColor(0xFFF3E0, 0x4A3416);
   /** 단계 번호 동그라미 · 「커밋」 칩의 파랑(Git Log 현재 브랜치와 같은 색). */
   private static final Color STEP_COLOR = ProjectHistoryPanel.HEAD_COLOR;
+  /** 맨 위 저장소 이름을 기본 글자보다 키우는 단계(pt). */
+  private static final int REPO_NAME_BIGGER = 3;
   private static final JBColor STEP_TEXT = new JBColor(0xFFFFFF, 0x1E1F22);
   private static final JBColor COMMITS_BG = new JBColor(0xE3EDFB, 0x25324A);
   private static final JBColor FILES_BG = new JBColor(0xEBECF0, 0x3C3F41);
@@ -325,9 +327,13 @@ public final class ReverseMergeAction extends DumbAwareAction {
 
     @Override
     protected @Nullable JComponent createCenterPanel() {
-      // 머리 오른쪽: 어느 저장소를 합치는지(이름 · 경로). 합치기 전에 꼭 확인할 값이라 맨 위에 둔다.
-      JBLabel where = dim(SyncBundle.message("rmerge.where", root.getName(), root.getPath()));
-      where.setHorizontalAlignment(SwingConstants.RIGHT);
+      // 맨 위: 어느 저장소를 합치는지. 합치기 전에 꼭 확인할 값이라 이름을 Git Log 현재 브랜치 파랑 · 큰 굵은 글씨로, 경로는 흐리게 둔다.
+      JBLabel repoName = new JBLabel(root.getName()).withFont(JBFont.label().biggerOn(REPO_NAME_BIGGER).asBold());
+      repoName.setForeground(ProjectHistoryPanel.HEAD_COLOR);
+      JPanel where = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(ROW_GAP), 0));
+      where.setOpaque(false);
+      where.add(repoName);
+      where.add(dim(root.getPath()));
       where.setToolTipText(root.getPath());
 
       // 단계 1: From → Into. 두 상자가 창 너비를 반씩 나눈다. From 은 원격 브랜치를 합치고, Into 는 원격에 맞춘 로컬 브랜치에 합친 뒤 같은 원격 브랜치로 푸시한다.
