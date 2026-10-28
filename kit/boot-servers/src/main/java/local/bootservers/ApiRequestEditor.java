@@ -534,7 +534,11 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         for (JBRadioButton radio : new JBRadioButton[]{authNone, authBearer, authBasic, authCookie}) {
             group.add(radio);
             kinds.add(radio);
-            radio.addActionListener(e -> applyAuthKind());
+            radio.addActionListener(e -> {
+                applyAuthKind();
+                // 방식은 고르는 즉시 남긴다. 아이디 · 비밀 값은 보낼 때 저장한다(saveAuth).
+                PropertiesComponent.getInstance(project).setValue(AUTH_TYPE_KEY, authKind(), ApiText.AUTH_NONE);
+            });
         }
         DocumentAdapter refresh = new DocumentAdapter() {
             @Override
