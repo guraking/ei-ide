@@ -3,7 +3,7 @@ package kinggura.sync;
 import com.intellij.openapi.options.Configurable;
 import com.intellij.openapi.options.ConfigurationException;
 import com.intellij.openapi.progress.ProgressManager;
-import com.intellij.openapi.ui.ComponentPanelBuilder;
+import com.intellij.openapi.ui.panel.ComponentPanelBuilder;
 import com.intellij.ui.DoubleClickListener;
 import com.intellij.ui.ToolbarDecorator;
 import com.intellij.ui.table.JBTable;
