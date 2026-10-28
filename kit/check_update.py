@@ -105,6 +105,7 @@ def apply_kit():
         ("번들 덜기(slim)", [KIT / "customize.py", NEW_SRC, PRODUCT_NAME, "slim"]),
         ("메뉴", [KIT / "menu" / "apply_menu.py", NEW_SRC]),
         ("기본값", [KIT / "defaults" / "apply_defaults.py", NEW_SRC]),
+        ("Git 인증", [KIT / "git-auth" / "apply_git_auth.py", NEW_SRC]),
     ]
     results = []
     for name, args in steps:
