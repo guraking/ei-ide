@@ -54,6 +54,14 @@ final class ReverseMerge {
 
   enum Result { MERGED, CONFLICT }
 
+  /** 커밋 안 한 변경이 있어 합치지 않았다. stash 를 참으로 다시 부르면 그 변경을 Stash 해 두고 합친다. */
+  static final class DirtyException extends IOException {
+    DirtyException() { super(SyncBundle.message("rmerge.dirty")); }
+  }
+
+  /** 합치기 전에 커밋 안 한 변경을 넣어 두는 Stash 의 이름. 되살릴 때 맨 위 Stash 가 이 이름일 때만 꺼낸다(남의 Stash 를 꺼내지 않게). */
+  static final String STASH_MESSAGE = "EI Merge Branches";
+
   private ReverseMerge() {}
 
   /** 원격 추적 ref. 받아 온 브랜치는 여기 있다. */
@@ -280,11 +288,17 @@ final class ReverseMerge {
   /**
    * into 로 옮겨(지금 브랜치가 아니면) 서버 개인 브랜치를 먼저 따라잡고(fast-forward 만), from 을 합친다. 충돌이면 CONFLICT(into 에서 합치기 상태로 둔다).
    * push 면 합친 뒤 서버 개인 브랜치로 올린다. 서버 개인 브랜치와 내 것이 갈라져 있으면 합치기 전에 멈춘다.
-   * 커밋 안 한 변경(새 파일 빼고)이 있으면 아무것도 하지 않고 멈춘다. 그 상태로 합치다 충돌이 나 합치기를 취소하면 git 이 그 변경을 되살리지 못할 수 있다.
+   * 커밋 안 한 변경(새 파일 빼고)이 있으면 stash 가 거짓이면 아무것도 하지 않고 DirtyException 으로 멈춘다. 그 상태로 합치다 충돌이 나 합치기를 취소하면 git 이 그 변경을 되살리지 못할 수 있다.
+   * stash 가 참이면 그 변경을 Stash(STASH_MESSAGE) 해 두고 합친 뒤 원래 브랜치에서 되살린다. 실패해도 되살린다. 충돌이면 Stash 를 두고, finish 가 마무리한 뒤 되살린다.
    * into 로 옮겼으면 끝난 뒤(실패 포함, 충돌 빼고) 원래 브랜치로 돌아온다.
    */
-  static Result merge(File root, String remote, String from, String into, String current, boolean push) throws IOException, InterruptedException {
-    if (!lines(git(root, "status", "--porcelain", "-uno")).isEmpty()) throw new IOException(SyncBundle.message("rmerge.dirty"));
+  static Result merge(File root, String remote, String from, String into, String current, boolean push, boolean stash) throws IOException, InterruptedException {
+    boolean stashed = false;
+    if (!lines(git(root, "status", "--porcelain", "-uno")).isEmpty()) {
+      if (!stash) throw new DirtyException();
+      git(root, GIT_LONG_TIMEOUT_SEC, "stash", "push", "-m", STASH_MESSAGE);
+      stashed = true;
+    }
     String intoRemote = remoteRef(remote, into);
     boolean switched = !into.equals(current);
     if (switched) {
@@ -316,10 +330,33 @@ final class ReverseMerge {
     }
     catch (IOException e) {
       if (switched) checkoutBack(root, current, e);
+      if (stashed) unstashAfterFailure(root, e);
       throw e;
     }
     if (switched) git(root, GIT_LONG_TIMEOUT_SEC, "checkout", current);
+    if (stashed) unstash(root);
     return Result.MERGED;
+  }
+
+  /** 맨 위 Stash 가 합치기 전에 넣어 둔 것(STASH_MESSAGE)이면 꺼내 되살린다. 꺼내지 못하면 Stash 를 그대로 두고 그 안내를 담은 IOException. */
+  static void unstash(File root) throws IOException, InterruptedException {
+    if (!git(root, "stash", "list", "-1", "--format=%s").contains(STASH_MESSAGE)) return;
+    try {
+      git(root, GIT_LONG_TIMEOUT_SEC, "stash", "pop");
+    }
+    catch (IOException e) {
+      throw new IOException(e.getMessage() + "\n" + SyncBundle.message("rmerge.unstash.failed"), e);
+    }
+  }
+
+  /** 합치기가 실패한 뒤 Stash 를 되살린다. 되살리지 못해도 cause 를 그대로 알리도록 그 실패는 cause 에 덧붙인다. */
+  private static void unstashAfterFailure(File root, IOException cause) throws InterruptedException {
+    try {
+      unstash(root);
+    }
+    catch (IOException e) {
+      cause.addSuppressed(e);
+    }
   }
 
   /** 아직 해결하지 않은 충돌 파일(저장소 기준 경로). */
@@ -330,6 +367,7 @@ final class ReverseMerge {
   /**
    * 충돌을 해결한 뒤 합치기를 마무리한다: 합치기 커밋, push 면 서버 개인 브랜치로 올리기, into 로 옮겼으면 원래 브랜치로 돌아오기.
    * 충돌이 남았거나 합치기를 취소해(MERGE_HEAD 없음) 마무리할 것이 없으면 false 를 돌려주고 아무것도 하지 않는다.
+   * 마무리했으면 합치기 전에 넣어 둔 Stash 가 있을 때 되살린다(unstash).
    */
   static boolean finish(File root, String remote, String into, String current, boolean push) throws IOException, InterruptedException {
     if (!hasRef(root, "MERGE_HEAD") || !conflicts(root).isEmpty()) return false;
@@ -343,6 +381,7 @@ final class ReverseMerge {
       throw e;
     }
     if (switched) git(root, GIT_LONG_TIMEOUT_SEC, "checkout", current);
+    unstash(root);
     return true;
   }
 

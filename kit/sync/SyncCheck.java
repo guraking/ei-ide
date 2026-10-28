@@ -48,6 +48,16 @@ public class SyncCheck {
     eq(SyncPanel.unquote("plain.txt"), "plain.txt");
     checkNestedRepo();
 
+    // Push 단추 숫자: git status -b 브랜치 줄의 ahead.
+    eq(SyncPanel.parseAhead("## main...origin/main [ahead 2, behind 1]"), 2);
+    eq(SyncPanel.parseAhead("## main...origin/main [ahead 13]"), 13);
+    eq(SyncPanel.parseAhead("## main...origin/main [behind 4]"), 0);
+    eq(SyncPanel.parseAhead("## main...origin/main"), 0);
+    eq(SyncPanel.parseAhead("## No commits yet on main"), 0);
+    // 받기 알림: 커밋 수와 겹치지 않는 파일 수.
+    eq(SyncPanel.countPulled("\u0001\n\nA.java\nb/B.xml\n\u0001\n\nA.java\n"), new SyncPanel.Pulled(2, 2));
+    eq(SyncPanel.countPulled(""), new SyncPanel.Pulled(0, 0));
+
     checkUnmappedVcs();
     checkBuildFiles();
     checkOutputDirs();
@@ -230,14 +240,14 @@ public class SyncCheck {
     // 커밋 안 한 변경이 있으면 아무것도 하지 않고 멈춘다.
     sh(mine, "echo dirty >> B.java");
     try {
-      ReverseMerge.merge(mine, "origin", "develop", "feature/kim", "feature/kim", true);
+      ReverseMerge.merge(mine, "origin", "develop", "feature/kim", "feature/kim", true, false);
       throw new AssertionError("커밋 안 한 변경이 있으면 합치지 않아야 한다");
     }
-    catch (IOException expected) {
+    catch (ReverseMerge.DirtyException expected) {
       eq(ReverseMerge.conflicts(mine), Set.of());
     }
     sh(mine, "git checkout -q -- B.java");
-    eq(ReverseMerge.merge(mine, "origin", "develop", "feature/kim", "feature/kim", true), ReverseMerge.Result.CONFLICT);
+    eq(ReverseMerge.merge(mine, "origin", "develop", "feature/kim", "feature/kim", true, false), ReverseMerge.Result.CONFLICT);
     eq(ReverseMerge.conflicts(mine), Set.of("A.java"));
     // 충돌이 남았으면 마무리하지 않는다. 해결하면 합치기 커밋 · 푸시까지 한다.
     eq(ReverseMerge.finish(mine, "origin", "feature/kim", "feature/kim", true), false);
@@ -248,7 +258,7 @@ public class SyncCheck {
     // 충돌 없는 쪽: 다른 개발자가 내 파일을 건드리지 않은 develop 을 새 개인 브랜치로 합치고 푸시.
     sh(other, "git push -q origin develop~1:refs/heads/feature/new");
     ReverseMerge.fetch(mine, "origin", "develop", "feature/new");
-    eq(ReverseMerge.merge(mine, "origin", "develop", "feature/new", "feature/kim", true), ReverseMerge.Result.MERGED);
+    eq(ReverseMerge.merge(mine, "origin", "develop", "feature/new", "feature/kim", true, false), ReverseMerge.Result.MERGED);
     // 다른 브랜치에 합쳤으면 원래 브랜치로 돌아온다.
     eq(SyncPanel.git(mine, "rev-parse", "--abbrev-ref", "HEAD").trim(), "feature/kim");
     eq(SyncPanel.git(mine, "rev-parse", "feature/new").trim(), SyncPanel.git(server, "rev-parse", "feature/new").trim());
@@ -257,13 +267,25 @@ public class SyncCheck {
     sh(mine, "git checkout -q feature/new && echo l > L.java && git add L.java && git commit -qm l && git checkout -q feature/kim");
     ReverseMerge.fetch(mine, "origin", "develop", "feature/new");
     try {
-      ReverseMerge.merge(mine, "origin", "develop", "feature/new", "feature/kim", true);
+      ReverseMerge.merge(mine, "origin", "develop", "feature/new", "feature/kim", true, false);
       throw new AssertionError("갈라진 개인 브랜치는 멈춰야 한다");
     }
     catch (IOException expected) {
       eq(SyncPanel.git(mine, "rev-parse", "--abbrev-ref", "HEAD").trim(), "feature/kim");
     }
     eq(ReverseMerge.unpushed(mine, "origin", "feature/new"), 1);
+    // Stash 하고 합치기: 커밋 안 한 변경을 넣어 두었다가 합친 뒤 원래 브랜치에서 되살린다. 남의 Stash 는 건드리지 않는다.
+    sh(other, "git checkout -q develop && echo d > D.java && git add D.java && git commit -qm d && git push -q origin develop && git push -q origin develop~1:refs/heads/feature/stash");
+    sh(mine, "echo keep > K.java && git add K.java && git stash push -q -m 남의것 && echo dirty >> B.java");
+    ReverseMerge.fetch(mine, "origin", "develop", "feature/stash");
+    eq(ReverseMerge.merge(mine, "origin", "develop", "feature/stash", "feature/kim", false, true), ReverseMerge.Result.MERGED);
+    eq(SyncPanel.git(mine, "rev-parse", "--abbrev-ref", "HEAD").trim(), "feature/kim");
+    eq(SyncPanel.git(mine, "status", "--porcelain", "-uno"), " M B.java\n");
+    eq(SyncPanel.git(mine, "stash", "list", "--format=%s").contains("남의것"), true);
+    eq(SyncPanel.git(mine, "stash", "list", "--format=%s").contains(ReverseMerge.STASH_MESSAGE), false);
+    ReverseMerge.unstash(mine);  // 맨 위가 우리 Stash 가 아니면 꺼내지 않는다.
+    eq(SyncPanel.git(mine, "stash", "list", "--format=%s").contains("남의것"), true);
+    sh(mine, "git checkout -q -- B.java");
     ReverseMerge.saveConfig(mine, ReverseMerge.CONFIG_FROM, "develop");
     eq(ReverseMerge.config(mine, ReverseMerge.CONFIG_FROM), "develop");
     eq(ReverseMerge.config(mine, ReverseMerge.CONFIG_INTO), null);

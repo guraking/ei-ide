@@ -5,7 +5,27 @@ import com.intellij.diff.DiffManager;
 import com.intellij.diff.DiffRequestPanel;
 import com.intellij.diff.requests.MessageDiffRequest;
 import com.intellij.diff.requests.SimpleDiffRequest;
+import com.intellij.ide.CommonActionsManager;
+import com.intellij.ide.DefaultTreeExpander;
+import com.intellij.ide.util.PropertiesComponent;
+import com.intellij.notification.Notification;
+import com.intellij.notification.NotificationAction;
+import com.intellij.notification.NotificationType;
 import com.intellij.openapi.Disposable;
+import com.intellij.openapi.actionSystem.ActionGroup;
+import com.intellij.openapi.actionSystem.DataSink;
+import com.intellij.openapi.actionSystem.Separator;
+import com.intellij.openapi.actionSystem.UiDataProvider;
+import com.intellij.openapi.fileEditor.OpenFileDescriptor;
+import com.intellij.openapi.progress.ProgressIndicator;
+import com.intellij.openapi.progress.ProgressManager;
+import com.intellij.openapi.progress.Task;
+import com.intellij.openapi.project.DumbAware;
+import com.intellij.openapi.util.Disposer;
+import com.intellij.openapi.util.text.StringUtil;
+import com.intellij.openapi.vcs.VcsNotifier;
+import com.intellij.pom.Navigatable;
+import com.intellij.ui.PopupHandler;
 import com.intellij.openapi.actionSystem.ActionManager;
 import com.intellij.ide.DataManager;
 import com.intellij.ide.actions.RevealFileAction;
@@ -88,16 +108,18 @@ import java.io.StringReader;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 이클립스 Team › Synchronize Workspace 와 같은 창.
@@ -139,6 +161,14 @@ final class SyncPanel extends SimpleToolWindowPanel {
   record Change(Kind kind, String status, String path, Repo repo) {
     @Override public String toString() { return "[" + status + "] " + path; }
   }
+
+  /** 폴더별로 묶어 보기에서 묶음 줄 아래 폴더 줄. path 는 저장소 기준 상위 폴더(맨 위 폴더면 빈 글). */
+  record Folder(String path) {
+    @Override public String toString() { return path; }
+  }
+
+  /** 받기 한 번으로 들어온 커밋 수와 바뀐 파일 수. */
+  record Pulled(int commits, int files) {}
 
   /** 트리 묶음 줄: 종류와 그 종류 파일 수. */
   record Group(Kind kind, int count) {
@@ -209,6 +239,29 @@ final class SyncPanel extends SimpleToolWindowPanel {
   // 저장소 줄 · 위쪽 줄의 역머지 안내 끝에 붙여 눌러서 Merge Branches 를 연다는 것을 보인다.
   private static final String NOTE_LINK_MARK = " ›";
   private static final Set<String> UNMERGED = Set.of("DD", "AU", "UD", "UA", "DU", "AA", "UU");
+  // git status -b 첫 줄(「## main...origin/main [ahead 2, behind 1]」)에서 올릴 커밋 수.
+  private static final String STATUS_BRANCH_LINE = "## ";
+  private static final Pattern AHEAD = Pattern.compile("\\[ahead (\\d+)");
+  // 받기 뒤 셈(git log --format=%x01 --name-only): 커밋마다 이 글자 한 줄, 그 아래 바뀐 파일 경로.
+  private static final String PULLED_COMMIT_MARK = "\u0001";
+  // 알림 설정(Settings → Notifications)에서 이 창의 알림을 가려 끌 수 있게 붙이는 표시 ID.
+  private static final String NOTIFICATION_ID = "kinggura.sync";
+  private static final String POPUP_PLACE = "KingGuraSynchronizePopup";
+  // 파일 줄 우클릭 아래쪽에 붙이는 IntelliJ 기본 동작(Jump to Source · Show History · Copy Absolute Path · Select in Project View).
+  private static final List<String> STOCK_FILE_ACTIONS = List.of("EditSource", "Vcs.ShowTabbedFileHistory", "CopyPaths", "SelectInProjectView");
+  // IntelliJ 비교 창의 「Compare Previous/Next File」. 이름 · 아이콘 · 단축키(Alt+← · Alt+→)를 그대로 쓴다.
+  private static final String ACTION_PREV_FILE = "Diff.PrevChange";
+  private static final String ACTION_NEXT_FILE = "Diff.NextChange";
+  private static final String GROUP_BY_FOLDER_KEY = "kinggura.sync.groupByFolder";
+  // 마지막 원격 확인에서 이만큼(분) 지나면 위쪽 줄에 「새로고침 필요」를 붙인다.
+  private static final long STALE_MINUTES = 30;
+  // 「N분 전」 표시와 자동 원격 확인을 살피는 간격.
+  private static final int TICK_MS = (int) TimeUnit.MINUTES.toMillis(1);
+  // 작업이 취소됐는지 살피는 간격(상태 표시줄 ✕).
+  private static final long CANCEL_POLL_MS = 200;
+  private static final Logger LOG = Logger.getInstance(SyncPanel.class);
+  // 저장소별 마지막 git status -b 의 올릴 커밋 수(Push 단추 숫자). compare 가 채운다.
+  private static final Map<File, Integer> AHEAD_COUNTS = new ConcurrentHashMap<>();
   // ProjectLevelVcsManager 가 주는 AbstractVcs.getName() 값. GitVcs.NAME · SvnVcs.VCS_NAME 과 같다.
   private static final String VCS_NAME_GIT = "Git";
   private static final String GIT = "git";
@@ -284,6 +337,15 @@ final class SyncPanel extends SimpleToolWindowPanel {
   // Git 루트별 역머지 기준 브랜치와의 차이(「develop 보다 3개 뒤 · 내 파일 2개 겹침」). 기준 브랜치를 고른 적 없거나 같으면 없다.
   private final Map<File, ReverseNote> reverseNotes = new ConcurrentHashMap<>();
 
+  // 원격 확인(fetch · svn status -u)에 실패한 저장소와 그 오류. 저장소 줄 끝에 빨간 표시, 풍선 도움말에 오류 원문.
+  private final Map<File, String> repoErrors = new ConcurrentHashMap<>();
+  // 마지막 전체 원격 확인 시각(EDT 에서만). 0 이면 아직 없음.
+  private long lastCheck;
+  // 위쪽 상태 글이 요약(showSummary)인지(EDT 에서만). 진행 · 알림 글이면 「N분 전」을 다시 그리지 않는다.
+  private boolean summaryShown;
+  // 폴더별로 묶어 보기(도구줄 토글, IDE 를 다시 켜도 남는다).
+  private boolean byFolder = PropertiesComponent.getInstance().getBoolean(GROUP_BY_FOLDER_KEY);
+
   /** 위쪽 줄 · 저장소 줄 끝에 붙는 역머지 안내. warn 이면 내 파일과 겹쳐 주황으로 보인다. */
   record ReverseNote(String text, boolean warn) {}
 
@@ -303,6 +365,18 @@ final class SyncPanel extends SimpleToolWindowPanel {
     actions.add(new ModeAction("sync.mode.incoming", AllIcons.Actions.Download, Kind.INCOMING));
     actions.add(new ModeAction("sync.mode.outgoing", AllIcons.Actions.Upload, Kind.OUTGOING));
     actions.add(new ModeAction("sync.mode.conflict", AllIcons.Vcs.Merge, Kind.CONFLICT));
+    // IntelliJ 변경 트리와 같은 모두 펼치기 · 모두 접기 · 폴더별 묶기, 비교 화면의 이전 · 다음 파일.
+    actions.addSeparator();
+    DefaultTreeExpander expander = new DefaultTreeExpander(tree);
+    actions.add(CommonActionsManager.getInstance().createExpandAllAction(expander, tree));
+    actions.add(CommonActionsManager.getInstance().createCollapseAllAction(expander, tree));
+    actions.add(new GroupByFolderAction());
+    actions.addSeparator();
+    for (AnAction step : List.of(new FileStepAction(ACTION_PREV_FILE, -1), new FileStepAction(ACTION_NEXT_FILE, 1))) {
+      actions.add(step);
+      // 비교 화면에 포커스가 있어도 Alt+← · Alt+→ 로 넘어가게 창 전체에 건다.
+      step.registerCustomShortcutSet(step.getShortcutSet(), this, parent);
+    }
     ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar(TOOLBAR_PLACE, actions, true);
     toolbar.setTargetComponent(this);
     title.setOpaque(false);
@@ -330,7 +404,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
     setToolbar(top);
 
     OnePixelSplitter splitter = new OnePixelSplitter(false, 0.35f);
-    splitter.setFirstComponent(ScrollPaneFactory.createScrollPane(tree, true));
+    // 트리에서 고른 파일을 IDE 에 알려 우클릭의 IntelliJ 기본 동작(Jump to Source · Show History 등)이 그 파일로 돈다.
+    splitter.setFirstComponent(new TreeData(ScrollPaneFactory.createScrollPane(tree, true)));
     splitter.setSecondComponent(diffPanel.getComponent());
 
     // 아래 단추 줄: 위쪽 1픽셀 선으로 목록과 가르고, 단추 사이 · 가장자리는 IntelliJ 기본 간격.
@@ -368,7 +443,11 @@ final class SyncPanel extends SimpleToolWindowPanel {
         Color color = fileStatus == null ? null : fileStatus.getColor();
         Object item = node.getUserObject();
         setToolTipText(null);
-        if (item instanceof Group group) {
+        if (item instanceof Folder folder) {
+          setIcon(AllIcons.Nodes.Folder);
+          append(folder.path().isEmpty() ? "/" : folder.path(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+        }
+        else if (item instanceof Group group) {
           setIcon(iconOf(group.kind()));
           append(group.kind().label(), new SimpleTextAttributes(SimpleTextAttributes.STYLE_BOLD, color));
           append(" " + group.count(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
@@ -384,12 +463,19 @@ final class SyncPanel extends SimpleToolWindowPanel {
           setIcon(new RowIcon(new StatusIcon(change.status(), SimpleTextAttributes.GRAYED_ATTRIBUTES.getFgColor(), label,
                                              statusWidth, fileIcon.getIconHeight()), fileIcon));
           append(name, new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, color));
-          if (slash > 0) append("  " + path.substring(0, slash), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+          if (slash > 0 && !byFolder) append("  " + path.substring(0, slash), SimpleTextAttributes.GRAYED_ATTRIBUTES);
           setToolTipText(path);
         }
         else {
           append(Objects.toString(item, ""));
-          if (item instanceof Repo repo) appendReverseNote(this, repo, (Runnable) () -> openReverseMerge(repo));
+          if (item instanceof Repo repo) {
+            appendReverseNote(this, repo, (Runnable) () -> openReverseMerge(repo));
+            String error = repoErrors.get(repo.root());
+            if (error != null) {
+              append("   " + SyncBundle.message("sync.repo.failed"), SimpleTextAttributes.ERROR_ATTRIBUTES);
+              setToolTipText(error);
+            }
+          }
         }
       }
     };
@@ -409,10 +495,12 @@ final class SyncPanel extends SimpleToolWindowPanel {
     }.installOn(tree);
     DumbAwareAction.create(e -> openSelectedFiles())
       .registerCustomShortcutSet(new CompositeShortcutSet(CommonShortcuts.getEditSource(), CommonShortcuts.ENTER), tree, parent);
+    // 우클릭한 줄이 고른 줄이 아니면 그 줄을 고른 뒤 메뉴를 띄운다(메뉴 내용은 고른 줄로 정한다). 메뉴 키 · Shift+F10 도 같은 메뉴.
     tree.addMouseListener(new MouseAdapter() {
-      @Override public void mousePressed(MouseEvent e) { showPopup(e); }
-      @Override public void mouseReleased(MouseEvent e) { showPopup(e); }
+      @Override public void mousePressed(MouseEvent e) { selectClicked(e); }
+      @Override public void mouseReleased(MouseEvent e) { selectClicked(e); }
     });
+    PopupHandler.installPopupMenu(tree, new PopupGroup(), POPUP_PLACE);
 
     // 커밋 · Push · Pull · 브랜치 전환으로 Git 상태가 바뀌면 그 저장소만 fetch 없이 다시 비교한다.
     // 변경 목록이 갱신되면(편집 · 저장마다 온다) 변경 · 새 파일 경로가 달라진 저장소(Git · SVN)만 다시 비교한다.
@@ -470,93 +558,146 @@ final class SyncPanel extends SimpleToolWindowPanel {
         if (busy) refreshAgain = true;
         else refresh();
       }));
+    javax.swing.Timer tick = new javax.swing.Timer(TICK_MS, e -> tick());
+    tick.start();
+    Disposer.register(parent, tick::stop);
+  }
+
+  /** 1분마다: 위쪽 「원격 확인 N분 전」을 다시 그리고, 설정의 자동 원격 확인 간격이 지났으면 새로고침한다. 창이 숨어 있거나 도는 중이면 하지 않는다. */
+  private void tick() {
+    if (busy || hidden) return;
+    if (summaryShown && summaryTail == null) showSummary(changes, null);
+    long every = TimeUnit.MINUTES.toMillis(SyncSettings.autoMinutes());
+    if (every > 0 && lastCheck > 0 && System.currentTimeMillis() - lastCheck >= every) refresh();
+  }
+
+  /** 트리 줄을 감싸 고른 파일 · 저장소를 IDE 동작에 알린다(VIRTUAL_FILE · NAVIGATABLE · FILE_PATH 등). */
+  private final class TreeData extends JPanel implements UiDataProvider {
+    TreeData(JComponent content) {
+      super(new BorderLayout());
+      add(content, BorderLayout.CENTER);
+    }
+
+    @Override
+    public void uiDataSnapshot(@NotNull DataSink sink) {
+      List<VirtualFile> files = new ArrayList<>();
+      List<FilePath> paths = new ArrayList<>();
+      List<Navigatable> targets = new ArrayList<>();
+      for (Change c : selectedChanges()) {
+        File file = new File(c.repo().root(), c.path());
+        paths.add(VcsUtil.getFilePath(file, false));
+        VirtualFile vf = LocalFileSystem.getInstance().findFileByIoFile(file);
+        if (vf == null || vf.isDirectory()) continue;
+        files.add(vf);
+        targets.add(new OpenFileDescriptor(project, vf));
+      }
+      Repo repo = selectedRepo();
+      if (files.isEmpty() && repo != null && selectedChanges().isEmpty()) {
+        VirtualFile root = LocalFileSystem.getInstance().findFileByIoFile(repo.root());
+        if (root != null) files.add(root);
+      }
+      if (!files.isEmpty()) {
+        sink.set(CommonDataKeys.VIRTUAL_FILE, files.get(0));
+        sink.set(CommonDataKeys.VIRTUAL_FILE_ARRAY, files.toArray(VirtualFile[]::new));
+      }
+      if (!targets.isEmpty()) sink.set(CommonDataKeys.NAVIGATABLE_ARRAY, targets.toArray(Navigatable[]::new));
+      if (!paths.isEmpty()) {
+        sink.set(VcsDataKeys.FILE_PATH, paths.get(0));
+        sink.set(VcsDataKeys.FILE_PATHS, paths);
+      }
+    }
+  }
+
+  /** 트리 우클릭 메뉴. 고른 줄에 따라 내용이 바뀐다(popupActions). */
+  private final class PopupGroup extends ActionGroup implements DumbAware {
+    @Override public @NotNull ActionUpdateThread getActionUpdateThread() { return ActionUpdateThread.EDT; }
+    @Override public AnAction @NotNull [] getChildren(AnActionEvent e) { return popupActions().toArray(AnAction.EMPTY_ARRAY); }
+  }
+
+  private void selectClicked(MouseEvent e) {
+    if (!e.isPopupTrigger()) return;
+    TreePath clicked = tree.getPathForLocation(e.getX(), e.getY());
+    if (clicked != null && !tree.isPathSelected(clicked)) tree.setSelectionPath(clicked);
+  }
+
+  /** 메뉴 항목 하나. 누르면 run 을 부른다. */
+  private static AnAction item(String text, Icon icon, Runnable run) {
+    return DumbAwareAction.create(text, icon, e -> run.run());
+  }
+
+  /** IntelliJ 기본 동작을 메뉴에 붙인다. 이 판에 없는 동작이면 건너뛴다. */
+  private static void addStock(List<AnAction> items, List<String> ids) {
+    for (String id : ids) {
+      AnAction action = ActionManager.getInstance().getAction(id);
+      if (action != null) items.add(action);
+    }
   }
 
   /**
    * 이클립스 Synchronize 의 우클릭 메뉴. 여러 파일(여러 저장소)을 골라도 된다.
-   * 파일 줄: 받기 · 커밋 · 올리기 · 충돌 해결, 무시 목록에 넣기 · 변경 되돌리기.
-   * 묶음 줄(들어올 · 나갈 · 충돌): 그 묶음의 파일 전부로 받기 · 커밋 · 올리기 · 충돌 해결 · 변경 되돌리기.
+   * 파일 줄: 받기 · 커밋 · 올리기 · 충돌 해결, 무시 목록에 넣기 · 변경 되돌리기, 아래에 IntelliJ 기본 동작.
+   * 묶음 · 폴더 줄: 그 아래 파일 전부로 받기 · 커밋 · 올리기 · 충돌 해결 · 변경 되돌리기.
+   * 저장소 줄: repoActions.
    */
-  private void showPopup(MouseEvent e) {
-    if (!e.isPopupTrigger()) return;
-    TreePath clicked = tree.getPathForLocation(e.getX(), e.getY());
-    if (clicked != null && !tree.isPathSelected(clicked)) tree.setSelectionPath(clicked);
+  private List<AnAction> popupActions() {
+    List<AnAction> items = new ArrayList<>();
     List<Change> all = selectedChanges();
     List<Change> grouped = selectedGroupChanges();
     if (all.isEmpty() && grouped.isEmpty()) {
       if (tree.getLastSelectedPathComponent() instanceof DefaultMutableTreeNode node && node.getUserObject() instanceof Repo repo) {
-        showRepoMenu(repo, e.getX(), e.getY());
+        return repoActions(repo);
       }
-      return;
+      return items;
     }
-    JPopupMenu menu = new JPopupMenu();
-    addSyncItems(menu, grouped.isEmpty() ? all : grouped);
+    addSyncItems(items, grouped.isEmpty() ? all : grouped);
     // 묶음 줄만 골랐으면 무시 목록 · 모른 척하기 없이 되돌리기만 둔다(수십 개 파일을 한 번에 무시하지 않게).
     if (all.isEmpty()) {
       List<Change> revertable = grouped.stream().filter(c -> undoOf(c) == Undo.REVERT).toList();
       if (!revertable.isEmpty()) {
         int skipped = (int) grouped.stream().filter(c -> undoOf(c) == Undo.UNSTAGE).count();
-        if (menu.getComponentCount() > 0) menu.addSeparator();
-        JMenuItem revert = new JMenuItem(SyncBundle.message("sync.menu.revert", revertable.size()));
-        revert.addActionListener(a -> revert(revertable, skipped));
-        menu.add(revert);
+        items.add(Separator.getInstance());
+        items.add(item(SyncBundle.message("sync.menu.revert", revertable.size()), null, () -> revert(revertable, skipped)));
       }
-      if (menu.getComponentCount() > 0) menu.show(tree, e.getX(), e.getY());
-      return;
+      return items;
     }
-    if (menu.getComponentCount() > 0) menu.addSeparator();
+    items.add(Separator.getInstance());
     // 모른 척 중인 파일은 변경이 아니므로 무시 · 되돌리기 대신 풀기만 둔다.
     List<Change> assumed = all.stream().filter(c -> c.kind() == Kind.ASSUMED).toList();
     if (!assumed.isEmpty()) {
-      JMenuItem unassume = new JMenuItem(SyncBundle.message("sync.menu.unassume", assumed.size()));
-      unassume.addActionListener(a -> assumeUnchanged(assumed, false));
-      menu.add(unassume);
+      items.add(item(SyncBundle.message("sync.menu.unassume", assumed.size()), null, () -> assumeUnchanged(assumed, false)));
     }
     List<Change> selected = all.stream().filter(c -> c.kind() != Kind.ASSUMED).toList();
-    if (selected.isEmpty()) {
-      menu.show(tree, e.getX(), e.getY());
-      return;
+    if (!selected.isEmpty()) {
+      items.add(Separator.getInstance());
+      boolean allGit = selected.stream().allMatch(c -> c.repo().vcs() == Vcs.GIT);
+      String ignoreName = allGit ? ".gitignore" : SyncBundle.message("sync.ignore.list");
+      items.add(item(SyncBundle.message("sync.menu.ignore", ignoreName, selected.size()), null, () -> ignore(selected, false)));
+      // .idea/misc.xml 처럼 폴더째 무시하는 경우가 많아 상위 폴더 단위도 둔다.
+      List<String> folders = selected.stream().map(Change::path).filter(p -> p.contains("/"))
+        .map(p -> "/" + p.substring(0, p.lastIndexOf('/') + 1)).distinct().toList();
+      if (!folders.isEmpty()) {
+        items.add(item(SyncBundle.message("sync.menu.ignore.folders", ignoreName, String.join(", ", folders)), null, () -> ignore(selected, true)));
+      }
+      // 되돌리기는 HEAD 에 있는 파일의 내 변경만 대상이다. 새 파일 · 이름 바꾼 파일 · 복사한 파일은 지우지 않고 스테이징만 풀 수 있다.
+      List<Change> revertable = selected.stream().filter(c -> undoOf(c) == Undo.REVERT).toList();
+      List<Change> unstageable = selected.stream().filter(c -> undoOf(c) == Undo.UNSTAGE).toList();
+      items.add(Separator.getInstance());
+      if (!revertable.isEmpty()) {
+        items.add(item(SyncBundle.message("sync.menu.revert", revertable.size()), null, () -> revert(revertable, unstageable.size())));
+      }
+      if (!unstageable.isEmpty()) {
+        items.add(item(SyncBundle.message("sync.menu.unstage", unstageable.size()), null, () -> unstage(unstageable)));
+      }
+      // 이미 추적 중이라 무시 목록으로는 못 빼는 파일(.iml 등)은 git update-index --skip-worktree 로 변경을 모른 척한다.
+      // 내 작업본에만 적용된다. SVN 에는 대응 기능이 없다.
+      List<Change> assumable = revertable.stream().filter(c -> c.repo().vcs() == Vcs.GIT).toList();
+      if (!assumable.isEmpty()) {
+        items.add(item(SyncBundle.message("sync.menu.assume", assumable.size()), null, () -> assumeUnchanged(assumable, true)));
+      }
     }
-    if (!assumed.isEmpty()) menu.addSeparator();
-
-    boolean allGit = selected.stream().allMatch(c -> c.repo().vcs() == Vcs.GIT);
-    String ignoreName = allGit ? ".gitignore" : SyncBundle.message("sync.ignore.list");
-    JMenuItem ignoreFiles = new JMenuItem(SyncBundle.message("sync.menu.ignore", ignoreName, selected.size()));
-    ignoreFiles.addActionListener(a -> ignore(selected, false));
-    menu.add(ignoreFiles);
-
-    // .idea/misc.xml 처럼 폴더째 무시하는 경우가 많아 상위 폴더 단위도 둔다.
-    List<String> folders = selected.stream().map(Change::path).filter(p -> p.contains("/"))
-      .map(p -> "/" + p.substring(0, p.lastIndexOf('/') + 1)).distinct().toList();
-    if (!folders.isEmpty()) {
-      JMenuItem ignoreFolders = new JMenuItem(SyncBundle.message("sync.menu.ignore.folders", ignoreName, String.join(", ", folders)));
-      ignoreFolders.addActionListener(a -> ignore(selected, true));
-      menu.add(ignoreFolders);
-    }
-
-    // 되돌리기는 HEAD 에 있는 파일의 내 변경만 대상이다. 새 파일 · 이름 바꾼 파일 · 복사한 파일은 지우지 않고 스테이징만 풀 수 있다.
-    List<Change> revertable = selected.stream().filter(c -> undoOf(c) == Undo.REVERT).toList();
-    List<Change> unstageable = selected.stream().filter(c -> undoOf(c) == Undo.UNSTAGE).toList();
-    if (!revertable.isEmpty() || !unstageable.isEmpty()) menu.addSeparator();
-    if (!revertable.isEmpty()) {
-      JMenuItem revert = new JMenuItem(SyncBundle.message("sync.menu.revert", revertable.size()));
-      revert.addActionListener(a -> revert(revertable, unstageable.size()));
-      menu.add(revert);
-    }
-    if (!unstageable.isEmpty()) {
-      JMenuItem unstage = new JMenuItem(SyncBundle.message("sync.menu.unstage", unstageable.size()));
-      unstage.addActionListener(a -> unstage(unstageable));
-      menu.add(unstage);
-    }
-    // 이미 추적 중이라 무시 목록으로는 못 빼는 파일(.iml 등)은 git update-index --skip-worktree 로 변경을 모른 척한다.
-    // 내 작업본에만 적용된다. SVN 에는 대응 기능이 없다.
-    List<Change> assumable = revertable.stream().filter(c -> c.repo().vcs() == Vcs.GIT).toList();
-    if (!assumable.isEmpty()) {
-      JMenuItem assume = new JMenuItem(SyncBundle.message("sync.menu.assume", assumable.size()));
-      assume.addActionListener(a -> assumeUnchanged(assumable, true));
-      menu.add(assume);
-    }
-    menu.show(tree, e.getX(), e.getY());
+    items.add(Separator.getInstance());
+    addStock(items, STOCK_FILE_ACTIONS);
+    return items;
   }
 
   /**
@@ -576,41 +717,29 @@ final class SyncPanel extends SimpleToolWindowPanel {
    * 받기 · 커밋 · 올리기 · 충돌 해결 항목. 받기 · 올리기 · 충돌 해결은 아래 단추를 눌러 같은 코드로 한다(고른 줄의 저장소가 대상).
    * SVN 은 들어올 파일만 svn update 할 수 있고, 커밋하면 바로 서버라 올리기가 없다. Git 은 파일 단위 받기가 없다.
    */
-  private void addSyncItems(JPopupMenu menu, List<Change> targets) {
+  private void addSyncItems(List<AnAction> items, List<Change> targets) {
     List<Change> incoming = targets.stream().filter(c -> c.kind() == Kind.INCOMING).toList();
     List<Change> outgoing = targets.stream().filter(c -> c.kind() == Kind.OUTGOING).toList();
     boolean conflict = targets.stream().anyMatch(c -> c.kind() == Kind.CONFLICT);
-    if (!incoming.isEmpty() || conflict) {
-      JMenuItem pull = new JMenuItem(SyncBundle.message("sync.menu.pull"), pullButton.getIcon());
-      pull.addActionListener(a -> pullButton.doClick());
-      menu.add(pull);
-    }
+    if (!incoming.isEmpty() || conflict) items.add(item(SyncBundle.message("sync.menu.pull"), pullButton.getIcon(), pullButton::doClick));
     List<Change> svnIncoming = incoming.stream().filter(c -> c.repo().vcs() == Vcs.SVN).toList();
     if (!svnIncoming.isEmpty()) {
-      JMenuItem update = new JMenuItem(SyncBundle.message("sync.menu.update.files", svnIncoming.size()));
-      update.addActionListener(a -> runOnRepos(svnIncoming, repo -> List.of("update", "--non-interactive", "--"),
-                                               done -> SyncBundle.message("sync.update.files.done", done)));
-      menu.add(update);
+      items.add(item(SyncBundle.message("sync.menu.update.files", svnIncoming.size()), null,
+                     () -> runOnRepos(svnIncoming, repo -> List.of("update", "--non-interactive", "--"),
+                                      done -> SyncBundle.message("sync.update.files.done", done))));
     }
     if (!outgoing.isEmpty()) {
-      JMenuItem commit = new JMenuItem(SyncBundle.message("sync.menu.commit", outgoing.size()), AllIcons.Actions.Commit);
-      commit.addActionListener(a -> commitFiles(commit.getText(), outgoing));
-      menu.add(commit);
+      String text = SyncBundle.message("sync.menu.commit", outgoing.size());
+      items.add(item(text, AllIcons.Actions.Commit, () -> commitFiles(text, outgoing)));
     }
     if (outgoing.stream().anyMatch(c -> c.repo().vcs() == Vcs.GIT)) {
-      JMenuItem push = new JMenuItem(SyncBundle.message("sync.menu.push"), pushButton.getIcon());
-      push.addActionListener(a -> pushButton.doClick());
-      menu.add(push);
+      items.add(item(SyncBundle.message("sync.menu.push"), pushButton.getIcon(), pushButton::doClick));
     }
-    if (conflict) {
-      JMenuItem resolve = new JMenuItem(SyncBundle.message("sync.menu.resolve"), resolveButton.getIcon());
-      resolve.addActionListener(a -> resolveButton.doClick());
-      menu.add(resolve);
-    }
+    if (conflict) items.add(item(SyncBundle.message("sync.menu.resolve"), resolveButton.getIcon(), resolveButton::doClick));
     Set<Repo> repoSet = byRepo(targets).keySet();
     if (repoSet.size() == 1 && repoSet.iterator().next().vcs() == Vcs.GIT) {
-      if (menu.getComponentCount() > 0) menu.addSeparator();
-      addUndoItem(menu, repoSet.iterator().next());
+      items.add(Separator.getInstance());
+      items.add(undoItem(repoSet.iterator().next()));
     }
   }
 
@@ -618,39 +747,48 @@ final class SyncPanel extends SimpleToolWindowPanel {
    * 저장소 줄 우클릭 메뉴. 받기 · 올리기는 아래 단추와 같은 코드로(고른 저장소가 대상), 그 밖에는 이 저장소 하나로 한다.
    * SVN 은 올리기 · Merge Branches · 되돌리기가 없다.
    */
-  private void showRepoMenu(Repo repo, int x, int y) {
+  private List<AnAction> repoActions(Repo repo) {
     boolean git = repo.vcs() == Vcs.GIT;
-    JPopupMenu menu = new JPopupMenu();
-    JMenuItem pull = new JMenuItem(SyncBundle.message("sync.menu.pull"), pullButton.getIcon());
-    pull.addActionListener(a -> pullButton.doClick());
-    menu.add(pull);
+    List<AnAction> items = new ArrayList<>();
+    items.add(item(SyncBundle.message("sync.menu.pull"), pullButton.getIcon(), pullButton::doClick));
+    if (git) items.add(item(SyncBundle.message("sync.menu.push"), pushButton.getIcon(), pushButton::doClick));
+    AnAction refresh = item(SyncBundle.message("sync.menu.repo.refresh"), AllIcons.Actions.ForceRefresh, () -> refreshRepo(repo.root(), repo.vcs()));
+    refresh.getTemplatePresentation().setEnabled(!busy);
+    items.add(refresh);
     if (git) {
-      JMenuItem push = new JMenuItem(SyncBundle.message("sync.menu.push"), pushButton.getIcon());
-      push.addActionListener(a -> pushButton.doClick());
-      menu.add(push);
+      items.add(Separator.getInstance());
+      items.add(item(SyncBundle.message("sync.menu.merge"), AllIcons.Vcs.Branch, () -> openReverseMerge(repo)));
+      items.add(undoItem(repo));
     }
-    JMenuItem refresh = new JMenuItem(SyncBundle.message("sync.menu.repo.refresh"), AllIcons.Actions.ForceRefresh);
-    refresh.setEnabled(!busy);
-    refresh.addActionListener(a -> refreshRepo(repo.root(), repo.vcs()));
-    menu.add(refresh);
-    if (git) {
-      menu.addSeparator();
-      JMenuItem merge = new JMenuItem(SyncBundle.message("sync.menu.merge"), AllIcons.Vcs.Branch);
-      merge.addActionListener(a -> openReverseMerge(repo));
-      menu.add(merge);
-      addUndoItem(menu, repo);
-    }
-    menu.addSeparator();
-    JMenuItem reveal = new JMenuItem(RevealFileAction.getActionName());
-    reveal.addActionListener(a -> RevealFileAction.openDirectory(repo.root()));
-    menu.add(reveal);
-    menu.show(tree, x, y);
+    items.add(Separator.getInstance());
+    if (git) items.add(item(SyncBundle.message("sync.menu.repo.log"), AllIcons.Vcs.History, () -> showGitLog(project)));
+    items.add(item(RevealFileAction.getActionName(), null, () -> RevealFileAction.openDirectory(repo.root())));
+    return items;
   }
 
-  private void addUndoItem(JPopupMenu menu, Repo repo) {
-    JMenuItem undo = new JMenuItem(SyncBundle.message("sync.menu.undo"), AllIcons.Actions.Undo);
-    undo.addActionListener(a -> undoLastGitAction(repo));
-    menu.add(undo);
+  private AnAction undoItem(Repo repo) {
+    return item(SyncBundle.message("sync.menu.undo"), AllIcons.Actions.Undo, () -> undoLastGitAction(repo));
+  }
+
+  /** Git Log 창(ProjectHistoryPanel)을 연다. */
+  static void showGitLog(Project project) {
+    ToolWindow window = ToolWindowManager.getInstance(project).getToolWindow(ProjectHistoryPanel.ID);
+    if (window != null) window.activate(null);
+  }
+
+  /** 알림 풍선의 「커밋 보기」: Git Log 창을 연다. */
+  static AnAction showCommitsAction(Project project) {
+    return NotificationAction.createSimpleExpiring(SyncBundle.message("sync.notify.show.commits"), () -> showGitLog(project));
+  }
+
+  /** IntelliJ VCS 알림 풍선. 글은 HTML 로 보이므로 이스케이프하고 줄바꿈은 줄로 바꾼다. 알림 설정에서 NOTIFICATION_ID 로 끌 수 있다. */
+  static void balloon(Project project, boolean error, String title, String content, AnAction... actions) {
+    Notification notification = VcsNotifier.standardNotification()
+      .createNotification(StringUtil.escapeXmlEntities(title), StringUtil.escapeXmlEntities(content).replace("\n", "<br>"),
+                          error ? NotificationType.ERROR : NotificationType.INFORMATION)
+      .setDisplayId(NOTIFICATION_ID);
+    for (AnAction action : actions) notification.addAction(action);
+    notification.notify(project);
   }
 
   /** 저장소의 마지막 Git 동작을 읽어 확인 창에 보이고, 확인하면 되돌린다(GitUndo). 되돌릴 수 없으면 그 이유를 알림 창으로 보인다. */
@@ -729,11 +867,12 @@ final class SyncPanel extends SimpleToolWindowPanel {
     runAction(SyncBundle.message("rmerge.title"), ACTION_REVERSE_MERGE, context);
   }
 
-  /** 글자 찾기에 쓸 줄 이름: 파일 줄은 파일 이름, 저장소 줄은 폴더 이름, 묶음 줄은 묶음 이름. */
+  /** 글자 찾기에 쓸 줄 이름: 파일 줄은 파일 이름, 저장소 줄은 폴더 이름, 폴더 줄은 경로, 묶음 줄은 묶음 이름. */
   private static String speedSearchText(TreePath path) {
     Object value = ((DefaultMutableTreeNode) path.getLastPathComponent()).getUserObject();
     if (value instanceof Change c) return c.path().substring(c.path().lastIndexOf('/') + 1);
     if (value instanceof Repo r) return r.root().getName();
+    if (value instanceof Folder f) return f.path();
     return value instanceof Group g ? g.kind().label() : "";
   }
 
@@ -749,7 +888,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
     return opened;
   }
 
-  /** 아래 단추를 지금 목록에 맞춘다: Pull Selected 끝에 받을 파일 수(고른 저장소, 없으면 전부), 충돌이 없으면 Resolve Conflicts 를 끈다. EDT 에서 부른다. */
+  /**
+   * 아래 단추를 지금 목록에 맞춘다: Pull Selected 끝에 받을 파일 수, Push 끝에 올릴 커밋 수(고른 저장소, 없으면 전부),
+   * 충돌이 없으면 Resolve Conflicts 를 끈다. EDT 에서 부른다.
+   */
   private void updateButtons() {
     List<Repo> targets = buttonTargets();
     int incoming = 0;
@@ -758,8 +900,14 @@ final class SyncPanel extends SimpleToolWindowPanel {
       if (c.kind() == Kind.CONFLICT) conflict = true;
       if ((c.kind() == Kind.INCOMING || c.kind() == Kind.CONFLICT) && targets.contains(c.repo())) incoming++;
     }
+    int ahead = 0;
+    for (Repo repo : targets) {
+      if (repo.vcs() == Vcs.GIT) ahead += AHEAD_COUNTS.getOrDefault(repo.root(), 0);
+    }
     String pull = SyncBundle.message("sync.button.pull");
     pullButton.setText(incoming == 0 ? pull : pull + COUNT_GAP + incoming);
+    String push = SyncBundle.message("sync.button.push");
+    pushButton.setText(ahead == 0 ? push : push + COUNT_GAP + ahead);
     resolveButton.setEnabled(conflict);
     resolveButton.setToolTipText(conflict ? null : SyncBundle.message("sync.resolve.none"));
   }
@@ -774,19 +922,19 @@ final class SyncPanel extends SimpleToolWindowPanel {
     runAction(text, ACTION_COMMIT_FILES, context);
   }
 
-  /** 고른 묶음 줄(들어올 · 나갈 · 충돌) 아래 파일 전부. */
+  /** 고른 묶음 줄(들어올 · 나갈 · 충돌) · 폴더 줄 아래 파일 전부(겹치지 않게). */
   private List<Change> selectedGroupChanges() {
-    List<Change> result = new ArrayList<>();
+    Set<Change> result = new LinkedHashSet<>();
     TreePath[] paths = tree.getSelectionPaths();
-    if (paths == null) return result;
+    if (paths == null) return new ArrayList<>(result);
     for (TreePath path : paths) {
-      if (path.getLastPathComponent() instanceof DefaultMutableTreeNode node && node.getUserObject() instanceof Group) {
-        for (int i = 0; i < node.getChildCount(); i++) {
-          if (((DefaultMutableTreeNode) node.getChildAt(i)).getUserObject() instanceof Change c) result.add(c);
+      if (path.getLastPathComponent() instanceof DefaultMutableTreeNode node && (node.getUserObject() instanceof Group || node.getUserObject() instanceof Folder)) {
+        for (TreeNode child : Collections.list(node.preorderEnumeration())) {
+          if (((DefaultMutableTreeNode) child).getUserObject() instanceof Change c) result.add(c);
         }
       }
     }
-    return result;
+    return new ArrayList<>(result);
   }
 
   private List<Change> selectedChanges() {
@@ -1204,6 +1352,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
         // 저장소 순서만 달라졌을 뿐 항목이 같으면 트리를 다시 만들지 않는다. 다시 만들면 고른 줄과 비교 화면이 비워진다.
         if (next.size() == changes.size() && new HashSet<>(next).equals(new HashSet<>(changes))) {
           tree.repaint();  // 저장소 줄 끝의 역머지 안내만 바뀌었을 수 있다.
+          updateButtons();  // 커밋 · 푸시 뒤 올릴 커밋 수만 바뀌었을 수 있다.
           return;
         }
         changes = next;
@@ -1247,6 +1396,98 @@ final class SyncPanel extends SimpleToolWindowPanel {
     }
   }
 
+  /** 도구줄 「Group by Directory」: 묶음 줄 아래를 상위 폴더별로 한 번 더 묶는다. 고른 값은 IDE 를 다시 켜도 남는다. */
+  private final class GroupByFolderAction extends DumbAwareToggleAction {
+    GroupByFolderAction() {
+      super(SyncBundle.message("sync.group.folder"), null, AllIcons.Actions.GroupByPackage);
+    }
+
+    @Override public @NotNull ActionUpdateThread getActionUpdateThread() { return ActionUpdateThread.EDT; }
+    @Override public boolean isSelected(@NotNull AnActionEvent e) { return byFolder; }
+
+    @Override
+    public void setSelected(@NotNull AnActionEvent e, boolean state) {
+      byFolder = state;
+      PropertiesComponent.getInstance().setValue(GROUP_BY_FOLDER_KEY, state);
+      rebuildTree();
+    }
+  }
+
+  /**
+   * 비교 화면의 이전 · 다음 파일(IntelliJ 「Compare Previous/Next File」과 같은 이름 · 아이콘 · 단축키).
+   * 트리의 파일 줄을 위에서 아래 차례(접힌 묶음 안도 포함)로 보고 고른 줄 앞 · 뒤 파일을 고르면 선택 알림이 비교 화면을 바꾼다.
+   */
+  private final class FileStepAction extends DumbAwareAction {
+    private final int step;
+
+    FileStepAction(String stockId, int step) {
+      this.step = step;
+      AnAction stock = ActionManager.getInstance().getAction(stockId);
+      if (stock != null) copyFrom(stock);
+    }
+
+    @Override public @NotNull ActionUpdateThread getActionUpdateThread() { return ActionUpdateThread.EDT; }
+    @Override public void update(@NotNull AnActionEvent e) { e.getPresentation().setEnabled(target() != null); }
+
+    @Override
+    public void actionPerformed(@NotNull AnActionEvent e) {
+      TreePath path = target();
+      if (path == null) return;
+      tree.setSelectionPath(path);
+      tree.scrollPathToVisible(path);
+    }
+
+    /** 고른 파일 줄에서 step 만큼 떨어진 파일 줄. 고른 파일이 없으면 다음은 첫 파일, 이전은 없음. 끝을 넘으면 null. */
+    private TreePath target() {
+      List<TreePath> files = new ArrayList<>();
+      DefaultMutableTreeNode root = (DefaultMutableTreeNode) tree.getModel().getRoot();
+      for (TreeNode node : Collections.list(root.preorderEnumeration())) {
+        if (((DefaultMutableTreeNode) node).getUserObject() instanceof Change) files.add(new TreePath(((DefaultMutableTreeNode) node).getPath()));
+      }
+      int at = files.indexOf(tree.getLeadSelectionPath());
+      int next = at < 0 ? (step > 0 ? 0 : -1) : at + step;
+      return next >= 0 && next < files.size() ? files.get(next) : null;
+    }
+  }
+
+  /**
+   * work 를 IDE 아래 상태 표시줄의 진행 막대(title, ✕ 로 취소)와 함께 작업 스레드에서 돌린다.
+   * ✕ 를 누르면 work 를 도는 스레드를 중단(interrupt)한다. run 이 그때 git · svn 프로세스를 끝내고, work 는 InterruptedException 을 받아 스스로 마무리한다.
+   */
+  private void inBackground(String title, Runnable work) {
+    ProgressManager.getInstance().run(new Task.Backgroundable(project, title, true) {
+      @Override
+      public void run(@NotNull ProgressIndicator indicator) {
+        indicator.setIndeterminate(true);
+        Future<?> job = ApplicationManager.getApplication().executeOnPooledThread(work);
+        while (true) {
+          try {
+            job.get(CANCEL_POLL_MS, TimeUnit.MILLISECONDS);
+            return;
+          }
+          catch (TimeoutException running) {
+            if (indicator.isCanceled()) {
+              job.cancel(true);
+              return;
+            }
+          }
+          catch (CancellationException cancelled) {
+            return;
+          }
+          catch (ExecutionException e) {
+            LOG.warn(e.getCause());
+            return;
+          }
+          catch (InterruptedException e) {
+            job.cancel(true);
+            Thread.currentThread().interrupt();
+            return;
+          }
+        }
+      }
+    });
+  }
+
   /**
    * IDE 동작을 부르는 단추. forSelectedRepo 면 트리에서 고른 저장소들의 루트를 VIRTUAL_FILE(_ARRAY) 로 넘겨
    * 받기 창은 첫 저장소로 열린다(DvcsUtil.guessRepositoryForOperation 이 VIRTUAL_FILE 을 먼저 본다).
@@ -1285,23 +1526,28 @@ final class SyncPanel extends SimpleToolWindowPanel {
   }
 
   /**
-   * Git 저장소마다 git pull --ff-only 를 작업 스레드에서 동시에 돌린다.
+   * Git 저장소마다 git pull --ff-only 를 작업 스레드에서 동시에 돌린다(상태 표시줄 진행 막대, ✕ 로 취소).
    * IntelliJ Update Project 는 저장소마다 확인 명령을 차례로 띄워 저장소 7개면 40초가 넘지만, 이렇게 하면 가장 느린 fetch 하나만큼 걸린다.
    * 그냥 받지 못하는 저장소(내 커밋과 갈라짐 · 저장 안 한 변경과 겹침 · 충돌 중)는 전처럼 IntelliJ 받기 창(Git.Pull)으로 넘긴다.
    * 받는 동안 그 루트를 fetching 에 두어 저장소 알림으로 따로 다시 비교하지 않게 하고, 끝나면 파일 보기를 새로 읽고 한 번 다시 비교한다.
+   * 받은 저장소가 있으면 받은 커밋 · 파일 수를 알림 풍선으로 알린다(「커밋 보기」로 Git Log 창).
    */
   private void gitPull(JButton button, String text, List<Repo> targets) {
     List<File> roots = new ArrayList<>();
     for (Repo repo : targets) roots.add(repo.root());
     button.setEnabled(false);
-    showStatus(SyncBundle.message("sync.git.pulling", text, roots.size()));
+    String progress = SyncBundle.message("sync.git.pulling", text, roots.size());
+    showStatus(progress);
     fetching.addAll(roots);
-    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+    inBackground(progress, () -> {
       Map<File, String> failed = Collections.synchronizedMap(new LinkedHashMap<>());
+      List<Pulled> pulled = Collections.synchronizedList(new ArrayList<>());
       try {
         inParallel(roots, root -> {
           try {
+            String before = git(root, "rev-parse", "HEAD").trim();
             git(root, GIT_LONG_TIMEOUT_SEC, "pull", "--ff-only", "--quiet");
+            pulled.add(countPulled(git(root, "log", "--format=%x01", "--name-only", before + "..HEAD")));
           }
           catch (IOException e) {
             failed.put(root, e.getMessage());
@@ -1315,7 +1561,12 @@ final class SyncPanel extends SimpleToolWindowPanel {
       catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         fetching.removeAll(roots);
-        SwingUtilities.invokeLater(() -> button.setEnabled(true));
+        LocalFileSystem.getInstance().refreshIoFiles(roots, true, true, null);
+        SwingUtilities.invokeLater(() -> {
+          button.setEnabled(true);
+          showStatus(SyncBundle.message("sync.interrupted"));
+          recompare();
+        });
         return;
       }
       fetching.removeAll(roots);
@@ -1325,14 +1576,37 @@ final class SyncPanel extends SimpleToolWindowPanel {
       String message = failed.isEmpty()
                        ? SyncBundle.message("sync.git.pulled", text, roots.size())
                        : SyncBundle.message("sync.git.pulled.partly", text, roots.size() - failed.size(), String.join(", ", names));
+      int repoCount = 0;
+      int commits = 0;
+      int files = 0;
+      for (Pulled one : pulled) {
+        if (one.commits() == 0) continue;
+        repoCount++;
+        commits += one.commits();
+        files += one.files();
+      }
+      String done = SyncBundle.message("sync.notify.pulled", repoCount, commits, files);
+      boolean any = repoCount > 0;
       // IDE 의 invokeLater 로 연다(SwingUtilities 로 연 받기 창은 쓰기 안전하지 않은 문맥이 된다. pushIfAhead 와 같다).
       ApplicationManager.getApplication().invokeLater(() -> {
         button.setEnabled(true);
         showStatus(message);
+        if (any) balloon(project, false, text, done, showCommitsAction(project));
         recompare();
         if (!failed.isEmpty()) runAction(text, ACTION_PULL, rootsContext(new ArrayList<>(failed.keySet())));
       }, ModalityState.nonModal(), project.getDisposed());
     });
+  }
+
+  /** git log --format=%x01 --name-only 출력에서 커밋 수와 겹치지 않는 파일 수. */
+  static Pulled countPulled(String log) {
+    int commits = 0;
+    Set<String> files = new HashSet<>();
+    for (String line : log.split("\n")) {
+      if (line.equals(PULLED_COMMIT_MARK)) commits++;
+      else if (!line.isBlank()) files.add(line);
+    }
+    return new Pulled(commits, files.size());
   }
 
   /** repos 가운데 들어올 변경 · 충돌이 하나라도 있는 저장소가 있는가. */
@@ -1438,6 +1712,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       try {
         String message = SyncBundle.message("sync.svn.updated", text, targets.size());
+        boolean ok = true;
         List<File> roots = new ArrayList<>();
         try {
           for (Repo repo : targets) {
@@ -1447,6 +1722,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
         }
         catch (IOException ex) {
           message = ex.getMessage();
+          ok = false;
         }
         catch (InterruptedException ex) {
           Thread.currentThread().interrupt();
@@ -1455,7 +1731,12 @@ final class SyncPanel extends SimpleToolWindowPanel {
         // 일부만 받고 실패했어도 바뀐 파일이 있을 수 있어 받은 저장소는 모두 새로 읽는다.
         LocalFileSystem.getInstance().refreshIoFiles(roots, true, true, null);
         String m = message;
-        SwingUtilities.invokeLater(() -> { showStatus(m); recompare(); });
+        boolean done = ok;
+        SwingUtilities.invokeLater(() -> {
+          showStatus(m);
+          balloon(project, !done, text, m);
+          recompare();
+        });
       }
       finally {
         SwingUtilities.invokeLater(() -> button.setEnabled(true));
@@ -1489,12 +1770,17 @@ final class SyncPanel extends SimpleToolWindowPanel {
 
   /** 위쪽 상태 글: 진행 · 오류 · 알림은 회색 글 한 조각. */
   private void showStatus(String text) {
+    summaryShown = false;
     status.clear();
     status.setToolTipText(null);
     status.append(Objects.toString(text, ""), SimpleTextAttributes.GRAYED_ATTRIBUTES);
   }
 
-  /** 위쪽 상태 글: 종류 색 숫자(↓ 들어올 · ↑ 나갈 · ⚠ 충돌, 0 은 뺀다) 뒤에 회색 tail. 풍선 도움말은 글로 쓴 요약. */
+  /**
+   * 위쪽 상태 글: 종류 색 숫자(↓ 들어올 · ↑ 나갈 · ⚠ 충돌, 0 은 뺀다) 뒤에 회색 tail. 풍선 도움말은 글로 쓴 요약.
+   * tail 이 null 이면 마지막 원격 확인이 얼마 전인지(「원격 확인 3분 전」), STALE_MINUTES 가 지났으면 주황 「새로고침 필요」.
+   * 원격 확인에 실패한 저장소가 있으면 끝에 빨간 「저장소 N개 원격 확인 실패」, 풍선 도움말에 오류 원문.
+   */
   private void showSummary(List<Change> list, String tail) {
     Map<Kind, Integer> count = new EnumMap<>(Kind.class);
     for (Change c : list) count.merge(c.kind(), 1, Integer::sum);
@@ -1515,9 +1801,24 @@ final class SyncPanel extends SimpleToolWindowPanel {
       }
       if (assumed > 0) status.append(SUMMARY_SEP + Kind.ASSUMED.label() + " " + assumed, SimpleTextAttributes.GRAYED_ATTRIBUTES);
     }
-    status.append(SUMMARY_SEP + tail, SimpleTextAttributes.GRAYED_ATTRIBUTES);
-    status.setToolTipText(summary(list));
+    if (tail != null) status.append(SUMMARY_SEP + tail, SimpleTextAttributes.GRAYED_ATTRIBUTES);
+    else if (lastCheck > 0) {
+      long minutes = TimeUnit.MILLISECONDS.toMinutes(System.currentTimeMillis() - lastCheck);
+      status.append(SUMMARY_SEP + (minutes == 0 ? SyncBundle.message("sync.checked.now") : SyncBundle.message("sync.checked.ago", minutes)),
+                    SimpleTextAttributes.GRAYED_ATTRIBUTES);
+      if (minutes >= STALE_MINUTES) {
+        status.append(SUMMARY_SEP + SyncBundle.message("sync.checked.stale"),
+                      new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, ReverseMergeAction.MINE_COLOR));
+      }
+    }
+    String tip = summary(list);
+    if (!repoErrors.isEmpty()) {
+      status.append(SUMMARY_SEP + SyncBundle.message("sync.remote.failed", repoErrors.size()), SimpleTextAttributes.ERROR_ATTRIBUTES);
+      tip += "\n\n" + String.join("\n", repoErrors.values());
+    }
+    status.setToolTipText(tip);
     summaryTail = tail;
+    summaryShown = true;
   }
 
   /** 위쪽 저장소 글: Git 저장소 하나면 브랜치 아이콘 · 굵은 브랜치 · 회색 「↔ upstream」, 그 밖에는 글 한 조각. */
@@ -1643,10 +1944,15 @@ final class SyncPanel extends SimpleToolWindowPanel {
     }
     busy = true;
     tree.setPaintBusy(true);
-    showStatus(SyncBundle.message("sync.comparing"));
+    String progress = SyncBundle.message("sync.comparing");
+    showStatus(progress);
     int seq = ++compareSeq;
-    ApplicationManager.getApplication().executeOnPooledThread(() -> {
-      List<String> errors = Collections.synchronizedList(new ArrayList<>());
+    Map<File, Vcs> vcsOf = new HashMap<>();
+    for (Map.Entry<File, Vcs> entry : roots) vcsOf.put(entry.getKey(), entry.getValue());
+    inBackground(progress, () -> {
+      // 저장소별 실패(저장소 정보 읽기 · 원격 확인). 끝나면 저장소마다 알림 풍선 하나, 실패한 저장소 줄은 빨간 표시.
+      Map<File, String> failures = Collections.synchronizedMap(new LinkedHashMap<>());
+      boolean interrupted = false;
       List<Repo> found = new ArrayList<>();
       List<Change> result = new ArrayList<>();
       List<Scanned> scannedAll = new ArrayList<>();
@@ -1656,12 +1962,12 @@ final class SyncPanel extends SimpleToolWindowPanel {
           REPO_SLOTS.acquire();
           try {
             Repo repo = entry.getValue() == Vcs.GIT ? gitRepo(entry.getKey()) : svnRepo(entry.getKey());
-            Future<List<Change>> remote = ApplicationManager.getApplication().executeOnPooledThread(() -> remoteCompare(repo, errors));
+            Future<List<Change>> remote = ApplicationManager.getApplication().executeOnPooledThread(() -> remoteCompare(repo, failures));
             remotes.add(remote);
             return new Scanned(repo, repo.vcs() == Vcs.GIT ? compare(repo) : compareSvn(repo, false), remote);
           }
           catch (IOException e) {
-            errors.add(e.getMessage());
+            failures.put(entry.getKey(), e.getMessage());
             return null;
           }
           finally {
@@ -1687,24 +1993,34 @@ final class SyncPanel extends SimpleToolWindowPanel {
         result = fetched;
       }
       catch (IOException e) {
-        errors.add(e.getMessage());
+        failures.put(new File(project.getBasePath() == null ? "" : project.getBasePath()), e.getMessage());
       }
       catch (InterruptedException e) {
         Thread.currentThread().interrupt();
-        errors.add(SyncBundle.message("sync.interrupted"));
-        // 새로고침 자체가 중단될 때만 원격 확인을 멈춘다. 그 밖에는 끝까지 둔다. 도중에 죽인 git fetch 는 .lock 파일을 남겨 다음 fetch 를 막을 수 있다.
+        interrupted = true;
+        // 새로고침 자체가 중단될 때(상태 표시줄 ✕)만 원격 확인을 멈춘다. 그 밖에는 끝까지 둔다. 도중에 죽인 git fetch 는 .lock 파일을 남겨 다음 fetch 를 막을 수 있다.
         for (Future<List<Change>> remote : remotes) remote.cancel(true);
       }
       List<Change> finalResult = result;
-      String checkedTail = SyncBundle.message("sync.last.check.tail", LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm")));
-      String errorText = errors.isEmpty() ? null : String.join(" / ", errors);
+      boolean stopped = interrupted;
+      Map<File, String> failed = new LinkedHashMap<>(failures);
       SwingUtilities.invokeLater(() -> {
         endBusy();
         showTitle(repos);
+        if (stopped) {
+          showStatus(SyncBundle.message("sync.interrupted"));
+          return;
+        }
+        repoErrors.clear();
+        repoErrors.putAll(failed);
+        lastCheck = System.currentTimeMillis();
         // 그사이 다시 비교(recompare)가 시작됐으면 목록은 그쪽 결과를 따르고, 원격 확인 결과 · 오류는 그대로 알린다.
-        if (errorText != null) showStatus(errorText);
-        else showSummary(finalResult, checkedTail);
-        if (seq != compareSeq) return;
+        showSummary(finalResult, null);
+        for (Map.Entry<File, String> failure : failed.entrySet()) notifyRepoError(failure.getKey(), vcsOf.get(failure.getKey()), failure.getValue());
+        if (seq != compareSeq) {
+          tree.repaint();
+          return;
+        }
         changes = finalResult;
         rebuildTree();
       });
@@ -1744,8 +2060,9 @@ final class SyncPanel extends SimpleToolWindowPanel {
     String name = root.getName();
     busy = true;
     tree.setPaintBusy(true);
-    showStatus(SyncBundle.message("sync.repo.fetching", name));
-    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+    String progress = SyncBundle.message("sync.repo.fetching", name);
+    showStatus(progress);
+    inBackground(progress, () -> {
       Repo updated = null;
       List<Change> fresh = List.of();
       String error = null;
@@ -1762,21 +2079,30 @@ final class SyncPanel extends SimpleToolWindowPanel {
         }
       }
       catch (IOException e) {
-        error = name + ": " + e.getMessage();
+        error = e.getMessage();
       }
       catch (InterruptedException e) {
         Thread.currentThread().interrupt();
-        error = name + ": " + SyncBundle.message("sync.interrupted");
+        error = SyncBundle.message("sync.interrupted");
       }
       Repo finalRepo = updated;
       List<Change> finalFresh = fresh;
       String finalError = error;
+      boolean stopped = Thread.currentThread().isInterrupted();
       SwingUtilities.invokeLater(() -> {
         endBusy();
-        if (finalError != null) {
-          showStatus(finalError);
+        if (stopped) {
+          showStatus(name + ": " + finalError);
           return;
         }
+        if (finalError != null) {
+          repoErrors.put(root, finalError);
+          showStatus(name + ": " + finalError);
+          tree.repaint();
+          notifyRepoError(root, vcs, finalError);
+          return;
+        }
+        repoErrors.remove(root);
         List<Repo> nextRepos = new ArrayList<>();
         boolean known = false;
         for (Repo r : repos) {
@@ -1799,6 +2125,21 @@ final class SyncPanel extends SimpleToolWindowPanel {
     });
   }
 
+  /**
+   * 저장소 하나의 원격 확인 실패 알림 풍선: 첫 줄만 보이고 「다시 시도」(그 저장소만 새로고침) · 「자세히」(오류 원문 창).
+   * vcs 를 모르면(목록 밖 폴더) 다시 시도 없이 보인다.
+   */
+  private void notifyRepoError(File root, Vcs vcs, String error) {
+    String first = error.lines().findFirst().orElse(error);
+    List<AnAction> actions = new ArrayList<>();
+    if (vcs != null) actions.add(NotificationAction.createSimpleExpiring(SyncBundle.message("sync.notify.retry"), () -> {
+      if (!busy) refreshRepo(root, vcs);
+    }));
+    actions.add(NotificationAction.createSimple(SyncBundle.message("sync.notify.details"),
+                                                () -> Messages.showErrorDialog(project, error, SyncBundle.message("sync.notify.failed.title", root.getName()))));
+    balloon(project, true, SyncBundle.message("sync.notify.failed.title", root.getName()), first, actions.toArray(AnAction.EMPTY_ARRAY));
+  }
+
   /** 새로고침이 끝났다. 도는 동안 매핑이 바뀌었으면 이제 한 번 새로고침한다. EDT 에서 부른다. */
   private void endBusy() {
     busy = false;
@@ -1809,8 +2150,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
     }
   }
 
-  /** 원격을 받아 와 다시 비교한다. 원격 실패는 errors 에 적고 지금 상태 비교 결과를 돌려준다. */
-  private List<Change> remoteCompare(Repo repo, List<String> errors) throws IOException, InterruptedException {
+  /** 원격을 받아 와 다시 비교한다. 원격 실패는 failures 에 저장소별로 적고 지금 상태 비교 결과를 돌려준다. */
+  private List<Change> remoteCompare(Repo repo, Map<File, String> failures) throws IOException, InterruptedException {
     try {
       if (repo.vcs() == Vcs.GIT) {
         fetch(repo.root());
@@ -1820,7 +2161,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       return compareSvnRemote(repo);
     }
     catch (IOException e) {
-      errors.add(e.getMessage());
+      failures.put(repo.root(), e.getMessage());
       if (repo.vcs() == Vcs.GIT) return compare(repo);
       svnIncoming.remove(repo.root());
       return compareSvn(repo, false);
@@ -1933,7 +2274,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       new String[]{"diff", "--name-status", "HEAD...@{u}"},
       new String[]{"diff", "--name-status", "@{u}...HEAD"},
       // --no-optional-locks: 저장할 때마다 도는 비교가 index.lock 을 잡아 IntelliJ 의 커밋 · 체크아웃을 막지 않게 한다.
-      new String[]{"--no-optional-locks", "-c", "core.untrackedCache=true", "status", "--porcelain=v1", "-unormal"}));
+      new String[]{"--no-optional-locks", "-c", "core.untrackedCache=true", "status", "--porcelain=v1", "-b", "-unormal"}));
     if (assumed) commands.add(new String[]{"ls-files", "-v"});
     List<String> out = inParallel(commands, args -> git(root, args));
     Map<String, String> incoming = parseNameStatus(out.get(0));
@@ -1942,6 +2283,11 @@ final class SyncPanel extends SimpleToolWindowPanel {
     // 새 파일은 폴더 단위로만 받는다(-unormal). 무시되지 않은 큰 폴더 속을 다 훑으면 느려진다.
     // 폴더는 ".idea/" 처럼 끝이 / 인 한 줄로 나오며, 그대로 .gitignore 에 넣을 수 있다.
     for (String line : out.get(2).split("\n")) {
+      // 첫 줄은 브랜치 줄(-b). 올릴 커밋 수만 꺼내 Push 단추에 쓴다.
+      if (line.startsWith(STATUS_BRANCH_LINE)) {
+        AHEAD_COUNTS.put(root, parseAhead(line));
+        continue;
+      }
       if (line.length() < 4) continue;
       String xy = line.substring(0, 2);
       String path = line.substring(3);
@@ -1961,6 +2307,12 @@ final class SyncPanel extends SimpleToolWindowPanel {
       result.add(new Change(Kind.ASSUMED, "Assume Unchanged", path, repo));
     }
     return result;
+  }
+
+  /** git status -b 브랜치 줄의 「[ahead N」. 없으면(원격과 같음 · 뒤처지기만 함 · 추적 브랜치 없음) 0. */
+  static int parseAhead(String branchLine) {
+    Matcher m = AHEAD.matcher(branchLine);
+    return m.find() ? Integer.parseInt(m.group(1)) : 0;
   }
 
   /**
@@ -2155,6 +2507,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       Object value = ((DefaultMutableTreeNode) part).getUserObject();
       if (value instanceof Repo r) key.append(r.root().getPath());
       else if (value instanceof Group g) key.append(g.kind());
+      else if (value instanceof Folder f) key.append("dir:").append(f.path());
       else if (value instanceof Change c) key.append(c.kind()).append(':').append(c.path());
       key.append('\n');
     }
@@ -2167,7 +2520,22 @@ final class SyncPanel extends SimpleToolWindowPanel {
       List<Change> ofKind = source.stream().filter(c -> c.kind() == kind).toList();
       if (ofKind.isEmpty()) continue;
       DefaultMutableTreeNode group = new DefaultMutableTreeNode(new Group(kind, ofKind.size()));
-      for (Change c : ofKind) group.add(new DefaultMutableTreeNode(c));
+      if (byFolder) {
+        // 상위 폴더별로 한 번 더 묶는다(폴더 이름 차례). 저장소 맨 위 파일은 「/」 줄 아래.
+        Map<String, List<Change>> folders = new TreeMap<>();
+        for (Change c : ofKind) {
+          int slash = c.path().lastIndexOf('/');
+          folders.computeIfAbsent(slash < 0 ? "" : c.path().substring(0, slash), k -> new ArrayList<>()).add(c);
+        }
+        for (Map.Entry<String, List<Change>> folder : folders.entrySet()) {
+          DefaultMutableTreeNode folderNode = new DefaultMutableTreeNode(new Folder(folder.getKey()));
+          for (Change c : folder.getValue()) folderNode.add(new DefaultMutableTreeNode(c));
+          group.add(folderNode);
+        }
+      }
+      else {
+        for (Change c : ofKind) group.add(new DefaultMutableTreeNode(c));
+      }
       parent.add(group);
     }
   }

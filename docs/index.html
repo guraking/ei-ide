@@ -466,7 +466,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
     <table class="keys map">
       <tr><th>창 (자리)</th><th>단추 · 우클릭</th></tr>
       <tr><td>Servers (아래)</td><td>Start · Start in Debug · Restart · Stop · Stop All · Add WAS… · Server Groups(New Group… · Start Group · Stop Group) · ⋯ More(Duplicate Server · Publish (Rebuild) · Remove WAS · Show Log Files…) · Refresh Server List. 줄 우클릭에 Open in Browser · Show Console · Edit Settings… (<a href="#servers">서버 창</a>)</td></tr>
-      <tr><td>Synchronize (아래)</td><td>Show All · Incoming · Outgoing · Conflicts · Refresh All · Selected Repository Only, 아래 Pull All · Pull Selected · Push · Commit and Push… · Resolve Conflicts · Merge Branches. 목록 우클릭 Pull · Update Only These Files · Commit… · Push · Resolve Conflicts · Undo Last Git Action…, 저장소 줄 우클릭 Pull · Push · Refresh This Repository · Merge Branches… · Undo Last Git Action… · 탐색기에서 열기, 파일 우클릭 Add to .gitignore · Replace with HEAD · Unstage Only, Keep Files · Assume Unchanged (<a href="#sync">Git · SVN</a>)</td></tr>
+      <tr><td>Synchronize (아래)</td><td>Show All · Incoming · Outgoing · Conflicts · Refresh All · Selected Repository Only, 아래 Pull All · Pull Selected · Push · Commit and Push… · Resolve Conflicts · Merge Branches. 목록 우클릭 Pull · Update Only These Files · Commit… · Push · Resolve Conflicts · Undo Last Git Action…, 저장소 줄 우클릭 Pull · Push · Refresh This Repository · Merge Branches… · Undo Last Git Action… · Show in Git Log · 탐색기에서 열기, 파일 우클릭 Add to .gitignore · Replace with HEAD · Unstage Only, Keep Files · Assume Unchanged · Jump to Source · Show History · Copy Absolute Path · Select in Project View, 도구줄 모두 펼치기 · 모두 접기 · 폴더별로 묶기 · 이전 · 다음 파일 (<a href="#sync">Git · SVN</a>)</td></tr>
       <tr><td>Git Log (아래)</td><td>모듈 목록 · 찾기 칸 · Refresh · 「?」 (<a href="#sync">Git · SVN</a>)</td></tr>
       <tr><td>Database (오른쪽)</td><td>Refresh · New Console · Connect · Disconnect · Edit · Delete · Find · More(Export · Import Connections). 표 우클릭 View Data · Generate SELECT · INSERT · UPDATE Statement · Generate Mapper Skeleton · Generate Feature Set… · Open ERD · Table Specification Excel…, 접속 우클릭 View Sessions · View Locks · Open ERD (All), 프로그램 우클릭 Open Source · View Compilation Errors (<a href="#db">데이터베이스</a>)</td></tr>
       <tr><td>Result (아래)</td><td>Fetch · Apply · Revert · CSV · Excel · INSERT · UPDATE · DTO · enum · 찾기(<kbd>Ctrl</kbd>+<kbd>F</kbd>). 칸 우클릭 Copy Value · Copy Selected Rows · Copy Column Values as IN List · Sort (<a href="#db">데이터베이스</a>)</td></tr>
@@ -969,7 +969,13 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
       <tr><td>Push</td><td>고른 저장소(없으면 전부)를 올리는 Push 창</td></tr>
       <tr><td>Commit and Push…</td><td>커밋 창을 엽니다. 파일을 체크하고 Commit and Push 로 커밋과 올리기를 한 번에</td></tr>
       <tr><td>목록 우클릭</td><td>「들어올 변경」 줄 · 그 파일: Pull(Pull Selected 와 같음), SVN 은 Update Only These Files 로 그 파일만 svn update. 「나갈 변경」 줄 · 그 파일: Commit…(그 파일만 체크된 커밋 창) · Push(Git 만) · Replace with HEAD(확인창, 이클립스 Replace With › HEAD Revision 과 같음). 「충돌」 줄: Resolve Conflicts</td></tr>
-      <tr><td>저장소 줄 우클릭</td><td>Pull · Push · Refresh This Repository(이 저장소만 원격 확인) · Merge Branches… · Undo Last Git Action… · 탐색기에서 열기</td></tr>
+      <tr><td>저장소 줄 우클릭</td><td>Pull · Push · Refresh This Repository(이 저장소만 원격 확인) · Merge Branches… · Undo Last Git Action… · Show in Git Log · 탐색기에서 열기</td></tr>
+      <tr><td>파일 줄 우클릭 아래</td><td>IntelliJ 기본 Jump to Source · Show History · Copy Absolute Path · Select in Project View. 메뉴 키 · Shift+F10 으로도 뜹니다</td></tr>
+      <tr><td>알림 풍선</td><td>받기가 끝나면 「받기 끝: 저장소 · 커밋 · 파일 수」와 「커밋 보기」(Git Log 창). 원격 확인에 실패한 저장소마다 「다시 시도」 · 「자세히」, 그 저장소 줄 끝에 빨간 「⚠ 원격 확인 실패」</td></tr>
+      <tr><td>진행 · 멈추기</td><td>새로고침 · 받기가 IDE 아래 상태 표시줄에 진행 막대로 보이고 ✕ 로 멈춥니다</td></tr>
+      <tr><td>단추 숫자</td><td>Pull Selected 끝에 받을 파일 수, Push 끝에 올릴 커밋 수. 충돌이 없으면 Resolve Conflicts 는 꺼집니다</td></tr>
+      <tr><td>도구줄</td><td>모두 펼치기 · 모두 접기 · 폴더별로 묶기 · 이전 파일 · 다음 파일(Alt+← · Alt+→, 비교 화면에서도)</td></tr>
+      <tr><td>원격 확인 시각</td><td>위쪽 줄 「원격 확인 3분 전」, 30분이 지나면 주황 「새로고침 필요」. 설정 → 버전 관리 → 동기화 창에서 자동 확인 간격(분, 기본 끔)</td></tr>
       <tr><td>Undo Last Git Action…</td><td>그 저장소의 마지막 Git 동작을 확인 창에 보이고 되돌립니다. 커밋 · amend 는 커밋만 없애고 파일은 남김, 합치기 · 받기 · 리베이스 · reset 은 그 전 위치로(커밋 안 한 내 변경은 지키고, 겹치면 멈춤), 브랜치를 막 바꿨으면 앞 브랜치로. 이미 서버에 있는 커밋이면 빨간 글로 알립니다. 한 번 더 하면 되돌리기 전으로</td></tr>
       <tr><td>키보드</td><td>글자를 치면 파일 이름으로 찾기, 파일 줄 두 번 누르기 · F4 · Enter 는 편집기로 열기. 저장할 때 다시 비교해도 고른 줄 · 오른쪽 비교가 그대로입니다</td></tr>
     </table>
