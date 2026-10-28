@@ -319,8 +319,10 @@ public final class ReverseMergeAction extends DumbAwareAction {
       return row;
     }
 
-    // 저장소 이름 글자 크기: 기본 글자보다 키우는 단계.
-    private static final int REPO_FONT_STEP = 2;
+    // 저장소 이름 띠: 기본 글자보다 키우는 단계와 띠 안쪽 여백(px).
+    private static final int REPO_FONT_STEP = 4;
+    private static final int REPO_PAD_V = 2;
+    private static final int REPO_PAD_H = 10;
 
     private static JBLabel dim(String text) {
       return new JBLabel(text, UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER);
@@ -328,10 +330,13 @@ public final class ReverseMergeAction extends DumbAwareAction {
 
     @Override
     protected @Nullable JComponent createCenterPanel() {
-      // 맨 위: 어느 저장소를 합치는지. 합치기 전에 꼭 확인할 값이라 Git Log 현재 브랜치와 같은 파랑 · 두 단계 큰 굵은 글씨로 눈에 띄게 하고, 경로는 옆에 작게.
+      // 맨 위: 어느 저장소를 합치는지. 합치기 전에 꼭 확인할 값이라 파란 바탕에 흰 큰 굵은 글씨 띠로 눈에 띄게 하고, 경로는 옆에 작게.
       JPanel where = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0));
       JBLabel name = new JBLabel(root.getName()).withFont(JBFont.label().biggerOn(REPO_FONT_STEP).asBold());
-      name.setForeground(ProjectHistoryPanel.HEAD_COLOR);
+      name.setOpaque(true);
+      name.setBackground(ProjectHistoryPanel.HEAD_COLOR);
+      name.setForeground(JBColor.WHITE);
+      name.setBorder(JBUI.Borders.empty(REPO_PAD_V, REPO_PAD_H));
       where.add(name);
       where.add(dim(root.getPath()));
 
