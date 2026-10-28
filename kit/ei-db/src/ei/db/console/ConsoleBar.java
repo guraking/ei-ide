@@ -2,6 +2,7 @@ package ei.db.console;
 
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.actionSystem.ActionToolbar;
+import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.actionSystem.Separator;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.editor.Editor;
@@ -41,12 +42,12 @@ import javax.swing.SwingConstants;
 import javax.swing.event.PopupMenuEvent;
 import javax.swing.event.PopupMenuListener;
 import java.awt.BorderLayout;
-import java.awt.Font;
 import java.sql.SQLException;
 import java.util.function.Function;
 
 /**
- * 콘솔 편집기 위의 띠: 운영 경고(운영 접속일 때) + 도구줄(실행 · 전체 실행 · 중지 · 실행 계획 · 실행 기록 · 정렬 · 대문자 · 소문자 · 접속 · 자동 커밋 · 미반영 배지 · 커밋 · 롤백).
+ * 콘솔 편집기 위의 띠. 위 줄은 도구줄(실행 · 전체 실행 · 중지 · 더 보기(실행 계획 · 실행 기록 · 정렬 · 대문자 · 소문자) │ 접속 · 건수 │ 자동 커밋 · 미반영 배지,
+ * 오른쪽 끝 커밋 · 롤백), 아래 줄은 운영 접속일 때만 보이는 빨간 띠(운영 접속 · 변경은 매번 확인합니다 · 미반영 N건).
  * 편집기 하나에 하나만 만들고 편집기가 닫힐 때 리스너도 풀린다.
  */
 final class ConsoleBar extends JPanel {
@@ -63,9 +64,13 @@ final class ConsoleBar extends JPanel {
   private static final int GAP = 8;
   /** 묶음 사이 세로선 높이(px, 배율 전). 도구줄 아이콘 단추 높이보다 조금 낮게 둔다. */
   private static final int SEPARATOR_HEIGHT = 18;
+  /** 운영 띠 왼쪽 빨간 줄 두께(px, 배율 전). */
+  private static final int BAND_STRIPE = 3;
   /** 운영 꼬리표: 바탕을 칠한 작은 굵은 글. 글 양옆 빈칸이 바탕 여백이 된다. */
   private static final SimpleTextAttributes PRODUCTION_TAG = new SimpleTextAttributes(UiColors.PRODUCTION_BG, UiColors.PRODUCTION, null,
       SimpleTextAttributes.STYLE_OPAQUE | SimpleTextAttributes.STYLE_SMALLER | SimpleTextAttributes.STYLE_BOLD);
+  private static final SimpleTextAttributes BAND_BOLD = new SimpleTextAttributes(SimpleTextAttributes.STYLE_BOLD, UiColors.DANGER_TEXT);
+  private static final SimpleTextAttributes BAND_PLAIN = new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, UiColors.DANGER_TEXT);
   private static final String TAG_PAD = " ";
   private static final String SPACE = "  ";
   private static final String DOT = " · ";
@@ -73,13 +78,15 @@ final class ConsoleBar extends JPanel {
   private final Project project;
   private final VirtualFile file;
   private final JPanel band = new JPanel(new BorderLayout());
+  /** 띠 왼쪽: 「운영 접속 · 변경은 매번 확인합니다 · 미반영 N건」. 오른쪽: 접속 이름 · 스키마 · 호스트. */
+  private final SimpleColoredComponent bandText = new SimpleColoredComponent();
   private final SimpleColoredComponent bandTarget = new SimpleColoredComponent();
   private final ComboBox<DbConfig> combo = new ComboBox<>();
   private final JBCheckBox autoCommit = new JBCheckBox(EiDbBundle.message("console.autocommit"));
   /** 조회 건수. 목록에서 고르거나 1 이상 숫자를 직접 쓴다. 프로젝트의 모든 콘솔 · 표 데이터 보기에 같이 적용된다. */
   private final ComboBox<Integer> rows = new ComboBox<>(new Integer[] {DbSessions.MAX_ROWS, 1000, 5000, 10000});
   private final JBLabel badge = new JBLabel();
-  /** 실행 · 정렬 단추와 커밋 · 롤백 단추. 켜짐 · 보임은 BarAction.update 가 접속 상태로 판정하고 refresh 가 다시 판정하게 한다. */
+  /** 실행 단추와 커밋 · 롤백 단추. 켜짐 · 보임은 BarAction.update 가 접속 상태로 판정하고 refresh 가 다시 판정하게 한다. */
   private final ActionToolbar runBar;
   private final ActionToolbar commitBar;
   /** 화면을 값에 맞추는 중이면 콤보 · 체크 상자의 변경 처리를 건너뛴다. */
@@ -107,34 +114,26 @@ final class ConsoleBar extends JPanel {
     this.project = project;
     this.file = file;
 
-    JBLabel warning = new JBLabel(EiDbBundle.message("console.production.warning"), AllIcons.General.Warning, SwingConstants.LEFT);
-    warning.setForeground(UiColors.DANGER_TEXT);
-    warning.setFont(warning.getFont().deriveFont(Font.BOLD));
-    bandTarget.setOpaque(false);
-    bandTarget.setIpad(JBUI.emptyInsets());
-    band.setBackground(UiColors.DANGER_BAND);
-    band.setBorder(JBUI.Borders.compound(JBUI.Borders.customLine(UiColors.DANGER_LINE, 0, 0, 1, 0),
-        JBUI.Borders.customLine(UiColors.DANGER, 0, 4, 0, 0), JBUI.Borders.empty(6, 10)));
-    band.add(warning, BorderLayout.WEST);
-    band.add(bandTarget, BorderLayout.EAST);
-    add(band, BorderLayout.NORTH);
-
+    // 자주 안 쓰는 단추는 「더 보기」 메뉴로 모은다. 단축키는 등록된 동작이 맡고 여기서는 표시만 한다.
+    DefaultActionGroup more = DefaultActionGroup.createPopupGroup(() -> EiDbBundle.message("explorer.more"));
+    more.getTemplatePresentation().setIcon(AllIcons.Actions.More);
+    more.add(new BarAction(EiDbBundle.message("console.plan.tooltip"), null, AllIcons.Toolwindows.ToolWindowHierarchy,
+        () -> ExplainPlan.run(project, editor, file)).shortcutOf(EXPLAIN_ACTION));
+    more.add(new BarAction(EiDbBundle.message("console.history.tooltip"), null, AllIcons.Vcs.History, () -> HistoryDialog.open(project)));
+    more.add(Separator.getInstance());
+    more.add(new BarAction(EiDbBundle.message("console.format"), EiDbBundle.message("console.format.tooltip"), AllIcons.Actions.ReformatCode,
+        () -> ConsoleRun.format(project, editor)).shortcutOf(FORMAT_ACTION));
+    more.add(new BarAction(EiDbBundle.message("console.upper"), EiDbBundle.message("console.upper.tooltip"), null,
+        () -> ConsoleRun.toCase(project, editor, true)).shortcutOf(UPPER_ACTION));
+    more.add(new BarAction(EiDbBundle.message("console.lower"), EiDbBundle.message("console.lower.tooltip"), null,
+        () -> ConsoleRun.toCase(project, editor, false)).shortcutOf(LOWER_ACTION));
     runBar = BarAction.toolbar(TOOLBAR_PLACE, editor.getContentComponent(),
         new BarAction(EiDbBundle.message("common.run"), EiDbBundle.message("console.run.tooltip"), AllIcons.Actions.Execute,
             () -> ConsoleRun.runCurrent(project, editor, file)).shortcutOf(RUN_ACTION),
         new BarAction(EiDbBundle.message("action.ei.db.console.RunAll.text"), EiDbBundle.message("console.runall.tooltip"), AllIcons.Actions.RunAll,
             () -> ConsoleRun.runAll(project, editor, file)).shortcutOf(RUN_ALL_ACTION),
         new BarAction(EiDbBundle.message("console.stop"), null, AllIcons.Actions.Suspend, this::cancelRun).enabledWhen(this::isRunning),
-        new BarAction(EiDbBundle.message("console.plan.tooltip"), null, AllIcons.Toolwindows.ToolWindowHierarchy,
-            () -> ExplainPlan.run(project, editor, file)).shortcutOf(EXPLAIN_ACTION),
-        new BarAction(EiDbBundle.message("console.history.tooltip"), null, AllIcons.Vcs.History, () -> HistoryDialog.open(project)),
-        Separator.getInstance(),
-        new BarAction(EiDbBundle.message("console.format"), EiDbBundle.message("console.format.tooltip"), AllIcons.Actions.ReformatCode,
-            () -> ConsoleRun.format(project, editor)).shortcutOf(FORMAT_ACTION),
-        new BarAction(EiDbBundle.message("console.upper"), EiDbBundle.message("console.upper.tooltip"), null,
-            () -> ConsoleRun.toCase(project, editor, true)).withText().shortcutOf(UPPER_ACTION),
-        new BarAction(EiDbBundle.message("console.lower"), EiDbBundle.message("console.lower.tooltip"), null,
-            () -> ConsoleRun.toCase(project, editor, false)).withText().shortcutOf(LOWER_ACTION));
+        more);
     commitBar = BarAction.toolbar(TOOLBAR_PLACE, editor.getContentComponent(),
         new BarAction(EiDbBundle.message("console.commit"), null, AllIcons.Actions.Commit, () -> endTransaction(true))
             .visibleWhen(this::manualCommit).enabledWhen(this::hasPending).withText(),
@@ -155,25 +154,38 @@ final class ConsoleBar extends JPanel {
     autoCommit.addActionListener(e -> toggleAutoCommit());
     badge.setForeground(UiColors.WARNING);
 
-    // 띠 아래 선 하나로 편집기와 나눈다. 단추는 IntelliJ 도구줄(평평한 아이콘 단추)이고 콤보 · 체크 상자만 일반 부품이다.
-    JPanel bar = new JPanel(new HorizontalLayout(GAP, SwingConstants.CENTER));
+    // 도구줄: 왼쪽 묶음들 + 오른쪽 끝 커밋 · 롤백. 아래 선 하나로 편집기(또는 운영 띠)와 나눈다.
+    JPanel left = new JPanel(new HorizontalLayout(GAP, SwingConstants.CENTER));
+    left.add(runBar.getComponent());
+    left.add(separator());
+    left.add(combo);
+    left.add(rows);
+    left.add(autoCommit);
+    left.add(badge);
+    JPanel bar = new JPanel(new BorderLayout());
     bar.setBorder(JBUI.Borders.compound(JBUI.Borders.customLineBottom(JBUI.CurrentTheme.ToolWindow.borderColor()), JBUI.Borders.emptyLeft(GAP)));
-    bar.add(runBar.getComponent());
-    bar.add(separator());
-    bar.add(combo);
-    bar.add(rows);
-    bar.add(separator());
-    bar.add(autoCommit);
-    bar.add(badge);
-    bar.add(commitBar.getComponent());
-    add(bar, BorderLayout.CENTER);
+    bar.add(left, BorderLayout.WEST);
+    bar.add(commitBar.getComponent(), BorderLayout.EAST);
+    add(bar, BorderLayout.NORTH);
+
+    // 운영 띠: 도구줄 아래, 왼쪽 빨간 줄 + 빨간 바탕.
+    bandText.setOpaque(false);
+    bandText.setIpad(JBUI.emptyInsets());
+    bandTarget.setOpaque(false);
+    bandTarget.setIpad(JBUI.emptyInsets());
+    band.setBackground(UiColors.DANGER_BAND);
+    band.setBorder(JBUI.Borders.compound(JBUI.Borders.customLine(UiColors.DANGER_LINE, 0, 0, 1, 0),
+        JBUI.Borders.customLine(UiColors.DANGER, 0, BAND_STRIPE, 0, 0), JBUI.Borders.empty(6, 10)));
+    band.add(bandText, BorderLayout.WEST);
+    band.add(bandTarget, BorderLayout.EAST);
+    add(band, BorderLayout.CENTER);
 
     DbSessions.get(project).addListener(parent, () -> ApplicationManager.getApplication().invokeLater(this::refresh));
     reloadConnections();
     refresh();
   }
 
-  /** 접속 콤보 줄: DB 종류 아이콘 + 상태 점 · 굵은 이름 · 회색 스키마 · 운영 꼬리표. */
+  /** 접속 콤보 줄: DB 종류 아이콘 + 상태 점 · 굵은 이름 · 「 · 스키마」 · 운영 꼬리표. */
   private final class ConnectionRenderer extends ColoredListCellRenderer<DbConfig> {
     @Override
     protected void customizeCellRenderer(@NotNull JList<? extends DbConfig> list, DbConfig c, int index, boolean selected, boolean hasFocus) {
@@ -181,7 +193,7 @@ final class ConsoleBar extends JPanel {
       boolean open = DbSessions.get(project).isOpen(c.id);
       setIcon(new KindIcon(c.kind, open ? UiColors.CONNECTED : UiColors.DISCONNECTED, selected ? null : UIUtil.getListBackground()));
       append(c.name, SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES);
-      append(SPACE + c.effectiveSchema(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+      append(DOT + c.effectiveSchema(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
       if (c.production) {
         append(SPACE);
         append(TAG_PAD + EiDbBundle.message("explorer.production") + TAG_PAD, PRODUCTION_TAG);
@@ -246,12 +258,16 @@ final class ConsoleBar extends JPanel {
         badge.setVisible(true);
         return;
       }
+      int pending = DbSessions.get(project).pending(c.id);
+      bandText.clear();
+      bandText.append(EiDbBundle.message("console.production.band.title"), BAND_BOLD);
+      bandText.append(DOT + EiDbBundle.message("console.production.band.note"), BAND_PLAIN);
+      if (pending > 0) bandText.append(DOT + EiDbBundle.message("console.badge.pending", pending), BAND_PLAIN);
       bandTarget.clear();
-      bandTarget.append(c.name, new SimpleTextAttributes(SimpleTextAttributes.STYLE_BOLD, UiColors.DANGER_TEXT));
-      bandTarget.append(DOT + c.effectiveSchema() + DOT + c.host, new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, UiColors.DANGER_TEXT));
+      bandTarget.append(c.name, BAND_BOLD);
+      bandTarget.append(DOT + c.effectiveSchema() + DOT + c.host, BAND_PLAIN);
       autoCommit.setEnabled(true);
       autoCommit.setSelected(c.autoCommit);
-      int pending = DbSessions.get(project).pending(c.id);
       // 미반영 건수는 짧은 꼬리표로, 전체 문구는 툴팁으로 보인다.
       badge.setText(null);
       badge.setIcon(new Badge(EiDbBundle.message("console.badge.pending.short", pending), UiColors.PENDING_BG, UiColors.PENDING));
