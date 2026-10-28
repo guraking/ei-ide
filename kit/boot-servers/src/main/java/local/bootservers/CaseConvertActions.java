@@ -1,5 +1,6 @@
 package local.bootservers;
 
+import com.intellij.codeInsight.hint.HintManager;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
@@ -54,6 +55,8 @@ public final class CaseConvertActions {
             }
             String converted = CaseConvert.convert(text, style);
             if (converted.equals(text)) {
+                // 이미 그 표기법이면 바꿀 것이 없다고 편집기 위 안내로 알린다(IntelliJ 편집기 동작의 「할 일 없음」 표시와 같다).
+                HintManager.getInstance().showInformationHint(editor, BootServersBundle.message("case.unchanged"));
                 return;
             }
             int start = selection.getSelectionStart();
