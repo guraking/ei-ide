@@ -3,15 +3,18 @@ package kinggura.sync;
 import com.intellij.openapi.options.Configurable;
 import com.intellij.openapi.options.ConfigurationException;
 import com.intellij.openapi.progress.ProgressManager;
+import com.intellij.openapi.ui.ComponentPanelBuilder;
+import com.intellij.ui.DoubleClickListener;
 import com.intellij.ui.ToolbarDecorator;
 import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.JBUI;
 import org.jetbrains.annotations.Nls;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.JComponent;
-import javax.swing.JLabel;
+import java.awt.event.MouseEvent;
 import javax.swing.table.AbstractTableModel;
 import java.util.ArrayList;
 import java.util.List;
@@ -42,9 +45,17 @@ public final class GitLoginConfigurable implements Configurable {
       .setEditAction(button -> edit())
       .setRemoveAction(button -> remove())
       .createPanel();
-    JLabel hint = new JLabel(SyncBundle.message("gitlogin.hint"));
-    hint.setBorder(JBUI.Borders.emptyBottom(8));
-    return FormBuilder.createFormBuilder().addComponent(hint).addComponentFillVertically(list, 0).getPanel();
+    new DoubleClickListener() {
+      @Override
+      protected boolean onDoubleClick(@NotNull MouseEvent event) {
+        edit();
+        return true;
+      }
+    }.installOn(table);
+    // 설명은 IntelliJ 설정 화면의 회색 안내 글(comment)로, 창 폭에 맞춰 줄을 바꾼다.
+    JComponent hint = ComponentPanelBuilder.createCommentComponent(SyncBundle.message("gitlogin.hint"), true);
+    hint.setBorder(JBUI.Borders.emptyTop(4));
+    return FormBuilder.createFormBuilder().addComponentFillVertically(list, 0).addComponent(hint).getPanel();
   }
 
   private void add() {
