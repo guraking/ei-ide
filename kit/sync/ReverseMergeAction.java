@@ -319,16 +319,21 @@ public final class ReverseMergeAction extends DumbAwareAction {
       return row;
     }
 
+    // 저장소 이름 글자 크기: 기본 글자보다 키우는 단계.
+    private static final int REPO_FONT_STEP = 2;
+
     private static JBLabel dim(String text) {
       return new JBLabel(text, UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER);
     }
 
     @Override
     protected @Nullable JComponent createCenterPanel() {
-      // 머리 오른쪽: 어느 저장소를 합치는지(이름 · 경로). 합치기 전에 꼭 확인할 값이라 맨 위에 둔다.
-      JBLabel where = dim(SyncBundle.message("rmerge.where", root.getName(), root.getPath()));
-      where.setHorizontalAlignment(SwingConstants.RIGHT);
-      where.setToolTipText(root.getPath());
+      // 맨 위: 어느 저장소를 합치는지. 합치기 전에 꼭 확인할 값이라 Git Log 현재 브랜치와 같은 파랑 · 두 단계 큰 굵은 글씨로 눈에 띄게 하고, 경로는 옆에 작게.
+      JPanel where = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0));
+      JBLabel name = new JBLabel(root.getName()).withFont(JBFont.label().biggerOn(REPO_FONT_STEP).asBold());
+      name.setForeground(ProjectHistoryPanel.HEAD_COLOR);
+      where.add(name);
+      where.add(dim(root.getPath()));
 
       // 단계 1: From → Into. 두 상자가 창 너비를 반씩 나눈다. From 은 원격 브랜치를 합치고, Into 는 원격에 맞춘 로컬 브랜치에 합친 뒤 같은 원격 브랜치로 푸시한다.
       fromBox.setToolTipText(SyncBundle.message("rmerge.from"));
