@@ -1072,7 +1072,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
                         setToolTipText(p.toString());
                     }
                 })
-                .setItemChosenCallback(open)
+                .setItemChosenCallback(open::accept)
                 .createPopup()
                 .showInFocusCenter();
     }
