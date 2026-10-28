@@ -10,6 +10,11 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowFactory;
 import com.intellij.openapi.wm.ToolWindowManager;
+import com.intellij.openapi.wm.WindowManager;
+import com.intellij.openapi.wm.ex.ToolWindowEx;
+import com.intellij.ide.util.PropertiesComponent;
+import com.intellij.openapi.application.ApplicationManager;
+import javax.swing.JFrame;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentFactory;
 import org.jetbrains.annotations.NotNull;
@@ -19,6 +24,9 @@ public final class SyncToolWindowFactory implements ToolWindowFactory, DumbAware
   static final String ID = "Synchronize";
   /** 우클릭으로 창을 열 때 비교할 파일. 있으면 창을 처음 만들 때 전체 비교를 건너뛰고 그 저장소만 비교한다. */
   private static final Key<VirtualFile> ONLY_FILE = Key.create("kinggura.sync.onlyFile");
+  // 처음 열릴 때 창 높이: IDE 창 내용 높이의 이 비율(2026-10-29 사용자 캡처). 한 번만 맞추고, 그 뒤는 IDE 가 기억하는 크기를 쓴다.
+  private static final float INITIAL_HEIGHT_RATIO = 0.35f;
+  private static final String INITIAL_SIZE_DONE_KEY = "kinggura.sync.initialSize";
 
   @Override
   public void init(@NotNull ToolWindow toolWindow) {
@@ -31,6 +39,20 @@ public final class SyncToolWindowFactory implements ToolWindowFactory, DumbAware
     Content content = ContentFactory.getInstance().createContent(panel, "", false);
     toolWindow.getContentManager().addContent(content);
     if (project.getUserData(ONLY_FILE) == null) panel.refresh();
+    applyInitialHeight(project, toolWindow);
+  }
+
+  /** 이 PC 에서 처음 열 때 한 번, 창 높이를 IDE 창 높이의 INITIAL_HEIGHT_RATIO 로 늘리거나 줄인다. 창이 아직 그려지기 전이면 다음 그리기 뒤에 잰다. */
+  private static void applyInitialHeight(Project project, ToolWindow toolWindow) {
+    PropertiesComponent properties = PropertiesComponent.getInstance();
+    if (properties.getBoolean(INITIAL_SIZE_DONE_KEY) || !(toolWindow instanceof ToolWindowEx ex)) return;
+    ApplicationManager.getApplication().invokeLater(() -> {
+      JFrame frame = WindowManager.getInstance().getFrame(project);
+      int current = toolWindow.getComponent().getHeight();
+      if (frame == null || current <= 0) return;
+      ex.stretchHeight(Math.round(frame.getContentPane().getHeight() * INITIAL_HEIGHT_RATIO) - current);
+      properties.setValue(INITIAL_SIZE_DONE_KEY, true);
+    });
   }
 
   /**
