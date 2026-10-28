@@ -81,7 +81,7 @@ public final class ConnectDialog extends DialogWrapper {
   private boolean fillingPassword;
   private final JBTextField schema = new JBTextField();
   private final JBLabel driverName = new JBLabel();
-  private final JBLabel driverStatus = new JBLabel("", UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER);
+  private final JBLabel driverStatus = new JBLabel("", UIUtil.ComponentStyle.REGULAR, UIUtil.FontColor.BRIGHTER);
   private final ActionLink downloadLink = new ActionLink(EiDbBundle.message("connect.download"), (ActionListener) e -> downloadDriver());
   private final ActionLink autoDriverLink = new ActionLink(EiDbBundle.message("connect.auto.driver"), (ActionListener) e -> autoDriver());
   private final JBLabel url = new JBLabel();
@@ -262,6 +262,7 @@ public final class ConnectDialog extends DialogWrapper {
     autoDriverLink.setVisible(!driverJar.isBlank());
     driverName.setText(EiDbBundle.message("common.searching"));
     driverStatus.setText("");
+    driverStatus.setToolTipText(null);
     // 창이 뜨기 전(init)에도 불리므로 current() 를 쓰면 바깥 상태가 잡혀 창이 닫힐 때까지 갱신이 밀린다. 글자만 바꾸므로 any() 로 둔다.
     ModalityState modality = ModalityState.any();
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
@@ -281,13 +282,16 @@ public final class ConnectDialog extends DialogWrapper {
   private void downloadDriver() {
     DbKind target = kind;
     try {
-      Path jar = ProgressManager.getInstance().runProcessWithProgressSynchronously(
+      ProgressManager.getInstance().runProcessWithProgressSynchronously(
           () -> Drivers.download(target), EiDbBundle.message("connect.download.progress", target.label), true, project);
-      Messages.showInfoMessage(getContentPane(), EiDbBundle.message("connect.downloaded", jar.getFileName()), EiDbBundle.message("connect.driver"));
+      refreshDriver();
     } catch (Exception e) {
-      Messages.showErrorDialog(getContentPane(), EiDbBundle.message("connect.download.failed", e.getMessage()), EiDbBundle.message("connect.driver"));
+      // 결과는 창 위에 또 창을 띄우지 않고 드라이버 칸 옆 글로 보인다. 긴 오류는 툴팁으로 전체를 본다.
+      String failed = EiDbBundle.message("connect.download.failed", e.getMessage());
+      driverStatus.setText(failed);
+      driverStatus.setToolTipText(failed);
+      driverStatus.setForeground(ERROR_COLOR);
     }
-    refreshDriver();
   }
 
   private void chooseJar() {

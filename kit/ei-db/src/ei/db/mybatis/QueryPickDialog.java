@@ -237,7 +237,7 @@ final class QueryPickDialog extends DialogWrapper {
       }
       int dot = name.lastIndexOf('.');
       append(name.substring(dot + 1), SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES);
-      if (dot > 0) append("  " + name.substring(0, dot), SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES);
+      if (dot > 0) append("  " + name.substring(0, dot), SimpleTextAttributes.GRAYED_ATTRIBUTES);
     }
   }
 }

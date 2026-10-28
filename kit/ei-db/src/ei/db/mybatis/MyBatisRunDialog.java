@@ -4,6 +4,7 @@ import com.intellij.icons.AllIcons;
 import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.editor.EditorFactory;
 import com.intellij.openapi.editor.colors.EditorColorsManager;
 import com.intellij.openapi.editor.colors.EditorFontType;
 import com.intellij.openapi.ide.CopyPasteManager;
@@ -14,20 +15,21 @@ import com.intellij.openapi.ui.ComboBox;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.openapi.ui.ValidationInfo;
 import com.intellij.psi.PsiClass;
+import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.ui.DocumentAdapter;
-import com.intellij.ui.JBColor;
+import com.intellij.ui.EditorNotificationPanel;
+import com.intellij.ui.EditorTextField;
 import com.intellij.ui.SimpleListCellRenderer;
 import com.intellij.ui.components.ActionLink;
 import com.intellij.ui.components.JBCheckBox;
 import com.intellij.ui.components.JBLabel;
-import com.intellij.ui.components.JBScrollPane;
-import com.intellij.ui.components.JBTextArea;
 import com.intellij.ui.components.JBTextField;
 import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
 import ei.db.DbConfig;
 import ei.db.DbSettings;
+import ei.db.FileTypes;
 import ei.db.EiDbBundle;
 import ei.db.Notify;
 import ei.db.SqlRunner;
@@ -37,14 +39,11 @@ import org.jetbrains.annotations.Nullable;
 
 import javax.swing.AbstractAction;
 import javax.swing.Action;
-import javax.swing.BoxLayout;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.event.DocumentEvent;
 import java.awt.BorderLayout;
-import java.awt.Color;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
+import java.awt.FlowLayout;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.ActionEvent;
 import java.util.ArrayList;
@@ -63,12 +62,9 @@ public final class MyBatisRunDialog extends DialogWrapper {
   /** 마지막에 고른 접속 id(프로젝트 단위). 로그 실행도 같은 값을 기본으로 쓴다. */
   public static final String CONNECTION_KEY = "ei.db.mybatis.connection";
   private static final String VALUE_KEY = "ei.db.mybatis.value.";
-  private static final int PREVIEW_ROWS = 12;
-  private static final int PREVIEW_COLUMNS = 80;
-  /** 칼럼 · 필드 불일치 알림: 경고 글자색과 알림 띠(Banner)의 경고 바탕 · 테두리. 모두 테마 색. */
-  private static final Color WARNING = JBUI.CurrentTheme.Label.warningForeground();
-  private static final Color WARNING_BACKGROUND = JBUI.CurrentTheme.Banner.WARNING_BACKGROUND;
-  private static final Color WARNING_BORDER = JBUI.CurrentTheme.Banner.WARNING_BORDER_COLOR;
+  /** SQL 미리보기 편집기 크기(px, 배율 전). 12줄 남짓 보이는 높이. */
+  private static final int PREVIEW_WIDTH = 640;
+  private static final int PREVIEW_HEIGHT = 240;
 
   private final Project project;
   private final MapperDoc doc;
@@ -76,7 +72,7 @@ public final class MyBatisRunDialog extends DialogWrapper {
   private final Set<String> listNames;
   private final Map<String, Row> rows = new LinkedHashMap<>();
   private final ComboBox<DbConfig> connection;
-  private final JBTextArea preview = new JBTextArea(PREVIEW_ROWS, PREVIEW_COLUMNS);
+  private final EditorTextField preview;
   private final JBLabel summary = new JBLabel();
   private final JPanel warning = new JPanel(new BorderLayout());
   private final PsiClass dto;
@@ -126,6 +122,12 @@ public final class MyBatisRunDialog extends DialogWrapper {
       row.isNull.setSelected(text.isBlank());
       rows.put(name, row);
     }
+    preview = new EditorTextField(EditorFactory.getInstance().createDocument(""), project, FileTypes.byExtension("sql"), true, false);
+    preview.addSettingsProvider(e -> {
+      e.setVerticalScrollbarVisible(true);
+      e.setHorizontalScrollbarVisible(true);
+    });
+    preview.setPreferredSize(JBUI.size(PREVIEW_WIDTH, PREVIEW_HEIGHT));
     connection = new ComboBox<>(DbSettings.getInstance().connections().toArray(new DbConfig[0]));
     connection.setRenderer(SimpleListCellRenderer.create("", MyBatisRunDialog::connectionLabel));
     DbConfig last = DbSettings.getInstance().find(props.getValue(CONNECTION_KEY, ""));
@@ -163,33 +165,18 @@ public final class MyBatisRunDialog extends DialogWrapper {
         .addLabeledComponent(EiDbBundle.message("common.connection"), connection, JBUI.scale(8))
         .addComponent(parameters(), JBUI.scale(10))
         .addComponent(note)
-        .addComponent(previewBox(), JBUI.scale(8))
+        .addComponent(previewHead(), JBUI.scale(8))
+        .addComponent(preview, JBUI.scale(4))
         .addComponent(warning, JBUI.scale(8))
         .getPanel();
   }
 
+  /** 매개변수마다 한 줄: 이름(코드 글꼴) · 값 칸 · 값 형식(흐린 글) · null. */
   private JComponent parameters() {
-    JPanel p = new JPanel(new GridBagLayout());
-    if (rows.isEmpty()) {
-      p.add(new JBLabel(EiDbBundle.message("mybatisrun.no.params")));
-      return p;
-    }
-    GridBagConstraints g = new GridBagConstraints();
-    g.insets = JBUI.insets(2, 0, 2, 10);
-    g.anchor = GridBagConstraints.WEST;
-    g.gridy = 0;
-    String[] heads = {EiDbBundle.message("mybatisrun.col.param"), EiDbBundle.message("common.col.type"), EiDbBundle.message("bind.col.value"), ""};
-    for (int k = 0; k < heads.length; k++) {
-      JBLabel h = new JBLabel(heads[k]);
-      h.setForeground(UIUtil.getContextHelpForeground());
-      g.gridx = k;
-      g.weightx = k == 2 ? 1 : 0;
-      g.fill = k == 2 ? GridBagConstraints.HORIZONTAL : GridBagConstraints.NONE;
-      p.add(h, g);
-    }
+    if (rows.isEmpty()) return new JBLabel(EiDbBundle.message("mybatisrun.no.params"));
+    FormBuilder form = FormBuilder.createFormBuilder();
     for (Map.Entry<String, Row> e : rows.entrySet()) {
       Row row = e.getValue();
-      g.gridy++;
       JBLabel name = new JBLabel(e.getKey());
       name.setFont(monospace());
       row.value.getEmptyText().setText(EiDbBundle.message("mybatisrun.empty.hint"));
@@ -201,43 +188,33 @@ public final class MyBatisRunDialog extends DialogWrapper {
         }
       });
       row.isNull.addActionListener(ev -> refresh());
-      JComponent[] cells = {name, row.type, row.value, row.isNull};
-      for (int k = 0; k < cells.length; k++) {
-        g.gridx = k;
-        g.weightx = k == 2 ? 1 : 0;
-        g.fill = k == 2 ? GridBagConstraints.HORIZONTAL : GridBagConstraints.NONE;
-        p.add(cells[k], g);
-      }
+      row.type.setForeground(UIUtil.getContextHelpForeground());
+      JPanel tail = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0));
+      tail.add(row.type);
+      tail.add(row.isNull);
+      JPanel line = new JPanel(new BorderLayout(JBUI.scale(8), 0));
+      line.add(row.value, BorderLayout.CENTER);
+      line.add(tail, BorderLayout.EAST);
+      form.addLabeledComponent(name, line);
     }
-    return p;
+    return form.getPanel();
   }
 
-  private JComponent previewBox() {
+  /** 미리보기 머리: 굵은 제목 · 흐린 요약 · 복사 링크. */
+  private JComponent previewHead() {
     JBLabel title = new JBLabel(EiDbBundle.message("mybatisrun.sql.label"));
     title.setFont(title.getFont().deriveFont(java.awt.Font.BOLD));
     summary.setForeground(UIUtil.getContextHelpForeground());
     ActionLink copy = new ActionLink(EiDbBundle.message("common.copy"), e -> {
       CopyPasteManager.getInstance().setContents(new StringSelection(preview.getText()));
     });
-    JPanel head = new JPanel();
-    head.setLayout(new BoxLayout(head, BoxLayout.X_AXIS));
-    head.setBorder(JBUI.Borders.empty(6, 10));
-    head.setOpaque(false);
-    head.add(title);
-    head.add(javax.swing.Box.createHorizontalStrut(JBUI.scale(10)));
-    head.add(summary);
-    head.add(javax.swing.Box.createHorizontalGlue());
-    head.add(copy);
-    preview.setEditable(false);
-    preview.setFont(monospace());
-    preview.setBorder(JBUI.Borders.empty(6, 10));
-    JPanel box = new JPanel(new BorderLayout());
-    box.setBorder(JBUI.Borders.customLine(JBColor.border(), 1));
-    box.add(head, BorderLayout.NORTH);
-    JBScrollPane scroll = new JBScrollPane(preview);
-    scroll.setBorder(JBUI.Borders.customLineTop(JBColor.border()));
-    box.add(scroll, BorderLayout.CENTER);
-    return box;
+    JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(10), 0));
+    left.add(title);
+    left.add(summary);
+    JPanel head = new JPanel(new BorderLayout());
+    head.add(left, BorderLayout.CENTER);
+    head.add(copy, BorderLayout.EAST);
+    return head;
   }
 
   private static java.awt.Font monospace() {
@@ -273,26 +250,18 @@ public final class MyBatisRunDialog extends DialogWrapper {
     List<ResultColumns.Issue> issues = columns == null ? List.of() : ResultColumns.compare(columns, dtoFields);
     warning.setVisible(!issues.isEmpty());
     if (issues.isEmpty()) return;
-    JBLabel title = new JBLabel(EiDbBundle.message("mybatisrun.mismatch", dto.getName(), issues.size()), AllIcons.General.Warning, JBLabel.LEFT);
-    title.setForeground(WARNING);
-    title.setFont(title.getFont().deriveFont(java.awt.Font.BOLD));
-    ActionLink open = new ActionLink(EiDbBundle.message("mybatisrun.open.dto"), e -> {
+    // 기본 알림 띠(경고 상태). 여러 줄은 라벨 HTML 로 줄을 나눈다. 이름에 든 < > 는 글로 보이게 바꾼다.
+    StringBuilder text = new StringBuilder("<html><b>")
+        .append(StringUtil.escapeXmlEntities(EiDbBundle.message("mybatisrun.mismatch", dto.getName(), issues.size()))).append("</b>");
+    for (ResultColumns.Issue i : issues) text.append("<br>").append(StringUtil.escapeXmlEntities(issueText(i)));
+    EditorNotificationPanel banner = new EditorNotificationPanel(EditorNotificationPanel.Status.Warning);
+    banner.icon(AllIcons.General.Warning);
+    banner.setText(text.append("</html>").toString());
+    banner.createActionLabel(EiDbBundle.message("mybatisrun.open.dto"), () -> {
       close(CANCEL_EXIT_CODE);
       dto.navigate(true);
     });
-    JPanel head = new JPanel(new BorderLayout());
-    head.setOpaque(false);
-    head.add(title, BorderLayout.CENTER);
-    head.add(open, BorderLayout.EAST);
-    JPanel lines = new JPanel();
-    lines.setOpaque(false);
-    lines.setLayout(new BoxLayout(lines, BoxLayout.Y_AXIS));
-    lines.setBorder(JBUI.Borders.emptyLeft(22));
-    for (ResultColumns.Issue i : issues) lines.add(new JBLabel(issueText(i)));
-    warning.add(head, BorderLayout.NORTH);
-    warning.add(lines, BorderLayout.CENTER);
-    warning.setBackground(WARNING_BACKGROUND);
-    warning.setBorder(JBUI.Borders.compound(JBUI.Borders.customLine(WARNING_BORDER, 1), JBUI.Borders.empty(8, 12)));
+    warning.add(banner, BorderLayout.CENTER);
     warning.revalidate();
     warning.repaint();
   }
