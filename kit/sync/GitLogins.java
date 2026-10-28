@@ -4,6 +4,7 @@ import com.intellij.credentialStore.CredentialAttributes;
 import com.intellij.credentialStore.CredentialAttributesKt;
 import com.intellij.ide.passwordSafe.PasswordSafe;
 import com.intellij.ide.util.PropertiesComponent;
+import com.intellij.openapi.application.ApplicationManager;
 
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -75,6 +76,8 @@ final class GitLogins {
 
   /** git 을 띄울 때 더할 환경값. 등록이 없으면 빈 맵. base 는 IDE 의 환경(이미 GIT_CONFIG_COUNT 가 있으면 그 뒤에 잇는다). */
   static Map<String, String> env(Map<String, String> base) {
+    // IDE 없이 도는 점검(SyncCheck)에서는 저장한 로그인이 없다.
+    if (ApplicationManager.getApplication() == null) return Map.of();
     Map<String, String> env = cachedEnv;
     if (env == null) {
       env = env(load(), base);
