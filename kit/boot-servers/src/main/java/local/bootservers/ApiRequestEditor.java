@@ -4,6 +4,7 @@ import com.intellij.credentialStore.CredentialAttributes;
 import com.intellij.credentialStore.CredentialAttributesKt;
 import com.intellij.icons.AllIcons;
 import com.intellij.ide.passwordSafe.PasswordSafe;
+import com.intellij.ide.ui.UISettings;
 import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
@@ -561,10 +562,9 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         return scroll;
     }
 
-    /** 보내기 단추 글: 「보내기」 뒤에 작게 단축키(Ctrl+Enter). */
+    /** 보내기 단추 글: 「보내기」 뒤에 단축키(Ctrl+Enter). 글 크기를 하나로 두어 단추 안 세로 가운데가 어긋나지 않게 한다. */
     private static String sendLabel() {
-        return "<html>" + BootServersBundle.message("api.send") + "&nbsp;&nbsp;<small>"
-                + KeymapUtil.getFirstKeyboardShortcutText(CustomShortcutSet.fromString(SEND_SHORTCUT)) + "</small></html>";
+        return BootServersBundle.message("api.send") + "  " + KeymapUtil.getFirstKeyboardShortcutText(CustomShortcutSet.fromString(SEND_SHORTCUT));
     }
 
     /** 주소 칸. 서버 부분(scheme://host:port)과 쿼리(?…)는 흐리게, 경로만 보통 색으로 그린다. 고른 글은 기본 선택 색. */
@@ -609,6 +609,8 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
             Segment segment = getLineBuffer();
             getDocument().getText(from, to - from, segment);
             g.setColor(UIUtil.getContextHelpForeground());
+            // 직접 그리는 글에도 IDE 글자 다듬기(안티에일리어싱)를 맞춘다. 없으면 흐린 부분만 글자가 깨져 보인다.
+            UISettings.setupAntialiasing(g);
             return Utilities.drawTabbedText(segment, x, y, g, this, from);
         }
     }
