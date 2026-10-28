@@ -44,7 +44,7 @@ import com.intellij.openapi.wm.ex.ToolWindowManagerListener;
 import com.intellij.ide.ui.laf.darcula.ui.DarculaButtonUI;
 import com.intellij.ui.ColoredTreeCellRenderer;
 import com.intellij.ui.DoubleClickListener;
-import com.intellij.ui.TreeLinkMouseListener;
+import com.intellij.openapi.vcs.changes.issueLinks.TreeLinkMouseListener;
 import com.intellij.ui.TreeSpeedSearch;
 import com.intellij.ui.RowIcon;
 import com.intellij.ui.SimpleColoredComponent;
