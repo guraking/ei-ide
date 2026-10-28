@@ -31,6 +31,8 @@ import com.intellij.ui.components.JBPasswordField;
 import com.intellij.ui.components.JBRadioButton;
 import com.intellij.ui.components.JBTextField;
 import com.intellij.ui.table.JBTable;
+import com.intellij.ide.ui.laf.darcula.ui.DarculaComboBoxUI;
+import com.intellij.openapi.ui.panel.ComponentPanelBuilder;
 import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.JBFont;
 import com.intellij.util.ui.JBUI;
@@ -65,6 +67,7 @@ import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Component;
+import java.awt.Dimension;
 import java.awt.FlowLayout;
 import javax.swing.AbstractAction;
 import javax.swing.JList;
@@ -197,6 +200,10 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
     private final JBTextField userField = new JBTextField();
     private final JBPasswordField passwordField = new JBPasswordField();
     private final JBTextField cookieField = new JBTextField();
+    private final JBLabel tokenLabel = new JBLabel(BootServersBundle.message("api.auth.token"));
+    private final JBLabel userLabel = new JBLabel(BootServersBundle.message("api.auth.user"));
+    private final JBLabel passwordLabel = new JBLabel(BootServersBundle.message("api.auth.password"));
+    private final JBLabel cookieLabel = new JBLabel(BootServersBundle.message("api.auth.cookie.value"));
     private final TabStrip requestTabs = new TabStrip(false);
     private final JPanel responseHead = new JPanel(new BorderLayout(JBUI.scale(10), 0));
     private final Pill statusPill = new Pill();
@@ -270,8 +277,8 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
                 }
             }
         });
-        // 콤보 상자의 고른 값은 렌더러 글자 색을 따르지 않으므로 상자 글자 색을 방식에 맞춰 바꾼다.
-        methodBox.addItemListener(e -> methodBox.setForeground(methodColor((String) methodBox.getSelectedItem())));
+        // 상자에 보이는 고른 값(index -1)도 렌더러 색을 쓰게 한다. 기본값이면 Darcula 가 상자 글자 색으로 덮는다.
+        methodBox.putClientProperty(DarculaComboBoxUI.DISABLE_SETTING_FOREGROUND, true);
         methodBox.setFont(monoFont().deriveFont(Font.BOLD));
         JPanel top = new JPanel(new BorderLayout(JBUI.scale(8), 0));
         top.add(methodBox, BorderLayout.WEST);
@@ -539,13 +546,20 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
             field.getDocument().addDocumentListener(refresh);
         }
         cookieField.getEmptyText().setText(BootServersBundle.message("api.auth.cookie.hint"));
+        // 이름 칸 폭은 보이는 이름 중 가장 긴 것으로 정해지므로, 늘 보이는 「방식」을 가장 긴 이름 폭에 맞춰 방식을 바꿔도 칸이 움직이지 않게 한다.
+        JBLabel kindLabel = new JBLabel(BootServersBundle.message("api.auth.kind"));
+        int labelWidth = 0;
+        for (JBLabel label : new JBLabel[]{kindLabel, tokenLabel, userLabel, passwordLabel, cookieLabel}) {
+            labelWidth = Math.max(labelWidth, label.getPreferredSize().width);
+        }
+        kindLabel.setPreferredSize(new Dimension(labelWidth, kindLabel.getPreferredSize().height));
         JPanel form = FormBuilder.createFormBuilder()
-                .addLabeledComponent(BootServersBundle.message("api.auth.kind"), kinds)
-                .addLabeledComponent(BootServersBundle.message("api.auth.token"), tokenField)
-                .addLabeledComponent(BootServersBundle.message("api.auth.user"), userField)
-                .addLabeledComponent(BootServersBundle.message("api.auth.password"), passwordField)
-                .addLabeledComponent(BootServersBundle.message("api.auth.cookie.value"), cookieField)
-                .addComponent(new JBLabel(BootServersBundle.message("api.auth.note")))
+                .addLabeledComponent(kindLabel, kinds)
+                .addLabeledComponent(tokenLabel, tokenField)
+                .addLabeledComponent(userLabel, userField)
+                .addLabeledComponent(passwordLabel, passwordField)
+                .addLabeledComponent(cookieLabel, cookieField)
+                .addComponentToRightColumn(ComponentPanelBuilder.createCommentComponent(BootServersBundle.message("api.auth.note"), true))
                 .getPanel();
         form.setBorder(JBUI.Borders.empty(12, 14));
         JPanel panel = new JPanel(new BorderLayout());
@@ -563,13 +577,22 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         return authCookie.isSelected() ? ApiText.AUTH_COOKIE : ApiText.AUTH_NONE;
     }
 
-    /** 고른 방식의 칸만 켠다. */
+    /** 고른 방식의 이름 · 칸만 보인다. 없음이면 방식 줄과 안내문만 남는다. */
     private void applyAuthKind() {
         String kind = authKind();
-        tokenField.setEnabled(ApiText.AUTH_BEARER.equals(kind));
-        userField.setEnabled(ApiText.AUTH_BASIC.equals(kind));
-        passwordField.setEnabled(ApiText.AUTH_BASIC.equals(kind));
-        cookieField.setEnabled(ApiText.AUTH_COOKIE.equals(kind));
+        boolean bearer = ApiText.AUTH_BEARER.equals(kind);
+        boolean basic = ApiText.AUTH_BASIC.equals(kind);
+        boolean cookie = ApiText.AUTH_COOKIE.equals(kind);
+        tokenLabel.setVisible(bearer);
+        tokenField.setVisible(bearer);
+        userLabel.setVisible(basic);
+        userField.setVisible(basic);
+        passwordLabel.setVisible(basic);
+        passwordField.setVisible(basic);
+        cookieLabel.setVisible(cookie);
+        cookieField.setVisible(cookie);
+        tokenField.getParent().revalidate();
+        tokenField.getParent().repaint();
         refreshAuthRow();
         refreshHints();
     }
