@@ -170,6 +170,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
     private final ExecutorService worker = AppExecutorUtil.createBoundedApplicationPoolExecutor("EI Merge Branches", 1);
     private final RowModel model = new RowModel();
     private final JBCheckBox push = new JBCheckBox();
+    private final JButton compare = new JButton(SyncBundle.message("rmerge.compare"));
     // 미리 보기를 다시 읽을 때마다 하나 올린다(EDT 에서만 쓰고 worker 가 읽는다). 늦게 끝난 옛 계산이 새 결과를 덮지 않게 한다.
     private volatile int seq;
     private boolean ready;
@@ -206,9 +207,11 @@ public final class ReverseMergeAction extends DumbAwareAction {
       setTitle(SyncBundle.message("rmerge.title"));
       setOKButtonText(SyncBundle.message("rmerge.button.merge"));
       init();
-      fromBox.addActionListener(e -> reload());
-      intoBox.addActionListener(e -> reload());
-      reload();
+      // 회사 PC 는 fetch 가 수 초 걸리므로 브랜치를 고르는 동안에는 받지 않는다. Compare 단추를 눌러야 받아 와 비교한다.
+      fromBox.addActionListener(e -> reload(false));
+      intoBox.addActionListener(e -> reload(false));
+      compare.addActionListener(e -> reload(true));
+      reload(false);
       addServerBranches();
     }
 
@@ -290,7 +293,10 @@ public final class ReverseMergeAction extends DumbAwareAction {
       // From 은 원격 브랜치를 합치고, Into 는 원격 브랜치에 맞춘 로컬 브랜치에 합친 뒤 같은 원격 브랜치로 푸시한다.
       JPanel where = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0));
       where.add(new JBLabel(SyncBundle.message("rmerge.repository")));
-      where.add(new JBLabel(root.getName()).withFont(JBFont.label().asBold()));
+      // 저장소 이름은 합치기 전에 꼭 확인할 값이라 Git Log 현재 브랜치와 같은 파랑 · 한 단계 큰 굵은 글씨로 보인다.
+      JBLabel name = new JBLabel(root.getName()).withFont(JBFont.label().biggerOn(1).asBold());
+      name.setForeground(ProjectHistoryPanel.HEAD_COLOR);
+      where.add(name);
       where.add(new JBLabel(root.getPath(), UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER));
       JPanel pick = new JPanel(new GridBagLayout());
       GridBagConstraints c = new GridBagConstraints();
@@ -302,8 +308,10 @@ public final class ReverseMergeAction extends DumbAwareAction {
       c.weightx = 0;
       pick.add(new JBLabel(SyncBundle.message("rmerge.into")), c);
       c.weightx = 1;
-      c.insets = JBUI.emptyInsets();
       pick.add(intoBox, c);
+      c.weightx = 0;
+      c.insets = JBUI.emptyInsets();
+      pick.add(compare, c);
 
       JBTable table = new JBTable(model);
       table.setShowGrid(false);
@@ -361,8 +369,11 @@ public final class ReverseMergeAction extends DumbAwareAction {
     private String from() { return (String) fromBox.getSelectedItem(); }
     private String into() { return (String) intoBox.getSelectedItem(); }
 
-    /** 두 브랜치를 받아 와 미리 보기를 다시 계산한다. 같은 브랜치를 고르면 계산하지 않고 Merge 를 끈다. */
-    private void reload() {
+    /**
+     * 미리 보기를 비우고 Merge 를 끈다. fetch 가 참이면(Compare 단추) 두 브랜치를 받아 와 미리 보기를 다시 계산하고, 거짓이면 Compare 를 누르라고 안내만 한다.
+     * 같은 브랜치를 고르면 계산하지 않는다.
+     */
+    private void reload(boolean fetch) {
       int mySeq = ++seq;
       ready = false;
       setOKActionEnabled(false);
@@ -379,6 +390,10 @@ public final class ReverseMergeAction extends DumbAwareAction {
       }
       if (from.equals(into)) {
         summary.setText(SyncBundle.message("rmerge.same"));
+        return;
+      }
+      if (!fetch) {
+        summary.setText(SyncBundle.message("rmerge.press.compare"));
         return;
       }
       summary.setText(SyncBundle.message("rmerge.loading"));

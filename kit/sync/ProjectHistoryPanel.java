@@ -117,7 +117,7 @@ final class ProjectHistoryPanel extends JPanel {
   // 알약 글자색. 밝은 테마(첫 값)에서는 흰 바탕에서 읽히도록 어둡게, 어두운 테마(둘째 값)에서는 밝게.
   // IntelliJ Log 탭의 테마 키(VersionControl.GitLog.*)는 따르지 않는다. 밝은 테마 기본값이 노랑 · 보라라 EI White 와 어울리지 않는다.
   // 현재 브랜치(HEAD)는 테마 강조 파랑 + 브랜치 아이콘, 로컬 브랜치는 초록, 원격(origin/*)은 회색, 태그는 황토.
-  private static final Color HEAD_COLOR = new JBColor(0x1A5FD0, 0x6FA8FF);
+  static final Color HEAD_COLOR = new JBColor(0x1A5FD0, 0x6FA8FF);
   private static final Color LOCAL_COLOR = new JBColor(0x2F8F5B, 0x5FCF8F);
   private static final Color REMOTE_COLOR = new JBColor(0x6B6B6B, 0xA0A0A0);
   private static final Color TAG_COLOR = new JBColor(0x9A6B00, 0xE0C060);
