@@ -65,6 +65,12 @@ public final class ApiTextCheck {
         eq("/list", ApiText.fillPath("/list", Map.of()), "변수 없음");
         eq("http://localhost:9090/api/x", ApiText.join("http://localhost:9090", "/api/x"), "잇기");
         eq("http://localhost:9090/", ApiText.join("http://localhost:9090", ""), "빈 경로");
+        eq(21, ApiText.hostEnd("http://localhost:8090/basic/list?a=1"), "서버 끝");
+        eq(32, ApiText.queryStart("http://localhost:8090/basic/list?a=1"), "쿼리 시작");
+        eq(10, ApiText.hostEnd("https://h?"), "경로 없음");
+        eq(10, ApiText.queryStart("https://h?"), "서버 뒤 ? 는 경로 없는 주소 끝");
+        eq(0, ApiText.hostEnd("/basic/list"), "scheme 없음");
+        eq(11, ApiText.queryStart("/basic/list"), "쿼리 없음");
         eq("http://h/list?a=1&b=%ED%85%8C+%26", ApiText.withQuery("http://h/list",
                 List.of(Map.entry("a", "1"), Map.entry(" ", "x"), Map.entry("b", "테 &"))), "쿼리");
         eq("http://h/l?x=1&a=2", ApiText.withQuery("http://h/l?x=1", List.of(Map.entry("a", "2"))), "이미 ? 있음");
