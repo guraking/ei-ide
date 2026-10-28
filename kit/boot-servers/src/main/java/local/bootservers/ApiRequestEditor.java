@@ -4,6 +4,7 @@ import com.intellij.credentialStore.CredentialAttributes;
 import com.intellij.credentialStore.CredentialAttributesKt;
 import com.intellij.icons.AllIcons;
 import com.intellij.ide.passwordSafe.PasswordSafe;
+import com.intellij.ide.ui.UISettings;
 import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
@@ -38,7 +39,6 @@ import com.intellij.util.ui.JBFont;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
 import com.intellij.ide.ui.laf.darcula.ui.DarculaButtonUI;
-import com.intellij.ide.ui.UISettings;
 import com.intellij.ide.ui.laf.darcula.ui.DarculaTextFieldUI;
 import com.intellij.openapi.actionSystem.CustomShortcutSet;
 import com.intellij.openapi.editor.colors.EditorColorsManager;
@@ -562,7 +562,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         return scroll;
     }
 
-    /** 보내기 단추 글: 「보내기」 뒤에 단축키(Ctrl+Enter). HTML 로 작게 쓰면 단추 글자 정렬이 어긋나 보통 글로 쓴다. */
+    /** 보내기 단추 글: 「보내기」 뒤에 단축키(Ctrl+Enter). 글 크기를 하나로 두어 단추 안 세로 가운데가 어긋나지 않게 한다. */
     private static String sendLabel() {
         return BootServersBundle.message("api.send") + "  " + KeymapUtil.getFirstKeyboardShortcutText(CustomShortcutSet.fromString(SEND_SHORTCUT));
     }
@@ -609,7 +609,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
             Segment segment = getLineBuffer();
             getDocument().getText(from, to - from, segment);
             g.setColor(UIUtil.getContextHelpForeground());
-            // 부모가 그리는 글은 텍스트 칸의 안티앨리어싱을 받지만, 직접 그리는 글은 g 의 힌트를 따르므로 IDE 설정대로 켠다. 안 켜면 글자가 깨져 보인다.
+            // 직접 그리는 글에도 IDE 글자 다듬기(안티에일리어싱)를 맞춘다. 없으면 흐린 부분만 글자가 깨져 보인다.
             UISettings.setupAntialiasing(g);
             return Utilities.drawTabbedText(segment, x, y, g, this, from);
         }
