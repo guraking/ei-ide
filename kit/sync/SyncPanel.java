@@ -101,8 +101,6 @@ import javax.swing.tree.TreePath;
 import javax.swing.tree.TreeSelectionModel;
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.awt.*;
-import java.awt.event.ComponentAdapter;
-import java.awt.event.ComponentEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
@@ -237,11 +235,9 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static final String STOCK_PUSH = "Vcs.Push";
   // 파일 줄 앞 상태 글자 칸의 최소 폭(JBUI.scale 전). 「M」 · 「??」 · 「충돌」 뒤 파일 아이콘이 한 줄로 서게 한다.
   private static final int STATUS_COL_W = 24;
-  // 왼쪽 목록 폭(px, 시안 360)과 창이 너무 좁거나 넓을 때의 비율 한계.
-  private static final int TREE_W = 360;
-  private static final float TREE_PROPORTION = 0.35f;
-  private static final float TREE_PROPORTION_MIN = 0.2f;
-  private static final float TREE_PROPORTION_MAX = 0.6f;
+  // 왼쪽 목록이 처음 차지하는 폭 비율(2026-10-29 사용자 캡처: 창 너비의 28%). 끌어 바꾼 값은 저장한다.
+  private static final float TREE_PROPORTION = 0.28f;
+  private static final String SPLITTER_KEY = "kinggura.sync.splitter";
   // 파일 줄 옆 상위 폴더에서 앞에 남기는 단계 수와 줄임표.
   private static final int SHORT_DIR_KEEP = 3;
   private static final String SHORT_DIR_ELLIPSIS = "\u2026";
@@ -414,15 +410,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     top.setBorder(JBUI.Borders.customLineBottom(JBColor.border()));
     setToolbar(top);
 
-    // 왼쪽 목록은 시안대로 폭을 고정하고(창이 넓어져도 안 늘어남), 나머지를 비교 칸이 쓴다.
-    OnePixelSplitter splitter = new OnePixelSplitter(false, TREE_PROPORTION);
-    splitter.addComponentListener(new ComponentAdapter() {
-      @Override
-      public void componentResized(ComponentEvent e) {
-        int width = splitter.getWidth();
-        if (width > 0) splitter.setProportion(Math.max(TREE_PROPORTION_MIN, Math.min(TREE_PROPORTION_MAX, (float) JBUI.scale(TREE_W) / width)));
-      }
-    });
+    OnePixelSplitter splitter = new OnePixelSplitter(false, SPLITTER_KEY, TREE_PROPORTION);
     // 트리에서 고른 파일을 IDE 에 알려 우클릭의 IntelliJ 기본 동작(Jump to Source · Show History 등)이 그 파일로 돈다.
     splitter.setFirstComponent(new TreeData(ScrollPaneFactory.createScrollPane(tree, true)));
     // 비교 칸 머리(시안): 파일 이름 · 「원격 ↔ 내 작업본」.
