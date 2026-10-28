@@ -30,6 +30,8 @@
     <postStartupActivity implementation="kinggura.sync.CloneIntoProject"/>
     <!-- 1054 판이 켜 둔 Git 스테이징을 기존 설치에서도 한 번 끈다. -->
     <postStartupActivity implementation="kinggura.sync.GitStagingOff"/>
+    <!-- Git 「Use credential helper」를 기존 설치에서도 한 번 켠다(askpass 스크립트가 막히는 PC 의 Push 실패 방지). -->
+    <postStartupActivity implementation="kinggura.sync.CredentialHelperOn"/>
     <!-- 워크스페이스 폴더 프로젝트는 프로젝트 창 맨 위의 프로젝트 폴더 줄을 그리기 전에 거른다(깜빡임 없음). -->
     <treeStructureProvider implementation="kinggura.sync.CloneIntoProject$HideWorkspaceRoot"/>
   </extensions>
