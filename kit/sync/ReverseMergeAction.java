@@ -4,6 +4,7 @@ import com.intellij.diff.DiffContentFactory;
 import com.intellij.diff.DiffManager;
 import com.intellij.diff.requests.SimpleDiffRequest;
 import com.intellij.icons.AllIcons;
+import com.intellij.ide.ui.UISettings;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
@@ -33,7 +34,9 @@ import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.SimpleListCellRenderer;
 import com.intellij.ui.components.JBCheckBox;
 import com.intellij.ui.components.JBLabel;
+import com.intellij.ui.components.panels.HorizontalLayout;
 import com.intellij.ui.table.JBTable;
+import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.JBFont;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.NamedColorUtil;
@@ -52,6 +55,7 @@ import javax.swing.event.PopupMenuListener;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
 import java.awt.*;
+import java.awt.event.ActionEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
@@ -73,6 +77,14 @@ import java.util.concurrent.Future;
 public final class ReverseMergeAction extends DumbAwareAction {
   /** 내 파일 줄 글자색. 동기화 창 · 설명서에서 「주의」에 쓰는 주황. */
   static final JBColor MINE_COLOR = new JBColor(0xB45F06, 0xFF9F0A);
+  /** 내 파일 줄 · 「내 파일」 칩의 바탕(옅은 주황). */
+  private static final JBColor MINE_BG = new JBColor(0xFFF3E0, 0x4A3416);
+  /** 단계 번호 동그라미 · 「커밋」 칩의 파랑(Git Log 현재 브랜치와 같은 색). */
+  private static final Color STEP_COLOR = ProjectHistoryPanel.HEAD_COLOR;
+  private static final JBColor STEP_TEXT = new JBColor(0xFFFFFF, 0x1E1F22);
+  private static final JBColor COMMITS_BG = new JBColor(0xE3EDFB, 0x25324A);
+  private static final JBColor FILES_BG = new JBColor(0xEBECF0, 0x3C3F41);
+  private static final JBColor FILES_FG = new JBColor(0x5A5D63, 0xB0B3B8);
   private static final int TABLE_W = 1000;
   private static final int TABLE_H = 420;
   private static final int PATH_COL_W = 480;
@@ -80,6 +92,16 @@ public final class ReverseMergeAction extends DumbAwareAction {
   private static final int COMBO_W = 300;
   // 찾기 칸 모서리 둥글기(px). 새 UI 콤보 상자 · 펼친 목록의 모서리와 비슷하게 맞춘다.
   private static final int SEARCH_ARC = 8;
+  // 단계 번호 동그라미 지름 · 번호와 제목 사이 간격 · 단계 안 내용의 왼쪽 들여쓰기(번호 너비에 맞춤)
+  private static final int STEP_D = 18;
+  private static final int GAP = 8;
+  private static final int STEP_INDENT = STEP_D + GAP;
+  // 단계 사이 · 단계 안 줄 사이 세로 간격
+  private static final int STEP_GAP = 14;
+  private static final int ROW_GAP = 6;
+  private static final int CHIP_PAD_V = 1;
+  private static final int CHIP_PAD_H = 7;
+  private static final String ARROW = "→";
 
   @Override public @NotNull ActionUpdateThread getActionUpdateThread() { return ActionUpdateThread.BGT; }
 
@@ -162,15 +184,18 @@ public final class ReverseMergeAction extends DumbAwareAction {
     private final String current;
     private final ComboBox<String> fromBox;
     private final ComboBox<String> intoBox;
-    private final JBLabel summary = new JBLabel();
-    private final JBLabel warn = new JBLabel();
     private final JBLabel unpushed = new JBLabel();
     private final JBLabel intoUnpushed = new JBLabel();
     // 미리 보기 계산을 하나씩 차례로 돌린다. 같은 저장소에 fetch 가 겹치면 「cannot lock ref」로 실패한다.
     private final ExecutorService worker = AppExecutorUtil.createBoundedApplicationPoolExecutor("EI Merge Branches", 1);
     private final RowModel model = new RowModel();
+    // 미리 보기 표. 비교 전 · 받는 중 · 실패 · 합칠 것 없음은 표의 빈 글(StatusText)로 보인다.
+    private final JBTable table = new JBTable(model);
+    // 단계 2 제목 옆 요약 칩: 커밋 수(파랑) · 파일 수(회색) · 내 파일과 겹치는 수(주황, 없으면 숨김)
+    private final Chip commitsChip = new Chip(COMMITS_BG, STEP_COLOR, null);
+    private final Chip filesChip = new Chip(FILES_BG, FILES_FG, null);
+    private final Chip mineChip = new Chip(MINE_BG, MINE_COLOR, AllIcons.General.Warning);
     private final JBCheckBox push = new JBCheckBox();
-    private final JButton compare = new JButton(SyncBundle.message("rmerge.compare"));
     // 미리 보기를 다시 읽을 때마다 하나 올린다(EDT 에서만 쓰고 worker 가 읽는다). 늦게 끝난 옛 계산이 새 결과를 덮지 않게 한다.
     private volatile int seq;
     private boolean ready;
@@ -210,7 +235,6 @@ public final class ReverseMergeAction extends DumbAwareAction {
       // 회사 PC 는 fetch 가 수 초 걸리므로 브랜치를 고르는 동안에는 받지 않는다. Compare 단추를 눌러야 받아 와 비교한다.
       fromBox.addActionListener(e -> reload(false));
       intoBox.addActionListener(e -> reload(false));
-      compare.addActionListener(e -> reload(true));
       reload(false);
       addServerBranches();
     }
@@ -287,33 +311,54 @@ public final class ReverseMergeAction extends DumbAwareAction {
       });
     }
 
+    /** 단계 제목 줄: 파란 번호 동그라미 + 굵은 제목. 뒤에 칩을 더 붙일 수 있다. */
+    private static JPanel step(int number, String titleKey) {
+      JPanel row = new JPanel(new HorizontalLayout(JBUI.scale(GAP)));
+      row.add(new StepNumber(number));
+      row.add(new JBLabel(SyncBundle.message(titleKey)).withFont(JBFont.label().asBold()));
+      return row;
+    }
+
+    private static JBLabel dim(String text) {
+      return new JBLabel(text, UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER);
+    }
+
     @Override
     protected @Nullable JComponent createCenterPanel() {
-      // IntelliJ Pull 창처럼 어느 저장소 · 원격에서 받는지 먼저 보인다.
-      // From 은 원격 브랜치를 합치고, Into 는 원격 브랜치에 맞춘 로컬 브랜치에 합친 뒤 같은 원격 브랜치로 푸시한다.
-      JPanel where = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0));
-      where.add(new JBLabel(SyncBundle.message("rmerge.repository")));
-      // 저장소 이름은 합치기 전에 꼭 확인할 값이라 Git Log 현재 브랜치와 같은 파랑 · 한 단계 큰 굵은 글씨로 보인다.
-      JBLabel name = new JBLabel(root.getName()).withFont(JBFont.label().biggerOn(1).asBold());
-      name.setForeground(ProjectHistoryPanel.HEAD_COLOR);
-      where.add(name);
-      where.add(new JBLabel(root.getPath(), UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER));
-      JPanel pick = new JPanel(new GridBagLayout());
+      // 머리 오른쪽: 어느 저장소를 합치는지(이름 · 경로). 합치기 전에 꼭 확인할 값이라 맨 위에 둔다.
+      JBLabel where = dim(SyncBundle.message("rmerge.where", root.getName(), root.getPath()));
+      where.setHorizontalAlignment(SwingConstants.RIGHT);
+      where.setToolTipText(root.getPath());
+
+      // 단계 1: From → Into. 두 상자가 창 너비를 반씩 나눈다. From 은 원격 브랜치를 합치고, Into 는 원격에 맞춘 로컬 브랜치에 합친 뒤 같은 원격 브랜치로 푸시한다.
+      fromBox.setToolTipText(SyncBundle.message("rmerge.from"));
+      intoBox.setToolTipText(SyncBundle.message("rmerge.into"));
+      JPanel branches = new JPanel(new GridBagLayout());
       GridBagConstraints c = new GridBagConstraints();
       c.fill = GridBagConstraints.HORIZONTAL;
-      c.insets = JBUI.insetsRight(8);
-      pick.add(new JBLabel(SyncBundle.message("rmerge.from")), c);
       c.weightx = 1;
-      pick.add(fromBox, c);
+      branches.add(fromBox, c);
       c.weightx = 0;
-      pick.add(new JBLabel(SyncBundle.message("rmerge.into")), c);
+      c.insets = JBUI.insets(0, GAP);
+      branches.add(new JBLabel(ARROW), c);
       c.weightx = 1;
-      pick.add(intoBox, c);
-      c.weightx = 0;
       c.insets = JBUI.emptyInsets();
-      pick.add(compare, c);
+      branches.add(intoBox, c);
+      branches.setBorder(JBUI.Borders.emptyLeft(STEP_INDENT));
+      unpushed.setForeground(NamedColorUtil.getErrorForeground());
+      intoUnpushed.setForeground(NamedColorUtil.getErrorForeground());
+      unpushed.setBorder(JBUI.Borders.emptyLeft(STEP_INDENT));
+      intoUnpushed.setBorder(JBUI.Borders.emptyLeft(STEP_INDENT));
 
-      JBTable table = new JBTable(model);
+      // 단계 2: 제목 + 요약 칩, 오른쪽에 비교 안내.
+      JPanel previewTitle = step(2, "rmerge.step.preview");
+      previewTitle.add(commitsChip);
+      previewTitle.add(filesChip);
+      previewTitle.add(mineChip);
+      JPanel previewHead = new JPanel(new BorderLayout());
+      previewHead.add(previewTitle, BorderLayout.WEST);
+      previewHead.add(dim(SyncBundle.message("rmerge.hint")), BorderLayout.EAST);
+
       table.setShowGrid(false);
       table.getColumnModel().getColumn(0).setPreferredWidth(JBUI.scale(PATH_COL_W));
       table.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
@@ -322,7 +367,10 @@ public final class ReverseMergeAction extends DumbAwareAction {
           super.getTableCellRendererComponent(t, value, selected, focus, row, column);
           ReverseMerge.Incoming item = model.rows.get(t.convertRowIndexToModel(row));
           setIcon(column == 0 && item.mine() ? AllIcons.General.Warning : null);
-          if (!selected) setForeground(item.mine() ? MINE_COLOR : t.getForeground());
+          if (!selected) {
+            setForeground(item.mine() ? MINE_COLOR : t.getForeground());
+            setBackground(item.mine() ? MINE_BG : t.getBackground());
+          }
           setToolTipText(column == 0 ? item.path() : null);
           return this;
         }
@@ -335,39 +383,63 @@ public final class ReverseMergeAction extends DumbAwareAction {
         }
       });
       JScrollPane scroll = ScrollPaneFactory.createScrollPane(table);
+      scroll.setBorder(JBUI.Borders.customLine(JBColor.border(), 1, 0, 1, 0));
       scroll.setPreferredSize(JBUI.size(TABLE_W, TABLE_H));
 
-      JPanel top = new JPanel(new BorderLayout(0, JBUI.scale(8)));
-      JPanel rows = new JPanel(new GridLayout(0, 1, 0, JBUI.scale(6)));
-      rows.add(where);
-      rows.add(pick);
-      // 로컬이 아니라 서버 브랜치끼리 합친다는 것을 아래 줄에 적는다.
-      rows.add(new JBLabel(SyncBundle.message("rmerge.from.server", remote), UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER));
-      top.add(rows, BorderLayout.NORTH);
-      JPanel lines = new JPanel(new GridLayout(0, 1, 0, JBUI.scale(2)));
-      lines.add(summary);
-      lines.add(warn);
-      lines.add(unpushed);
-      lines.add(intoUnpushed);
-      unpushed.setForeground(NamedColorUtil.getErrorForeground());
-      intoUnpushed.setForeground(NamedColorUtil.getErrorForeground());
-      top.add(lines, BorderLayout.SOUTH);
-      warn.setForeground(MINE_COLOR);
-      JPanel hints = new JPanel(new GridLayout(0, 1, 0, JBUI.scale(2)));
-      hints.add(new JBLabel(SyncBundle.message("rmerge.hint"), UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER));
-      hints.add(new JBLabel(SyncBundle.message("rmerge.hint.mine", ReverseMerge.MINE_DAYS), UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER));
-      JPanel bottom = new JPanel(new BorderLayout(0, JBUI.scale(6)));
-      bottom.add(hints, BorderLayout.NORTH);
-      bottom.add(push, BorderLayout.SOUTH);
-      JPanel panel = new JPanel(new BorderLayout(0, JBUI.scale(8)));
+      // 단계 3: 합친 뒤 Push 여부. 커밋 안 한 변경은 합칠 때 Stash 할지 묻는다(runMerge).
+      push.setBorder(JBUI.Borders.emptyLeft(STEP_INDENT));
+      JBLabel stashHint = dim(SyncBundle.message("rmerge.stash.hint", SyncBundle.message("rmerge.stash.button")));
+      stashHint.setBorder(JBUI.Borders.emptyLeft(STEP_INDENT));
+
+      JPanel top = FormBuilder.createFormBuilder()
+        .addComponent(where)
+        .addComponent(step(1, "rmerge.step.pick"), JBUI.scale(ROW_GAP))
+        .addComponent(branches, JBUI.scale(ROW_GAP))
+        .addComponent(unpushed, JBUI.scale(ROW_GAP))
+        .addComponent(intoUnpushed, 0)
+        .addComponent(previewHead, JBUI.scale(STEP_GAP))
+        .getPanel();
+      JPanel bottom = FormBuilder.createFormBuilder()
+        .addComponent(step(3, "rmerge.step.after"))
+        .addComponent(push, JBUI.scale(ROW_GAP))
+        .addComponent(stashHint, 0)
+        .getPanel();
+      JPanel panel = new JPanel(new BorderLayout(0, JBUI.scale(ROW_GAP)));
       panel.add(top, BorderLayout.NORTH);
       panel.add(scroll, BorderLayout.CENTER);
       panel.add(bottom, BorderLayout.SOUTH);
       return panel;
     }
 
+    /** 왼쪽 아래 Compare 단추. 두 브랜치를 서버에서 받아 와 미리 보기를 채운다. */
+    @Override
+    protected Action @NotNull [] createLeftSideActions() {
+      return new Action[]{new DialogWrapperAction(SyncBundle.message("rmerge.compare")) {
+        @Override
+        protected void doAction(ActionEvent e) { reload(true); }
+      }};
+    }
+
     private String from() { return (String) fromBox.getSelectedItem(); }
     private String into() { return (String) intoBox.getSelectedItem(); }
+
+    /** 표를 비우고 그 자리에 안내 글을 보인다. */
+    private void status(String text) {
+      table.getEmptyText().setText(text);
+    }
+
+    /** 요약 칩을 미리 보기 결과로 채운다. null 이면 모두 숨긴다. */
+    private void showChips(@Nullable ReverseMerge.Preview preview) {
+      commitsChip.setVisible(preview != null);
+      filesChip.setVisible(preview != null);
+      mineChip.setVisible(preview != null && preview.mineCount() > 0);
+      if (preview == null) return;
+      commitsChip.setText(SyncBundle.message("rmerge.chip.commits", preview.commits()));
+      filesChip.setText(SyncBundle.message("rmerge.chip.files", preview.files().size()));
+      mineChip.setText(SyncBundle.message("rmerge.chip.mine", preview.mineCount()));
+      mineChip.setToolTipText("<html>" + SyncBundle.message("rmerge.warn", preview.mineCount()) + "<br>"
+                              + SyncBundle.message("rmerge.hint.mine", ReverseMerge.MINE_DAYS) + "</html>");
+    }
 
     /**
      * 미리 보기를 비우고 Merge 를 끈다. fetch 가 참이면(Compare 단추) 두 브랜치를 받아 와 미리 보기를 다시 계산하고, 거짓이면 Compare 를 누르라고 안내만 한다.
@@ -377,26 +449,29 @@ public final class ReverseMergeAction extends DumbAwareAction {
       int mySeq = ++seq;
       ready = false;
       setOKActionEnabled(false);
-      warn.setText(" ");
       unpushed.setText(" ");
       intoUnpushed.setText(" ");
       model.set(List.of());
+      showChips(null);
+      table.setToolTipText(null);
+      table.setPaintBusy(false);
       String from = from();
       String into = into();
       push.setText(SyncBundle.message("rmerge.push", remote + "/" + into));
       if (from == null || into == null) {
-        summary.setText(SyncBundle.message("rmerge.pick"));
+        status(SyncBundle.message("rmerge.pick"));
         return;
       }
       if (from.equals(into)) {
-        summary.setText(SyncBundle.message("rmerge.same"));
+        status(SyncBundle.message("rmerge.same"));
         return;
       }
       if (!fetch) {
-        summary.setText(SyncBundle.message("rmerge.press.compare"));
+        status(SyncBundle.message("rmerge.press.compare"));
         return;
       }
-      summary.setText(SyncBundle.message("rmerge.loading"));
+      status(SyncBundle.message("rmerge.loading"));
+      table.setPaintBusy(true);
       worker.execute(() -> {
         if (mySeq != seq || isDisposed()) return;  // 그사이 다른 브랜치를 골랐거나 창을 닫았다. 새 계산만 돌린다.
         ReverseMerge.Preview preview = null;
@@ -429,20 +504,20 @@ public final class ReverseMergeAction extends DumbAwareAction {
         int intoNotOnServer = intoLocalOnly;
         SwingUtilities.invokeLater(() -> {
           if (mySeq != seq || isDisposed()) return;
+          table.setPaintBusy(false);
           if (failure != null) {
-            summary.setText(failure);
-            summary.setToolTipText(failure);
+            status(failure);
+            table.setToolTipText(failure);
             return;
           }
           model.set(result.files());
           if (notOnServer > 0) unpushed.setText(SyncBundle.message("rmerge.unpushed", remote, from, notOnServer));
           if (intoNotOnServer > 0) intoUnpushed.setText(SyncBundle.message("rmerge.unpushed.into", into, intoNotOnServer));
           if (result.commits() == 0) {
-            summary.setText(SyncBundle.message("rmerge.up.to.date", into, from));
+            status(SyncBundle.message("rmerge.up.to.date", into, from));
             return;
           }
-          summary.setText(SyncBundle.message("rmerge.summary", from, result.commits(), result.files().size()));
-          if (result.mineCount() > 0) warn.setText(SyncBundle.message("rmerge.warn", result.mineCount()));
+          showChips(result);
           ready = true;
           setOKActionEnabled(true);
         });
@@ -615,6 +690,55 @@ public final class ReverseMergeAction extends DumbAwareAction {
           Messages.showErrorDialog(project, error.getMessage(), SyncBundle.message("rmerge.title"));
         }
       });
+    }
+  }
+
+  /** 단계 번호: 파란 동그라미 안의 흰 숫자. */
+  private static final class StepNumber extends JComponent {
+    private final String text;
+
+    StepNumber(int number) {
+      text = String.valueOf(number);
+      setPreferredSize(JBUI.size(STEP_D));
+    }
+
+    @Override
+    protected void paintComponent(Graphics g) {
+      Graphics2D g2 = (Graphics2D) g.create();
+      UISettings.setupAntialiasing(g2);
+      g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+      g2.setColor(STEP_COLOR);
+      g2.fillOval(0, 0, getWidth(), getHeight());
+      g2.setColor(STEP_TEXT);
+      g2.setFont(JBFont.small().asBold());
+      FontMetrics fm = g2.getFontMetrics();
+      g2.drawString(text, (getWidth() - fm.stringWidth(text)) / 2, (getHeight() - fm.getHeight()) / 2 + fm.getAscent());
+      g2.dispose();
+    }
+  }
+
+  /** 둥근 바탕의 짧은 숫자 표시(커밋 · 파일 · 내 파일). */
+  private static final class Chip extends JBLabel {
+    private final Color fill;
+
+    Chip(Color fill, Color text, @Nullable Icon icon) {
+      this.fill = fill;
+      setForeground(text);
+      setIcon(icon);
+      setFont(JBFont.small().asBold());
+      setBorder(JBUI.Borders.empty(CHIP_PAD_V, CHIP_PAD_H));
+      setOpaque(false);
+      setVisible(false);
+    }
+
+    @Override
+    protected void paintComponent(Graphics g) {
+      Graphics2D g2 = (Graphics2D) g.create();
+      g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+      g2.setColor(fill);
+      g2.fillRoundRect(0, 0, getWidth(), getHeight(), getHeight(), getHeight());
+      g2.dispose();
+      super.paintComponent(g);
     }
   }
 
