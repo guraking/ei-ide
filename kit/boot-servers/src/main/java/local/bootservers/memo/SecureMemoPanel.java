@@ -183,6 +183,7 @@ final class SecureMemoPanel extends JPanel implements Disposable {
         ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar(TOOLBAR_PLACE, group, true);
         toolbar.setTargetComponent(view);
         view.setToolbar(toolbar.getComponent());
+        saveState.setFont(JBUI.Fonts.smallFont());
         saveState.setBorder(JBUI.Borders.empty(UIUtil.DEFAULT_VGAP / 2, UIUtil.DEFAULT_HGAP));
         JPanel stateRow = new JPanel(new BorderLayout());
         stateRow.setBorder(JBUI.Borders.customLineTop(JBColor.border()));

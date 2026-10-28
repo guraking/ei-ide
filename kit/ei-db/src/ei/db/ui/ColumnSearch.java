@@ -57,7 +57,7 @@ final class ColumnSearch extends DialogWrapper {
   private final SearchTextField field = new SearchTextField(false);
   private final Model model = new Model();
   private final JBTable table = new JBTable(model);
-  private final JBLabel status = new JBLabel(" ", UIUtil.ComponentStyle.REGULAR, UIUtil.FontColor.BRIGHTER);
+  private final JBLabel status = new JBLabel(" ", UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER);
   /** 늦게 온 이전 검색 결과를 버리는 번호. */
   private final AtomicInteger generation = new AtomicInteger();
 

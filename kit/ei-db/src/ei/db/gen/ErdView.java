@@ -127,7 +127,7 @@ public final class ErdView {
         new BarAction(EiDbBundle.message("erd.save.png"), EiDbBundle.message("erd.save.png.description"), AllIcons.ToolbarDecorator.Export,
             () -> savePng(project, schema, canvas)));
     JBLabel summary = new JBLabel(EiDbBundle.message("erd.summary", canvas.tableCount(), canvas.relationCount()),
-                                  UIUtil.ComponentStyle.REGULAR, UIUtil.FontColor.BRIGHTER);
+                                  UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER);
     summary.setBorder(JBUI.Borders.emptyRight(LEGEND_GAP));
     JPanel top = new JPanel(new BorderLayout());
     top.add(toolbar.getComponent(), BorderLayout.CENTER);

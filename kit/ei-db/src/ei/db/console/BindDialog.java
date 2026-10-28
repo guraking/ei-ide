@@ -105,7 +105,7 @@ final class BindDialog extends DialogWrapper {
     scroll.setPreferredSize(new Dimension(grid.getPreferredSize().width + JBUI.scale(20), JBUI.scale(ROW_HEIGHT) * rows));
 
     JBLabel note = new JBLabel(EiDbBundle.message("bind.note"),
-                               UIUtil.ComponentStyle.REGULAR, UIUtil.FontColor.BRIGHTER);
+                               UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER);
     note.setBorder(JBUI.Borders.emptyTop(8));
     JPanel panel = new JPanel(new BorderLayout());
     panel.add(scroll, BorderLayout.CENTER);
