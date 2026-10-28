@@ -42,7 +42,6 @@ import com.intellij.openapi.application.WriteIntentReadAction;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.fileEditor.FileEditorManager;
-import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.vcs.ProjectLevelVcsManager;
@@ -66,7 +65,6 @@ import com.intellij.ui.ColoredTreeCellRenderer;
 import com.intellij.ui.DoubleClickListener;
 import com.intellij.openapi.vcs.changes.issueLinks.TreeLinkMouseListener;
 import com.intellij.ui.TreeSpeedSearch;
-import com.intellij.ui.RowIcon;
 import com.intellij.ui.SimpleColoredComponent;
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.actionSystem.ActionToolbar;
@@ -105,6 +103,8 @@ import javax.swing.tree.TreePath;
 import javax.swing.tree.TreeSelectionModel;
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.awt.*;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
@@ -180,7 +180,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     @Override public String toString() { return kind.label() + " " + count; }
   }
 
-  /** 파일 줄 앞 상태 글자(M · A · ?? 등). 파일 형식 아이콘과 RowIcon 으로 묶어 글자 · 아이콘 · 이름 순으로 보인다. 폭은 width 로 고정해 아이콘을 줄 맞춘다. */
+  /** 파일 줄 앞 상태 글자(M · A · ?? 등). 폭은 width 로 고정해 이름 시작을 줄 맞춘다. */
   static final class StatusIcon implements Icon {
     private final String text;
     private final Color color;
@@ -239,6 +239,14 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static final String STOCK_PUSH = "Vcs.Push";
   // 파일 줄 앞 상태 글자 칸의 최소 폭(JBUI.scale 전). 「M」 · 「??」 · 「충돌」 뒤 파일 아이콘이 한 줄로 서게 한다.
   private static final int STATUS_COL_W = 24;
+  // 왼쪽 목록 폭(px, 시안 360)과 창이 너무 좁거나 넓을 때의 비율 한계.
+  private static final int TREE_W = 360;
+  private static final float TREE_PROPORTION = 0.35f;
+  private static final float TREE_PROPORTION_MIN = 0.2f;
+  private static final float TREE_PROPORTION_MAX = 0.6f;
+  // 파일 줄 옆 상위 폴더에서 앞에 남기는 단계 수와 줄임표.
+  private static final int SHORT_DIR_KEEP = 3;
+  private static final String SHORT_DIR_ELLIPSIS = "\u2026";
   // 위쪽 요약에서 종류별 숫자 앞에 붙는 표시.
   private static final String MARK_INCOMING = "↓";
   private static final String MARK_OUTGOING = "↑";
@@ -249,9 +257,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
   // 저장소 줄 · 위쪽 줄의 역머지 안내 끝에 붙여 눌러서 Merge Branches 를 연다는 것을 보인다.
   private static final String NOTE_LINK_MARK = " ›";
   private static final Set<String> UNMERGED = Set.of("DD", "AU", "UD", "UA", "DU", "AA", "UU");
-  // git status -b 첫 줄(「## main...origin/main [ahead 2, behind 1]」)에서 올릴 커밋 수.
   private static final String STATUS_BRANCH_LINE = "## ";
-  private static final Pattern AHEAD = Pattern.compile("\\[ahead (\\d+)");
   // 받기 뒤 셈(git log --format=%x01 --name-only): 커밋마다 이 글자 한 줄, 그 아래 바뀐 파일 경로.
   private static final String PULLED_COMMIT_MARK = "\u0001";
   // 알림 설정(Settings → Notifications)에서 이 창의 알림을 가려 끌 수 있게 붙이는 표시 ID.
@@ -271,7 +277,6 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static final long CANCEL_POLL_MS = 200;
   private static final Logger LOG = Logger.getInstance(SyncPanel.class);
   // 저장소별 마지막 git status -b 의 올릴 커밋 수(Push 단추 숫자). compare 가 채운다.
-  private static final Map<File, Integer> AHEAD_COUNTS = new ConcurrentHashMap<>();
   // ProjectLevelVcsManager 가 주는 AbstractVcs.getName() 값. GitVcs.NAME · SvnVcs.VCS_NAME 과 같다.
   private static final String VCS_NAME_GIT = "Git";
   private static final String GIT = "git";
@@ -417,7 +422,15 @@ final class SyncPanel extends SimpleToolWindowPanel {
     top.add(middle, BorderLayout.CENTER);
     setToolbar(top);
 
-    OnePixelSplitter splitter = new OnePixelSplitter(false, 0.35f);
+    // 왼쪽 목록은 시안대로 폭을 고정하고(창이 넓어져도 안 늘어남), 나머지를 비교 칸이 쓴다.
+    OnePixelSplitter splitter = new OnePixelSplitter(false, TREE_PROPORTION);
+    splitter.addComponentListener(new ComponentAdapter() {
+      @Override
+      public void componentResized(ComponentEvent e) {
+        int width = splitter.getWidth();
+        if (width > 0) splitter.setProportion(Math.max(TREE_PROPORTION_MIN, Math.min(TREE_PROPORTION_MAX, (float) JBUI.scale(TREE_W) / width)));
+      }
+    });
     // 트리에서 고른 파일을 IDE 에 알려 우클릭의 IntelliJ 기본 동작(Jump to Source · Show History 등)이 그 파일로 돈다.
     splitter.setFirstComponent(new TreeData(ScrollPaneFactory.createScrollPane(tree, true)));
     // 비교 칸 머리(시안): 왼쪽에 파일 이름 · 「원격 ↔ 내 작업본」, 오른쪽에 이전 · 다음 파일과 단축키.
@@ -442,16 +455,16 @@ final class SyncPanel extends SimpleToolWindowPanel {
     JButton pull = actionButton(SyncBundle.message("sync.button.pull"), IconLoader.getIcon(PULL_SELECTED_ICON, SyncPanel.class), ACTION_PULL, true);
     pullButton = pull;
     pull.putClientProperty(DarculaButtonUI.DEFAULT_STYLE_KEY, Boolean.TRUE);
-    bottom.add(actionButton(SyncBundle.message("sync.button.update.all"), AllIcons.Actions.CheckOut, ACTION_UPDATE_ALL, false));
+    bottom.add(actionButton(SyncBundle.message("sync.button.update.all"), AllIcons.Actions.MoveDown, ACTION_UPDATE_ALL, false));
     bottom.add(pull);
     // 올리기: 고른 저장소(없으면 전부)로 IntelliJ Push 창. 커밋하고 올리기: 커밋 창을 연다(그 창의 Commit and Push 로 한 번에).
-    pushButton = actionButton(SyncBundle.message("sync.button.push"), AllIcons.Vcs.Push, ACTION_PUSH, true);
+    pushButton = actionButton(SyncBundle.message("sync.button.push"), AllIcons.Actions.MoveUp, ACTION_PUSH, true);
     bottom.add(pushButton);
-    bottom.add(actionButton(SyncBundle.message("sync.button.commit.push"), AllIcons.Actions.Commit, ACTION_COMMIT, false));
-    resolveButton = actionButton(SyncBundle.message("sync.button.resolve"), AllIcons.Vcs.Merge, "Git.ResolveConflicts", false);
+    bottom.add(actionButton(SyncBundle.message("sync.button.commit.push"), null, ACTION_COMMIT, false));
+    resolveButton = actionButton(SyncBundle.message("sync.button.resolve"), null, "Git.ResolveConflicts", false);
     bottom.add(resolveButton);
     // 고른 저장소(없으면 지금 저장소)로 Merge Branches 창을 연다.
-    bottom.add(actionButton(SyncBundle.message("sync.button.reverse"), AllIcons.Vcs.Branch, ACTION_REVERSE_MERGE, true));
+    bottom.add(actionButton(SyncBundle.message("sync.button.reverse"), null, ACTION_REVERSE_MERGE, true));
     JPanel content = new JPanel(new BorderLayout());
     content.add(splitter, BorderLayout.CENTER);
     content.add(bottom, BorderLayout.SOUTH);
@@ -461,7 +474,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     tree.getEmptyText().setText(SyncBundle.message("sync.empty"))
       .appendSecondaryText(SyncBundle.message("sync.empty.link"), SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES, e -> { if (!busy) refresh(); });
     // 묶음 줄과 파일 줄은 종류별로 IDE 의 파일 상태 색(테마를 따름)으로 그린다. 충돌 빨강 · 들어올 파랑(수정됨) · 나갈 보라(병합됨).
-    // 묶음 줄: 종류 아이콘 · 굵은 이름 · 회색 개수. 파일 줄: 회색 상태 글자 · 파일 형식 아이콘 · 이름 · 회색 상위 폴더, 풍선 도움말은 전체 경로.
+    // 묶음 줄: 굵은 이름 · 회색 개수. 파일 줄: 회색 상태 글자 · 이름 · 회색 상위 폴더(길면 가운데를 … 로 줄임), 풍선 도움말은 전체 경로.
     ColoredTreeCellRenderer renderer = new ColoredTreeCellRenderer() {
       @Override
       public void customizeCellRenderer(JTree t, Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus) {
@@ -475,7 +488,6 @@ final class SyncPanel extends SimpleToolWindowPanel {
           append(folder.path().isEmpty() ? "/" : folder.path(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
         }
         else if (item instanceof Group group) {
-          setIcon(iconOf(group.kind()));
           append(group.kind().label(), new SimpleTextAttributes(SimpleTextAttributes.STYLE_BOLD, color));
           append(" " + group.count(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
         }
@@ -483,14 +495,12 @@ final class SyncPanel extends SimpleToolWindowPanel {
           String path = change.path();
           int slash = path.lastIndexOf('/');
           String name = path.substring(slash + 1);
-          Icon fileIcon = FileTypeManager.getInstance().getFileTypeByFileName(name).getIcon();
-          if (fileIcon == null) fileIcon = AllIcons.FileTypes.Unknown;
           Font label = JBUI.Fonts.label();
-          int statusWidth = Math.max(JBUI.scale(STATUS_COL_W), getFontMetrics(label).stringWidth(change.status()));
-          setIcon(new RowIcon(new StatusIcon(change.status(), SimpleTextAttributes.GRAYED_ATTRIBUTES.getFgColor(), label,
-                                             statusWidth, fileIcon.getIconHeight()), fileIcon));
+          FontMetrics metrics = getFontMetrics(label);
+          int statusWidth = Math.max(JBUI.scale(STATUS_COL_W), metrics.stringWidth(change.status()));
+          setIcon(new StatusIcon(change.status(), SimpleTextAttributes.GRAYED_ATTRIBUTES.getFgColor(), label, statusWidth, metrics.getHeight()));
           append(name, new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, color));
-          if (slash > 0 && !byFolder) append("  " + path.substring(0, slash), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+          if (slash > 0 && !byFolder) append("  " + shortDir(path.substring(0, slash)), SimpleTextAttributes.GRAYED_ATTRIBUTES);
           setToolTipText(path);
         }
         else {
@@ -940,25 +950,31 @@ final class SyncPanel extends SimpleToolWindowPanel {
   }
 
   /**
-   * 아래 단추를 지금 목록에 맞춘다: Pull Selected 끝에 받을 파일 수, Push 끝에 올릴 커밋 수(고른 저장소, 없으면 전부),
+   * 아래 단추를 지금 목록에 맞춘다: Pull Selected 끝에 받을 파일 수, Push 끝에 나갈 파일 수(고른 저장소, 없으면 전부. 위쪽 ↑ 수와 같다),
    * 충돌이 없으면 Resolve Conflicts 를 끈다. EDT 에서 부른다.
    */
+  /** 파일 줄 옆 상위 폴더. 다섯 단계 이상이면 앞 셋과 마지막만 남기고 가운데를 … 로 줄인다(src/main/java/…/order). */
+  static String shortDir(String dir) {
+    String[] parts = dir.split("/");
+    if (parts.length <= SHORT_DIR_KEEP + 1) return dir;
+    return String.join("/", parts[0], parts[1], parts[2], SHORT_DIR_ELLIPSIS, parts[parts.length - 1]);
+  }
+
   private void updateButtons() {
     List<Repo> targets = buttonTargets();
     int incoming = 0;
+    int outgoing = 0;
     boolean conflict = false;
     for (Change c : changes) {
       if (c.kind() == Kind.CONFLICT) conflict = true;
-      if ((c.kind() == Kind.INCOMING || c.kind() == Kind.CONFLICT) && targets.contains(c.repo())) incoming++;
-    }
-    int ahead = 0;
-    for (Repo repo : targets) {
-      if (repo.vcs() == Vcs.GIT) ahead += AHEAD_COUNTS.getOrDefault(repo.root(), 0);
+      if (!targets.contains(c.repo())) continue;
+      if (c.kind() == Kind.INCOMING || c.kind() == Kind.CONFLICT) incoming++;
+      if (c.kind() == Kind.OUTGOING) outgoing++;
     }
     String pull = SyncBundle.message("sync.button.pull");
     pullButton.setText(incoming == 0 ? pull : pull + COUNT_GAP + incoming);
     String push = SyncBundle.message("sync.button.push");
-    pushButton.setText(ahead == 0 ? push : push + COUNT_GAP + ahead);
+    pushButton.setText(outgoing == 0 ? push : push + COUNT_GAP + outgoing);
     resolveButton.setEnabled(conflict);
     resolveButton.setToolTipText(conflict ? null : SyncBundle.message("sync.resolve.none"));
   }
@@ -1893,16 +1909,6 @@ final class SyncPanel extends SimpleToolWindowPanel {
     title.append(list.size() == 1 ? list.get(0).toString() : SyncBundle.message("sync.repo.count", list.size()));
   }
 
-  /** 묶음 줄 아이콘. 도구줄 보기 거르기와 같은 그림을 쓰고, 충돌은 경고 표시. */
-  private static Icon iconOf(Kind kind) {
-    return switch (kind) {
-      case CONFLICT -> AllIcons.General.Warning;
-      case INCOMING -> AllIcons.Actions.Download;
-      case OUTGOING -> AllIcons.Actions.Upload;
-      case ASSUMED -> AllIcons.Actions.Show;
-    };
-  }
-
   /** 종류별 글자색으로 쓸 IDE 파일 상태. 모른 척 중 · 저장소 줄은 기본 글자색(null). */
   private static FileStatus statusColorOf(Kind kind) {
     if (kind == null) return null;
@@ -2337,11 +2343,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     // 새 파일은 폴더 단위로만 받는다(-unormal). 무시되지 않은 큰 폴더 속을 다 훑으면 느려진다.
     // 폴더는 ".idea/" 처럼 끝이 / 인 한 줄로 나오며, 그대로 .gitignore 에 넣을 수 있다.
     for (String line : out.get(2).split("\n")) {
-      // 첫 줄은 브랜치 줄(-b). 올릴 커밋 수만 꺼내 Push 단추에 쓴다.
-      if (line.startsWith(STATUS_BRANCH_LINE)) {
-        AHEAD_COUNTS.put(root, parseAhead(line));
-        continue;
-      }
+      if (line.startsWith(STATUS_BRANCH_LINE)) continue;  // 첫 줄은 브랜치 줄(-b).
       if (line.length() < 4) continue;
       String xy = line.substring(0, 2);
       String path = line.substring(3);
@@ -2361,12 +2363,6 @@ final class SyncPanel extends SimpleToolWindowPanel {
       result.add(new Change(Kind.ASSUMED, "Assume Unchanged", path, repo));
     }
     return result;
-  }
-
-  /** git status -b 브랜치 줄의 「[ahead N」. 없으면(원격과 같음 · 뒤처지기만 함 · 추적 브랜치 없음) 0. */
-  static int parseAhead(String branchLine) {
-    Matcher m = AHEAD.matcher(branchLine);
-    return m.find() ? Integer.parseInt(m.group(1)) : 0;
   }
 
   /**
@@ -2548,13 +2544,27 @@ final class SyncPanel extends SimpleToolWindowPanel {
       if (collapsed.contains(key)) tree.collapsePath(path);
       if (selected.contains(key)) reselect.add(path);
     }
-    // 고른 파일이 남아 있으면 다시 고르고, 선택 알림이 비교 화면을 그 파일의 지금 내용으로 다시 그린다. 없으면 지난 비교가 남지 않게 비운다.
+    // 고른 파일이 남아 있으면 다시 고르고, 선택 알림이 비교 화면을 그 파일의 지금 내용으로 다시 그린다.
+    // 고른 것이 없으면 첫 파일을 골라 비교 칸이 비지 않게 하고(시안), 파일이 하나도 없을 때만 안내 글을 둔다.
+    if (reselect.isEmpty()) {
+      TreePath first = firstChangePath(root);
+      if (first != null) reselect.add(first);
+    }
     if (reselect.isEmpty()) {
       diffPanel.setRequest(new MessageDiffRequest(SyncBundle.message("sync.diff.empty")));
       diffHead.setVisible(false);
     }
     else tree.setSelectionPaths(reselect.toArray(TreePath[]::new));
     updateButtons();
+  }
+
+  /** 트리에서 맨 위 파일 줄. 파일이 없으면 null. */
+  private static TreePath firstChangePath(DefaultMutableTreeNode root) {
+    for (TreeNode node : Collections.list(root.preorderEnumeration())) {
+      DefaultMutableTreeNode n = (DefaultMutableTreeNode) node;
+      if (n.getUserObject() instanceof Change) return new TreePath(n.getPath());
+    }
+    return null;
   }
 
   /** 트리 줄 하나의 열쇠: 맨 위부터 저장소 폴더 · 묶음 종류 · 「종류:경로」를 이어 붙인다. 다시 만든 트리에서 같은 줄을 찾는 데 쓴다. */
