@@ -659,7 +659,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
 
   /** 비교 칸 머리의 이전 · 다음 파일 글 링크. 흐린 글로 두고 누르면 step 을 고른다. */
   private static ActionLink stepLink(String text, FileStepAction step) {
-    ActionLink link = new ActionLink(text, e -> step.go());
+    ActionLink link = new ActionLink(text, e -> { step.go(); });
     link.setForeground(UIUtil.getContextHelpForeground());
     return link;
   }
