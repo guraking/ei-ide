@@ -22,6 +22,7 @@
   26) 프로젝트 창 모듈 줄을 모두 폴더 이름만 굵게 그린다(뒤의 [모듈 이름] 을 뺀다).
   27) TextMate html 번들이 .jsp 를 잡지 않게 하여 .jsp 는 언제나 jsp 번들(지시문 · 스크립틀릿 · ${} 을 아는 쪽)이 맡는다.
   28) 설치 파일(.exe) 압축을 lzma 에서 zlib 로 바꿔 빌드 시간을 줄인다.
+  29) 단추 글자를 글자 상자가 아니라 대문자 · 한글 높이 기준으로 세로 가운데에 둔다(맑은 고딕에서 1~2px 아래로 처지던 것).
 고치기 전 원본은 <intellij-community>/../backup/<시각>-before/ 에 같은 상대경로로 남긴다.
 모든 원문을 먼저 찾아 본 뒤에 쓴다. 하나라도 못 찾으면 아무 파일도 바꾸지 않는다. 줄끝(LF · CRLF)은 파일마다 원래대로 둔다.
 두 번 실행해도 같은 결과가 된다.
@@ -33,6 +34,7 @@ import time
 from pathlib import Path
 
 # (파일, 바꿀 원문, 바꿀 내용). 원문은 2026.2.3 소스에서 정확히 한 번 나오는 것만 쓴다.
+BUTTON_UI_FILE = "platform/platform-impl/src/com/intellij/ide/ui/laf/darcula/ui/DarculaButtonUI.java"
 DEFAULT_LAF_FILE = "community-resources/resources/idea/IdeaApplicationInfo.xml"
 DEFAULT_LAF_LINE = '  <default-laf dark="EI Graphite"/>\n'
 # 수정 전에 지울 옛 줄: 파일 → 줄 정규식. 지금 넣을 줄과 같은 줄은 남긴다.
@@ -307,6 +309,33 @@ EDITS = [
     ("build/conf/nsis/idea.nsi",
      "SetCompressor lzma\n",
      "SetCompressor zlib\n"),
+    # 29) 단추 글자의 기준선은 원래 글자 상자(ascent + descent)를 단추 가운데에 두는 값이다. 맑은 고딕처럼 ascent 가 큰 글꼴은
+    #     실제 글자가 상자 아래쪽에 앉아 단추 글자가 1~2px 아래로 처진다. 대문자 · 한글이 차지하는 높이(「H가」의 잉크 높이)를
+    #     가운데에 맞춘다. 내림 글자(g · y)는 기준선 아래로 내려가는 것이 정상이라 높이에 넣지 않는다. 우리 단추와 IntelliJ 대화 상자 단추 모두에 적용된다.
+    (BUTTON_UI_FILE,
+     "        textRect.x + getTextShiftOffset(),\n"
+     "        textRect.y + metrics.getAscent() + getTextShiftOffset());\n",
+     "        textRect.x + getTextShiftOffset(),\n"
+     "        centeredBaseline(g, textRect, metrics) + getTextShiftOffset());\n"),
+    (BUTTON_UI_FILE,
+     "      textRect.x + getTextShiftOffset(),\n"
+     "      textRect.y + metrics.getAscent() + getTextShiftOffset());\n",
+     "      textRect.x + getTextShiftOffset(),\n"
+     "      centeredBaseline(g, textRect, metrics) + getTextShiftOffset());\n"),
+    (BUTTON_UI_FILE,
+     "  protected int getMnemonicIndex(AbstractButton b) {\n",
+     "  // EI IDE: 대문자 · 한글 잉크 높이의 가운데가 글자 칸 가운데에 오는 기준선. 잉크를 못 재면 원래 값(위 + ascent).\n"
+     "  private static final String CENTER_SAMPLE = \"H\\uAC00\";\n"
+     "\n"
+     "  private static int centeredBaseline(Graphics g, Rectangle textRect, FontMetrics metrics) {\n"
+     "    Font font = metrics.getFont();\n"
+     "    String sample = font.canDisplayUpTo(CENTER_SAMPLE) == -1 ? CENTER_SAMPLE : CENTER_SAMPLE.substring(0, 1);\n"
+     "    java.awt.geom.Rectangle2D ink = font.createGlyphVector(((Graphics2D)g).getFontRenderContext(), sample).getVisualBounds();\n"
+     "    if (ink.isEmpty()) return textRect.y + metrics.getAscent();\n"
+     "    return (int)Math.round(textRect.getCenterY() - ink.getCenterY());\n"
+     "  }\n"
+     "\n"
+     "  protected int getMnemonicIndex(AbstractButton b) {\n"),
 ]
 
 
