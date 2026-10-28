@@ -76,8 +76,6 @@ import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.DumbAwareToggleAction;
 import com.intellij.openapi.ui.SimpleToolWindowPanel;
 import com.intellij.ui.JBColor;
-import com.intellij.ui.components.ActionLink;
-import com.intellij.openapi.keymap.KeymapUtil;
 import com.intellij.openapi.actionSystem.CustomShortcutSet;
 import com.intellij.util.IconUtil;
 import com.intellij.util.ui.UIUtil;
@@ -266,8 +264,6 @@ final class SyncPanel extends SimpleToolWindowPanel {
   // 파일 줄 우클릭 아래쪽에 붙이는 IntelliJ 기본 동작(Jump to Source · Show History · Copy Absolute Path · Select in Project View).
   private static final List<String> STOCK_FILE_ACTIONS = List.of("EditSource", "Vcs.ShowTabbedFileHistory", "CopyPaths", "SelectInProjectView");
   // IntelliJ 비교 창의 「Compare Previous/Next File」. 이름 · 아이콘 · 단축키(Alt+← · Alt+→)를 그대로 쓴다.
-  private static final String ACTION_PREV_FILE = "Diff.PrevChange";
-  private static final String ACTION_NEXT_FILE = "Diff.NextChange";
   private static final String GROUP_BY_FOLDER_KEY = "kinggura.sync.groupByFolder";
   // 마지막 원격 확인에서 이만큼(분) 지나면 위쪽 줄에 「새로고침 필요」를 붙인다.
   private static final long STALE_MINUTES = 30;
@@ -384,18 +380,12 @@ final class SyncPanel extends SimpleToolWindowPanel {
     actions.add(new ModeAction("sync.mode.incoming", Kind.INCOMING));
     actions.add(new ModeAction("sync.mode.outgoing", Kind.OUTGOING));
     actions.add(new ModeAction("sync.mode.conflict", Kind.CONFLICT));
-    // IntelliJ 변경 트리와 같은 모두 펼치기 · 모두 접기 · 폴더별 묶기. 이전 · 다음 파일은 비교 칸 머리에 둔다.
+    // IntelliJ 변경 트리와 같은 모두 펼치기 · 모두 접기 · 폴더별 묶기.
     actions.addSeparator();
     DefaultTreeExpander expander = new DefaultTreeExpander(tree);
     actions.add(CommonActionsManager.getInstance().createExpandAllAction(expander, tree));
     actions.add(CommonActionsManager.getInstance().createCollapseAllAction(expander, tree));
     actions.add(new GroupByFolderAction());
-    FileStepAction prevFile = new FileStepAction(ACTION_PREV_FILE, -1);
-    FileStepAction nextFile = new FileStepAction(ACTION_NEXT_FILE, 1);
-    for (FileStepAction step : List.of(prevFile, nextFile)) {
-      // 비교 화면에 포커스가 있어도 Alt+← · Alt+→ 로 넘어가게 창 전체에 건다.
-      step.registerCustomShortcutSet(step.getShortcutSet(), this, parent);
-    }
     ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar(TOOLBAR_PLACE, actions, true);
     toolbar.setTargetComponent(this);
     title.setOpaque(false);
@@ -435,14 +425,9 @@ final class SyncPanel extends SimpleToolWindowPanel {
     });
     // 트리에서 고른 파일을 IDE 에 알려 우클릭의 IntelliJ 기본 동작(Jump to Source · Show History 등)이 그 파일로 돈다.
     splitter.setFirstComponent(new TreeData(ScrollPaneFactory.createScrollPane(tree, true)));
-    // 비교 칸 머리(시안): 왼쪽에 파일 이름 · 「원격 ↔ 내 작업본」, 오른쪽에 이전 · 다음 파일과 단축키.
-    JPanel steps = new JPanel(new FlowLayout(FlowLayout.RIGHT, JBUI.scale(GAP * 2), 0));
-    steps.setOpaque(false);
-    steps.add(stepLink(SyncBundle.message("sync.diff.prev", KeymapUtil.getFirstKeyboardShortcutText(prevFile)), prevFile));
-    steps.add(stepLink(SyncBundle.message("sync.diff.next", KeymapUtil.getFirstKeyboardShortcutText(nextFile)), nextFile));
+    // 비교 칸 머리(시안): 파일 이름 · 「원격 ↔ 내 작업본」.
     diffTitle.setOpaque(false);
     diffHead.add(diffTitle, BorderLayout.CENTER);
-    diffHead.add(steps, BorderLayout.EAST);
     diffHead.setBorder(JBUI.Borders.compound(JBUI.Borders.customLineBottom(JBColor.border()), JBUI.Borders.empty(GAP / 2, GAP)));
     diffHead.setVisible(false);
     JPanel diffSide = new JPanel(new BorderLayout());
@@ -667,13 +652,6 @@ final class SyncPanel extends SimpleToolWindowPanel {
     if (!e.isPopupTrigger()) return;
     TreePath clicked = tree.getPathForLocation(e.getX(), e.getY());
     if (clicked != null && !tree.isPathSelected(clicked)) tree.setSelectionPath(clicked);
-  }
-
-  /** 비교 칸 머리의 이전 · 다음 파일 글 링크. 흐린 글로 두고 누르면 step 을 고른다. */
-  private static ActionLink stepLink(String text, FileStepAction step) {
-    ActionLink link = new ActionLink(text, e -> { step.go(); });
-    link.setForeground(UIUtil.getContextHelpForeground());
-    return link;
   }
 
   /** 메뉴 항목 하나. 누르면 run 을 부른다. */
@@ -1479,46 +1457,6 @@ final class SyncPanel extends SimpleToolWindowPanel {
       byFolder = state;
       PropertiesComponent.getInstance().setValue(GROUP_BY_FOLDER_KEY, state);
       rebuildTree();
-    }
-  }
-
-  /**
-   * 비교 화면의 이전 · 다음 파일(IntelliJ 「Compare Previous/Next File」과 같은 이름 · 아이콘 · 단축키).
-   * 트리의 파일 줄을 위에서 아래 차례(접힌 묶음 안도 포함)로 보고 고른 줄 앞 · 뒤 파일을 고르면 선택 알림이 비교 화면을 바꾼다.
-   */
-  private final class FileStepAction extends DumbAwareAction {
-    private final int step;
-
-    FileStepAction(String stockId, int step) {
-      this.step = step;
-      AnAction stock = ActionManager.getInstance().getAction(stockId);
-      if (stock != null) copyFrom(stock);
-    }
-
-    @Override public @NotNull ActionUpdateThread getActionUpdateThread() { return ActionUpdateThread.EDT; }
-    @Override public void update(@NotNull AnActionEvent e) { e.getPresentation().setEnabled(target() != null); }
-
-    @Override
-    public void actionPerformed(@NotNull AnActionEvent e) { go(); }
-
-    /** 앞 · 뒤 파일 줄을 고른다. 없으면 아무것도 하지 않는다. */
-    void go() {
-      TreePath path = target();
-      if (path == null) return;
-      tree.setSelectionPath(path);
-      tree.scrollPathToVisible(path);
-    }
-
-    /** 고른 파일 줄에서 step 만큼 떨어진 파일 줄. 고른 파일이 없으면 다음은 첫 파일, 이전은 없음. 끝을 넘으면 null. */
-    private TreePath target() {
-      List<TreePath> files = new ArrayList<>();
-      DefaultMutableTreeNode root = (DefaultMutableTreeNode) tree.getModel().getRoot();
-      for (TreeNode node : Collections.list(root.preorderEnumeration())) {
-        if (((DefaultMutableTreeNode) node).getUserObject() instanceof Change) files.add(new TreePath(((DefaultMutableTreeNode) node).getPath()));
-      }
-      int at = files.indexOf(tree.getLeadSelectionPath());
-      int next = at < 0 ? (step > 0 ? 0 : -1) : at + step;
-      return next >= 0 && next < files.size() ? files.get(next) : null;
     }
   }
 
