@@ -106,9 +106,10 @@ final class ProjectHistoryPanel extends JPanel {
   // 색. 가지 선 · 작성자 동그라미는 테마 밝기에 맞춘 고정 팔레트, 알약은 글자색 + 옅은 바탕 · 테두리.
   // 이웃한 가지끼리 비슷한 색이 붙지 않도록 파랑 · 초록 · 주황 · 보라 · 청록 … 순으로 둔다. 밝은 테마는 흰 바탕에서 읽히는 진한 색,
   // 어두운 테마는 같은 색상을 밝게 한 색(EI White · EI Graphite 의 코드 색과 같은 계열).
+  // 밝은 팔레트는 동그라미의 흰 글자와 명암비 4.5:1 이상(WCAG AA)이어야 한다.
   private static final Color[] LIGHT_PALETTE = {
-    new Color(0x3B6FB6), new Color(0x2F8F5B), new Color(0xC0612B), new Color(0x7A5BB5), new Color(0x2A8C8C),
-    new Color(0xA8862A), new Color(0xB0475E), new Color(0x4E7FA8), new Color(0x6B8E23), new Color(0x8A6A4F)};
+    new Color(0x3B6FB6), new Color(0x2E7D50), new Color(0xA8521F), new Color(0x7A5BB5), new Color(0x237575),
+    new Color(0x856A1C), new Color(0xB0475E), new Color(0x41709A), new Color(0x5A7A1D), new Color(0x8A6A4F)};
   private static final Color[] DARK_PALETTE = {
     new Color(0x6FA8FF), new Color(0x5FCF8F), new Color(0xF0A060), new Color(0xB49AF0), new Color(0x5FD3D3),
     new Color(0xE0C060), new Color(0xE88A9C), new Color(0x8FB8E0), new Color(0xA8C860), new Color(0xC8A080)};
@@ -263,7 +264,7 @@ final class ProjectHistoryPanel extends JPanel {
   private JComponent detailPanel() {
     subject.setFont(JBUI.Fonts.label().biggerOn(1).asBold());
     author.setFont(JBUI.Fonts.label().asBold());
-    authorTime.setFont(JBUI.Fonts.smallFont());
+    authorTime.setForeground(DIM);
     JPanel names = new JPanel(new GridLayout(0, 1));
     names.add(author);
     names.add(authorTime);
@@ -281,7 +282,6 @@ final class ProjectHistoryPanel extends JPanel {
     message.setBorder(JBUI.Borders.empty());
     JLabel hint = new JLabel(SyncBundle.message("history.hint"));
     hint.setForeground(DIM);
-    hint.setFont(JBUI.Fonts.smallFont());
     hint.setBorder(JBUI.Borders.emptyTop(GAP));
 
     JPanel head = new JPanel();
