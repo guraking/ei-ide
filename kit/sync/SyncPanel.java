@@ -2548,7 +2548,16 @@ final class SyncPanel extends SimpleToolWindowPanel {
       if (collapsed.contains(key)) tree.collapsePath(path);
       if (selected.contains(key)) reselect.add(path);
     }
-    // 고른 파일이 남아 있으면 다시 고르고, 선택 알림이 비교 화면을 그 파일의 지금 내용으로 다시 그린다. 없으면 지난 비교가 남지 않게 비운다.
+    // 고른 파일이 남아 있으면 다시 고르고, 선택 알림이 비교 화면을 그 파일의 지금 내용으로 다시 그린다.
+    // 남은 선택이 없으면 첫 파일을 골라 비교 칸이 비어 있지 않게 한다(시안). 파일이 하나도 없을 때만 비운다.
+    if (reselect.isEmpty()) {
+      for (TreeNode node : Collections.list(root.preorderEnumeration())) {
+        if (((DefaultMutableTreeNode) node).getUserObject() instanceof Change) {
+          reselect.add(new TreePath(((DefaultMutableTreeNode) node).getPath()));
+          break;
+        }
+      }
+    }
     if (reselect.isEmpty()) {
       diffPanel.setRequest(new MessageDiffRequest(SyncBundle.message("sync.diff.empty")));
       diffHead.setVisible(false);
