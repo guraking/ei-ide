@@ -420,6 +420,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
     JPanel top = new JPanel(new BorderLayout());
     top.add(toolbar.getComponent(), BorderLayout.WEST);
     top.add(middle, BorderLayout.CENTER);
+    // 시안: 도구줄 아래에 창 너비 전체로 경계선 하나. 왼쪽 목록과 오른쪽 비교 칸이 그 아래에서 같은 높이로 시작한다.
+    top.setBorder(JBUI.Borders.customLineBottom(JBColor.border()));
     setToolbar(top);
 
     // 왼쪽 목록은 시안대로 폭을 고정하고(창이 넓어져도 안 늘어남), 나머지를 비교 칸이 쓴다.
