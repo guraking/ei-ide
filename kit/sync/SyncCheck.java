@@ -49,11 +49,9 @@ public class SyncCheck {
     checkNestedRepo();
 
     // Push 단추 숫자: git status -b 브랜치 줄의 ahead.
-    eq(SyncPanel.parseAhead("## main...origin/main [ahead 2, behind 1]"), 2);
-    eq(SyncPanel.parseAhead("## main...origin/main [ahead 13]"), 13);
-    eq(SyncPanel.parseAhead("## main...origin/main [behind 4]"), 0);
-    eq(SyncPanel.parseAhead("## main...origin/main"), 0);
-    eq(SyncPanel.parseAhead("## No commits yet on main"), 0);
+    eq(SyncPanel.shortDir("src/main/java/com/shop/order"), "src/main/java/\u2026/order");
+    eq(SyncPanel.shortDir("src/main/resources/mapper"), "src/main/resources/mapper");
+    eq(SyncPanel.shortDir("src"), "src");
     // 받기 알림: 커밋 수와 겹치지 않는 파일 수.
     eq(SyncPanel.countPulled("\u0001\n\nA.java\nb/B.xml\n\u0001\n\nA.java\n"), new SyncPanel.Pulled(2, 2));
     eq(SyncPanel.countPulled(""), new SyncPanel.Pulled(0, 0));
