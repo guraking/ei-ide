@@ -40,18 +40,28 @@ import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
 import com.intellij.ide.ui.laf.darcula.ui.DarculaButtonUI;
 import com.intellij.ide.ui.laf.darcula.ui.DarculaTextFieldUI;
+import com.intellij.openapi.actionSystem.ActionManager;
+import com.intellij.openapi.actionSystem.ActionToolbar;
+import com.intellij.openapi.actionSystem.ActionUpdateThread;
+import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CustomShortcutSet;
+import com.intellij.openapi.actionSystem.DefaultActionGroup;
+import com.intellij.openapi.actionSystem.ToggleAction;
 import com.intellij.openapi.editor.colors.EditorColorsManager;
 import com.intellij.openapi.keymap.KeymapUtil;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.ui.AnimatedIcon;
 import com.intellij.ui.SimpleListCellRenderer;
+import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.components.ActionLink;
+import com.intellij.ui.components.JBPanelWithEmptyText;
 import com.intellij.ui.components.JBScrollPane;
+import com.intellij.ui.tabs.JBTabs;
+import com.intellij.ui.tabs.JBTabsFactory;
+import com.intellij.ui.tabs.TabInfo;
 import com.intellij.util.IconUtil;
 import local.bootservers.ui.Pill;
-import local.bootservers.ui.TabStrip;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -61,7 +71,6 @@ import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.JTable;
-import javax.swing.SwingConstants;
 import javax.swing.event.DocumentEvent;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.text.BadLocationException;
@@ -85,8 +94,6 @@ import javax.swing.event.TableModelListener;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics2D;
-import java.awt.GridBagLayout;
-import java.awt.GridLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.awt.font.TextAttribute;
@@ -103,6 +110,8 @@ import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -116,7 +125,8 @@ import java.util.function.IntPredicate;
 import java.util.regex.Pattern;
 
 /**
- * API 요청 화면(편집기 탭). 방식 · 주소 · 쿼리 · 헤더 · 본문 · 인증을 고쳐 보내고 상태 · 걸린 시간 · 응답 본문 · 헤더를 보인다.
+ * API 요청 화면(편집기 탭). 위 절반은 요청(왼쪽 쿼리 · 헤더 · 본문 · 인증 탭, 오른쪽 보낼 HTTP 요청 글 미리보기),
+ * 아래 절반은 응답(상태 · 걸린 시간 · 본문 · 헤더 · 쿠키), 맨 아래 줄에 마지막 보낸 시각.
  * 인증 방식 · 아이디는 프로젝트 설정에, 토큰 · 비밀번호 · 쿠키는 IDE 비밀번호 저장소에 둔다. 요청 · 응답 내용은 로그에 남기지 않는다.
  * 프로젝트마다 쿠키 저장소가 있어 로그인 응답의 Set-Cookie 를 다음 요청에 이어 보낸다(IDE 를 다시 켜면 비워짐).
  */
@@ -144,6 +154,9 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
     private static final int MAX_SHOWN_CHARS = 2_000_000;
     private static final int HTTP_ERROR_STATUS = 400;
     private static final float REQUEST_RESPONSE_SPLIT = 0.5f;
+    /** 요청 영역에서 탭(왼쪽)이 차지하는 비율. 오른쪽은 보낼 요청 미리보기. */
+    private static final float TABS_PREVIEW_SPLIT = 0.55f;
+    private static final DateTimeFormatter SENT_TIME = DateTimeFormatter.ofPattern("HH:mm:ss");
     private static final String SEND_SHORTCUT = "control ENTER";
     /** 보내는 중 지난 시간을 고쳐 쓰는 간격(ms). */
     private static final int ELAPSED_TICK_MS = 100;
@@ -154,10 +167,12 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
     private static final int CHECK_COLUMN_WIDTH = 32;
     /** 표 칸 좌우 안쪽 여백. */
     private static final int CELL_PADDING = 8;
-    private static final int TAB_QUERY = 0;
-    private static final int TAB_HEADERS = 1;
-    private static final int TAB_BODY = 2;
-    private static final int TAB_AUTH = 3;
+    private static final int VIEW_BODY = 0;
+    private static final int VIEW_HEADERS = 1;
+    private static final int VIEW_COOKIES = 2;
+    private static final String[] VIEW_CARDS = {"body", "headers", "cookies"};
+    private static final String VIEWS_PLACE = "EiApiResponseViews";
+    private static final String SET_COOKIE = "set-cookie";
     private static final JBColor METHOD_GET = new JBColor(0x1F8A4C, 0x5FCF8F);
     private static final JBColor METHOD_POST = new JBColor(0xB8620E, 0xF0A060);
     private static final JBColor METHOD_PUT = new JBColor(0x1750B8, 0x6FA8FF);
@@ -217,18 +232,29 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
     private final JBLabel userLabel = new JBLabel(BootServersBundle.message("api.auth.user"));
     private final JBLabel passwordLabel = new JBLabel(BootServersBundle.message("api.auth.password"));
     private final JBLabel cookieLabel = new JBLabel(BootServersBundle.message("api.auth.cookie.value"));
-    private final TabStrip requestTabs = new TabStrip(false);
-    private final JPanel responseHead = new JPanel(new BorderLayout(JBUI.scale(10), 0));
+    private final JBTabs requestTabs;
+    private final TabInfo queryTab;
+    private final TabInfo headersTab;
+    private final TabInfo bodyTab;
+    private final TabInfo authTab;
+    /** 지금 입력으로 보낼 HTTP 요청 글(읽기 전용). 입력이 바뀔 때마다 다시 만든다. */
+    private final EditorTextField previewField;
     private final Pill statusPill = new Pill();
     private final JBLabel metaLabel = new JBLabel();
-    private final TabStrip responseTabs = new TabStrip(true);
+    private final ActionToolbar viewsToolbar;
     private final JBLabel errorTitle = new JBLabel();
     private final JBLabel errorText = new JBLabel();
     private final JPanel responseCards = new JPanel(new CardLayout());
+    private final JPanel responseViews = new JPanel(new CardLayout());
+    private final JBLabel footLabel = new JBLabel();
     private final Timer elapsedTimer = new Timer(ELAPSED_TICK_MS, null);
     private long sendStart;
     private final EditorTextField responseBody;
     private final EditorTextField responseHeaders;
+    private final EditorTextField responseCookies;
+    private int shownView = VIEW_BODY;
+    private int headerCount;
+    private int cookieCount;
     /** 저장소에서 읽은(또는 마지막으로 쓴) 값. 바뀐 것만 다시 쓴다. 읽기 전에는 null. */
     private volatile Map<String, String> savedSecrets;
     private CompletableFuture<HttpResponse<String>> pending;
@@ -279,6 +305,8 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         responseBody = textField(byExtension(PLAIN_TEXT), true);
         responseBody.addSettingsProvider(editor -> editor.getSettings().setLineNumbersShown(true));
         responseHeaders = textField(byExtension(PLAIN_TEXT), true);
+        responseCookies = textField(byExtension(PLAIN_TEXT), true);
+        previewField = textField(byExtension(PLAIN_TEXT), true);
 
         methodBox.setRenderer(new SimpleListCellRenderer<>() {
             @Override
@@ -305,47 +333,74 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         top.add(buttons, BorderLayout.EAST);
         top.setBorder(JBUI.Borders.compound(JBUI.Borders.customLineBottom(JBColor.border()), JBUI.Borders.empty(10, 14)));
 
-        requestTabs.addTab(BootServersBundle.message("api.tab.query"), rowsPanel(queryModel, row -> false));
-        requestTabs.addTab(BootServersBundle.message("api.tab.headers"), rowsPanel(headerModel, this::isAuthRow));
-        requestTabs.addTab(BootServersBundle.message("api.tab.body"), bodyField);
-        requestTabs.addTab(BootServersBundle.message("api.tab.auth"), authPanel());
-        ActionLink addRow = new ActionLink(BootServersBundle.message("api.row.add"), e -> {
-            DefaultTableModel model = requestTabs.selected() == TAB_QUERY ? queryModel : headerModel;
-            model.addRow(new Object[]{true, "", "", ""});
-        });
-        requestTabs.onSelect(() -> addRow.setVisible(requestTabs.selected() == TAB_QUERY || requestTabs.selected() == TAB_HEADERS));
-        JPanel requestHead = new JPanel(new BorderLayout());
-        requestHead.add(requestTabs, BorderLayout.WEST);
-        requestHead.add(addRow, BorderLayout.EAST);
-        requestHead.setBorder(JBUI.Borders.compound(JBUI.Borders.customLineBottom(JBColor.border()), JBUI.Borders.empty(0, 14)));
-        JPanel request = new JPanel(new BorderLayout());
-        request.add(requestHead, BorderLayout.NORTH);
-        request.add(requestTabs.cards(), BorderLayout.CENTER);
-        TableModelListener counts = e -> refreshHints();
+        // 요청 탭. 쿼리 · 헤더 탭은 탭 줄 오른쪽에 「줄 추가」 링크를 둔다.
+        requestTabs = JBTabsFactory.createTabs(project, this);
+        queryTab = requestTab(BootServersBundle.message("api.tab.query"), rowsPanel(queryModel, row -> false), addRowLink(queryModel));
+        headersTab = requestTab(BootServersBundle.message("api.tab.headers"), rowsPanel(headerModel, this::isAuthRow), addRowLink(headerModel));
+        bodyTab = requestTab(BootServersBundle.message("api.tab.body"), bodyField, null);
+        authTab = requestTab(BootServersBundle.message("api.tab.auth"), authPanel(), null);
+        requestTabs.select(queryTab, false);
+        TableModelListener counts = e -> {
+            refreshHints();
+            refreshPreview();
+        };
         queryModel.addTableModelListener(counts);
         headerModel.addTableModelListener(counts);
         bodyField.addDocumentListener(new com.intellij.openapi.editor.event.DocumentListener() {
             @Override
             public void documentChanged(@NotNull com.intellij.openapi.editor.event.DocumentEvent event) {
                 refreshHints();
+                // 본문 문서가 바뀌는 중에 미리보기 문서를 고치지 않도록 한 박자 뒤에 만든다.
+                ApplicationManager.getApplication().invokeLater(ApiRequestEditor.this::refreshPreview, project.getDisposed());
+            }
+        });
+        methodBox.addActionListener(e -> refreshPreview());
+        urlField.getDocument().addDocumentListener(new DocumentAdapter() {
+            @Override
+            protected void textChanged(@NotNull DocumentEvent e) {
+                refreshPreview();
             }
         });
 
-        responseTabs.addTab(BootServersBundle.message("api.tab.body"), responseBody);
-        responseTabs.addTab(BootServersBundle.message("api.tab.headers"), responseHeaders);
+        JPanel previewHead = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0));
+        JBLabel previewTitle = new JBLabel(BootServersBundle.message("api.preview.title"));
+        previewTitle.setFont(JBFont.label().asBold());
+        previewHead.add(previewTitle);
+        previewHead.add(dim(new JBLabel(BootServersBundle.message("api.preview.hint"))));
+        previewHead.setBorder(JBUI.Borders.compound(JBUI.Borders.customLineBottom(JBColor.border()), JBUI.Borders.empty(8, 14)));
+        JPanel preview = new JPanel(new BorderLayout());
+        preview.add(previewHead, BorderLayout.NORTH);
+        preview.add(previewField, BorderLayout.CENTER);
+        OnePixelSplitter requestSplit = new OnePixelSplitter(false, TABS_PREVIEW_SPLIT);
+        // 칸 안 글(긴 안내 · 표 머리)의 최소 너비에 나눔 선이 묶이지 않게 한다.
+        requestSplit.setHonorComponentsMinimumSize(false);
+        requestSplit.setFirstComponent(requestTabs.getComponent());
+        requestSplit.setSecondComponent(preview);
+
+        // 응답 머리줄: 「응답」 · 상태 알약 · 시간 · 크기, 오른쪽에 본문 · 헤더 · 쿠키 토글.
         statusPill.setFont(monoFont().deriveFont(Font.BOLD));
         metaLabel.setForeground(UIUtil.getContextHelpForeground());
+        JBLabel responseTitle = new JBLabel(BootServersBundle.message("api.response.title"));
+        responseTitle.setFont(JBFont.label().asBold());
         JPanel status = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(10), 0));
+        status.add(responseTitle);
         status.add(statusPill);
         status.add(metaLabel);
+        DefaultActionGroup views = new DefaultActionGroup(new ViewAction(VIEW_BODY), new ViewAction(VIEW_HEADERS), new ViewAction(VIEW_COOKIES));
+        viewsToolbar = ActionManager.getInstance().createActionToolbar(VIEWS_PLACE, views, true);
+        viewsToolbar.setTargetComponent(root);
+        viewsToolbar.setReservePlaceAutoPopupIcon(false);
+        viewsToolbar.getComponent().setVisible(false);
+        JPanel responseHead = new JPanel(new BorderLayout(JBUI.scale(10), 0));
         responseHead.add(status, BorderLayout.WEST);
-        responseHead.add(responseTabs, BorderLayout.EAST);
-        responseHead.setBorder(JBUI.Borders.compound(JBUI.Borders.customLineBottom(JBColor.border()), JBUI.Borders.empty(8, 14)));
-        responseHead.setVisible(false);
+        responseHead.add(viewsToolbar.getComponent(), BorderLayout.EAST);
+        responseHead.setBorder(JBUI.Borders.compound(JBUI.Borders.customLineBottom(JBColor.border()), JBUI.Borders.empty(4, 14)));
 
-        responseCards.add(centered(new JBLabel(BootServersBundle.message("api.response.empty"), AllIcons.Actions.Execute, SwingConstants.CENTER),
-                dim(new JBLabel(KeymapUtil.getFirstKeyboardShortcutText(CustomShortcutSet.fromString(SEND_SHORTCUT))))), RESPONSE_EMPTY_CARD);
-        responseCards.add(centered(dim(new JBLabel(BootServersBundle.message("api.sending.wait", REQUEST_TIMEOUT.toSeconds())))),
+        String shortcut = KeymapUtil.getFirstKeyboardShortcutText(CustomShortcutSet.fromString(SEND_SHORTCUT));
+        JBPanelWithEmptyText empty = new JBPanelWithEmptyText().withEmptyText(BootServersBundle.message("api.response.empty"));
+        empty.getEmptyText().appendSecondaryText(shortcut, SimpleTextAttributes.GRAYED_ATTRIBUTES, null);
+        responseCards.add(empty, RESPONSE_EMPTY_CARD);
+        responseCards.add(new JBPanelWithEmptyText().withEmptyText(BootServersBundle.message("api.sending.wait", REQUEST_TIMEOUT.toSeconds())),
                 RESPONSE_SENDING_CARD);
         errorTitle.setFont(JBFont.label().asBold());
         errorText.setAllowAutoWrapping(true);
@@ -359,19 +414,27 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         errorCard.setBorder(JBUI.Borders.empty(12, 14));
         errorCard.add(errorBox, BorderLayout.NORTH);
         responseCards.add(errorCard, RESPONSE_ERROR_CARD);
-        responseCards.add(responseTabs.cards(), RESPONSE_SHOWN_CARD);
+        responseViews.add(responseBody, VIEW_CARDS[VIEW_BODY]);
+        responseViews.add(responseHeaders, VIEW_CARDS[VIEW_HEADERS]);
+        responseViews.add(responseCookies, VIEW_CARDS[VIEW_COOKIES]);
+        responseCards.add(responseViews, RESPONSE_SHOWN_CARD);
         JPanel response = new JPanel(new BorderLayout());
         response.add(responseHead, BorderLayout.NORTH);
         response.add(responseCards, BorderLayout.CENTER);
 
-        // 넓은 화면을 살려 요청(왼쪽) · 응답(오른쪽)을 나란히 둔다.
-        OnePixelSplitter split = new OnePixelSplitter(false, REQUEST_RESPONSE_SPLIT);
-        // 칸 안 글(긴 안내 · 표 머리)의 최소 너비에 나눔 선이 묶이지 않게 한다.
+        // 요청(위) · 응답(아래)으로 나눠 응답을 전체 폭으로 보인다.
+        OnePixelSplitter split = new OnePixelSplitter(true, REQUEST_RESPONSE_SPLIT);
         split.setHonorComponentsMinimumSize(false);
-        split.setFirstComponent(request);
+        split.setFirstComponent(requestSplit);
         split.setSecondComponent(response);
+
+        JPanel foot = new JPanel(new BorderLayout());
+        foot.add(dim(footLabel), BorderLayout.WEST);
+        foot.add(dim(new JBLabel(BootServersBundle.message("api.foot.shortcut", shortcut))), BorderLayout.EAST);
+        foot.setBorder(JBUI.Borders.compound(JBUI.Borders.customLineTop(JBColor.border()), JBUI.Borders.empty(4, 14)));
         root.add(top, BorderLayout.NORTH);
         root.add(split, BorderLayout.CENTER);
+        root.add(foot, BorderLayout.SOUTH);
 
         // 파란 기본 단추 위에서는 아이콘 · 글자를 기본 단추 글자 색(테마)으로 맞춘다.
         sendButton.setIcon(IconUtil.colorize(AllIcons.Actions.Execute, JBUI.CurrentTheme.Button.defaultButtonForeground()));
@@ -427,27 +490,35 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         return label;
     }
 
-    /** 칸 한가운데에 위아래로 쌓는다. */
-    private static JComponent centered(JComponent... lines) {
-        JPanel column = new JPanel(new GridLayout(lines.length, 1, 0, JBUI.scale(6)));
-        for (JComponent line : lines) {
-            if (line instanceof JBLabel label) {
-                label.setHorizontalAlignment(SwingConstants.CENTER);
-            }
-            column.add(line);
+    private TabInfo requestTab(String title, JComponent content, @Nullable JComponent side) {
+        TabInfo info = new TabInfo(content).setText(title);
+        if (side != null) {
+            info.setSideComponent(side);
         }
-        JPanel panel = new JPanel(new GridBagLayout());
-        panel.add(column);
-        return panel;
+        requestTabs.addTab(info);
+        return info;
+    }
+
+    /** 탭 줄 오른쪽 링크: 표에 빈 줄을 더한다. */
+    private static JComponent addRowLink(DefaultTableModel model) {
+        ActionLink link = new ActionLink(BootServersBundle.message("api.row.add"), e -> model.addRow(new Object[]{true, "", "", ""}));
+        link.setBorder(JBUI.Borders.empty(0, 8));
+        return link;
+    }
+
+    /** 탭 이름 뒤에 흐린 보조 글. */
+    private static void setHint(TabInfo tab, String title, String hint) {
+        tab.setText(title);
+        tab.append("  " + hint, SimpleTextAttributes.GRAYED_ATTRIBUTES);
     }
 
     /** 요청 탭 이름 옆 보조 글: 쿼리 · 헤더 줄 수, 본문 유무, 인증 방식. */
     private void refreshHints() {
-        requestTabs.setHint(TAB_QUERY, String.valueOf(queryModel.getRowCount()));
-        requestTabs.setHint(TAB_HEADERS, String.valueOf(headerModel.getRowCount()));
-        requestTabs.setHint(TAB_BODY, bodyField.getText().isBlank()
+        setHint(queryTab, BootServersBundle.message("api.tab.query"), String.valueOf(queryModel.getRowCount()));
+        setHint(headersTab, BootServersBundle.message("api.tab.headers"), String.valueOf(headerModel.getRowCount()));
+        setHint(bodyTab, BootServersBundle.message("api.tab.body"), bodyField.getText().isBlank()
                 ? BootServersBundle.message("api.hint.none") : BootServersBundle.message("api.hint.json"));
-        requestTabs.setHint(TAB_AUTH, switch (authKind()) {
+        setHint(authTab, BootServersBundle.message("api.tab.auth"), switch (authKind()) {
             case ApiText.AUTH_BEARER -> "Bearer";
             case ApiText.AUTH_BASIC -> "Basic";
             case ApiText.AUTH_COOKIE -> BootServersBundle.message("api.auth.cookie");
@@ -455,8 +526,75 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         });
     }
 
+    /** 지금 입력으로 보낼 HTTP 요청 글을 다시 만든다. 인증 줄 값은 헤더 표와 같이 앞부분만 보인다. */
+    private void refreshPreview() {
+        List<Map.Entry<String, String>> headers = checkedRows(headerModel, 0);
+        // 헤더 칸에 직접 적은 같은 이름이 있으면 인증 줄은 보내지 않으므로(sendOrCancel) 미리보기에서도 뺀다.
+        if (isAuthRow(0) && Boolean.TRUE.equals(headerModel.getValueAt(0, ENABLED_COLUMN)) && !headers.isEmpty()) {
+            for (int i = 1; i < headers.size(); i++) {
+                if (headers.get(i).getKey().equalsIgnoreCase(headers.get(0).getKey())) {
+                    headers.remove(0);
+                    break;
+                }
+            }
+        }
+        previewField.setText(ApiText.requestText(String.valueOf(methodBox.getSelectedItem()), urlField.getText(),
+                checkedRows(queryModel, 0), headers, bodyField.getText()));
+    }
+
     private void showCard(String card) {
         ((CardLayout) responseCards.getLayout()).show(responseCards, card);
+    }
+
+    private void showView(int view) {
+        shownView = view;
+        ((CardLayout) responseViews.getLayout()).show(responseViews, VIEW_CARDS[view]);
+    }
+
+    /** 응답 토글 이름. 헤더 · 쿠키는 개수를 붙인다. */
+    private String viewTitle(int view) {
+        return switch (view) {
+            case VIEW_HEADERS -> BootServersBundle.message("api.tab.headers") + " " + headerCount;
+            case VIEW_COOKIES -> BootServersBundle.message("api.tab.cookies") + " " + cookieCount;
+            default -> BootServersBundle.message("api.tab.body");
+        };
+    }
+
+    /** 응답 머리줄의 본문 · 헤더 · 쿠키 토글 하나. */
+    private final class ViewAction extends ToggleAction implements DumbAware {
+        private final int view;
+
+        ViewAction(int view) {
+            this.view = view;
+        }
+
+        @Override
+        public @NotNull ActionUpdateThread getActionUpdateThread() {
+            return ActionUpdateThread.EDT;
+        }
+
+        @Override
+        public boolean displayTextInToolbar() {
+            return true;
+        }
+
+        @Override
+        public void update(@NotNull AnActionEvent e) {
+            super.update(e);
+            e.getPresentation().setText(viewTitle(view));
+        }
+
+        @Override
+        public boolean isSelected(@NotNull AnActionEvent e) {
+            return shownView == view;
+        }
+
+        @Override
+        public void setSelected(@NotNull AnActionEvent e, boolean state) {
+            if (state) {
+                showView(view);
+            }
+        }
     }
 
     /** locked 줄은 체크만 고칠 수 있다. */
@@ -477,7 +615,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
 
     /**
      * 체크 · 이름 · 값 · 어디서 표. 체크를 끈 줄은 보내지 않고 흐리게 줄을 그어 보인다. 이름 · 값은 코드 글꼴, 값은 숫자 · 글을 색으로 가른다.
-     * locked 줄은 흐린 글자. Delete 키로 고른 줄(locked 제외)을 뺀다. 줄 더하기는 탭 줄 오른쪽 링크.
+     * locked 줄은 흐린 글자. Delete 키로 고른 줄(locked 제외)을 뺀다. 줄 더하기는 표 끝 줄과 탭 줄 오른쪽 링크.
      */
     private static JComponent rowsPanel(DefaultTableModel model, IntPredicate locked) {
         JBTable table = new JBTable(model);
@@ -869,8 +1007,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         statusPill.clear();
         metaLabel.setIcon(AnimatedIcon.Default.INSTANCE);
         metaLabel.setText(BootServersBundle.message("api.sending.elapsed", "0.0"));
-        responseTabs.setVisible(false);
-        responseHead.setVisible(true);
+        viewsToolbar.getComponent().setVisible(false);
         showCard(RESPONSE_SENDING_CARD);
         elapsedTimer.start();
         CompletableFuture<HttpResponse<String>> future = client(project).sendAsync(request, HttpResponse.BodyHandlers.ofString());
@@ -891,6 +1028,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         elapsedTimer.stop();
         metaLabel.setIcon(null);
         sendButton.setText(sendLabel());
+        footLabel.setText(BootServersBundle.message("api.foot.last", LocalTime.now().format(SENT_TIME), elapsedMs));
         if (error != null) {
             metaLabel.setText(BootServersBundle.message("api.meta.time", elapsedMs));
             showError(BootServersBundle.message("api.error.title"), responseErrorMessage(error));
@@ -903,23 +1041,30 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         statusPill.show(reason == null ? String.valueOf(code) : code + " " + reason,
                 failed ? STATUS_ERROR : STATUS_OK, failed ? STATUS_ERROR_BG : STATUS_OK_BG);
         StringBuilder headerText = new StringBuilder();
+        List<String> cookies = new ArrayList<>();
         String contentType = "";
+        headerCount = 0;
         for (Map.Entry<String, List<String>> header : response.headers().map().entrySet()) {
             if (header.getKey().startsWith(PSEUDO_HEADER_PREFIX)) {
                 continue;
             }
+            headerCount++;
             String value = String.join(", ", header.getValue());
             headerText.append(header.getKey()).append(": ").append(value).append('\n');
             if (CONTENT_TYPE.equalsIgnoreCase(header.getKey())) {
                 contentType = value.toLowerCase(Locale.ROOT);
             }
+            if (SET_COOKIE.equalsIgnoreCase(header.getKey())) {
+                cookies.addAll(header.getValue());
+            }
         }
         responseHeaders.setText(headerText.toString());
+        responseCookies.setText(String.join("\n", cookies));
+        cookieCount = cookies.size();
         String size = StringUtil.formatFileSize(body.getBytes(StandardCharsets.UTF_8).length);
         String mediaType = contentType.split(";")[0].strip();
         metaLabel.setText(mediaType.isEmpty() ? BootServersBundle.message("api.meta", elapsedMs, size)
                 : BootServersBundle.message("api.meta.type", elapsedMs, size, mediaType));
-        responseTabs.setHint(1, String.valueOf(response.headers().map().size()));
         if (body.isBlank()) {
             showError(BootServersBundle.message("api.body.blank"),
                     BootServersBundle.message(failed ? "api.body.blank.error" : "api.body.blank.ok"));
@@ -938,7 +1083,8 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         }
         responseBody.setFileType(byExtension(shownType));
         responseBody.setText(shown);
-        responseTabs.setVisible(true);
+        viewsToolbar.getComponent().setVisible(true);
+        viewsToolbar.updateActionsAsync();
         showCard(RESPONSE_SHOWN_CARD);
     }
 
@@ -946,7 +1092,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
     private void showError(String title, String message) {
         errorTitle.setText(title);
         errorText.setText(UIUtil.toHtml(StringUtil.escapeXmlEntities(message)));
-        responseTabs.setVisible(false);
+        viewsToolbar.getComponent().setVisible(false);
         showCard(RESPONSE_ERROR_CARD);
     }
 

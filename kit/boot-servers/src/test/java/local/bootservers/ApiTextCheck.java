@@ -74,6 +74,12 @@ public final class ApiTextCheck {
         eq("http://h/list?a=1&b=%ED%85%8C+%26", ApiText.withQuery("http://h/list",
                 List.of(Map.entry("a", "1"), Map.entry(" ", "x"), Map.entry("b", "테 &"))), "쿼리");
         eq("http://h/l?x=1&a=2", ApiText.withQuery("http://h/l?x=1", List.of(Map.entry("a", "2"))), "이미 ? 있음");
+        eq("GET /basic/list?a=1 HTTP/1.1\nHost: localhost:8090\nAccept: */*\n",
+                ApiText.requestText("GET", "http://localhost:8090/basic/list", List.of(Map.entry("a", "1")),
+                        List.of(Map.entry("Accept", "*/*")), ""), "보낼 요청 글");
+        eq("POST / HTTP/1.1\nHost: h\n\n{}",
+                ApiText.requestText("POST", "http://h", List.of(), List.of(), "{}"), "경로 없음 · 본문");
+        eq("GET /x HTTP/1.1\n", ApiText.requestText("GET", "/x", List.of(), List.of(), null), "scheme 없음");
     }
 
     private static void auth() {
