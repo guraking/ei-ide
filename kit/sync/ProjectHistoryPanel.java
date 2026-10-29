@@ -1,5 +1,6 @@
 package kinggura.sync;
 
+import com.intellij.openapi.editor.colors.EditorColorsManager;
 import com.intellij.diff.DiffContentFactory;
 import com.intellij.diff.DiffManager;
 import com.intellij.diff.requests.SimpleDiffRequest;
@@ -179,7 +180,7 @@ final class ProjectHistoryPanel extends JPanel {
   // 고른 커밋의 꺾인 선이 어느 커밋과 이어지는지. 긴 글은 「…」로 잘리고 전체는 풍선 도움말.
   private final JBLabel bend = new JBLabel();
   private final TitledSeparator filesTitle = new TitledSeparator();
-  private final Font hashFont = new Font(Font.MONOSPACED, Font.PLAIN, JBUI.Fonts.label().getSize());
+  private final Font hashFont = new Font(EditorColorsManager.getInstance().getGlobalScheme().getEditorFontName(), Font.PLAIN, JBUI.Fonts.label().getSize());
   private Loaded loaded;
   private boolean loadingMore;
   private boolean graph;
