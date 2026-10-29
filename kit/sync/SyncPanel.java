@@ -772,7 +772,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       items.add(item(text, AllIcons.Actions.Commit, () -> commitFiles(text, outgoing)));
     }
     if (outgoing.stream().anyMatch(c -> c.repo().vcs() == Vcs.GIT)) {
-      items.add(item(SyncBundle.message("sync.menu.push"), pushButton.getIcon(), pushButton::doClick));
+      items.add(item(SyncBundle.message("sync.menu.push"), AllIcons.Actions.MoveUp, pushButton::doClick));
     }
     if (conflict) items.add(item(SyncBundle.message("sync.menu.resolve"), resolveButton.getIcon(), resolveButton::doClick));
     Set<Repo> repoSet = byRepo(targets).keySet();
@@ -792,7 +792,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     items.add(item(SyncBundle.message("sync.menu.pull"), pullButton.getIcon(), pullButton::doClick));
     if (git) {
       // 메뉴 옆에 IntelliJ Push 단축키를 보인다(시안 「Push… Ctrl+Shift+K」).
-      AnAction push = item(SyncBundle.message("sync.menu.repo.push"), pushButton.getIcon(), pushButton::doClick);
+      AnAction push = item(SyncBundle.message("sync.menu.repo.push"), AllIcons.Actions.MoveUp, pushButton::doClick);
       AnAction stockPush = ActionManager.getInstance().getAction(STOCK_PUSH);
       if (stockPush != null) push.setShortcutSet(stockPush.getShortcutSet());
       items.add(push);
