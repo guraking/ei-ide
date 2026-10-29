@@ -195,6 +195,9 @@ public final class ReverseMergeAction extends DumbAwareAction {
     private final Chip filesChip = new Chip(FILES_BG, FILES_FG, null);
     private final Chip mineChip = new Chip(MINE_BG, MINE_COLOR, AllIcons.General.Warning);
     private final JBCheckBox push = new JBCheckBox();
+    // 두 브랜치를 받아 와 비교하는 동안 단계 2 제목 옆에 보이는 진행 막대(글은 막대 안).
+    private final JProgressBar gauge = new JProgressBar();
+    private static final int GAUGE_W = 260;
     // 미리 보기를 다시 읽을 때마다 하나 올린다(EDT 에서만 쓰고 worker 가 읽는다). 늦게 끝난 옛 계산이 새 결과를 덮지 않게 한다.
     private volatile int seq;
     private boolean ready;
@@ -374,6 +377,12 @@ public final class ReverseMergeAction extends DumbAwareAction {
       previewTitle.add(commitsChip);
       previewTitle.add(filesChip);
       previewTitle.add(mineChip);
+      gauge.setIndeterminate(true);
+      gauge.setStringPainted(true);
+      gauge.setString(SyncBundle.message("rmerge.loading"));
+      gauge.setPreferredSize(new Dimension(JBUI.scale(GAUGE_W), gauge.getPreferredSize().height));
+      gauge.setVisible(false);
+      previewTitle.add(gauge);
       JPanel previewHead = new JPanel(new BorderLayout());
       previewHead.add(previewTitle, BorderLayout.WEST);
       previewHead.add(dim(SyncBundle.message("rmerge.hint")), BorderLayout.EAST);
@@ -465,6 +474,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
       showChips(null);
       table.setToolTipText(null);
       table.setPaintBusy(false);
+      gauge.setVisible(false);
       String from = from();
       String into = into();
       push.setText(SyncBundle.message("rmerge.push", remote + "/" + into));
@@ -480,7 +490,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
         status(SyncBundle.message("rmerge.press.compare"));
         return;
       }
-      status(SyncBundle.message("rmerge.loading"));
+      status("");
+      gauge.setVisible(true);
       table.setPaintBusy(true);
       worker.execute(() -> {
         if (mySeq != seq || isDisposed()) return;  // 그사이 다른 브랜치를 골랐거나 창을 닫았다. 새 계산만 돌린다.
@@ -515,6 +526,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
         SwingUtilities.invokeLater(() -> {
           if (mySeq != seq || isDisposed()) return;
           table.setPaintBusy(false);
+          gauge.setVisible(false);
           if (failure != null) {
             status(failure);
             table.setToolTipText(failure);
