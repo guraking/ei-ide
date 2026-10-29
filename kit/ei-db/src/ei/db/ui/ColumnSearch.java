@@ -21,6 +21,7 @@ import org.jetbrains.annotations.Nullable;
 import javax.swing.Action;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
+import javax.swing.JProgressBar;
 import javax.swing.KeyStroke;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
@@ -58,6 +59,8 @@ final class ColumnSearch extends DialogWrapper {
   private final Model model = new Model();
   private final JBTable table = new JBTable(model);
   private final JBLabel status = new JBLabel(" ", UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER);
+  /** 찾는 동안 상태 글 자리에 보이는 진행 막대. */
+  private final JProgressBar gauge = Gauge.create(EiDbBundle.message("common.searching"));
   /** 늦게 온 이전 검색 결과를 버리는 번호. */
   private final AtomicInteger generation = new AtomicInteger();
 
@@ -99,7 +102,10 @@ final class ColumnSearch extends DialogWrapper {
     scroll.setPreferredSize(new Dimension(JBUI.scale(WIDTH), JBUI.scale(HEIGHT)));
     panel.add(scroll, BorderLayout.CENTER);
     status.setText(EiDbBundle.message("columnsearch.status.help"));
-    panel.add(status, BorderLayout.SOUTH);
+    JPanel south = new JPanel(new BorderLayout());
+    south.add(gauge, BorderLayout.WEST);
+    south.add(status, BorderLayout.CENTER);
+    panel.add(south, BorderLayout.SOUTH);
     return panel;
   }
 
@@ -120,7 +126,8 @@ final class ColumnSearch extends DialogWrapper {
       return;
     }
     int gen = generation.incrementAndGet();
-    status.setText(EiDbBundle.message("common.searching"));
+    status.setText("");
+    gauge.setVisible(true);
     DbSessions sessions = DbSessions.get(project);
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       try {
@@ -128,7 +135,10 @@ final class ColumnSearch extends DialogWrapper {
         later(gen, () -> showHits(hits));
       } catch (Exception e) {
         String msg = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
-        later(gen, () -> status.setText(EiDbBundle.message("columnsearch.status.failed", msg)));
+        later(gen, () -> {
+          gauge.setVisible(false);
+          status.setText(EiDbBundle.message("columnsearch.status.failed", msg));
+        });
       }
     });
   }
@@ -140,6 +150,7 @@ final class ColumnSearch extends DialogWrapper {
   }
 
   private void showHits(List<Hit> hits) {
+    gauge.setVisible(false);
     boolean truncated = hits.size() > ColumnSearchSql.MAX_HITS;
     model.set(truncated ? hits.subList(0, ColumnSearchSql.MAX_HITS) : hits);
     if (hits.isEmpty()) status.setText(EiDbBundle.message("common.nothing.found"));

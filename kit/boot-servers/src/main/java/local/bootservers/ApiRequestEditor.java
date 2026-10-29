@@ -51,7 +51,6 @@ import com.intellij.openapi.editor.colors.EditorColorsManager;
 import com.intellij.openapi.keymap.KeymapUtil;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.util.text.StringUtil;
-import com.intellij.ui.AnimatedIcon;
 import com.intellij.ui.SimpleListCellRenderer;
 import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.components.ActionLink;
@@ -61,6 +60,7 @@ import com.intellij.ui.tabs.JBTabs;
 import com.intellij.ui.tabs.JBTabsFactory;
 import com.intellij.ui.tabs.TabInfo;
 import com.intellij.util.IconUtil;
+import local.bootservers.ui.Gauge;
 import local.bootservers.ui.Pill;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -70,6 +70,7 @@ import javax.swing.ButtonGroup;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
+import javax.swing.JProgressBar;
 import javax.swing.JTable;
 import javax.swing.event.DocumentEvent;
 import javax.swing.table.DefaultTableCellRenderer;
@@ -241,6 +242,8 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
     private final EditorTextField previewField;
     private final Pill statusPill = new Pill();
     private final JBLabel metaLabel = new JBLabel();
+    // 보내는 동안 응답 머리줄에 보이는 진행 막대. 막대 안 글은 지난 시간.
+    private final JProgressBar gauge = Gauge.create("");
     private final ActionToolbar viewsToolbar;
     private final JBLabel errorTitle = new JBLabel();
     private final JBLabel errorText = new JBLabel();
@@ -386,6 +389,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         status.add(responseTitle);
         status.add(statusPill);
         status.add(metaLabel);
+        status.add(gauge);
         DefaultActionGroup views = new DefaultActionGroup(new ViewAction(VIEW_BODY), new ViewAction(VIEW_HEADERS), new ViewAction(VIEW_COOKIES));
         viewsToolbar = ActionManager.getInstance().createActionToolbar(VIEWS_PLACE, views, true);
         viewsToolbar.setTargetComponent(root);
@@ -440,7 +444,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         sendButton.setIcon(IconUtil.colorize(AllIcons.Actions.Execute, JBUI.CurrentTheme.Button.defaultButtonForeground()));
         sendButton.setToolTipText(KeymapUtil.getFirstKeyboardShortcutText(CustomShortcutSet.fromString(SEND_SHORTCUT)));
         DumbAwareAction.create(e -> sendOrCancel()).registerCustomShortcutSet(CustomShortcutSet.fromString(SEND_SHORTCUT), root, this);
-        elapsedTimer.addActionListener(e -> metaLabel.setText(BootServersBundle.message("api.sending.elapsed",
+        elapsedTimer.addActionListener(e -> gauge.setString(BootServersBundle.message("api.sending.elapsed",
                 String.format(Locale.ROOT, "%.1f", (System.nanoTime() - sendStart) / 1_000_000 / MS_PER_SECOND))));
         sendButton.addActionListener(e -> sendOrCancel());
         reset.addActionListener(e -> fill());
@@ -1005,8 +1009,9 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         long start = System.nanoTime();
         sendStart = start;
         statusPill.clear();
-        metaLabel.setIcon(AnimatedIcon.Default.INSTANCE);
-        metaLabel.setText(BootServersBundle.message("api.sending.elapsed", "0.0"));
+        metaLabel.setText("");
+        gauge.setString(BootServersBundle.message("api.sending.elapsed", "0.0"));
+        gauge.setVisible(true);
         viewsToolbar.getComponent().setVisible(false);
         showCard(RESPONSE_SENDING_CARD);
         elapsedTimer.start();
@@ -1026,6 +1031,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         }
         pending = null;
         elapsedTimer.stop();
+        gauge.setVisible(false);
         metaLabel.setIcon(null);
         sendButton.setText(sendLabel());
         footLabel.setText(BootServersBundle.message("api.foot.last", LocalTime.now().format(SENT_TIME), elapsedMs));

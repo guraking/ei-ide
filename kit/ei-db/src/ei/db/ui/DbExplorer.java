@@ -67,6 +67,7 @@ import org.jetbrains.annotations.NotNull;
 
 import javax.swing.Icon;
 import javax.swing.JPanel;
+import javax.swing.JProgressBar;
 import javax.swing.JTree;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.TreeExpansionEvent;
@@ -79,6 +80,8 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Font;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.Graphics;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
@@ -111,7 +114,8 @@ final class DbExplorer extends SimpleToolWindowPanel {
   private static final String PLACE = "EiDatabaseExplorer";
   private static final String[] TABLE_TYPES = {"TABLE"};
   private static final String[] VIEW_TYPES = {"VIEW"};
-  private static final Message LOADING = new Message(EiDbBundle.message("explorer.loading"), false);
+  /** 아직 안 읽은 마디의 자리 자식. 읽는 동안은 검색 줄 아래 진행 막대가 알리므로 글은 비운다. */
+  private static final Message LOADING = new Message("", false);
   private static final Color CONNECTED = JBColor.namedColor("EiDatabase.connected", new JBColor(0x3E9B47, 0x5FB865));
   private static final Color DANGER = JBColor.namedColor("EiDatabase.production", new JBColor(0xD9363E, 0xF75464));
   /** 이름 · 주석 · 주소 사이 간격 글. */
@@ -155,6 +159,8 @@ final class DbExplorer extends SimpleToolWindowPanel {
   private final SearchTextField search = new SearchTextField(false);
   private final Alarm filterAlarm;
   private final Set<DefaultMutableTreeNode> loading = Collections.newSetFromMap(new IdentityHashMap<>());
+  /** loading 이 비어 있지 않은 동안 검색 줄 아래에 보이는 진행 막대. */
+  private final JProgressBar gauge = Gauge.create(EiDbBundle.message("explorer.loading"));
   private final ExecutorService metaQueue = AppExecutorUtil.createBoundedApplicationPoolExecutor("EI Database 탐색기", 1);
   /** 창 머리에 「접속 N / M」을 보일 내용 탭. attach 전에는 null. */
   private Content content;
@@ -252,6 +258,11 @@ final class DbExplorer extends SimpleToolWindowPanel {
     JPanel top = new JPanel(new BorderLayout());
     top.add(tabs.getComponent(), BorderLayout.NORTH);
     top.add(searchRow, BorderLayout.CENTER);
+    // 막대가 숨어 있으면 GridBag 이 자리를 잡지 않아 나무가 검색 줄에 붙는다.
+    JPanel gaugeRow = new JPanel(new GridBagLayout());
+    gaugeRow.add(gauge, new GridBagConstraints(0, 0, 1, 1, 1, 0, GridBagConstraints.WEST, GridBagConstraints.HORIZONTAL,
+        JBUI.insets(SEARCH_INSET), 0, 0));
+    top.add(gaugeRow, BorderLayout.SOUTH);
     JPanel body = new JPanel(new BorderLayout());
     body.add(top, BorderLayout.NORTH);
     body.add(ScrollPaneFactory.createScrollPane(tree, true), BorderLayout.CENTER);
@@ -364,6 +375,7 @@ final class DbExplorer extends SimpleToolWindowPanel {
 
   private void loadIfNeeded(DefaultMutableTreeNode node) {
     if (node.getChildCount() != 1 || node(node.getChildAt(0)).getUserObject() != LOADING || !loading.add(node)) return;
+    showGauge();
     Object o = node.getUserObject();
     if (o instanceof Schema s) {
       DbSessions sessions = DbSessions.get(project);
@@ -382,6 +394,7 @@ final class DbExplorer extends SimpleToolWindowPanel {
     } else if (o instanceof TableItem t) {
       withColumns(node, t, cols -> {
         loading.remove(node); // 이미 읽어 둔 칼럼이면 background 를 거치지 않는다.
+        showGauge();
         fillTable(node, t);
       });
     }
@@ -401,9 +414,14 @@ final class DbExplorer extends SimpleToolWindowPanel {
       Runnable finish = done;
       ApplicationManager.getApplication().invokeLater(() -> {
         loading.remove(node);
+        showGauge();
         finish.run();
       }, project.getDisposed());
     });
+  }
+
+  private void showGauge() {
+    gauge.setVisible(!loading.isEmpty());
   }
 
   private void withColumns(DefaultMutableTreeNode node, TableItem t, Consumer<List<Meta.Column>> then) {

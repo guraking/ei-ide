@@ -36,6 +36,7 @@ import javax.swing.ButtonGroup;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
+import javax.swing.JProgressBar;
 import javax.swing.event.DocumentEvent;
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -81,6 +82,8 @@ public final class ConnectDialog extends DialogWrapper {
   private boolean fillingPassword;
   private final JBTextField schema = new JBTextField();
   private final JBLabel driverName = new JBLabel();
+  /** ~/.m2 에서 드라이버 jar 를 찾는 동안 jar 이름 자리에 보이는 진행 막대. */
+  private final JProgressBar driverGauge = Gauge.create(EiDbBundle.message("common.searching"));
   private final JBLabel driverStatus = new JBLabel("", UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER);
   private final ActionLink downloadLink = new ActionLink(EiDbBundle.message("connect.download"), (ActionListener) e -> downloadDriver());
   private final ActionLink autoDriverLink = new ActionLink(EiDbBundle.message("connect.auto.driver"), (ActionListener) e -> autoDriver());
@@ -89,6 +92,8 @@ public final class ConnectDialog extends DialogWrapper {
   private final JBCheckBox readOnly = new JBCheckBox(EiDbBundle.message("connect.read.only"));
   private final JBCheckBox production = new JBCheckBox(EiDbBundle.message("connect.production"));
   private final JBLabel testResult = new JBLabel();
+  /** 연결 시험 동안 결과 글 자리에 보이는 진행 막대. */
+  private final JProgressBar testGauge = Gauge.create(EiDbBundle.message("connect.testing"));
 
   /** existing 이 null 이면 새 접속. 저장하면 설정에 넣고 그 접속을, 취소하면 null. */
   public static DbConfig edit(Project project, DbConfig existing) {
@@ -163,6 +168,7 @@ public final class ConnectDialog extends DialogWrapper {
     });
 
     JPanel driverRow = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0));
+    driverRow.add(driverGauge);
     driverRow.add(driverName);
     driverRow.add(driverStatus);
     downloadLink.setVisible(false);
@@ -206,6 +212,7 @@ public final class ConnectDialog extends DialogWrapper {
     JButton test = new JButton(EiDbBundle.message("connect.test"));
     test.addActionListener(e -> testConnection());
     p.add(test);
+    p.add(testGauge);
     p.add(testResult);
     return p;
   }
@@ -260,7 +267,8 @@ public final class ConnectDialog extends DialogWrapper {
   private void refreshDriver() {
     DbConfig probe = current();
     autoDriverLink.setVisible(!driverJar.isBlank());
-    driverName.setText(EiDbBundle.message("common.searching"));
+    driverName.setVisible(false);
+    driverGauge.setVisible(true);
     driverStatus.setText("");
     // 창이 뜨기 전(init)에도 불리므로 current() 를 쓰면 바깥 상태가 잡혀 창이 닫힐 때까지 갱신이 밀린다. 글자만 바꾸므로 any() 로 둔다.
     ModalityState modality = ModalityState.any();
@@ -269,6 +277,8 @@ public final class ConnectDialog extends DialogWrapper {
       ApplicationManager.getApplication().invokeLater(() -> {
         if (kind != probe.kind || !Objects.equals(driverJar, probe.driverJar)) return;
         boolean chosen = !driverJar.isBlank();
+        driverGauge.setVisible(false);
+        driverName.setVisible(true);
         driverName.setText(jar != null ? jar.getFileName().toString() : chosen ? Path.of(driverJar).getFileName().toString() : kind.artifactPrefix + " jar");
         driverStatus.setText(EiDbBundle.message(jar == null ? "connect.driver.not.found" : chosen ? "connect.driver.chosen" : "connect.driver.m2"));
         driverStatus.setForeground(jar == null ? ERROR_COLOR : UIUtil.getContextHelpForeground());
@@ -347,7 +357,8 @@ public final class ConnectDialog extends DialogWrapper {
     String pw = new String(password.getPassword());
     testResult.setForeground(UIUtil.getContextHelpForeground());
     testResult.setToolTipText(null);
-    testResult.setText(EiDbBundle.message("connect.testing"));
+    testResult.setText("");
+    testGauge.setVisible(true);
     // 창이 뜨기 전(init)에도 불리므로 current() 를 쓰면 바깥 상태가 잡혀 창이 닫힐 때까지 갱신이 밀린다. 글자만 바꾸므로 any() 로 둔다.
     ModalityState modality = ModalityState.any();
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
@@ -370,6 +381,7 @@ public final class ConnectDialog extends DialogWrapper {
       String tip = tooltip;
       Color fg = color;
       ApplicationManager.getApplication().invokeLater(() -> {
+        testGauge.setVisible(false);
         testResult.setText(shown);
         testResult.setToolTipText(tip);
         testResult.setForeground(fg);
