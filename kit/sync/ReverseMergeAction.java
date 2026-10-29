@@ -356,8 +356,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
       branches.add(intoBox, c);
       // Compare 는 브랜치 줄 오른쪽 끝, 저장소 띠와 같은 파랑 바탕으로 눈에 띄게.
       JButton compare = new JButton(SyncBundle.message("rmerge.compare"));
-      compare.setBackground(STEP_COLOR);
-      compare.setForeground(STEP_COLOR);
+      SyncPanel.tint(compare, STEP_COLOR);
       compare.addActionListener(e -> reload(true));
       c.weightx = 0;
       c.insets = JBUI.insetsLeft(GAP);
