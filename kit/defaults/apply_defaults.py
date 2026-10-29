@@ -38,6 +38,12 @@ BUTTON_UI_FILE = "platform/platform-impl/src/com/intellij/ide/ui/laf/darcula/ui/
 DEFAULT_LAF_FILE = "community-resources/resources/idea/IdeaApplicationInfo.xml"
 DEFAULT_LAF_LINE = '  <default-laf dark="EI Graphite"/>\n'
 # 수정 전에 지울 옛 줄: 파일 → 줄 정규식. 지금 넣을 줄과 같은 줄은 남긴다.
+FONT_FILE = "platform/editor-ui-api/src/com/intellij/openapi/editor/colors/FontPreferences.java"
+FONT_ORIGINAL = '    if (SystemInfo.isJetBrainsJvm) {\n      return JETBRAINS_MONO;\n    }\n'
+# 예전 판이 넣은 수정 → 원문. 값만 바뀐 수정은 이미 손질된 소스에서 원문을 못 찾으므로, 읽은 뒤 먼저 원문으로 되돌린다.
+OLD_EDITS = {FONT_FILE: [
+    ('    if (SystemInfo.isJetBrainsJvm) {\n      return "JetBrainsMonoHangul";  // EI IDE: boot-servers 플러그인이 등록하는 한글 글꼴\n    }\n',
+     FONT_ORIGINAL)]}
 STALE_LINES = {DEFAULT_LAF_FILE: re.compile(r'^ *<default-laf [^\n]*/>\n', re.M)}
 
 EDITS = [
@@ -136,10 +142,9 @@ EDITS = [
     ("build/src/org/jetbrains/intellij/build/IdeaCommunityProperties.kt",
      '      "intellij.dev",  // KingGura: 플러그인 개발용 실행 도구는 쓰지 않는다\n    ))\n',
      '      "intellij.dev",  // KingGura: 플러그인 개발용 실행 도구는 쓰지 않는다\n    )).add("intellij.vcs.svn")  // KingGura: SVN 저장소도 쓴다\n'),
-    # 12) 편집기 기본 글꼴을 한글 폭이 맞는 JetBrainsMonoHangul 로 한다. 글꼴 파일은 boot-servers 플러그인이 켤 때 등록한다(BundledFonts).
-    ("platform/editor-ui-api/src/com/intellij/openapi/editor/colors/FontPreferences.java",
-     '    if (SystemInfo.isJetBrainsJvm) {\n      return JETBRAINS_MONO;\n    }\n',
-     '    if (SystemInfo.isJetBrainsJvm) {\n      return "JetBrainsMonoHangul";  // EI IDE: boot-servers 플러그인이 등록하는 한글 글꼴\n    }\n'),
+    # 12) 편집기 기본 글꼴을 JBMono Pretendard(JetBrains Mono + Pretendard 한글)로 한다. 글꼴 파일은 boot-servers 플러그인이 켤 때 등록한다(BundledFonts).
+    (FONT_FILE, FONT_ORIGINAL,
+     '    if (SystemInfo.isJetBrainsJvm) {\n      return "JBMono Pretendard";  // EI IDE: boot-servers 플러그인이 등록하는 한글 글꼴\n    }\n'),
     # 13) JetBrains 쪽 자동 업데이트 확인을 끈다. IDE 새 판은 GitHub 릴리스를 보는 boot-servers 가 알리고,
     #     플러그인 확인은 마켓의 번들 플러그인(Java · Gradle 등)을 「새 판」으로 받아 와 여기서 고친 기본값을 덮는 일이 있었다.
     ("platform/platform-impl/src/com/intellij/openapi/updateSettings/impl/UpdateOptions.kt",
@@ -371,6 +376,12 @@ def main():
                 texts[rel] = None
                 continue
             texts[rel] = read_source(path)
+            for prev, original in OLD_EDITS.get(rel, []):
+                text, newline = texts[rel]
+                if prev in text:
+                    print(f"옛 수정 되돌림: {rel}")
+                    texts[rel] = (text.replace(prev, original), newline)
+                    changed.append(rel)
             stale = STALE_LINES.get(rel)
             if stale:
                 text, newline = texts[rel]
