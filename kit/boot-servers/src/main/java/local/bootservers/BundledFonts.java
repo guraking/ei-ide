@@ -17,18 +17,19 @@ import java.util.List;
  * 플러그인 jar 에 든 글꼴을 JVM 에 등록해 OS 에 설치하지 않아도 편집기 글꼴 목록에 나오게 한다.
  * JetBrainsMonoHangul (JetBrains Mono + D2Coding 한글, OFL 1.1, https://github.com/Jhyub/JetBrainsMonoHangul).
  * 편집기 기본 글꼴 이름(FontPreferences)이 이 가족 이름을 가리키므로 첫 창이 뜨기 전에 등록해야 한다.
- * IDE 화면 글꼴(메뉴 · 설정 창 · 도구 창)도 이 글꼴로 한다. 설정마다 한 번만 바꾸고, 그 뒤 사용자가 고른 글꼴은 그대로 둔다.
+ * IDE 화면 글꼴(메뉴 · 설정 창 · 도구 창)은 JetBrains Mono 로 한다. 설정마다 한 번만 바꾸고, 그 뒤 사용자가 고른 글꼴은 그대로 둔다.
  */
 public final class BundledFonts implements AppLifecycleListener {
 
     private static final Logger LOG = Logger.getInstance(BundledFonts.class);
     // 편집기 기본 글꼴이 쓰는 보통 굵기. 첫 창 전에 등록한다.
     private static final String REGULAR = "JetBrainsMonoHangul-Regular.ttf";
-    // 글꼴 파일 안의 가족 이름. 화면 글꼴 설정(UISettings.fontFace)에 이 이름을 넣는다.
-    private static final String FAMILY = "JetBrainsMonoHangul";
-    /** 화면 글꼴을 바꿨다는 표시. 앱 수준 PropertiesComponent(other.xml)에 남는다. */
-    private static final String UI_FONT_APPLIED_KEY = "eiide.uiFont.monoHangul.applied";
-    // 굵게 · 기울임. 화면 글꼴로 쓰면 굵은 글(제목 · 선택 단추)이 첫 화면부터 나오므로 화면을 다시 깔기 전에 함께 등록한다.
+    // 화면 글꼴(UISettings.fontFace). IntelliJ 가 함께 싣는 글꼴이라 화면이 깔리기 전에 이미 있다.
+    // 한글이 없어 한글은 OS 기본 한글 글꼴로 그려진다. JetBrainsMonoHangul 을 화면 글꼴로 쓰면 한글이 두 칸 폭이라 음절마다 벌어지고 작은 크기에서 획이 얇다.
+    private static final String UI_FAMILY = "JetBrains Mono";
+    /** 화면 글꼴을 바꿨다는 표시. 앱 수준 PropertiesComponent(other.xml)에 남는다. 이전 키(monoHangul)로 이미 바꾼 PC 도 한 번 다시 바꾼다. */
+    private static final String UI_FONT_APPLIED_KEY = "eiide.uiFont.jetbrainsMono.applied";
+    // 굵게 · 기울임. 편집기에서 굵은 글(키워드 등)이 첫 화면부터 나오므로 함께 등록한다.
     // 늦게 등록하면 그 사이 자바가 보통 굵기를 번지게 그려 굵기를 흉내 내어 한글 획이 뭉개진다.
     private static final List<String> OTHER_FILES = List.of(
             "JetBrainsMonoHangul-Bold.ttf", "JetBrainsMonoHangul-Italic.ttf", "JetBrainsMonoHangul-BoldItalic.ttf");
@@ -42,23 +43,16 @@ public final class BundledFonts implements AppLifecycleListener {
         applyUiFont();
     }
 
-    /**
-     * 화면 글꼴을 FAMILY 로 한다(Appearance → Use custom font). 처음 한 번만 설정을 바꾼다.
-     * 화면 글꼴은 이 글꼴을 등록하기 전에 깔리므로, 설정이 FAMILY 를 가리키면 등록 뒤 화면을 다시 깐다.
-     * 등록에 실패했으면 다시 깔지 않는다(설정은 남아도 IntelliJ 가 없는 글꼴을 기본 글꼴로 대신한다).
-     */
+    /** 화면 글꼴을 UI_FAMILY 로 한다(Appearance → Use custom font). 처음 한 번만 바꾸고 화면을 다시 깐다. 글꼴이 없으면 손대지 않는다. */
     private static void applyUiFont() {
-        if (!FAMILY.equals(new Font(FAMILY, Font.PLAIN, 1).getFamily())) return;
-        UISettings ui = UISettings.getInstance();
         PropertiesComponent properties = PropertiesComponent.getInstance();
-        if (!properties.getBoolean(UI_FONT_APPLIED_KEY)) {
-            properties.setValue(UI_FONT_APPLIED_KEY, true);
-            ui.setOverrideLafFonts(true);
-            ui.setFontFace(FAMILY);
-        }
-        if (ui.getOverrideLafFonts() && FAMILY.equals(ui.getFontFace())) {
-            ApplicationManager.getApplication().invokeLater(() -> LafManager.getInstance().updateUI());
-        }
+        if (properties.getBoolean(UI_FONT_APPLIED_KEY)) return;
+        if (!UI_FAMILY.equals(new Font(UI_FAMILY, Font.PLAIN, 1).getFamily())) return;
+        properties.setValue(UI_FONT_APPLIED_KEY, true);
+        UISettings ui = UISettings.getInstance();
+        ui.setOverrideLafFonts(true);
+        ui.setFontFace(UI_FAMILY);
+        ApplicationManager.getApplication().invokeLater(() -> LafManager.getInstance().updateUI());
     }
 
     /** jar 의 /fonts/file 을 등록한다. 실패하면 기록만 남긴다. */
