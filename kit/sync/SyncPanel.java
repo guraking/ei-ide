@@ -250,6 +250,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static final String COUNT_GAP = "  ";
   // 저장소 줄 · 위쪽 줄의 역머지 안내 끝에 붙여 눌러서 Merge Branches 를 연다는 것을 보인다.
   private static final String NOTE_LINK_MARK = " ›";
+  private static final String NOTE_SEP = " · ";
   private static final Set<String> UNMERGED = Set.of("DD", "AU", "UD", "UA", "DU", "AA", "UU");
   private static final String STATUS_BRANCH_LINE = "## ";
   // 받기 뒤 셈(git log --format=%x01 --name-only): 커밋마다 이 글자 한 줄, 그 아래 바뀐 파일 경로.
@@ -359,6 +360,12 @@ final class SyncPanel extends SimpleToolWindowPanel {
   /** 위쪽 줄 · 저장소 줄 끝에 붙는 역머지 안내. warn 이면 내 파일과 겹쳐 주황으로 보인다. */
   record ReverseNote(String text, boolean warn) {}
 
+  // 아래 단추 줄의 바탕색(흰 글자). 같은 일은 같은 색: 받기는 IntelliJ 기본 단추 파랑, 올리기 초록, 충돌 붉은색, 브랜치 합치기 보라.
+  private static final JBColor BUTTON_TEXT = new JBColor(0xFFFFFF, 0xFFFFFF);
+  private static final JBColor PUSH_BG = new JBColor(0x2F8F5B, 0x3A8F5E);
+  private static final JBColor RESOLVE_BG = new JBColor(0xD9534F, 0xC75450);
+  private static final JBColor MERGE_BG = new JBColor(0x7A52C7, 0x8B6BD1);
+
   SyncPanel(Project project, Disposable parent) {
     super(true, true);
     this.project = project;
@@ -430,16 +437,18 @@ final class SyncPanel extends SimpleToolWindowPanel {
     JButton pull = actionButton(SyncBundle.message("sync.button.pull"), IconLoader.getIcon(PULL_SELECTED_ICON, SyncPanel.class), ACTION_PULL, true);
     pullButton = pull;
     pull.putClientProperty(DarculaButtonUI.DEFAULT_STYLE_KEY, Boolean.TRUE);
-    bottom.add(actionButton(SyncBundle.message("sync.button.update.all"), AllIcons.Actions.MoveDown, ACTION_UPDATE_ALL, false));
+    JButton pullAll = actionButton(SyncBundle.message("sync.button.update.all"), AllIcons.Actions.MoveDown, ACTION_UPDATE_ALL, false);
+    pullAll.putClientProperty(DarculaButtonUI.DEFAULT_STYLE_KEY, Boolean.TRUE);
+    bottom.add(pullAll);
     bottom.add(pull);
     // 올리기: 고른 저장소(없으면 전부)로 IntelliJ Push 창. 커밋하고 올리기: 커밋 창을 연다(그 창의 Commit and Push 로 한 번에).
     pushButton = actionButton(SyncBundle.message("sync.button.push"), AllIcons.Actions.MoveUp, ACTION_PUSH, true);
-    bottom.add(pushButton);
-    bottom.add(actionButton(SyncBundle.message("sync.button.commit.push"), null, ACTION_COMMIT, false));
+    bottom.add(tint(pushButton, PUSH_BG));
+    bottom.add(tint(actionButton(SyncBundle.message("sync.button.commit.push"), null, ACTION_COMMIT, false), PUSH_BG));
     resolveButton = actionButton(SyncBundle.message("sync.button.resolve"), null, "Git.ResolveConflicts", false);
-    bottom.add(resolveButton);
+    bottom.add(tint(resolveButton, RESOLVE_BG));
     // 고른 저장소(없으면 지금 저장소)로 Merge Branches 창을 연다.
-    bottom.add(actionButton(SyncBundle.message("sync.button.reverse"), null, ACTION_REVERSE_MERGE, true));
+    bottom.add(tint(actionButton(SyncBundle.message("sync.button.reverse"), null, ACTION_REVERSE_MERGE, true), MERGE_BG));
     JPanel content = new JPanel(new BorderLayout());
     content.add(splitter, BorderLayout.CENTER);
     content.add(bottom, BorderLayout.SOUTH);
@@ -1491,6 +1500,13 @@ final class SyncPanel extends SimpleToolWindowPanel {
    * 받기 창은 첫 저장소로 열린다(DvcsUtil.guessRepositoryForOperation 이 VIRTUAL_FILE 을 먼저 본다).
    * 고른 저장소가 없으면 IDE 기본(마지막 편집 파일의 저장소)을 따른다.
    */
+  /** 단추를 bg 바탕 · 흰 글자로 칠한다(IntelliJ 단추 UI 는 UIResource 가 아닌 색을 그대로 쓴다). */
+  private static JButton tint(JButton button, Color bg) {
+    button.setBackground(bg);
+    button.setForeground(BUTTON_TEXT);
+    return button;
+  }
+
   private JButton actionButton(String text, Icon icon, String actionId, boolean forSelectedRepo) {
     JButton button = new JButton(text, icon);
     button.addActionListener(e -> {
@@ -2168,7 +2184,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
   }
 
   /**
-   * 역머지 기준 브랜치(Git 메뉴 Merge Branches 에서 고른 From)가 있으면 지금 브랜치와의 차이를 reverseNotes 에 남긴다.
+   * 역머지 기준 브랜치(Git 메뉴 Merge Branches 에서 고른 From)가 있으면 지금 브랜치와의 차이를 reverseNotes 에 남긴다:
+   * From 보다 뒤진 커밋 수(역머지할 것)와, 내 브랜치에만 있고 From 에 아직 안 합쳐진 내 커밋 수(GitLab 머지 요청할 것).
    * fetch 면 그 브랜치만 먼저 받아 오고, 아니면 마지막으로 받아 둔 것으로 센다.
    * 실패해도(서버에서 지워짐 · 아직 받은 적 없음 등) 동기화 비교는 계속하고 안내만 지운다.
    */
@@ -2187,9 +2204,13 @@ final class SyncPanel extends SimpleToolWindowPanel {
       if (fetch) ReverseMerge.fetch(root, remote, from);
       ReverseMerge.Preview preview = ReverseMerge.preview(root, cfg, remote, from, repo.branch(), repo.branch());
       int mine = preview.mineCount();
-      if (preview.commits() == 0) reverseNotes.remove(root);
-      else reverseNotes.put(root, new ReverseNote(mine > 0 ? SyncBundle.message("rmerge.note.mine", from, preview.commits(), mine)
-                                                           : SyncBundle.message("rmerge.note", from, preview.commits()), mine > 0));
+      int ahead = Integer.parseInt(git(root, "rev-list", "--count", ReverseMerge.remoteRef(remote, from) + "..HEAD").trim());
+      List<String> parts = new ArrayList<>();
+      if (preview.commits() > 0) parts.add(mine > 0 ? SyncBundle.message("rmerge.note.mine", from, preview.commits(), mine)
+                                                    : SyncBundle.message("rmerge.note", from, preview.commits()));
+      if (ahead > 0) parts.add(SyncBundle.message("rmerge.note.ahead", from, ahead));
+      if (parts.isEmpty()) reverseNotes.remove(root);
+      else reverseNotes.put(root, new ReverseNote(String.join(NOTE_SEP, parts), mine > 0));
     }
     catch (IOException e) {
       reverseNotes.remove(root);
