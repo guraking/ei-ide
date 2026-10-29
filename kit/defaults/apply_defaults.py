@@ -39,6 +39,8 @@ DEFAULT_LAF_FILE = "community-resources/resources/idea/IdeaApplicationInfo.xml"
 DEFAULT_LAF_LINE = '  <default-laf dark="EI Graphite"/>\n'
 # 수정 전에 지울 옛 줄: 파일 → 줄 정규식. 지금 넣을 줄과 같은 줄은 남긴다.
 FONT_FILE = "platform/editor-ui-api/src/com/intellij/openapi/editor/colors/FontPreferences.java"
+# 글꼴 목록을 만드는 서비스. EI Mono 를 목록보다 먼저 등록하는 곳(12-1).
+FONT_SERVICE_FILE = "platform/platform-impl/src/com/intellij/openapi/editor/impl/FontFamilyServiceImpl.java"
 FONT_ORIGINAL = '    if (SystemInfo.isJetBrainsJvm) {\n      return JETBRAINS_MONO;\n    }\n'
 # 예전 판이 넣은 수정 → 원문. 값만 바뀐 수정은 이미 손질된 소스에서 원문을 못 찾으므로, 읽은 뒤 먼저 원문으로 되돌린다.
 OLD_EDITS = {FONT_FILE: [
@@ -147,6 +149,47 @@ EDITS = [
     # 12) 편집기 기본 글꼴을 EI Mono(JetBrains Mono + Pretendard 한글)로 한다. 글꼴 파일은 boot-servers 플러그인이 켤 때 등록한다(BundledFonts).
     (FONT_FILE, FONT_ORIGINAL,
      '    if (SystemInfo.isJetBrainsJvm) {\n      return "EI Mono";  // EI IDE: boot-servers 플러그인이 등록하는 한글 글꼴\n    }\n'),
+    # 12-1) EI Mono 를 IDE 글꼴 목록(FontFamilyServiceImpl)이 만들어지기 전에 등록한다. 목록은 처음 한 번 getAllFonts() 로 만들고 다시 읽지 않는다.
+    #       boot-servers 플러그인은 첫 창이 뜰 때 등록하므로, 편집기 설정에 EI Mono 가 적혀 있으면 그보다 먼저 목록이 만들어져
+    #       설정 창 글꼴 상자에 「Font missing: EI Mono」로 보인다. 글꼴 파일은 본체에 든 boot-servers jar 의 /fonts/*.ttf 를 그대로 읽는다.
+    (FONT_SERVICE_FILE,
+     '    try {\n      Font[] fonts = GraphicsEnvironment.getLocalGraphicsEnvironment().getAllFonts();\n',
+     '    registerEiFonts();  // EI IDE: 목록을 읽기 전에 EI Mono 를 등록한다\n'
+     '    try {\n      Font[] fonts = GraphicsEnvironment.getLocalGraphicsEnvironment().getAllFonts();\n'),
+    (FONT_SERVICE_FILE,
+     '  private static boolean isUnsupportedFont(',
+     '  // EI IDE: 본체에 든 boot-servers 플러그인 jar 안의 글꼴(EI Mono). 위치는 IDE 설치 폴더 기준.\n'
+     '  private static final String EI_FONT_JAR = "plugins/boot-servers/lib/boot-servers.jar";\n'
+     '  private static final String EI_FONT_DIR = "fonts/";\n'
+     '  private static final String EI_FONT_EXT = ".ttf";\n'
+     '\n'
+     '  /** EI IDE: EI_FONT_JAR 의 EI_FONT_DIR 아래 TTF 를 모두 등록한다. jar 가 없거나 읽지 못하면 기록만 남기고 넘어간다. */\n'
+     '  private static void registerEiFonts() {\n'
+     '    java.nio.file.Path jar = java.nio.file.Path.of(com.intellij.openapi.application.PathManager.getHomePath(), EI_FONT_JAR);\n'
+     '    if (!java.nio.file.Files.isRegularFile(jar)) {\n'
+     '      LOG.warn("EI IDE 글꼴 jar 가 없음: " + jar);\n'
+     '      return;\n'
+     '    }\n'
+     '    try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(jar.toFile())) {\n'
+     '      java.util.Enumeration<? extends java.util.zip.ZipEntry> entries = zip.entries();\n'
+     '      while (entries.hasMoreElements()) {\n'
+     '        java.util.zip.ZipEntry entry = entries.nextElement();\n'
+     '        String name = entry.getName();\n'
+     '        if (!name.startsWith(EI_FONT_DIR) || !name.endsWith(EI_FONT_EXT)) continue;\n'
+     '        try (java.io.InputStream in = zip.getInputStream(entry)) {\n'
+     '          GraphicsEnvironment.getLocalGraphicsEnvironment().registerFont(Font.createFont(Font.TRUETYPE_FONT, in));\n'
+     '        }\n'
+     '        catch (Exception e) {\n'
+     '          LOG.warn("EI IDE 글꼴 등록 실패: " + name, e);\n'
+     '        }\n'
+     '      }\n'
+     '    }\n'
+     '    catch (java.io.IOException e) {\n'
+     '      LOG.warn("EI IDE 글꼴 jar 를 읽지 못함: " + jar, e);\n'
+     '    }\n'
+     '  }\n'
+     '\n'
+     '  private static boolean isUnsupportedFont('),
     # 13) JetBrains 쪽 자동 업데이트 확인을 끈다. IDE 새 판은 GitHub 릴리스를 보는 boot-servers 가 알리고,
     #     플러그인 확인은 마켓의 번들 플러그인(Java · Gradle 등)을 「새 판」으로 받아 와 여기서 고친 기본값을 덮는 일이 있었다.
     ("platform/platform-impl/src/com/intellij/openapi/updateSettings/impl/UpdateOptions.kt",
