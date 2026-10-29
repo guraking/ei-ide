@@ -1502,10 +1502,14 @@ final class SyncPanel extends SimpleToolWindowPanel {
    * 받기 창은 첫 저장소로 열린다(DvcsUtil.guessRepositoryForOperation 이 VIRTUAL_FILE 을 먼저 본다).
    * 고른 저장소가 없으면 IDE 기본(마지막 편집 파일의 저장소)을 따른다.
    */
-  /** 단추 테두리와 글자를 color 로 칠한다. 새 UI 단추는 바탕색을 칠하지 않고 테두리에만 쓰므로 글자도 같은 색으로 맞춘다. */
+  /**
+   * 단추 바탕을 color 로 채우고 글자는 흰색으로 쓴다. 테두리도 같은 색이라 따로 보이지 않는다.
+   * DarculaButtonUI · DarculaButtonPainter 가 읽는 JButton.backgroundColor · textColor · borderColor 속성을 쓴다.
+   */
   private static JButton tint(JButton button, Color color) {
-    button.setBackground(color);
-    button.setForeground(color);
+    button.putClientProperty("JButton.backgroundColor", color);
+    button.putClientProperty("JButton.borderColor", color);
+    button.putClientProperty("JButton.textColor", JBColor.WHITE);
     return button;
   }
 
