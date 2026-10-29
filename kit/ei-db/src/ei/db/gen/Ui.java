@@ -1,5 +1,6 @@
 package ei.db.gen;
 
+import com.intellij.openapi.editor.colors.EditorColorsManager;
 import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.JBColor;
 import com.intellij.util.ui.JBUI;
@@ -43,7 +44,7 @@ final class Ui {
   }
 
   static Font mono() {
-    return new Font(Font.MONOSPACED, Font.PLAIN, JBUI.Fonts.label().getSize());
+    return new Font(EditorColorsManager.getInstance().getGlobalScheme().getEditorFontName(), Font.PLAIN, JBUI.Fonts.label().getSize());
   }
 
   static void onChange(JTextComponent field, Runnable r) {
