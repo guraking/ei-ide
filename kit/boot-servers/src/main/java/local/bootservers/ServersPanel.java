@@ -90,7 +90,6 @@ import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JList;
 import javax.swing.JPanel;
-import javax.swing.JProgressBar;
 import javax.swing.JTree;
 import javax.swing.SwingConstants;
 import javax.swing.Timer;
@@ -139,18 +138,13 @@ final class ServersPanel extends SimpleToolWindowPanel {
     private static final String PROFILE_KEY = "spring.profiles.active";
     private static final String PORT_KEY = "server.port";
     private static final int TICK_MILLIS = 1000;
-    // 트리 · 오른쪽 칸, 설정 · 콘솔 나눔 비율을 기억하는 키와 처음 비율
+    // 트리 · 오른쪽 칸 나눔 비율을 기억하는 키와 처음 비율
     private static final String TREE_SPLIT_KEY = "BootServers.Servers.TreeSplit";
-    private static final String DETAIL_SPLIT_KEY = "BootServers.Servers.DetailSplit";
     private static final float TREE_PROPORTION = 0.22f;
-    private static final float DETAIL_PROPORTION = 0.4f;
     // 트리 위 진행 막대 둘레 여백(px, 배율 전)
     private static final int GAUGE_INSET = 4;
     // 머리줄 이름이 기본 라벨 글자보다 큰 만큼
     private static final float TITLE_FONT_BIGGER = 2f;
-    // 아래 탭 차례
-    private static final int CONSOLE_TAB = 0;
-    private static final int LOG_TAB = 1;
     // 실행 설정 이름 끝의 「 (local)」 같은 덧붙임. 회색으로 보인다.
     private static final String SUFFIX_OPEN = " (";
     private static final String SUFFIX_CLOSE = ")";
@@ -190,7 +184,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
     private final DefaultTreeModel treeModel = new DefaultTreeModel(new DefaultMutableTreeNode());
     private final Tree tree = new Tree(treeModel);
     // 서버 목록을 찾는 동안 트리 위에 보이는 진행 막대
-    private final JProgressBar gauge = Gauge.create(BootServersBundle.message("servers.empty.loading"));
+    private final Gauge gauge = Gauge.create(BootServersBundle.message("servers.empty.loading"));
 
     // 오른쪽 칸: 아무것도 안 골랐을 때 안내, 골랐을 때 머리줄 · 설정 · 탭
     private final CardLayout sideCards = new CardLayout();
@@ -212,16 +206,6 @@ final class ServersPanel extends SimpleToolWindowPanel {
     // 고른 서버가 실패했을 때 오른쪽 칸 위에 보이는 오류 띠
     private final InlineBanner errorBanner = new InlineBanner("", EditorNotificationPanel.Status.Error);
     private final JPanel bannerRow = new JPanel(new BorderLayout());
-    // 아래 탭: 고른 서버의 프로세스 출력 콘솔 · WAS 로그 파일
-    private final JBTabbedPane tabs = new JBTabbedPane();
-    private final JPanel consoleHolder = new JPanel(new BorderLayout());
-    private ConsoleView console;
-    private Object consoleTarget;
-    private ProcessHandler consoleHandler;
-    private final JPanel logHolder = new JPanel(new BorderLayout());
-    private final JBLabel logFileName = new JBLabel();
-    private LogFileView.View logView;
-    private WasSettings.Server logServer;
 
     ServersPanel(Project project, ToolWindow toolWindow) {
         super(true, true);
@@ -323,13 +307,6 @@ final class ServersPanel extends SimpleToolWindowPanel {
             @Override
             public void runConfigurationChanged(@NotNull RunnerAndConfigurationSettings settings) {
                 rebuildLater();
-            }
-        });
-        // 스프링 부트 프로세스가 뜨면 tick 을 기다리지 않고 콘솔 탭을 붙인다.
-        project.getMessageBus().connect(parent).subscribe(ExecutionManager.EXECUTION_TOPIC, new ExecutionListener() {
-            @Override
-            public void processStarted(@NotNull String executorId, @NotNull ExecutionEnvironment env, @NotNull ProcessHandler handler) {
-                ApplicationManager.getApplication().invokeLater(ServersPanel.this::syncConsole, ModalityState.any(), project.getDisposed());
             }
         });
         reload();
@@ -446,7 +423,6 @@ final class ServersPanel extends SimpleToolWindowPanel {
         shownStates = states;
         tree.repaint();
         updateStatus();
-        syncConsole();
         updateTitle(states);
         if (changed) {
             ProjectView.getInstance(project).refresh();
@@ -1104,7 +1080,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
         return p;
     }
 
-    /** 고른 서버 칸: 위에 오류 띠 · 머리줄 · 설정(세로로 눌리면 스크롤), 아래에 콘솔 · 로그 파일 탭. 나눔 비율은 기억한다. */
+    /** 고른 서버 칸: 위에 오류 띠 · 머리줄 · 설정(세로로 눌리면 스크롤). 콘솔은 실행 창 · 서버별 콘솔 탭에서 본다. */
     private JComponent serverCard(ActionToolbar detailToolbar) {
         errorBanner.showCloseButton(false);
         bannerRow.add(errorBanner, BorderLayout.CENTER);
@@ -1121,13 +1097,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
         JPanel top = new JPanel(new BorderLayout());
         top.add(stack, BorderLayout.NORTH);
 
-        tabs.addTab(BootServersBundle.message("servers.tab.console"), consoleHolder);
-        tabs.addTab(BootServersBundle.message("servers.tab.log"), logCard());
-        OnePixelSplitter split = new OnePixelSplitter(true, DETAIL_PROPORTION);
-        split.setSplitterProportionKey(DETAIL_SPLIT_KEY);
-        split.setFirstComponent(ScrollPaneFactory.createScrollPane(top, true));
-        split.setSecondComponent(tabs);
-        return split;
+        return ScrollPaneFactory.createScrollPane(top, true);
     }
 
     /** 머리줄: 큰 굵은 이름 + 상태 꼬리표 + 흐린 보조 글(포트 · 프로필 · 실행 시간), 오른쪽 끝에 시작 · 중지 · 편집 단추. 보조 글은 좁으면 줄임표. */
@@ -1237,16 +1207,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
             cards.show(detail, "was");
         }
         sideCards.show(side, detailBoot == null && detailServer == null ? "none" : "server");
-        // 로그 파일 탭은 WAS 만. 다른 줄로 옮기면 보던 파일은 닫는다.
-        if (logServer != null && logServer != detailServer) {
-            clearLog();
-        }
-        tabs.setEnabledAt(LOG_TAB, detailServer != null);
-        if (detailServer == null && tabs.getSelectedIndex() == LOG_TAB) {
-            tabs.setSelectedIndex(CONSOLE_TAB);
-        }
         updateStatus();
-        syncConsole();
     }
 
     /** 머리줄의 상태 꼬리표 · 흐린 보조 글(모듈 · 포트 · 프로필 · 실행 시간)과, 실패했으면 위쪽 오류 띠를 맞춘다. */
@@ -1323,108 +1284,6 @@ final class ServersPanel extends SimpleToolWindowPanel {
         String key = row instanceof Boot b ? b.name() : WasRunner.registryKey((WasSettings.Server) row);
         ServerRegistry.Run run = ServerRegistry.getInstance(project).get(key);
         return run == null ? "" : uptime(run.startMillis);
-    }
-
-    // ---- 아래 탭: 콘솔 · 로그 파일 ----
-
-    /** 고른 줄의 살아 있는 프로세스. 없거나 끝났으면 null. */
-    private ProcessHandler handlerOf(Object target) {
-        if (target instanceof Boot b) {
-            List<RunContentDescriptor> descriptors = b.settings() == null ? List.of() : ServerLauncher.runningDescriptors(b.settings());
-            return descriptors.isEmpty() ? null : descriptors.get(0).getProcessHandler();
-        }
-        return WasRunner.getInstance(project).handler((WasSettings.Server) target);
-    }
-
-    /**
-     * 콘솔 탭을 고른 줄의 프로세스에 맞춘다. 줄이 바뀌거나 새 프로세스가 뜨면 콘솔을 새로 만들어 붙이고,
-     * 프로세스가 끝나도 마지막 출력(실패 이유)은 남긴다. 실행 창 콘솔과 같은 프로세스에 따로 붙으므로 붙기 전 출력은 안 보인다.
-     * shortcut: WAS 는 startNotify 뒤 다음 tick 에 붙어 첫 1초 출력을 놓친다, 거슬리면 WasRunner 가 시작 알림을 주게 한다.
-     */
-    private void syncConsole() {
-        Object target = detailBoot != null ? detailBoot : detailServer;
-        ProcessHandler handler = target == null ? null : handlerOf(target);
-        boolean sameTarget = target == null ? consoleTarget == null : consoleTarget != null && same(target, consoleTarget);
-        if (sameTarget && (handler == null || handler == consoleHandler)) {
-            return;
-        }
-        if (console != null) {
-            Disposer.dispose(console);
-            console = null;
-        }
-        consoleHolder.removeAll();
-        consoleTarget = target;
-        consoleHandler = handler;
-        if (target != null) {
-            console = TextConsoleBuilderFactory.getInstance().createBuilder(project).filters(new LogLevelFilter()).getConsole();
-            Disposer.register(parent, console);
-            DefaultActionGroup actions = new DefaultActionGroup();
-            JPanel panel = ConsolePanel.create(console, actions);
-            ConsolePanel.addConsoleActions(console, actions);
-            if (handler != null) {
-                console.attachToProcess(handler);
-            }
-            else {
-                console.print(BootServersBundle.message("servers.console.idle") + "\n", ConsoleViewContentType.SYSTEM_OUTPUT);
-            }
-            consoleHolder.add(panel, BorderLayout.CENTER);
-        }
-        consoleHolder.revalidate();
-        consoleHolder.repaint();
-    }
-
-    /** 「로그 파일」 탭: 위에 고르기 링크 · 고른 파일 경로, 아래에 그 파일 끝을 따라가는 콘솔. */
-    private JComponent logCard() {
-        ActionLink choose = new ActionLink(BootServersBundle.message("servers.log.choose"), e -> {
-            if (detailServer != null) {
-                showLogFiles(detailServer, this::showLogInTab);
-            }
-        });
-        logFileName.setForeground(NamedColorUtil.getInactiveTextColor());
-        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(UIUtil.DEFAULT_HGAP), 0));
-        row.setBorder(JBUI.Borders.empty(UIUtil.DEFAULT_VGAP, UIUtil.DEFAULT_HGAP / 2));
-        row.add(choose);
-        row.add(logFileName);
-        JPanel p = new JPanel(new BorderLayout());
-        p.add(row, BorderLayout.NORTH);
-        p.add(logHolder, BorderLayout.CENTER);
-        clearLog();
-        return p;
-    }
-
-    /** 보던 로그 파일을 닫고 안내만 보인다. */
-    private void clearLog() {
-        if (logView != null) {
-            Disposer.dispose(logView);
-            logView = null;
-        }
-        logServer = null;
-        logFileName.setText("");
-        logFileName.setToolTipText(null);
-        logHolder.removeAll();
-        JBPanelWithEmptyText hint = new JBPanelWithEmptyText();
-        hint.getEmptyText().setText(BootServersBundle.message("servers.log.choose.hint"));
-        logHolder.add(hint, BorderLayout.CENTER);
-        logHolder.revalidate();
-        logHolder.repaint();
-    }
-
-    /** 고른 로그 파일을 「로그 파일」 탭에서 따라간다. */
-    private void showLogInTab(Path file) {
-        if (detailServer == null) {
-            return;
-        }
-        clearLog();
-        logView = LogFileView.view(project, file);
-        Disposer.register(parent, logView);
-        logServer = detailServer;
-        logFileName.setText(file.toString());
-        logFileName.setToolTipText(file.toString());
-        logHolder.removeAll();
-        logHolder.add(logView.panel(), BorderLayout.CENTER);
-        logHolder.revalidate();
-        logHolder.repaint();
-        tabs.setSelectedIndex(LOG_TAB);
     }
 
     /** 이름을 바꾸고, 프로필 · 포트 칸 값을 VM 옵션의 -D 값으로 넣어 실행 설정에 적는다. 다음 시작부터 적용된다. */
