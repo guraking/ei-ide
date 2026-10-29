@@ -77,6 +77,7 @@ import com.intellij.openapi.project.DumbAwareToggleAction;
 import com.intellij.openapi.ui.SimpleToolWindowPanel;
 import com.intellij.ui.JBColor;
 import com.intellij.openapi.actionSystem.CustomShortcutSet;
+import com.intellij.ui.InplaceButton;
 import com.intellij.util.IconUtil;
 import com.intellij.util.ui.UIUtil;
 import com.intellij.ui.OnePixelSplitter;
@@ -226,6 +227,9 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static final String TOOLBAR_PLACE = "KingGuraSynchronizeToolbar";
   // 기본(강조색) 단추 위에 놓는 흰 받기 아이콘. 테마마다 기본 단추 바탕이 강조색이고 글자가 흰색이다.
   private static final String PULL_SELECTED_ICON = "/icons/ei/pullSelected.svg";
+  // 색 바탕 단추 위에 쓰는 흰 화살표(IntelliJ 회색 MoveDown · MoveUp 은 색 바탕에서 보이지 않는다).
+  private static final String PULL_ALL_ICON = "/icons/ei/pullAll.svg";
+  private static final String PUSH_ICON = "/icons/ei/push.svg";
   // 도구줄 글 사이 · 아래 단추 사이 간격(JBUI.scale 전).
   private static final int GAP = 8;
   // 고른 저장소만 새로고침 아이콘. IntelliJ ForceRefresh 의 빨간 점을 빼고 다른 도구줄 아이콘과 같은 회색(새 UI 아이콘 색)으로 칠한다(시안).
@@ -311,6 +315,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
   /** 비교 칸 머리: 파일 이름 · 「원격 ↔ 내 작업본」. 파일을 고르지 않았으면 머리 줄째 숨긴다. */
   private final SimpleColoredComponent diffTitle = new SimpleColoredComponent();
   private final JPanel diffHead = new JPanel(new BorderLayout());
+  private final JPanel diffSide = new JPanel(new BorderLayout());
   private final SimpleColoredComponent status = new SimpleColoredComponent();
   /** 원격을 받아 오는 동안 요약 뒤에 보이는 진행 막대와 글. 전체 새로고침은 끝난 저장소 수로 찬다. */
   private final Gauge gauge = new Gauge("");
@@ -425,9 +430,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
     // 비교 칸 머리(시안): 파일 이름 · 「원격 ↔ 내 작업본」.
     diffTitle.setOpaque(false);
     diffHead.add(diffTitle, BorderLayout.CENTER);
+    // 닫기: 비교 칸을 접어 목록만 남긴다. 목록에서 파일을 다시 고르면 열린다.
+    diffHead.add(new InplaceButton(SyncBundle.message("sync.diff.close"), AllIcons.Actions.Close, e -> diffSide.setVisible(false)), BorderLayout.EAST);
     diffHead.setBorder(JBUI.Borders.compound(JBUI.Borders.customLineBottom(JBColor.border()), JBUI.Borders.empty(GAP / 2, GAP)));
     diffHead.setVisible(false);
-    JPanel diffSide = new JPanel(new BorderLayout());
     diffSide.add(diffHead, BorderLayout.NORTH);
     diffSide.add(diffPanel.getComponent(), BorderLayout.CENTER);
     splitter.setSecondComponent(diffSide);
@@ -439,14 +445,12 @@ final class SyncPanel extends SimpleToolWindowPanel {
     JButton pull = actionButton(SyncBundle.message("sync.button.pull"), IconLoader.getIcon(PULL_SELECTED_ICON, SyncPanel.class), ACTION_PULL, true);
     pullButton = pull;
     pull.putClientProperty(DarculaButtonUI.DEFAULT_STYLE_KEY, Boolean.TRUE);
-    whiteIcon(pull);
-    JButton pullAll = actionButton(SyncBundle.message("sync.button.update.all"), AllIcons.Actions.MoveDown, ACTION_UPDATE_ALL, false);
+    JButton pullAll = actionButton(SyncBundle.message("sync.button.update.all"), IconLoader.getIcon(PULL_ALL_ICON, SyncPanel.class), ACTION_UPDATE_ALL, false);
     pullAll.putClientProperty(DarculaButtonUI.DEFAULT_STYLE_KEY, Boolean.TRUE);
-    whiteIcon(pullAll);
     bottom.add(pullAll);
     bottom.add(pull);
     // 올리기: 고른 저장소(없으면 전부)로 IntelliJ Push 창. 커밋하고 올리기: 커밋 창을 연다(그 창의 Commit and Push 로 한 번에).
-    pushButton = actionButton(SyncBundle.message("sync.button.push"), AllIcons.Actions.MoveUp, ACTION_PUSH, true);
+    pushButton = actionButton(SyncBundle.message("sync.button.push"), IconLoader.getIcon(PUSH_ICON, SyncPanel.class), ACTION_PUSH, true);
     bottom.add(tint(pushButton, PUSH_BG));
     bottom.add(tint(actionButton(SyncBundle.message("sync.button.commit.push"), null, ACTION_COMMIT, false), PUSH_BG));
     resolveButton = actionButton(SyncBundle.message("sync.button.resolve"), null, "Git.ResolveConflicts", false);
@@ -1510,12 +1514,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
     button.putClientProperty("JButton.borderColor", color);
     button.putClientProperty("JButton.focusedBorderColor", color);
     button.putClientProperty("JButton.textColor", Color.WHITE);
-    return whiteIcon(button);
-  }
-
-  /** 색 바탕 단추의 아이콘을 흰색으로 바꾼다. 회색 기본 아이콘은 파랑 · 초록 바탕에서 보이지 않는다. */
-  private static JButton whiteIcon(JButton button) {
-    if (button.getIcon() != null) button.setIcon(IconUtil.colorize(button.getIcon(), Color.WHITE));
+    // 기본 단추(Pull All · Pull Selected)와 같은 굵은 글자로 맞춘다.
+    button.setFont(button.getFont().deriveFont(Font.BOLD));
     return button;
   }
 
@@ -2651,6 +2651,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
           diffTitle.append(local.getName());
           diffTitle.append("   " + SyncBundle.message("sync.diff.title", repo.remoteName()), SimpleTextAttributes.GRAYED_ATTRIBUTES);
           diffHead.setVisible(true);
+          diffSide.setVisible(true);
         }
         catch (IOException e) {
           diffPanel.setRequest(new MessageDiffRequest(e.getMessage()));

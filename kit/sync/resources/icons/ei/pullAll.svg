@@ -1,0 +1,5 @@
+<!-- 흰 아래 화살표(파란 기본 단추 위). 위 가로줄 + 아래로 향한 화살. -->
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect x="2" y="2" width="12" height="1" rx="0.5" fill="#FFFFFF"/>
+<path d="M8 5.5V13.5M8 13.5L4.5 10M8 13.5L11.5 10" stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
