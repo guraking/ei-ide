@@ -2597,7 +2597,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     if (!(tree.getLastSelectedPathComponent() instanceof DefaultMutableTreeNode node)
         || !(node.getUserObject() instanceof Change change)) {
       // 파일이 아닌 줄(저장소 · 묶음)은 마지막 비교를 그대로 두되, 그 저장소에 파일이 하나도 없으면(다 받았거나 올린 뒤) 지난 비교를 지운다.
-      Object item = node == null ? null : node.getUserObject();
+      Object item = tree.getLastSelectedPathComponent() instanceof DefaultMutableTreeNode n ? n.getUserObject() : null;
       boolean anyLeft = false;
       for (Change c : changes) {
         if (!(item instanceof Repo repo) || c.repo().root().equals(repo.root())) anyLeft = true;
