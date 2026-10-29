@@ -77,6 +77,7 @@ import com.intellij.util.ui.NamedColorUtil;
 import com.intellij.util.ui.UIUtil;
 import local.bootservers.was.WasSettings;
 import local.bootservers.was.WasLogFiles;
+import local.bootservers.ui.Gauge;
 import local.bootservers.ui.Pill;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -89,6 +90,7 @@ import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JList;
 import javax.swing.JPanel;
+import javax.swing.JProgressBar;
 import javax.swing.JTree;
 import javax.swing.SwingConstants;
 import javax.swing.Timer;
@@ -103,6 +105,8 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
@@ -140,6 +144,8 @@ final class ServersPanel extends SimpleToolWindowPanel {
     private static final String DETAIL_SPLIT_KEY = "BootServers.Servers.DetailSplit";
     private static final float TREE_PROPORTION = 0.22f;
     private static final float DETAIL_PROPORTION = 0.4f;
+    // 트리 위 진행 막대 둘레 여백(px, 배율 전)
+    private static final int GAUGE_INSET = 4;
     // 머리줄 이름이 기본 라벨 글자보다 큰 만큼
     private static final float TITLE_FONT_BIGGER = 2f;
     // 아래 탭 차례
@@ -183,6 +189,8 @@ final class ServersPanel extends SimpleToolWindowPanel {
     // 종류 묶음(userObject 는 묶음 이름 String) → 서버 줄 → WAS 는 올린 프로젝트 줄
     private final DefaultTreeModel treeModel = new DefaultTreeModel(new DefaultMutableTreeNode());
     private final Tree tree = new Tree(treeModel);
+    // 서버 목록을 찾는 동안 트리 위에 보이는 진행 막대
+    private final JProgressBar gauge = Gauge.create(BootServersBundle.message("servers.empty.loading"));
 
     // 오른쪽 칸: 아무것도 안 골랐을 때 안내, 골랐을 때 머리줄 · 설정 · 탭
     private final CardLayout sideCards = new CardLayout();
@@ -264,7 +272,14 @@ final class ServersPanel extends SimpleToolWindowPanel {
         side.add(serverCard(detailToolbar), "server");
         OnePixelSplitter splitter = new OnePixelSplitter(false, TREE_PROPORTION);
         splitter.setSplitterProportionKey(TREE_SPLIT_KEY);
-        splitter.setFirstComponent(ScrollPaneFactory.createScrollPane(tree, true));
+        // 막대가 숨어 있으면 GridBag 이 자리를 잡지 않아 트리가 위로 붙는다.
+        JPanel gaugeRow = new JPanel(new GridBagLayout());
+        gaugeRow.add(gauge, new GridBagConstraints(0, 0, 1, 1, 1, 0, GridBagConstraints.WEST, GridBagConstraints.HORIZONTAL,
+                JBUI.insets(GAUGE_INSET), 0, 0));
+        JPanel treeSide = new JPanel(new BorderLayout());
+        treeSide.add(gaugeRow, BorderLayout.NORTH);
+        treeSide.add(ScrollPaneFactory.createScrollPane(tree, true), BorderLayout.CENTER);
+        splitter.setFirstComponent(treeSide);
         splitter.setSecondComponent(side);
         setContent(splitter);
 
@@ -321,11 +336,13 @@ final class ServersPanel extends SimpleToolWindowPanel {
     }
 
     private void reload() {
-        tree.getEmptyText().setText(BootServersBundle.message("servers.empty.loading"));
+        tree.getEmptyText().setText("");
+        gauge.setVisible(true);
         ReadAction.nonBlocking(() -> ServerLauncher.serverModules(project))
                 .inSmartMode(project)
                 .expireWith(parent)
                 .finishOnUiThread(ModalityState.any(), found -> {
+                    gauge.setVisible(false);
                     bootModules = found;
                     rebuildRows();
                     tree.getEmptyText().setText(BootServersBundle.message("servers.empty.none"))
