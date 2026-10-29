@@ -168,6 +168,9 @@ final class ProjectHistoryPanel extends JPanel {
   private final SearchTextField filter = new SearchTextField(false);
   private final Pill branch = new Pill();
   private final JLabel status = new JLabel(" ");
+  // 읽는 동안 상태 글 자리에 보이는 진행 막대(글은 막대 안).
+  private final JProgressBar gauge = new JProgressBar();
+  private static final int GAUGE_W = 200;
   private final JBLabel subject = new JBLabel();
   private final JTextArea message = new JTextArea();
   // 흐린 「작성자 · 날짜 · 」 뒤에 해시(누르면 복사).
@@ -228,6 +231,12 @@ final class ProjectHistoryPanel extends JPanel {
     left.add(toolbar.getComponent());
     left.add(status);
     status.setForeground(DIM);
+    gauge.setIndeterminate(true);
+    gauge.setStringPainted(true);
+    gauge.setString(SyncBundle.message("history.loading"));
+    gauge.setPreferredSize(new Dimension(JBUI.scale(GAUGE_W), gauge.getPreferredSize().height));
+    gauge.setVisible(false);
+    left.add(gauge);
     JPanel top = new JPanel(new BorderLayout());
     top.setBorder(JBUI.Borders.empty(GAP / 2, GAP / 2, 0, GAP));
     top.add(left, BorderLayout.WEST);
@@ -329,10 +338,16 @@ final class ProjectHistoryPanel extends JPanel {
     return row < 0 || row >= shown.size() ? null : shown.get(row);
   }
 
+  /** 읽는 동안 상태 글 자리에 진행 막대를 보인다. */
+  private void loading(boolean on) {
+    if (on) status.setText("");
+    gauge.setVisible(on);
+  }
+
   private void load() {
     Target target = selectedTarget();
     if (target == null) return;
-    status.setText(SyncBundle.message("history.loading"));
+    loading(true);
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       Loaded result;
       String error = null;
@@ -355,6 +370,7 @@ final class ProjectHistoryPanel extends JPanel {
         String current = done == null ? "" : done.branch();
         branch.setRefs(current.isEmpty() ? List.of() : List.of(current), current);
         fillCommits();
+        loading(false);
         status.setText(done == null ? failure : SyncBundle.message("history.count", done.entries().size()));
       });
     });
@@ -365,7 +381,7 @@ final class ProjectHistoryPanel extends JPanel {
     Loaded before = loaded;
     if (before == null || !before.more() || loadingMore) return;
     loadingMore = true;
-    status.setText(SyncBundle.message("history.loading"));
+    loading(true);
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       Loaded result = null;
       String error = null;
@@ -387,6 +403,7 @@ final class ProjectHistoryPanel extends JPanel {
           // 실패한 묶음은 다시 내릴 때 또 시도하지 않도록 끝으로 본다.
           loaded = new Loaded(before.target(), before.branch(), before.svnRoot(), before.svnPrefix(), before.entries(), before.rows(),
                               false);
+          loading(false);
           status.setText(Objects.toString(failure, SyncBundle.message("history.count", before.entries().size())));
           return;
         }
@@ -399,6 +416,7 @@ final class ProjectHistoryPanel extends JPanel {
         }
         if (shown.size() > first) commitModel.fireTableRowsInserted(first, shown.size() - 1);
         commits.repaint();  // 앞 묶음 마지막 줄의 아래 선도 새 줄로 이어진다.
+        loading(false);
         status.setText(SyncBundle.message("history.count", done.entries().size()));
       });
     });

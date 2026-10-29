@@ -1558,7 +1558,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
     for (Repo repo : targets) roots.add(repo.root());
     button.setEnabled(false);
     String progress = SyncBundle.message("sync.git.pulling", text, roots.size());
-    showStatus(progress);
+    showStatus("");
+    showGauge(progress, 0, 0);
     fetching.addAll(roots);
     inBackground(progress, () -> {
       Map<File, String> failed = Collections.synchronizedMap(new LinkedHashMap<>());
@@ -1729,7 +1730,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
    */
   private void svnUpdate(JButton button, String text, List<Repo> targets) {
     button.setEnabled(false);
-    showStatus(SyncBundle.message("sync.svn.updating", text));
+    showStatus("");
+    showGauge(SyncBundle.message("sync.svn.updating", text), 0, 0);
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       try {
         String message = SyncBundle.message("sync.svn.updated", text, targets.size());
@@ -1798,8 +1800,9 @@ final class SyncPanel extends SimpleToolWindowPanel {
     gauge.setVisible(true);
   }
 
-  /** 위쪽 상태 글: 진행 · 오류 · 알림은 회색 글 한 조각. */
+  /** 위쪽 상태 글: 진행 · 오류 · 알림은 회색 글 한 조각. 빈 글이 아니면 진행 막대를 숨긴다(진행 막대는 showGauge 뒤 다음 상태 글까지만 보인다). */
   private void showStatus(String text) {
+    if (!Objects.toString(text, "").isEmpty()) gauge.setVisible(false);
     summaryShown = false;
     status.clear();
     status.setToolTipText(null);
@@ -1812,6 +1815,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
    * 원격 확인에 실패한 저장소가 있으면 끝에 빨간 「저장소 N개 원격 확인 실패」, 풍선 도움말에 오류 원문.
    */
   private void showSummary(List<Change> list, String tail) {
+    if (!"".equals(tail)) gauge.setVisible(false);
     Map<Kind, Integer> count = new EnumMap<>(Kind.class);
     for (Change c : list) count.merge(c.kind(), 1, Integer::sum);
     int assumed = count.getOrDefault(Kind.ASSUMED, 0);
@@ -1967,7 +1971,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
     busy = true;
     tree.setPaintBusy(true);
     String progress = SyncBundle.message("sync.comparing");
-    showStatus(progress);
+    showStatus("");
+    showGauge(progress, 0, 0);
     int seq = ++compareSeq;
     Map<File, Vcs> vcsOf = new HashMap<>();
     for (Map.Entry<File, Vcs> entry : roots) vcsOf.put(entry.getKey(), entry.getValue());
