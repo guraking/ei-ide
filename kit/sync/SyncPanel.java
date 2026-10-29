@@ -2226,6 +2226,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
     // 설정은 git 한 번으로 다 읽는다(From · 원격 이름 · 내 이름 · 이메일).
     Map<String, String> cfg = ReverseMerge.configs(root);
     String from = cfg.get(ReverseMerge.CONFIG_FROM);
+    // 마지막 합치기가 내 브랜치 → develop 방향이었으면 From 이 내 브랜치라, 그때의 Into(develop)를 기준으로 쓴다.
+    if (from != null && from.equals(repo.branch())) from = cfg.get(ReverseMerge.CONFIG_INTO);
     if (from == null || from.equals(repo.branch())) {
       reverseNotes.remove(root);
       return;
