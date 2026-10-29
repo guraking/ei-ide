@@ -146,19 +146,19 @@
         <option name="DEFAULT_BLOCK_COMMENT">
             <value>
                 <option name="FOREGROUND" value="767676" />
-                <option name="FONT_TYPE" value="2" />
+                <option name="FONT_TYPE" value="0" />
             </value>
         </option>
         <option name="DEFAULT_CONSTANT">
             <value>
                 <option name="FOREGROUND" value="7A1FA2" />
-                <option name="FONT_TYPE" value="2" />
+                <option name="FONT_TYPE" value="0" />
             </value>
         </option>
         <option name="DEFAULT_DOC_COMMENT">
             <value>
                 <option name="FOREGROUND" value="767676" />
-                <option name="FONT_TYPE" value="2" />
+                <option name="FONT_TYPE" value="0" />
             </value>
         </option>
         <option name="DEFAULT_DOC_COMMENT_TAG">
@@ -229,7 +229,7 @@
         <option name="DEFAULT_LINE_COMMENT">
             <value>
                 <option name="FOREGROUND" value="767676" />
-                <option name="FONT_TYPE" value="2" />
+                <option name="FONT_TYPE" value="0" />
             </value>
         </option>
         <option name="DEFAULT_METADATA">
@@ -245,13 +245,13 @@
         <option name="DEFAULT_STATIC_FIELD">
             <value>
                 <option name="FOREGROUND" value="7A1FA2" />
-                <option name="FONT_TYPE" value="2" />
+                <option name="FONT_TYPE" value="0" />
             </value>
         </option>
         <option name="DEFAULT_STATIC_METHOD">
             <value>
                 <option name="FOREGROUND" value="8A5A00" />
-                <option name="FONT_TYPE" value="2" />
+                <option name="FONT_TYPE" value="0" />
             </value>
         </option>
         <option name="DEFAULT_STRING">
@@ -400,7 +400,7 @@
         <option name="JS.GLOBAL_VARIABLE">
             <value>
                 <option name="FOREGROUND" value="7A1FA2" />
-                <option name="FONT_TYPE" value="2" />
+                <option name="FONT_TYPE" value="0" />
             </value>
         </option>
         <option name="JS.JSX_CLIENT_COMPONENT">
@@ -447,13 +447,13 @@
         <option name="STATIC_FINAL_FIELD_ATTRIBUTES" baseAttributes="STATIC_FIELD_ATTRIBUTES" />
         <option name="STATIC_METHOD_ATTRIBUTES">
             <value>
-                <option name="FONT_TYPE" value="2" />
+                <option name="FONT_TYPE" value="0" />
             </value>
         </option>
         <option name="TEMPLATE_VARIABLE_ATTRIBUTES">
             <value>
                 <option name="FOREGROUND" value="7A1FA2" deuteranopia="0" protanopia="0" />
-                <option name="FONT_TYPE" value="2" />
+                <option name="FONT_TYPE" value="0" />
             </value>
         </option>
         <option name="TEXT">
@@ -472,7 +472,7 @@
         <option name="TODO_DEFAULT_ATTRIBUTES">
             <value>
                 <option name="FOREGROUND" value="1E8A3C" deuteranopia="3777E6" protanopia="3777E6" />
-                <option name="FONT_TYPE" value="2" />
+                <option name="FONT_TYPE" value="0" />
                 <option name="ERROR_STRIPE_COLOR" value="54aae3" deuteranopia="3777E6" protanopia="3777E6" />
             </value>
         </option>
@@ -559,7 +559,7 @@
         <option name="CONSOLE_USER_INPUT">
             <value>
                 <option name="FOREGROUND" value="1E8A3C" />
-                <option name="FONT_TYPE" value="2" />
+                <option name="FONT_TYPE" value="0" />
             </value>
         </option>
         <option name="CSS.COLOR">
@@ -581,7 +581,7 @@
         <option name="DEBUGGER_INLINED_VALUES_MODIFIED">
             <value>
                 <option name="FOREGROUND" value="9A6B00" />
-                <option name="FONT_TYPE" value="2" />
+                <option name="FONT_TYPE" value="0" />
             </value>
         </option>
         <option name="DEFAULT_CLASS_REFERENCE">
@@ -690,13 +690,13 @@
         <option name="Static method access">
             <value>
                 <option name="FOREGROUND" value="7A1FA2" />
-                <option name="FONT_TYPE" value="2" />
+                <option name="FONT_TYPE" value="0" />
             </value>
         </option>
         <option name="Static property reference ID">
             <value>
                 <option name="FOREGROUND" value="7A1FA2" />
-                <option name="FONT_TYPE" value="2" />
+                <option name="FONT_TYPE" value="0" />
             </value>
         </option>
         <option name="UNMATCHED_BRACE_ATTRIBUTES">
@@ -1074,7 +1074,7 @@
         <option name="XML_NS_PREFIX">
             <value>
                 <option name="FOREGROUND" value="1A5FD0" />
-                <option name="FONT_TYPE" value="2" />
+                <option name="FONT_TYPE" value="0" />
             </value>
         </option>
         <option name="XML_ATTRIBUTE_NAME">
@@ -1090,7 +1090,7 @@
         <option name="XML_COMMENT">
             <value>
                 <option name="FOREGROUND" value="767676" />
-                <option name="FONT_TYPE" value="2" />
+                <option name="FONT_TYPE" value="0" />
             </value>
         </option>
         <option name="HTML_ATTRIBUTE_NAME">
@@ -1106,7 +1106,7 @@
         <option name="HTML_COMMENT">
             <value>
                 <option name="FOREGROUND" value="767676" />
-                <option name="FONT_TYPE" value="2" />
+                <option name="FONT_TYPE" value="0" />
             </value>
         </option>
         <option name="JSP_ATTRIBUTE_NAME">
@@ -1122,7 +1122,7 @@
         <option name="JSP_COMMENT">
             <value>
                 <option name="FOREGROUND" value="767676" />
-                <option name="FONT_TYPE" value="2" />
+                <option name="FONT_TYPE" value="0" />
             </value>
         </option>
         <option name="PROPERTIES.VALUE">
@@ -1138,7 +1138,7 @@
         <option name="PROPERTIES.LINE_COMMENT">
             <value>
                 <option name="FOREGROUND" value="767676" />
-                <option name="FONT_TYPE" value="2" />
+                <option name="FONT_TYPE" value="0" />
             </value>
         </option>
         <option name="YAML_SCALAR_KEY">
@@ -1169,7 +1169,7 @@
         <option name="YAML_COMMENT">
             <value>
                 <option name="FOREGROUND" value="767676" />
-                <option name="FONT_TYPE" value="2" />
+                <option name="FONT_TYPE" value="0" />
             </value>
         </option>
         <option name="YAML_SIGN">
@@ -1200,13 +1200,13 @@
         <option name="JSON.LINE_COMMENT">
             <value>
                 <option name="FOREGROUND" value="767676" />
-                <option name="FONT_TYPE" value="2" />
+                <option name="FONT_TYPE" value="0" />
             </value>
         </option>
         <option name="JSON.BLOCK_COMMENT">
             <value>
                 <option name="FOREGROUND" value="767676" />
-                <option name="FONT_TYPE" value="2" />
+                <option name="FONT_TYPE" value="0" />
             </value>
         </option>
         <option name="MARKDOWN_HEADER_LEVEL_1">
