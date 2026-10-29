@@ -43,6 +43,8 @@ FONT_ORIGINAL = '    if (SystemInfo.isJetBrainsJvm) {\n      return JETBRAINS_MO
 # 예전 판이 넣은 수정 → 원문. 값만 바뀐 수정은 이미 손질된 소스에서 원문을 못 찾으므로, 읽은 뒤 먼저 원문으로 되돌린다.
 OLD_EDITS = {FONT_FILE: [
     ('    if (SystemInfo.isJetBrainsJvm) {\n      return "JetBrainsMonoHangul";  // EI IDE: boot-servers 플러그인이 등록하는 한글 글꼴\n    }\n',
+     FONT_ORIGINAL),
+    ('    if (SystemInfo.isJetBrainsJvm) {\n      return "JBMono Pretendard";  // EI IDE: boot-servers 플러그인이 등록하는 한글 글꼴\n    }\n',
      FONT_ORIGINAL)]}
 STALE_LINES = {DEFAULT_LAF_FILE: re.compile(r'^ *<default-laf [^\n]*/>\n', re.M)}
 
@@ -142,9 +144,9 @@ EDITS = [
     ("build/src/org/jetbrains/intellij/build/IdeaCommunityProperties.kt",
      '      "intellij.dev",  // KingGura: 플러그인 개발용 실행 도구는 쓰지 않는다\n    ))\n',
      '      "intellij.dev",  // KingGura: 플러그인 개발용 실행 도구는 쓰지 않는다\n    )).add("intellij.vcs.svn")  // KingGura: SVN 저장소도 쓴다\n'),
-    # 12) 편집기 기본 글꼴을 JBMono Pretendard(JetBrains Mono + Pretendard 한글)로 한다. 글꼴 파일은 boot-servers 플러그인이 켤 때 등록한다(BundledFonts).
+    # 12) 편집기 기본 글꼴을 EI Mono(JetBrains Mono + Pretendard 한글)로 한다. 글꼴 파일은 boot-servers 플러그인이 켤 때 등록한다(BundledFonts).
     (FONT_FILE, FONT_ORIGINAL,
-     '    if (SystemInfo.isJetBrainsJvm) {\n      return "JBMono Pretendard";  // EI IDE: boot-servers 플러그인이 등록하는 한글 글꼴\n    }\n'),
+     '    if (SystemInfo.isJetBrainsJvm) {\n      return "EI Mono";  // EI IDE: boot-servers 플러그인이 등록하는 한글 글꼴\n    }\n'),
     # 13) JetBrains 쪽 자동 업데이트 확인을 끈다. IDE 새 판은 GitHub 릴리스를 보는 boot-servers 가 알리고,
     #     플러그인 확인은 마켓의 번들 플러그인(Java · Gradle 등)을 「새 판」으로 받아 와 여기서 고친 기본값을 덮는 일이 있었다.
     ("platform/platform-impl/src/com/intellij/openapi/updateSettings/impl/UpdateOptions.kt",
