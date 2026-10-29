@@ -439,8 +439,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
     JButton pull = actionButton(SyncBundle.message("sync.button.pull"), IconLoader.getIcon(PULL_SELECTED_ICON, SyncPanel.class), ACTION_PULL, true);
     pullButton = pull;
     pull.putClientProperty(DarculaButtonUI.DEFAULT_STYLE_KEY, Boolean.TRUE);
+    whiteIcon(pull);
     JButton pullAll = actionButton(SyncBundle.message("sync.button.update.all"), AllIcons.Actions.MoveDown, ACTION_UPDATE_ALL, false);
     pullAll.putClientProperty(DarculaButtonUI.DEFAULT_STYLE_KEY, Boolean.TRUE);
+    whiteIcon(pullAll);
     bottom.add(pullAll);
     bottom.add(pull);
     // 올리기: 고른 저장소(없으면 전부)로 IntelliJ Push 창. 커밋하고 올리기: 커밋 창을 연다(그 창의 Commit and Push 로 한 번에).
@@ -1502,14 +1504,18 @@ final class SyncPanel extends SimpleToolWindowPanel {
    * 받기 창은 첫 저장소로 열린다(DvcsUtil.guessRepositoryForOperation 이 VIRTUAL_FILE 을 먼저 본다).
    * 고른 저장소가 없으면 IDE 기본(마지막 편집 파일의 저장소)을 따른다.
    */
-  /**
-   * 단추 바탕을 color 로 채우고 글자는 흰색으로 쓴다. 테두리도 같은 색이라 따로 보이지 않는다.
-   * DarculaButtonUI · DarculaButtonPainter 가 읽는 JButton.backgroundColor · textColor · borderColor 속성을 쓴다.
-   */
-  private static JButton tint(JButton button, Color color) {
+  /** 단추 바탕과 테두리를 color 로 채우고 글자는 흰색으로 쓴다(Pull All 처럼 채운 모양, 테두리는 바탕과 같은 색이라 보이지 않는다). */
+  static JButton tint(JButton button, Color color) {
     button.putClientProperty("JButton.backgroundColor", color);
     button.putClientProperty("JButton.borderColor", color);
-    button.putClientProperty("JButton.textColor", JBColor.WHITE);
+    button.putClientProperty("JButton.focusedBorderColor", color);
+    button.putClientProperty("JButton.textColor", Color.WHITE);
+    return whiteIcon(button);
+  }
+
+  /** 색 바탕 단추의 아이콘을 흰색으로 바꾼다. 회색 기본 아이콘은 파랑 · 초록 바탕에서 보이지 않는다. */
+  private static JButton whiteIcon(JButton button) {
+    if (button.getIcon() != null) button.setIcon(IconUtil.colorize(button.getIcon(), Color.WHITE));
     return button;
   }
 
