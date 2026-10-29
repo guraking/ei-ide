@@ -2592,11 +2592,12 @@ final class SyncPanel extends SimpleToolWindowPanel {
         FilePath path = VcsUtil.getFilePath(local, false);
         DiffContentFactory factory = DiffContentFactory.getInstance();
         try {
-          // 양쪽 제목 대신 머리 줄 하나에 「파일 · 원격 ↔ 내 작업본」을 쓴다(시안). 왼쪽이 원격, 오른쪽이 내 작업본.
+          // 머리 줄의 「파일 · 원격 ↔ 내 작업본」에 더해 양쪽 편집기 위에도 제목을 둔다. 왼쪽이 원격, 오른쪽이 내 작업본.
           diffPanel.setRequest(new SimpleDiffRequest(change.path(),
                                                      factory.createFromBytes(project, remoteBytes, path),
                                                      factory.createFromBytes(project, mineBytes, path),
-                                                     null, null));
+                                                     SyncBundle.message("sync.diff.remote", repo.remoteName()),
+                                                     SyncBundle.message("sync.diff.local")));
           diffTitle.clear();
           diffTitle.append(local.getName());
           diffTitle.append("   " + SyncBundle.message("sync.diff.title", repo.remoteName()), SimpleTextAttributes.GRAYED_ATTRIBUTES);
