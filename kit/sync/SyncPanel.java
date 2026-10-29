@@ -2198,7 +2198,9 @@ final class SyncPanel extends SimpleToolWindowPanel {
       reverseNotes.remove(root);
       return;
     }
-    fetching.add(root);
+    // fetching 은 우리 fetch 가 바꾼 원격 참조 알림을 거르는 표시다. 받지 않고 세기만 할 때 넣으면, 그동안 끝난 합치기 · 푸시의
+    // 저장소 알림이 버려져 합치는 도중 읽은 목록(나갈 파일)이 새로고침까지 남는다.
+    if (fetch) fetching.add(root);
     try {
       String remote = ReverseMerge.remoteOf(cfg, repo.branch());
       if (fetch) ReverseMerge.fetch(root, remote, from);
@@ -2216,7 +2218,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       reverseNotes.remove(root);
     }
     finally {
-      fetching.remove(root);
+      if (fetch) fetching.remove(root);
     }
   }
 
