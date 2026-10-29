@@ -28,19 +28,18 @@ public final class BundledFonts implements AppLifecycleListener {
     private static final String FAMILY = "JetBrainsMonoHangul";
     /** 화면 글꼴을 바꿨다는 표시. 앱 수준 PropertiesComponent(other.xml)에 남는다. */
     private static final String UI_FONT_APPLIED_KEY = "eiide.uiFont.monoHangul.applied";
-    // 굵게 · 기울임. 쓰일 때까지 시간이 있으므로 풀 스레드에서 등록한다.
+    // 굵게 · 기울임. 화면 글꼴로 쓰면 굵은 글(제목 · 선택 단추)이 첫 화면부터 나오므로 화면을 다시 깔기 전에 함께 등록한다.
+    // 늦게 등록하면 그 사이 자바가 보통 굵기를 번지게 그려 굵기를 흉내 내어 한글 획이 뭉개진다.
     private static final List<String> OTHER_FILES = List.of(
             "JetBrainsMonoHangul-Bold.ttf", "JetBrainsMonoHangul-Italic.ttf", "JetBrainsMonoHangul-BoldItalic.ttf");
 
     @Override
     public void appFrameCreated(@NotNull List<String> commandLineArgs) {
         register(REGULAR);
+        for (String file : OTHER_FILES) {
+            register(file);
+        }
         applyUiFont();
-        ApplicationManager.getApplication().executeOnPooledThread(() -> {
-            for (String file : OTHER_FILES) {
-                register(file);
-            }
-        });
     }
 
     /**
