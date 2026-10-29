@@ -15,7 +15,8 @@ import java.util.List;
 
 /**
  * 플러그인 jar 에 든 글꼴을 JVM 에 등록해 OS 에 설치하지 않아도 편집기 글꼴 목록에 나오게 한다.
- * JBMono Pretendard (JetBrains Mono + Pretendard 한글, 둘 다 OFL 1.1). 한글은 영문 1.5칸 폭이다.
+ * EI Mono (JetBrains Mono + Pretendard 한글, 둘 다 OFL 1.1). 한글은 영문 1.5칸 폭이다.
+ * Pretendard 는 OFL 예약 이름이라 합친 글꼴에는 그 이름을 쓰지 않는다.
  * 편집기 기본 글꼴 이름(FontPreferences)이 이 가족 이름을 가리키므로 첫 창이 뜨기 전에 등록해야 한다.
  * IDE 화면 글꼴(메뉴 · 설정 창 · 도구 창)도 이 글꼴로 한다. 설정마다 한 번만 바꾸고, 그 뒤 사용자가 고른 글꼴은 그대로 둔다.
  */
@@ -23,15 +24,15 @@ public final class BundledFonts implements AppLifecycleListener {
 
     private static final Logger LOG = Logger.getInstance(BundledFonts.class);
     // 편집기 기본 글꼴이 쓰는 보통 굵기. 첫 창 전에 등록한다.
-    private static final String REGULAR = "JBMonoPretendard-Regular.ttf";
+    private static final String REGULAR = "EIMono-Regular.ttf";
     // 글꼴 파일 안의 가족 이름. 화면 글꼴 설정(UISettings.fontFace)에도 이 이름을 넣는다.
-    private static final String FAMILY = "JBMono Pretendard";
-    /** 화면 글꼴을 바꿨다는 표시. 앱 수준 PropertiesComponent(other.xml)에 남는다. 앞 글꼴(JetBrainsMonoHangul)로 바꾼 PC 도 한 번 다시 바꾸도록 새 키를 쓴다. */
-    private static final String UI_FONT_APPLIED_KEY = "eiide.uiFont.jbmonoPretendard.applied";
+    private static final String FAMILY = "EI Mono";
+    /** 화면 글꼴을 바꿨다는 표시. 앱 수준 PropertiesComponent(other.xml)에 남는다. 앞 글꼴(JetBrainsMonoHangul · JBMono Pretendard)로 바꾼 PC 도 한 번 다시 바꾸도록 새 키를 쓴다. */
+    private static final String UI_FONT_APPLIED_KEY = "eiide.uiFont.eiMono.applied";
     // 굵게 · 기울임. 화면 글꼴로 쓰면 굵은 글(제목 · 선택 단추)이 첫 화면부터 나오므로 화면을 다시 깔기 전에 함께 등록한다.
     // 늦게 등록하면 그 사이 자바가 보통 굵기를 번지게 그려 굵기를 흉내 내어 한글 획이 뭉개진다.
     private static final List<String> OTHER_FILES = List.of(
-            "JBMonoPretendard-Bold.ttf", "JBMonoPretendard-Italic.ttf", "JBMonoPretendard-BoldItalic.ttf");
+            "EIMono-Bold.ttf", "EIMono-Italic.ttf", "EIMono-BoldItalic.ttf");
 
     @Override
     public void appFrameCreated(@NotNull List<String> commandLineArgs) {
