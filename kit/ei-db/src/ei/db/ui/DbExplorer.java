@@ -225,31 +225,30 @@ final class DbExplorer extends SimpleToolWindowPanel {
       if (selectedConfig() != null) openSearch(selectedConfig());
     });
 
-    // 찾기 줄 오른쪽: 새로고침 · 더 보기(접속 추가 · 연결 · 끊기 · 편집 · 삭제 · 콘솔 · 찾기 · 내보내기 · 가져오기).
+    // 창 위 도구줄(1065 전 배치). 묶음: 추가 · 새로고침 │ 콘솔 · 찾기 │ 끊기 · 편집 · 삭제 │ 더 보기(내보내기 · 가져오기).
     DefaultActionGroup bar = new DefaultActionGroup();
+    bar.add(new Act(EiDbBundle.message("connect.title.add"), AllIcons.General.Add, () -> true, this::addConnection));
     bar.add(new Act(EiDbBundle.message("explorer.refresh"), AllIcons.Actions.Refresh, () -> true, this::refreshSelected));
+    bar.addSeparator();
+    bar.add(new Act(EiDbBundle.message("explorer.new.console"), AllIcons.Nodes.Console, () -> selectedConfig() != null, () -> ConsoleOpener.openNew(project, selectedConfig())));
+    bar.add(new Act(EiDbBundle.message("explorer.find"), AllIcons.Actions.Search, () -> selectedConfig() != null, () -> openSearch(selectedConfig())));
+    bar.addSeparator();
+    bar.add(new Act(EiDbBundle.message("explorer.disconnect"), AllIcons.Actions.Suspend, this::selectedIsOpen, () -> disconnect(selectedConfig())));
+    bar.add(new Act(EiDbBundle.message("explorer.edit"), AllIcons.Actions.Edit, () -> selectedConfig() != null, () -> edit(selectedConfig())));
+    bar.add(new Act(EiDbBundle.message("explorer.delete"), AllIcons.General.Remove, () -> selectedConfig() != null, () -> delete(selectedConfig())));
+    bar.addSeparator();
     DefaultActionGroup more = DefaultActionGroup.createPopupGroup(() -> EiDbBundle.message("explorer.more"));
     more.getTemplatePresentation().setIcon(AllIcons.Actions.More);
-    more.add(new Act(EiDbBundle.message("connect.title.add"), AllIcons.General.Add, () -> true, this::addConnection));
-    more.add(new Act(EiDbBundle.message("explorer.connect"), AllIcons.Actions.Execute, () -> selectedConfig() != null && !selectedIsOpen(), () -> connect(selectedConfig())));
-    more.add(new Act(EiDbBundle.message("explorer.disconnect"), AllIcons.Actions.Suspend, this::selectedIsOpen, () -> disconnect(selectedConfig())));
-    more.add(new Act(EiDbBundle.message("explorer.edit"), AllIcons.Actions.Edit, () -> selectedConfig() != null, () -> edit(selectedConfig())));
-    more.add(new Act(EiDbBundle.message("explorer.delete"), AllIcons.General.Remove, () -> selectedConfig() != null, () -> delete(selectedConfig())));
-    more.addSeparator();
-    more.add(new Act(EiDbBundle.message("explorer.new.console"), AllIcons.Nodes.Console, () -> selectedConfig() != null, () -> ConsoleOpener.openNew(project, selectedConfig())));
-    more.add(new Act(EiDbBundle.message("explorer.find"), AllIcons.Actions.Search, () -> selectedConfig() != null, () -> openSearch(selectedConfig())));
-    more.addSeparator();
     more.add(new Act(EiDbBundle.message("explorer.export"), AllIcons.ToolbarDecorator.Export, () -> !DbSettings.getInstance().connections().isEmpty(), this::exportConnections));
     more.add(new Act(EiDbBundle.message("explorer.import"), AllIcons.ToolbarDecorator.Import, () -> true, this::importConnections));
     bar.add(more);
     ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar(PLACE, bar, true);
     toolbar.setTargetComponent(this);
-    toolbar.setReservePlaceAutoPopupIcon(false);
+    setToolbar(toolbar.getComponent());
 
     JPanel searchRow = new JPanel(new BorderLayout());
-    searchRow.setBorder(JBUI.Borders.compound(JBUI.Borders.customLineBottom(JBColor.border()), JBUI.Borders.empty(SEARCH_INSET, SEARCH_INSET, SEARCH_INSET, 0)));
+    searchRow.setBorder(JBUI.Borders.compound(JBUI.Borders.customLineBottom(JBColor.border()), JBUI.Borders.empty(SEARCH_INSET)));
     searchRow.add(search, BorderLayout.CENTER);
-    searchRow.add(toolbar.getComponent(), BorderLayout.EAST);
     JPanel top = new JPanel(new BorderLayout());
     top.add(tabs.getComponent(), BorderLayout.NORTH);
     top.add(searchRow, BorderLayout.CENTER);
