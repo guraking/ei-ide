@@ -67,7 +67,6 @@ import org.jetbrains.annotations.NotNull;
 
 import javax.swing.Icon;
 import javax.swing.JPanel;
-import javax.swing.JProgressBar;
 import javax.swing.JTree;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.TreeExpansionEvent;
@@ -160,7 +159,7 @@ final class DbExplorer extends SimpleToolWindowPanel {
   private final Alarm filterAlarm;
   private final Set<DefaultMutableTreeNode> loading = Collections.newSetFromMap(new IdentityHashMap<>());
   /** loading 이 비어 있지 않은 동안 검색 줄 아래에 보이는 진행 막대. */
-  private final JProgressBar gauge = Gauge.create(EiDbBundle.message("explorer.loading"));
+  private final Gauge gauge = Gauge.create(EiDbBundle.message("explorer.loading"));
   private final ExecutorService metaQueue = AppExecutorUtil.createBoundedApplicationPoolExecutor("EI Database 탐색기", 1);
   /** 창 머리에 「접속 N / M」을 보일 내용 탭. attach 전에는 null. */
   private Content content;

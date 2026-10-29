@@ -36,7 +36,6 @@ import javax.swing.ButtonGroup;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
-import javax.swing.JProgressBar;
 import javax.swing.event.DocumentEvent;
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -83,7 +82,7 @@ public final class ConnectDialog extends DialogWrapper {
   private final JBTextField schema = new JBTextField();
   private final JBLabel driverName = new JBLabel();
   /** ~/.m2 에서 드라이버 jar 를 찾는 동안 jar 이름 자리에 보이는 진행 막대. */
-  private final JProgressBar driverGauge = Gauge.create(EiDbBundle.message("common.searching"));
+  private final Gauge driverGauge = Gauge.create(EiDbBundle.message("common.searching"));
   private final JBLabel driverStatus = new JBLabel("", UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER);
   private final ActionLink downloadLink = new ActionLink(EiDbBundle.message("connect.download"), (ActionListener) e -> downloadDriver());
   private final ActionLink autoDriverLink = new ActionLink(EiDbBundle.message("connect.auto.driver"), (ActionListener) e -> autoDriver());
@@ -93,7 +92,7 @@ public final class ConnectDialog extends DialogWrapper {
   private final JBCheckBox production = new JBCheckBox(EiDbBundle.message("connect.production"));
   private final JBLabel testResult = new JBLabel();
   /** 연결 시험 동안 결과 글 자리에 보이는 진행 막대. */
-  private final JProgressBar testGauge = Gauge.create(EiDbBundle.message("connect.testing"));
+  private final Gauge testGauge = Gauge.create(EiDbBundle.message("connect.testing"));
 
   /** existing 이 null 이면 새 접속. 저장하면 설정에 넣고 그 접속을, 취소하면 null. */
   public static DbConfig edit(Project project, DbConfig existing) {

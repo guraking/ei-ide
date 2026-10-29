@@ -4,7 +4,6 @@ import com.intellij.diff.DiffContentFactory;
 import com.intellij.diff.DiffManager;
 import com.intellij.diff.requests.SimpleDiffRequest;
 import com.intellij.icons.AllIcons;
-import com.intellij.ide.ui.UISettings;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
@@ -91,10 +90,9 @@ public final class ReverseMergeAction extends DumbAwareAction {
   private static final int COMBO_W = 300;
   // 찾기 칸 모서리 둥글기(px). 새 UI 콤보 상자 · 펼친 목록의 모서리와 비슷하게 맞춘다.
   private static final int SEARCH_ARC = 8;
-  // 단계 번호 동그라미 지름 · 번호와 제목 사이 간격 · 단계 안 내용의 왼쪽 들여쓰기(번호 너비에 맞춤)
-  private static final int STEP_D = 18;
+  // 칸 사이 간격 · 단계 제목 아래 내용의 왼쪽 들여쓰기
   private static final int GAP = 8;
-  private static final int STEP_INDENT = STEP_D + GAP;
+  private static final int STEP_INDENT = 26;
   // 단계 사이 · 단계 안 줄 사이 세로 간격
   private static final int STEP_GAP = 14;
   private static final int ROW_GAP = 6;
@@ -195,9 +193,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
     private final Chip filesChip = new Chip(FILES_BG, FILES_FG, null);
     private final Chip mineChip = new Chip(MINE_BG, MINE_COLOR, AllIcons.General.Warning);
     private final JBCheckBox push = new JBCheckBox();
-    // 두 브랜치를 받아 와 비교하는 동안 단계 2 제목 옆에 보이는 진행 막대(글은 막대 안).
-    private final JProgressBar gauge = new JProgressBar();
-    private static final int GAUGE_W = 260;
+    // 두 브랜치를 받아 와 비교하는 동안 단계 2 제목 옆에 보이는 진행 막대와 글.
+    private final Gauge gauge = new Gauge(SyncBundle.message("rmerge.loading"));
     // 미리 보기를 다시 읽을 때마다 하나 올린다(EDT 에서만 쓰고 worker 가 읽는다). 늦게 끝난 옛 계산이 새 결과를 덮지 않게 한다.
     private volatile int seq;
     private boolean ready;
@@ -313,10 +310,9 @@ public final class ReverseMergeAction extends DumbAwareAction {
       });
     }
 
-    /** 단계 제목 줄: 파란 번호 동그라미 + 굵은 제목. 뒤에 칩을 더 붙일 수 있다. */
-    private static JPanel step(int number, String titleKey) {
+    /** 단계 제목 줄: 굵은 제목. 뒤에 칩을 더 붙일 수 있다. */
+    private static JPanel step(String titleKey) {
       JPanel row = new JPanel(new HorizontalLayout(JBUI.scale(GAP)));
-      row.add(new StepNumber(number));
       row.add(new JBLabel(SyncBundle.message(titleKey)).withFont(JBFont.label().asBold()));
       return row;
     }
@@ -361,7 +357,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
       // Compare 는 브랜치 줄 오른쪽 끝, 저장소 띠와 같은 파랑 바탕으로 눈에 띄게.
       JButton compare = new JButton(SyncBundle.message("rmerge.compare"));
       compare.setBackground(STEP_COLOR);
-      compare.setForeground(STEP_TEXT);
+      compare.setForeground(STEP_COLOR);
       compare.addActionListener(e -> reload(true));
       c.weightx = 0;
       c.insets = JBUI.insetsLeft(GAP);
@@ -373,15 +369,10 @@ public final class ReverseMergeAction extends DumbAwareAction {
       intoUnpushed.setBorder(JBUI.Borders.emptyLeft(STEP_INDENT));
 
       // 단계 2: 제목 + 요약 칩, 오른쪽에 비교 안내.
-      JPanel previewTitle = step(2, "rmerge.step.preview");
+      JPanel previewTitle = step("rmerge.step.preview");
       previewTitle.add(commitsChip);
       previewTitle.add(filesChip);
       previewTitle.add(mineChip);
-      gauge.setIndeterminate(true);
-      gauge.setStringPainted(true);
-      gauge.setString(SyncBundle.message("rmerge.loading"));
-      gauge.setPreferredSize(new Dimension(JBUI.scale(GAUGE_W), gauge.getPreferredSize().height));
-      gauge.setVisible(false);
       previewTitle.add(gauge);
       JPanel previewHead = new JPanel(new BorderLayout());
       previewHead.add(previewTitle, BorderLayout.WEST);
@@ -421,14 +412,14 @@ public final class ReverseMergeAction extends DumbAwareAction {
 
       JPanel top = FormBuilder.createFormBuilder()
         .addComponent(where)
-        .addComponent(step(1, "rmerge.step.pick"), JBUI.scale(ROW_GAP))
+        .addComponent(step("rmerge.step.pick"), JBUI.scale(ROW_GAP))
         .addComponent(branches, JBUI.scale(ROW_GAP))
         .addComponent(unpushed, JBUI.scale(ROW_GAP))
         .addComponent(intoUnpushed, 0)
         .addComponent(previewHead, JBUI.scale(STEP_GAP))
         .getPanel();
       JPanel bottom = FormBuilder.createFormBuilder()
-        .addComponent(step(3, "rmerge.step.after"))
+        .addComponent(step("rmerge.step.after"))
         .addComponent(push, JBUI.scale(ROW_GAP))
         .addComponent(stashHint, 0)
         .getPanel();
@@ -712,30 +703,6 @@ public final class ReverseMergeAction extends DumbAwareAction {
           Messages.showErrorDialog(project, error.getMessage(), SyncBundle.message("rmerge.title"));
         }
       });
-    }
-  }
-
-  /** 단계 번호: 파란 동그라미 안의 흰 숫자. */
-  private static final class StepNumber extends JComponent {
-    private final String text;
-
-    StepNumber(int number) {
-      text = String.valueOf(number);
-      setPreferredSize(JBUI.size(STEP_D));
-    }
-
-    @Override
-    protected void paintComponent(Graphics g) {
-      Graphics2D g2 = (Graphics2D) g.create();
-      UISettings.setupAntialiasing(g2);
-      g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-      g2.setColor(STEP_COLOR);
-      g2.fillOval(0, 0, getWidth(), getHeight());
-      g2.setColor(STEP_TEXT);
-      g2.setFont(JBFont.small().asBold());
-      FontMetrics fm = g2.getFontMetrics();
-      g2.drawString(text, (getWidth() - fm.stringWidth(text)) / 2, (getHeight() - fm.getHeight()) / 2 + fm.getAscent());
-      g2.dispose();
     }
   }
 

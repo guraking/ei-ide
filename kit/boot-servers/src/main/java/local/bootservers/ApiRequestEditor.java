@@ -70,7 +70,6 @@ import javax.swing.ButtonGroup;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
-import javax.swing.JProgressBar;
 import javax.swing.JTable;
 import javax.swing.event.DocumentEvent;
 import javax.swing.table.DefaultTableCellRenderer;
@@ -243,7 +242,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
     private final Pill statusPill = new Pill();
     private final JBLabel metaLabel = new JBLabel();
     // 보내는 동안 응답 머리줄에 보이는 진행 막대. 막대 안 글은 지난 시간.
-    private final JProgressBar gauge = Gauge.create("");
+    private final Gauge gauge = Gauge.create("");
     private final ActionToolbar viewsToolbar;
     private final JBLabel errorTitle = new JBLabel();
     private final JBLabel errorText = new JBLabel();

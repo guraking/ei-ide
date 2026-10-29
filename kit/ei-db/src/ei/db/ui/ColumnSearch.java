@@ -21,7 +21,6 @@ import org.jetbrains.annotations.Nullable;
 import javax.swing.Action;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
-import javax.swing.JProgressBar;
 import javax.swing.KeyStroke;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
@@ -60,7 +59,7 @@ final class ColumnSearch extends DialogWrapper {
   private final JBTable table = new JBTable(model);
   private final JBLabel status = new JBLabel(" ", UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER);
   /** 찾는 동안 상태 글 자리에 보이는 진행 막대. */
-  private final JProgressBar gauge = Gauge.create(EiDbBundle.message("common.searching"));
+  private final Gauge gauge = Gauge.create(EiDbBundle.message("common.searching"));
   /** 늦게 온 이전 검색 결과를 버리는 번호. */
   private final AtomicInteger generation = new AtomicInteger();
 

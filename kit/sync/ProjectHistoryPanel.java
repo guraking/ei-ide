@@ -168,9 +168,8 @@ final class ProjectHistoryPanel extends JPanel {
   private final SearchTextField filter = new SearchTextField(false);
   private final Pill branch = new Pill();
   private final JLabel status = new JLabel(" ");
-  // 읽는 동안 상태 글 자리에 보이는 진행 막대(글은 막대 안).
-  private final JProgressBar gauge = new JProgressBar();
-  private static final int GAUGE_W = 200;
+  // 읽는 동안 상태 글 자리에 보이는 진행 막대와 글.
+  private final Gauge gauge = new Gauge(SyncBundle.message("history.loading"));
   private final JBLabel subject = new JBLabel();
   private final JTextArea message = new JTextArea();
   // 흐린 「작성자 · 날짜 · 」 뒤에 해시(누르면 복사).
@@ -231,11 +230,6 @@ final class ProjectHistoryPanel extends JPanel {
     left.add(toolbar.getComponent());
     left.add(status);
     status.setForeground(DIM);
-    gauge.setIndeterminate(true);
-    gauge.setStringPainted(true);
-    gauge.setString(SyncBundle.message("history.loading"));
-    gauge.setPreferredSize(new Dimension(JBUI.scale(GAUGE_W), gauge.getPreferredSize().height));
-    gauge.setVisible(false);
     left.add(gauge);
     JPanel top = new JPanel(new BorderLayout());
     top.setBorder(JBUI.Borders.empty(GAP / 2, GAP / 2, 0, GAP));

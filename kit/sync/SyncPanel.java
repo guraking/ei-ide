@@ -312,9 +312,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private final SimpleColoredComponent diffTitle = new SimpleColoredComponent();
   private final JPanel diffHead = new JPanel(new BorderLayout());
   private final SimpleColoredComponent status = new SimpleColoredComponent();
-  /** 원격을 받아 오는 동안 요약 뒤에 보이는 진행 막대(IntelliJ 식 게이지). 글은 막대 안에, 전체 새로고침은 끝난 저장소 수로 찬다. */
-  private final JProgressBar gauge = new JProgressBar();
-  private static final int GAUGE_W = 260;
+  /** 원격을 받아 오는 동안 요약 뒤에 보이는 진행 막대와 글. 전체 새로고침은 끝난 저장소 수로 찬다. */
+  private final Gauge gauge = new Gauge("");
   // 목록 우클릭 메뉴가 아래 단추와 같은 동작을 하도록 단추를 눌러 부른다.
   private JButton pullButton;
   private JButton pushButton;
@@ -364,7 +363,6 @@ final class SyncPanel extends SimpleToolWindowPanel {
   record ReverseNote(String text, boolean warn) {}
 
   // 아래 단추 줄의 바탕색(흰 글자). 같은 일은 같은 색: 받기는 IntelliJ 기본 단추 파랑, 올리기 초록, 충돌 붉은색, 브랜치 합치기 보라.
-  private static final JBColor BUTTON_TEXT = new JBColor(0xFFFFFF, 0xFFFFFF);
   private static final JBColor PUSH_BG = new JBColor(0x2F8F5B, 0x3A8F5E);
   private static final JBColor RESOLVE_BG = new JBColor(0xD9534F, 0xC75450);
   private static final JBColor MERGE_BG = new JBColor(0x7A52C7, 0x8B6BD1);
@@ -407,9 +405,6 @@ final class SyncPanel extends SimpleToolWindowPanel {
     JPanel labels = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(GAP), 0));
     labels.add(title);
     labels.add(status);
-    gauge.setStringPainted(true);
-    gauge.setPreferredSize(new Dimension(JBUI.scale(GAUGE_W), gauge.getPreferredSize().height));
-    gauge.setVisible(false);
     labels.add(gauge);
     // FlowLayout 은 줄을 위에 붙이므로, 도구줄 높이에 맞춰 세로 가운데로 놓는다.
     JPanel middle = new JPanel(new GridBagLayout());
@@ -1507,10 +1502,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
    * 받기 창은 첫 저장소로 열린다(DvcsUtil.guessRepositoryForOperation 이 VIRTUAL_FILE 을 먼저 본다).
    * 고른 저장소가 없으면 IDE 기본(마지막 편집 파일의 저장소)을 따른다.
    */
-  /** 단추를 bg 바탕 · 흰 글자로 칠한다(IntelliJ 단추 UI 는 UIResource 가 아닌 색을 그대로 쓴다). */
-  private static JButton tint(JButton button, Color bg) {
-    button.setBackground(bg);
-    button.setForeground(BUTTON_TEXT);
+  /** 단추 테두리와 글자를 color 로 칠한다. 새 UI 단추는 바탕색을 칠하지 않고 테두리에만 쓰므로 글자도 같은 색으로 맞춘다. */
+  private static JButton tint(JButton button, Color color) {
+    button.setBackground(color);
+    button.setForeground(color);
     return button;
   }
 
@@ -1791,11 +1786,9 @@ final class SyncPanel extends SimpleToolWindowPanel {
     return value instanceof Change c ? c.kind() : null;
   }
 
-  /** 진행 막대를 보인다. total 이 0 이면 끝을 모르는 움직임, 아니면 done/total 만큼 찬다. text 는 막대 안 글. */
+  /** 진행 막대를 보인다. total 이 0 이면 끝을 모르는 움직임, 아니면 done/total 만큼 찬다. text 는 막대 옆 글. */
   private void showGauge(String text, int done, int total) {
-    gauge.setIndeterminate(total == 0);
-    gauge.setMaximum(Math.max(total, 1));
-    gauge.setValue(done);
+    gauge.setProgress(done, total);
     gauge.setString(text);
     gauge.setVisible(true);
   }
