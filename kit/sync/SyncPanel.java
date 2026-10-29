@@ -312,6 +312,9 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private final SimpleColoredComponent diffTitle = new SimpleColoredComponent();
   private final JPanel diffHead = new JPanel(new BorderLayout());
   private final SimpleColoredComponent status = new SimpleColoredComponent();
+  /** 원격을 받아 오는 동안 요약 뒤에 보이는 진행 막대(IntelliJ 식 게이지). 글은 막대 안에, 전체 새로고침은 끝난 저장소 수로 찬다. */
+  private final JProgressBar gauge = new JProgressBar();
+  private static final int GAUGE_W = 260;
   // 목록 우클릭 메뉴가 아래 단추와 같은 동작을 하도록 단추를 눌러 부른다.
   private JButton pullButton;
   private JButton pushButton;
@@ -404,6 +407,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
     JPanel labels = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(GAP), 0));
     labels.add(title);
     labels.add(status);
+    gauge.setStringPainted(true);
+    gauge.setPreferredSize(new Dimension(JBUI.scale(GAUGE_W), gauge.getPreferredSize().height));
+    gauge.setVisible(false);
+    labels.add(gauge);
     // FlowLayout 은 줄을 위에 붙이므로, 도구줄 높이에 맞춰 세로 가운데로 놓는다.
     JPanel middle = new JPanel(new GridBagLayout());
     GridBagConstraints left = new GridBagConstraints();
@@ -1782,6 +1789,15 @@ final class SyncPanel extends SimpleToolWindowPanel {
     return value instanceof Change c ? c.kind() : null;
   }
 
+  /** 진행 막대를 보인다. total 이 0 이면 끝을 모르는 움직임, 아니면 done/total 만큼 찬다. text 는 막대 안 글. */
+  private void showGauge(String text, int done, int total) {
+    gauge.setIndeterminate(total == 0);
+    gauge.setMaximum(Math.max(total, 1));
+    gauge.setValue(done);
+    gauge.setString(text);
+    gauge.setVisible(true);
+  }
+
   /** 위쪽 상태 글: 진행 · 오류 · 알림은 회색 글 한 조각. */
   private void showStatus(String text) {
     summaryShown = false;
@@ -1815,7 +1831,9 @@ final class SyncPanel extends SimpleToolWindowPanel {
       }
       if (assumed > 0) status.append(SUMMARY_SEP + Kind.ASSUMED.label() + " " + assumed, SimpleTextAttributes.GRAYED_ATTRIBUTES);
     }
-    if (tail != null) status.append(SUMMARY_SEP + tail, SimpleTextAttributes.GRAYED_ATTRIBUTES);
+    if (tail != null) {
+      if (!tail.isEmpty()) status.append(SUMMARY_SEP + tail, SimpleTextAttributes.GRAYED_ATTRIBUTES);
+    }
     else if (lastCheck > 0) {
       long minutes = TimeUnit.MILLISECONDS.toMinutes(System.currentTimeMillis() - lastCheck);
       status.append(SUMMARY_SEP + (minutes == 0 ? SyncBundle.message("sync.checked.now") : SyncBundle.message("sync.checked.ago", minutes)),
@@ -1990,10 +2008,17 @@ final class SyncPanel extends SimpleToolWindowPanel {
           if (seq != compareSeq) return;
           changes = local;
           rebuildTree();
-          showSummary(local, SyncBundle.message("sync.fetching.tail"));
+          showSummary(local, "");
+          showGauge(SyncBundle.message("sync.fetching.gauge", 0, scannedAll.size()), 0, scannedAll.size());
         });
         List<Change> fetched = new ArrayList<>();
-        for (Scanned scanned : scannedAll) fetched.addAll(await(scanned.remote()));
+        int total = scannedAll.size();
+        int done = 0;
+        for (Scanned scanned : scannedAll) {
+          fetched.addAll(await(scanned.remote()));
+          int finished = ++done;
+          SwingUtilities.invokeLater(() -> { if (busy) showGauge(SyncBundle.message("sync.fetching.gauge", finished, total), finished, total); });
+        }
         result = fetched;
       }
       catch (IOException e) {
@@ -2065,7 +2090,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
     busy = true;
     tree.setPaintBusy(true);
     String progress = SyncBundle.message("sync.repo.fetching", name);
-    showStatus(progress);
+    showStatus("");
+    showGauge(progress, 0, 0);
     inBackground(progress, () -> {
       Repo updated = null;
       List<Change> fresh = List.of();
@@ -2148,6 +2174,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private void endBusy() {
     busy = false;
     tree.setPaintBusy(false);
+    gauge.setVisible(false);
     if (refreshAgain) {
       refreshAgain = false;
       refresh();
