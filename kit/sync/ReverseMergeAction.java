@@ -55,7 +55,6 @@ import javax.swing.event.PopupMenuListener;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
 import java.awt.*;
-import java.awt.event.ActionEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
@@ -356,6 +355,14 @@ public final class ReverseMergeAction extends DumbAwareAction {
       c.weightx = 1;
       c.insets = JBUI.emptyInsets();
       branches.add(intoBox, c);
+      // Compare 는 브랜치 줄 오른쪽 끝, 저장소 띠와 같은 파랑 바탕으로 눈에 띄게.
+      JButton compare = new JButton(SyncBundle.message("rmerge.compare"));
+      compare.setBackground(STEP_COLOR);
+      compare.setForeground(STEP_TEXT);
+      compare.addActionListener(e -> reload(true));
+      c.weightx = 0;
+      c.insets = JBUI.insetsLeft(GAP);
+      branches.add(compare, c);
       branches.setBorder(JBUI.Borders.emptyLeft(STEP_INDENT));
       unpushed.setForeground(NamedColorUtil.getErrorForeground());
       intoUnpushed.setForeground(NamedColorUtil.getErrorForeground());
@@ -421,15 +428,6 @@ public final class ReverseMergeAction extends DumbAwareAction {
       panel.add(scroll, BorderLayout.CENTER);
       panel.add(bottom, BorderLayout.SOUTH);
       return panel;
-    }
-
-    /** 왼쪽 아래 Compare 단추. 두 브랜치를 서버에서 받아 와 미리 보기를 채운다. */
-    @Override
-    protected Action @NotNull [] createLeftSideActions() {
-      return new Action[]{new DialogWrapperAction(SyncBundle.message("rmerge.compare")) {
-        @Override
-        protected void doAction(ActionEvent e) { reload(true); }
-      }};
     }
 
     private String from() { return (String) fromBox.getSelectedItem(); }
