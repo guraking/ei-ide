@@ -1522,6 +1522,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
 
   private JButton actionButton(String text, Icon icon, String actionId, boolean forSelectedRepo) {
     JButton button = new JButton(text, icon);
+    // 누른 단추가 일하는 동안 꺼지면 초점이 옆 단추로 넘어가 테두리가 생긴다. 아래 단추 줄은 마우스로만 쓰므로 초점을 받지 않는다.
+    button.setFocusable(false);
     button.addActionListener(e -> {
       // Git.Pull 은 Git 전용이라 SVN 저장소에서는 꺼져 있다. SVN 은 svn update 로 받는다.
       // Git 과 SVN 이 섞여 있으면 받기는 SVN 저장소를 svn update 로 받고 Git 저장소는 Git.Pull 로 이어 받는다.
