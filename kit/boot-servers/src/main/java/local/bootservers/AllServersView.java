@@ -12,6 +12,7 @@ import local.bootservers.ui.LineChart;
 import local.bootservers.ui.Pill;
 
 import javax.swing.JComponent;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTable;
 import javax.swing.SwingConstants;
@@ -85,6 +86,15 @@ final class AllServersView {
         for (int c = 0; c < columns.length; c++) {
             table.getColumnModel().getColumn(c).setCellRenderer(cells);
         }
+        // 칸 제목도 값과 같은 쪽으로 맞춘다(글 칸은 왼쪽, 숫자 칸은 오른쪽).
+        TableCellRenderer header = table.getTableHeader().getDefaultRenderer();
+        table.getTableHeader().setDefaultRenderer((t, value, selected, focus, row, column) -> {
+            Component c = header.getTableCellRendererComponent(t, value, selected, focus, row, column);
+            if (c instanceof JLabel label) {
+                label.setHorizontalAlignment(column == 0 || column == STATE_COLUMN || column == SPARK_COLUMN ? SwingConstants.LEFT : SwingConstants.RIGHT);
+            }
+            return c;
+        });
         table.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {

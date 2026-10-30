@@ -344,7 +344,20 @@ final class ConnectionMapView {
             Point a = positions.get(e.from().id());
             Point b = positions.get(e.to().id());
             double x1 = JBUI.scale(a.x + BOX_WIDTH);
-            double y1 = JBUI.scale(a.y + BOX_HEIGHT / 2);
+            // 한 서버에서 나가는 선이 여럿이면 상자 오른쪽 변을 나눠 위 대상부터 차례로 출발한다. 같은 점에서 겹쳐 나가지 않게 한다.
+            int index = 0;
+            int count = 0;
+            for (int i = 0; i < edges.size(); i++) {
+                Edge other = edges.get(i);
+                if (other.from() == e.from()) {
+                    count++;
+                    int otherY = positions.get(other.to().id()).y;
+                    if (otherY < b.y || otherY == b.y && i < edges.indexOf(e)) {
+                        index++;
+                    }
+                }
+            }
+            double y1 = JBUI.scale(a.y + BOX_HEIGHT * (index + 1.0) / (count + 1));
             double x2 = JBUI.scale(b.x);
             double y2 = JBUI.scale(b.y + BOX_HEIGHT / 2);
             // 오른쪽에서 왼쪽으로 가는 선(같은 열 · 뒤 열의 서버)도 상자를 가로지르지 않게 손잡이를 바깥으로 뺀다.
