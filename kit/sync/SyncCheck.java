@@ -64,6 +64,7 @@ public class SyncCheck {
     checkInSvn();
     checkRun();
     checkReverseMerge();
+    checkFindWindowsGit();
     checkGitLogins();
     checkGitUndo();
     System.out.println("SyncCheck 통과");
@@ -396,6 +397,29 @@ public class SyncCheck {
 
   private static void sh(File dir, String command) throws Exception {
     SyncPanel.run(dir, "sh", "-c", command);
+  }
+
+  /** 띄울 git: PATH 의 설치본(실제 exe 우선) → 없으면 내장 MinGit → 그것도 없으면 「git」. */
+  private static void checkFindWindowsGit() throws Exception {
+    File base = java.nio.file.Files.createTempDirectory("find-git").toFile();
+    File bundled = new File(base, "ide/git.exe");
+    File cmd = new File(base, "Git/cmd");
+    File real = new File(base, "Git/mingw64/bin/git.exe");
+    File wrapperOnly = new File(base, "Only");
+    eq(SyncPanel.findWindowsGit(null, bundled), "git");
+    bundled.getParentFile().mkdirs();
+    bundled.createNewFile();
+    eq(SyncPanel.findWindowsGit(null, bundled), bundled.getPath());
+    eq(SyncPanel.findWindowsGit(new File(base, "empty").getPath(), bundled), bundled.getPath());
+    cmd.mkdirs();
+    new File(cmd, "git.exe").createNewFile();
+    eq(SyncPanel.findWindowsGit(cmd.getPath(), bundled), "git");
+    real.getParentFile().mkdirs();
+    real.createNewFile();
+    eq(SyncPanel.findWindowsGit(cmd.getPath(), bundled), real.getPath());
+    wrapperOnly.mkdirs();
+    new File(wrapperOnly, "git.exe").createNewFile();
+    eq(SyncPanel.findWindowsGit(wrapperOnly.getPath() + File.pathSeparator + cmd.getPath(), bundled), "git");
   }
 
   /** Git 로그인: 서버 주소 다듬기, Basic 머리글, GIT_CONFIG_* 환경값, 저장 형식. */

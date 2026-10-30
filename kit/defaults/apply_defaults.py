@@ -251,6 +251,15 @@ EDITS = [
      '      File bundled = new File(PathManager.getHomePath(), BUNDLED_SVN);\n'
      '      return bundled.isFile() ? bundled.getPath() : "svn";\n'
      '    }\n'),
+    # 19-1) PC 에 Git 이 없으면 설치본에 같이 넣은 MinGit(kit/mingit)을 쓴다. PATH · Program Files 의 Git 과 설정에서 고른 경로가 우선이다.
+    ("plugins/git4idea/backend/src/config/GitExecutableDetector.java",
+     '    return SystemInfo.isWindows ? WIN_EXECUTABLE : UNIX_EXECUTABLE;\n',
+     '    if (SystemInfo.isWindows) {\n'
+     '      // EI IDE: 설치본에 같이 넣은 MinGit\n'
+     '      File bundled = new File(com.intellij.openapi.application.PathManager.getHomePath(), "plugins/kinggura-sync/git/cmd/git.exe");\n'
+     '      if (bundled.isFile()) return bundled.getPath();\n'
+     '    }\n'
+     '    return SystemInfo.isWindows ? WIN_EXECUTABLE : UNIX_EXECUTABLE;\n'),
     # 20) 콘솔은 앞부분을 버려 cycle buffer 크기(원래 1024 KB)만 남긴다. 서버 로그가 금방 잘리므로
     #     Settings > Editor > General > Console 의 「Override console cycle buffer size」를 켠 채 30720 KB(30 MB)로 둔다.
     #     설정값은 기본값과 다를 때만 저장되므로, 이 칸을 건드린 적 없는 기존 설정에도 그대로 적용된다.
