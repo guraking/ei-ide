@@ -357,7 +357,7 @@ final class ConnectionMapView {
                     }
                 }
             }
-            double y1 = JBUI.scale(a.y + BOX_HEIGHT * (index + 1.0) / (count + 1));
+            double y1 = JBUI.scale((float) (a.y + BOX_HEIGHT * (index + 1.0) / (count + 1)));
             double x2 = JBUI.scale(b.x);
             double y2 = JBUI.scale(b.y + BOX_HEIGHT / 2);
             // 오른쪽에서 왼쪽으로 가는 선(같은 열 · 뒤 열의 서버)도 상자를 가로지르지 않게 손잡이를 바깥으로 뺀다.
