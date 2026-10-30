@@ -228,7 +228,7 @@ final class ConnectionMapView {
         return result;
     }
 
-    /** 상자 · 선을 만들고 자리를 잡는다. 서버 열은 들어오는 선을 따라 깊이를 매기고(순환은 서버 수에서 멈춤), 바깥은 맨 오른쪽 열. */
+    /** 상자 · 선을 만들고 자리를 잡는다. 서버 열은 들어오는 선을 따라 깊이를 매기고(순환은 서버 수에서 멈춤), 바깥은 그것을 쓰는 서버의 바로 오른쪽 열. */
     private void build(List<ServerMonitor.Watched> live) {
         Map<String, Node> byId = new LinkedHashMap<>();
         for (ServerMonitor.Watched w : live) {
@@ -263,14 +263,16 @@ final class ConnectionMapView {
                 }
             }
         }
-        int outside = 0;
-        for (int d : depth.values()) {
-            outside = Math.max(outside, d + 1);
+        Map<String, Integer> outsideColumn = new HashMap<>();
+        for (Edge e : edges) {
+            if (e.to().server() == null) {
+                outsideColumn.merge(e.to().id(), depth.get(e.from().id()) + 1, Math::max);
+            }
         }
         Map<Integer, Integer> rowsInColumn = new HashMap<>();
         positions.clear();
         for (Node n : nodes) {
-            int col = n.server() != null ? depth.get(n.id()) : outside;
+            int col = n.server() != null ? depth.get(n.id()) : outsideColumn.get(n.id());
             int row = rowsInColumn.merge(col, 1, Integer::sum) - 1;
             positions.put(n.id(), new Point(MARGIN + col * (BOX_WIDTH + COLUMN_GAP), MARGIN + row * (BOX_HEIGHT + ROW_GAP)));
         }
