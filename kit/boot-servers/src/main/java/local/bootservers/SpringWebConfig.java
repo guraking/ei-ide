@@ -72,6 +72,34 @@ final class SpringWebConfig {
         return result;
     }
 
+    /** 모듈 하나의 설정 파일과 읽은 값. sources 는 files 와 같은 차례다. */
+    record ModuleConfig(List<VirtualFile> files, List<Links.Source> sources) {
+    }
+
+    /**
+     * 모듈 본 리소스 폴더의 application*.yml · yaml · properties, 그다음 그 안 config 폴더의 것(스프링이 읽는 차례, 뒤가 이긴다).
+     * 읽기 동작 안에서 부른다. 읽지 못한 파일은 값 없이 넣는다.
+     */
+    static ModuleConfig moduleConfig(Module module) {
+        List<VirtualFile> files = new ArrayList<>();
+        List<VirtualFile> roots = ModuleRootManager.getInstance(module).getSourceRoots(JavaResourceRootType.RESOURCE);
+        for (VirtualFile root : roots) {
+            addConfigFiles(root, files);
+        }
+        for (VirtualFile root : roots) {
+            VirtualFile sub = root.findChild(CONFIG_SUBFOLDER);
+            if (sub != null && sub.isDirectory()) {
+                addConfigFiles(sub, files);
+            }
+        }
+        List<Links.Source> sources = new ArrayList<>();
+        for (VirtualFile file : files) {
+            String text = text(file);
+            sources.add(new Links.Source(file.getName(), isYaml(file), text == null ? List.of() : ConfigKeys.entries(text, isYaml(file))));
+        }
+        return new ModuleConfig(files, sources);
+    }
+
     private static void addConfigFiles(VirtualFile dir, List<VirtualFile> result) {
         for (VirtualFile child : dir.getChildren()) {
             String extension = child.getExtension();

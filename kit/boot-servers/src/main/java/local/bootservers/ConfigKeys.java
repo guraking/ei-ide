@@ -96,6 +96,101 @@ public final class ConfigKeys {
         return yaml ? findYaml(text, normalize(key)) : findProperties(text, normalize(key));
     }
 
+    /** 설정 글의 값 하나. key 는 점으로 이은 전체 키(yml 목록 번호는 넣지 않음), document 는 yml 문서(---) 번호(0 부터). */
+    public record Entry(String key, String value, int offset, int document) {
+    }
+
+    /**
+     * 설정 글의 값이 있는 키를 모두 글 순서로 돌려준다(부모 키 · 블록 글은 뺀다). 경로 따라가기는 find 와 같은 규칙이다.
+     * properties 는 문서를 나누지 않는다(document 는 늘 0).
+     */
+    public static List<Entry> entries(String text, boolean yaml) {
+        return yaml ? yamlEntries(text) : propertyEntries(text);
+    }
+
+    private static List<Entry> yamlEntries(String text) {
+        List<Entry> result = new ArrayList<>();
+        Deque<Level> path = new ArrayDeque<>();
+        int document = 0;
+        boolean documentHasKeys = false;
+        int blockIndent = -1;
+        int lineStart = 0;
+        while (lineStart <= text.length()) {
+            int lineEnd = text.indexOf('\n', lineStart);
+            if (lineEnd < 0) {
+                lineEnd = text.length();
+            }
+            String line = stripComment(text.substring(lineStart, lineEnd).replace("\r", ""));
+            int indent = leadingSpaces(line);
+            String content = line.trim();
+            int start = lineStart;
+            lineStart = lineEnd + 1;
+            if (content.isEmpty() || (blockIndent >= 0 && indent > blockIndent)) {
+                continue;
+            }
+            blockIndent = -1;
+            if (indent == 0 && (content.startsWith(DOCUMENT_START) || content.equals(DOCUMENT_END))) {
+                path.clear();
+                if (documentHasKeys) {
+                    document++;
+                    documentHasKeys = false;
+                }
+                continue;
+            }
+            while (content.startsWith(LIST_ITEM) || content.equals(LIST_ITEM_BARE)) {
+                int shift = content.equals(LIST_ITEM_BARE) ? 1 : LIST_ITEM.length();
+                String rest = content.substring(shift);
+                indent += shift + leadingSpaces(rest);
+                content = rest.trim();
+            }
+            int keyEnd = keyEnd(content);
+            if (keyEnd < 0) {
+                continue;
+            }
+            String key = unquote(content.substring(0, keyEnd).trim());
+            String value = unquote(content.substring(keyEnd + 1).trim());
+            while (!path.isEmpty() && path.peekLast().indent() >= indent) {
+                path.removeLast();
+            }
+            path.addLast(new Level(indent, key));
+            documentHasKeys = true;
+            if (value.startsWith(BLOCK_LITERAL) || value.startsWith(BLOCK_FOLDED)) {
+                blockIndent = indent;
+            }
+            else if (!value.isEmpty()) {
+                result.add(new Entry(join(path), value, start + indent, document));
+            }
+        }
+        return result;
+    }
+
+    private static List<Entry> propertyEntries(String text) {
+        List<Entry> result = new ArrayList<>();
+        boolean continued = false;
+        int lineStart = 0;
+        while (lineStart <= text.length()) {
+            int lineEnd = text.indexOf('\n', lineStart);
+            if (lineEnd < 0) {
+                lineEnd = text.length();
+            }
+            String line = text.substring(lineStart, lineEnd).replace("\r", "");
+            boolean wasContinued = continued;
+            continued = endsWithEscape(line);
+            int indent = leadingWhitespace(line);
+            String content = line.substring(indent);
+            if (!wasContinued && !content.isEmpty()
+                    && content.charAt(0) != COMMENT && content.charAt(0) != PROPERTIES_BANG) {
+                int end = propertyKeyEnd(content);
+                String value = propertyValue(content.substring(end));
+                if (!value.isEmpty()) {
+                    result.add(new Entry(content.substring(0, end).replace("\\", ""), value, lineStart + indent, 0));
+                }
+            }
+            lineStart = lineEnd + 1;
+        }
+        return result;
+    }
+
     /** yml 한 단계. indent 는 키가 시작하는 칸. */
     private record Level(int indent, String key) {
     }

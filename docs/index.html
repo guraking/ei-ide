@@ -741,6 +741,14 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
       </ol>
     </div>
 
+    <h3>대시보드 · 연결 지도 · 모아 보기</h3>
+    <p class="lead">서버를 고르면 머리줄 아래가 「설정 · 대시보드 · 연결 지도」 탭으로 나뉩니다. 값은 5초마다 재고 최근 10분만 남기며, 서버를 멈추거나 IDE 를 닫으면 지웁니다.</p>
+    <ul class="legend">
+      <li><span class="mark">D</span><div><b>대시보드</b> <span class="t">CPU · 힙 · 스레드 · 분당 요청 · 평균 응답(최대) · 오류율(5xx) · DB 풀(Hikari) 칸과 CPU · 힙 · 평균 응답 10분 그래프, 느린 요청 상위 5(30초마다). 느린 요청 줄을 두 번 누르면 그 컨트롤러 메서드로 갑니다. 요청 · DB 풀 값은 액추에이터(<code>spring-boot-starter-actuator</code>)가 있는 서버만 보이고, 서버 창에서 띄우면 <code>health · metrics</code> 를 저절로 엽니다(설정 파일은 그대로, 이미 적힌 노출 목록에 더함). WAS 는 CPU · 힙 · 스레드만.</span></div></li>
+      <li><span class="mark">M</span><div><b>연결 지도</b> <span class="t">실행 중인 스프링 부트 서버의 application*.yml · properties 에서 <code>datasource url</code> · <code>redis</code> · <code>http://…</code> 주소(gateway routes 포함)를 읽어 상자와 선으로 그립니다. 다른 서버의 포트로 가는 localhost 주소는 그 서버 상자로 잇습니다. 10초마다 IDE 가 그 포트에 붙어 보고, 붙으면 초록 실선 · 끊기면 빨강 점선과 오른쪽 아래 알림(연결 지도 보기 · 다시 확인 · 이 연결 알림 끄기). 프로필은 서버 설정대로 읽고, 위 상자에서 하나로 바꿔 볼 수 있습니다. 선이나 아래 표의 줄을 두 번 누르면 그 설정 줄로 갑니다.</span></div></li>
+      <li><span class="mark">C</span><div><b>모아 보기</b> <span class="t">도구줄 「모아 보기」를 누르면 실행 중인 서버를 한 표로 비교합니다. 평균 응답 300 ms · DB 풀 80 % 이상은 주황, 오류율 0.5 % 이상은 빨강. 줄을 누르면 그 서버의 대시보드로 갑니다.</span></div></li>
+    </ul>
+
     <h3>URL 찾기 <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>U</kbd></h3>
     <div class="figure">
       <div>

@@ -7,19 +7,24 @@ import javax.management.remote.JMXConnector;
 import javax.management.remote.JMXConnectorFactory;
 import javax.management.remote.JMXServiceURL;
 import java.io.IOException;
+import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
 import java.lang.management.MemoryUsage;
+import java.lang.management.ThreadMXBean;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Iterator;
+import java.util.Set;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import javax.management.MBeanServerConnection;
+import javax.management.ObjectName;
 
 /**
  * 실행 중인 서버 들여다보기: 스프링 부트 /actuator/health 의 UP · DOWN, JVM 힙 사용량.
@@ -85,6 +90,42 @@ final class ServerProbe {
             return new long[] {usage.getUsed(), usage.getMax()};
         }
         catch (IOException | AttachNotSupportedException | RuntimeException | LinkageError e) {
+            close(pid);
+            return null;
+        }
+    }
+
+    /** JVM 값: CPU(0~1, 모르면 NaN) · 코어 수 · 힙 사용 · 최대(모르면 -1) · 스레드 · 최고 스레드 · GC 누적 횟수. */
+    record Jvm(double cpu, int cores, long heapUsed, long heapMax, int threads, int peakThreads, long gcCount) {
+    }
+
+    /** 대시보드용 JVM 값. heap 과 같은 attach 연결을 쓴다. attach 를 못 하면 null. */
+    static Jvm jvm(long rootPid) {
+        closeDead();
+        long pid = javaPid(rootPid);
+        try {
+            JMXConnector connector = CONNECTIONS.get(pid);
+            if (connector == null) {
+                connector = connect(pid);
+                CONNECTIONS.put(pid, connector);
+            }
+            MBeanServerConnection server = connector.getMBeanServerConnection();
+            MemoryUsage heap = ManagementFactory.newPlatformMXBeanProxy(server, ManagementFactory.MEMORY_MXBEAN_NAME, MemoryMXBean.class)
+                    .getHeapMemoryUsage();
+            ThreadMXBean threads = ManagementFactory.newPlatformMXBeanProxy(server, ManagementFactory.THREAD_MXBEAN_NAME, ThreadMXBean.class);
+            com.sun.management.OperatingSystemMXBean os = ManagementFactory.newPlatformMXBeanProxy(
+                    server, ManagementFactory.OPERATING_SYSTEM_MXBEAN_NAME, com.sun.management.OperatingSystemMXBean.class);
+            double cpu = os.getProcessCpuLoad();
+            long gc = 0;
+            Set<ObjectName> collectors = server.queryNames(new ObjectName(ManagementFactory.GARBAGE_COLLECTOR_MXBEAN_DOMAIN_TYPE + ",*"), null);
+            for (ObjectName name : collectors) {
+                long count = ManagementFactory.newPlatformMXBeanProxy(server, name.getCanonicalName(), GarbageCollectorMXBean.class).getCollectionCount();
+                gc += Math.max(count, 0);
+            }
+            return new Jvm(cpu < 0 ? Double.NaN : cpu, os.getAvailableProcessors(), heap.getUsed(), heap.getMax(),
+                    threads.getThreadCount(), threads.getPeakThreadCount(), gc);
+        }
+        catch (IOException | AttachNotSupportedException | javax.management.JMException | RuntimeException | LinkageError e) {
             close(pid);
             return null;
         }
