@@ -983,6 +983,15 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
     <h2><span class="no">07</span>Git · SVN</h2>
     <p class="lead">아래쪽 「Synchronize」 창과 「Git Log」 창 두 개입니다. 커밋 · 올리기(Push)는 Git 메뉴(SVN 은 Subversion 메뉴)의 기본 기능을 그대로 씁니다. Git 은 설치본에 함께 들어 있어(MinGit) PC 에 Git 이 없어도 됩니다. PC 에 Git 이 있으면 그쪽을 씁니다.</p>
 
+    <h3>내장 Git (MinGit 2.56.0.4)</h3>
+    <p class="lead">1071 판부터 설치본에 가벼운 Git 이 들어 있습니다. 사내망처럼 Git 을 받을 수 없는 PC 도 Git 설치 없이 Clone · Pull · Push 를 할 수 있습니다. 따로 켤 것은 없습니다.</p>
+    <div class="notes">
+      <div class="note"><b>설치 위치</b><code>C:\Program Files\JetBrains\EI IDE\plugins\kinggura-sync\git</code><br>설치 경로를 바꿨다면 앞부분만 다릅니다.</div>
+      <div class="note"><b>실행 파일</b>동기화 창 · Merge Branches: <code>git\ucrt64\bin\git.exe</code><br>IntelliJ Git 메뉴: <code>git\cmd\git.exe</code><br>판 표시: <code>git\ei-mingit-version.txt</code></div>
+      <div class="note ok"><b>어떤 Git 을 쓰나</b>IntelliJ Git 은 설정에서 고른 경로가 있으면 그 경로를 씁니다. 그 밖에는 PC 에 설치된 Git 을 쓰고, 없을 때만 내장 Git 을 씁니다.</div>
+      <div class="note"><b>경로를 직접 넣을 때</b>Settings → Version Control → Git(설정 → 버전 관리 → Git)의 Git 실행 파일 경로 칸에 <code>git\cmd\git.exe</code> 의 전체 경로를 넣습니다.</div>
+    </div>
+
     <h3>Synchronize · Git → Synchronize Workspace</h3>
     <p class="lead">이클립스 Team → Synchronize Workspace 와 같은 창입니다. 프로젝트 안의 Git 저장소 여러 개와 SVN 을 저장소별로 묶어 들어올 변경(파랑) · 나갈 변경(보라) · 충돌(빨강)을 한눈에 봅니다. 커밋 · 올리기 뒤에는 자동으로 다시 비교합니다. 왼쪽 목록은 처음에 창 너비의 45% 를 차지하고, 끌어 바꾼 폭은 기억합니다. 프로젝트 트리 우클릭 → Git(SVN 은 Subversion) → Synchronize Workspace 로 열면 그 저장소만 비교합니다.</p>
     <table class="keys map" style="margin-bottom:18px">
