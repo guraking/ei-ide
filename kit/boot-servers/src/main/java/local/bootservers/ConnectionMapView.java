@@ -51,7 +51,7 @@ import java.util.function.Function;
 
 /**
  * 서버 창 「연결 지도」 탭: 실행 중인 스프링 부트 서버와, 그 설정 파일에서 찾은 DB · Redis · 다른 서버 주소를 상자와 선으로 그린다.
- * 왼쪽에서 오른쪽으로: 다른 서버가 붙지 않는 서버 → 그 서버가 붙는 서버 → … → 바깥(점선 상자). 선은 붙으면 초록 실선, 끊기면 빨강 점선.
+ * 왼쪽에서 오른쪽으로: 다른 서버가 붙지 않는 서버 → 그 서버가 붙는 서버 → …, 바깥(점선 상자)은 그 주소를 쓰는 서버 바로 오른쪽. 선은 붙으면 초록 실선, 끊기면 빨강 점선.
  * 선이나 아래 표의 줄을 두 번 누르면 그 주소가 적힌 설정 파일의 줄로 간다.
  */
 final class ConnectionMapView {
@@ -64,6 +64,7 @@ final class ConnectionMapView {
     private static final int ARC = 8;
     private static final int DOT = 8;
     private static final int TEXT_PAD = 12;
+    private static final int LABEL_PAD = 3;
     private static final float LINE_WIDTH = 2f;
     private static final float[] DASH = {6f, 4f};
     // 선 위 점까지의 거리가 이 안이면 그 선을 누른 것으로 친다(px, 배율 전)
@@ -228,7 +229,7 @@ final class ConnectionMapView {
         return result;
     }
 
-    /** 상자 · 선을 만들고 자리를 잡는다. 서버 열은 들어오는 선을 따라 깊이를 매기고(순환은 서버 수에서 멈춤), 바깥은 맨 오른쪽 열. */
+    /** 상자 · 선을 만들고 자리를 잡는다. 서버 열은 들어오는 선을 따라 깊이를 매기고(순환은 서버 수에서 멈춤), 바깥은 쓰는 서버 다음 열. */
     private void build(List<ServerMonitor.Watched> live) {
         Map<String, Node> byId = new LinkedHashMap<>();
         for (ServerMonitor.Watched w : live) {
@@ -263,14 +264,16 @@ final class ConnectionMapView {
                 }
             }
         }
-        int outside = 0;
-        for (int d : depth.values()) {
-            outside = Math.max(outside, d + 1);
+        // 바깥 상자는 그 주소를 쓰는 서버 바로 오른쪽 열(여럿이 쓰면 가장 오른쪽 서버 다음). 선이 다른 상자 뒤를 지나지 않는다.
+        for (Edge e : edges) {
+            if (e.to().server() == null) {
+                depth.merge(e.to().id(), depth.get(e.from().id()) + 1, Math::max);
+            }
         }
         Map<Integer, Integer> rowsInColumn = new HashMap<>();
         positions.clear();
         for (Node n : nodes) {
-            int col = n.server() != null ? depth.get(n.id()) : outside;
+            int col = depth.get(n.id());
             int row = rowsInColumn.merge(col, 1, Integer::sum) - 1;
             positions.put(n.id(), new Point(MARGIN + col * (BOX_WIDTH + COLUMN_GAP), MARGIN + row * (BOX_HEIGHT + ROW_GAP)));
         }
@@ -391,7 +394,14 @@ final class ConnectionMapView {
                     Point2D mid = pointAt(c, 0.5);
                     String label = stateText(s);
                     FontMetrics fm = g2.getFontMetrics();
-                    g2.drawString(label, (float) (mid.getX() - fm.stringWidth(label) / 2.0), (float) (mid.getY() - JBUI.scale(4)));
+                    // 글자 밑에 바탕을 깔아 선 · 다른 선과 겹쳐도 읽히게 한다.
+                    int labelWidth = fm.stringWidth(label);
+                    int labelX = (int) (mid.getX() - labelWidth / 2.0);
+                    int labelY = (int) (mid.getY() - fm.getHeight() / 2.0);
+                    g2.setColor(UIUtil.getPanelBackground());
+                    g2.fillRect(labelX - JBUI.scale(LABEL_PAD), labelY, labelWidth + JBUI.scale(LABEL_PAD) * 2, fm.getHeight());
+                    g2.setColor(color);
+                    g2.drawString(label, labelX, labelY + fm.getAscent());
                 }
                 for (Node n : nodes) {
                     paintNode(g2, n);
