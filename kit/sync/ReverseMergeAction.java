@@ -28,6 +28,7 @@ import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VfsUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.ui.ComboboxSpeedSearch;
+import com.intellij.ui.InplaceButton;
 import com.intellij.ui.JBColor;
 import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.SimpleListCellRenderer;
@@ -98,7 +99,6 @@ public final class ReverseMergeAction extends DumbAwareAction {
   private static final int ROW_GAP = 6;
   private static final int CHIP_PAD_V = 1;
   private static final int CHIP_PAD_H = 7;
-  private static final String ARROW = "→";
 
   @Override public @NotNull ActionUpdateThread getActionUpdateThread() { return ActionUpdateThread.BGT; }
 
@@ -340,7 +340,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
       where.add(name);
       where.add(dim(root.getPath()));
 
-      // 단계 1: From → Into. 두 상자가 창 너비를 반씩 나눈다. From 은 원격 브랜치를 합치고, Into 는 원격에 맞춘 로컬 브랜치에 합친 뒤 같은 원격 브랜치로 푸시한다.
+      // 단계 1: From ⇄ Into. 두 상자가 창 너비를 반씩 나눈다. From 은 원격 브랜치를 합치고, Into 는 원격에 맞춘 로컬 브랜치에 합친 뒤 같은 원격 브랜치로 푸시한다.
       fromBox.setToolTipText(SyncBundle.message("rmerge.from"));
       intoBox.setToolTipText(SyncBundle.message("rmerge.into"));
       JPanel branches = new JPanel(new GridBagLayout());
@@ -350,7 +350,13 @@ public final class ReverseMergeAction extends DumbAwareAction {
       branches.add(fromBox, c);
       c.weightx = 0;
       c.insets = JBUI.insets(0, GAP);
-      branches.add(new JBLabel(ARROW), c);
+      // 가운데 단추: From 과 Into 를 맞바꾸고 바로 다시 비교한다.
+      branches.add(new InplaceButton(SyncBundle.message("rmerge.swap"), AllIcons.Actions.SwapPanels, e -> {
+        Object from = fromBox.getSelectedItem();
+        fromBox.setSelectedItem(intoBox.getSelectedItem());
+        intoBox.setSelectedItem(from);
+        reload(true);
+      }), c);
       c.weightx = 1;
       c.insets = JBUI.emptyInsets();
       branches.add(intoBox, c);
