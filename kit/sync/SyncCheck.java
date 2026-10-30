@@ -400,6 +400,11 @@ public class SyncCheck {
 
   /** Git 로그인: 서버 주소 다듬기, Basic 머리글, GIT_CONFIG_* 환경값, 저장 형식. */
   private static void checkGitLogins() {
+    java.util.Map<String, String> servers = GitRemoteAuth.serverUrls(List.of("https://u@A.com/x.git", "git@b.com:x.git", "https://a.com/y.git", "https://c.com:8443/z"));
+    eq(List.copyOf(servers.keySet()), List.of("https://a.com", "https://c.com:8443"));
+    eq(servers.get("https://a.com"), "https://u@A.com/x.git");
+    eq(GitRemoteAuth.failedServers(servers.keySet(), "fatal: Authentication failed for 'https://C.com:8443/z/'"), List.of("https://c.com:8443"));
+    eq(GitRemoteAuth.failedServers(servers.keySet(), "fatal: could not read Username"), List.of("https://a.com", "https://c.com:8443"));
     eq(GitLogins.serverOf("https://AXPLM-GitLab.example.com/pjt/a.git"), "https://axplm-gitlab.example.com");
     eq(GitLogins.serverOf("gitlab.example.com:8443/x"), "https://gitlab.example.com:8443");
     eq(GitLogins.serverOf("https://user@host.com/"), "https://host.com");

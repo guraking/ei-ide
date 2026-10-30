@@ -74,6 +74,20 @@ final class GitLogins {
     cachedEnv = null;
   }
 
+  /** 그 서버의 비밀번호 · 토큰이 저장돼 있는지. */
+  static boolean hasSecret(String server) {
+    if (find(list(), server) == null) return false;
+    String secret = PasswordSafe.getInstance().getPassword(attributes(server));
+    return secret != null && !secret.isEmpty();
+  }
+
+  /** 인증에 실패한 값을 지운다. 목록 줄은 남겨 표에서 값만 다시 넣게 한다. 등록이 없는 서버면 아무 일도 안 한다. */
+  static void forget(String server) {
+    if (find(list(), server) == null) return;
+    PasswordSafe.getInstance().setPassword(attributes(server), null);
+    cachedEnv = null;
+  }
+
   /** git 을 띄울 때 더할 환경값. 등록이 없으면 빈 맵. base 는 IDE 의 환경(이미 GIT_CONFIG_COUNT 가 있으면 그 뒤에 잇는다). */
   static Map<String, String> env(Map<String, String> base) {
     // IDE 없이 도는 점검(SyncCheck)에서는 저장한 로그인이 없다.

@@ -222,7 +222,7 @@ final class ReverseMerge {
 
   /** 서버에 있는 브랜치 이름들. 내 fetch 설정과 상관없이 서버에 직접 묻는다. */
   static List<String> serverBranches(File root, String remote) throws IOException, InterruptedException {
-    return parseHeads(git(root, GIT_LONG_TIMEOUT_SEC, "ls-remote", "--heads", remote));
+    return parseHeads(GitRemoteAuth.run(root, GIT_LONG_TIMEOUT_SEC, true, "ls-remote", "--heads", remote));
   }
 
   /** 지금까지 받아 둔 원격 브랜치 이름들(refs/remotes/<원격>/*). 서버에 가지 않아 바로 나온다. 이름순. */
@@ -245,9 +245,18 @@ final class ReverseMerge {
 
   /** 브랜치들을 이름으로 받아 remoteRef 에 둔다. 서버에서 브랜치가 지워졌으면 IOException. */
   static void fetch(File root, String remote, String... branches) throws IOException, InterruptedException {
+    fetch(root, true, remote, branches);
+  }
+
+  /** fetch 와 같고 인증에 실패해도 로그인 창을 띄우지 않는다(사용자가 부르지 않은 자동 fetch). */
+  static void fetchQuietly(File root, String remote, String... branches) throws IOException, InterruptedException {
+    fetch(root, false, remote, branches);
+  }
+
+  private static void fetch(File root, boolean ask, String remote, String... branches) throws IOException, InterruptedException {
     List<String> args = new ArrayList<>(List.of("fetch", "--quiet", remote));
     for (String b : new LinkedHashSet<>(List.of(branches))) args.add("+" + HEADS + b + ":" + remoteRef(remote, b));
-    git(root, GIT_LONG_TIMEOUT_SEC, args.toArray(String[]::new));
+    GitRemoteAuth.run(root, GIT_LONG_TIMEOUT_SEC, ask, args.toArray(String[]::new));
   }
 
   /** 개인 브랜치의 기준점: into 가 지금 브랜치면 HEAD(커밋 안 한 것 포함), 아니면 받아 온 서버 개인 브랜치. */
@@ -389,7 +398,7 @@ final class ReverseMerge {
   private static void push(File root, String remote, String into, boolean push) throws IOException, InterruptedException {
     if (!push) return;
     try {
-      git(root, GIT_LONG_TIMEOUT_SEC, "push", remote, "HEAD:" + HEADS + into);
+      GitRemoteAuth.run(root, GIT_LONG_TIMEOUT_SEC, true, "push", remote, "HEAD:" + HEADS + into);
     }
     catch (IOException e) {
       throw new IOException(e.getMessage() + "\n" + SyncBundle.message("rmerge.push.failed", into), e);
