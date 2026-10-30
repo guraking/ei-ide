@@ -1581,7 +1581,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
         inParallel(roots, root -> {
           try {
             String before = git(root, "rev-parse", "HEAD").trim();
-            git(root, GIT_LONG_TIMEOUT_SEC, "pull", "--ff-only", "--quiet");
+            GitRemoteAuth.run(root, GIT_LONG_TIMEOUT_SEC, true, "pull", "--ff-only", "--quiet");
             pulled.add(countPulled(git(root, "log", "--format=%x01", "--name-only", before + "..HEAD")));
           }
           catch (IOException e) {
@@ -2219,7 +2219,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private void fetch(File root) throws IOException, InterruptedException {
     fetching.add(root);
     try {
-      git(root, GIT_LONG_TIMEOUT_SEC, "fetch", "--quiet");
+      GitRemoteAuth.run(root, GIT_LONG_TIMEOUT_SEC, false, "fetch", "--quiet");
     }
     finally {
       fetching.remove(root);
@@ -2248,7 +2248,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     if (fetch) fetching.add(root);
     try {
       String remote = ReverseMerge.remoteOf(cfg, repo.branch());
-      if (fetch) ReverseMerge.fetch(root, remote, from);
+      if (fetch) ReverseMerge.fetchQuietly(root, remote, from);
       ReverseMerge.Preview preview = ReverseMerge.preview(root, cfg, remote, from, repo.branch(), repo.branch());
       int mine = preview.mineCount();
       int ahead = Integer.parseInt(git(root, "rev-list", "--count", ReverseMerge.remoteRef(remote, from) + "..HEAD").trim());
@@ -2679,6 +2679,15 @@ final class SyncPanel extends SimpleToolWindowPanel {
     return run(dir, timeoutSec, GIT, gitArgs(args));
   }
 
+  /** git 과 같고 logins 의 인증을 더 넘긴다(GitRemoteAuth). */
+  static String gitWith(File dir, long timeoutSec, List<GitLogins.Login> logins, String... args) throws IOException, InterruptedException {
+    return new String(runBytes(dir, timeoutSec, logins, GIT, gitArgs(args)), StandardCharsets.UTF_8).replace("\r\n", "\n");
+  }
+
+  static boolean isGitAuthError(String message) {
+    return message != null && containsAny(message, GIT_AUTH_ERRORS);
+  }
+
   /** git 과 같고 표준 출력을 바이트 그대로 돌려준다. */
   static byte[] gitBytes(File dir, String... args) throws IOException, InterruptedException {
     return runBytes(dir, CMD_TIMEOUT_SEC, GIT, gitArgs(args));
@@ -2739,6 +2748,11 @@ final class SyncPanel extends SimpleToolWindowPanel {
    * 표준 입력은 바로 닫아, 자격 증명을 묻는 git 이 입력을 기다리며 시간 제한까지 멈추지 않고 곧바로 실패하게 한다.
    */
   static byte[] runBytes(File dir, long timeoutSec, String exe, String... args) throws IOException, InterruptedException {
+    return runBytes(dir, timeoutSec, List.of(), exe, args);
+  }
+
+  /** runBytes 와 같고 git 에 logins 의 인증을 더 넘긴다. */
+  private static byte[] runBytes(File dir, long timeoutSec, List<GitLogins.Login> logins, String exe, String... args) throws IOException, InterruptedException {
     List<String> command = new ArrayList<>(List.of(VCS_NAME_SVN.equals(exe) ? svnExecutable() : GIT.equals(exe) ? gitExecutable() : exe));
     command.addAll(List.of(args));
     String label = exe + " " + verb(args);
@@ -2748,7 +2762,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
     try {
       ProcessBuilder builder = new ProcessBuilder(command).directory(dir).redirectOutput(outFile).redirectError(errFile);
       // 설정 → Git 로그인에 넣은 서버는 git 이 비밀번호 도우미를 띄우지 않게 인증을 미리 넘긴다.
-      if (GIT.equals(exe)) builder.environment().putAll(GitLogins.env(builder.environment()));
+      if (GIT.equals(exe)) {
+        builder.environment().putAll(GitLogins.env(builder.environment()));
+        builder.environment().putAll(GitLogins.env(logins, builder.environment()));
+      }
       Process process = builder.start();
       process.getOutputStream().close();
       try {
