@@ -298,7 +298,10 @@ final class ServersPanel extends SimpleToolWindowPanel {
         };
         ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar("BootServers.Toolbar", new DefaultActionGroup(add, reload, Separator.getInstance(), start, debug, restart, stop, edit, Separator.getInstance(), all, more), true);
         toolbar.setTargetComponent(tree);
-        setToolbar(toolbar.getComponent());
+        JPanel head = new JPanel(new BorderLayout());
+        head.add(toolbar.getComponent(), BorderLayout.CENTER);
+        head.add(gauge.line(), BorderLayout.SOUTH);
+        setToolbar(head);
         PopupHandler.installPopupMenu(tree, new DefaultActionGroup(add, Separator.getInstance(), serverActions, Separator.getInstance(), reload), "BootServers.Popup");
 
         monitor = new ServerMonitor(project, parent, this::watched, this::slowTarget, this::refreshMonitorViews, this::showMapOf);

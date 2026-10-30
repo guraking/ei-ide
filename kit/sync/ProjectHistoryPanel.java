@@ -249,7 +249,10 @@ final class ProjectHistoryPanel extends JPanel {
     OnePixelSplitter main = new OnePixelSplitter(false, TABLE_RATIO);
     main.setFirstComponent(commitScroll);
     main.setSecondComponent(detailPanel());
-    add(top, BorderLayout.NORTH);
+    JPanel head = new JPanel(new BorderLayout());
+    head.add(top, BorderLayout.CENTER);
+    head.add(gauge.line(), BorderLayout.SOUTH);
+    add(head, BorderLayout.NORTH);
     add(main, BorderLayout.CENTER);
 
     reloadTargets();

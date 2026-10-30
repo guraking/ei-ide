@@ -96,7 +96,10 @@ final class ColumnSearch extends DialogWrapper {
       }
     }.installOn(table);
     JPanel panel = new JPanel(new BorderLayout(0, JBUI.scale(6)));
-    panel.add(field, BorderLayout.NORTH);
+    JPanel north = new JPanel(new BorderLayout());
+    north.add(field, BorderLayout.CENTER);
+    north.add(gauge.line(), BorderLayout.SOUTH);
+    panel.add(north, BorderLayout.NORTH);
     JBScrollPane scroll = new JBScrollPane(table);
     scroll.setPreferredSize(new Dimension(JBUI.scale(WIDTH), JBUI.scale(HEIGHT)));
     panel.add(scroll, BorderLayout.CENTER);

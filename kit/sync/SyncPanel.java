@@ -430,7 +430,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
     top.add(middle, BorderLayout.CENTER);
     // 시안: 도구줄 아래에 창 너비 전체로 경계선 하나. 왼쪽 목록과 오른쪽 비교 칸이 그 아래에서 같은 높이로 시작한다.
     top.setBorder(JBUI.Borders.customLineBottom(JBColor.border()));
-    setToolbar(top);
+    JPanel head = new JPanel(new BorderLayout());
+    head.add(top, BorderLayout.CENTER);
+    head.add(gauge.line(), BorderLayout.SOUTH);
+    setToolbar(head);
 
     OnePixelSplitter splitter = new OnePixelSplitter(false, SPLITTER_KEY, TREE_PROPORTION);
     // 트리에서 고른 파일을 IDE 에 알려 우클릭의 IntelliJ 기본 동작(Jump to Source · Show History 등)이 그 파일로 돈다.

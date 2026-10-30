@@ -3,32 +3,40 @@ package local.bootservers.ui;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.util.ui.JBUI;
 
+import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
+import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 
 /**
- * 끝을 모르는 일 동안 보이는 진행 표시: IntelliJ 상태줄처럼 얇은 진행 막대와 그 오른쪽의 회색 글.
- * 글을 막대 안에 그리면 막대가 글 높이만큼 두꺼워지므로 글은 막대 밖에 둔다.
- * 처음에는 숨겨 두고, 부르는 쪽이 일 시작에 보이고 끝에 숨긴다.
+ * 진행 표시: 창 너비 전체를 가로지르는 2px 진행 선({@link #line()})과, 원래 자리에 남는 회색 글(이 패널).
+ * 부르는 쪽이 선을 도구 막대 바로 아래에 붙인다. 선 칸은 숨겨도 높이를 지켜 아래 내용이 들썩이지 않는다.
+ * 처음에는 숨겨 두고, 부르는 쪽이 일 시작에 보이고 끝에 숨긴다. 글과 선은 함께 보이고 숨는다.
  */
 public final class Gauge extends JPanel {
+    /** IntelliJ 편집기 · 탐색줄의 가는 진행 선과 같은 두께. */
+    private static final int LINE_H = 2;
 
-    private static final int BAR_W = 120;
-    private static final int GAP = 6;
-
+    private final JProgressBar bar = new JProgressBar();
+    private final JPanel line = new JPanel(new BorderLayout());
     private final JBLabel label = new JBLabel();
 
     private Gauge(String text) {
-        super(new FlowLayout(FlowLayout.LEFT, JBUI.scale(GAP), 0));
+        super(new FlowLayout(FlowLayout.LEFT, 0, 0));
         setOpaque(false);
-        JProgressBar bar = new JProgressBar();
         bar.setIndeterminate(true);
-        bar.setPreferredSize(new Dimension(JBUI.scale(BAR_W), bar.getPreferredSize().height));
+        // DarculaProgressBarUI 가 읽는 값: 선 두께와 둥글지 않은 끝.
+        bar.putClientProperty("ProgressBar.stripeWidth", LINE_H);
+        bar.putClientProperty("ProgressBar.flatEnds", Boolean.TRUE);
+        bar.setBorder(JBUI.Borders.empty());
+        bar.setVisible(false);
+        line.setOpaque(false);
+        line.setPreferredSize(new Dimension(0, JBUI.scale(LINE_H)));
+        line.add(bar, BorderLayout.CENTER);
         label.setForeground(JBUI.CurrentTheme.ContextHelp.FOREGROUND);
         label.setText(text);
-        add(bar);
         add(label);
         setVisible(false);
     }
@@ -39,5 +47,16 @@ public final class Gauge extends JPanel {
 
     public void setString(String text) {
         label.setText(text);
+    }
+
+    /** 도구 막대 아래에 창 너비로 붙일 선 칸. */
+    public JComponent line() {
+        return line;
+    }
+
+    @Override
+    public void setVisible(boolean on) {
+        super.setVisible(on);
+        bar.setVisible(on);
     }
 }

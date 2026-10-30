@@ -422,7 +422,10 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         responseViews.add(responseCookies, VIEW_CARDS[VIEW_COOKIES]);
         responseCards.add(responseViews, RESPONSE_SHOWN_CARD);
         JPanel response = new JPanel(new BorderLayout());
-        response.add(responseHead, BorderLayout.NORTH);
+        JPanel responseTop = new JPanel(new BorderLayout());
+        responseTop.add(responseHead, BorderLayout.CENTER);
+        responseTop.add(gauge.line(), BorderLayout.SOUTH);
+        response.add(responseTop, BorderLayout.NORTH);
         response.add(responseCards, BorderLayout.CENTER);
 
         // 요청(위) · 응답(아래)으로 나눠 응답을 전체 폭으로 보인다.
