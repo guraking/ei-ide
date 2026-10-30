@@ -239,9 +239,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static final String STOCK_PUSH = "Vcs.Push";
   // 파일 줄 앞 상태 글자 칸의 최소 폭(JBUI.scale 전). 「M」 · 「??」 · 「충돌」 뒤 파일 아이콘이 한 줄로 서게 한다.
   private static final int STATUS_COL_W = 24;
-  // 왼쪽 목록이 처음 차지하는 폭 비율(2026-10-29 사용자 캡처: 창 너비의 28%). 끌어 바꾼 값은 저장한다.
-  private static final float TREE_PROPORTION = 0.28f;
-  private static final String SPLITTER_KEY = "kinggura.sync.splitter";
+  // 왼쪽 목록이 처음 차지하는 폭 비율. 저장소 줄의 「develop 보다 N개 뒤 · 내 커밋」 안내까지 한 줄에 들어가게 넓게 잡는다. 끌어 바꾼 값은 저장한다.
+  private static final float TREE_PROPORTION = 0.45f;
+  // 저장 키. 이 비율로 바꿀 때 키를 새로 해서, 앞 비율을 저장해 둔 PC 도 한 번은 새 비율로 연다.
+  private static final String SPLITTER_KEY = "kinggura.sync.splitter.v2";
   // 파일 줄 옆 상위 폴더에서 앞에 남기는 단계 수와 줄임표.
   private static final int SHORT_DIR_KEEP = 3;
   private static final String SHORT_DIR_ELLIPSIS = "\u2026";
