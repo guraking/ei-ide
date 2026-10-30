@@ -379,19 +379,21 @@ final class ConnectionMapView {
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g2.setColor(UIUtil.getPanelBackground());
                 g2.fillRect(0, 0, getWidth(), getHeight());
-                Color error = JBUI.CurrentTheme.Label.errorForeground();
-                Color gray = NamedColorUtil.getInactiveTextColor();
                 g2.setFont(JBUI.Fonts.smallFont());
                 for (Edge e : edges) {
                     ServerMonitor.LinkState s = monitor.state(e.link());
-                    Color color = !s.checked() ? gray : s.up() ? UP : error;
+                    Color color = lineColor(s);
                     g2.setColor(color);
                     g2.setStroke(s.checked() && !s.up()
                             ? new BasicStroke(JBUI.scale(LINE_WIDTH), BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND, 1f, scaled(DASH), 0f)
                             : new BasicStroke(JBUI.scale(LINE_WIDTH)));
-                    CubicCurve2D c = curve(e);
-                    g2.draw(c);
-                    Point2D mid = pointAt(c, 0.5);
+                    g2.draw(curve(e));
+                }
+                // 글자는 선을 다 그린 뒤 그린다. 뒤에 그린 선이 앞 선의 글자를 덮지 않게 한다.
+                for (Edge e : edges) {
+                    ServerMonitor.LinkState s = monitor.state(e.link());
+                    Color color = lineColor(s);
+                    Point2D mid = pointAt(curve(e), 0.5);
                     String label = stateText(s);
                     FontMetrics fm = g2.getFontMetrics();
                     // 글자 밑에 바탕을 깔아 선 · 다른 선과 겹쳐도 읽히게 한다.
@@ -410,6 +412,10 @@ final class ConnectionMapView {
             finally {
                 g2.dispose();
             }
+        }
+
+        private static Color lineColor(ServerMonitor.LinkState s) {
+            return !s.checked() ? NamedColorUtil.getInactiveTextColor() : s.up() ? UP : JBUI.CurrentTheme.Label.errorForeground();
         }
 
         private void paintNode(Graphics2D g2, Node n) {
