@@ -344,7 +344,20 @@ final class ConnectionMapView {
             Point a = positions.get(e.from().id());
             Point b = positions.get(e.to().id());
             double x1 = JBUI.scale(a.x + BOX_WIDTH);
-            double y1 = JBUI.scale(a.y + BOX_HEIGHT / 2);
+            // 한 서버에서 나가는 선이 여럿이면 상자 오른쪽 변을 나눠 위 대상부터 차례로 출발한다. 같은 점에서 겹쳐 나가지 않게 한다.
+            int index = 0;
+            int count = 0;
+            for (int i = 0; i < edges.size(); i++) {
+                Edge other = edges.get(i);
+                if (other.from() == e.from()) {
+                    count++;
+                    int otherY = positions.get(other.to().id()).y;
+                    if (otherY < b.y || otherY == b.y && i < edges.indexOf(e)) {
+                        index++;
+                    }
+                }
+            }
+            double y1 = JBUI.scale(a.y + BOX_HEIGHT * (index + 1.0) / (count + 1));
             double x2 = JBUI.scale(b.x);
             double y2 = JBUI.scale(b.y + BOX_HEIGHT / 2);
             // 오른쪽에서 왼쪽으로 가는 선(같은 열 · 뒤 열의 서버)도 상자를 가로지르지 않게 손잡이를 바깥으로 뺀다.
@@ -379,19 +392,21 @@ final class ConnectionMapView {
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g2.setColor(UIUtil.getPanelBackground());
                 g2.fillRect(0, 0, getWidth(), getHeight());
-                Color error = JBUI.CurrentTheme.Label.errorForeground();
-                Color gray = NamedColorUtil.getInactiveTextColor();
                 g2.setFont(JBUI.Fonts.smallFont());
                 for (Edge e : edges) {
                     ServerMonitor.LinkState s = monitor.state(e.link());
-                    Color color = !s.checked() ? gray : s.up() ? UP : error;
+                    Color color = lineColor(s);
                     g2.setColor(color);
                     g2.setStroke(s.checked() && !s.up()
                             ? new BasicStroke(JBUI.scale(LINE_WIDTH), BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND, 1f, scaled(DASH), 0f)
                             : new BasicStroke(JBUI.scale(LINE_WIDTH)));
-                    CubicCurve2D c = curve(e);
-                    g2.draw(c);
-                    Point2D mid = pointAt(c, 0.5);
+                    g2.draw(curve(e));
+                }
+                // 글자는 선을 다 그린 뒤 그린다. 뒤에 그린 선이 앞 선의 글자를 덮지 않게 한다.
+                for (Edge e : edges) {
+                    ServerMonitor.LinkState s = monitor.state(e.link());
+                    Color color = lineColor(s);
+                    Point2D mid = pointAt(curve(e), 0.5);
                     String label = stateText(s);
                     FontMetrics fm = g2.getFontMetrics();
                     // 글자 밑에 바탕을 깔아 선 · 다른 선과 겹쳐도 읽히게 한다.
@@ -410,6 +425,10 @@ final class ConnectionMapView {
             finally {
                 g2.dispose();
             }
+        }
+
+        private static Color lineColor(ServerMonitor.LinkState s) {
+            return !s.checked() ? NamedColorUtil.getInactiveTextColor() : s.up() ? UP : JBUI.CurrentTheme.Label.errorForeground();
         }
 
         private void paintNode(Graphics2D g2, Node n) {
