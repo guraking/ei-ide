@@ -246,7 +246,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
             }
         });
 
-        // 창 머리 도구줄은 추가 · 새로고침 · 「더 보기」(나머지 동작), 우클릭 메뉴는 모두 펼친다. 머리줄 단추는 시작 · 디버그 · 재시작 · 중지 · 편집.
+        // 창 머리 도구줄은 추가 · 새로고침 · 시작 · 디버그 · 재시작 · 중지 · 편집(고른 서버에 작동, IntelliJ Services 창과 같은 자리) · 「더 보기」, 우클릭 메뉴는 모두 펼친다.
         AnAction add = addAction();
         AnAction reload = reloadAction();
         AnAction start = action(BootServersBundle.message("servers.action.start"), AllIcons.Actions.Execute, t -> isStartable(stateOf(t)), t -> start(t, false));
@@ -258,16 +258,13 @@ final class ServersPanel extends SimpleToolWindowPanel {
         DefaultActionGroup more = new DefaultActionGroup(BootServersBundle.message("servers.action.more"), true);
         more.getTemplatePresentation().setIcon(AllIcons.Actions.More);
         more.add(serverActions);
-        ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar("BootServers.Toolbar", new DefaultActionGroup(add, reload, more), true);
+        ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar("BootServers.Toolbar", new DefaultActionGroup(add, reload, Separator.getInstance(), start, debug, restart, stop, edit, Separator.getInstance(), more), true);
         toolbar.setTargetComponent(tree);
         setToolbar(toolbar.getComponent());
         PopupHandler.installPopupMenu(tree, new DefaultActionGroup(add, Separator.getInstance(), serverActions, Separator.getInstance(), reload), "BootServers.Popup");
-        ActionToolbar detailToolbar = ActionManager.getInstance().createActionToolbar("BootServers.Detail", new DefaultActionGroup(start, debug, restart, stop, edit), true);
-        detailToolbar.setTargetComponent(tree);
-        detailToolbar.setReservePlaceAutoPopupIcon(false);
 
         side.add(emptyCard(), "none");
-        side.add(serverCard(detailToolbar), "server");
+        side.add(serverCard(), "server");
         OnePixelSplitter splitter = new OnePixelSplitter(false, TREE_PROPORTION);
         splitter.setSplitterProportionKey(TREE_SPLIT_KEY);
         // 막대가 숨어 있으면 GridBag 이 자리를 잡지 않아 트리가 위로 붙는다.
@@ -1099,7 +1096,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
     }
 
     /** 고른 서버 칸: 위에 오류 띠 · 머리줄 · 설정(세로로 눌리면 스크롤). 콘솔은 실행 창 · 서버별 콘솔 탭에서 본다. */
-    private JComponent serverCard(ActionToolbar detailToolbar) {
+    private JComponent serverCard() {
         errorBanner.showCloseButton(false);
         bannerRow.add(errorBanner, BorderLayout.CENTER);
         bannerRow.setBorder(JBUI.Borders.empty(UIUtil.DEFAULT_VGAP, UIUtil.DEFAULT_HGAP, 0, UIUtil.DEFAULT_HGAP));
@@ -1107,7 +1104,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
         detail.add(bootCard(), "boot");
         detail.add(wasCard(), "was");
         JPanel body = new JPanel(new BorderLayout());
-        body.add(header(detailToolbar), BorderLayout.NORTH);
+        body.add(header(), BorderLayout.NORTH);
         body.add(detail, BorderLayout.CENTER);
         JPanel stack = new JPanel(new BorderLayout());
         stack.add(bannerRow, BorderLayout.NORTH);
@@ -1118,8 +1115,8 @@ final class ServersPanel extends SimpleToolWindowPanel {
         return ScrollPaneFactory.createScrollPane(top, true);
     }
 
-    /** 머리줄: 큰 굵은 이름 + 상태 꼬리표 + 흐린 보조 글(포트 · 프로필 · 실행 시간), 오른쪽 끝에 시작 · 중지 · 편집 단추. 보조 글은 좁으면 줄임표. */
-    private JComponent header(ActionToolbar toolbar) {
+    /** 머리줄: 큰 굵은 이름 + 상태 꼬리표 + 흐린 보조 글(포트 · 프로필 · 실행 시간). 보조 글은 좁으면 줄임표. 시작 · 중지 단추는 창 머리 도구줄에 있다. */
+    private JComponent header() {
         title.setFont(JBUI.Fonts.label().asBold().biggerOn(TITLE_FONT_BIGGER));
         status.setForeground(NamedColorUtil.getInactiveTextColor());
         status.setMinimumSize(new Dimension(0, 0));
@@ -1139,7 +1136,6 @@ final class ServersPanel extends SimpleToolWindowPanel {
         health.setVisible(false);
         heap.setVisible(false);
         head.add(Box.createHorizontalGlue());
-        head.add(toolbar.getComponent());
         return head;
     }
 
