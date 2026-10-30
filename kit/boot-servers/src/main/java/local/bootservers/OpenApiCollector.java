@@ -2,14 +2,12 @@ package local.bootservers;
 
 import com.intellij.codeInsight.AnnotationUtil;
 import com.intellij.openapi.progress.ProgressManager;
-import com.intellij.openapi.project.Project;
 import com.intellij.psi.CommonClassNames;
 import com.intellij.psi.PsiAnnotation;
 import com.intellij.psi.PsiArrayType;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiClassType;
 import com.intellij.psi.PsiField;
-import com.intellij.psi.PsiMethod;
 import com.intellij.psi.PsiModifier;
 import com.intellij.psi.PsiParameter;
 import com.intellij.psi.PsiPrimitiveType;
@@ -17,17 +15,15 @@ import com.intellij.psi.PsiType;
 import com.intellij.psi.PsiTypeParameter;
 import com.intellij.psi.util.InheritanceUtil;
 import com.intellij.psi.util.PsiUtil;
-import local.bootservers.OpenApiSpec.Op;
 import local.bootservers.OpenApiSpec.Param;
 import local.bootservers.OpenApiSpec.Schema;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * 프로젝트의 스프링 요청 매핑(UrlMappingAction.collect)을 OpenAPI 문서로 옮긴다.
+ * 스프링 컨트롤러 메서드의 매개변수를 요청 값과 값 모양으로 옮긴다(Send API Request 가 쓴다).
  * 요청 값은 메서드 매개변수의 스프링 주석(@PathVariable · @RequestParam · @RequestHeader · @RequestBody)으로 정하고,
  * 주석 없는 매개변수는 스프링 바인딩과 같게 단순 형식이면 쿼리 값, 객체면 그 필드들을 쿼리 값(한 단계)으로 본다.
  */
@@ -84,41 +80,6 @@ final class OpenApiCollector {
     }
 
     private OpenApiCollector() {
-    }
-
-    /**
-     * 읽기 동작 안에서 부른다. 스프링 웹 의존성이 없으면 null.
-     * 코드가 바뀌어 메서드를 잃은 매핑은 건너뛴다.
-     */
-    static String specJson(Project project, String title, String serverUrl) {
-        List<UrlMappingAction.Endpoint> endpoints = UrlMappingAction.collect(project);
-        if (endpoints == null) {
-            return null;
-        }
-        Map<String, Map<String, Schema>> components = new LinkedHashMap<>();
-        List<Op> ops = new ArrayList<>();
-        for (UrlMappingAction.Endpoint endpoint : endpoints) {
-            ProgressManager.checkCanceled();
-            PsiMethod method = endpoint.target().getElement();
-            PsiClass owner = method == null ? null : method.getContainingClass();
-            if (owner == null) {
-                continue;
-            }
-            List<Param> params = new ArrayList<>();
-            Schema body = null;
-            for (PsiParameter parameter : method.getParameterList().getParameters()) {
-                ProgressManager.checkCanceled();
-                if (AnnotationUtil.findAnnotation(parameter, REQUEST_BODY) != null) {
-                    body = schema(parameter.getType(), components);
-                } else {
-                    addParams(parameter, params, components);
-                }
-            }
-            for (String httpMethod : OpenApiSpec.methods(endpoint.httpMethod())) {
-                ops.add(new Op(httpMethod, endpoint.url(), method.getName(), owner.getName(), params, body));
-            }
-        }
-        return OpenApiSpec.toJson(title, serverUrl, ops, components);
     }
 
     /** @RequestBody 가 아닌 매개변수 하나를 요청 값으로 옮긴다. 요청 값이 아닌 매개변수는 넣지 않는다. */
