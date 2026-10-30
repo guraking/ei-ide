@@ -85,6 +85,8 @@
         <listener class="local.bootservers.JdkAutoRegister" topic="com.intellij.ide.AppLifecycleListener"/>
         <!-- 아이콘 없는 기본 메뉴 · 우클릭 동작에 아이콘(/icons/ei/menu-icons.properties) -->
         <listener class="local.bootservers.icons.MenuIcons" topic="com.intellij.ide.AppLifecycleListener"/>
+        <!-- 우리 창 · 대화 상자 안 단추 위는 손가락, 나머지는 화살표 커서(입력 커서가 남아 보이던 것) -->
+        <listener class="local.bootservers.HandCursor" topic="com.intellij.ide.AppLifecycleListener"/>
     </applicationListeners>
 
     <projectListeners>
