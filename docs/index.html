@@ -97,7 +97,7 @@ h3{font-size:18px; margin:36px 0 12px}
 /* 화면 그림 + 설명 */
 .figure{display:grid; grid-template-columns:minmax(0,1.7fr) minmax(0,1fr); gap:20px; align-items:start; margin-top:8px}
 .figure.wide{grid-template-columns:minmax(0,1fr)}
-.figure + table.keys{margin-top:18px}
+.figure + table.keys, .flow + .flow{margin-top:18px}
 .legend{list-style:none; margin:0; padding:0; display:grid; gap:10px}
 .legend li{display:grid; grid-template-columns:24px minmax(0,1fr); gap:10px; font-size:14px}
 .legend li b{font-weight:600}
@@ -816,14 +816,14 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
       <div class="side"><h5>list.jsp 우클릭 → 컨트롤러로 이동</h5><pre>OrderController.list  —  뷰 이름 order/list
 <span class="cm">이 JSP 를 뷰로 쓰는 메서드가 여럿이면 목록에서 고릅니다.</span></pre></div>
     </div>
-    <p class="lead" style="margin-top:10px">JSP 위치의 앞 · 뒤(prefix · suffix)는 <code>spring.mvc.view.*</code> 설정에서 읽고, 없으면 <code>/WEB-INF/views/ … .jsp</code> 로 봅니다. 설정 키는 프로필 파일마다 따로 찾아 고르게 합니다.</p>
+    <p class="lead" style="margin-top:18px">JSP 위치의 앞 · 뒤(prefix · suffix)는 <code>spring.mvc.view.*</code> 설정에서 읽고, 없으면 <code>/WEB-INF/views/ … .jsp</code> 로 봅니다. 설정 키는 프로필 파일마다 따로 찾아 고르게 합니다.</p>
 
     <h3>properties 한글 그대로 보기</h3>
     <div class="ba">
       <div class="side"><h5>파일에 저장되는 글</h5><pre>msg.hello=\uC548\uB155\uD558\uC138\uC694</pre></div>
       <div class="side"><h5>편집기에 보이는 글</h5><pre>msg.hello=안녕하세요</pre></div>
     </div>
-    <p class="lead" style="margin-top:10px">설정 → 편집기 → 파일 인코딩의 「투명한 native-to-ascii 변환」을 처음부터 켜 두었습니다. 한글로 고치고 저장하면 다시 <code>\uXXXX</code> 로 바꿔 씁니다. 이 기본값은 소스 손질 대본(<code>apply_defaults.py</code>)을 다시 돌려 빌드한 판부터 들어갑니다.</p>
+    <p class="lead" style="margin-top:18px">설정 → 편집기 → 파일 인코딩의 「투명한 native-to-ascii 변환」을 처음부터 켜 두었습니다. 한글로 고치고 저장하면 다시 <code>\uXXXX</code> 로 바꿔 씁니다. 이 기본값은 소스 손질 대본(<code>apply_defaults.py</code>)을 다시 돌려 빌드한 판부터 들어갑니다.</p>
 
     <h3>서버 콘솔에 남는 로그</h3>
     <p class="lead">콘솔은 글이 일정 양을 넘으면 앞부분을 버립니다. 그 양을 1 MB 에서 30 MB 로 늘려 두었습니다. 더 늘리려면 Settings → Editor → General → Console 의 「Override console cycle buffer size」 칸에 KB 로 적습니다.</p>
@@ -1482,7 +1482,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
 ==&gt; Parameters: O100(String), A(String)</pre></div>
       <div class="side"><h5>값을 채운 SQL</h5><pre><span class="kw">SELECT</span> * <span class="kw">FROM</span> ORDERS <span class="kw">WHERE</span> ORDER_NO = <span class="st">'O100'</span> <span class="kw">AND</span> ST = <span class="st">'A'</span></pre></div>
     </div>
-    <p class="lead" style="margin-top:10px">우클릭 메뉴: 「Run in Database Console」 · 「Send to Query Console」.</p>
+    <p class="lead" style="margin-top:18px">우클릭 메뉴: 「Run in Database Console」 · 「Send to Query Console」.</p>
     <p class="lead">「Send to Query Console」는 실행하지 않고 콘솔에 붙입니다. 로그가 아닌 선택 글도 보냅니다. 붙는 SQL 은 콘솔 「정렬」과 같은 모양으로 정렬됩니다. MyBatis 로그와 log4jdbc(<code>jdbc.sqltiming</code>) 로그를 모두 읽고, 같은 쿼리는 가장 최근 것 하나만 목록에 보입니다. 쿼리가 여럿이면 「보낼 쿼리」 창이 뜹니다. 왼쪽 거르기 칸 · 목록에서 고르면 오른쪽에 값을 채우고 정렬한 쿼리가 보이고, 「복사」 · 「실행」(Ctrl+Enter) · 「콘솔로 보내기」(Enter)로 끝냅니다.</p>
     <p class="lead">로그에 쿼리가 여럿이면 보낼 쿼리를 목록에서 고르고, 이어서 보낼 콘솔 탭(또는 「새 콘솔…」)을 고릅니다. 실행도 고른 콘솔에서 합니다.</p>
 
@@ -1567,7 +1567,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
         </div>
       </div>
     </div>
-    <p class="lead" style="margin-top:10px">매퍼 XML 문장이나 매퍼 인터페이스 메서드에서 우클릭합니다. 코드는 고쳐서 「복사」하거나 「이 클래스에 넣기…」로 고른 클래스에 넣습니다. 「부모-자식」은 자식 목록을 부모마다 채워 JSON 이 <code>{"orderId": 1, "items": [ … ]}</code> 모양으로 나가게 하고, 자식이 없는 부모는 빈 목록 <code>[]</code> 입니다.</p>
+    <p class="lead" style="margin-top:18px">매퍼 XML 문장이나 매퍼 인터페이스 메서드에서 우클릭합니다. 코드는 고쳐서 「복사」하거나 「이 클래스에 넣기…」로 고른 클래스에 넣습니다. 「부모-자식」은 자식 목록을 부모마다 채워 JSON 이 <code>{"orderId": 1, "items": [ … ]}</code> 모양으로 나가게 하고, 자식이 없는 부모는 빈 목록 <code>[]</code> 입니다.</p>
 
     <h3>서비스 자동 완성 · 계층 이동 · 빠진 짝</h3>
     <div class="cols2">
@@ -1633,7 +1633,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
         <div class="statusline" style="border-top:1px solid var(--line); border-bottom:0"><span class="m">&lt;if test&gt; 안의 이름은 바꾸지 않습니다</span><span class="gap"></span><span class="btn">취소</span><span class="btn pri">바꾸기</span></div>
       </div>
     </div>
-    <p class="lead" style="margin-top:10px">먼저 옛 칼럼 이름 · 새 칼럼 이름 · 표 이름(비우면 모든 매퍼)을 넣고, 「DTO 필드도 바꾸기」를 끄면 XML 만 바꿉니다. 미리보기에서 체크를 푼 줄은 그대로 둡니다.</p>
+    <p class="lead" style="margin-top:18px">먼저 옛 칼럼 이름 · 새 칼럼 이름 · 표 이름(비우면 모든 매퍼)을 넣고, 「DTO 필드도 바꾸기」를 끄면 XML 만 바꿉니다. 미리보기에서 체크를 푼 줄은 그대로 둡니다.</p>
   </div>
 </section>
 
@@ -1667,7 +1667,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
         </div>
       </div>
     </div>
-    <p class="lead" style="margin-top:10px">창에서 클래스 이름(기본 <code>메서드이름Request</code>)과 묶을 매개변수 · 필드 이름을 고릅니다. 요청 이름 <code>user_id</code> · <code>user-name</code> 은 필드 이름 <code>userId</code> · <code>userName</code> 으로 바꾸고, 바뀐 이름은 창에 따로 알려 줍니다(요청 쪽 이름도 맞춰야 하므로). <code>defaultValue</code> 는 필드 초깃값이 됩니다.</p>
+    <p class="lead" style="margin-top:18px">창에서 클래스 이름(기본 <code>메서드이름Request</code>)과 묶을 매개변수 · 필드 이름을 고릅니다. 요청 이름 <code>user_id</code> · <code>user-name</code> 은 필드 이름 <code>userId</code> · <code>userName</code> 으로 바꾸고, 바뀐 이름은 창에 따로 알려 줍니다(요청 쪽 이름도 맞춰야 하므로). <code>defaultValue</code> 는 필드 초깃값이 됩니다.</p>
 
     <h3>입력 검증 붙이기 · DTO 안</h3>
     <div class="cols2">
@@ -1695,7 +1695,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
         </div>
       </div>
     </div>
-    <p class="lead" style="margin-top:10px">필드 이름을 칼럼 이름(<code>itemId</code> ↔ <code>ITEM_ID</code>)으로 맞춥니다. 날짜 칼럼은 <code>@NotNull</code> 만, <code>double</code> 필드에는 자릿수를 걸지 않습니다. 이미 붙어 있는 주석은 건너뜁니다. jakarta · javax 는 프로젝트에 있는 쪽을 씁니다.</p>
+    <p class="lead" style="margin-top:18px">필드 이름을 칼럼 이름(<code>itemId</code> ↔ <code>ITEM_ID</code>)으로 맞춥니다. 날짜 칼럼은 <code>@NotNull</code> 만, <code>double</code> 필드에는 자릿수를 걸지 않습니다. 이미 붙어 있는 주석은 건너뜁니다. jakarta · javax 는 프로젝트에 있는 쪽을 씁니다.</p>
 
     <h3>빈 catch · printStackTrace · System.out 검사</h3>
     <div class="scroll">
@@ -1706,7 +1706,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
         <div class="balloon" style="border-left-color:var(--warn)">System.out 출력 대신 로거를 쓰세요 — <kbd>Alt</kbd>+<kbd>Enter</kbd> 「로거로 바꾸기: <code>log.info("{}", user);</code>」</div>
       </div>
     </div>
-    <p class="lead" style="margin-top:10px">로거가 없는 클래스는 노란 줄만 보이고 바꾸기는 뜨지 않습니다. 끄려면 설정 → 검사에서 「EiLogUsage」를 찾습니다.</p>
+    <p class="lead" style="margin-top:18px">로거가 없는 클래스는 노란 줄만 보이고 바꾸기는 뜨지 않습니다. 끄려면 설정 → 검사에서 「EiLogUsage」를 찾습니다.</p>
 
     <h3>enum 만들기 · 결과 창 「enum」 단추</h3>
     <div class="cols2">
@@ -1728,7 +1728,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
         </div>
       </div>
     </div>
-    <p class="lead" style="margin-top:10px">코드가 숫자로 시작하면 <code>C01</code> 처럼 앞에 C 를 붙이고, 겹치는 이름은 <code>_2</code> 를 붙입니다. 표의 코드가 바뀌면 enum 안에서 우클릭 → 「Sync Enum」: Javadoc 의 SQL 을 그 접속으로 다시 돌려 상수를 새로 씁니다.</p>
+    <p class="lead" style="margin-top:18px">코드가 숫자로 시작하면 <code>C01</code> 처럼 앞에 C 를 붙이고, 겹치는 이름은 <code>_2</code> 를 붙입니다. 표의 코드가 바뀌면 enum 안에서 우클릭 → 「Sync Enum」: Javadoc 의 SQL 을 그 접속으로 다시 돌려 상수를 새로 씁니다.</p>
 
     <h3>JSON 으로 DTO 만들기 · 트리 우클릭</h3>
     <div class="cols2">
@@ -1761,7 +1761,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
         </div>
       </div>
     </div>
-    <p class="lead" style="margin-top:10px">커서를 SQL 문자열 위에 두고 우클릭합니다. <code>dto.getUserId()</code> 는 <code>#{userId}</code> 로 바꾸고, 문장 종류(select · insert · update · delete)는 SQL 첫 낱말로 정합니다. 부등호가 있으면 CDATA 로 감쌉니다. 자바 코드는 바꾸지 않고 창에서 보여 주고 복사만 합니다.</p>
+    <p class="lead" style="margin-top:18px">커서를 SQL 문자열 위에 두고 우클릭합니다. <code>dto.getUserId()</code> 는 <code>#{userId}</code> 로 바꾸고, 문장 종류(select · insert · update · delete)는 SQL 첫 낱말로 정합니다. 부등호가 있으면 CDATA 로 감쌉니다. 자바 코드는 바꾸지 않고 창에서 보여 주고 복사만 합니다.</p>
 
   </div>
 </section>
