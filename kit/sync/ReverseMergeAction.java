@@ -382,6 +382,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
       JPanel previewHead = new JPanel(new BorderLayout());
       previewHead.add(previewTitle, BorderLayout.WEST);
       previewHead.add(dim(SyncBundle.message("rmerge.hint")), BorderLayout.EAST);
+      previewHead.add(gauge.line(), BorderLayout.SOUTH);
 
       table.setShowGrid(false);
       table.getColumnModel().getColumn(0).setPreferredWidth(JBUI.scale(PATH_COL_W));

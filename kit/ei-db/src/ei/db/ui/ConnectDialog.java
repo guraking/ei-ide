@@ -168,6 +168,9 @@ public final class ConnectDialog extends DialogWrapper {
 
     JPanel driverRow = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0));
     driverRow.add(driverGauge);
+    JPanel driverCell = new JPanel(new BorderLayout());
+    driverCell.add(driverRow, BorderLayout.CENTER);
+    driverCell.add(driverGauge.line(), BorderLayout.SOUTH);
     driverRow.add(driverName);
     driverRow.add(driverStatus);
     downloadLink.setVisible(false);
@@ -197,7 +200,7 @@ public final class ConnectDialog extends DialogWrapper {
         .addLabeledComponent(EiDbBundle.message("connect.user"), user)
         .addLabeledComponent(EiDbBundle.message("connect.password"), passwordRow)
         .addLabeledComponent(EiDbBundle.message("connect.default.schema"), schema)
-        .addLabeledComponent(EiDbBundle.message("connect.driver"), driverRow)
+        .addLabeledComponent(EiDbBundle.message("connect.driver"), driverCell)
         .addLabeledComponent(EiDbBundle.message("connect.url"), url)
         .addLabeledComponent(EiDbBundle.message("connect.safety"), safety)
         .getPanel();
@@ -213,7 +216,10 @@ public final class ConnectDialog extends DialogWrapper {
     p.add(test);
     p.add(testGauge);
     p.add(testResult);
-    return p;
+    JPanel south = new JPanel(new BorderLayout());
+    south.add(testGauge.line(), BorderLayout.NORTH);
+    south.add(p, BorderLayout.CENTER);
+    return south;
   }
 
   @Override

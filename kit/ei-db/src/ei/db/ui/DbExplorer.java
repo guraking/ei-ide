@@ -249,7 +249,10 @@ final class DbExplorer extends SimpleToolWindowPanel {
     bar.add(more);
     ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar(PLACE, bar, true);
     toolbar.setTargetComponent(this);
-    setToolbar(toolbar.getComponent());
+    JPanel head = new JPanel(new BorderLayout());
+    head.add(toolbar.getComponent(), BorderLayout.CENTER);
+    head.add(gauge.line(), BorderLayout.SOUTH);
+    setToolbar(head);
 
     JPanel searchRow = new JPanel(new BorderLayout());
     searchRow.setBorder(JBUI.Borders.compound(JBUI.Borders.customLineBottom(JBColor.border()), JBUI.Borders.empty(SEARCH_INSET)));
