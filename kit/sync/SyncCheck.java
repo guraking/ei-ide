@@ -15,6 +15,8 @@ public class SyncCheck {
     eq(SyncPanel.parseAssumed("H src/A.java\nh src/main/resources/application-local.yml\nh 한글 경로/b.txt\nS skip.yml\nS sparse.txt\ns 한글 경로/c.txt\n", onDisk::contains),
        List.of("src/main/resources/application-local.yml", "한글 경로/b.txt", "skip.yml", "한글 경로/c.txt"));
     eq(SyncPanel.parseAssumed("", p -> true), List.of());
+    // git log --name-status 는 최신 커밋이 먼저 나온다. 같은 경로는 최신 상태를 쓴다.
+    eq(SyncPanel.parseNameStatus("D\ta.txt\n\nA\ta.txt\nM\tb.txt\n"), java.util.Map.of("a.txt", "D", "b.txt", "M"));
 
     SyncPanel.Repo r = new SyncPanel.Repo(new File("."), SyncPanel.Vcs.GIT, "main", "origin/main");
     SyncPanel.Repo svn = new SyncPanel.Repo(new File("."), SyncPanel.Vcs.SVN, null, "12");

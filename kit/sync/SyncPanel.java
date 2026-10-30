@@ -2323,7 +2323,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
     // 명령들은 서로 기다릴 필요가 없어 동시에 돌린다. 윈도우는 git 을 띄우는 비용이 커서 차례로 돌리면 그만큼 늦다.
     List<String[]> commands = new ArrayList<>(List.of(
       new String[]{"diff", "--name-status", "HEAD...@{u}"},
-      new String[]{"diff", "--name-status", "@{u}...HEAD"},
+      // 나갈 변경은 내 브랜치 줄기(첫 부모)에서 직접 만든 커밋만 본다. Merge Branches 로 합쳐 들어온 남의 develop 커밋은 Push 전까지도 내 변경이 아니다.
+      new String[]{"log", "--first-parent", "--no-merges", "--format=", "--name-status", "@{u}..HEAD"},
       // --no-optional-locks: 저장할 때마다 도는 비교가 index.lock 을 잡아 IntelliJ 의 커밋 · 체크아웃을 막지 않게 한다.
       new String[]{"--no-optional-locks", "-c", "core.untrackedCache=true", "status", "--porcelain=v1", "-b", "-unormal"}));
     if (assumed) commands.add(new String[]{"ls-files", "-v"});
@@ -2450,13 +2451,13 @@ final class SyncPanel extends SimpleToolWindowPanel {
     return result;
   }
 
-  /** "M\tpath", "R100\told\tnew" 형식에서 상태와 최종 경로를 꺼낸다. */
+  /** "M\tpath", "R100\told\tnew" 형식에서 상태와 최종 경로를 꺼낸다. git log 처럼 같은 경로가 여러 번 나오면 먼저 나온(최신) 상태를 쓴다. */
   static Map<String, String> parseNameStatus(String output) {
     Map<String, String> result = new LinkedHashMap<>();
     for (String line : output.split("\n")) {
       String[] parts = line.split("\t");
       if (parts.length < 2) continue;
-      result.put(unquote(parts[parts.length - 1]), parts[0].substring(0, 1));
+      result.putIfAbsent(unquote(parts[parts.length - 1]), parts[0].substring(0, 1));
     }
     return result;
   }
