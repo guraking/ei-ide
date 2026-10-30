@@ -41,6 +41,7 @@ import com.intellij.openapi.application.WriteIntentReadAction;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.DumbAwareAction;
+import com.intellij.openapi.project.DumbAwareToggleAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.ui.SimpleToolWindowPanel;
@@ -220,6 +221,16 @@ final class ServersPanel extends SimpleToolWindowPanel {
     // 고른 서버가 실패했을 때 오른쪽 칸 위에 보이는 오류 띠
     private final InlineBanner errorBanner = new InlineBanner("", EditorNotificationPanel.Status.Error);
     private final JPanel bannerRow = new JPanel(new BorderLayout());
+    // 머리줄 아래 탭(설정 · 대시보드 · 연결 지도)과 「모아 보기」. 값은 monitor 가 모으고, 보이는 탭만 다시 그린다.
+    private static final int TAB_DASHBOARD = 1;
+    private static final int TAB_MAP = 2;
+    private static final String HEALTH_SUFFIX = "/health";
+    private final JBTabbedPane tabs = new JBTabbedPane();
+    private final ServerMonitor monitor;
+    private final DashboardView dashboard;
+    private final ConnectionMapView map;
+    private final AllServersView allView;
+    private boolean allMode;
 
     ServersPanel(Project project, ToolWindow toolWindow) {
         super(true, true);
@@ -232,6 +243,16 @@ final class ServersPanel extends SimpleToolWindowPanel {
         tree.setCellRenderer(new NodeRenderer());
         tree.getSelectionModel().setSelectionMode(TreeSelectionModel.DISCONTIGUOUS_TREE_SELECTION);
         tree.addTreeSelectionListener(e -> showDetail());
+        // 모아 보기 중에 목록을 누르면 그 서버 칸으로 돌아간다(목록을 다시 만들 때의 선택 바뀜으로는 나가지 않는다).
+        tree.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                if (allMode) {
+                    allMode = false;
+                    showDetail();
+                }
+            }
+        });
         tree.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
@@ -258,13 +279,35 @@ final class ServersPanel extends SimpleToolWindowPanel {
         DefaultActionGroup more = new DefaultActionGroup(BootServersBundle.message("servers.action.more"), true);
         more.getTemplatePresentation().setIcon(AllIcons.Actions.More);
         more.add(serverActions);
-        ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar("BootServers.Toolbar", new DefaultActionGroup(add, reload, Separator.getInstance(), start, debug, restart, stop, edit, Separator.getInstance(), more), true);
+        AnAction all = new DumbAwareToggleAction(BootServersBundle.message("servers.action.all"), BootServersBundle.message("servers.action.all.description"), AllIcons.Nodes.DataTables) {
+            @Override
+            public boolean isSelected(@NotNull AnActionEvent e) {
+                return allMode;
+            }
+
+            @Override
+            public void setSelected(@NotNull AnActionEvent e, boolean state) {
+                allMode = state;
+                showDetail();
+            }
+
+            @Override
+            public @NotNull ActionUpdateThread getActionUpdateThread() {
+                return ActionUpdateThread.EDT;
+            }
+        };
+        ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar("BootServers.Toolbar", new DefaultActionGroup(add, reload, Separator.getInstance(), start, debug, restart, stop, edit, Separator.getInstance(), all, more), true);
         toolbar.setTargetComponent(tree);
         setToolbar(toolbar.getComponent());
         PopupHandler.installPopupMenu(tree, new DefaultActionGroup(add, Separator.getInstance(), serverActions, Separator.getInstance(), reload), "BootServers.Popup");
 
+        monitor = new ServerMonitor(project, parent, this::watched, this::slowTarget, this::refreshMonitorViews, this::showMapOf);
+        dashboard = new DashboardView(project);
+        map = new ConnectionMapView(project, monitor, this::stateColorOf);
+        allView = new AllServersView(this::showDashboardOf);
         side.add(emptyCard(), "none");
         side.add(serverCard(), "server");
+        side.add(allView.component(), "all");
         OnePixelSplitter splitter = new OnePixelSplitter(false, TREE_PROPORTION);
         splitter.setSplitterProportionKey(TREE_SPLIT_KEY);
         // 막대가 숨어 있으면 GridBag 이 자리를 잡지 않아 트리가 위로 붙는다.
@@ -1095,7 +1138,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
         return p;
     }
 
-    /** 고른 서버 칸: 위에 오류 띠 · 머리줄 · 설정(세로로 눌리면 스크롤). 콘솔은 실행 창 · 서버별 콘솔 탭에서 본다. */
+    /** 고른 서버 칸: 위에 오류 띠 · 머리줄, 그 아래 설정(세로로 눌리면 스크롤) · 대시보드 · 연결 지도 탭. 콘솔은 실행 창 · 서버별 콘솔 탭에서 본다. */
     private JComponent serverCard() {
         errorBanner.showCloseButton(false);
         bannerRow.add(errorBanner, BorderLayout.CENTER);
@@ -1103,16 +1146,19 @@ final class ServersPanel extends SimpleToolWindowPanel {
         bannerRow.setVisible(false);
         detail.add(bootCard(), "boot");
         detail.add(wasCard(), "was");
-        JPanel body = new JPanel(new BorderLayout());
-        body.add(header(), BorderLayout.NORTH);
-        body.add(detail, BorderLayout.CENTER);
+        JPanel settings = new JPanel(new BorderLayout());
+        settings.add(detail, BorderLayout.NORTH);
+        tabs.addTab(BootServersBundle.message("servers.tab.settings"), ScrollPaneFactory.createScrollPane(settings, true));
+        tabs.addTab(BootServersBundle.message("servers.tab.dashboard"), dashboard.component());
+        tabs.addTab(BootServersBundle.message("servers.tab.map"), map.component());
+        tabs.addChangeListener(e -> refreshMonitorViews());
         JPanel stack = new JPanel(new BorderLayout());
         stack.add(bannerRow, BorderLayout.NORTH);
-        stack.add(body, BorderLayout.CENTER);
-        JPanel top = new JPanel(new BorderLayout());
-        top.add(stack, BorderLayout.NORTH);
-
-        return ScrollPaneFactory.createScrollPane(top, true);
+        stack.add(header(), BorderLayout.CENTER);
+        JPanel card = new JPanel(new BorderLayout());
+        card.add(stack, BorderLayout.NORTH);
+        card.add(tabs, BorderLayout.CENTER);
+        return card;
     }
 
     /** 머리줄: 큰 굵은 이름 + 상태 꼬리표 + 흐린 보조 글(포트 · 프로필 · 실행 시간). 보조 글은 좁으면 줄임표. 시작 · 중지 단추는 창 머리 도구줄에 있다. */
@@ -1227,8 +1273,112 @@ final class ServersPanel extends SimpleToolWindowPanel {
             wasSummary.repaint();
             cards.show(detail, "was");
         }
-        sideCards.show(side, detailBoot == null && detailServer == null ? "none" : "server");
+        sideCards.show(side, allMode ? "all" : detailBoot == null && detailServer == null ? "none" : "server");
         updateStatus();
+        refreshMonitorViews();
+    }
+
+    // ---- 대시보드 · 연결 지도 · 모아 보기 ----
+
+    /** monitor 가 화면 스레드에서 부르는 서버 목록. 스프링 부트(실행 설정이 있는 줄)와 WAS. */
+    private List<ServerMonitor.Watched> watched() {
+        List<ServerMonitor.Watched> result = new ArrayList<>();
+        for (Object row : rows) {
+            if (row instanceof Deploy || (row instanceof Boot b && b.settings() == null)) {
+                continue;
+            }
+            boolean live = stateOf(row) == ServerLauncher.State.RUNNING;
+            ProcessHandler handler = live ? handlerOf(row) : null;
+            long pid = handler instanceof BaseProcessHandler<?> process ? process.getProcess().pid() : -1;
+            if (row instanceof Boot b) {
+                ServerRegistry.Run run = ServerRegistry.getInstance(project).get(b.name());
+                Integer port = live && run != null && run.port != null ? run.port : portNumber(getProperty(vmOf(b), PORT_KEY));
+                String health = live ? healthUrl(b) : null;
+                String actuator = health == null ? null : health.substring(0, health.length() - HEALTH_SUFFIX.length());
+                result.add(new ServerMonitor.Watched(b.name(), b.module(), profileOf(b), live, pid, actuator, port));
+            }
+            else {
+                WasSettings.Server s = (WasSettings.Server) row;
+                result.add(new ServerMonitor.Watched(s.name, null, null, live, pid, null, s.httpPort));
+            }
+        }
+        return result;
+    }
+
+    private static Integer portNumber(String text) {
+        try {
+            return text.isBlank() ? null : Integer.valueOf(text.strip());
+        }
+        catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /** 고른 줄의 이름(스프링 부트 실행 설정 이름 · WAS 이름). 없으면 null. */
+    private String selectedName() {
+        return detailBoot != null ? detailBoot.name() : detailServer != null ? detailServer.name : null;
+    }
+
+    /** 느린 요청을 잴 서버: 대시보드 탭이 보일 때 고른 서버. */
+    private String slowTarget() {
+        return !allMode && tabs.isShowing() && tabs.getSelectedIndex() == TAB_DASHBOARD ? selectedName() : null;
+    }
+
+    /** 보이는 것만 다시 그린다. */
+    private void refreshMonitorViews() {
+        if (allMode) {
+            List<String> names = new ArrayList<>();
+            for (ServerMonitor.Watched w : monitor.servers()) {
+                if (w.live()) {
+                    names.add(w.name());
+                }
+            }
+            allView.show(names, monitor);
+            return;
+        }
+        String name = selectedName();
+        if (tabs.getSelectedIndex() == TAB_DASHBOARD) {
+            dashboard.show(name == null ? null : monitor.history(name), name == null ? MetricsProbe.Access.NONE : monitor.access(name),
+                    name == null ? List.of() : monitor.slow(name));
+        }
+        else if (tabs.getSelectedIndex() == TAB_MAP) {
+            map.show(name);
+        }
+    }
+
+    /** 이름이 같은 줄을 골라 그 칸의 tab 을 연다. 서버 창을 앞으로 띄운다. */
+    private void showTabOf(String name, int tab) {
+        allMode = false;
+        for (Object row : rows) {
+            boolean match = row instanceof Boot b ? b.settings() != null && b.name().equals(name)
+                    : row instanceof WasSettings.Server s && s.name.equals(name);
+            if (match) {
+                tree.clearSelection();
+                select(row);
+                break;
+            }
+        }
+        tabs.setSelectedIndex(tab);
+        showDetail();
+        toolWindow.activate(null);
+    }
+
+    private void showDashboardOf(String name) {
+        showTabOf(name, TAB_DASHBOARD);
+    }
+
+    private void showMapOf(String name) {
+        showTabOf(name, TAB_MAP);
+    }
+
+    /** 연결 지도 상자 점 색: 그 이름 줄의 상태 색. 줄이 없으면 흐린 색. */
+    private Color stateColorOf(String name) {
+        for (Object row : rows) {
+            if (row instanceof Boot b && b.settings() != null && b.name().equals(name)) {
+                return stateColor(shownState(row));
+            }
+        }
+        return NamedColorUtil.getInactiveTextColor();
     }
 
     /** 머리줄의 상태 꼬리표 · 흐린 보조 글(모듈 · 포트 · 프로필 · 실행 시간)과, 실패했으면 위쪽 오류 띠를 맞춘다. */

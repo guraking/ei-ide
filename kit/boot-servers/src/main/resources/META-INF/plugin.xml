@@ -33,6 +33,7 @@
         <actionConfigurationCustomizer implementation="local.bootservers.GistMenuOff"/>
         <notificationGroup id="EI IDE 새 판" key="notification.group.update" displayType="STICKY_BALLOON"/>
         <notificationGroup id="서버 실행" key="notification.group.servers" displayType="BALLOON"/>
+        <notificationGroup id="서버 연결" key="notification.group.links" displayType="BALLOON"/>
         <notificationGroup id="프로그램 목록" key="notification.group.programs" displayType="BALLOON"/>
         <notificationGroup id="IDE 메모리" key="notification.group.memory" displayType="STICKY_BALLOON"/>
         <!-- @Controller 뷰 이름 글 Ctrl+클릭 → JSP, 주석 속성 ${키} Ctrl+클릭 → application*.yml · properties 의 키 줄 -->
@@ -47,6 +48,7 @@
         <fileEditorProvider implementation="local.bootservers.ApiRequestEditor$Provider"/>
         <!-- JDK 24 이상 실행에 sun-misc-unsafe-memory-access=allow 옵션을 더해 Unsafe 경고를 끈다 -->
         <java.programPatcher implementation="local.bootservers.UnsafeWarningPatcher"/>
+        <java.programPatcher implementation="local.bootservers.ActuatorExposurePatcher"/>
         <!-- EI Graphite: Islands Dark 위에 회색 판 · 흰 글자 · 회색 선택 줄(강조색 없음)을 얹은 테마와 그 에디터 색. 첫 실행 기본 테마는 apply_defaults 22번 -->
         <themeProvider id="EI Graphite" path="/themes/EIGraphite.theme.json" targetUi="islands"/>
         <bundledColorScheme id="EI Graphite" path="/themes/EIGraphite.xml"/>
