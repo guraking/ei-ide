@@ -291,6 +291,11 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static final String ACTION_UPDATE_ALL = "Vcs.UpdateProject";
   // 설치본에 같이 넣은 VisualSVN 명령줄 도구(apply_defaults 19 의 SVN 기본 경로와 같은 곳).
   private static final String BUNDLED_SVN = "plugins/kinggura-sync/svn/bin/svn.exe";
+  // 윈도우 Git 은 PATH 에 cmd\git.exe 를 둔다. 이것은 설치 폴더의 mingw64\bin\git.exe 를 다시 띄우는 껍데기라 git 한 번에 프로세스가 둘 뜬다.
+  private static final String GIT_EXE_NAME = "git.exe";
+  private static final String GIT_REAL_EXE = "mingw64/bin/git.exe";
+  /** runBytes 가 띄울 git. 처음 한 번 찾는다. */
+  private static volatile String gitPath;
   // svn status --xml 의 item 값 가운데 변경으로 볼 것. 서버 쪽(repos-status)은 작업본에만 있는 값이 올 수 없다.
   private static final Set<String> SVN_CHANGED = Set.of("modified", "added", "deleted", "replaced");
   private static final Set<String> SVN_LOCAL_CHANGED = Set.of("modified", "added", "deleted", "replaced", "unversioned", "missing");
@@ -2685,6 +2690,28 @@ final class SyncPanel extends SimpleToolWindowPanel {
     return full.toArray(String[]::new);
   }
 
+  /**
+   * 띄울 git 의 경로. 윈도우에서 PATH 의 git.exe 가 Git 설치 폴더 안(cmd 등)에 있고 그 설치 폴더에 mingw64\bin\git.exe 가 있으면 그것을 바로 부른다.
+   * 껍데기를 건너뛰면 git 을 띄울 때마다 프로세스 하나가 줄어든다(백신 검사가 있는 PC 에서 한 번에 0.5초 안팎). 못 찾으면 PATH 의 「git」.
+   */
+  static String gitExecutable() {
+    String found = gitPath;
+    if (found != null) return found;
+    found = GIT;
+    String path = System.getenv("PATH");
+    if (com.intellij.openapi.util.SystemInfo.isWindows && path != null) {
+      for (String dir : path.split(File.pathSeparator)) {
+        File parent = new File(dir).getParentFile();
+        if (!new File(dir, GIT_EXE_NAME).isFile() || parent == null) continue;
+        File real = new File(parent, GIT_REAL_EXE);
+        if (real.isFile()) found = real.getPath();
+        break;
+      }
+    }
+    gitPath = found;
+    return found;
+  }
+
   /** 설치본에 같이 넣은 svn.exe 가 있으면 그 경로, 없으면 PATH 에서 찾을 「svn」. */
   static String svnExecutable() {
     File bundled = new File(PathManager.getHomePath(), BUNDLED_SVN);
@@ -2712,7 +2739,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
    * 표준 입력은 바로 닫아, 자격 증명을 묻는 git 이 입력을 기다리며 시간 제한까지 멈추지 않고 곧바로 실패하게 한다.
    */
   static byte[] runBytes(File dir, long timeoutSec, String exe, String... args) throws IOException, InterruptedException {
-    List<String> command = new ArrayList<>(List.of(VCS_NAME_SVN.equals(exe) ? svnExecutable() : exe));
+    List<String> command = new ArrayList<>(List.of(VCS_NAME_SVN.equals(exe) ? svnExecutable() : GIT.equals(exe) ? gitExecutable() : exe));
     command.addAll(List.of(args));
     String label = exe + " " + verb(args);
     File outFile = File.createTempFile("kinggura-sync", ".out");
