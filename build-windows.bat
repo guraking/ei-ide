@@ -14,6 +14,10 @@ if not exist "intellij-community\android\.git" (
     echo android 모듈이 없습니다: %CD%\intellij-community\android
     exit /b 1
 )
+if not exist "bundled-plugins\kinggura-sync\git\ucrt64\bin\git.exe" (
+    echo MinGit 이 없습니다. 먼저 python kit\mingit\apply_mingit.py 를 실행하세요.
+    exit /b 1
+)
 findstr /c:"EI IDE" "intellij-community\community-resources\resources\idea\IdeaApplicationInfo.xml" >nul || (
     echo 이름 바꾸기가 적용되지 않은 소스입니다. 먼저 이름 바꾸기를 적용해야 합니다.
     exit /b 1

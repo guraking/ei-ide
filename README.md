@@ -4,6 +4,8 @@
 
 **[사용 설명서](https://raw.githack.com/guraking/ei-ide/main/docs/index.html)** · **[수정 내역](수정내역.md)** · **[내려받기](https://github.com/guraking/ei-ide/releases)**
 
+Git 은 설치본에 함께 들어 있어(MinGit) PC 에 Git 을 설치하지 않아도 됩니다.
+
 <!-- 아래 그림은 docs/readme/index.html 을 docs/readme/capture.js 로 찍은 것이다. 글을 고치면 그 HTML 을 고치고 다시 찍는다. -->
 
 ![이클립스에 익숙한 사람을 위한 자바 개발 도구입니다. IntelliJ IDEA Community 2026.2.3 을 바탕으로, 이클립스의 서버 창 · Synchronize · 단축키 흐름을 얹고 쓰지 않는 기능은 덜어 냈습니다. 개인 학습용 프로젝트입니다.](docs/img/readme-intro.png)
