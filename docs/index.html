@@ -113,6 +113,14 @@ h3{font-size:18px; margin:36px 0 12px}
 .btn{display:inline-flex; align-items:center; gap:5px; border:1px solid var(--line); background:var(--panel); border-radius:6px; padding:3px 9px; font-size:12px; white-space:nowrap; color:var(--fg)}
 .btn.pri{border-color:var(--ok); color:var(--ok)}
 .btn.dim{opacity:.55}
+.btn.fill{border-color:transparent; color:#fff; font-weight:600}
+.btn.blue{background:#3574f0} .btn.green{background:#2e8b57} .btn.red{background:#c9404a} .btn.purple{background:#8250c8}
+.ide .cols{display:grid}
+.ide .cols > div{min-width:0; overflow:hidden}
+.ide .cols > div + div{border-left:1px solid var(--line)}
+.ide .sub{padding:6px 10px; border-bottom:1px solid var(--line); font-size:12px; color:var(--muted)}
+.ide .sub b{color:var(--fg)}
+.repo-band{background:#3574f0; color:#fff; font-weight:700; font-size:14px; padding:3px 10px; border-radius:4px}
 .combo{display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); background:var(--panel); border-radius:6px; padding:3px 8px; font-size:12px; white-space:nowrap}
 .combo::after{content:"▾"; color:var(--muted); font-size:10px}
 .input{border:1px solid var(--info); background:var(--panel); border-radius:6px; padding:2px 8px; font:12px var(--f-mono); min-width:52px; text-align:right}
@@ -467,7 +475,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
       <tr><th>창 (자리)</th><th>단추 · 우클릭</th></tr>
       <tr><td>Servers (아래)</td><td>Start · Start in Debug · Restart · Stop · Stop All · Add WAS… · Server Groups(New Group… · Start Group · Stop Group) · ⋯ More(Duplicate Server · Publish (Rebuild) · Remove WAS · Show Log Files…) · Refresh Server List. 줄 우클릭에 Open in Browser · Show Console · Edit Settings… (<a href="#servers">서버 창</a>)</td></tr>
       <tr><td>Synchronize (아래)</td><td>Show All · Incoming · Outgoing · Conflicts · Refresh All · Selected Repository Only, 아래 Pull All · Pull Selected · Push · Commit and Push… · Resolve Conflicts · Merge Branches. 목록 우클릭 Pull · Update Only These Files · Commit… · Push · Resolve Conflicts · Undo Last Git Action…, 저장소 줄 우클릭 Pull · Push · Refresh This Repository · Merge Branches… · Undo Last Git Action… · Show in Git Log · 탐색기에서 열기, 파일 우클릭 Add to .gitignore · Replace with HEAD · Unstage Only, Keep Files · Assume Unchanged · Jump to Source · Show History · Copy Absolute Path · Select in Project View, 도구줄 모두 펼치기 · 모두 접기 · 폴더별로 묶기 · 이전 · 다음 파일 (<a href="#sync">Git · SVN</a>)</td></tr>
-      <tr><td>Git Log (아래)</td><td>모듈 목록 · 찾기 칸 · Refresh · 「?」 (<a href="#sync">Git · SVN</a>)</td></tr>
+      <tr><td>Git Log (아래)</td><td>프로젝트 상자 · Refresh · 「?」 · 찾기 칸 (<a href="#sync">Git · SVN</a>)</td></tr>
       <tr><td>Database (오른쪽)</td><td>Refresh · New Console · Connect · Disconnect · Edit · Delete · Find · More(Export · Import Connections). 표 우클릭 View Data · Generate SELECT · INSERT · UPDATE Statement · Generate Mapper Skeleton · Generate Feature Set… · Open ERD · Table Specification Excel…, 접속 우클릭 View Sessions · View Locks · Open ERD (All), 프로그램 우클릭 Open Source · View Compilation Errors (<a href="#db">데이터베이스</a>)</td></tr>
       <tr><td>Result (아래)</td><td>Fetch · Apply · Revert · CSV · Excel · INSERT · UPDATE · DTO · enum · 찾기(<kbd>Ctrl</kbd>+<kbd>F</kbd>). 칸 우클릭 Copy Value · Copy Selected Rows · Copy Column Values as IN List · Sort (<a href="#db">데이터베이스</a>)</td></tr>
       <tr><td>API (아래)</td><td>Reload · Save as openapi.yaml… (<a href="#servers">서버 창</a>)</td></tr>
@@ -683,29 +691,32 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
       <div>
         <div class="scroll">
           <div class="ide">
-            <div class="title"><span class="dots"><i></i><i></i><i></i></span>서버</div>
+            <div class="title"><span class="dots"><i></i><i></i><i></i></span>Servers</div>
             <div class="bar">
-              <span class="mark">1</span>
-              <span class="btn pri">▶ 시작</span><span class="btn">디버그로 시작</span><span class="btn">재시작</span><span class="btn">■ 중지</span><span class="btn">모두 중지</span>
+              <span class="mark">2</span><span class="btn">＋ Add WAS…</span><span class="btn">⟳ Refresh</span>
               <span class="sepv"></span>
-              <span class="mark">2</span><span class="btn">서버 복제</span><span class="btn">WAS 추가…</span>
+              <span class="mark">1</span><span class="btn">▶ Start</span><span class="btn">Debug</span><span class="btn">Restart</span><span class="btn">■ Stop</span><span class="btn">Edit Settings…</span>
+              <span class="sepv"></span>
+              <span class="btn">⋮ More</span>
             </div>
-            <div class="split">
-              <div>
-                <table class="grid">
-                  <tr><th>이름</th><th>상태</th><th>포트 <span class="mark">3</span></th><th>컨텍스트 · 프로필</th><th>실행 시간</th></tr>
-                  <tr class="sel"><td>api-server</td><td><span class="dot up"></span>올라감</td><td><a href="#servers">8080</a></td><td>local</td><td>12분</td></tr>
-                  <tr class="sel"><td>api-server (복제)</td><td><span class="dot dbg"></span>디버그</td><td><a href="#servers">8081</a></td><td>dev</td><td>3분</td></tr>
-                  <tr><td>batch</td><td><span class="dot down"></span>멈춤</td><td>–</td><td>local</td><td>–</td></tr>
-                  <tr><td>Tomcat 9</td><td><span class="dot up"></span>올라감</td><td><a href="#servers">9090</a></td><td>/web</td><td>40분</td></tr>
-                </table>
+            <div class="cols" style="grid-template-columns:minmax(0,1fr) minmax(0,1.5fr)">
+              <div class="treeview">
+                <div>▾ Spring Boot</div>
+                <div class="l1 sel"><span class="dot up"></span>api-server <span class="muted">:8080 · local</span></div>
+                <div class="l1"><span class="dot dbg"></span>api-server (복제) <span class="muted">:8081 · dev</span></div>
+                <div class="l1"><span class="dot down"></span>batch</div>
+                <div>▾ WAS</div>
+                <div class="l1"><span class="dot up"></span>Tomcat 9 <span class="muted">:9090</span></div>
               </div>
-              <div class="form">
-                <div style="display:flex;align-items:center;gap:6px;color:var(--fg)"><span class="mark">4</span>api-server</div>
-                <label>프로필<span class="f">local</span></label>
-                <label>VM 옵션<span class="f">-Xmx1g -Dfile.encoding=UTF-8</span></label>
-                <label>포트<span class="f">8080</span></label>
-                <div><span class="btn">적용</span></div>
+              <div>
+                <div class="sub"><span class="mark">3</span> <b style="font-size:14px">api-server</b> <span class="tag out">실행 중</span> <span>8080 · local · 12분</span> <span style="color:var(--ok)">UP</span> <span>힙 512 / 2048 MB</span></div>
+                <div class="form">
+                  <div style="display:flex;align-items:center;gap:6px;color:var(--fg)"><span class="mark">4</span>설정</div>
+                  <label>프로필<span class="f">local</span></label>
+                  <label>포트<span class="f">8080</span></label>
+                  <label>VM 옵션<span class="f">-Xmx1g -Dfile.encoding=UTF-8</span></label>
+                  <div><span class="btn">Apply</span></div>
+                </div>
               </div>
             </div>
           </div>
@@ -713,9 +724,9 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
         <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
       </div>
       <ol class="legend">
-        <li><span class="mark">1</span><div><b>여러 줄 한꺼번에</b> <span class="t">Ctrl 로 여러 서버를 고르고 시작 · 디버그 · 재시작 · 중지. 디버그로 시작하면 디버거가 자동으로 붙습니다. 중지 뒤 10초 안에 안 꺼지면 강제로 끝냅니다.</span></div></li>
-        <li><span class="mark">2</span><div><b>서버 복제 · WAS 추가</b> <span class="t">같은 모듈을 다른 프로필 · 포트로 하나 더. WAS 는 Tomcat · JBoss/WildFly · WebLogic · JEUS, 설치 폴더는 건드리지 않습니다.</span></div></li>
-        <li><span class="mark">3</span><div><b>포트를 누르면 브라우저</b> <span class="t">콘솔 출력에서 포트를 찾아 보여 줍니다.</span></div></li>
+        <li><span class="mark">1</span><div><b>기동 단추는 왼쪽 위 도구줄</b> <span class="t">트리에서 서버를 고르고 Start · Debug · Restart · Stop · Edit Settings…. Ctrl 로 여러 줄을 고르면 한꺼번에 듣습니다. 우클릭 메뉴에도 같은 단추가 있습니다. 디버그로 시작하면 디버거가 자동으로 붙습니다. 중지 뒤 10초 안에 안 꺼지면 강제로 끝냅니다.</span></div></li>
+        <li><span class="mark">2</span><div><b>WAS 추가 · 서버 복제</b> <span class="t">Add WAS… 는 도구줄 맨 앞, 서버 복제는 우클릭입니다. 같은 모듈을 다른 프로필 · 포트로 하나 더. WAS 는 Tomcat · JBoss/WildFly · WebLogic · JEUS, 설치 폴더는 건드리지 않습니다.</span></div></li>
+        <li><span class="mark">3</span><div><b>오른쪽 머리줄</b> <span class="t">이름 · 상태 · 포트 · 프로필 · 실행 시간. 실행 중인 스프링 부트는 <code>/actuator/health</code> 를 5초마다 물어 UP(초록) · DOWN(빨강)을 보이고(액추에이터가 없으면 숨김), 실행 중인 서버는 힙 사용량도 보입니다. 콘솔은 실행 창의 서버별 탭, 로그 파일은 편집기 탭으로 열립니다. 포트는 콘솔 출력에서 찾습니다.</span></div></li>
         <li><span class="mark">L</span><div><b>로그 거르기</b> <span class="t">실행 · 서버 콘솔 우클릭 「Filter Log」 → ERROR · WARN · INFO · DEBUG 와 글자로 거른 줄 목록. 스택 줄은 앞 오류에 붙여 함께, 「따라가기」면 새 로그도 반영, 두 번 누르면 콘솔의 그 줄로.</span></div></li>
         <li><span class="mark">G</span><div><b>서버 묶음</b> <span class="t">도구 모음 · 우클릭 「Server Groups」 → 「New Group…」으로 서버와 순서를 정하고 「Start Group」. 앞 서버가 실행 중이 되면 다음 서버를 띄우고, 실패하면 멈추고 알립니다.</span></div></li>
         <li><span class="mark">F</span><div><b>로그 파일 보기</b> <span class="t">WAS 줄 우클릭 「Show Log Files…」 → 로그 파일을 골라 실행 창 탭으로 열고 끝을 따라 읽습니다. 「Filter Log」도 됩니다.</span></div></li>
@@ -758,12 +769,21 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
     <div class="figure">
       <div>
         <div class="scroll">
-          <div class="ide">
+          <div class="ide" id="fig-api">
             <div class="title"><span class="dots"><i></i><i></i><i></i></span>POST CadController#save</div>
-            <div class="bar"><span class="mark">1</span><span class="verb post">POST</span><span class="input" style="flex:1; text-align:left">http://localhost:9090/api/cad/save</span><span class="btn pri">보내기</span><span class="btn">값 다시 채우기</span></div>
-            <div class="bar"><span class="mark">2</span><span class="btn">쿼리</span><span class="btn">헤더</span><span class="btn pri">본문</span><span class="sepv"></span><span class="mark">3</span><span class="btn">인증</span></div>
-            <div style="padding:6px 12px" class="mono">{ "cadId": 1, "cadNm": "테스트", "useYn": "Y", "regDate": "2026-10-27" }</div>
-            <div class="bar"><span class="mark">4</span><span class="mono" style="font-size:12px"><span style="color:var(--ok)">상태 200</span> · 35 ms · 412 B · <span style="color:var(--muted)">{"result": "success"}</span></span></div>
+            <div class="bar"><span class="mark">1</span><span class="combo"><span class="verb post">POST</span></span><span class="input" style="flex:1; text-align:left">http://localhost:9090/api/cad/save?cadId=1</span><span class="btn fill blue">보내기</span><span class="btn">값 다시 채우기</span></div>
+            <div class="cols" style="grid-template-columns:minmax(0,1.3fr) minmax(0,1fr)">
+              <div>
+                <div class="bar"><span class="mark">2</span><span class="btn">쿼리 1</span><span class="btn">헤더 2</span><span class="btn pri">본문 JSON</span><span class="sepv"></span><span class="mark">3</span><span class="btn">인증 Bearer</span></div>
+                <div style="padding:8px 12px; line-height:1.6" class="mono">{<br>&nbsp;&nbsp;"cadNm": "테스트",<br>&nbsp;&nbsp;"useYn": "Y",<br>&nbsp;&nbsp;"regDate": "2026-10-27"<br>}</div>
+              </div>
+              <div>
+                <div class="sub"><b>보낼 요청</b> 그대로 복사 가능</div>
+                <div style="padding:8px 12px; line-height:1.6; font-size:11.5px" class="mono">POST /api/cad/save?cadId=1<br>Accept: application/json<br>Content-Type: application/json<br>Authorization: Bearer ••••</div>
+              </div>
+            </div>
+            <div class="bar" style="border-top:1px solid var(--line)"><span class="mark">4</span><b>응답</b><span class="tag out">200</span><span class="mono" style="font-size:12px; color:var(--muted)">35 ms · 412 B</span><span style="flex:1"></span><span class="btn pri">본문</span><span class="btn">헤더 6</span><span class="btn">쿠키 1</span></div>
+            <div style="padding:8px 12px; line-height:1.6" class="mono">{<br>&nbsp;&nbsp;"result": "success",<br>&nbsp;&nbsp;"cadId": 1<br>}</div>
           </div>
         </div>
         <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
@@ -772,7 +792,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
         <li><span class="mark">1</span><div><b>우클릭으로 바로 열기</b> <span class="t">컨트롤러 메서드나 <code>@GetMapping</code> · <code>@RequestMapping</code> 줄에서 우클릭 「Send API Request」. 편집기 탭으로 열리고, 같은 메서드를 다시 열면 그 탭으로 갑니다. 주소는 이 모듈을 올린 WAS(서버 창) → 실행 중인 스프링 부트 서버 → <code>server.port</code> 순으로 정합니다. 방식이 정해지지 않은 <code>@RequestMapping</code> 은 GET 으로 열고, 위 상자에서 바꿉니다.</span></div></li>
         <li><span class="mark">2</span><div><b>시험 값 채우기</b> <span class="t"><code>@PathVariable</code> 은 주소에, <code>@RequestParam</code> · 주석 없는 VO 의 필드(<code>TestVo vo</code>)는 쿼리 표에, <code>@RequestHeader</code> 는 헤더 표에(<code>Accept</code> 는 늘, 본문이 있으면 <code>Content-Type</code> 도), <code>@RequestBody</code> DTO 는 JSON 본문에 넣습니다. defaultValue → 이름이 id · no · seq · cnt 로 끝나면 1 → email 은 test@test.com → Yn 은 Y → 숫자 1 · 참거짓 true · 날짜 오늘 · 글 「테스트」. 표의 체크를 끄면 그 줄은 보내지 않고, 「값 다시 채우기」로 처음 값으로 돌립니다.</span></div></li>
         <li><span class="mark">3</span><div><b>인증</b> <span class="t">없음 · Bearer 토큰 · 아이디/비번(Basic) · 쿠키 중 고르면 이 프로젝트의 모든 요청에 붙습니다. 토큰 · 비밀번호 · 쿠키는 IDE 비밀번호 저장소에 둡니다. 로그인 API 를 한 번 보내면 받은 세션 쿠키(JSESSIONID 등)를 IDE 를 끌 때까지 이어 보냅니다. 고른 인증은 헤더 표 맨 위 흐린 줄로 보이고, 그 줄 체크를 끄면 그 요청만 빼고 보냅니다. 헤더 표에 직접 적은 Authorization · Cookie 가 앞섭니다.</span></div></li>
-        <li><span class="mark">4</span><div><b>응답</b> <span class="t">상태 · 걸린 시간 · 크기와 본문 · 헤더. JSON 은 줄맞춤, JSP 화면(HTML)은 HTML 색으로 보입니다.</span></div></li>
+        <li><span class="mark">4</span><div><b>응답</b> <span class="t">오른쪽 위 「보낼 요청」에 실제로 나갈 내용이 보입니다. 아래 응답은 상태 · 걸린 시간 · 크기와 본문 · 헤더 · 쿠키. JSON 은 줄맞춤, JSP 화면(HTML)은 HTML 색으로 보입니다.</span></div></li>
         <li><span class="mark">Y</span><div><b>openapi.yaml 미리보기</b> <span class="t"><code>openapi</code> · <code>swagger</code> 사양 파일(.yaml · .yml · .json)을 열면 편집기 옆에 Swagger 화면이 붙고, 고치면 바로 다시 그립니다. OpenAPI 3.0 · Swagger 2.0 은 자동 완성 · 오류 표시가 됩니다.</span></div></li>
       </ol>
     </div>
@@ -956,18 +976,19 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
     <p class="lead">아래쪽 「Synchronize」 창과 「Git Log」 창 두 개입니다. 커밋 · 올리기(Push)는 Git 메뉴(SVN 은 Subversion 메뉴)의 기본 기능을 그대로 씁니다.</p>
 
     <h3>Synchronize · Git → Synchronize Workspace</h3>
-    <p class="lead">이클립스 Team → Synchronize Workspace 와 같은 창입니다. 프로젝트 안의 Git 저장소 여러 개와 SVN 을 저장소별로 묶어 들어올 변경(파랑) · 나갈 변경(보라) · 충돌(빨강)을 한눈에 봅니다. 커밋 · 올리기 뒤에는 자동으로 다시 비교합니다. 프로젝트 트리 우클릭 → Git(SVN 은 Subversion) → Synchronize Workspace 로 열면 그 저장소만 비교합니다.</p>
+    <p class="lead">이클립스 Team → Synchronize Workspace 와 같은 창입니다. 프로젝트 안의 Git 저장소 여러 개와 SVN 을 저장소별로 묶어 들어올 변경(파랑) · 나갈 변경(보라) · 충돌(빨강)을 한눈에 봅니다. 커밋 · 올리기 뒤에는 자동으로 다시 비교합니다. 왼쪽 목록은 처음에 창 너비의 45% 를 차지하고, 끌어 바꾼 폭은 기억합니다. 프로젝트 트리 우클릭 → Git(SVN 은 Subversion) → Synchronize Workspace 로 열면 그 저장소만 비교합니다.</p>
     <table class="keys map" style="margin-bottom:18px">
       <tr><th>단추</th><th>하는 일</th></tr>
       <tr><td>Show All · Incoming · Outgoing · Conflicts</td><td>보기 거르기</td></tr>
+      <tr><td>「나갈 변경」에 나오는 것</td><td>내 브랜치에서 직접 만든 커밋과 커밋 안 한 수정만 보입니다. Merge Branches 로 develop 을 합친 뒤에도 남이 고친 파일은 내 변경처럼 나오지 않습니다. Push 단추의 숫자(올릴 커밋 수)에는 합치기 커밋까지 들어갑니다</td></tr>
+      <tr><td>오른쪽 비교 칸</td><td>파일을 고르면 왼쪽 「원격 (origin/…)」 · 오른쪽 「내 작업본」으로 비교합니다. 머리 오른쪽 × 로 닫으면 목록만 남고, 파일을 다시 고르면 열립니다</td></tr>
       <tr><td>Refresh All · Selected Repository Only</td><td>모든 저장소 · 고른 저장소 하나만 원격과 다시 비교</td></tr>
       
-      <tr><td>Pull All</td><td>고른 것과 상관없이 모든 저장소를 한 번에 받기(IDE 의 Update Project)</td></tr>
-      <tr><td>Pull Selected</td><td>트리에서 고른 저장소만 받기. SVN 은 svn update</td></tr>
-      <tr><td>Resolve Conflicts</td><td>충돌 해결 창</td></tr>
-      <tr><td>Merge Branches</td><td>고른 저장소(없으면 지금 저장소)로 역머지 창</td></tr>
-      <tr><td>Push</td><td>고른 저장소(없으면 전부)를 올리는 Push 창</td></tr>
-      <tr><td>Commit and Push…</td><td>커밋 창을 엽니다. 파일을 체크하고 Commit and Push 로 커밋과 올리기를 한 번에</td></tr>
+      <tr><td>Pull All · Pull Selected (파랑)</td><td>아래 단추 줄. Pull All 은 고른 것과 상관없이 모든 저장소를 한 번에 받기(IDE 의 Update Project), Pull Selected 는 트리에서 고른 저장소만 받기. SVN 은 svn update</td></tr>
+      <tr><td>Resolve Conflicts (빨강)</td><td>충돌 해결 창</td></tr>
+      <tr><td>Merge Branches (보라)</td><td>고른 저장소(없으면 지금 저장소)로 역머지 창</td></tr>
+      <tr><td>Push (초록)</td><td>고른 저장소(없으면 전부)를 올리는 Push 창</td></tr>
+      <tr><td>Commit and Push… (초록)</td><td>커밋 창을 엽니다. 파일을 체크하고 Commit and Push 로 커밋과 올리기를 한 번에</td></tr>
       <tr><td>목록 우클릭</td><td>「들어올 변경」 줄 · 그 파일: Pull(Pull Selected 와 같음), SVN 은 Update Only These Files 로 그 파일만 svn update. 「나갈 변경」 줄 · 그 파일: Commit…(그 파일만 체크된 커밋 창) · Push(Git 만) · Replace with HEAD(확인창, 이클립스 Replace With › HEAD Revision 과 같음). 「충돌」 줄: Resolve Conflicts</td></tr>
       <tr><td>저장소 줄 우클릭</td><td>Pull · Push · Refresh This Repository(이 저장소만 원격 확인) · Merge Branches… · Undo Last Git Action… · Show in Git Log · 탐색기에서 열기</td></tr>
       <tr><td>파일 줄 우클릭 아래</td><td>IntelliJ 기본 Jump to Source · Show History · Copy Absolute Path · Select in Project View. 메뉴 키 · Shift+F10 으로도 뜹니다</td></tr>
@@ -983,40 +1004,54 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
     <div class="figure">
       <div>
         <div class="scroll">
-          <div class="ide rel" style="min-height:340px">
-            <div class="title"><span class="dots"><i></i><i></i><i></i></span>동기화</div>
-            <div class="bar"><span class="mark">1</span><span class="btn">모두 보기</span><span class="btn">들어올</span><span class="btn">나갈</span><span class="btn">충돌</span><span class="sepv"></span><span class="btn">전체 새로고침</span></div>
-            <div class="treeview">
-              <div>▾ 저장소 backend <span class="muted">— 마지막 원격 확인 10:42</span></div>
-              <div class="l1">▾ 들어올 변경 <span class="tag in">2</span></div>
-              <div class="l2">OrderService.java</div>
-              <div class="l2">application.yml</div>
-              <div class="l1">▾ 나갈 변경 <span class="tag out">3</span></div>
-              <div class="l2 sel">OrderMapper.xml <span class="mark">2</span></div>
-              <div class="l2">OrderDto.java</div>
-              <div class="l2">application-local.yml</div>
-              <div class="l1">▾ 충돌 <span class="tag cf">1</span></div>
-              <div class="l2">pom.xml</div>
-              <div class="l1">▾ Assume Unchanged <span class="tag">1</span> <span class="mark">4</span></div>
-              <div class="l2">application-dev.yml</div>
-              <div>▸ 저장소 front <span class="muted">— 원격과 같습니다</span></div>
+          <div class="ide rel" style="min-width:680px">
+            <div class="title"><span class="dots"><i></i><i></i><i></i></span>Synchronize</div>
+            <div class="bar"><span class="btn">⟳</span><span class="btn">⟳ 고른 저장소</span><span class="sepv"></span><span class="mark">1</span><span class="btn pri">Show All</span><span class="btn">Incoming</span><span class="btn">Outgoing</span><span class="btn">Conflicts</span><span class="sepv"></span><span class="btn">⇊</span><span class="btn">⇈</span><span class="btn">폴더</span><span class="key">저장소 2개 · 원격 확인 3분 전</span></div>
+            <div class="cols" style="grid-template-columns:45fr 55fr; min-height:300px">
+              <div class="treeview" style="position:relative">
+                <div>▾ backend <span class="muted">feature/order ↔ origin/feature/order</span></div>
+                <div class="l1" style="color:var(--warn)"><span class="mark">5</span> develop 보다 3개 뒤 · 내 파일 2개 겹침</div>
+                <div class="l1">▾ 들어올 변경 <span class="tag in">2</span></div>
+                <div class="l2">OrderService.java</div>
+                <div class="l2">application.yml</div>
+                <div class="l1">▾ 나갈 변경 <span class="tag out">2</span></div>
+                <div class="l2 sel">OrderMapper.xml <span class="mark">2</span></div>
+                <div class="l2">OrderDto.java</div>
+                <div class="l1">▾ 충돌 <span class="tag cf">1</span></div>
+                <div class="l2">pom.xml</div>
+                <div class="l1">▾ Assume Unchanged <span class="tag">1</span> <span class="mark">4</span></div>
+                <div class="l2">application-local.yml</div>
+                <div>▸ front <span class="muted">main ↔ origin/main</span></div>
+              </div>
+              <div>
+                <div class="sub" style="display:flex; align-items:center; gap:6px"><span class="mark">6</span><b>OrderMapper.xml</b> 원격 ↔ 내 작업본<span style="flex:1"></span>×</div>
+                <div class="cols" style="grid-template-columns:1fr 1fr; font-size:11.5px; line-height:1.7">
+                  <div style="padding:8px" class="mono">&lt;select id="list"&gt;<br>&nbsp;&nbsp;SELECT<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ID<br><br>&nbsp;&nbsp;FROM TB_ORDER<br>&lt;/select&gt;</div>
+                  <div style="padding:8px" class="mono">&lt;select id="list"&gt;<br>&nbsp;&nbsp;SELECT<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ID<br><span style="background:var(--ok-soft)">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;, NAME</span><br>&nbsp;&nbsp;FROM TB_ORDER<br>&lt;/select&gt;</div>
+                </div>
+              </div>
             </div>
-            <div class="menu" style="left:250px; top:190px">
-              <div>.gitignore 에 추가</div>
-              <div>내 변경 되돌리기</div>
-              <div>스테이징만 풀기 — 파일은 그대로</div>
-              <div class="on">Assume Unchanged <span class="mark">3</span></div>
-              <hr><div>새로고침</div>
+            <div class="bar" style="border-top:1px solid var(--line); border-bottom:0"><span class="mark">7</span><span class="btn fill blue">Pull All</span><span class="btn fill blue">Pull Selected 2</span><span class="btn fill green">Push 1</span><span class="btn fill green">Commit and Push…</span><span class="btn fill red">Resolve Conflicts</span><span class="btn fill purple">Merge Branches</span></div>
+            <div class="menu" style="left:210px; top:205px">
+              <div>Commit… (1 files)</div>
+              <div>Push</div>
+              <div>Replace with HEAD (1 files)</div>
+              <hr>
+              <div>Add to .gitignore (1 files)</div>
+              <div class="on">Assume Unchanged (1 files) <span class="mark">3</span></div>
             </div>
           </div>
         </div>
         <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
       </div>
       <ol class="legend">
-        <li><span class="mark">1</span><div><b>보기 거르기</b> <span class="t">모두 보기 · 들어올 · 나갈 · 충돌만 따로 볼 수 있습니다.</span></div></li>
-        <li><span class="mark">2</span><div><b>파일 우클릭</b> <span class="t">무시 목록에 추가 · 내 변경 되돌리기 · Assume Unchanged. 새로 추가 · 이름 바꿈 · 복사한 파일은 지워지지 않게 되돌리기에서 빠지고 「스테이징만 풀기」로 갑니다.</span></div></li>
+        <li><span class="mark">1</span><div><b>보기 거르기</b> <span class="t">Show All · Incoming · Outgoing · Conflicts 로 따로 볼 수 있습니다.</span></div></li>
+        <li><span class="mark">2</span><div><b>파일 우클릭</b> <span class="t">Commit… · Push · Replace with HEAD · Add to .gitignore · Assume Unchanged. 새로 추가 · 이름 바꿈 · 복사한 파일은 지워지지 않게 Replace with HEAD 에서 빠지고 「Unstage Only, Keep Files」로 갑니다.</span></div></li>
         <li><span class="mark">3</span><div><b>Assume Unchanged</b> <span class="t"><code>application-local.yml</code> 처럼 내 PC 에서만 고친 파일이 커밋 목록에 계속 뜰 때 씁니다. 커밋 창 · 프로젝트 트리의 파일 우클릭에도 있습니다(프로젝트 트리에는 「No Assume Unchanged」도). 원격에서 그 파일이 바뀌면 받기(Pull)가 멈추니 그때는 먼저 No Assume Unchanged 로 푸세요.</span></div></li>
         <li><span class="mark">4</span><div><b>Assume Unchanged · 풀기</b> <span class="t">Assume Unchanged 로 둔 파일은 「모두 보기」 맨 아래 「Assume Unchanged」 묶음에 모입니다. 우클릭 「No Assume Unchanged」로 되돌리면 내 변경이 다시 나갈 변경으로 보입니다. 파일 내용은 그대로입니다.</span></div></li>
+        <li><span class="mark">5</span><div><b>역머지 안내</b> <span class="t">Merge Branches 를 한 번 한 저장소 줄에 「develop 보다 3개 뒤 · 내 파일 2개 겹침」(겹치면 주황), 아직 안 합쳐진 내 커밋이 있으면 「develop 에 안 합쳐진 내 커밋 N개」가 나옵니다.</span></div></li>
+        <li><span class="mark">6</span><div><b>비교 칸</b> <span class="t">왼쪽 원격 · 오른쪽 내 작업본. × 로 닫을 수 있습니다.</span></div></li>
+        <li><span class="mark">7</span><div><b>아래 단추 줄</b> <span class="t">받기는 파랑, 올리기는 초록, 충돌은 빨강, 합치기는 보라입니다.</span></div></li>
         <li><span class="mark">+</span><div><b>IDE 파일은 처음부터 안 뜸</b> <span class="t">프로젝트를 열면 저장소마다 <code>.git/info/exclude</code> 에 <code>*.iml</code> · <code>.idea/</code> · <code>.project</code> · <code>.classpath</code> · <code>.settings/</code> 를 넣습니다. 팀 <code>.gitignore</code> 와 서버에는 영향이 없습니다.</span></div></li>
       </ol>
     </div>
@@ -1024,10 +1059,39 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
 
     <h3>역머지 · Git → Merge Branches… · Synchronize 창 아래 Merge Branches 단추</h3>
     <p class="lead">GitLab 사이트에서 하던 「develop → 내 개인 브랜치」 머지를 IDE 에서 합니다. 내 PC 가 개인 브랜치만 받도록 설정돼 있어도 서버에 직접 브랜치 목록을 물어 고르게 하고, 고른 브랜치만 받아 옵니다. 합치기 전에 들어올 파일을 먼저 보여 주고, Merge 를 눌러야 합칩니다.</p>
+    <div class="figure">
+      <div>
+        <div class="scroll">
+          <div class="ide">
+            <div class="title"><span class="dots"><i></i><i></i><i></i></span>Merge Branches</div>
+            <div class="bar"><span class="mark">1</span><span class="repo-band">backend</span><span class="key">D:\work\backend</span></div>
+            <div class="sub"><b>가져올 브랜치</b></div>
+            <div class="bar"><span class="mark">2</span><span class="combo" style="flex:1">origin/develop</span><span class="btn">⇄</span><span class="combo" style="flex:1">origin/feature/order</span><span class="btn fill blue">Compare</span></div>
+            <div class="sub" style="display:flex; align-items:center; gap:6px"><span class="mark">3</span><b>미리보기</b><span class="tag in">커밋 3</span><span class="tag in">파일 4</span><span class="tag" style="color:var(--warn)">내 파일 1</span><span style="flex:1"></span>파일을 두 번 누르면 비교</div>
+            <table class="grid">
+              <tr><th>파일</th><th>작성자</th><th>날짜</th><th>커밋 메시지</th></tr>
+              <tr style="color:var(--warn)"><td>⚠ OrderMapper.xml <span class="mark">4</span></td><td>김당사</td><td>어제</td><td>주문 조회 칼럼 추가</td></tr>
+              <tr><td>OrderService.java</td><td>이당사</td><td>어제</td><td>주문 상태 확인</td></tr>
+              <tr><td>application.yml</td><td>이당사</td><td>10-28</td><td>설정 정리</td></tr>
+            </table>
+            <div class="sub"><b>합친 뒤</b></div>
+            <div class="bar" style="border-bottom:0"><span class="mark">5</span><span>☑ origin/feature/order 으로 Push</span><span style="flex:1"></span><span class="btn">Cancel</span><span class="btn fill blue">Merge</span></div>
+          </div>
+        </div>
+        <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
+      </div>
+      <ol class="legend">
+        <li><span class="mark">1</span><div><b>파란 저장소 띠</b> <span class="t">합칠 저장소를 창 맨 위 파란 띠로 먼저 보여 줍니다. 옆은 그 폴더입니다.</span></div></li>
+        <li><span class="mark">2</span><div><b>From ⇄ Into</b> <span class="t">왼쪽이 가져올 브랜치, 오른쪽이 합칠 곳입니다. 가운데 ⇄ 는 두 브랜치를 맞바꾸고 바로 다시 비교합니다.</span></div></li>
+        <li><span class="mark">3</span><div><b>미리보기</b> <span class="t">Compare 를 누르면 커밋 · 파일 · 내 파일 수와 들어올 파일이 나옵니다.</span></div></li>
+        <li><span class="mark">4</span><div><b>주황 줄</b> <span class="t">내가 고친 파일을 다른 사람도 고친 것입니다. 먼저 두 번 눌러 비교해 보세요.</span></div></li>
+        <li><span class="mark">5</span><div><b>Push · Merge</b> <span class="t">Push 를 켜 두면 합친 뒤 서버로 올립니다. 커밋 안 한 변경이 있으면 Stash 하고 합칠지 묻습니다.</span></div></li>
+      </ol>
+    </div>
     <table class="keys map" style="margin-bottom:18px">
       <tr><th>창의 칸</th><th>하는 일</th></tr>
-      <tr><td>Repository</td><td>합칠 저장소 이름과 폴더(IntelliJ Pull 창처럼)</td></tr>
-      <tr><td>From · Into</td><td>반대 방향(개인 브랜치 → develop)도 From · Into 만 바꾸면 됩니다. From 은 가져올 서버 브랜치(develop · main 등), Into 는 합칠 곳(내 개인 브랜치)의 서버 브랜치입니다. 두 상자 모두 origin/ 을 붙여 보이고, 아래 줄에 「서버(origin)의 From 브랜치를 Into 브랜치에 합칩니다. 아래 Push 가 켜져 있으면 합친 결과를 서버로 올립니다」를 적습니다. From 브랜치에 내 PC 에만 있는 커밋이 있으면 빨간 줄로 먼저 Push 하라고 알립니다. 고른 값은 저장소마다 기억합니다. Into 가 지금 브랜치가 아니면 그 브랜치로 옮긴 뒤 합칩니다.</td></tr>
+      <tr><td>Repository</td><td>창 맨 위 파란 띠에 합칠 저장소 이름, 옆에 폴더</td></tr>
+      <tr><td>From · Into</td><td>반대 방향(개인 브랜치 → develop)은 가운데 ⇄ 단추로 맞바꾸면 됩니다. 브랜치를 고른 뒤 줄 끝 Compare 로 비교합니다. From 은 가져올 서버 브랜치(develop · main 등), Into 는 합칠 곳(내 개인 브랜치)의 서버 브랜치입니다. 두 상자 모두 origin/ 을 붙여 보이고, 아래 줄에 「서버(origin)의 From 브랜치를 Into 브랜치에 합칩니다. 아래 Push 가 켜져 있으면 합친 결과를 서버로 올립니다」를 적습니다. From 브랜치에 내 PC 에만 있는 커밋이 있으면 빨간 줄로 먼저 Push 하라고 알립니다. 고른 값은 저장소마다 기억합니다. Into 가 지금 브랜치가 아니면 그 브랜치로 옮긴 뒤 합칩니다.</td></tr>
       <tr><td>들어올 파일 표</td><td>파일 · 마지막으로 바꾼 사람 · 때 · 커밋 제목. 파일을 두 번 누르면 Into(왼쪽) ↔ From(오른쪽) 비교 창.</td></tr>
       <tr><td>주황 줄 · ⚠</td><td>내 파일을 다른 사람이 From 에서 고친 것. 충돌 없이 조용히 합쳐져 내 소스가 바뀔 수 있으니 먼저 비교해 보세요. 내 파일은 개인 브랜치에서 바꾼 파일 · 고치는 중인 파일 · 최근 30일 안에 내 Git 이메일로 커밋한 파일입니다.</td></tr>
       <tr><td>Push to … after merge</td><td>켜 두면(기본) 합친 뒤 서버의 개인 브랜치로 바로 올립니다.</td></tr>
@@ -1044,14 +1108,46 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
       <tr><td>커밋</td><td>Staged 에 담긴 것만 커밋됩니다. 메시지를 쓰고 Commit(또는 Commit and Push…). 고른 것 없이 전부 커밋하려면 Commit All.</td></tr>
       <tr><td>새 파일</td><td>Untracked 에 있는 새 파일도 「+」로 담으면 함께 커밋됩니다.</td></tr>
     </table>
-    <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note"><b>Stash 와 다른 점</b>스테이징은 「이번 커밋에 넣을 것」을 고르는 칸이고, 작업본은 그대로입니다. Stash(Synchronize 창 Stash Changes)는 고친 것을 통째로 치워 작업본을 깨끗하게 만들어 두었다가 나중에 Unstash 로 꺼내는 것입니다. 급한 다른 일을 먼저 할 때는 Stash, 고친 것 중 일부만 커밋할 때는 스테이징을 씁니다.</div><div class="note warn"><b>변경 목록(changelist)</b>스테이징을 켜면 Git 저장소에서는 변경 목록 대신 Staged · Unstaged 로 나뉩니다. SVN 저장소는 그대로 변경 목록을 씁니다. 파일 우클릭 Assume Unchanged 는 Staged · Unstaged 목록에서도 됩니다.</div></div>
+    <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note"><b>Stash 와 다른 점</b>스테이징은 「이번 커밋에 넣을 것」을 고르는 칸이고, 작업본은 그대로입니다. Stash(Git → Uncommitted Changes → Stash Changes)는 고친 것을 통째로 치워 작업본을 깨끗하게 만들어 두었다가 나중에 Unstash 로 꺼내는 것입니다. 급한 다른 일을 먼저 할 때는 Stash, 고친 것 중 일부만 커밋할 때는 스테이징을 씁니다.</div><div class="note warn"><b>변경 목록(changelist)</b>스테이징을 켜면 Git 저장소에서는 변경 목록 대신 Staged · Unstaged 로 나뉩니다. SVN 저장소는 그대로 변경 목록을 씁니다. 파일 우클릭 Assume Unchanged 는 Staged · Unstaged 목록에서도 됩니다.</div></div>
 
     <h3>Git Log · 아래쪽 「Git Log」 창</h3>
-    <p class="lead">왼쪽에서 프로젝트(모듈)를 고르면 그 폴더를 바꾼 커밋을 IntelliJ 기본 Log 탭처럼 보여 줍니다. Git · SVN(한 줄) 모두 되고, 기존 Git 로그 창은 그대로입니다.</p>
+    <p class="lead">왼쪽 위 상자에서 프로젝트(모듈)를 고르면 그 폴더를 바꾼 커밋을 IntelliJ 기본 Log 탭처럼 보여 줍니다. Git · SVN(한 줄) 모두 되고, 기존 Git 로그 창은 그대로입니다.</p>
+    <div class="figure">
+      <div>
+        <div class="scroll">
+          <div class="ide">
+            <div class="title"><span class="dots"><i></i><i></i><i></i></span>Git Log</div>
+            <div class="bar"><span class="mark">1</span><span class="combo">backend</span><span class="tag in">feature/order</span><span class="btn">⟳</span><span class="btn">?</span><span class="key">최근 200개</span><span style="flex:1"></span><span class="mark">2</span><span class="input" style="min-width:200px; text-align:left; border-color:var(--line); color:var(--muted)">메시지 · 작성자 찾기</span></div>
+            <div class="cols" style="grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)">
+              <div>
+                <table class="grid">
+                  <tr class="sel"><td><span style="color:var(--info)">●</span> 주문 조회 칼럼 추가 <span class="tag in">feature/order</span></td><td><b>김당사</b></td><td>10분 전</td></tr>
+                  <tr><td><span style="color:var(--info)">○</span> <span style="color:var(--muted)">Merge branch 'develop'</span></td><td><b>김당사</b></td><td>오늘 09:12</td></tr>
+                  <tr><td><span style="color:var(--ok)">●</span> 주문 상태 확인 <span class="tag">develop</span></td><td><b>이당사</b></td><td>어제 18:40</td></tr>
+                  <tr><td><span style="color:var(--ok)">●</span> 설정 정리</td><td><b>이당사</b></td><td>10-28</td></tr>
+                </table>
+              </div>
+              <div>
+                <div class="sub"><span class="mark">3</span> <b>김당사</b> · a1b2c3d</div>
+                <div style="padding:8px 10px; font-size:12px">주문 조회 칼럼 추가</div>
+                <div class="sub">바뀐 파일 2개</div>
+                <div class="treeview" style="padding:4px 0"><div>OrderMapper.xml</div><div>OrderDto.java</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
+      </div>
+      <ol class="legend">
+        <li><span class="mark">1</span><div><b>저장소 · 브랜치</b> <span class="t">왼쪽 위에 프로젝트 상자 · 현재 브랜치 알약 · Refresh · 「?」 · 읽은 커밋 수.</span></div></li>
+        <li><span class="mark">2</span><div><b>찾기 칸</b> <span class="t">오른쪽 끝의 넓은 칸입니다. 치는 대로 메시지 · 작성자로 거릅니다.</span></div></li>
+        <li><span class="mark">3</span><div><b>오른쪽 칸</b> <span class="t">고른 커밋의 작성자 · 해시 · 메시지 · 바뀐 파일.</span></div></li>
+      </ol>
+    </div>
     <table class="keys map">
       <tr><th>자리</th><th>하는 일</th></tr>
       <tr><td>커밋 목록</td><td>최근 200개, 맨 아래까지 내리면 다음 200개를 이어 읽습니다. 가지마다 색이 다른 꺾인 선 위에 커밋 점(합치기 커밋은 속이 빈 점 · 흐린 글자), 브랜치 · 태그는 알약, 오른쪽은 굵은 작성자와 날짜.</td></tr>
-      <tr><td>위쪽 줄</td><td>찾기 칸(제목 · 작성자, 찾으면 한 줄로 그림) · Refresh · 「?」(점 · 선 · 색 설명). 커밋을 고르면 그 아래 줄에 그 커밋의 꺾인 선이 어느 커밋과 이어지는지(합쳐 들인 커밋 · 여기서 갈라져 나간 가지 · 이 커밋을 합쳐 간 커밋)가 한 줄로 보입니다.</td></tr>
+      <tr><td>위쪽 줄</td><td>왼쪽에 프로젝트 상자 · 현재 브랜치 · Refresh · 「?」(점 · 선 · 색 설명), 오른쪽 끝에 찾기 칸(메시지 · 작성자, 찾으면 한 줄로 그림). 커밋을 고르면 그 아래 줄에 그 커밋의 꺾인 선이 어느 커밋과 이어지는지(합쳐 들인 커밋 · 여기서 갈라져 나간 가지 · 이 커밋을 합쳐 간 커밋)가 한 줄로 보입니다.</td></tr>
       <tr><td>오른쪽 칸</td><td>작성자 · 해시(누르면 복사) · 전체 메시지 · 바뀐 파일. 파일을 두 번 누르면 커밋 전 · 후 비교 창.</td></tr>
     </table>
   </div>
