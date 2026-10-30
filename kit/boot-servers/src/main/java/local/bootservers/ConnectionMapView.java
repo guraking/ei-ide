@@ -107,7 +107,7 @@ final class ConnectionMapView {
         this.project = project;
         this.monitor = monitor;
         this.stateColor = stateColor;
-        profile.setRenderer(SimpleListCellRenderer.create("", p -> p == null ? BootServersBundle.message("map.profile.server") : p));
+        profile.setRenderer(SimpleListCellRenderer.create(BootServersBundle.message("map.profile.server"), p -> p));
         profile.addActionListener(e -> {
             if (!updatingProfiles) {
                 monitor.setProfileOverride((String) profile.getSelectedItem());

@@ -63,13 +63,6 @@ public final class LineChart extends JComponent {
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             int w = getWidth();
             int h = getHeight();
-            if (grid) {
-                g2.setColor(JBColor.border());
-                for (int i = 1; i <= GRID_LINES; i++) {
-                    int y = h * i / (GRID_LINES + 1);
-                    g2.drawLine(0, y, w, y);
-                }
-            }
             double max = 0;
             int known = 0;
             for (double v : values) {
@@ -82,6 +75,13 @@ public final class LineChart extends JComponent {
                 g2.setColor(NamedColorUtil.getInactiveTextColor());
                 UIUtil.drawCenteredString(g2, new Rectangle(0, 0, w, h), empty);
                 return;
+            }
+            if (grid) {
+                g2.setColor(JBColor.border());
+                for (int i = 1; i <= GRID_LINES; i++) {
+                    int y = h * i / (GRID_LINES + 1);
+                    g2.drawLine(0, y, w, y);
+                }
             }
             double top = max <= 0 ? 1 : max * HEADROOM;
             int pad = JBUI.scale(PAD);

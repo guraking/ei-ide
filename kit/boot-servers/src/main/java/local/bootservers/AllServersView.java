@@ -182,7 +182,8 @@ final class AllServersView {
                         color = avg >= Metrics.SLOW_AVG_MILLIS ? warn : normal;
                     }
                     case 7 -> {
-                        shown = DashboardView.millis(s.maxSeconds() * MILLIS_PER_SECOND);
+                        // 요청이 없으면 최대 값은 액추에이터 자신의 요청 시간이라 보이지 않는다.
+                        shown = s.requests() > 0 ? DashboardView.millis(s.maxSeconds() * MILLIS_PER_SECOND) : DashboardView.millis(Double.NaN);
                         color = s.maxSeconds() * MILLIS_PER_SECOND >= Metrics.SLOW_AVG_MILLIS ? warn : normal;
                     }
                     case 8 -> {

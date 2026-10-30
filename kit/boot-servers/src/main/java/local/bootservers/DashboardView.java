@@ -126,6 +126,8 @@ final class DashboardView {
         for (Stat s : new Stat[]{cpu, heap, threads, requests, response, errors, pool}) {
             stats.add(s);
         }
+        // 마지막 칸은 바깥 테두리와 겹치지 않게 오른쪽 선을 뺀다.
+        pool.setBorder(JBUI.Borders.empty(UIUtil.DEFAULT_VGAP, UIUtil.DEFAULT_HGAP));
         JPanel charts = new JPanel(new GridLayout(1, 3, JBUI.scale(UIUtil.DEFAULT_HGAP), 0));
         charts.add(chartBox(BootServersBundle.message("dashboard.chart.cpu"), cpuChart));
         charts.add(chartBox(BootServersBundle.message("dashboard.chart.heap"), heapChart));
@@ -214,7 +216,7 @@ final class DashboardView {
                 Double.isNaN(s.requests()) ? "" : BootServersBundle.message("dashboard.requests.total", Math.round(s.requests())), gray);
         double avg = history.averageMillis();
         response.show(millis(avg), avg >= Metrics.SLOW_AVG_MILLIS ? warn : normal,
-                Double.isNaN(s.maxSeconds()) ? "" : BootServersBundle.message("dashboard.response.max", millis(s.maxSeconds() * MILLIS_PER_SECOND)),
+                !(s.requests() > 0) ? "" : BootServersBundle.message("dashboard.response.max", millis(s.maxSeconds() * MILLIS_PER_SECOND)),
                 s.maxSeconds() * MILLIS_PER_SECOND >= Metrics.SLOW_AVG_MILLIS ? warn : gray);
         double rate = history.errorRate();
         double server = history.perMinute(Metrics.Sample::serverErrors);
