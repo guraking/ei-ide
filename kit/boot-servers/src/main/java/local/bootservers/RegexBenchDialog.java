@@ -75,7 +75,6 @@ final class RegexBenchDialog extends DialogWrapper {
     private static final float TEXT_TABS_SPLIT = 0.45f;
     private static final int SAMPLE_ROWS = 5;
     private static final int RESULT_ROWS = 4;
-    private static final int CHECK_COLUMNS = 24;
     private static final int COPIED_FADE_MS = 1500;
     private static final String FLAVOR_KEY = "KingGura.RegexBench.flavor";
     // 그룹 표 칸 수
@@ -88,7 +87,7 @@ final class RegexBenchDialog extends DialogWrapper {
     private final RegexComposer composer = new RegexComposer(this::composed);
     private final JBTextField patternField = new JBTextField();
     private final Map<RegexBench.Flag, JBCheckBox> flagBoxes = new EnumMap<>(RegexBench.Flag.class);
-    private final JBTextField checkField = new JBTextField(CHECK_COLUMNS);
+    private final JBTextField checkField = new JBTextField();
     private final JBLabel checkResult = new JBLabel();
     private final JBLabel status = new JBLabel();
     private final JBTextArea sampleArea = new JBTextArea(SAMPLE_ROWS, 0);
@@ -182,7 +181,10 @@ final class RegexBenchDialog extends DialogWrapper {
         }
 
         checkField.getEmptyText().setText(BootServersBundle.message("regex.check.empty"));
-        JPanel checkRow = row(checkField, checkResult);
+        // 확인할 글 칸은 줄 폭을 다 쓰고 결과는 오른쪽에 붙인다
+        JPanel checkRow = new JPanel(new BorderLayout(JBUI.scale(UIUtil.DEFAULT_HGAP), 0));
+        checkRow.add(checkField, BorderLayout.CENTER);
+        checkRow.add(checkResult, BorderLayout.EAST);
 
         JPanel top = FormBuilder.createFormBuilder()
                 .addLabeledComponent(BootServersBundle.message("regex.compose"), composer.component(), true)
