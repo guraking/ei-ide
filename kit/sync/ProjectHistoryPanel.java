@@ -107,8 +107,8 @@ final class ProjectHistoryPanel extends JPanel {
   private static final int MAX_LANES = 12;
   private static final int DOT = 7;
   // 표의 작성자 · 날짜 · 해시 칸 처음 폭(JBUI.scale 전, 끌어서 바꿀 수 있음). 메시지 칸이 나머지를 차지한다.
-  private static final int AUTHOR_COL_W = 72;
-  private static final int TIME_COL_W = 90;
+  private static final int AUTHOR_COL_W = 100;
+  private static final int TIME_COL_W = 120;
   private static final int HASH_COL_W = 72;
   // 바뀐 파일 줄 앞 상태 글자 칸의 최소 폭(JBUI.scale 전).
   private static final int STATUS_COL_W = 16;
