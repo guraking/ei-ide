@@ -143,14 +143,10 @@ final class ServersPanel extends SimpleToolWindowPanel {
     // 머리줄 들여다보기(상태 점검 · 힙)를 다시 재는 간격(tick 수). 고른 줄이 실행 중일 때만 잰다.
     private static final int PROBE_TICKS = 5;
     private static final long MB = 1024L * 1024L;
-    private static final String LOCALHOST = "http://localhost:";
-    private static final String HEALTH_PATH = "/actuator/health";
-    private static final String MANAGEMENT_PORT_KEY = "management.server.port";
-    private static final String CONTEXT_PATH_KEY = "server.servlet.context-path";
     private static final JBColor HEALTH_UP = new JBColor(0x208A3C, 0x5FB865);
     // 트리 · 오른쪽 칸 나눔 비율을 기억하는 키와 처음 비율
-    private static final String TREE_SPLIT_KEY = "BootServers.Servers.TreeSplit";
-    private static final float TREE_PROPORTION = 0.22f;
+    private static final String TREE_SPLIT_KEY = "BootServers.Servers.TreeSplit2";
+    private static final float TREE_PROPORTION = 0.20f;
     // 트리 위 진행 막대 둘레 여백(px, 배율 전)
     private static final int GAUGE_INSET = 4;
     // 머리줄 이름이 기본 라벨 글자보다 큰 만큼
@@ -224,7 +220,6 @@ final class ServersPanel extends SimpleToolWindowPanel {
     // 머리줄 아래 탭(설정 · 대시보드 · 연결 지도)과 「모아 보기」. 값은 monitor 가 모으고, 보이는 탭만 다시 그린다.
     private static final int TAB_DASHBOARD = 1;
     private static final int TAB_MAP = 2;
-    private static final String HEALTH_SUFFIX = "/health";
     private final JBTabbedPane tabs = new JBTabbedPane();
     private final ServerMonitor monitor;
     private final DashboardView dashboard;
@@ -1296,13 +1291,11 @@ final class ServersPanel extends SimpleToolWindowPanel {
             if (row instanceof Boot b) {
                 ServerRegistry.Run run = ServerRegistry.getInstance(project).get(b.name());
                 Integer port = live && run != null && run.port != null ? run.port : portNumber(getProperty(vmOf(b), PORT_KEY));
-                String health = live ? healthUrl(b) : null;
-                String actuator = health == null ? null : health.substring(0, health.length() - HEALTH_SUFFIX.length());
-                result.add(new ServerMonitor.Watched(b.name(), b.module(), profileOf(b), live, pid, actuator, port));
+                result.add(new ServerMonitor.Watched(b.name(), b.module(), profileOf(b), live, pid, port));
             }
             else {
                 WasSettings.Server s = (WasSettings.Server) row;
-                result.add(new ServerMonitor.Watched(s.name, null, null, live, pid, null, s.httpPort));
+                result.add(new ServerMonitor.Watched(s.name, null, null, live, pid, s.httpPort));
             }
         }
         return result;
@@ -1523,9 +1516,9 @@ final class ServersPanel extends SimpleToolWindowPanel {
             return;
         }
         long pid = process.getProcess().pid();
-        String url = row instanceof Boot b ? healthUrl(b) : null;
+        boolean boot = row instanceof Boot;
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
-            ServerProbe.Health result = url == null ? null : ServerProbe.health(url);
+            ServerProbe.Health result = boot ? ServerProbe.health(pid) : null;
             long[] memory = ServerProbe.heap(pid);
             ApplicationManager.getApplication().invokeLater(() -> {
                 Object now = detailBoot != null ? detailBoot : detailServer;
@@ -1560,27 +1553,6 @@ final class ServersPanel extends SimpleToolWindowPanel {
             return descriptors.isEmpty() ? null : descriptors.get(0).getProcessHandler();
         }
         return WasRunner.getInstance(project).handler((WasSettings.Server) target);
-    }
-
-    /**
-     * 스프링 부트 상태 점검 주소. VM 옵션에 management.server.port 가 있으면 그 포트, 아니면 콘솔에서 읽은 포트 + server.servlet.context-path.
-     * 포트를 모르면 null.
-     */
-    private String healthUrl(Boot b) {
-        String vm = vmOf(b);
-        String management = getProperty(vm, MANAGEMENT_PORT_KEY);
-        if (!management.isEmpty()) {
-            return LOCALHOST + management + HEALTH_PATH;
-        }
-        ServerRegistry.Run run = ServerRegistry.getInstance(project).get(b.name());
-        if (run == null || run.port == null) {
-            return null;
-        }
-        String context = getProperty(vm, CONTEXT_PATH_KEY);
-        while (context.endsWith("/")) {
-            context = context.substring(0, context.length() - 1);
-        }
-        return LOCALHOST + run.port + context + HEALTH_PATH;
     }
 
     private static String vmOf(Boot b) {

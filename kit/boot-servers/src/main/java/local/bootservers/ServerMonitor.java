@@ -17,6 +17,7 @@ import com.intellij.util.concurrency.AppExecutorUtil;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import javax.management.MBeanServerConnection;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -39,8 +40,8 @@ import java.util.function.Supplier;
  */
 final class ServerMonitor {
 
-    /** 서버 창의 줄 하나. module 은 스프링 부트만(WAS 는 null), pid 는 실행 중일 때만(-1), actuator 는 「…/actuator」 또는 null. */
-    record Watched(String name, Module module, String vmProfile, boolean live, long pid, String actuator, Integer port) {
+    /** 서버 창의 줄 하나. module 은 스프링 부트만(WAS 는 null), pid 는 실행 중일 때만(-1). */
+    record Watched(String name, Module module, String vmProfile, boolean live, long pid, Integer port) {
     }
 
     /** 한 연결의 마지막 확인. checked 가 false 면 아직 확인 전. downSince 는 끊긴 것을 처음 본 시각(붙어 있으면 0). */
@@ -195,11 +196,12 @@ final class ServerMonitor {
             }
             anyLive = true;
             ServerProbe.Jvm jvm = w.pid() < 0 ? null : ServerProbe.jvm(w.pid());
-            MetricsProbe.Requests r = MetricsProbe.requests(w.actuator());
+            MBeanServerConnection server = w.module() == null || w.pid() < 0 ? null : ServerProbe.connection(w.pid());
+            MetricsProbe.Requests r = w.module() == null ? MetricsProbe.Requests.of(MetricsProbe.Access.NONE) : MetricsProbe.requests(server);
             accesses.put(w.name(), r.access());
             samples.put(w.name(), sample(jvm, r));
             if (checkSlow && w.name().equals(slowName) && r.access() == MetricsProbe.Access.OK) {
-                slows.put(w.name(), Metrics.slowest(MetricsProbe.slow(w.actuator()), SLOW_TOP));
+                slows.put(w.name(), Metrics.slowest(MetricsProbe.slow(server), SLOW_TOP));
             }
         }
         List<Link> found = null;
