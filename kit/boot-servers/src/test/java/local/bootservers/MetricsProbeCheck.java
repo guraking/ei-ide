@@ -1,77 +1,103 @@
 package local.bootservers;
 
-import com.sun.net.httpserver.HttpServer;
-
-import java.io.IOException;
-import java.io.OutputStream;
-import java.net.InetSocketAddress;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
+import javax.management.Attribute;
+import javax.management.AttributeList;
+import javax.management.DynamicMBean;
+import javax.management.MBeanInfo;
+import javax.management.MBeanServer;
+import javax.management.ObjectName;
+import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-/** MetricsProbe 를 가짜 액추에이터에 붙여 점검한다. 실패하면 예외로 끝난다. */
+/** MetricsProbe 를 가짜 JMX metrics 끝점(스프링 부트 EndpointMBean 과 같은 이름 · 연산)에 붙여 점검한다. 실패하면 예외로 끝난다. */
 public final class MetricsProbeCheck {
 
-    private static final String BASE = "/ctx/actuator/metrics";
-    private static final Map<String, String> ANSWERS = Map.of(
-            BASE, "{\"names\":[\"http.server.requests\",\"hikaricp.connections.active\",\"hikaricp.connections.max\"]}",
-            BASE + "/http.server.requests", m(110, 2.0, 0.9) + ",\"availableTags\":[{\"tag\":\"outcome\",\"values\":[\"SUCCESS\",\"SERVER_ERROR\"]},"
-                    + "{\"tag\":\"uri\",\"values\":[\"/actuator/metrics\",\"/api/{id}\",\"/slow\"]}]}",
-            BASE + "/http.server.requests?tag=uri:/actuator/metrics", m(10, 0.1, 0.01) + "}",
-            BASE + "/http.server.requests?tag=outcome:SERVER_ERROR", m(3, 0.3, 0.2) + "}",
-            BASE + "/http.server.requests?tag=uri:/api/{id}", m(90, 0.9, 0.05) + ",\"availableTags\":[{\"tag\":\"method\",\"values\":[\"GET\"]},{\"tag\":\"outcome\",\"values\":[\"SUCCESS\"]}]}",
-            BASE + "/http.server.requests?tag=uri:/slow", m(10, 1.0, 0.9) + ",\"availableTags\":[{\"tag\":\"method\",\"values\":[\"POST\"]},{\"tag\":\"outcome\",\"values\":[\"SERVER_ERROR\"]}]}",
-            BASE + "/http.server.requests?tag=uri:/slow&tag=outcome:SERVER_ERROR", m(3, 0.3, 0.2) + "}",
-            BASE + "/hikaricp.connections.active", "{\"measurements\":[{\"statistic\":\"VALUE\",\"value\":4.0}]}",
-            BASE + "/hikaricp.connections.max", "{\"measurements\":[{\"statistic\":\"VALUE\",\"value\":10.0}]}");
+    private static final String REQUESTS = "http.server.requests";
+    private static final Map<String, Map<String, Object>> ANSWERS = Map.of(
+            REQUESTS, m(110, 2.0, 0.9, List.of(tag("outcome", "SUCCESS", "SERVER_ERROR"), tag("uri", "/actuator/prometheus", "/api/{id}", "/slow"))),
+            REQUESTS + "[uri:/actuator/prometheus]", m(10, 0.1, 0.01, List.of()),
+            REQUESTS + "[outcome:SERVER_ERROR]", m(3, 0.3, 0.2, List.of()),
+            REQUESTS + "[uri:/api/{id}]", m(90, 0.9, 0.05, List.of(tag("method", "GET"), tag("outcome", "SUCCESS"))),
+            REQUESTS + "[uri:/slow]", m(10, 1.0, 0.9, List.of(tag("method", "POST"), tag("outcome", "SERVER_ERROR"))),
+            REQUESTS + "[uri:/slow, outcome:SERVER_ERROR]", m(3, 0.3, 0.2, List.of()),
+            "hikaricp.connections.active", Map.of("measurements", List.of(Map.of("statistic", "VALUE", "value", 4.0))),
+            "hikaricp.connections.max", Map.of("measurements", List.of(Map.of("statistic", "VALUE", "value", 10.0))));
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws Exception {
+        MBeanServer server = ManagementFactory.getPlatformMBeanServer();
+        check(MetricsProbe.requests(server).access() == MetricsProbe.Access.NOT_EXPOSED, "끝점 없음");
+        check(MetricsProbe.requests(null).access() == MetricsProbe.Access.UNREACHABLE, "연결 없음");
         List<String> asked = new ArrayList<>();
-        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        server.createContext("/", exchange -> {
-            String path = URLDecoder.decode(exchange.getRequestURI().getRawPath(), StandardCharsets.UTF_8);
-            String query = exchange.getRequestURI().getRawQuery();
-            String key = query == null ? path : path + "?" + URLDecoder.decode(query, StandardCharsets.UTF_8);
-            asked.add(key);
-            String body = key.startsWith("/locked") ? null : ANSWERS.get(key);
-            int code = key.startsWith("/locked") ? 401 : body == null ? 404 : 200;
-            byte[] bytes = body == null ? new byte[0] : body.getBytes(StandardCharsets.UTF_8);
-            exchange.sendResponseHeaders(code, bytes.length == 0 ? -1 : bytes.length);
-            try (OutputStream out = exchange.getResponseBody()) {
-                out.write(bytes);
-            }
-        });
-        server.start();
+        // unique-names 를 켠 앱처럼 context 꼬리가 붙은 이름
+        ObjectName name = new ObjectName("org.springframework.boot:type=Endpoint,name=Metrics,context=1a2b");
+        server.registerMBean(new FakeEndpoint(asked), name);
         try {
-            String root = "http://127.0.0.1:" + server.getAddress().getPort();
-            MetricsProbe.Requests r = MetricsProbe.requests(root + "/ctx/actuator");
+            MetricsProbe.Requests r = MetricsProbe.requests(server);
             check(r.access() == MetricsProbe.Access.OK, "OK");
             check(r.count() == 100 && Math.abs(r.totalSeconds() - 1.9) < 1e-9, "액추에이터 뺌: " + r);
             check(r.serverErrors() == 3 && r.clientErrors() == 0, "오류 수");
             check(r.poolActive() == 4 && r.poolMax() == 10 && Double.isNaN(r.poolPending()), "DB 풀");
             for (String a : asked) {
-                check(ANSWERS.containsKey(a), "없는 지표를 물음: " + a);
+                check(a.equals("listNames") || ANSWERS.containsKey(a), "없는 지표를 물음: " + a);
             }
-            List<Metrics.Slow> slow = MetricsProbe.slow(root + "/ctx/actuator");
+            List<Metrics.Slow> slow = MetricsProbe.slow(server);
             check(slow.size() == 2, "두 주소: " + slow);
             Metrics.Slow s = Metrics.slowest(slow, 1).get(0);
             check(s.uri().equals("/slow") && s.method().equals("POST") && Math.abs(s.avgMillis() - 100) < 1e-9 && s.errors() == 3, "느린 주소: " + s);
-            check(MetricsProbe.requests(root + "/locked").access() == MetricsProbe.Access.FORBIDDEN, "로그인 필요");
-            check(MetricsProbe.requests(root + "/none").access() == MetricsProbe.Access.NOT_EXPOSED, "열리지 않음");
-            check(MetricsProbe.requests(null).access() == MetricsProbe.Access.NONE, "주소 없음");
         }
         finally {
-            server.stop(0);
+            server.unregisterMBean(name);
         }
-        check(MetricsProbe.requests("http://127.0.0.1:1/actuator").access() == MetricsProbe.Access.UNREACHABLE, "연결 안 됨");
         System.out.println("MetricsProbeCheck 통과");
     }
 
-    private static String m(double count, double total, double max) {
-        return "{\"measurements\":[{\"statistic\":\"COUNT\",\"value\":" + count + "},{\"statistic\":\"TOTAL_TIME\",\"value\":" + total
-                + "},{\"statistic\":\"MAX\",\"value\":" + max + "}]";
+    /** 스프링 부트 EndpointMBean 처럼 연산 이름으로만 고르고, 응답은 JSON 과 같은 모양의 Map 으로 돌려준다. */
+    private record FakeEndpoint(List<String> asked) implements DynamicMBean {
+        @Override
+        public Object invoke(String action, Object[] params, String[] signature) {
+            if (action.equals("listNames")) {
+                asked.add(action);
+                return Map.of("names", List.of(REQUESTS, "hikaricp.connections.active", "hikaricp.connections.max"));
+            }
+            String key = (String) params[0] + (params[1] == null ? "" : params[1].toString());
+            asked.add(key);
+            return ANSWERS.get(key);
+        }
+
+        @Override
+        public Object getAttribute(String attribute) {
+            return null;
+        }
+
+        @Override
+        public void setAttribute(Attribute attribute) {
+        }
+
+        @Override
+        public AttributeList getAttributes(String[] attributes) {
+            return new AttributeList();
+        }
+
+        @Override
+        public AttributeList setAttributes(AttributeList attributes) {
+            return new AttributeList();
+        }
+
+        @Override
+        public MBeanInfo getMBeanInfo() {
+            return new MBeanInfo(FakeEndpoint.class.getName(), null, null, null, null, null);
+        }
+    }
+
+    private static Map<String, Object> m(double count, double total, double max, List<Map<String, Object>> tags) {
+        return Map.of("measurements", List.of(Map.of("statistic", "COUNT", "value", count), Map.of("statistic", "TOTAL_TIME", "value", total),
+                Map.of("statistic", "MAX", "value", max)), "availableTags", tags);
+    }
+
+    private static Map<String, Object> tag(String tag, String... values) {
+        return Map.of("tag", tag, "values", List.of(values));
     }
 
     private static void check(boolean ok, String what) {
