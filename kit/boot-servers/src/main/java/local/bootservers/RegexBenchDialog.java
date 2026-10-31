@@ -50,6 +50,7 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.datatransfer.StringSelection;
 import java.util.ArrayList;
@@ -140,7 +141,7 @@ final class RegexBenchDialog extends DialogWrapper {
         EditorColorsScheme scheme = EditorColorsManager.getInstance().getGlobalScheme();
         matchPainter = new DefaultHighlighter.DefaultHighlightPainter(matchColor(scheme));
         Color selection = scheme.getColor(EditorColors.SELECTION_BACKGROUND_COLOR);
-        selectedPainter = new DefaultHighlighter.DefaultHighlightPainter(selection != null ? selection : UIUtil.getTextFieldSelectionBackground());
+        selectedPainter = new DefaultHighlighter.DefaultHighlightPainter(selection != null ? selection : sampleArea.getSelectionColor());
         debounce.setRepeats(false);
         flavorBox.setSelectedItem(flavor != null ? flavor : savedFlavor());
         sampleArea.setText(sample);
@@ -547,6 +548,6 @@ final class RegexBenchDialog extends DialogWrapper {
                 .createHtmlTextBalloonBuilder(BootServersBundle.message("regex.code.copied"), MessageType.INFO, null)
                 .setFadeoutTime(COPIED_FADE_MS)
                 .createBalloon()
-                .show(RelativePoint.getNorthOf(copyButton), Balloon.Position.above);
+                .show(new RelativePoint(copyButton, new Point(copyButton.getWidth() / 2, 0)), Balloon.Position.above);
     }
 }
