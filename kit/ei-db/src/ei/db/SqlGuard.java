@@ -25,8 +25,8 @@ public final class SqlGuard {
   /** 끝의 ; 가 문장의 일부인 PL/SQL 단위(END 이름; 까지 그대로 보낸다). */
   private static final Pattern PLSQL = Pattern.compile(
       "^(?:CREATE\\s+(?:OR\\s+REPLACE\\s+)?(?:(?:NON)?EDITIONABLE\\s+)?(?:PROCEDURE|FUNCTION|PACKAGE|TRIGGER|TYPE)\\b|DECLARE\\b|BEGIN\\b)");
-  /** 큰따옴표로 감싼 이름("" 이스케이프 포함). WHERE 판정에서만 지운다. 이름 안의 "WHERE" 를 조건절로 보지 않게. */
-  private static final Pattern QUOTED_NAME = Pattern.compile("\"(?:[^\"]++|\"\")*+\"");
+  /** 따옴표로 감싼 이름: 큰따옴표(Oracle · PostgreSQL, "" 이스케이프) · 백틱(MySQL, `` 이스케이프). WHERE 판정에서만 지운다. 이름 안의 WHERE 를 조건절로 보지 않게. */
+  private static final Pattern QUOTED_NAME = Pattern.compile("\"(?:[^\"]++|\"\")*+\"|`(?:[^`]++|``)*+`");
   /** 소유 수량자(++ · *+)는 긴 문자열에서 StackOverflowError 를 막는다. 문자열('' 이스케이프 포함) · 블록 주석 · 줄 주석을 한 번에 훑어 앞에 나온 것부터 지운다(문자열 안의 -- 를 주석으로 보지 않게). */
   private static final Pattern STRING_OR_COMMENT = Pattern.compile("'(?:[^']++|'')*+'|/\\*.*?\\*/|--[^\\n]*", Pattern.DOTALL);
 
