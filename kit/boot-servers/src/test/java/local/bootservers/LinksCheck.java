@@ -54,6 +54,10 @@ public final class LinksCheck {
         Links.Source docs = source("application.yml", "server.port: 1\n---\nspring.config.activate.on-profile: local\nserver.port: 2\n---\nspring.profiles: \"!local\"\nserver.port: 3\n");
         check(Links.port(List.of(docs), Set.of("local")) == 2, "문서 프로필 맞음");
         check(Links.port(List.of(docs), Set.of("dev")) == 3, "! 프로필");
+        check(Links.matches("local & !dev", Set.of("local")) && !Links.matches("local & !dev", Set.of("local", "dev")), "& · !");
+        check(Links.matches("(dev | qa) & eu", Set.of("qa", "eu")) && !Links.matches("(dev | qa) & eu", Set.of("qa")), "괄호 · |");
+        check(Links.matches("x, prod | dev", Set.of("dev")) && !Links.matches("dev & (qa", Set.of("dev", "qa")), "쉼표 · 깨진 식");
+        check(Links.profiles("", List.of(source("application.yml", "spring:\n  profiles:\n    default: local\n"))).equals(Set.of("local")), "spring.profiles.default");
     }
 
     private static void jdbc() {

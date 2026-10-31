@@ -42,6 +42,8 @@ final class Links {
     private static final String NOT = "!";
     private static final String[] PROFILE_KEYS = {"spring.config.activate.on-profile", "spring.profiles"};
     private static final String ACTIVE_KEY = "spring.profiles.active";
+    // 켜진 프로필이 없을 때 쓰는 프로필 이름. 이 키가 없으면 스프링 기본값 default.
+    private static final String DEFAULT_KEY = "spring.profiles.default";
     private static final String PORT_KEY = "server.port";
     private static final String JDBC = "jdbc:";
     // 다른 드라이버를 감싸 로그만 남기는 드라이버. 감싼 뒤의 주소로 읽는다.
@@ -83,9 +85,20 @@ final class Links {
     private Links() {
     }
 
-    /** VM 옵션에도 프로필이 없으면 설정의 spring.profiles.active, 그것도 없으면 default. 쉼표로 여럿. */
+    /** VM 옵션에도 프로필이 없으면 설정의 spring.profiles.active, 그것도 없으면 설정의 spring.profiles.default, 그것도 없으면 default. 쉼표로 여럿. */
     static Set<String> profiles(String vmProfile, List<Source> sources) {
         String value = vmProfile == null || vmProfile.isBlank() ? baseValue(sources, ACTIVE_KEY) : vmProfile;
+        Set<String> result = names(value);
+        if (result.isEmpty()) {
+            result = names(baseValue(sources, DEFAULT_KEY));
+        }
+        if (result.isEmpty()) {
+            result.add(DEFAULT_PROFILE);
+        }
+        return result;
+    }
+
+    private static Set<String> names(String value) {
         Set<String> result = new LinkedHashSet<>();
         if (value != null) {
             for (String p : value.split(",")) {
@@ -93,9 +106,6 @@ final class Links {
                     result.add(p.strip());
                 }
             }
-        }
-        if (result.isEmpty()) {
-            result.add(DEFAULT_PROFILE);
         }
         return result;
     }
@@ -306,17 +316,94 @@ final class Links {
         return result;
     }
 
-    /** on-profile 값(쉼표로 여럿, 앞에 ! 는 아님)이 켜진 프로필 중 하나와 맞는가. */
-    private static boolean matches(String expression, Set<String> profiles) {
+    /**
+     * on-profile 값이 켜진 프로필과 맞는가. 스프링 Profiles.of 와 같은 식: 쉼표로 여럿(하나라도 맞으면),
+     * 각 식은 ! (아님) · &amp; (그리고) · | (또는) · 괄호. &amp; 가 | 보다 먼저 묶인다. 식이 깨졌으면 맞지 않는 것으로 본다.
+     */
+    static boolean matches(String expression, Set<String> profiles) {
         for (String part : expression.split(",")) {
-            String p = part.strip();
-            boolean negate = p.startsWith(NOT);
-            String name = negate ? p.substring(NOT.length()).strip() : p;
-            if (negate != profiles.contains(name)) {
+            if (part.isBlank()) {
+                continue;
+            }
+            ProfileExpression p = new ProfileExpression(part, profiles);
+            if (p.parse()) {
                 return true;
             }
         }
         return false;
+    }
+
+    /** 한 프로필 식을 앞에서부터 읽어 맞는지 계산한다. */
+    private static final class ProfileExpression {
+        private final String text;
+        private final Set<String> profiles;
+        private int pos;
+        private boolean broken;
+
+        ProfileExpression(String text, Set<String> profiles) {
+            this.text = text;
+            this.profiles = profiles;
+        }
+
+        boolean parse() {
+            boolean result = or();
+            skipSpaces();
+            return result && !broken && pos == text.length();
+        }
+
+        private boolean or() {
+            boolean result = and();
+            while (take('|')) {
+                result |= and();
+            }
+            return result;
+        }
+
+        private boolean and() {
+            boolean result = not();
+            while (take('&')) {
+                result &= not();
+            }
+            return result;
+        }
+
+        private boolean not() {
+            if (take(NOT.charAt(0))) {
+                return !not();
+            }
+            if (take('(')) {
+                boolean result = or();
+                if (!take(')')) {
+                    broken = true;
+                }
+                return result;
+            }
+            skipSpaces();
+            int start = pos;
+            while (pos < text.length() && "()&|!".indexOf(text.charAt(pos)) < 0 && !Character.isWhitespace(text.charAt(pos))) {
+                pos++;
+            }
+            if (start == pos) {
+                broken = true;
+                return false;
+            }
+            return profiles.contains(text.substring(start, pos));
+        }
+
+        private boolean take(char ch) {
+            skipSpaces();
+            if (pos < text.length() && text.charAt(pos) == ch) {
+                pos++;
+                return true;
+            }
+            return false;
+        }
+
+        private void skipSpaces() {
+            while (pos < text.length() && Character.isWhitespace(text.charAt(pos))) {
+                pos++;
+            }
+        }
     }
 
     /** application-{p}.yml → p, application.yml · 다른 이름 → null. */

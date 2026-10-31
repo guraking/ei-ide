@@ -10,6 +10,8 @@ public class CoreCheck {
     eq(SqlGuard.danger("delete order_item where id = 1"), null);
     eq(SqlGuard.danger("UPDATE product SET a = 'WHERE'"), "WHERE 없는 UPDATE");
     eq(SqlGuard.danger("-- WHERE\nUPDATE product SET a = 1"), "WHERE 없는 UPDATE");
+    eq(SqlGuard.danger("UPDATE t SET \"WHERE\" = 1"), "WHERE 없는 UPDATE");
+    eq(SqlGuard.danger("UPDATE \"T\" SET a = 1 WHERE \"WHERE\" = 1"), null);
     eq(SqlGuard.danger("truncate table app.orders"), "TRUNCATE 문");
     eq(SqlGuard.table("DELETE FROM app.\"ORDER_ITEM\""), "ORDER_ITEM");
     eq(SqlGuard.isWrite("  select * from dual"), false);
