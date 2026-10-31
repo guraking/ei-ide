@@ -106,7 +106,7 @@ final class ProjectHistoryPanel extends JPanel {
   private static final int GRAPH_PAD = 8;
   private static final int MAX_LANES = 12;
   private static final int DOT = 7;
-  // 표의 작성자 · 날짜 · 해시 칸 폭(JBUI.scale 전). 메시지 칸이 나머지를 차지한다.
+  // 표의 작성자 · 날짜 · 해시 칸 처음 폭(JBUI.scale 전, 끌어서 바꿀 수 있음). 메시지 칸이 나머지를 차지한다.
   private static final int AUTHOR_COL_W = 72;
   private static final int TIME_COL_W = 90;
   private static final int HASH_COL_W = 72;
@@ -236,9 +236,10 @@ final class ProjectHistoryPanel extends JPanel {
     commits.getTableHeader().setReorderingAllowed(false);
     commits.getTableHeader().setForeground(DIM);
     commits.setDefaultRenderer(Object.class, new CommitRenderer());
-    fixWidth(commits.getColumnModel().getColumn(COL_AUTHOR), JBUI.scale(AUTHOR_COL_W));
-    fixWidth(commits.getColumnModel().getColumn(COL_TIME), JBUI.scale(TIME_COL_W));
-    fixWidth(commits.getColumnModel().getColumn(COL_HASH), JBUI.scale(HASH_COL_W));
+    // 작성자 · 날짜 · 해시 칸은 처음 폭만 주고 머리글 경계를 끌어 넓히고 줄일 수 있다. 가지 선 칸만 폭을 고정한다(updateGraphWidth).
+    commits.getColumnModel().getColumn(COL_AUTHOR).setPreferredWidth(JBUI.scale(AUTHOR_COL_W));
+    commits.getColumnModel().getColumn(COL_TIME).setPreferredWidth(JBUI.scale(TIME_COL_W));
+    commits.getColumnModel().getColumn(COL_HASH).setPreferredWidth(JBUI.scale(HASH_COL_W));
     commits.getSelectionModel().addListSelectionListener(e -> { if (!e.getValueIsAdjusting()) showDetail(); });
     // 오른쪽 단추로 누른 줄을 먼저 고른다(우클릭 메뉴가 그 줄의 작성자를 쓴다). PopupHandler 보다 먼저 달아야 먼저 불린다.
     commits.addMouseListener(new MouseAdapter() {
