@@ -11,19 +11,22 @@ public class HistoryCheck {
   static void eq(Object a, Object b) { if (!java.util.Objects.equals(a, b)) throw new AssertionError(a + " != " + b); }
 
   public static void main(String[] args) throws Exception {
-    String out = "\u001eabc\u001fp1 p2\u001f이정민\u001f1761126840\u001fHEAD -> develop, origin/develop, tag: v1\u001f업체선정 요청\n\n둘째 줄\n\u001d\n\nM\tsrc/A.java\nA\t한글 경로/B.xml\nR100\told.txt\tnew.txt\n"
-                 + "\u001edef\u001f\u001fkim\u001f1761120000\u001fHEAD, grafted\u001f빈 커밋\n\u001d\n";
+    String out = "\u001eabc\u001fp1 p2\u001f이정민\u001f1761126840\u001fHEAD -> develop, origin/develop, tag: v1\u001f업체선정 요청\n\n둘째 줄\n\u001fjm@x\u001d\n\n:100644 100644 a1 a2 M\tsrc/A.java\n:000000 100644 0000000000000000000000000000000000000000 b2 A\t한글 경로/B.xml\n"
+                 + ":100644 100644 c1 c1 R100\told.txt\tnew.txt\n"
+                 + "\u001edef\u001f\u001fkim\u001f1761120000\u001fHEAD, grafted\u001f빈 커밋\n\u001f\u001d\n";
     List<History.Entry> log = History.parseGitLog(out);
     eq(log.size(), 2);
     eq(log.get(0).author(), "이정민");
+    eq(log.get(0).email(), "jm@x");
     eq(log.get(0).parents(), List.of("p1", "p2"));
     eq(log.get(0).merge(), true);
     eq(log.get(0).refs(), List.of("develop", "origin/develop", "tag: v1"));
     eq(log.get(0).subject(), "업체선정 요청");
     eq(log.get(0).message(), "업체선정 요청\n\n둘째 줄");
     eq(log.get(0).time(), Instant.ofEpochSecond(1761126840));
-    eq(log.get(0).files(), List.of(new History.FileChange("M", "src/A.java"), new History.FileChange("A", "한글 경로/B.xml"),
-                                   new History.FileChange("R", "new.txt", "old.txt")));
+    eq(log.get(0).files(), List.of(new History.FileChange("M", "src/A.java", "src/A.java", "a1", "a2"),
+                                   new History.FileChange("A", "한글 경로/B.xml", "한글 경로/B.xml", "0000000000000000000000000000000000000000", "b2"),
+                                   new History.FileChange("R", "new.txt", "old.txt", "c1", "c1")));
     eq(log.get(1).parents(), List.of());
     eq(log.get(1).refs(), List.of());
     eq(log.get(1).files(), List.of());
@@ -31,6 +34,14 @@ public class HistoryCheck {
     bad(() -> History.parseGitLog("\u001eabc\u001fkim\u001d\n"));
     bad(() -> History.parseGitLog("\u001eabc\u001f\u001fkim\u001fx\u001f\u001fmsg\u001d\n"));
     bad(() -> History.parseGitLog("\u001eabc\u001f\u001fkim\u001f1\u001f\u001fmsg\n"));
+    bad(() -> History.parseGitLog("\u001eabc\u001f\u001fkim\u001f1\u001f\u001fmsg\u001f\u001d\n:100644 a1 M\tx\n"));
+
+    eq(History.parseMe("user.name 이 정민\nuser.email JM@X\n"), new History.Me("이 정민", "JM@X"));
+    eq(History.parseMe(""), History.Me.NONE);
+    History.Me me = new History.Me("", "jm@x");
+    eq(me.is(log.get(0)), true);
+    eq(me.is(log.get(1)), false);
+    eq(History.Me.NONE.is(log.get(1)), false);  // 빈 이름 · 메일끼리 같다고 보지 않는다
 
     checkLayout();
 
@@ -77,6 +88,7 @@ public class HistoryCheck {
     eq(History.parseSvnLog(koLog, koPrefix).get(0).files(), List.of(new History.FileChange("M", "src/X.java")));
 
     checkRealGit();
+    checkClashes();
     System.out.println("HistoryCheck 통과");
   }
 
@@ -100,10 +112,10 @@ public class HistoryCheck {
     eq(log.stream().map(History.Entry::subject).toList(), List.of("Merge branch 'side'", "본줄기", "곁가지", "앱 첫 커밋"));
     eq(log.get(0).parents(), List.of(log.get(1).id(), log.get(2).id()));
     eq(log.get(1).parents(), List.of(log.get(3).id()));  // 폴더 밖 「밖 커밋」을 건너뛴 부모
-    eq(log.get(3).files(), List.of(new History.FileChange("A", "한글.java")));
+    eq(names(log.get(3).files()), List.of(new History.FileChange("A", "한글.java")));
     eq(log.get(1).refs(), List.of());
     eq(log.get(0).refs(), List.of("main"));
-    eq(log.get(0).files(), List.of(new History.FileChange("A", "side.java")));
+    eq(names(log.get(0).files()), List.of(new History.FileChange("A", "side.java")));
     // 첫 묶음 뒤 새 커밋이 생겨도 첫 HEAD 에서 세면 다음 묶음이 어긋나지 않는다.
     commit(repo, "app/later.java", "나중 커밋");
     // 다음 묶음: 앞의 둘을 건너뛰면 나머지 둘이 같은 순서로 온다.
@@ -112,7 +124,7 @@ public class HistoryCheck {
     git(repo, "mv", "app/main.java", "app/renamed.java");
     git(repo, "commit", "-q", "-m", "이름 바꿈");
     List<History.Entry> renamed = History.parseGitLog(git(app, History.gitLogArgs("HEAD", 1, 0)));
-    eq(renamed.get(0).files(), List.of(new History.FileChange("R", "renamed.java", "main.java")));
+    eq(names(renamed.get(0).files()), List.of(new History.FileChange("R", "renamed.java", "main.java")));
     List<History.Row> rows = History.layout(log);
     // 0 합치기(본줄기 · 곁가지) / 1 본줄기 / 2 곁가지 / 3 첫 커밋. 곁가지는 1 칸, 나머지는 0 칸.
     eq(History.links(log, rows, 0), List.of(new History.Link(History.LinkKind.MERGED_FROM, log.get(2))));
@@ -124,6 +136,80 @@ public class HistoryCheck {
     eq(History.passingTarget(rows, 2, 3), -1);
     eq(rows.get(0).bottom(), List.of(new History.Seg(0, 0, 0), new History.Seg(0, 1, 1)));
     eq(rows.get(3).top(), List.of(new History.Seg(0, 0, 0), new History.Seg(1, 0, 1)));
+  }
+
+  /**
+   * 내 소스 건드림: 나(me)는 f · g · h 를 고친다. kim 은
+   * 1) 갈라진 가지에서 f · g 를 고친 뒤 내 가지를 합치며 f 는 자기 것을 택한다(합치기에서 덮어씀). g 는 양쪽을 다 넣어 합쳐 빠진다.
+   * 2) 합친 뒤 h 를 내 커밋 전 내용으로 되돌린다(되돌림). 내가 안 고친 파일은 나오지 않는다.
+   */
+  private static void checkClashes() throws Exception {
+    File repo = Files.createTempDirectory("clash").toFile();
+    File app = new File(repo, "app");
+    eq(app.mkdir(), true);
+    git(repo, "init", "-q", "-b", "main");
+    git(repo, "config", "user.name", "me");
+    git(repo, "config", "user.email", "me@x");
+    write(repo, "app/f", "base\n");
+    write(repo, "app/g", "1\n2\n3\n4\n5\n");
+    write(repo, "app/h", "old\n");
+    write(repo, "app/other", "x\n");
+    git(repo, "add", ".");
+    git(repo, "commit", "-q", "-m", "base");
+    git(repo, "checkout", "-q", "-b", "kim");
+    write(repo, "app/f", "kim\n");
+    write(repo, "app/g", "1\n2\n3\n4\nkim\n");
+    kim(repo, "kim 작업");
+    git(repo, "checkout", "-q", "main");
+    write(repo, "app/f", "mine\n");
+    write(repo, "app/g", "mine\n2\n3\n4\n5\n");
+    write(repo, "app/h", "new\n");
+    git(repo, "commit", "-q", "-am", "내 작업");
+    git(repo, "checkout", "-q", "kim");
+    try {
+      git(repo, "-c", "user.name=kim", "-c", "user.email=kim@x", "merge", "-q", "main", "-m", "merge");
+    }
+    catch (IOException conflict) {
+      // f 만 충돌한다. kim 은 자기 판을 택한다.
+    }
+    git(repo, "checkout", "--ours", "app/f");
+    git(repo, "add", "app/f");
+    kim(repo, "합치기 - 내 것 택함");
+    write(repo, "app/h", "old\n");
+    kim(repo, "옛 작업본 올림");
+    write(repo, "app/other", "y\n");
+    kim(repo, "상관없는 파일");
+    String head = git(repo, "rev-parse", "HEAD").trim();
+    List<History.Entry> log = History.parseGitLog(git(app, History.gitLogArgs("kim", 100, 0)));
+    List<String> merges = new java.util.ArrayList<>();
+    for (History.Entry e : log) if (e.merge()) merges.add(e.id());
+    eq(merges.size(), 1);
+    java.util.Map<String, List<List<History.FileChange>>> sides = History.parseSides(git(app, History.sideArgs(merges)));
+    eq(sides.get(merges.get(0)).size(), 2);
+    java.util.Map<String, List<History.Clash>> clashes = History.clashes(log, new History.Me("me", "me@x"), sides);
+    java.util.Map<String, String> bySubject = new java.util.TreeMap<>();
+    for (History.Entry e : log) {
+      List<History.Clash> found = clashes.get(e.id());
+      if (found == null) continue;
+      List<String> parts = new java.util.ArrayList<>();
+      for (History.Clash c : found) parts.add(c.change().path() + (c.reverted() ? " 되돌림 " : " 덮어씀 ") + c.mine().subject());
+      bySubject.put(e.subject(), String.join(", ", parts));
+    }
+    eq(bySubject, java.util.Map.of("합치기 - 내 것 택함", "f 덮어씀 내 작업", "옛 작업본 올림", "h 되돌림 내 작업"));
+    // 나를 모르면(user.name · email 없음) 아무것도 찾지 않는다.
+    eq(History.clashes(log, History.Me.NONE, sides), java.util.Map.of());
+    eq(History.gitHead(app), "kim");
+    git(repo, "checkout", "-q", "--detach", head);
+    eq(History.gitHead(app), head.substring(0, 7));
+    eq(History.gitHead(Files.createTempDirectory("nogit").toFile()), "");
+  }
+
+  private static void write(File repo, String path, String text) throws IOException {
+    Files.writeString(new File(repo, path).toPath(), text);
+  }
+
+  private static void kim(File repo, String message) throws IOException, InterruptedException {
+    git(repo, "-c", "user.name=kim", "-c", "user.email=kim@x", "commit", "-q", "-am", message);
   }
 
   /** 가지 선: M(합치기) ← A(본줄기) · B(곁가지) ← R(뿌리). 곁가지는 1번 칸으로 갈라졌다가 R 에서 0번 칸으로 모인다. */
@@ -141,7 +227,14 @@ public class HistoryCheck {
   }
 
   private static History.Entry entry(String id, String... parents) {
-    return new History.Entry(id, List.of(parents), "a", Instant.EPOCH, List.of(), id, List.of());
+    return new History.Entry(id, List.of(parents), "a", "", Instant.EPOCH, List.of(), id, List.of());
+  }
+
+  /** 내용 해시를 뺀 상태 · 경로만(실제 git 해시는 실행마다 같지 않을 수 있다). */
+  private static List<History.FileChange> names(List<History.FileChange> files) {
+    List<History.FileChange> result = new java.util.ArrayList<>();
+    for (History.FileChange f : files) result.add(new History.FileChange(f.status(), f.path(), f.oldPath()));
+    return result;
   }
 
   private static void commit(File repo, String path, String message) throws IOException, InterruptedException {

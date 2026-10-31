@@ -476,7 +476,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
       <tr><th>창 (자리)</th><th>단추 · 우클릭</th></tr>
       <tr><td>Servers (아래)</td><td>Start · Start in Debug · Restart · Stop · Stop All · Add WAS… · Server Groups(New Group… · Start Group · Stop Group) · ⋯ More(Duplicate Server · Publish (Rebuild) · Remove WAS · Show Log Files…) · Refresh Server List. 줄 우클릭에 Open in Browser · Show Console · Edit Settings… (<a href="#servers">서버 창</a>)</td></tr>
       <tr><td>Synchronize (아래)</td><td>Show All · Incoming · Outgoing · Conflicts · Refresh All · Selected Repository Only, 아래 Pull All · Pull Selected · Push · Commit and Push… · Resolve Conflicts · Merge Branches. 목록 우클릭 Pull · Update Only These Files · Commit… · Push · Resolve Conflicts · Undo Last Git Action…, 저장소 줄 우클릭 Pull · Push · Refresh This Repository · Merge Branches… · Undo Last Git Action… · Show in Git Log · 탐색기에서 열기, 파일 우클릭 Add to .gitignore · Replace with HEAD · Unstage Only, Keep Files · Assume Unchanged · Jump to Source · Show History · Copy Absolute Path · Select in Project View, 도구줄 모두 펼치기 · 모두 접기 · 폴더별로 묶기 · 이전 · 다음 파일 (<a href="#sync">Git · SVN</a>)</td></tr>
-      <tr><td>Git Log (아래)</td><td>프로젝트 상자 · Refresh · 「?」 · 찾기 칸 (<a href="#sync">Git · SVN</a>)</td></tr>
+      <tr><td>Git Log (아래)</td><td>왼쪽 저장소 목록 · Refresh · 「?」 · 내 소스 건드린 커밋만 · 찾기 칸 (<a href="#sync">Git · SVN</a>)</td></tr>
       <tr><td>Database (오른쪽)</td><td>Refresh · New Console · Connect · Disconnect · Edit · Delete · Find · More(Export · Import Connections). 표 우클릭 View Data · Generate SELECT · INSERT · UPDATE Statement · Generate Mapper Skeleton · Generate Feature Set… · Open ERD · Table Specification Excel…, 접속 우클릭 View Sessions · View Locks · Open ERD (All), 프로그램 우클릭 Open Source · View Compilation Errors (<a href="#db">데이터베이스</a>)</td></tr>
       <tr><td>Result (아래)</td><td>Fetch · Apply · Revert · CSV · Excel · INSERT · UPDATE · DTO · enum · 찾기(<kbd>Ctrl</kbd>+<kbd>F</kbd>). 칸 우클릭 Copy Value · Copy Selected Rows · Copy Column Values as IN List · Sort (<a href="#db">데이터베이스</a>)</td></tr>
       <tr><td>API (아래)</td><td>Reload · Save as openapi.yaml… (<a href="#servers">서버 창</a>)</td></tr>
@@ -1128,16 +1128,18 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
     <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note"><b>Stash 와 다른 점</b>스테이징은 「이번 커밋에 넣을 것」을 고르는 칸이고, 작업본은 그대로입니다. Stash(Git → Uncommitted Changes → Stash Changes)는 고친 것을 통째로 치워 작업본을 깨끗하게 만들어 두었다가 나중에 Unstash 로 꺼내는 것입니다. 급한 다른 일을 먼저 할 때는 Stash, 고친 것 중 일부만 커밋할 때는 스테이징을 씁니다.</div><div class="note warn"><b>변경 목록(changelist)</b>스테이징을 켜면 Git 저장소에서는 변경 목록 대신 Staged · Unstaged 로 나뉩니다. SVN 저장소는 그대로 변경 목록을 씁니다. 파일 우클릭 Assume Unchanged 는 Staged · Unstaged 목록에서도 됩니다.</div></div>
 
     <h3>Git Log · 아래쪽 「Git Log」 창</h3>
-    <p class="lead">왼쪽 위 상자에서 프로젝트(모듈)를 고르면 그 폴더를 바꾼 커밋을 IntelliJ 기본 Log 탭처럼 보여 줍니다. Git · SVN(한 줄) 모두 되고, 기존 Git 로그 창은 그대로입니다.</p>
+    <p class="lead">왼쪽 저장소 목록에서 프로젝트(모듈)를 누르면 그 폴더를 바꾼 커밋을 IntelliJ 기본 Log 탭처럼 보여 줍니다. Git · SVN(한 줄) 모두 되고, 기존 Git 로그 창은 그대로입니다. 다른 사람이 내 커밋을 되돌리거나 합치며 버린 커밋에는 빨간 · 주황 꼬리표가 붙습니다.</p>
     <div class="figure">
       <div>
         <div class="scroll">
           <div class="ide">
             <div class="title"><span class="dots"><i></i><i></i><i></i></span>Git Log</div>
-            <div class="bar"><span class="mark">1</span><span class="combo">backend</span><span class="tag in">feature/order</span><span class="btn">⟳</span><span class="btn">?</span><span class="key">최근 200개</span><span style="flex:1"></span><span class="mark">2</span><span class="input" style="min-width:200px; text-align:left; border-color:var(--line); color:var(--muted)">메시지 · 작성자 찾기</span></div>
-            <div class="cols" style="grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)">
+            <div class="bar"><span class="mark">1</span><span class="tag in">feature/order</span><span class="btn">⟳</span><span class="btn">?</span><span class="key">☐ 내 소스 건드린 커밋만</span><span class="key">최근 200개</span><span style="flex:1"></span><span class="mark">2</span><span class="input" style="min-width:200px; text-align:left; border-color:var(--line); color:var(--muted)">메시지 · 작성자 찾기</span></div>
+            <div class="cols" style="grid-template-columns:minmax(0,0.6fr) minmax(0,1.6fr) minmax(0,1fr)">
+              <div class="treeview" style="padding:4px 0"><div class="sel">backend<br><span class="muted">Git · feature/order</span></div><div>frontend<br><span class="muted">Git · main</span></div><div>dxplm<br><span class="muted">SVN</span></div></div>
               <div>
                 <table class="grid">
+                  <tr><td><span style="color:var(--info)">●</span> <span class="tag cf">내 소스 되돌림</span> 설정 정리</td><td><b>박당사</b></td><td>5분 전</td></tr>
                   <tr class="sel"><td><span style="color:var(--info)">●</span> 주문 조회 칼럼 추가 <span class="tag in">feature/order</span></td><td><b>김당사</b></td><td>10분 전</td></tr>
                   <tr><td><span style="color:var(--info)">○</span> <span style="color:var(--muted)">Merge branch 'develop'</span></td><td><b>김당사</b></td><td>오늘 09:12</td></tr>
                   <tr><td><span style="color:var(--ok)">●</span> 주문 상태 확인 <span class="tag">develop</span></td><td><b>이당사</b></td><td>어제 18:40</td></tr>
@@ -1156,16 +1158,18 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
         <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
       </div>
       <ol class="legend">
-        <li><span class="mark">1</span><div><b>저장소 · 브랜치</b> <span class="t">왼쪽 위에 프로젝트 상자 · 현재 브랜치 알약 · Refresh · 「?」 · 읽은 커밋 수.</span></div></li>
+        <li><span class="mark">1</span><div><b>저장소 · 브랜치</b> <span class="t">맨 왼쪽은 저장소 목록(이름 · Git/SVN · 현재 브랜치, 한 번 누르면 그 기록). 위쪽은 현재 브랜치 알약 · Refresh · 「?」 · 「내 소스 건드린 커밋만」 · 읽은 커밋 수.</span></div></li>
         <li><span class="mark">2</span><div><b>찾기 칸</b> <span class="t">오른쪽 끝의 넓은 칸입니다. 치는 대로 메시지 · 작성자로 거릅니다.</span></div></li>
         <li><span class="mark">3</span><div><b>오른쪽 칸</b> <span class="t">고른 커밋의 작성자 · 해시 · 메시지 · 바뀐 파일.</span></div></li>
       </ol>
     </div>
     <table class="keys map">
       <tr><th>자리</th><th>하는 일</th></tr>
+      <tr><td>저장소 목록</td><td>맨 왼쪽 칸. 프로젝트(모듈)마다 이름 · Git/SVN · 현재 브랜치, 한 번 누르면 그 저장소 기록. 칸 사이 경계를 끌어 폭을 바꿉니다.</td></tr>
       <tr><td>커밋 목록</td><td>최근 200개, 맨 아래까지 내리면 다음 200개를 이어 읽습니다. 가지마다 색이 다른 꺾인 선 위에 커밋 점(합치기 커밋은 속이 빈 점 · 흐린 글자), 브랜치 · 태그는 알약, 오른쪽은 굵은 작성자와 날짜.</td></tr>
-      <tr><td>위쪽 줄</td><td>왼쪽에 프로젝트 상자 · 현재 브랜치 · Refresh · 「?」(점 · 선 · 색 설명), 오른쪽 끝에 찾기 칸(메시지 · 작성자, 찾으면 한 줄로 그림). 커밋을 고르면 그 아래 줄에 그 커밋의 꺾인 선이 어느 커밋과 이어지는지(합쳐 들인 커밋 · 여기서 갈라져 나간 가지 · 이 커밋을 합쳐 간 커밋)가 한 줄로 보입니다.</td></tr>
+      <tr><td>위쪽 줄</td><td>왼쪽에 현재 브랜치 · Refresh · 「?」(점 · 선 · 색 설명) · 「내 소스 건드린 커밋만」(켜면 꼬리표 붙은 커밋만), 오른쪽 끝에 찾기 칸(메시지 · 작성자, 찾으면 한 줄로 그림). 커밋을 고르면 그 아래 줄에 그 커밋의 꺾인 선이 어느 커밋과 이어지는지(합쳐 들인 커밋 · 여기서 갈라져 나간 가지 · 이 커밋을 합쳐 간 커밋)가 한 줄로 보입니다.</td></tr>
       <tr><td>오른쪽 칸</td><td>작성자 · 해시(누르면 복사) · 전체 메시지 · 바뀐 파일. 파일을 두 번 누르면 커밋 전 · 후 비교 창.</td></tr>
+      <tr><td>내 소스 꼬리표</td><td>빨간 「내 소스 되돌림」: 다른 사람이 내가 커밋한 파일을 내 커밋 전 내용으로 되돌렸습니다(옛 작업본을 그대로 올린 경우). 주황 「내 소스 덮어씀」: 다른 사람이 합치며(Merge) 내 수정을 버리고 자기 판을 택했습니다. 오른쪽 칸 「내 소스를 건드린 파일」에 파일마다 어느 내 커밋이었는지가 보이고, 두 번 누르면 내 판 ↔ 그 사람 판 비교 창. 「나」는 그 저장소의 git user.email · user.name, 읽어 온 커밋 안에서만 찾습니다(내리면 더 찾음). 이미 pull 받은 지난 일도 기록에 남아 있어 찾아집니다.</td></tr>
     </table>
   </div>
 </section>
