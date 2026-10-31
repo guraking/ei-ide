@@ -106,10 +106,12 @@ final class ProjectHistoryPanel extends JPanel {
   private static final int GRAPH_PAD = 8;
   private static final int MAX_LANES = 12;
   private static final int DOT = 7;
-  // 표의 작성자 · 날짜 · 해시 칸 폭(JBUI.scale 전). 메시지 칸이 나머지를 차지한다.
-  private static final int AUTHOR_COL_W = 72;
-  private static final int TIME_COL_W = 90;
+  // 표의 작성자 · 날짜 · 해시 칸 처음 폭(JBUI.scale 전, 끌어서 바꿀 수 있음). 메시지 칸이 나머지를 차지한다.
+  private static final int AUTHOR_COL_W = 100;
+  private static final int TIME_COL_W = 120;
   private static final int HASH_COL_W = 72;
+  // 끌어서 넓힐 수 있는 칸의 최대 폭(처음 폭의 배수).
+  private static final int COL_MAX_FACTOR = 4;
   // 바뀐 파일 줄 앞 상태 글자 칸의 최소 폭(JBUI.scale 전).
   private static final int STATUS_COL_W = 16;
   // 현재 브랜치 알약 안 브랜치 아이콘 크기(16 픽셀 아이콘 대비).
@@ -185,16 +187,7 @@ final class ProjectHistoryPanel extends JPanel {
   // 표에 보이는 커밋(찾기로 거른 뒤). 가지 선을 그릴 때는 loaded.entries() 와 순서 · 개수가 같다.
   private final List<History.Entry> shown = new ArrayList<>();
   private final CommitModel commitModel = new CommitModel();
-  // 풍선 도움말: 작성자와 긴 날짜(표에는 짧은 시간만 보인다).
-  private final JBTable commits = new JBTable(commitModel) {
-    @Override
-    public String getToolTipText(MouseEvent e) {
-      int i = rowAtPoint(e.getPoint());
-      if (i < 0 || i >= shown.size()) return null;
-      History.Entry entry = shown.get(i);
-      return entry.author() + " · " + stamp(ROW_TIME, entry.time());
-    }
-  };
+  private final JBTable commits = new JBTable(commitModel);
   private final JBList<History.FileChange> files = new JBList<>();
   private final SearchTextField filter = new SearchTextField(false);
   private final Pill branch = new Pill();
@@ -245,9 +238,10 @@ final class ProjectHistoryPanel extends JPanel {
     commits.getTableHeader().setReorderingAllowed(false);
     commits.getTableHeader().setForeground(DIM);
     commits.setDefaultRenderer(Object.class, new CommitRenderer());
-    fixWidth(commits.getColumnModel().getColumn(COL_AUTHOR), JBUI.scale(AUTHOR_COL_W));
-    fixWidth(commits.getColumnModel().getColumn(COL_TIME), JBUI.scale(TIME_COL_W));
-    fixWidth(commits.getColumnModel().getColumn(COL_HASH), JBUI.scale(HASH_COL_W));
+    // 작성자 · 날짜 · 해시 칸은 머리글 경계를 끌어 넓히고 줄일 수 있다. 가지 선 칸만 폭을 고정한다(updateGraphWidth).
+    resizableWidth(commits.getColumnModel().getColumn(COL_AUTHOR), JBUI.scale(AUTHOR_COL_W));
+    resizableWidth(commits.getColumnModel().getColumn(COL_TIME), JBUI.scale(TIME_COL_W));
+    resizableWidth(commits.getColumnModel().getColumn(COL_HASH), JBUI.scale(HASH_COL_W));
     commits.getSelectionModel().addListSelectionListener(e -> { if (!e.getValueIsAdjusting()) showDetail(); });
     // 오른쪽 단추로 누른 줄을 먼저 고른다(우클릭 메뉴가 그 줄의 작성자를 쓴다). PopupHandler 보다 먼저 달아야 먼저 불린다.
     commits.addMouseListener(new MouseAdapter() {
@@ -361,6 +355,21 @@ final class ProjectHistoryPanel extends JPanel {
       PropertiesComponent.getInstance().setValue(ME_ALIASES_KEY, String.join("\n", aliases), "");
       load();
     }
+  }
+
+  /** 「작성자 <메일>」. 메일이 없으면(SVN) 작성자만. */
+  private static String authorWithEmail(History.Entry entry) {
+    return entry.email().isEmpty() ? entry.author() : entry.author() + " <" + entry.email() + ">";
+  }
+
+  /**
+   * 끌어서 바꿀 수 있는 칸: 처음 폭 width, 최소 그 절반, 최대 COL_MAX_FACTOR 배.
+   * JTable 은 남는 폭을 칸마다 (최대 - 처음 폭) 비율로 나누므로 최대를 묶어 두어야 남는 폭을 최대가 없는 메시지 칸이 거의 다 받는다(창 크기를 바꿀 때도).
+   */
+  private static void resizableWidth(TableColumn column, int width) {
+    column.setMinWidth(width / 2);
+    column.setMaxWidth(width * COL_MAX_FACTOR);
+    column.setPreferredWidth(width);
   }
 
   /** 표 칸 폭을 고정한다. 남는 폭은 메시지 칸이 차지한다. */
@@ -797,7 +806,8 @@ final class ProjectHistoryPanel extends JPanel {
     subject.setVisible(true);
     message.setText(body);
     message.setVisible(!body.isEmpty());
-    meta.setText(entry.author() + " · " + when(entry.time()) + " · ");
+    // 줄 풍선 도움말 대신 여기서 작성자 · 메일과 긴 날짜(요일 포함)를 다 보인다.
+    meta.setText(authorWithEmail(entry) + " · " + stamp(ROW_TIME, entry.time()) + " · ");
     meta.setToolTipText(stamp(FULL, entry.time()));
     hash.setText(shortId(entry));
     metaRow.setVisible(true);
