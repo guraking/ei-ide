@@ -185,26 +185,7 @@ final class ProjectHistoryPanel extends JPanel {
   // 표에 보이는 커밋(찾기로 거른 뒤). 가지 선을 그릴 때는 loaded.entries() 와 순서 · 개수가 같다.
   private final List<History.Entry> shown = new ArrayList<>();
   private final CommitModel commitModel = new CommitModel();
-  // 풍선 도움말: 작성자 · 메일과 긴 날짜(표에는 짧은 시간만 보인다). 줄 전체가 같은 글이라 Swing 은 처음 뜬 자리에 그대로 두므로,
-  // 마우스가 있는 칸의 왼쪽 아래로 자리를 알린다. 자리는 칸이 바뀔 때만 달라져, 마우스를 조금 움직일 때마다 다시 띄우지 않는다.
-  private final JBTable commits = new JBTable(commitModel) {
-    @Override
-    public String getToolTipText(MouseEvent e) {
-      int i = rowAtPoint(e.getPoint());
-      if (i < 0 || i >= shown.size()) return null;
-      History.Entry entry = shown.get(i);
-      return authorWithEmail(entry) + " · " + stamp(ROW_TIME, entry.time());
-    }
-
-    @Override
-    public Point getToolTipLocation(MouseEvent e) {
-      int i = rowAtPoint(e.getPoint());
-      int column = columnAtPoint(e.getPoint());
-      if (i < 0 || column < 0) return null;
-      Rectangle cell = getCellRect(i, column, true);
-      return new Point(cell.x + JBUI.scale(GAP), cell.y + cell.height);
-    }
-  };
+  private final JBTable commits = new JBTable(commitModel);
   private final JBList<History.FileChange> files = new JBList<>();
   private final SearchTextField filter = new SearchTextField(false);
   private final Pill branch = new Pill();
@@ -812,7 +793,8 @@ final class ProjectHistoryPanel extends JPanel {
     subject.setVisible(true);
     message.setText(body);
     message.setVisible(!body.isEmpty());
-    meta.setText(authorWithEmail(entry) + " · " + when(entry.time()) + " · ");
+    // 줄 풍선 도움말 대신 여기서 작성자 · 메일과 긴 날짜(요일 포함)를 다 보인다.
+    meta.setText(authorWithEmail(entry) + " · " + stamp(ROW_TIME, entry.time()) + " · ");
     meta.setToolTipText(stamp(FULL, entry.time()));
     hash.setText(shortId(entry));
     metaRow.setVisible(true);
