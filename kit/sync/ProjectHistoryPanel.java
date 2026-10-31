@@ -67,7 +67,7 @@ import java.util.List;
 
 /**
  * 아래쪽 「Git Log」 창. 왼쪽 저장소(모듈) 목록에서 고르면 그 폴더 안을 바꾼 최근 커밋을 표로 보여 준다.
- * 다른 사람이 내 커밋을 되돌리거나 합치며 버린 커밋은 메시지 앞 꼬리표와 오른쪽 「내 소스를 건드린 파일」로 알린다(History.clashes).
+ * 다른 사람이 내 소스를(또는 내가 남의 소스를) 되돌리거나 합치며 버리거나 이어 고친 커밋은 메시지 앞 꼬리표와 오른쪽 「… 소스를 건드린 파일」로 알린다(History.clashes).
  * 표 칸은 가지 그래프(가지마다 색이 다른 꺾인 선 위에 커밋 점, 합치기는 속이 빈 점) · 메시지와 브랜치 · 태그 알약 · 작성자 · 날짜 · 짧은 해시.
  * 오른쪽은 고른 커밋의 메시지 · 작성자 · 날짜 · 해시 · 꺾인 선 설명과 바뀐 파일(두 번 누르면 비교 창).
  * 맨 아래까지 내리면 다음 LOG_LIMIT 개를 읽어 밑에 붙인다. 찾기로 거르면 사이가 빠지므로 가지 선 대신 한 줄로 그린다. 기존 Git 로그 창은 그대로 둔다.
@@ -119,9 +119,11 @@ final class ProjectHistoryPanel extends JPanel {
   // 표와 오른쪽 상세 칸의 폭 비율, 왼쪽 저장소 목록과 나머지의 폭 비율.
   private static final float TABLE_RATIO = 0.62f;
   private static final float REPO_RATIO = 0.15f;
-  // 내 소스 꼬리표 색: 되돌림은 빨강, 합치며 덮어씀은 주황.
-  private static final Color REVERTED_COLOR = new JBColor(0xC03030, 0xF07070);
-  private static final Color OVERWRITTEN_COLOR = new JBColor(0xC0612B, 0xF0A060);
+  // 소스 건드림 꼬리표 색: 되돌림은 빨강, 합치며 덮어씀은 주황, 이어 고침은 회색. 내 소스 · 남의 소스 모두 같은 색.
+  private static final Map<History.ClashKind, Color> CLASH_COLOR = Map.of(
+    History.ClashKind.REVERTED, new JBColor(0xC03030, 0xF07070),
+    History.ClashKind.OVERWRITTEN, new JBColor(0xC0612B, 0xF0A060),
+    History.ClashKind.EDITED, new JBColor(0x6B6B6B, 0xA0A0A0));
 
   // 표 칸 번호.
   private static final int COL_GRAPH = 0;
@@ -171,7 +173,7 @@ final class ProjectHistoryPanel extends JPanel {
 
   private final Project project;
   private final JBList<Target> targets = new JBList<>();
-  // 켜면 내 소스를 건드린 커밋만 보인다. Git 저장소에서만 보인다.
+  // 켜면 내 소스 · 남의 소스를 건드린 커밋만 보인다. Git 저장소에서만 보인다.
   private final JBCheckBox onlyMine = new JBCheckBox();
   // 표에 보이는 커밋(찾기로 거른 뒤). 가지 선을 그릴 때는 loaded.entries() 와 순서 · 개수가 같다.
   private final List<History.Entry> shown = new ArrayList<>();
@@ -201,7 +203,7 @@ final class ProjectHistoryPanel extends JPanel {
   // 고른 커밋의 꺾인 선이 어느 커밋과 이어지는지. 긴 글은 「…」로 잘리고 전체는 풍선 도움말.
   private final JBLabel bend = new JBLabel();
   private final TitledSeparator filesTitle = new TitledSeparator();
-  // 고른 커밋이 내 소스를 건드린 파일. 없으면 제목과 함께 숨긴다. 두 번 누르면 내 판 ↔ 그 커밋 판 비교.
+  // 고른 커밋이 내 소스(또는 남의 소스)를 건드린 파일. 없으면 제목과 함께 숨긴다. 두 번 누르면 바뀌기 전 판 ↔ 그 커밋 판 비교.
   private final TitledSeparator clashTitle = new TitledSeparator();
   private final JBList<History.Clash> clashList = new JBList<>();
   private final Font hashFont = new Font(EditorColorsManager.getInstance().getGlobalScheme().getEditorFontName(), Font.PLAIN, JBUI.Fonts.label().getSize());
@@ -222,6 +224,7 @@ final class ProjectHistoryPanel extends JPanel {
     targets.getEmptyText().setText(SyncBundle.message("history.empty.targets"));
     targets.getSelectionModel().addListSelectionListener(e -> { if (!e.getValueIsAdjusting()) load(); });
     onlyMine.setText(SyncBundle.message("history.mine.only"));
+    onlyMine.setToolTipText(SyncBundle.message("history.mine.only.tip"));
     onlyMine.setVisible(false);
     onlyMine.addActionListener(e -> fillCommits());
     clashList.setCellRenderer(new ClashRenderer());
@@ -537,9 +540,9 @@ final class ProjectHistoryPanel extends JPanel {
     for (History.Entry entry : page) {
       if (!seen.add(entry.id())) continue;
       entries.add(entry);
-      if (target.vcs() == SyncPanel.Vcs.GIT && entry.merge() && !me.is(entry)) merges.add(entry.id());
+      if (target.vcs() == SyncPanel.Vcs.GIT && entry.merge()) merges.add(entry.id());
     }
-    // 다른 사람 합치기 커밋이 있을 때만 git 을 한 번 더 부른다(부모마다 따로 비교, History.clashes).
+    // 합치기 커밋이 있을 때만 git 을 한 번 더 부른다(부모마다 따로 비교, History.clashes).
     if (!merges.isEmpty() && !me.equals(History.Me.NONE)) sides.putAll(History.parseSides(SyncPanel.git(dir, History.sideArgs(merges))));
     return new Loaded(target, branch, svnRoot, svnPrefix, start, remotes, entries, History.layout(entries), page.size() == LOG_LIMIT,
                       me, sides, History.clashes(entries, me, sides));
@@ -719,7 +722,9 @@ final class ProjectHistoryPanel extends JPanel {
     bend.setToolTipText(bend.getText().isEmpty() ? null : bend.getText());
     bend.setVisible(!bend.getText().isEmpty());
     List<History.Clash> clashes = clashesOf(entry);
-    clashTitle.setText(SyncBundle.message("history.mine.files", clashes.size()));
+    // 한 커밋의 꼬리표는 모두 같은 쪽이다(작성자가 나면 남의 소스, 아니면 내 소스).
+    boolean others = !clashes.isEmpty() && clashes.get(0).others();
+    clashTitle.setText(SyncBundle.message(others ? "history.others.files" : "history.mine.files", clashes.size()));
     clashTitle.setVisible(!clashes.isEmpty());
     clashList.setListData(clashes.toArray(History.Clash[]::new));
     clashList.setVisible(!clashes.isEmpty());
@@ -792,7 +797,7 @@ final class ProjectHistoryPanel extends JPanel {
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       byte[][] contents;
       try {
-        contents = new byte[][]{blob(dir, clash.mineChange().newBlob()), blob(dir, clash.change().newBlob())};
+        contents = new byte[][]{blob(dir, clash.ownerChange().newBlob()), blob(dir, clash.change().newBlob())};
       }
       catch (IOException e) {
         SwingUtilities.invokeLater(() -> DiffManager.getInstance().showDiff(project, new MessageDiffRequest(e.getMessage())));
@@ -809,7 +814,7 @@ final class ProjectHistoryPanel extends JPanel {
           DiffManager.getInstance().showDiff(project, new SimpleDiffRequest(
             clash.change().path() + " (" + entry.id() + ")", factory.createFromBytes(project, contents[0], path),
             factory.createFromBytes(project, contents[1], path),
-            SyncBundle.message("history.mine.commit", shortId(clash.mine()), stamp(FULL, clash.mine().time())),
+            SyncBundle.message("history.mine.commit", ownerName(clash), shortId(clash.owner()), stamp(FULL, clash.owner().time())),
             entry.author() + " · " + stamp(FULL, entry.time())));
         }
         catch (IOException e) {
@@ -817,6 +822,16 @@ final class ProjectHistoryPanel extends JPanel {
         }
       });
     });
+  }
+
+  /** 바뀌기 전 판을 만든 사람: 내 소스면 「내」, 남의 소스면 그 작성자. */
+  private static String ownerName(History.Clash clash) {
+    return clash.others() ? clash.owner().author() : SyncBundle.message("history.mine.me");
+  }
+
+  /** 꼬리표 글: 내 소스 · 남의 소스와 건드린 방식. */
+  private static String clashLabel(boolean others, History.ClashKind kind) {
+    return SyncBundle.message("history.clash." + (others ? "others." : "mine.") + kind.name().toLowerCase(Locale.ROOT));
   }
 
   /** 해시의 파일 내용. 0 만인 해시(없는 파일)는 빈 내용. */
@@ -982,16 +997,17 @@ final class ProjectHistoryPanel extends JPanel {
     }
   }
 
-  /** 내 소스를 건드린 파일: 색 있는 「되돌림」 · 「덮어씀」, 파일 이름, 흐린 「← 내 커밋 해시 · 날짜」. */
+  /** 소스를 건드린 파일: 색 있는 「되돌림」 · 「덮어씀」 · 「이어 고침」, 파일 이름, 흐린 「← 내(또는 작성자) 커밋 해시 · 날짜」. */
   private static final class ClashRenderer extends ColoredListCellRenderer<History.Clash> {
     @Override
     protected void customizeCellRenderer(@NotNull JList<? extends History.Clash> list, History.Clash value, int index,
                                          boolean selected, boolean focused) {
-      boolean reverted = value.reverted();
-      append(SyncBundle.message(reverted ? "history.mine.kind.reverted" : "history.mine.kind.overwritten") + "  ",
-             new SimpleTextAttributes(SimpleTextAttributes.STYLE_BOLD, reverted ? REVERTED_COLOR : OVERWRITTEN_COLOR));
+      History.ClashKind kind = value.kind();
+      append(SyncBundle.message("history.mine.kind." + kind.name().toLowerCase(Locale.ROOT)) + "  ",
+             new SimpleTextAttributes(SimpleTextAttributes.STYLE_BOLD, CLASH_COLOR.get(kind)));
       append(value.change().path());
-      append("  " + SyncBundle.message("history.mine.from", shortId(value.mine()), when(value.mine().time())), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+      append("  " + SyncBundle.message("history.mine.from", ownerName(value), shortId(value.owner()), when(value.owner().time())),
+             SimpleTextAttributes.GRAYED_ATTRIBUTES);
       setToolTipText(value.change().path());
     }
   }
@@ -1099,14 +1115,13 @@ final class ProjectHistoryPanel extends JPanel {
       }
     }
 
-    /** 내 소스를 건드린 커밋이면 메시지 앞에 「내 소스 되돌림」(하나라도 되돌림) · 「내 소스 덮어씀」 꼬리표를 그리고 차지한 폭(뒤 여백 포함)을 돌려준다. */
+    /** 소스를 건드린 커밋이면 메시지 앞에 가장 센 방식(History.strongest)의 꼬리표를 그리고 차지한 폭(뒤 여백 포함)을 돌려준다. */
     private int paintClashPill(Graphics2D g2, int x, int cy) {
       List<History.Clash> clashes = clashesOf(entry);
       if (clashes.isEmpty()) return 0;
-      boolean reverted = false;
-      for (History.Clash c : clashes) reverted |= c.reverted();
-      String label = SyncBundle.message(reverted ? "history.mine.reverted" : "history.mine.overwritten");
-      return paintPill(this, g2, label, reverted ? REVERTED_COLOR : OVERWRITTEN_COLOR, null, x, cy - JBUI.scale(PILL_H) / 2) + JBUI.scale(GAP) / 2;
+      History.ClashKind kind = History.strongest(clashes);
+      String label = clashLabel(clashes.get(0).others(), kind);
+      return paintPill(this, g2, label, CLASH_COLOR.get(kind), null, x, cy - JBUI.scale(PILL_H) / 2) + JBUI.scale(GAP) / 2;
     }
 
     private void segment(Graphics2D g, History.Seg s, int y1, int y2) {

@@ -355,49 +355,62 @@ final class History {
     return new Me(name, email);
   }
 
+  /** 건드린 방식. 되돌림: 결과가 그 판을 만든 커밋 직전 내용과 같음. 덮어씀: 합치며 그 판을 버리고 다른 부모 판을 택함. 이어 고침: 그 판 위에서 고침. */
+  enum ClashKind { REVERTED, OVERWRITTEN, EDITED }
+
   /**
-   * 다른 사람 커밋이 내가 커밋한 파일 내용을 바꾼 것. change 는 그 커밋의 파일 변경, mine · mineChange 는 그 직전 내용을 만든 내 커밋과 그 파일 변경.
-   * reverted 는 바꾼 결과가 내 커밋 직전 내용과 같음(내 수정이 통째로 되돌려짐).
+   * 한 커밋이 다른 쪽(나 ↔ 다른 사람) 판을 바꾼 것. change 는 이 커밋의 파일 변경, owner · ownerChange 는 바뀌기 직전 내용을 만든 커밋과 그 파일 변경.
+   * others 는 내 커밋이 남의 소스를 건드림(false 면 다른 사람 커밋이 내 소스를 건드림).
    */
-  record Clash(FileChange change, Entry mine, FileChange mineChange) {
-    boolean reverted() { return change.newBlob().equals(mineChange.oldBlob()); }
-  }
+  record Clash(FileChange change, Entry owner, FileChange ownerChange, ClashKind kind, boolean others) {}
 
-  private record Mine(Entry entry, FileChange change) {}
+  private record Version(Entry entry, FileChange change) {}
 
   /**
-   * 다른 사람 커밋마다 내 소스를 건드린 파일(커밋 id → 목록, 없으면 빠짐). entries 는 최근 것부터(git log 순서).
-   * 오래된 커밋부터 보며 내 커밋이 만든 「경로 + 내용 해시」를 기억하고, 다른 사람 커밋의 파일 변경이 그 내용에서 출발한 것(직전 내용이 내 판)을 본다.
+   * 커밋마다 다른 쪽 소스를 건드린 파일(커밋 id → 목록, 없으면 빠짐). entries 는 최근 것부터(git log 순서). 다른 사람끼리 · 내 커밋끼리는 보지 않는다.
+   * 오래된 커밋부터 보며 나 · 다른 사람 커밋이 만든 「경로 + 내용 해시」를 따로 기억하고, 파일 변경이 다른 쪽이 만든 내용에서 출발한 것(직전 내용이 다른 쪽 판)을 본다.
    * 내용 해시로 잇기 때문에 가지가 갈라져 있어도, rebase 로 다시 올린 커밋이어도 맞는다.
-   * 보통 커밋: 결과가 내 커밋 직전 내용과 같을 때만(되돌림). 내 판 위에서 고친 것은 내 수정을 보고 이어 고친 것이라 뺀다.
-   * 합치기 커밋: sides(부모마다 따로 비교한 파일)로 본다. 한 부모와만 다른 파일은 다른 부모 판을 그대로 가져온 것이므로, 그 비교의 직전 내용이 내 판이면
-   * 합치며 내 수정을 버린 것이다(덮어씀, 결과가 내 직전 내용이면 되돌림). 두 부모 모두와 다른 파일은 양쪽을 합친 결과라 뺀다. sides 에 없는 합치기 커밋은 files 로 본다.
-   * 되돌림이 아니면서 결과가 내 다른 판인 것(합치며 내 새 수정이 들어옴)과 모드만 바뀐 변경(내용 같음)은 뺀다.
+   * 결과가 그 판을 만든 커밋 직전 내용과 같으면 되돌림. 아니면 보통 커밋은 이어 고침,
+   * 합치기 커밋은 sides(부모마다 따로 비교한 파일)로 본다: 한 부모와만 다른 파일은 다른 부모 판을 그대로 가져온 것이므로 직전 내용이 다른 쪽 판이면
+   * 합치며 그 수정을 버린 것이다(덮어씀). 두 부모 모두와 다른 파일은 양쪽을 합친 결과라 뺀다. sides 에 없는 합치기 커밋은 files 로 본다.
+   * 합치며 결과가 다른 쪽의 또 다른 판인 것(그쪽 새 수정이 들어옴)과 모드만 바뀐 변경(내용 같음)은 뺀다.
    */
   static Map<String, List<Clash>> clashes(List<Entry> entries, Me me, Map<String, List<List<FileChange>>> sides) {
-    Map<String, Mine> versions = new HashMap<>();
+    Map<String, Version> mine = new HashMap<>();
+    Map<String, Version> theirs = new HashMap<>();
     Map<String, List<Clash>> result = new HashMap<>();
+    if (me.equals(Me.NONE)) return result;
     for (int i = entries.size() - 1; i >= 0; i--) {
       Entry entry = entries.get(i);
-      if (me.is(entry)) {
-        for (FileChange f : entry.files()) {
-          if (!f.newBlob().isEmpty()) versions.put(f.path() + '\0' + f.newBlob(), new Mine(entry, f));
-        }
-        continue;
-      }
+      boolean byMe = me.is(entry);
+      Map<String, Version> owners = byMe ? theirs : mine;
       List<Clash> found = new ArrayList<>();
       Set<String> paths = new HashSet<>();
       for (FileChange f : candidates(entry, sides.get(entry.id()))) {
         if (f.oldBlob().isEmpty() || f.oldBlob().equals(f.newBlob())) continue;
-        Mine mine = versions.get(f.oldPath() + '\0' + f.oldBlob());
-        if (mine == null) continue;
-        boolean reverted = f.newBlob().equals(mine.change().oldBlob());
-        if (!reverted && (!entry.merge() || versions.containsKey(f.path() + '\0' + f.newBlob()))) continue;
-        if (paths.add(f.path())) found.add(new Clash(f, mine.entry(), mine.change()));
+        Version owner = owners.get(f.oldPath() + '\0' + f.oldBlob());
+        if (owner == null) continue;
+        ClashKind kind;
+        if (f.newBlob().equals(owner.change().oldBlob())) kind = ClashKind.REVERTED;
+        else if (!entry.merge()) kind = ClashKind.EDITED;
+        else if (owners.containsKey(f.path() + '\0' + f.newBlob())) continue;
+        else kind = ClashKind.OVERWRITTEN;
+        if (paths.add(f.path())) found.add(new Clash(f, owner.entry(), owner.change(), kind, byMe));
       }
       if (!found.isEmpty()) result.put(entry.id(), found);
+      Map<String, Version> own = byMe ? mine : theirs;
+      for (FileChange f : entry.files()) {
+        if (!f.newBlob().isEmpty()) own.put(f.path() + '\0' + f.newBlob(), new Version(entry, f));
+      }
     }
     return result;
+  }
+
+  /** 커밋 한 줄에 보일 대표: 되돌림 > 덮어씀 > 이어 고침 순으로 가장 센 것. clashes 는 비어 있지 않다. */
+  static ClashKind strongest(List<Clash> clashes) {
+    ClashKind best = ClashKind.EDITED;
+    for (Clash c : clashes) if (c.kind().ordinal() < best.ordinal()) best = c.kind();
+    return best;
   }
 
   /** 볼 파일 변경: 보통 커밋은 files, 합치기 커밋은 부모별 비교 가운데 다른 부모 비교에는 없는 경로만(clashes 설명). */

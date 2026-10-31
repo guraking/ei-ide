@@ -140,8 +140,9 @@ public class HistoryCheck {
 
   /**
    * 내 소스 건드림: 나(me)는 f · g · h 를 고친다. kim 은
-   * 1) 갈라진 가지에서 f · g 를 고친 뒤 내 가지를 합치며 f 는 자기 것을 택한다(합치기에서 덮어씀). g 는 양쪽을 다 넣어 합쳐 빠진다.
-   * 2) 합친 뒤 h 를 내 커밋 전 내용으로 되돌린다(되돌림). 내가 안 고친 파일은 나오지 않는다.
+   * 1) 내 base 판 위에서 f · g 를 고친다(이어 고침). 내 가지를 합치며 f 는 자기 것을 택한다(덮어씀). g 는 양쪽을 다 넣어 합쳐 빠진다.
+   * 2) 합친 뒤 h 를 내 커밋 전 내용으로 되돌리고(되돌림), other 를 고친다(이어 고침).
+   * 3) 그 뒤 내가 kim 의 f 를 고치고(남의 소스 이어 고침) other 를 kim 전 내용으로 되돌린다(남의 소스 되돌림).
    */
   private static void checkClashes() throws Exception {
     File repo = Files.createTempDirectory("clash").toFile();
@@ -179,6 +180,9 @@ public class HistoryCheck {
     kim(repo, "옛 작업본 올림");
     write(repo, "app/other", "y\n");
     kim(repo, "상관없는 파일");
+    write(repo, "app/f", "kim2\n");
+    write(repo, "app/other", "x\n");
+    git(repo, "commit", "-q", "-am", "내가 남의 것");
     String head = git(repo, "rev-parse", "HEAD").trim();
     List<History.Entry> log = History.parseGitLog(git(app, History.gitLogArgs("kim", 100, 0)));
     List<String> merges = new java.util.ArrayList<>();
@@ -192,10 +196,13 @@ public class HistoryCheck {
       List<History.Clash> found = clashes.get(e.id());
       if (found == null) continue;
       List<String> parts = new java.util.ArrayList<>();
-      for (History.Clash c : found) parts.add(c.change().path() + (c.reverted() ? " 되돌림 " : " 덮어씀 ") + c.mine().subject());
+      for (History.Clash c : found) parts.add(c.change().path() + " " + (c.others() ? "남 " : "") + c.kind() + " " + c.owner().subject());
       bySubject.put(e.subject(), String.join(", ", parts));
     }
-    eq(bySubject, java.util.Map.of("합치기 - 내 것 택함", "f 덮어씀 내 작업", "옛 작업본 올림", "h 되돌림 내 작업"));
+    eq(bySubject, java.util.Map.of("kim 작업", "f EDITED base, g EDITED base", "합치기 - 내 것 택함", "f OVERWRITTEN 내 작업",
+                                   "옛 작업본 올림", "h REVERTED 내 작업", "상관없는 파일", "other EDITED base",
+                                   "내가 남의 것", "f 남 EDITED kim 작업, other 남 REVERTED 상관없는 파일"));
+    eq(History.strongest(clashes.get(log.get(0).id())), History.ClashKind.REVERTED);
     // 나를 모르면(user.name · email 없음) 아무것도 찾지 않는다.
     eq(History.clashes(log, History.Me.NONE, sides), java.util.Map.of());
     eq(History.gitHead(app), "kim");
