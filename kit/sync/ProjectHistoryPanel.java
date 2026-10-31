@@ -367,11 +367,34 @@ final class ProjectHistoryPanel extends JPanel {
       File base = new File(project.getBasePath());
       byDir.put(base, target(project.getName(), base));
     }
+    // Gradle 소스 세트 모듈(supp.main · supp.test)처럼 다른 모듈 폴더 안에 있고 같은 저장소인 모듈은 뺀다. 그 안의 다른 저장소(중첩 저장소)는 남긴다.
+    List<File> nested = new ArrayList<>();
+    for (File dir : byDir.keySet()) {
+      if (insideSameRepo(dir, byDir.keySet())) nested.add(dir);
+    }
+    byDir.keySet().removeAll(nested);
     // setListData 는 고른 줄을 비우고(→ load 는 고른 것이 없어 그냥 끝남), setSelectedIndex 가 다시 고르며 load 를 부른다.
     List<File> dirs = new ArrayList<>(byDir.keySet());
     targets.setListData(byDir.values().toArray(Target[]::new));
     commits.getEmptyText().setText(SyncBundle.message(byDir.isEmpty() ? "history.empty.targets" : "history.empty.commits"));
     targets.setSelectedIndex(selected == null ? 0 : Math.max(0, dirs.indexOf(selected.dir())));
+  }
+
+  /** dir 이 dirs 가운데 다른 폴더 안에 있고, 둘의 저장소 폴더(.git · .svn 이 있는 가장 가까운 위 폴더)가 같은가. */
+  private static boolean insideSameRepo(File dir, Set<File> dirs) {
+    File repo = repoRoot(dir);
+    for (File other : dirs) {
+      if (!other.equals(dir) && dir.toPath().startsWith(other.toPath()) && Objects.equals(repo, repoRoot(other))) return true;
+    }
+    return false;
+  }
+
+  /** .git(폴더 · 파일) 이나 .svn 이 있는 가장 가까운 위 폴더. 없으면 null. */
+  private static File repoRoot(File dir) {
+    for (File d = dir.getAbsoluteFile(); d != null; d = d.getParentFile()) {
+      if (new File(d, ".git").exists() || new File(d, ".svn").isDirectory()) return d;
+    }
+    return null;
   }
 
   private static Target target(String name, File dir) {
