@@ -186,7 +186,7 @@ final class ProjectHistoryPanel extends JPanel {
   private final List<History.Entry> shown = new ArrayList<>();
   private final CommitModel commitModel = new CommitModel();
   // 풍선 도움말: 작성자 · 메일과 긴 날짜(표에는 짧은 시간만 보인다). 줄 전체가 같은 글이라 Swing 은 처음 뜬 자리에 그대로 두므로,
-  // 마우스 가로 위치 · 그 줄 바로 아래로 자리를 매번 알려 마우스를 따라오게 한다.
+  // 마우스가 있는 칸의 왼쪽 아래로 자리를 알린다. 자리는 칸이 바뀔 때만 달라져, 마우스를 조금 움직일 때마다 다시 띄우지 않는다.
   private final JBTable commits = new JBTable(commitModel) {
     @Override
     public String getToolTipText(MouseEvent e) {
@@ -199,9 +199,10 @@ final class ProjectHistoryPanel extends JPanel {
     @Override
     public Point getToolTipLocation(MouseEvent e) {
       int i = rowAtPoint(e.getPoint());
-      if (i < 0) return null;
-      Rectangle row = getCellRect(i, 0, true);
-      return new Point(e.getX(), row.y + row.height);
+      int column = columnAtPoint(e.getPoint());
+      if (i < 0 || column < 0) return null;
+      Rectangle cell = getCellRect(i, column, true);
+      return new Point(cell.x + JBUI.scale(GAP), cell.y + cell.height);
     }
   };
   private final JBList<History.FileChange> files = new JBList<>();
