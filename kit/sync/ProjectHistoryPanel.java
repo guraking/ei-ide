@@ -13,14 +13,17 @@ import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.ModuleRootManager;
-import com.intellij.openapi.ui.ComboBox;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowFactory;
 import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.JBColor;
 import com.intellij.icons.AllIcons;
+import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.actionSystem.ActionManager;
+import com.intellij.openapi.actionSystem.ActionUpdateThread;
+import com.intellij.openapi.actionSystem.AnActionEvent;
+import com.intellij.ui.PopupHandler;
 import com.intellij.openapi.actionSystem.ActionToolbar;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.project.DumbAwareAction;
@@ -31,6 +34,7 @@ import com.intellij.openapi.vcs.FileStatus;
 import com.intellij.ui.ColoredListCellRenderer;
 import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.components.ActionLink;
+import com.intellij.ui.components.JBCheckBox;
 import com.intellij.ui.OnePixelSplitter;
 import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.RowIcon;
@@ -66,7 +70,8 @@ import java.util.*;
 import java.util.List;
 
 /**
- * 아래쪽 「Git Log」 창. 위 도구줄에서 프로젝트(모듈)를 고르면 그 폴더 안을 바꾼 최근 커밋을 표로 보여 준다.
+ * 아래쪽 「Git Log」 창. 왼쪽 저장소(모듈) 목록에서 고르면 그 폴더 안을 바꾼 최근 커밋을 표로 보여 준다.
+ * 다른 사람이 내 소스를(또는 내가 남의 소스를) 되돌리거나 합치며 버리거나 이어 고친 커밋은 메시지 앞 꼬리표와 오른쪽 「… 소스를 건드린 파일」로 알린다(History.clashes).
  * 표 칸은 가지 그래프(가지마다 색이 다른 꺾인 선 위에 커밋 점, 합치기는 속이 빈 점) · 메시지와 브랜치 · 태그 알약 · 작성자 · 날짜 · 짧은 해시.
  * 오른쪽은 고른 커밋의 메시지 · 작성자 · 날짜 · 해시 · 꺾인 선 설명과 바뀐 파일(두 번 누르면 비교 창).
  * 맨 아래까지 내리면 다음 LOG_LIMIT 개를 읽어 밑에 붙인다. 찾기로 거르면 사이가 빠지므로 가지 선 대신 한 줄로 그린다. 기존 Git 로그 창은 그대로 둔다.
@@ -114,9 +119,18 @@ final class ProjectHistoryPanel extends JPanel {
   // 찾기 칸 폭(px). 2026-10-29 사용자 요청으로 세 배쯤 넓혔다.
   private static final int SEARCH_W = 400;
   private static final String TOOLBAR_PLACE = "KingGuraGitLogToolbar";
+  private static final String POPUP_PLACE = "KingGuraGitLogPopup";
+  // 「나로 보기」로 더한 다른 계정(History.Me.aliasKey, 줄마다 하나). 앱 수준이라 모든 프로젝트 · 저장소에 같이 쓴다.
+  private static final String ME_ALIASES_KEY = "kinggura.sync.gitlog.me.aliases";
   private static final float LINE_WIDTH = 1.5f;
-  // 표와 오른쪽 상세 칸의 폭 비율.
+  // 표와 오른쪽 상세 칸의 폭 비율, 왼쪽 저장소 목록과 나머지의 폭 비율.
   private static final float TABLE_RATIO = 0.62f;
+  private static final float REPO_RATIO = 0.15f;
+  // 소스 건드림 꼬리표 색: 되돌림은 빨강, 합치며 덮어씀은 주황, 이어 고침은 보라(브랜치 알약의 초록 · 회색 · 황토 · 파랑과 겹치지 않게). 내 소스 · 남의 소스 모두 같은 색.
+  private static final Map<History.ClashKind, Color> CLASH_COLOR = Map.of(
+    History.ClashKind.REVERTED, new JBColor(0xC03030, 0xF07070),
+    History.ClashKind.OVERWRITTEN, new JBColor(0xC0612B, 0xF0A060),
+    History.ClashKind.EDITED, new JBColor(0x7A5BB5, 0xB49AF0));
 
   // 표 칸 번호.
   private static final int COL_GRAPH = 0;
@@ -150,20 +164,24 @@ final class ProjectHistoryPanel extends JPanel {
     "M", FileStatus.MODIFIED, "A", FileStatus.ADDED, "D", FileStatus.DELETED, "R", FileStatus.MODIFIED);
   private static final Color DIM = SimpleTextAttributes.GRAYED_ATTRIBUTES.getFgColor();
 
-  /** 도구줄 저장소 콤보 한 줄. dir 은 모듈의 첫 콘텐츠 루트. */
-  private record Target(String name, File dir, SyncPanel.Vcs vcs) {
+  /** 왼쪽 저장소 목록 한 줄. dir 은 모듈의 첫 콘텐츠 루트, branch 는 Git 현재 브랜치(History.gitHead, SVN · 못 읽으면 빈 글). */
+  private record Target(String name, File dir, SyncPanel.Vcs vcs, String branch) {
     @Override public String toString() { return name; }
   }
 
   /**
    * 읽어 온 기록. branch 는 Git 현재 브랜치(떨어진 HEAD 면 짧은 해시) · SVN 저장소 경로. svnRoot · svnPrefix 는 SVN 비교 창용. more 는 다음 묶음이 남았을 수 있음.
    * start 는 첫 묶음 때의 HEAD 해시(Git, 다음 묶음도 여기서 센다), remotes 는 원격 이름(원격 브랜치 알약 색을 고른다). SVN 은 null · 빈 목록.
+   * me 는 이 저장소의 나, sides 는 다른 사람 합치기 커밋의 부모별 바뀐 파일, clashes 는 내 소스를 건드린 커밋(History.clashes). SVN 은 NONE · 빈 맵.
    */
   private record Loaded(Target target, String branch, String svnRoot, String svnPrefix, String start, List<String> remotes,
-                        List<History.Entry> entries, List<History.Row> rows, boolean more) {}
+                        List<History.Entry> entries, List<History.Row> rows, boolean more,
+                        History.Me me, Map<String, List<List<History.FileChange>>> sides, Map<String, List<History.Clash>> clashes) {}
 
   private final Project project;
-  private final ComboBox<Target> targets = new ComboBox<>();
+  private final JBList<Target> targets = new JBList<>();
+  // 켜면 내 소스 · 남의 소스를 건드린 커밋만 보인다. Git 저장소에서만 보인다.
+  private final JBCheckBox onlyMine = new JBCheckBox();
   // 표에 보이는 커밋(찾기로 거른 뒤). 가지 선을 그릴 때는 loaded.entries() 와 순서 · 개수가 같다.
   private final List<History.Entry> shown = new ArrayList<>();
   private final CommitModel commitModel = new CommitModel();
@@ -192,6 +210,9 @@ final class ProjectHistoryPanel extends JPanel {
   // 고른 커밋의 꺾인 선이 어느 커밋과 이어지는지. 긴 글은 「…」로 잘리고 전체는 풍선 도움말.
   private final JBLabel bend = new JBLabel();
   private final TitledSeparator filesTitle = new TitledSeparator();
+  // 고른 커밋이 내 소스(또는 남의 소스)를 건드린 파일. 없으면 제목과 함께 숨긴다. 두 번 누르면 바뀌기 전 판 ↔ 그 커밋 판 비교.
+  private final TitledSeparator clashTitle = new TitledSeparator();
+  private final JBList<History.Clash> clashList = new JBList<>();
   private final Font hashFont = new Font(EditorColorsManager.getInstance().getGlobalScheme().getEditorFontName(), Font.PLAIN, JBUI.Fonts.label().getSize());
   private Loaded loaded;
   private boolean loadingMore;
@@ -205,8 +226,18 @@ final class ProjectHistoryPanel extends JPanel {
     super(new BorderLayout());
     this.project = project;
 
-    targets.setRenderer(new TargetRenderer());
-    targets.addActionListener(e -> load());
+    targets.setCellRenderer(new TargetRenderer());
+    targets.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+    targets.getEmptyText().setText(SyncBundle.message("history.empty.targets"));
+    targets.getSelectionModel().addListSelectionListener(e -> { if (!e.getValueIsAdjusting()) load(); });
+    onlyMine.setText(SyncBundle.message("history.mine.only"));
+    onlyMine.setToolTipText(SyncBundle.message("history.mine.only.tip"));
+    onlyMine.setVisible(false);
+    onlyMine.addActionListener(e -> fillCommits());
+    clashList.setCellRenderer(new ClashRenderer());
+    clashList.addMouseListener(new MouseAdapter() {
+      @Override public void mouseClicked(MouseEvent e) { if (e.getClickCount() == 2) showClashDiff(); }
+    });
     commits.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
     commits.setRowHeight(JBUI.scale(ROW_H));
     commits.setShowGrid(false);
@@ -218,6 +249,12 @@ final class ProjectHistoryPanel extends JPanel {
     fixWidth(commits.getColumnModel().getColumn(COL_TIME), JBUI.scale(TIME_COL_W));
     fixWidth(commits.getColumnModel().getColumn(COL_HASH), JBUI.scale(HASH_COL_W));
     commits.getSelectionModel().addListSelectionListener(e -> { if (!e.getValueIsAdjusting()) showDetail(); });
+    // 오른쪽 단추로 누른 줄을 먼저 고른다(우클릭 메뉴가 그 줄의 작성자를 쓴다). PopupHandler 보다 먼저 달아야 먼저 불린다.
+    commits.addMouseListener(new MouseAdapter() {
+      @Override public void mousePressed(MouseEvent e) { selectRowAt(e); }
+      @Override public void mouseReleased(MouseEvent e) { selectRowAt(e); }
+    });
+    PopupHandler.installPopupMenu(commits, new DefaultActionGroup(new MeAliasAction()), POPUP_PLACE);
     files.setCellRenderer(new FileRenderer());
     files.addMouseListener(new MouseAdapter() {
       @Override public void mouseClicked(MouseEvent e) { if (e.getClickCount() == 2) showDiff(); }
@@ -233,7 +270,7 @@ final class ProjectHistoryPanel extends JPanel {
       if (entry != null) CopyPasteManager.getInstance().setContents(new StringSelection(entry.id()));
     });
 
-    // 도구줄: 왼쪽에 저장소 콤보 · 현재 브랜치 알약 · 새로고침 · 설명 · 「최근 N개」, 오른쪽 끝에 찾기 칸.
+    // 도구줄: 왼쪽에 현재 브랜치 알약 · 새로고침 · 설명 · 「내 소스 건드린 커밋만」 · 「최근 N개」, 오른쪽 끝에 찾기 칸.
     // 창 머리 아래 선은 IntelliJ 가 그으므로 안쪽 칸에 테두리를 더하면 선이 두 겹이 된다.
     DefaultActionGroup actions = new DefaultActionGroup(
       DumbAwareAction.create(SyncBundle.message("history.refresh"), AllIcons.Actions.Refresh, e -> reloadTargets()),
@@ -241,9 +278,9 @@ final class ProjectHistoryPanel extends JPanel {
     ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar(TOOLBAR_PLACE, actions, true);
     toolbar.setTargetComponent(this);
     JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(GAP), JBUI.scale(GAP / 2)));
-    left.add(targets);
     left.add(branch);
     left.add(toolbar.getComponent());
+    left.add(onlyMine);
     left.add(status);
     status.setForeground(DIM);
     left.add(gauge);
@@ -267,10 +304,63 @@ final class ProjectHistoryPanel extends JPanel {
     JPanel head = new JPanel(new BorderLayout());
     head.add(top, BorderLayout.CENTER);
     head.add(gauge.line(), BorderLayout.SOUTH);
-    add(head, BorderLayout.NORTH);
-    add(main, BorderLayout.CENTER);
+    JPanel right = new JPanel(new BorderLayout());
+    right.add(head, BorderLayout.NORTH);
+    right.add(main, BorderLayout.CENTER);
+    OnePixelSplitter repos = new OnePixelSplitter(false, REPO_RATIO);
+    repos.setFirstComponent(ScrollPaneFactory.createScrollPane(targets, true));
+    repos.setSecondComponent(right);
+    add(repos, BorderLayout.CENTER);
 
     reloadTargets();
+  }
+
+  private void selectRowAt(MouseEvent e) {
+    if (!SwingUtilities.isRightMouseButton(e)) return;
+    int row = commits.rowAtPoint(e.getPoint());
+    if (row >= 0) commits.setRowSelectionInterval(row, row);
+  }
+
+  /** 「나로 보기」로 더한 계정들. */
+  private static Set<String> meAliases() {
+    Set<String> result = new LinkedHashSet<>();
+    for (String line : PropertiesComponent.getInstance().getValue(ME_ALIASES_KEY, "").split("\n")) {
+      if (!line.isBlank()) result.add(line.trim());
+    }
+    return result;
+  }
+
+  /**
+   * 우클릭 「○○ 도 나로 보기」 · 「○○ 을 나에서 빼기」: 고른 커밋 작성자를 「나」에 더하거나 뺀다(같은 사람의 다른 계정을 서로 남으로 보지 않게).
+   * git config 의 나인 작성자 · SVN · 고른 줄 없음에는 보이지 않는다. 바꾸면 기록을 다시 읽어 꼬리표를 새로 찾는다.
+   */
+  private final class MeAliasAction extends DumbAwareAction {
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.EDT;
+    }
+
+    @Override
+    public void update(@NotNull AnActionEvent e) {
+      History.Entry entry = selectedEntry();
+      boolean show = entry != null && loaded != null && loaded.target().vcs() == SyncPanel.Vcs.GIT && !loaded.me().configured(entry);
+      e.getPresentation().setEnabledAndVisible(show);
+      if (show) {
+        boolean alias = meAliases().contains(History.Me.aliasKey(entry));
+        e.getPresentation().setText(SyncBundle.message(alias ? "history.me.remove" : "history.me.add", entry.author()));
+      }
+    }
+
+    @Override
+    public void actionPerformed(@NotNull AnActionEvent e) {
+      History.Entry entry = selectedEntry();
+      if (entry == null) return;
+      Set<String> aliases = meAliases();
+      String key = History.Me.aliasKey(entry);
+      if (!aliases.remove(key)) aliases.add(key);
+      PropertiesComponent.getInstance().setValue(ME_ALIASES_KEY, String.join("\n", aliases), "");
+      load();
+    }
   }
 
   /** 표 칸 폭을 고정한다. 남는 폭은 메시지 칸이 차지한다. */
@@ -303,7 +393,7 @@ final class ProjectHistoryPanel extends JPanel {
 
     JPanel head = new JPanel();
     head.setLayout(new BoxLayout(head, BoxLayout.Y_AXIS));
-    for (JComponent c : List.of(subject, message, metaRow, bend, filesTitle)) {
+    for (JComponent c : List.of(subject, message, metaRow, bend, clashTitle, clashList, filesTitle)) {
       c.setAlignmentX(LEFT_ALIGNMENT);
       head.add(c);
       head.add(Box.createVerticalStrut(JBUI.scale(GAP / 2)));
@@ -319,7 +409,10 @@ final class ProjectHistoryPanel extends JPanel {
     return panel;
   }
 
-  /** 모듈 콤보를 이름 순으로 다시 채우고 고른 모듈의 기록을 다시 읽는다. 모듈이 없으면 프로젝트 폴더 하나. 같은 폴더를 가리키는 모듈은 한 번만. 고른 것은 그대로 둔다. */
+  /**
+   * 저장소 목록을 이름 순으로 다시 채우고 고른 저장소의 기록을 다시 읽는다. 모듈이 없으면 프로젝트 폴더 하나. 같은 폴더를 가리키는 모듈은 한 번만.
+   * 고른 것은 폴더로 다시 찾아 그대로 둔다(브랜치가 바뀌어도). 없으면 첫 줄.
+   */
   private void reloadTargets() {
     Target selected = selectedTarget();
     Map<File, Target> byDir = new LinkedHashMap<>();
@@ -329,21 +422,49 @@ final class ProjectHistoryPanel extends JPanel {
       VirtualFile[] roots = ModuleRootManager.getInstance(module).getContentRoots();
       if (roots.length == 0) continue;
       File dir = new File(roots[0].getPath());
-      byDir.putIfAbsent(dir, new Target(module.getName(), dir, SyncPanel.unmappedVcs(dir)));
+      byDir.putIfAbsent(dir, target(module.getName(), dir));
     }
     if (byDir.isEmpty() && project.getBasePath() != null) {
       File base = new File(project.getBasePath());
-      byDir.put(base, new Target(project.getName(), base, SyncPanel.unmappedVcs(base)));
+      byDir.put(base, target(project.getName(), base));
     }
-    // setModel 은 첫 항목을 고르되 콤보 동작 이벤트를 내지 않고, setSelectedItem 은 낸다(→ load). 그래서 되고를 때만 따로 읽는다.
-    targets.setModel(new DefaultComboBoxModel<>(byDir.values().toArray(Target[]::new)));
+    // Gradle 소스 세트 모듈(supp.main · supp.test)처럼 다른 모듈 폴더 안에 있고 같은 저장소인 모듈은 뺀다. 그 안의 다른 저장소(중첩 저장소)는 남긴다.
+    List<File> nested = new ArrayList<>();
+    for (File dir : byDir.keySet()) {
+      if (insideSameRepo(dir, byDir.keySet())) nested.add(dir);
+    }
+    byDir.keySet().removeAll(nested);
+    // setListData 는 고른 줄을 비우고(→ load 는 고른 것이 없어 그냥 끝남), setSelectedIndex 가 다시 고르며 load 를 부른다.
+    List<File> dirs = new ArrayList<>(byDir.keySet());
+    targets.setListData(byDir.values().toArray(Target[]::new));
     commits.getEmptyText().setText(SyncBundle.message(byDir.isEmpty() ? "history.empty.targets" : "history.empty.commits"));
-    if (selected != null && byDir.containsValue(selected)) targets.setSelectedItem(selected);
-    else load();
+    targets.setSelectedIndex(selected == null ? 0 : Math.max(0, dirs.indexOf(selected.dir())));
+  }
+
+  /** dir 이 dirs 가운데 다른 폴더 안에 있고, 둘의 저장소 폴더(.git · .svn 이 있는 가장 가까운 위 폴더)가 같은가. */
+  private static boolean insideSameRepo(File dir, Set<File> dirs) {
+    File repo = repoRoot(dir);
+    for (File other : dirs) {
+      if (!other.equals(dir) && dir.toPath().startsWith(other.toPath()) && Objects.equals(repo, repoRoot(other))) return true;
+    }
+    return false;
+  }
+
+  /** .git(폴더 · 파일) 이나 .svn 이 있는 가장 가까운 위 폴더. 없으면 null. */
+  private static File repoRoot(File dir) {
+    for (File d = dir.getAbsoluteFile(); d != null; d = d.getParentFile()) {
+      if (new File(d, ".git").exists() || new File(d, ".svn").isDirectory()) return d;
+    }
+    return null;
+  }
+
+  private static Target target(String name, File dir) {
+    SyncPanel.Vcs vcs = SyncPanel.unmappedVcs(dir);
+    return new Target(name, dir, vcs, vcs == SyncPanel.Vcs.GIT ? History.gitHead(dir) : "");
   }
 
   private Target selectedTarget() {
-    return (Target)targets.getSelectedItem();
+    return targets.getSelectedValue();
   }
 
   private History.Entry selectedEntry() {
@@ -384,6 +505,7 @@ final class ProjectHistoryPanel extends JPanel {
         loaded = done;
         String current = done == null ? "" : done.branch();
         branch.setRefs(current.isEmpty() ? List.of() : List.of(current), current);
+        onlyMine.setVisible(target.vcs() == SyncPanel.Vcs.GIT);
         fillCommits();
         loading(false);
         status.setText(done == null ? failure : SyncBundle.message("history.count", done.entries().size()));
@@ -418,17 +540,24 @@ final class ProjectHistoryPanel extends JPanel {
         if (done == null) {
           // 실패한 묶음은 다시 내릴 때 또 시도하지 않도록 끝으로 본다.
           loaded = new Loaded(before.target(), before.branch(), before.svnRoot(), before.svnPrefix(), before.start(), before.remotes(),
-                              before.entries(), before.rows(), false);
+                              before.entries(), before.rows(), false, before.me(), before.sides(), before.clashes());
           loading(false);
           status.setText(Objects.toString(failure, SyncBundle.message("history.count", before.entries().size())));
           return;
         }
         loaded = done;
+        if (onlyMine.isSelected()) {
+          // 앞서 읽은 내 커밋을 새 묶음의 더 오래된 커밋과 이어 보면 이미 보인 커밋도 새로 걸릴 수 있어 처음부터 다시 거른다.
+          fillCommits();
+          loading(false);
+          status.setText(SyncBundle.message("history.count", done.entries().size()));
+          return;
+        }
         updateGraphWidth();
         String word = searchWord();
         int first = shown.size();
         for (History.Entry entry : done.entries().subList(before.entries().size(), done.entries().size())) {
-          if (matches(entry, word)) shown.add(entry);
+          if (visible(entry, word)) shown.add(entry);
         }
         if (shown.size() > first) commitModel.fireTableRowsInserted(first, shown.size() - 1);
         commits.repaint();  // 앞 묶음 마지막 줄의 아래 선도 새 줄로 이어진다.
@@ -452,8 +581,11 @@ final class ProjectHistoryPanel extends JPanel {
     String svnPrefix = null;
     String start = null;
     List<String> remotes = List.of();
+    History.Me me = History.Me.NONE;
+    Map<String, List<List<History.FileChange>>> sides = before == null ? new HashMap<>() : new HashMap<>(before.sides());
     if (target.vcs() == SyncPanel.Vcs.GIT) {
       if (before == null) {
+        me = History.parseMe(gitOrEmpty(dir, "config", "--get-regexp", "^user\\.(name|email)$")).withAliases(meAliases());
         branch = gitOrEmpty(dir, "rev-parse", "--abbrev-ref", "HEAD");
         if (DETACHED.equals(branch)) branch = gitOrEmpty(dir, "rev-parse", "--short", "HEAD");
         String head = gitOrEmpty(dir, "rev-parse", "HEAD");
@@ -468,6 +600,7 @@ final class ProjectHistoryPanel extends JPanel {
         branch = before.branch();
         start = before.start();
         remotes = before.remotes();
+        me = before.me();
       }
       page = History.parseGitLog(SyncPanel.git(dir, History.gitLogArgs(start, LOG_LIMIT, entries.size())));
     }
@@ -487,10 +620,16 @@ final class ProjectHistoryPanel extends JPanel {
     }
     Set<String> seen = new HashSet<>();
     for (History.Entry entry : entries) seen.add(entry.id());
+    List<String> merges = new ArrayList<>();
     for (History.Entry entry : page) {
-      if (seen.add(entry.id())) entries.add(entry);
+      if (!seen.add(entry.id())) continue;
+      entries.add(entry);
+      if (target.vcs() == SyncPanel.Vcs.GIT && entry.merge()) merges.add(entry.id());
     }
-    return new Loaded(target, branch, svnRoot, svnPrefix, start, remotes, entries, History.layout(entries), page.size() == LOG_LIMIT);
+    // 합치기 커밋이 있을 때만 git 을 한 번 더 부른다(부모마다 따로 비교, History.clashes).
+    if (!merges.isEmpty() && me.known()) sides.putAll(History.parseSides(SyncPanel.git(dir, History.sideArgs(merges))));
+    return new Loaded(target, branch, svnRoot, svnPrefix, start, remotes, entries, History.layout(entries), page.size() == LOG_LIMIT,
+                      me, sides, History.clashes(entries, me, sides));
   }
 
   /** entries(비어 있지 않음) 의 마지막 리비전 앞의 다음 묶음. 마지막이 1 이하면 빈 목록. 리비전이 숫자가 아니면 IOException. */
@@ -510,7 +649,7 @@ final class ProjectHistoryPanel extends JPanel {
     List<History.Entry> page = History.parseSvnLog(
       SyncPanel.run(dir, "svn", "log", "--xml", "-v", "-l", String.valueOf(LOG_LIMIT), "-r", range), svnPrefix);
     if (!page.isEmpty()) {
-      entries.set(lastIndex, new History.Entry(last.id(), List.of(page.get(0).id()), last.author(), last.time(), last.refs(),
+      entries.set(lastIndex, new History.Entry(last.id(), List.of(page.get(0).id()), last.author(), last.email(), last.time(), last.refs(),
                                                last.message(), last.files()));
     }
     return page;
@@ -532,16 +671,16 @@ final class ProjectHistoryPanel extends JPanel {
     return value == null ? "" : value;
   }
 
-  /** 찾기 글로 표를 다시 채운다. 찾기 칸이 비어 있을 때만 가지 선을 그린다. */
+  /** 찾기 글 · 「내 소스 건드린 커밋만」으로 표를 다시 채운다. 둘 다 꺼져 있을 때만 가지 선을 그린다. */
   private void fillCommits() {
     shown.clear();
     clearDetail();
     if (loaded != null) {
       String word = searchWord();
-      graph = word.isEmpty();
+      graph = word.isEmpty() && !onlyMine.isSelected();
       updateGraphWidth();
       for (History.Entry entry : loaded.entries()) {
-        if (matches(entry, word)) shown.add(entry);
+        if (visible(entry, word)) shown.add(entry);
       }
     }
     commitModel.fireTableDataChanged();
@@ -549,6 +688,15 @@ final class ProjectHistoryPanel extends JPanel {
 
   private String searchWord() {
     return filter.getText().trim().toLowerCase(Locale.ROOT);
+  }
+
+  /** 찾기 글에 맞고, 「내 소스 건드린 커밋만」이 켜져 있으면 내 소스를 건드린 커밋인가. */
+  private boolean visible(History.Entry entry, String word) {
+    return matches(entry, word) && (!onlyMine.isSelected() || clashesOf(entry).size() > 0);
+  }
+
+  private List<History.Clash> clashesOf(History.Entry entry) {
+    return loaded == null ? List.of() : loaded.clashes().getOrDefault(entry.id(), List.of());
   }
 
   /** 찾기 글(소문자, 빈 글이면 모두)이 제목이나 작성자에 들어 있는가. */
@@ -571,7 +719,7 @@ final class ProjectHistoryPanel extends JPanel {
     String html = "<html>" + String.join("<br>", SyncBundle.message("history.legend.dot"), SyncBundle.message("history.legend.merge.dot"),
                                          SyncBundle.message("history.legend.split"), SyncBundle.message("history.legend.merge"),
                                          SyncBundle.message("history.legend.passing"), SyncBundle.message("history.legend.color"),
-                                         SyncBundle.message("history.legend.hover")) + "</html>";
+                                         SyncBundle.message("history.legend.hover"), SyncBundle.message("history.legend.mine")) + "</html>";
     JBPopupFactory.getInstance().createHtmlTextBalloonBuilder(html, MessageType.INFO, null)
       .setHideOnClickOutside(true)
       .createBalloon()
@@ -627,6 +775,9 @@ final class ProjectHistoryPanel extends JPanel {
     bend.setText("");
     bend.setToolTipText(null);
     bend.setVisible(false);
+    clashTitle.setVisible(false);
+    clashList.setListData(new History.Clash[0]);
+    clashList.setVisible(false);
     filesTitle.setVisible(false);
     files.setListData(new History.FileChange[0]);
     files.getEmptyText().setText(SyncBundle.message("history.empty.select"));
@@ -654,6 +805,13 @@ final class ProjectHistoryPanel extends JPanel {
     bend.setText(graph ? bendText(commits.getSelectedRow()) : "");
     bend.setToolTipText(bend.getText().isEmpty() ? null : bend.getText());
     bend.setVisible(!bend.getText().isEmpty());
+    List<History.Clash> clashes = clashesOf(entry);
+    // 한 커밋의 꼬리표는 모두 같은 쪽이다(작성자가 나면 남의 소스, 아니면 내 소스).
+    boolean others = !clashes.isEmpty() && clashes.get(0).others();
+    clashTitle.setText(SyncBundle.message(others ? "history.others.files" : "history.mine.files", clashes.size()));
+    clashTitle.setVisible(!clashes.isEmpty());
+    clashList.setListData(clashes.toArray(History.Clash[]::new));
+    clashList.setVisible(!clashes.isEmpty());
     filesTitle.setText(SyncBundle.message("history.files", entry.files().size()));
     filesTitle.setVisible(true);
     files.setListData(entry.files().toArray(History.FileChange[]::new));
@@ -708,6 +866,61 @@ final class ProjectHistoryPanel extends JPanel {
         }
       });
     });
+  }
+
+  /**
+   * 고른 「내 소스를 건드린 파일」의 내 커밋 판(왼쪽)과 이 커밋 판(오른쪽)을 비교 창으로 연다. 내용은 해시로 바로 읽는다(git cat-file).
+   * 없는 파일(해시가 0 만)은 빈 내용. 읽기 실패는 비교 창에 오류 문구로 보인다.
+   */
+  private void showClashDiff() {
+    History.Entry entry = selectedEntry();
+    History.Clash clash = clashList.getSelectedValue();
+    Loaded source = loaded;
+    if (entry == null || clash == null || source == null) return;
+    File dir = source.target().dir();
+    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+      byte[][] contents;
+      try {
+        contents = new byte[][]{blob(dir, clash.ownerChange().newBlob()), blob(dir, clash.change().newBlob())};
+      }
+      catch (IOException e) {
+        SwingUtilities.invokeLater(() -> DiffManager.getInstance().showDiff(project, new MessageDiffRequest(e.getMessage())));
+        return;
+      }
+      catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        return;
+      }
+      SwingUtilities.invokeLater(() -> {
+        FilePath path = VcsUtil.getFilePath(new File(dir, clash.change().path()), false);
+        DiffContentFactory factory = DiffContentFactory.getInstance();
+        try {
+          DiffManager.getInstance().showDiff(project, new SimpleDiffRequest(
+            clash.change().path() + " (" + entry.id() + ")", factory.createFromBytes(project, contents[0], path),
+            factory.createFromBytes(project, contents[1], path),
+            SyncBundle.message("history.mine.commit", ownerName(clash), shortId(clash.owner()), stamp(FULL, clash.owner().time())),
+            entry.author() + " · " + stamp(FULL, entry.time())));
+        }
+        catch (IOException e) {
+          DiffManager.getInstance().showDiff(project, new MessageDiffRequest(e.getMessage()));
+        }
+      });
+    });
+  }
+
+  /** 바뀌기 전 판을 만든 사람: 내 소스면 「내」, 남의 소스면 그 작성자. */
+  private static String ownerName(History.Clash clash) {
+    return clash.others() ? clash.owner().author() : SyncBundle.message("history.mine.me");
+  }
+
+  /** 꼬리표 글: 내 소스 · 남의 소스와 건드린 방식. */
+  private static String clashLabel(boolean others, History.ClashKind kind) {
+    return SyncBundle.message("history.clash." + (others ? "others." : "mine.") + kind.name().toLowerCase(Locale.ROOT));
+  }
+
+  /** 해시의 파일 내용. 0 만인 해시(없는 파일)는 빈 내용. */
+  private static byte[] blob(File dir, String hash) throws IOException, InterruptedException {
+    return hash.chars().allMatch(c -> c == '0') ? new byte[0] : SyncPanel.gitBytes(dir, "cat-file", "blob", hash);
   }
 
   /** Git 은 「해시:./경로」(작업 폴더 기준, 직전은 첫 부모), SVN 은 「저장소 URL@리비전」. 실패는 IOException. */
@@ -855,7 +1068,7 @@ final class ProjectHistoryPanel extends JPanel {
     }
   }
 
-  /** 프로젝트(모듈) 아이콘 · 이름, 뒤에 흐린 Git · SVN 표시. */
+  /** 프로젝트(모듈) 아이콘 · 이름, 뒤에 흐린 Git · SVN 표시와 현재 브랜치. */
   private static final class TargetRenderer extends ColoredListCellRenderer<Target> {
     @Override
     protected void customizeCellRenderer(@NotNull JList<? extends Target> list, Target value, int index, boolean selected, boolean focused) {
@@ -863,6 +1076,23 @@ final class ProjectHistoryPanel extends JPanel {
       setIcon(AllIcons.Nodes.Module);
       append(value.name());
       append("  " + (value.vcs() == SyncPanel.Vcs.GIT ? "Git" : "SVN"), SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES);
+      if (!value.branch().isEmpty()) append("  " + value.branch(), SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES);
+      setToolTipText(value.dir().getPath());
+    }
+  }
+
+  /** 소스를 건드린 파일: 색 있는 「되돌림」 · 「덮어씀」 · 「이어 고침」, 파일 이름, 흐린 「← 내(또는 작성자) 커밋 해시 · 날짜」. */
+  private static final class ClashRenderer extends ColoredListCellRenderer<History.Clash> {
+    @Override
+    protected void customizeCellRenderer(@NotNull JList<? extends History.Clash> list, History.Clash value, int index,
+                                         boolean selected, boolean focused) {
+      History.ClashKind kind = value.kind();
+      append(SyncBundle.message("history.mine.kind." + kind.name().toLowerCase(Locale.ROOT)) + "  ",
+             new SimpleTextAttributes(SimpleTextAttributes.STYLE_BOLD, CLASH_COLOR.get(kind)));
+      append(value.change().path());
+      append("  " + SyncBundle.message("history.mine.from", ownerName(value), shortId(value.owner()), when(value.owner().time())),
+             SimpleTextAttributes.GRAYED_ATTRIBUTES);
+      setToolTipText(value.change().path());
     }
   }
 
@@ -952,11 +1182,13 @@ final class ProjectHistoryPanel extends JPanel {
         case COL_TIME -> when(entry.time());
         default -> shortId(entry);
       };
-      String fitted = fit(text, fm, room);
-      g2.drawString(fitted, gap, baseline);
-      if (column != COL_MESSAGE) return;
-      int pillX = gap + fm.stringWidth(fitted) + gap;
+      int x = gap;
       int cy = h / 2;
+      if (column == COL_MESSAGE) x += paintClashPill(g2, x, cy);
+      String fitted = fit(text, fm, room - (x - gap));
+      g2.drawString(fitted, x, baseline);
+      if (column != COL_MESSAGE) return;
+      int pillX = x + fm.stringWidth(fitted) + gap;
       String head = loaded == null ? null : loaded.branch();
       for (String ref : entry.refs()) {
         boolean isHead = ref.equals(head);
@@ -965,6 +1197,15 @@ final class ProjectHistoryPanel extends JPanel {
         if (pillX + pillWidth(fm, ref, icon) > w - gap) break;
         pillX += paintPill(this, g2, ref, color, icon, pillX, cy - JBUI.scale(PILL_H) / 2) + gap / 2;
       }
+    }
+
+    /** 소스를 건드린 커밋이면 메시지 앞에 가장 센 방식(History.strongest)의 꼬리표를 그리고 차지한 폭(뒤 여백 포함)을 돌려준다. */
+    private int paintClashPill(Graphics2D g2, int x, int cy) {
+      List<History.Clash> clashes = clashesOf(entry);
+      if (clashes.isEmpty()) return 0;
+      History.ClashKind kind = History.strongest(clashes);
+      String label = clashLabel(clashes.get(0).others(), kind);
+      return paintPill(this, g2, label, CLASH_COLOR.get(kind), null, x, cy - JBUI.scale(PILL_H) / 2) + JBUI.scale(GAP) / 2;
     }
 
     private void segment(Graphics2D g, History.Seg s, int y1, int y2) {
