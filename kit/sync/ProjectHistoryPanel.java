@@ -119,11 +119,11 @@ final class ProjectHistoryPanel extends JPanel {
   // 표와 오른쪽 상세 칸의 폭 비율, 왼쪽 저장소 목록과 나머지의 폭 비율.
   private static final float TABLE_RATIO = 0.62f;
   private static final float REPO_RATIO = 0.15f;
-  // 소스 건드림 꼬리표 색: 되돌림은 빨강, 합치며 덮어씀은 주황, 이어 고침은 회색. 내 소스 · 남의 소스 모두 같은 색.
+  // 소스 건드림 꼬리표 색: 되돌림은 빨강, 합치며 덮어씀은 주황, 이어 고침은 보라(브랜치 알약의 초록 · 회색 · 황토 · 파랑과 겹치지 않게). 내 소스 · 남의 소스 모두 같은 색.
   private static final Map<History.ClashKind, Color> CLASH_COLOR = Map.of(
     History.ClashKind.REVERTED, new JBColor(0xC03030, 0xF07070),
     History.ClashKind.OVERWRITTEN, new JBColor(0xC0612B, 0xF0A060),
-    History.ClashKind.EDITED, new JBColor(0x6B6B6B, 0xA0A0A0));
+    History.ClashKind.EDITED, new JBColor(0x7A5BB5, 0xB49AF0));
 
   // 표 칸 번호.
   private static final int COL_GRAPH = 0;
