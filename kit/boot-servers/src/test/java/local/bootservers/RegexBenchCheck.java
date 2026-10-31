@@ -39,6 +39,13 @@ public final class RegexBenchCheck {
         eq(1, js("[[]", global, "a[b", "").matches().size(), "묶음 안 [ 는 글자");
         eq(3, js("[a&&b]", global, "a&b", "").matches().size(), "묶음 안 && 는 글자");
         eq(1, js("\\u{1F600}", EnumSet.of(Flag.JS_UNICODE), "x\uD83D\uDE00", "").matches().size(), "u 의 \\u{…}");
+        String spaces = "a\u00A0b\uFEFFc\u3000d";
+        eq(3, js("\\s", global, spaces, "").matches().size(), "JS \\s 는 유니코드 공백도");
+        eq(0, run(Flavor.JAVA, "\\s", none, spaces, "").matches().size(), "Java \\s 는 ASCII 공백만");
+        eq(4, js("\\S", global, spaces, "").matches().size(), "JS \\S 는 유니코드 공백 빼고");
+        eq(2, js("[^\\S\n]", global, " \u00A0\n", "").matches().size(), "JS 줄바꿈 뺀 공백 [^\\S\\n]");
+        eq(3, js("[\\s,]", global, ",\u00A0 x", "").matches().size(), "JS 묶음 안 \\s");
+        eq(1, js("[x\\S]", global, "\u00A0y", "").matches().size(), "JS 묶음 안 \\S");
         eq(1, js("é", EnumSet.of(Flag.JS_IGNORE_CASE), "É", "").matches().size(), "i 는 ASCII 밖도");
         eq("2026.10.31", js("(?<y>\\d{4})-(\\d\\d)-(\\d\\d)", none, "2026-10-31", "$<y>.$2.$3").replaced(), "$<이름> · $n");
         eq("[x]$-", js("x", none, "x", "[$&]$$-").replaced(), "$& · $$");

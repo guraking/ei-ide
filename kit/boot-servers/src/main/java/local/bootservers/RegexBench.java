@@ -16,7 +16,8 @@ import java.util.regex.PatternSyntaxException;
  * 정규식 작업대의 일치 · 바꾸기 계산. IntelliJ 클래스를 쓰지 않는다(점검 RegexBenchCheck).
  * JavaScript 문법은 java.util.regex 로 옮겨 돌린다. 옮기는 것: 빈 묶음 [] · [^], 묶음 안 [ · &&,
  * 반복이 아닌 { , u 플래그의 코드 포인트 이스케이프(백슬래시 u{…}). 바꾸기 글은 String.prototype.replace 규칙($$ $& $` $' $n $nn $<이름>)을 따른다.
- * shortcut: JS \s 의 유니코드 공백(  · ﻿ 등)과 u 없는 「.」의 UTF-16 한 칸 일치는 흉내 내지 않는다. 틀린 결과가 보고되면 옮김에 더한다.
+ * \s · \S 는 JS 공백 목록(JS_SPACES, ECMAScript WhiteSpace + LineTerminator)으로 옮긴다.
+ * shortcut: u 없는 「.」 이 UTF-16 한 칸(이모지 반쪽)에 맞는 것은 흉내 내지 않는다. 틀린 결과가 보고되면 옮김에 더한다.
  */
 final class RegexBench {
 
@@ -213,6 +214,10 @@ final class RegexBench {
         }
     }
 
+    /** ECMAScript 의 WhiteSpace · LineTerminator(\s 가 맞는 글자). Java \s 는 이 가운데 ASCII 만 맞는다. */
+    private static final String JS_SPACES =
+            "\\t\\n\\x0B\\f\\r\\x20\\x{A0}\\x{1680}\\x{2000}-\\x{200A}\\x{2028}\\x{2029}\\x{202F}\\x{205F}\\x{3000}\\x{FEFF}";
+
     /** JavaScript 정규식을 java.util.regex 에서 같은 뜻이 되게 옮긴다. */
     static String toJava(String js, boolean unicode) {
         StringBuilder out = new StringBuilder();
@@ -226,6 +231,13 @@ final class RegexBench {
                     // Java 의 같은 표기는 \x{…} 다
                     out.append("\\x").append(js, i + 2, close + 1);
                     i = close + 1;
+                } else if (js.charAt(i + 1) == 's') {
+                    out.append(inClass ? JS_SPACES : "[" + JS_SPACES + "]");
+                    i += 2;
+                } else if (js.charAt(i + 1) == 'S') {
+                    // 묶음 안에서는 Java 겹 묶음(합집합)으로 넣는다. [^…[^공백]] 도 Java 9 부터 바깥 ^ 가 전체에 걸린다.
+                    out.append("[^").append(JS_SPACES).append(']');
+                    i += 2;
                 } else {
                     out.append(js, i, i + 2);
                     i += 2;
