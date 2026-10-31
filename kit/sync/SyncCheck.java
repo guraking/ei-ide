@@ -50,7 +50,34 @@ public class SyncCheck {
     eq(SyncPanel.unquote("plain.txt"), "plain.txt");
     checkNestedRepo();
 
-    // Push 단추 숫자: git status -b 브랜치 줄의 ahead.
+    // Push 단추 숫자 · 받을 저장소: git status -b 브랜치 줄의 ahead · behind.
+    eq(SyncPanel.parseTracking("## main...origin/main [ahead 2, behind 13]\n M a.txt\n"), new SyncPanel.Tracking(2, 13));
+    eq(SyncPanel.parseTracking("## main...origin/main [behind 1]\n"), new SyncPanel.Tracking(0, 1));
+    eq(SyncPanel.parseTracking("## feature/new\n?? b/\n"), new SyncPanel.Tracking(0, 0));
+    eq(SyncPanel.parseTracking("## HEAD (no branch)\n"), new SyncPanel.Tracking(0, 0));
+    // 경로 묶음: 명령줄 한도를 넘지 않게 나누고 순서 · 개수는 그대로.
+    List<String> many = new java.util.ArrayList<>();
+    for (int i = 0; i < 3000; i++) many.add("src/main/java/com/shop/order/Order" + i + ".java");
+    List<List<String>> parts = SyncPanel.chunks(many);
+    eq(parts.size() > 1, true);
+    List<String> joined = new java.util.ArrayList<>();
+    for (List<String> part : parts) {
+      eq(String.join(" ", part).length() < 32_000, true);
+      joined.addAll(part);
+    }
+    eq(joined, many);
+    eq(SyncPanel.chunks(List.of()), List.of());
+    eq(SyncPanel.chunks(List.of("a")), List.of(List.of("a")));
+    // svn 경로의 @ 는 끝에 @ 를 붙여 이름 그대로 읽게 한다.
+    eq(SyncPanel.svnPath("img/icon@2x.png"), "img/icon@2x.png@");
+    eq(SyncPanel.svnPath("img/icon.png"), "img/icon.png");
+    // .gitignore 줄 이스케이프: 글로브 글자 · 맨 앞 # · ! · 끝 공백.
+    eq(SyncPanel.gitignoreEscape("/a[1]*?.txt"), "/a\\[1\\]\\*\\?.txt");
+    eq(SyncPanel.gitignoreEscape("#x"), "\\#x");
+    eq(SyncPanel.gitignoreEscape("!x"), "\\!x");
+    eq(SyncPanel.gitignoreEscape("/a#b!c"), "/a#b!c");
+    eq(SyncPanel.gitignoreEscape("/sp  "), "/sp\\ \\ ");
+    checkGitignore();
     eq(SyncPanel.shortDir("src/main/java/com/shop/order"), "src/main/java/\u2026/order");
     eq(SyncPanel.shortDir("src/main/resources/mapper"), "src/main/resources/mapper");
     eq(SyncPanel.shortDir("src"), "src");
@@ -399,6 +426,17 @@ public class SyncCheck {
     SyncPanel.run(dir, "sh", "-c", command);
   }
 
+  /** .gitignore 에 더하기: 이미 있는 줄은 건너뛰고, 줄 끝은 파일이 쓰던 CRLF · LF 를 따른다. */
+  private static void checkGitignore() throws IOException {
+    File crlf = java.nio.file.Files.createTempDirectory("ignore-crlf").toFile();
+    java.nio.file.Files.writeString(new File(crlf, ".gitignore").toPath(), "/target/\r\n/a[1].txt");
+    SyncPanel.addToGitignore(crlf, List.of("/a[1].txt", "/b.txt"));
+    eq(java.nio.file.Files.readString(new File(crlf, ".gitignore").toPath()), "/target/\r\n/a[1].txt\r\n/a\\[1\\].txt\r\n/b.txt\r\n");
+    File lf = java.nio.file.Files.createTempDirectory("ignore-lf").toFile();
+    SyncPanel.addToGitignore(lf, List.of("/b.txt", "/b.txt"));
+    eq(java.nio.file.Files.readString(new File(lf, ".gitignore").toPath()), "/b.txt\n");
+  }
+
   /** 띄울 git: PATH 의 설치본(실제 exe 우선) → 없으면 내장 MinGit → 그것도 없으면 「git」. */
   private static void checkFindWindowsGit() throws Exception {
     File base = java.nio.file.Files.createTempDirectory("find-git").toFile();
@@ -420,6 +458,14 @@ public class SyncCheck {
     wrapperOnly.mkdirs();
     new File(wrapperOnly, "git.exe").createNewFile();
     eq(SyncPanel.findWindowsGit(wrapperOnly.getPath() + File.pathSeparator + cmd.getPath(), bundled), "git");
+    // 새 판(UCRT 빌드) Git 은 실제 exe 가 ucrt64\bin 에 있다.
+    File ucrtCmd = new File(base, "GitUcrt/cmd");
+    File ucrtReal = new File(base, "GitUcrt/ucrt64/bin/git.exe");
+    ucrtCmd.mkdirs();
+    new File(ucrtCmd, "git.exe").createNewFile();
+    ucrtReal.getParentFile().mkdirs();
+    ucrtReal.createNewFile();
+    eq(SyncPanel.findWindowsGit(ucrtCmd.getPath(), bundled), ucrtReal.getPath());
   }
 
   /** Git 로그인: 서버 주소 다듬기, Basic 머리글, GIT_CONFIG_* 환경값, 저장 형식. */

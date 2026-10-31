@@ -20,8 +20,15 @@ import java.util.List;
 final class GitUndo {
   enum Mode { SOFT, KEEP, CHECKOUT }
 
-  /** 되돌릴 동작. subject 는 reflog 제목(「commit: 메시지」), when 은 그 시각, target 은 돌아갈 커밋 또는 브랜치, onServer 는 없어질 커밋이 원격 추적 브랜치에 있는지. */
-  record Plan(Mode mode, String subject, String when, String target, boolean onServer) {}
+  /**
+   * 되돌릴 동작. subject 는 reflog 제목(「commit: 메시지」), when 은 그 시각, target 은 돌아갈 커밋 또는 브랜치,
+   * onServer 는 없어질 커밋이 원격 추적 브랜치에 있고 서버에서 받아 온 것이 아닌지, head 는 읽을 때의 HEAD reflog 맨 위 줄(실행 직전에 같은지 본다, plan 만으로는 null).
+   */
+  record Plan(Mode mode, String subject, String when, String target, boolean onServer, String head) {
+    Plan(Mode mode, String subject, String when, String target, boolean onServer) {
+      this(mode, subject, when, target, onServer, null);
+    }
+  }
 
   // reflog 한 줄: 커밋 · 선택자(브랜치@{시각}) · 제목을 0x1f 로 나눈다(제목에 다른 문자는 다 올 수 있다).
   private static final String FIELD = "\u001f";
@@ -36,6 +43,11 @@ final class GitUndo {
   // 진행 중인 합치기 · cherry-pick · revert · 리베이스를 나타내는 .git 안 파일 · 폴더.
   private static final List<String> IN_PROGRESS = List.of("MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply");
   private static final int SHORT_HASH = 8;
+  // 서버에서 받아 온 동작의 reflog 제목 앞부분(pull · pull --ff-only · pull --rebase 등).
+  private static final String PULL_PREFIX = "pull";
+  // 「merge origin/main: Fast-forward」 · 「reset: moving to origin/main」 처럼 upstream 을 받아 들인 동작.
+  private static final String MERGE_PREFIX = "merge ";
+  private static final String RESET_TO_PREFIX = "reset: moving to ";
 
   private GitUndo() {}
 
@@ -52,7 +64,7 @@ final class GitUndo {
     catch (IOException detached) {
       throw new IOException(SyncBundle.message("undo.detached"));
     }
-    String head = SyncPanel.git(root, "log", "-g", "-n", "1", REFLOG_DATE, REFLOG_FORMAT, "HEAD").trim();
+    String head = headTop(root);
     String log = SyncPanel.git(root, "log", "-g", "-n", "2", REFLOG_DATE, REFLOG_FORMAT, "refs/heads/" + branch).trim();
     Plan plan = plan(head, log, branch);
     if (plan == null) throw new IOException(SyncBundle.message("undo.nothing", branch));
@@ -63,17 +75,30 @@ final class GitUndo {
       catch (IOException notBranch) {
         throw new IOException(SyncBundle.message("undo.checkout.not.branch", plan.target()));
       }
-      return plan;
+      return new Plan(plan.mode(), plan.subject(), plan.when(), plan.target(), false, head);
     }
     boolean onServer;
     try {
       SyncPanel.git(root, "merge-base", "--is-ancestor", "HEAD", "@{u}");
-      onServer = true;
+      String upstream = SyncPanel.git(root, "rev-parse", "--abbrev-ref", "@{u}").trim();
+      onServer = !fromUpstream(plan.subject(), upstream);
     }
     catch (IOException notAncestorOrNoUpstream) {
       onServer = false;
     }
-    return new Plan(plan.mode(), plan.subject(), plan.when(), plan.target(), onServer);
+    return new Plan(plan.mode(), plan.subject(), plan.when(), plan.target(), onServer, head);
+  }
+
+  /** HEAD reflog 맨 위 한 줄. 커밋 · 체크아웃 · reset 등 HEAD 를 움직인 모든 동작이 한 줄을 더한다. */
+  private static String headTop(File root) throws IOException, InterruptedException {
+    return SyncPanel.git(root, "log", "-g", "-n", "1", REFLOG_DATE, REFLOG_FORMAT, "HEAD").trim();
+  }
+
+  /** reflog 제목이 서버(upstream, 예: origin/main)에서 받아 온 동작인지. 그 커밋을 되돌려도 서버 커밋을 없애는 것이 아니다. */
+  static boolean fromUpstream(String subject, String upstream) {
+    return subject.startsWith(PULL_PREFIX)
+           || subject.startsWith(MERGE_PREFIX + upstream + ":")
+           || subject.startsWith(RESET_TO_PREFIX + upstream);
   }
 
   /**
@@ -129,6 +154,8 @@ final class GitUndo {
 
   /** plan 을 실행하고 알림 글을 돌려준다. reset --keep 이 내 변경과 겹쳐 멈추면 이유를 붙인 IOException(작업본은 그대로). 작업 스레드에서 부른다. */
   static String run(File root, Plan plan) throws IOException, InterruptedException {
+    // 확인 창이 떠 있는 동안 커밋 · 받기 · 체크아웃이 있었으면 그 동작까지 되돌리지 않게 멈춘다.
+    if (plan.head() != null && !plan.head().equals(headTop(root))) throw new IOException(SyncBundle.message("undo.changed", root.getName()));
     switch (plan.mode()) {
       case SOFT -> SyncPanel.git(root, "reset", "--soft", plan.target());
       // 커밋 되돌리기(reset --soft)를 다시 되돌릴 때처럼 색인 · 작업본이 이미 target 과 같으면 --soft 로 충분하다.

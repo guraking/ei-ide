@@ -19,6 +19,7 @@ import com.intellij.openapi.module.ModifiableModuleModel;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.module.ModuleTypeManager;
+import com.intellij.openapi.module.UnloadedModuleDescription;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.ContentEntry;
@@ -45,9 +46,11 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -59,7 +62,7 @@ import java.util.regex.Pattern;
  * 받은 폴더와 그 아래 두 단계의 pom.xml · Gradle 파일은 Maven · Gradle 프로젝트로 연결한다(linkBuildFiles).
  * 열 때와 Clone 뒤에 모듈마다 빌드 결과 · 내려받은 라이브러리 폴더를 제외 폴더로 표시한다(excludeBuildOutput). 인덱스 · 검색 · TODO 가 읽지 않는다.
  * 다음이면 false 를 돌려 IntelliJ 기본 동작(새 프로젝트로 열기)에 맡긴다:
- * 시작 화면(기본 프로젝트)에서 받았을 때, 같은 이름 모듈이 이미 있을 때,
+ * 시작 화면(기본 프로젝트)에서 받았을 때, 대소문자만 다른 것까지 같은 이름 모듈이 이미 있을 때(Close Project 로 내린 모듈 포함, 윈도우에서 .iml 이 서로 덮이므로),
  * SVN 으로 받았을 때, 열린 프로젝트가 SVN 프로젝트일 때(svnProject).
  * IntelliJ 는 SVN 이 하나라도 섞이면 Commit 창 대신 커밋 대화상자를 쓰므로(CommitModeManager.canSetNonModal) Git 과 SVN 을 한 프로젝트에 섞지 않는다.
  * 받은 폴더가 프로젝트 폴더 안이어도 따로 모듈로 붙인다.
@@ -67,8 +70,8 @@ import java.util.regex.Pattern;
  * 프로젝트 창 맨 위의 프로젝트 폴더 줄은 HideWorkspaceRoot 가 그 안의 줄들(.idea 빼고)로 바꿔 그린다
  * (IntelliJ 가 열 때마다 다시 등록하므로 등록은 빼지 않는다. 받은 저장소 모듈은 이 폴더 줄 아래에 그려지므로 줄만 지우면 같이 사라진다).
  * 그러면 「git」 줄 없이 받은 저장소 모듈들만 이클립스처럼 나란히 보인다(빈 워크스페이스면 빈 트리, .idea 는 디스크에 그대로).
- * 워크스페이스 판정(workspaceDir): 프로젝트 폴더와 그 위 어디에도 .git · .svn 이 없고, 프로젝트 폴더 아래에 모듈로 붙은 폴더가 하나 이상 있으며,
- * 프로젝트 폴더를 콘텐츠 루트로 가진 모듈이 없거나 있어도 그 루트 하나뿐이며 소스 폴더가 없다.
+ * 워크스페이스 판정(workspaceDir): 프로젝트 폴더에 빌드 파일(BUILD_FILES)이 없고, 프로젝트 폴더와 그 위(사용자 폴더 · 드라이브 맨 위는 빼고)에 .git · .svn 이 없고,
+ * 프로젝트 폴더 아래에 모듈로 붙은 폴더가 하나 이상 있으며, 프로젝트 폴더를 콘텐츠 루트로 가진 모듈이 없거나 있어도 그 루트 하나뿐이며 소스 폴더가 없다.
  * 그래서 빈 워크스페이스는 첫 Clone 전까지 폴더 줄이 보인다.
  */
 public final class CloneIntoProject implements CheckoutListener, StartupActivity.DumbAware {
@@ -89,6 +92,10 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
   private static final String ECLIPSE_CLASSPATH = ".classpath";
   private static final Pattern CLASSPATH_ENTRY = Pattern.compile("<classpathentry\\b[^>]*>");
   private static final Pattern ENTRY_PATH = Pattern.compile("\\bpath=\"([^\"]*)\"");
+  private static final String KIND_SRC = "(?s).*\\bkind=\"src\".*";
+  private static final String KIND_OUTPUT = "(?s).*\\bkind=\"output\".*";
+  // .classpath 에 적지 않아도 소스 · 웹 폴더로 보는 이클립스 기본 폴더(Dynamic Web Project · MyEclipse).
+  private static final List<String> ECLIPSE_SOURCE_DIRS = List.of("src", "WebContent", "WebRoot");
 
   @Override
   public void runActivity(@NotNull Project project) {
@@ -103,12 +110,14 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
     VirtualFile dir = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(directory);
     if (dir == null) return false;
     String name = dir.getName();
-    if (ModuleManager.getInstance(project).findModuleByName(name) != null) return false;
+    if (moduleNameTaken(project, name)) return false;
     if (Files.isDirectory(directory.resolve(".svn")) || svnProject(project)) return false;
 
     // 이 리스너는 Clone 작업 스레드에서 불린다(CloneableProjectsService.runCloneTask). 모듈 · 매핑은 EDT 에서 바꾼다.
     // 붙이다 실패하면 만든 모듈을 지우고 false 를 돌려 IntelliJ 기본 동작(새 프로젝트로 열기)에 맡긴다. 반쯤 붙은 모듈을 남기지 않는다.
     AtomicReference<Module> created = new AtomicReference<>();
+    AtomicBoolean mapped = new AtomicBoolean();
+    String path = directory.toString().replace('\\', '/');
     try {
       ApplicationManager.getApplication().invokeAndWait(() -> {
         if (project.isDisposed()) return;
@@ -117,6 +126,7 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
         ModuleRootModificationUtil.addContentRoot(created.get(), dir);
         ModuleRootModificationUtil.setSdkInherited(created.get());
         excludeDirs(created.get(), outputDirs(directory));
+        mapped.set(true);
         addVcsMapping(project, directory);
         removeWorkspaceModule(project);
       });
@@ -124,19 +134,32 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
     catch (RuntimeException e) {
       LOG.warn("Clone 한 폴더를 모듈로 붙이지 못해 새 프로젝트로 엽니다: " + directory, e);
       Module module = created.get();
-      if (module != null) {
-        ApplicationManager.getApplication().invokeAndWait(() -> {
-          if (!project.isDisposed() && !module.isDisposed()) disposeModule(project, module);
-        });
-      }
+      ApplicationManager.getApplication().invokeAndWait(() -> {
+        if (project.isDisposed()) return;
+        if (module != null && !module.isDisposed()) disposeModule(project, module);
+        if (mapped.get()) CloseRepoAction.removeVcsMappings(project, List.of(path));
+      });
       return false;
     }
+    // 붙이는 사이 프로젝트가 닫혔으면 붙은 곳이 없으므로 새 프로젝트로 연다.
+    if (created.get() == null || project.isDisposed()) return false;
     // Git Clone 은 이 리스너 뒤에 최근 목록에 올리므로 onCloneSuccess 에서 한 번 더 뺀다.
-    String path = directory.toString().replace('\\', '/');
     RecentProjectsManager.getInstance().removePath(path);
     ForgetRecent.ATTACHED.add(path);
     linkBuildFiles(project, directory);
     return true;
+  }
+
+  /** 올라온 모듈이나 내린 모듈 중 대소문자를 가리지 않고 같은 이름이 있으면 true. 새 모듈 만들기는 같은 이름의 내린 모듈을 지우고, 윈도우에서는 .iml 이 대소문자만 달라도 덮인다. */
+  private static boolean moduleNameTaken(Project project, String name) {
+    ModuleManager modules = ModuleManager.getInstance(project);
+    for (Module module : modules.getModules()) {
+      if (module.getName().equalsIgnoreCase(name)) return true;
+    }
+    for (UnloadedModuleDescription description : modules.getUnloadedModuleDescriptions()) {
+      if (description.getName().equalsIgnoreCase(name)) return true;
+    }
+    return false;
   }
 
   /**
@@ -292,22 +315,29 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
   }
 
   /**
-   * .classpath 의 출력 폴더(<classpathentry kind="output" path="bin"/>)를 상대 경로로 돌려준다.
+   * .classpath 의 첫 출력 폴더(<classpathentry kind="output" path="bin"/>)를 상대 경로로 돌려준다.
    * 없거나 프로젝트 폴더 자신(「.」 · 빈 값)이거나 절대 경로 · 위로 나가는 경로면 null.
+   * 같은 .classpath 의 소스 폴더(kind="src")나 ECLIPSE_SOURCE_DIRS 와 같거나 그것을 품은 폴더여도 null(대소문자 무시, 윈도우 경로).
    */
   static @Nullable String eclipseOutput(String classpath) {
+    List<String> sources = new ArrayList<>(ECLIPSE_SOURCE_DIRS);
+    String output = null;
     Matcher tag = CLASSPATH_ENTRY.matcher(classpath);
     while (tag.find()) {
       String entry = tag.group();
-      if (!entry.matches("(?s).*\\bkind=\"output\".*")) continue;
       Matcher path = ENTRY_PATH.matcher(entry);
-      if (!path.find()) return null;
-      String value = path.group(1).replace('\\', '/');
+      String value = path.find() ? path.group(1).replace('\\', '/') : "";
       while (value.endsWith("/")) value = value.substring(0, value.length() - 1);
-      if (value.isEmpty() || value.equals(".") || value.startsWith("/") || value.contains(":") || value.equals("..") || value.startsWith("../") || value.contains("/../")) return null;
-      return value;
+      if (entry.matches(KIND_SRC)) sources.add(value);
+      else if (output == null && entry.matches(KIND_OUTPUT)) output = value;
     }
-    return null;
+    if (output == null || output.isEmpty() || output.equals(".") || output.startsWith("/") || output.contains(":") || output.equals("..") || output.startsWith("../") || output.contains("/../")) return null;
+    String lower = output.toLowerCase(Locale.ROOT);
+    for (String source : sources) {
+      String s = source.toLowerCase(Locale.ROOT);
+      if (s.equals(lower) || s.startsWith(lower + "/")) return null;
+    }
+    return output;
   }
 
   /**
@@ -344,12 +374,16 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
 
   /**
    * 워크스페이스면 프로젝트 폴더를 돌려준다. 아니면 null.
-   * Git · SVN 저장소 안이거나, 그 폴더 아래에 모듈로 붙은 폴더가 하나도 없으면(그냥 폴더 · SVN 작업본 · 소스 폴더를 아직 안 정한 프로젝트) 워크스페이스가 아니다.
+   * 프로젝트 폴더에 빌드 파일이 있거나(zip 으로 받은 다중 모듈 프로젝트 · 맨 위 묶음 빌드 파일), Git · SVN 저장소 안이거나,
+   * 그 폴더 아래에 모듈로 붙은 폴더가 하나도 없으면(그냥 폴더 · SVN 작업본 · 소스 폴더를 아직 안 정한 프로젝트) 워크스페이스가 아니다.
    */
   private static @Nullable VirtualFile workspaceDir(Project project) {
     String base = project.isDefault() ? null : project.getBasePath();
     if (base == null) return null;
-    for (Path dir = Path.of(base); dir != null; dir = dir.getParent()) {
+    for (String file : BUILD_FILES) {
+      if (Files.isRegularFile(Path.of(base, file))) return null;
+    }
+    for (Path dir = Path.of(base); dir != null && !aboveWorkspaces(dir); dir = dir.getParent()) {
       if (Files.exists(dir.resolve(".git")) || Files.isDirectory(dir.resolve(".svn"))) return null;
     }
     VirtualFile baseDir = LocalFileSystem.getInstance().findFileByNioFile(Path.of(base));
@@ -364,6 +398,11 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
       }
     }
     return attached ? baseDir : null;
+  }
+
+  /** 사용자 폴더이거나 그 위, 또는 드라이브 맨 위면 true. 여기 우연히 있는 .git · .svn 은 저장소로 보지 않는다. */
+  static boolean aboveWorkspaces(Path dir) {
+    return dir.getParent() == null || Path.of(System.getProperty("user.home")).startsWith(dir);
   }
 
   private static void removeWorkspaceModule(Project project) {

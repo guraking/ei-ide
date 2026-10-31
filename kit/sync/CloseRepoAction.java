@@ -14,6 +14,7 @@ import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vcs.ProjectLevelVcsManager;
 import com.intellij.openapi.vcs.VcsConfiguration;
 import com.intellij.openapi.vcs.VcsDirectoryMapping;
+import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.pointers.VirtualFilePointer;
 import org.jetbrains.annotations.NotNull;
@@ -29,6 +30,7 @@ import java.util.Set;
 /**
  * 프로젝트 트리 우클릭의 「Close Project」 · 「Open Project」. 이클립스처럼 워크스페이스 안 저장소 하나만 닫고 다시 연다.
  * 닫기: 고른 줄 중 모듈의 콘텐츠 루트인 폴더를 그 모듈째 내린다(ModuleManager 의 unloaded 모듈, IntelliJ Load/Unload Modules 와 같은 상태).
+ * 콘텐츠 루트가 그 폴더 안에 있는 다른 모듈(Gradle · Maven 하위 모듈)도 함께 내린다. 열기도 같은 범위를 함께 올린다.
  * 내린 모듈은 색인 · 검색 · 컴파일에서 빠지고 트리에는 UnloadedModule 아이콘 줄로 남는다. 상태는 IntelliJ 가 workspace.xml 에 저장한다.
  * 그 폴더의 VCS 매핑도 떼어 동기화 창 · Git Log · 커밋 창에서 빠지게 하고, 「등록 안 된 VCS 루트」 알림이 뜨지 않게 무시 목록에 넣는다.
  * 열기: 내린 모듈의 콘텐츠 루트 줄을 고르면 모듈을 다시 올리고 매핑을 다시 붙인다(CloneIntoProject.addVcsMapping, .git · .svn 으로 판정).
@@ -79,7 +81,10 @@ public class CloseRepoAction extends DumbAwareAction {
     }
   }
 
-  /** 고른 줄 중 닫기(열기)할 모듈 이름 → 그 모듈 콘텐츠 루트 경로('/' 구분). 닫기는 올라온 모듈, 열기는 내린 모듈의 루트 줄만 센다. */
+  /**
+   * 고른 줄 중 닫기(열기)할 모듈 이름 → 그 모듈 콘텐츠 루트 경로('/' 구분). 닫기는 올라온 모듈, 열기는 내린 모듈의 루트 줄만 센다.
+   * 그 루트 줄 안에 콘텐츠 루트가 있는 같은 상태의 모듈(하위 모듈)도 넣는다.
+   */
   private Map<String, List<String>> targets(Project project, AnActionEvent e) {
     Map<String, List<String>> targets = new LinkedHashMap<>();
     VirtualFile[] files = e.getData(CommonDataKeys.VIRTUAL_FILE_ARRAY);
@@ -93,26 +98,40 @@ public class CloseRepoAction extends DumbAwareAction {
       if (close()) {
         Module module = ModuleUtilCore.findModuleForFile(file, project);
         if (module == null || !List.of(ModuleRootManager.getInstance(module).getContentRoots()).contains(file)) continue;
-        List<String> paths = new ArrayList<>();
-        for (VirtualFile root : ModuleRootManager.getInstance(module).getContentRoots()) paths.add(root.getPath());
-        targets.put(module.getName(), paths);
+        for (Module inner : ModuleManager.getInstance(project).getModules()) {
+          List<String> paths = new ArrayList<>();
+          boolean under = false;
+          for (VirtualFile root : ModuleRootManager.getInstance(inner).getContentRoots()) {
+            paths.add(root.getPath());
+            if (VfsUtilCore.isAncestor(file, root, false)) under = true;
+          }
+          if (under) targets.put(inner.getName(), paths);
+        }
         continue;
       }
-      for (UnloadedModuleDescription description : ModuleManager.getInstance(project).getUnloadedModuleDescriptions()) {
-        List<String> paths = new ArrayList<>();
-        boolean selected = false;
+      var unloaded = ModuleManager.getInstance(project).getUnloadedModuleDescriptions();
+      boolean selected = false;
+      for (UnloadedModuleDescription description : unloaded) {
         for (VirtualFilePointer root : description.getContentRoots()) {
-          paths.add(root.getPresentableUrl().replace('\\', '/'));
           if (root.getUrl().equals(file.getUrl())) selected = true;
         }
-        if (selected) targets.put(description.getName(), paths);
+      }
+      if (!selected) continue;
+      for (UnloadedModuleDescription description : unloaded) {
+        List<String> paths = new ArrayList<>();
+        boolean under = false;
+        for (VirtualFilePointer root : description.getContentRoots()) {
+          paths.add(root.getPresentableUrl().replace('\\', '/'));
+          if (VfsUtilCore.isEqualOrAncestor(file.getUrl(), root.getUrl())) under = true;
+        }
+        if (under) targets.put(description.getName(), paths);
       }
     }
     return targets;
   }
 
   /** 이 경로들과 같은 폴더의 VCS 매핑을 뺀다. 프로젝트 전체(<Project>) 매핑은 폴더별로 뗄 수 없으므로 그대로 둔다. */
-  private static void removeVcsMappings(Project project, List<String> roots) {
+  static void removeVcsMappings(Project project, List<String> roots) {
     ProjectLevelVcsManager vcs = ProjectLevelVcsManager.getInstance(project);
     List<VcsDirectoryMapping> kept = new ArrayList<>();
     boolean removed = false;

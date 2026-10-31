@@ -17,7 +17,7 @@ import java.awt.FlowLayout;
 /**
  * 서버 하나의 로그인을 넣는 창. IntelliJ GitHub 계정의 「토큰으로 로그인」 창처럼 칸은 고른 방식에 필요한 것만 보인다.
  * 아이디 · 비밀번호: 서버 · 아이디 · 비밀번호. 토큰: 서버 · 토큰(Basic 아이디는 GitLogins 가 채운다).
- * 고치기에서는 비밀번호 · 토큰 칸이 비어 있고, 비워 두면 저장된 값을 그대로 쓴다(result 의 secret 이 null).
+ * 고치기에서는 비밀번호 · 토큰 칸이 비어 있고, 비워 두면 저장된 값을 그대로 쓴다(result 의 secret 이 null). 서버 주소나 방식을 바꾸면 값을 새로 넣어야 한다.
  */
 final class GitLoginDialog extends DialogWrapper {
   private final JBTextField server = new JBTextField();
@@ -30,12 +30,15 @@ final class GitLoginDialog extends DialogWrapper {
   private final boolean editing;
   /** 고치기 전 서버 주소. 주소를 바꾸면 저장된 비밀번호가 옛 주소에 묶여 있어 새로 넣어야 한다. */
   private final @Nullable String oldServer;
+  /** 고치기 전 방식. 비밀번호를 토큰으로(또는 반대로) 바꾸면 옛 값을 그대로 쓰지 않는다. */
+  private final @Nullable GitLogins.Kind oldKind;
 
   /** old 가 null 이면 새로 넣기. */
   GitLoginDialog(@Nullable GitLogins.Login old) {
     super(true);
     editing = old != null;
     oldServer = old == null ? null : old.server();
+    oldKind = old == null ? null : old.kind();
     ButtonGroup kinds = new ButtonGroup();
     kinds.add(password);
     kinds.add(token);
@@ -95,7 +98,8 @@ final class GitLoginDialog extends DialogWrapper {
     // Basic 인증은 아이디:비밀번호로 묶으므로 아이디에 「:」가 있으면 안 되고, 탭 · 줄바꿈은 저장 형식을 깬다.
     if (name.contains(":") || name.contains("\t") || name.contains("\n")) return new ValidationInfo(SyncBundle.message("gitlogin.error.user"), user);
     if (password.isSelected() && name.isEmpty()) return new ValidationInfo(SyncBundle.message("gitlogin.error.user.empty"), user);
-    if (secret.getPassword().length == 0 && !GitLogins.serverOf(server.getText()).equals(oldServer)) {
+    GitLogins.Kind kind = token.isSelected() ? GitLogins.Kind.TOKEN : GitLogins.Kind.PASSWORD;
+    if (secret.getPassword().length == 0 && (!GitLogins.serverOf(server.getText()).equals(oldServer) || kind != oldKind)) {
       return new ValidationInfo(SyncBundle.message("gitlogin.error.secret"), secret);
     }
     return null;

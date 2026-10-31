@@ -10,6 +10,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vcs.ProjectLevelVcsManager;
 import com.intellij.openapi.vcs.VcsNotifier;
 import com.intellij.openapi.vcs.VcsRoot;
+import com.intellij.openapi.vcs.changes.ChangeListManager;
 import com.intellij.openapi.vcs.changes.VcsDirtyScopeManager;
 import com.intellij.openapi.vcs.FilePath;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -29,12 +30,15 @@ import java.util.Map;
 /**
  * 커밋 창 · 변경 목록 · 프로젝트 트리 우클릭 메뉴의 「Assume Unchanged」. 고른 파일을 Git 저장소별로 묶어 git update-index --skip-worktree 를 돌린다.
  * 「No Assume Unchanged」(Undo)는 같은 파일의 skip-worktree 와 예전 방식 assume-unchanged 표시를 모두 푼다. 모른 척 중이 아닌 파일에 풀기를 해도 아무 일도 없다.
- * 폴더 · Git 저장소 밖 파일은 건너뛴다. 동기화 창의 같은 메뉴와 동작이 같다(SyncPanel.setHidden).
+ * 폴더 · Git 저장소 밖 파일 · 추적하지 않는(새 · 무시) 파일은 건너뛴다. 동기화 창의 같은 메뉴와 동작이 같다(SyncPanel.setHidden).
+ * 저장소 하나가 실패해도 나머지는 계속하고, 실패한 저장소 이름과 까닭을 알린다.
  */
 public class AssumeUnchangedAction extends AnAction implements DumbAware {
 
   /** 알림 설정(Settings → Notifications)에서 이 알림을 가려 끌 수 있게 붙이는 표시 ID. */
   private static final String NOTIFICATION_ID = "kinggura.sync.assumeUnchanged";
+  // git 한 번에 넘기는 경로 수. 윈도우 명령줄 한도(32767자)를 경로 100개 × 최대 260자로도 넘지 않게 나눈다.
+  private static final int PATHS_PER_CALL = 100;
 
   /** 프로젝트 트리 우클릭의 「No Assume Unchanged」. */
   public static final class Undo extends AssumeUnchangedAction {
@@ -57,26 +61,30 @@ public class AssumeUnchangedAction extends AnAction implements DumbAware {
     Map<File, List<String>> byRoot = byRoot(e);
     if (project == null || byRoot.isEmpty()) return;
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
-      String message;
-      boolean failed = false;
-      try {
-        int count = 0;
-        for (Map.Entry<File, List<String>> entry : byRoot.entrySet()) {
-          SyncPanel.setHidden(entry.getKey(), entry.getValue(), on());
-          count += entry.getValue().size();
+      int count = 0;
+      List<String> failures = new ArrayList<>();
+      for (Map.Entry<File, List<String>> entry : byRoot.entrySet()) {
+        List<String> paths = entry.getValue();
+        try {
+          for (int from = 0; from < paths.size(); from += PATHS_PER_CALL) {
+            List<String> part = paths.subList(from, Math.min(from + PATHS_PER_CALL, paths.size()));
+            SyncPanel.setHidden(entry.getKey(), part, on());
+            count += part.size();
+          }
         }
-        message = SyncPanel.hideMessage(count, on());
+        catch (IOException ex) {
+          failures.add(entry.getKey().getName() + ": " + ex.getMessage());
+        }
+        catch (InterruptedException ex) {
+          Thread.currentThread().interrupt();
+          return;
+        }
       }
-      catch (IOException ex) {
-        message = ex.getMessage();
-        failed = true;
-      }
-      catch (InterruptedException ex) {
-        Thread.currentThread().interrupt();
-        return;
-      }
-      String m = message;
-      boolean error = failed;
+      List<String> lines = new ArrayList<>();
+      if (count > 0 || failures.isEmpty()) lines.add(SyncPanel.hideMessage(count, on()));
+      lines.addAll(failures);
+      String m = String.join("\n", lines);
+      boolean error = !failures.isEmpty();
       ApplicationManager.getApplication().invokeLater(() -> {
         // 변경 목록은 바꾼 파일만 다시 읽는다. 동기화 창은 변경 목록 알림으로는 모른 척 목록을 다시 읽지 않으므로 따로 부른다.
         List<FilePath> touched = new ArrayList<>();
@@ -95,15 +103,17 @@ public class AssumeUnchangedAction extends AnAction implements DumbAware {
     });
   }
 
-  /** 고른 파일을 Git 루트별로 묶는다. 경로는 루트 기준 상대 경로('/' 구분)다. */
+  /** 고른 파일 가운데 Git 이 추적하는 파일을 루트별로 묶는다. 경로는 루트 기준 상대 경로('/' 구분)다. */
   private static Map<File, List<String>> byRoot(AnActionEvent e) {
     Map<File, List<String>> result = new LinkedHashMap<>();
     Project project = e.getProject();
     VirtualFile[] files = e.getData(CommonDataKeys.VIRTUAL_FILE_ARRAY);
     if (project == null || files == null) return result;
     ProjectLevelVcsManager vcs = ProjectLevelVcsManager.getInstance(project);
+    ChangeListManager changes = ChangeListManager.getInstance(project);
     for (VirtualFile file : files) {
-      if (file.isDirectory()) continue;
+      // 추적하지 않는 파일이 섞이면 git update-index 가 통째로 실패하므로 뺀다.
+      if (file.isDirectory() || changes.isUnversioned(file) || changes.isIgnoredFile(file)) continue;
       VcsRoot root = vcs.getVcsRootObjectFor(file);
       if (root == null || root.getVcs() == null || !"Git".equals(root.getVcs().getName()) || root.getPath() == null) continue;
       String rel = file.getPath().substring(root.getPath().getPath().length() + 1);

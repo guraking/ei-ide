@@ -198,6 +198,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
     // 미리 보기를 다시 읽을 때마다 하나 올린다(EDT 에서만 쓰고 worker 가 읽는다). 늦게 끝난 옛 계산이 새 결과를 덮지 않게 한다.
     private volatile int seq;
     private boolean ready;
+    // 미리 본 From 커밋. Merge 는 이 커밋을 합친다(그사이 자동 fetch 가 받아 온 커밋은 넣지 않는다). EDT 에서만 쓴다.
+    private String fromTip;
     // 이 창에서 이미 받아 온 브랜치. 같은 브랜치를 다시 고르면 fetch 하지 않는다(worker 스레드에서만 쓴다).
     private final Set<String> fetched = new HashSet<>();
 
@@ -537,6 +539,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
             return;
           }
           showChips(result);
+          fromTip = result.fromTip();
           ready = true;
           setOKActionEnabled(true);
         });
@@ -589,18 +592,19 @@ public final class ReverseMergeAction extends DumbAwareAction {
       if (!ready) return;
       String from = from();
       String into = into();
+      String tip = fromTip;
       boolean pushAfter = push.isSelected();
       super.doOKAction();
       // 열린 편집기의 저장 안 한 내용이 합치기에 빠지지 않게 먼저 저장한다. 단추 클릭은 쓰기 락 없이 오므로 락을 잡는다.
       WriteIntentReadAction.run((Runnable) () -> FileDocumentManager.getInstance().saveAllDocuments());
-      runMerge(from, into, pushAfter, false);
+      runMerge(from, tip, into, pushAfter, false);
     }
 
     /**
-     * 작업 스레드에서 합친다. 커밋 안 한 변경이 있어 멈추면(DirtyException) Stash 해 두고 합칠지 묻고, 고르면 stash 를 참으로 다시 한다.
+     * 작업 스레드에서 from 의 tip(미리 본 커밋)을 합친다. 커밋 안 한 변경이 있어 멈추면(DirtyException) Stash 해 두고 합칠지 묻고, 고르면 stash 를 참으로 다시 한다.
      * 충돌이면 충돌 창을 띄워 마무리한다(resolveThenFinish).
      */
-    private void runMerge(String from, String into, boolean pushAfter, boolean stash) {
+    private void runMerge(String from, String tip, String into, boolean pushAfter, boolean stash) {
       ProgressManager.getInstance().run(new Task.Backgroundable(project, SyncBundle.message("rmerge.running", from, into), false) {
         private ReverseMerge.Result result;
         private Set<String> conflicts = Set.of();
@@ -610,8 +614,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
           try {
             ReverseMerge.saveConfig(root, ReverseMerge.CONFIG_FROM, from);
             ReverseMerge.saveConfig(root, ReverseMerge.CONFIG_INTO, into);
-            result = ReverseMerge.merge(root, remote, from, into, current, pushAfter, stash);
-            if (result == ReverseMerge.Result.CONFLICT) conflicts = ReverseMerge.conflicts(root);
+            result = ReverseMerge.merge(root, remote, from, tip, into, current, pushAfter, stash);
+            if (result != ReverseMerge.Result.MERGED) conflicts = ReverseMerge.conflicts(root);
           }
           catch (IOException ex) {
             throw new RuntimeException(ex.getMessage(), ex);
@@ -627,11 +631,13 @@ public final class ReverseMergeAction extends DumbAwareAction {
 
         @Override
         public void onSuccess() {
-          if (result == ReverseMerge.Result.CONFLICT) {
+          if (result != ReverseMerge.Result.MERGED) {
+            // 이번 합치기가 Stash 를 했을 때만 마무리 뒤 되살린다. 예전에 남은 같은 이름의 Stash 는 꺼내지 않는다.
+            boolean stashed = result == ReverseMerge.Result.CONFLICT_STASHED;
             String text = SyncBundle.message("rmerge.conflict", from, into);
-            if (stash) text += "\n\n" + SyncBundle.message("rmerge.stash.kept");
+            if (stashed) text += "\n\n" + SyncBundle.message("rmerge.stash.kept");
             Messages.showWarningDialog(project, text, SyncBundle.message("rmerge.title"));
-            resolveThenFinish(conflicts, from, into, pushAfter, stash);
+            resolveThenFinish(conflicts, from, into, pushAfter, stashed);
             return;
           }
           showDone(from, into, pushAfter);
@@ -642,7 +648,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
           if (error.getCause() instanceof ReverseMerge.DirtyException) {
             if (Messages.showOkCancelDialog(project, SyncBundle.message("rmerge.dirty.ask"), SyncBundle.message("rmerge.title"),
                                             SyncBundle.message("rmerge.stash.button"), Messages.getCancelButton(), Messages.getQuestionIcon()) == Messages.OK) {
-              runMerge(from, into, pushAfter, true);
+              runMerge(from, tip, into, pushAfter, true);
             }
             return;
           }
@@ -670,7 +676,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
      * Git 메뉴의 Resolve Conflicts 는 변경 목록이 충돌을 알아챈 뒤에만 파일을 찾으므로, 막 끝난 합치기에서는 git 이 알려 준 충돌 파일을 직접 넘긴다.
      * 충돌이 남았거나 합치기를 취소했으면 마무리하지 않고 안내만 한다.
      */
-    private void resolveThenFinish(Set<String> paths, String from, String into, boolean pushAfter, boolean stash) {
+    private void resolveThenFinish(Set<String> paths, String from, String into, boolean pushAfter, boolean stashed) {
       List<VirtualFile> files = new ArrayList<>();
       for (String path : paths) {
         VirtualFile file = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(new File(root, path));
@@ -683,7 +689,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
         @Override
         public void run(@NotNull ProgressIndicator indicator) {
           try {
-            finished = ReverseMerge.finish(root, remote, into, current, pushAfter);
+            finished = ReverseMerge.finish(root, remote, into, current, pushAfter, stashed);
           }
           catch (IOException ex) {
             throw new RuntimeException(ex.getMessage(), ex);
@@ -701,7 +707,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
         public void onSuccess() {
           if (finished) showDone(from, into, pushAfter);
           else Messages.showWarningDialog(project, SyncBundle.message("rmerge.conflict.left", into)
-                                                   + (stash ? "\n\n" + SyncBundle.message("rmerge.stash.left") : ""), SyncBundle.message("rmerge.title"));
+                                                   + (stashed ? "\n\n" + SyncBundle.message("rmerge.stash.left", current) : ""), SyncBundle.message("rmerge.title"));
         }
 
         @Override

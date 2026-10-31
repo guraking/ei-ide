@@ -153,10 +153,14 @@ final class SyncPanel extends SimpleToolWindowPanel {
 
   enum Vcs { GIT, SVN }
 
-  /** 비교 대상 저장소 하나. Git 은 branch ↔ upstream, SVN 은 branch 가 없고 upstream 자리에 작업본 리비전이 온다. */
+  /**
+   * 비교 대상 저장소 하나. Git 은 branch ↔ upstream, SVN 은 branch 가 없고 upstream 자리에 작업본 리비전이 온다.
+   * Git 에 추적 브랜치가 없으면(아직 Push 하지 않은 새 브랜치 · detached HEAD) upstream 은 null 이고, 원격 비교 없이 HEAD 와 작업본만 비교한다.
+   */
   record Repo(File root, Vcs vcs, String branch, String upstream) {
-    String label() { return vcs == Vcs.GIT ? branch + " ↔ " + upstream : SyncBundle.message("sync.repo.svn.revision", upstream); }
-    String remoteName() { return vcs == Vcs.GIT ? upstream : "svn HEAD"; }
+    String label() { return vcs == Vcs.GIT ? branch + " ↔ " + upstreamLabel() : SyncBundle.message("sync.repo.svn.revision", upstream); }
+    String upstreamLabel() { return upstream == null ? SyncBundle.message("sync.repo.no.upstream") : upstream; }
+    String remoteName() { return vcs == Vcs.GIT ? (upstream == null ? GIT_HEAD : upstream) : "svn HEAD"; }
     @Override public String toString() { return root.getName() + " (" + label() + ")"; }
   }
 
@@ -258,6 +262,11 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static final String NOTE_SEP = " · ";
   private static final Set<String> UNMERGED = Set.of("DD", "AU", "UD", "UA", "DU", "AA", "UU");
   private static final String STATUS_BRANCH_LINE = "## ";
+  // git status -b 브랜치 줄 끝의 「[ahead 2, behind 3]」. 브랜치 이름에는 공백이 없어 이 꼴은 괄호 안에만 나온다.
+  private static final Pattern TRACKING_COUNT = Pattern.compile("(ahead|behind) (\\d+)");
+  private static final String TRACKING_AHEAD = "ahead";
+  // 추적 브랜치가 없는 Git 저장소의 비교 기준과 detached HEAD 의 브랜치 이름(rev-parse --abbrev-ref).
+  private static final String GIT_HEAD = "HEAD";
   // 받기 뒤 셈(git log --format=%x01 --name-only): 커밋마다 이 글자 한 줄, 그 아래 바뀐 파일 경로.
   private static final String PULLED_COMMIT_MARK = "\u0001";
   // 알림 설정(Settings → Notifications)에서 이 창의 알림을 가려 끌 수 있게 붙이는 표시 ID.
@@ -274,12 +283,26 @@ final class SyncPanel extends SimpleToolWindowPanel {
   // 작업이 취소됐는지 살피는 간격(상태 표시줄 ✕).
   private static final long CANCEL_POLL_MS = 200;
   private static final Logger LOG = Logger.getInstance(SyncPanel.class);
-  // 저장소별 마지막 git status -b 의 올릴 커밋 수(Push 단추 숫자). compare 가 채운다.
   // ProjectLevelVcsManager 가 주는 AbstractVcs.getName() 값. GitVcs.NAME · SvnVcs.VCS_NAME 과 같다.
   private static final String VCS_NAME_GIT = "Git";
   private static final String GIT = "git";
-  // 자격 증명이 없어 git 이 실패할 때 내는 문구(git 2.x, 영어 · 기본 메시지). 이때 오류에 저장 방법 안내를 붙인다.
-  private static final List<String> GIT_AUTH_ERRORS = List.of("could not read Username", "could not read Password", "Authentication failed");
+  // 자격 증명이 없어 git 이 실패할 때 내는 문구(git 2.x 영어 기본 메시지와 한국어 번역). 이때 오류에 저장 방법 안내를 붙인다.
+  private static final List<String> GIT_AUTH_ERRORS = List.of("could not read Username", "could not read Password", "Authentication failed",
+                                                              "인증 실패", "인증이 실패", "인증에 실패");
+  // 서버에 닿는 git 하위 명령. Git 로그인 머리글은 이 명령에만 넘긴다(status · checkout 등 로컬 명령이 부르는 저장소 훅이 읽지 못하게).
+  private static final Set<String> GIT_REMOTE_VERBS = Set.of("fetch", "pull", "push", "ls-remote", "clone");
+  // 터미널에서 아이디 · 비밀번호를 묻지 않고 곧바로 실패하게 한다(표준 입력이 닫혀 있어 물어도 답할 수 없다).
+  private static final String ENV_TERMINAL_PROMPT = "GIT_TERMINAL_PROMPT";
+  // 서버 명령의 오류 문구 언어를 영어로 고정해 인증 실패를 GIT_AUTH_ERRORS 로 알아보게 한다. 메시지 번역만 바꾸고 파일 이름 출력은 그대로다.
+  private static final String ENV_MESSAGE_LANGUAGE = "LANGUAGE";
+  private static final String MESSAGE_LANGUAGE_UNTRANSLATED = "C";
+  // 한 번에 넘기는 경로 인자 글자 수 상한. 윈도우 명령줄 한도(32767자)에서 실행 파일 경로 · 앞 인자 몫을 넉넉히 남긴다.
+  private static final int ARG_CHARS_MAX = 24_000;
+  // 경로 인자 하나에 더해지는 글자: 앞 공백과 감싸는 따옴표 둘.
+  private static final int ARG_QUOTE_CHARS = 3;
+  // .gitignore 에서 글로브로 읽히는 글자와, 줄 맨 앞에서만 뜻이 있는 글자(주석 · 제외 취소). 이름 그대로 맞게 역슬래시를 붙인다.
+  private static final String GITIGNORE_SPECIAL = "[]*?\\";
+  private static final String GITIGNORE_LEADING = "#!";
   static final String VCS_NAME_SVN = "svn";
   private static final String ACTION_PULL = "Git.Pull";
   private static final String ACTION_REVERSE_MERGE = "KingGura.ReverseMerge";
@@ -293,7 +316,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static final String BUNDLED_SVN = "plugins/kinggura-sync/svn/bin/svn.exe";
   // 윈도우 Git 은 PATH 에 cmd\git.exe 를 둔다. 이것은 설치 폴더의 mingw64\bin\git.exe 를 다시 띄우는 껍데기라 git 한 번에 프로세스가 둘 뜬다.
   private static final String GIT_EXE_NAME = "git.exe";
-  private static final String GIT_REAL_EXE = "mingw64/bin/git.exe";
+  // 설치 폴더 안 실제 git.exe. 예전 판은 mingw64, 새 판(UCRT 빌드)은 ucrt64 아래에 있다. 앞의 것이 먼저다.
+  private static final List<String> GIT_REAL_EXES = List.of("mingw64/bin/git.exe", "ucrt64/bin/git.exe");
   // 설치본에 같이 넣은 MinGit(kit/mingit). PC 에 Git 이 없을 때만 쓴다. 이 exe 는 cmd\git.exe 껍데기 없이 바로 돈다.
   private static final String BUNDLED_GIT = "plugins/kinggura-sync/git/ucrt64/bin/git.exe";
   /** runBytes 가 띄울 git. 처음 한 번 찾는다. */
@@ -371,6 +395,14 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private boolean summaryShown;
   // 폴더별로 묶어 보기(도구줄 토글, IDE 를 다시 켜도 남는다).
   private boolean byFolder = PropertiesComponent.getInstance().getBoolean(GROUP_BY_FOLDER_KEY);
+
+  // 저장소별 마지막 git status -b 의 앞선 · 뒤진 커밋 수. Push 단추 숫자와 받을 저장소 고르기에 쓴다. compare 가 채운다.
+  private final Map<File, Tracking> tracking = new ConcurrentHashMap<>();
+  // 새로고침이 도는 동안 들어온 저장소 하나 새로고침(EDT 에서만). 끝나면 차례로 한다(같은 저장소 fetch · 목록 바꾸기가 겹치지 않게).
+  private final Map<File, Vcs> queuedRepos = new LinkedHashMap<>();
+
+  /** 추적 브랜치보다 앞선(올릴) · 뒤진(받을) 커밋 수. */
+  record Tracking(int ahead, int behind) {}
 
   /** 위쪽 줄 · 저장소 줄 끝에 붙는 역머지 안내. warn 이면 내 파일과 겹쳐 주황으로 보인다. */
   record ReverseNote(String text, boolean warn) {}
@@ -565,10 +597,12 @@ final class SyncPanel extends SimpleToolWindowPanel {
         // 브랜치가 없는(detached) HEAD 는 rev-parse --abbrev-ref 처럼 "HEAD" 로 본다.
         String branch = Objects.requireNonNullElse(repository.getCurrentBranchName(), "HEAD");
         SwingUtilities.invokeLater(() -> {
-          // 같은 브랜치로 또 온 알림은 다시 읽지 않는다. 추적 브랜치가 없어 다시 읽기가 실패한 브랜치에서 알림마다 fetch 하지 않게 한다.
+          // 같은 브랜치로 또 온 알림은 다시 읽지 않는다(알림마다 fetch 하지 않게). 추적 브랜치가 없던 저장소는 로컬 git 으로 생겼는지만 본다.
           boolean moved = !branch.equals(lastBranch.put(root, branch));
           for (Repo repo : repos) {
-            if (moved && repo.vcs() == Vcs.GIT && repo.root().equals(root) && !branch.equals(repo.branch())) switchedRoots.add(root);
+            if (repo.vcs() != Vcs.GIT || !repo.root().equals(root)) continue;
+            if (moved && !branch.equals(repo.branch())) switchedRoots.add(root);
+            else if (repo.upstream() == null) checkUpstream(root);
           }
           pendingRoots.add(root);
           debounce.restart();
@@ -611,6 +645,26 @@ final class SyncPanel extends SimpleToolWindowPanel {
     javax.swing.Timer tick = new javax.swing.Timer(TICK_MS, e -> tick());
     tick.start();
     Disposer.register(parent, tick::stop);
+  }
+
+  /**
+   * 추적 브랜치가 없던 저장소에 (Push 로) 추적 브랜치가 생겼으면 저장소 정보부터 다시 읽는다.
+   * 먼저 로컬 git 으로만 확인해, 아직 없으면 알림마다 fetch 하지 않는다.
+   */
+  private void checkUpstream(File root) {
+    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+      try {
+        git(root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}");
+      }
+      catch (IOException noUpstream) {
+        return;
+      }
+      catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        return;
+      }
+      SwingUtilities.invokeLater(() -> refreshRepo(root, Vcs.GIT));
+    });
   }
 
   /** 1분마다: 위쪽 「원격 확인 N분 전」을 다시 그리고, 설정의 자동 원격 확인 간격이 지났으면 새로고침한다. 창이 숨어 있거나 도는 중이면 하지 않는다. */
@@ -719,14 +773,18 @@ final class SyncPanel extends SimpleToolWindowPanel {
     List<Change> selected = all.stream().filter(c -> c.kind() != Kind.ASSUMED).toList();
     if (!selected.isEmpty()) {
       items.add(Separator.getInstance());
-      boolean allGit = selected.stream().allMatch(c -> c.repo().vcs() == Vcs.GIT);
-      String ignoreName = allGit ? ".gitignore" : SyncBundle.message("sync.ignore.list");
-      items.add(item(SyncBundle.message("sync.menu.ignore", ignoreName, selected.size()), null, () -> ignore(selected, false)));
-      // .idea/misc.xml 처럼 폴더째 무시하는 경우가 많아 상위 폴더 단위도 둔다.
-      List<String> folders = selected.stream().map(Change::path).filter(p -> p.contains("/"))
-        .map(p -> "/" + p.substring(0, p.lastIndexOf('/') + 1)).distinct().toList();
-      if (!folders.isEmpty()) {
-        items.add(item(SyncBundle.message("sync.menu.ignore.folders", ignoreName, String.join(", ", folders)), null, () -> ignore(selected, true)));
+      // 무시 목록은 아직 추적하지 않는 새 파일에만 듣는다. 이미 추적 중인 파일은 아래 모른 척하기로 뺀다.
+      List<Change> ignorable = selected.stream().filter(c -> UNTRACKED_STATUS.contains(c.status())).toList();
+      if (!ignorable.isEmpty()) {
+        boolean allGit = ignorable.stream().allMatch(c -> c.repo().vcs() == Vcs.GIT);
+        String ignoreName = allGit ? ".gitignore" : SyncBundle.message("sync.ignore.list");
+        items.add(item(SyncBundle.message("sync.menu.ignore", ignoreName, ignorable.size()), null, () -> ignore(ignorable, false)));
+        // .idea/misc.xml 처럼 폴더째 무시하는 경우가 많아 상위 폴더 단위도 둔다.
+        List<String> folders = ignorable.stream().map(Change::path).filter(p -> p.contains("/"))
+          .map(p -> "/" + p.substring(0, p.lastIndexOf('/') + 1)).distinct().toList();
+        if (!folders.isEmpty()) {
+          items.add(item(SyncBundle.message("sync.menu.ignore.folders", ignoreName, String.join(", ", folders)), null, () -> ignore(ignorable, true)));
+        }
       }
       // 되돌리기는 HEAD 에 있는 파일의 내 변경만 대상이다. 새 파일 · 이름 바꾼 파일 · 복사한 파일은 지우지 않고 스테이징만 풀 수 있다.
       List<Change> revertable = selected.stream().filter(c -> undoOf(c) == Undo.REVERT).toList();
@@ -775,8 +833,12 @@ final class SyncPanel extends SimpleToolWindowPanel {
     List<Change> svnIncoming = incoming.stream().filter(c -> c.repo().vcs() == Vcs.SVN).toList();
     if (!svnIncoming.isEmpty()) {
       items.add(item(SyncBundle.message("sync.menu.update.files", svnIncoming.size()), null,
-                     () -> runOnRepos(svnIncoming, repo -> List.of("update", "--non-interactive", "--"),
-                                      done -> SyncBundle.message("sync.update.files.done", done))));
+                     () -> {
+                       // 받을 파일에 편집기의 저장 안 한 내용이 있으면 받기 전에 디스크에 쓴다(메모리 · 디스크 내용 다름 창이 뜨지 않게).
+                       saveAllDocuments();
+                       runOnRepos(svnIncoming, repo -> List.of("update", "--non-interactive", "--"),
+                                  done -> SyncBundle.message("sync.update.files.done", done));
+                     }));
     }
     if (!outgoing.isEmpty()) {
       String text = SyncBundle.message("sync.menu.commit", outgoing.size());
@@ -946,7 +1008,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
   }
 
   /**
-   * 아래 단추를 지금 목록에 맞춘다: Pull Selected 끝에 받을 파일 수, Push 끝에 나갈 파일 수(고른 저장소, 없으면 전부. 위쪽 ↑ 수와 같다),
+   * 아래 단추를 지금 목록에 맞춘다: Pull Selected 끝에 받을 파일 수, Push 끝에 올릴 커밋 수(고른 저장소, 없으면 전부. 커밋 안 한 파일은 세지 않는다),
    * 충돌이 없으면 Resolve Conflicts 를 끈다. EDT 에서 부른다.
    */
   /** 파일 줄 옆 상위 폴더. 다섯 단계 이상이면 앞 셋과 마지막만 남기고 가운데를 … 로 줄인다(src/main/java/…/order). */
@@ -965,7 +1027,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
       if (c.kind() == Kind.CONFLICT) conflict = true;
       if (!targets.contains(c.repo())) continue;
       if (c.kind() == Kind.INCOMING || c.kind() == Kind.CONFLICT) incoming++;
-      if (c.kind() == Kind.OUTGOING) outgoing++;
+    }
+    for (Repo repo : targets) {
+      Tracking counts = tracking.get(repo.root());
+      if (repo.vcs() == Vcs.GIT && counts != null) outgoing += counts.ahead();
     }
     String pull = SyncBundle.message("sync.button.pull");
     pullButton.setText(incoming == 0 ? pull : pull + COUNT_GAP + incoming);
@@ -1069,14 +1134,31 @@ final class SyncPanel extends SimpleToolWindowPanel {
     return patterns;
   }
 
-  /** 저장소 맨 위 .gitignore 끝에 패턴을 더한다. 이미 있는 줄은 다시 넣지 않는다. */
+  /** 저장소 맨 위 .gitignore 끝에 패턴을 이스케이프해 더한다. 이미 있는 줄은 다시 넣지 않고, 줄 끝은 파일이 쓰던 것(CRLF · LF)을 따른다. */
   static void addToGitignore(File root, List<String> patterns) throws IOException {
     File gitignore = new File(root, ".gitignore");
     String text = gitignore.isFile() ? Files.readString(gitignore.toPath(), StandardCharsets.UTF_8) : "";
+    String eol = text.contains("\r\n") ? "\r\n" : "\n";
     Set<String> existing = new HashSet<>(Arrays.asList(text.replace("\r\n", "\n").split("\n")));
-    StringBuilder add = new StringBuilder(text.isEmpty() || text.endsWith("\n") ? "" : "\n");
-    for (String p : patterns) if (existing.add(p)) add.append(p).append('\n');
+    StringBuilder add = new StringBuilder(text.isEmpty() || text.endsWith("\n") ? "" : eol);
+    for (String p : patterns) {
+      String line = gitignoreEscape(p);
+      if (existing.add(line)) add.append(line).append(eol);
+    }
     Files.writeString(gitignore.toPath(), text + add, StandardCharsets.UTF_8);
+  }
+
+  /** 경로를 그 이름 하나만 맞는 .gitignore 줄로: 글로브 글자 · 줄 맨 앞의 # · ! · 끝 공백 앞에 역슬래시를 붙인다. */
+  static String gitignoreEscape(String path) {
+    int end = path.length();
+    while (end > 0 && path.charAt(end - 1) == ' ') end--;
+    StringBuilder line = new StringBuilder();
+    for (int i = 0; i < path.length(); i++) {
+      char c = path.charAt(i);
+      if (GITIGNORE_SPECIAL.indexOf(c) >= 0 || (i == 0 && GITIGNORE_LEADING.indexOf(c) >= 0) || i >= end) line.append('\\');
+      line.append(c);
+    }
+    return line.toString();
   }
 
   /**
@@ -1170,13 +1252,20 @@ final class SyncPanel extends SimpleToolWindowPanel {
           List<String> paths = new ArrayList<>();
           for (Change c : entry.getValue()) paths.add(c.path());
           if (repo.vcs() == Vcs.GIT) paths.retainAll(changedFromHead(repo.root(), paths));
-          if (paths.isEmpty()) continue;
-          List<String> args = new ArrayList<>(head.apply(repo));
-          args.addAll(paths);
-          if (repo.vcs() == Vcs.GIT) git(repo.root(), args.toArray(String[]::new));
-          else run(repo.root(), "svn", args.toArray(String[]::new));
-          done += paths.size();
-          for (String path : paths) touched.add(new File(repo.root(), path));
+          // 파일이 많으면 명령줄 한도를 넘지 않게 나눠 돌린다. 작업본을 바꾸는 명령이라 도중에 끊기지 않게 시간 제한을 길게 둔다.
+          for (List<String> part : chunks(paths)) {
+            List<String> args = new ArrayList<>(head.apply(repo));
+            if (repo.vcs() == Vcs.GIT) {
+              args.addAll(part);
+              git(repo.root(), GIT_LONG_TIMEOUT_SEC, args.toArray(String[]::new));
+            }
+            else {
+              for (String path : part) args.add(svnPath(path));
+              run(repo.root(), SVN_UPDATE_TIMEOUT_SEC, "svn", args.toArray(String[]::new));
+            }
+            done += part.size();
+            for (String path : part) touched.add(new File(repo.root(), path));
+          }
         }
         message = success.apply(done);
       }
@@ -1193,11 +1282,42 @@ final class SyncPanel extends SimpleToolWindowPanel {
     });
   }
 
-  /** paths 가운데 HEAD 와 내용이 다른(스테이징 · 작업본) 경로. 경로는 NUL 로 나눠 받아 이스케이프가 없다. */
+  /**
+   * paths 가운데 HEAD 와 내용이 다른(스테이징 · 작업본) 경로. 경로는 NUL 로 나눠 받아 이스케이프가 없다.
+   * --no-optional-locks: index.lock 을 잡지 않아 IntelliJ 의 커밋 · 체크아웃과 부딪치지 않는다.
+   */
   private static Set<String> changedFromHead(File root, List<String> paths) throws IOException, InterruptedException {
-    List<String> args = new ArrayList<>(List.of("diff", "--name-only", "-z", "HEAD", "--"));
-    args.addAll(paths);
-    return new HashSet<>(Arrays.asList(git(root, args.toArray(String[]::new)).split("\0")));
+    Set<String> result = new HashSet<>();
+    for (List<String> part : chunks(paths)) {
+      List<String> args = new ArrayList<>(List.of("--no-optional-locks", "diff", "--name-only", "-z", "HEAD", "--"));
+      args.addAll(part);
+      result.addAll(Arrays.asList(git(root, args.toArray(String[]::new)).split("\0")));
+    }
+    return result;
+  }
+
+  /** 경로들을 한 번에 넘길 수 있는 묶음으로 나눈다(윈도우 명령줄 한도). 경로 하나가 한도보다 길면 그 하나로 한 묶음이다. */
+  static List<List<String>> chunks(List<String> paths) {
+    List<List<String>> result = new ArrayList<>();
+    List<String> part = new ArrayList<>();
+    int chars = 0;
+    for (String path : paths) {
+      int size = path.length() + ARG_QUOTE_CHARS;
+      if (!part.isEmpty() && chars + size > ARG_CHARS_MAX) {
+        result.add(part);
+        part = new ArrayList<>();
+        chars = 0;
+      }
+      part.add(path);
+      chars += size;
+    }
+    if (!part.isEmpty()) result.add(part);
+    return result;
+  }
+
+  /** svn 은 경로의 마지막 @ 뒤를 고정 리비전으로 읽는다. 이름에 @ 가 있으면 끝에 @ 를 하나 붙여 이름 그대로 읽게 한다. */
+  static String svnPath(String path) {
+    return path.indexOf('@') >= 0 ? path + "@" : path;
   }
 
   /** 모른 척하기 · 풀기 뒤 알림 문구. 프로젝트 트리 메뉴(AssumeUnchangedAction)와 같이 쓴다. */
@@ -1237,10 +1357,12 @@ final class SyncPanel extends SimpleToolWindowPanel {
    */
   static void setHidden(File root, List<String> paths, boolean on) throws IOException, InterruptedException {
     List<String> flags = on ? List.of("--skip-worktree") : List.of("--no-skip-worktree", "--no-assume-unchanged");
-    for (String flag : flags) {
-      List<String> args = new ArrayList<>(List.of("update-index", flag, "--"));
-      args.addAll(paths);
-      git(root, args.toArray(String[]::new));
+    for (List<String> part : chunks(paths)) {
+      for (String flag : flags) {
+        List<String> args = new ArrayList<>(List.of("update-index", flag, "--"));
+        args.addAll(part);
+        git(root, args.toArray(String[]::new));
+      }
     }
   }
 
@@ -1399,15 +1521,20 @@ final class SyncPanel extends SimpleToolWindowPanel {
         return;
       }
       String message = error.get();
-      Set<File> roots = new HashSet<>();
-      for (Repo repo : targets) roots.add(repo.root());
       SwingUtilities.invokeLater(() -> {
         if (seq != compareSeq) return;
+        // 그사이 저장소 하나 새로고침이 저장소 정보(브랜치 · 추적 브랜치)를 바꿨으면 옛 정보로 한 그 저장소 비교는 버리고 지금 목록을 둔다.
+        Set<File> roots = new HashSet<>();
+        for (Repo repo : targets) {
+          if (repos.contains(repo)) roots.add(repo.root());
+        }
         List<Change> next = new ArrayList<>();
         for (Change c : changes) {
           if (!roots.contains(c.repo().root()) || (!assumed && c.kind() == Kind.ASSUMED)) next.add(c);
         }
-        next.addAll(result);
+        for (Change c : result) {
+          if (roots.contains(c.repo().root())) next.add(c);
+        }
         showTitle(repos);
         // 새로고침 중이면 위쪽 상태 글은 그쪽 진행 글을 둔다.
         if (message != null) showStatus(message);
@@ -1478,9 +1605,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
 
   /**
    * work 를 IDE 아래 상태 표시줄의 진행 막대(title, ✕ 로 취소)와 함께 작업 스레드에서 돌린다.
-   * ✕ 를 누르면 work 를 도는 스레드를 중단(interrupt)한다. run 이 그때 git · svn 프로세스를 끝내고, work 는 InterruptedException 을 받아 스스로 마무리한다.
+   * killable 이면 ✕ 를 누를 때 work 를 도는 스레드를 중단(interrupt)한다. run 이 그때 git · svn 프로세스를 끝내고, work 는 InterruptedException 을 받아 스스로 마무리한다.
+   * 아니면(pull · fetch 처럼 저장소를 바꾸는 work) 진행 막대만 내리고 work 는 끝까지 둔다. 도중에 죽인 git 은 .lock 파일 · 반쯤 바뀐 작업본을 남긴다.
    */
-  private void inBackground(String title, Runnable work) {
+  private void inBackground(String title, boolean killable, Runnable work) {
     ProgressManager.getInstance().run(new Task.Backgroundable(project, title, true) {
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
@@ -1493,7 +1621,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
           }
           catch (TimeoutException running) {
             if (indicator.isCanceled()) {
-              job.cancel(true);
+              if (killable) job.cancel(true);
               return;
             }
           }
@@ -1505,7 +1633,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
             return;
           }
           catch (InterruptedException e) {
-            job.cancel(true);
+            if (killable) job.cancel(true);
             Thread.currentThread().interrupt();
             return;
           }
@@ -1551,6 +1679,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
           Messages.showInfoMessage(project, SyncBundle.message("sync.nothing.to.pull"), text);
           return;
         }
+        // 들어올 파일에 편집기의 저장 안 한 내용이 있으면 받기 전에 디스크에 쓴다(메모리 · 디스크 내용 다름 창이 뜨지 않게).
+        saveAllDocuments();
         if (!svnRepos.isEmpty()) svnUpdate(button, text, svnRepos);
         if (!gitRepos.isEmpty()) gitPull(button, text, gitRepos);
         return;
@@ -1568,7 +1698,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
    * Git 저장소마다 git pull --ff-only 를 작업 스레드에서 동시에 돌린다(상태 표시줄 진행 막대, ✕ 로 취소).
    * IntelliJ Update Project 는 저장소마다 확인 명령을 차례로 띄워 저장소 7개면 40초가 넘지만, 이렇게 하면 가장 느린 fetch 하나만큼 걸린다.
    * 그냥 받지 못하는 저장소(내 커밋과 갈라짐 · 저장 안 한 변경과 겹침 · 충돌 중)는 전처럼 IntelliJ 받기 창(Git.Pull)으로 넘긴다.
-   * 받는 동안 그 루트를 fetching 에 두어 저장소 알림으로 따로 다시 비교하지 않게 하고, 끝나면 파일 보기를 새로 읽고 한 번 다시 비교한다.
+   * 받는 동안 그 루트를 fetching 에 두어 저장소 알림으로 따로 다시 비교하지 않게 하고(그 저장소에 fetch 가 돌고 있으면 끝나기를 기다린다),
+   * 끝나면 파일 보기를 새로 읽고 한 번 다시 비교한다. ✕ 로 취소해도 돌던 pull 은 끝까지 둔다.
    * 받은 저장소가 있으면 받은 커밋 · 파일 수를 알림 풍선으로 알린다(「커밋 보기」로 Git Log 창).
    */
   private void gitPull(JButton button, String text, List<Repo> targets) {
@@ -1578,12 +1709,12 @@ final class SyncPanel extends SimpleToolWindowPanel {
     String progress = SyncBundle.message("sync.git.pulling", text, roots.size());
     showStatus("");
     showGauge(progress, 0, 0);
-    fetching.addAll(roots);
-    inBackground(progress, () -> {
+    inBackground(progress, false, () -> {
       Map<File, String> failed = Collections.synchronizedMap(new LinkedHashMap<>());
       List<Pulled> pulled = Collections.synchronizedList(new ArrayList<>());
       try {
         inParallel(roots, root -> {
+          lockFetch(root);
           try {
             String before = git(root, "rev-parse", "HEAD").trim();
             GitRemoteAuth.run(root, GIT_LONG_TIMEOUT_SEC, true, "pull", "--ff-only", "--quiet");
@@ -1591,6 +1722,9 @@ final class SyncPanel extends SimpleToolWindowPanel {
           }
           catch (IOException e) {
             failed.put(root, e.getMessage());
+          }
+          finally {
+            fetching.remove(root);
           }
           return null;
         });
@@ -1600,7 +1734,6 @@ final class SyncPanel extends SimpleToolWindowPanel {
       }
       catch (InterruptedException e) {
         Thread.currentThread().interrupt();
-        fetching.removeAll(roots);
         LocalFileSystem.getInstance().refreshIoFiles(roots, true, true, null);
         SwingUtilities.invokeLater(() -> {
           button.setEnabled(true);
@@ -1609,7 +1742,6 @@ final class SyncPanel extends SimpleToolWindowPanel {
         });
         return;
       }
-      fetching.removeAll(roots);
       LocalFileSystem.getInstance().refreshIoFiles(roots, true, true, null);
       List<String> names = new ArrayList<>();
       for (File root : failed.keySet()) names.add(root.getName());
@@ -1649,8 +1781,12 @@ final class SyncPanel extends SimpleToolWindowPanel {
     return new Pulled(commits, files.size());
   }
 
-  /** repos 가운데 들어올 변경 · 충돌이 하나라도 있는 저장소가 있는가. */
+  /** repos 가운데 들어올 변경 · 충돌이 하나라도 있거나, 받을 커밋이 있는(파일 차이는 없어도) Git 저장소가 있는가. */
   private boolean hasIncoming(List<Repo> targets) {
+    for (Repo repo : targets) {
+      Tracking counts = tracking.get(repo.root());
+      if (repo.vcs() == Vcs.GIT && counts != null && counts.behind() > 0) return true;
+    }
     for (Change c : changes) {
       if ((c.kind() == Kind.INCOMING || c.kind() == Kind.CONFLICT) && targets.contains(c.repo())) return true;
     }
@@ -1883,7 +2019,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       title.setIcon(AllIcons.Vcs.Branch);
       title.append(repo.root().getName() + "  ", SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES);
       title.append(repo.branch(), SimpleTextAttributes.REGULAR_ATTRIBUTES);
-      title.append(" ↔ " + repo.upstream(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
+      title.append(" ↔ " + repo.upstreamLabel(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
       appendReverseNote(title, repo, null);
       title.setCursor(Cursor.getPredefinedCursor(reverseNotes.containsKey(repo.root()) ? Cursor.HAND_CURSOR : Cursor.DEFAULT_CURSOR));
       return;
@@ -1978,6 +2114,11 @@ final class SyncPanel extends SimpleToolWindowPanel {
    * 저장소 하나가 실패해도(원격 추적 브랜치 없음 · 서버 연결 불가) 나머지는 계속 비교하고 오류는 상태 줄에 모아 보인다.
    */
   void refresh() {
+    // 새로고침이 도는 동안 또 부르면(프로젝트 트리에서 창 열기 등) 끝난 뒤 한 번 한다. 같은 저장소 fetch 가 겹치지 않게 한다.
+    if (busy) {
+      refreshAgain = true;
+      return;
+    }
     List<Map.Entry<File, Vcs>> roots = vcsRoots();
     if (roots.isEmpty()) {
       // 워크스페이스 폴더는 VCS 매핑이 잡히기 전이거나 받은 저장소가 없으면 루트가 비어 있다. 오류가 아니라 저장소 0개로 보인다.
@@ -1992,7 +2133,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     int seq = ++compareSeq;
     Map<File, Vcs> vcsOf = new HashMap<>();
     for (Map.Entry<File, Vcs> entry : roots) vcsOf.put(entry.getKey(), entry.getValue());
-    inBackground(progress, () -> {
+    inBackground(progress, true, () -> {
       // 저장소별 실패(저장소 정보 읽기 · 원격 확인). 끝나면 저장소마다 알림 풍선 하나, 실패한 저장소 줄은 빨간 표시.
       Map<File, String> failures = Collections.synchronizedMap(new LinkedHashMap<>());
       boolean interrupted = false;
@@ -2048,8 +2189,9 @@ final class SyncPanel extends SimpleToolWindowPanel {
       catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         interrupted = true;
-        // 새로고침 자체가 중단될 때(상태 표시줄 ✕)만 원격 확인을 멈춘다. 그 밖에는 끝까지 둔다. 도중에 죽인 git fetch 는 .lock 파일을 남겨 다음 fetch 를 막을 수 있다.
-        for (Future<List<Change>> remote : remotes) remote.cancel(true);
+        // 새로고침 자체가 중단돼도(상태 표시줄 ✕) 이미 돌고 있는 원격 확인(fetch)은 죽이지 않고 결과만 버린다.
+        // 도중에 죽인 git fetch 는 .lock 파일을 남겨 다음 fetch · IntelliJ 커밋을 막을 수 있다.
+        for (Future<List<Change>> remote : remotes) remote.cancel(false);
       }
       List<Change> finalResult = result;
       boolean stopped = interrupted;
@@ -2105,15 +2247,22 @@ final class SyncPanel extends SimpleToolWindowPanel {
     else refreshRepo(best.getKey(), best.getValue());
   }
 
-  /** 저장소 하나만 원격을 받아 와 다시 비교하고 목록에서 그 저장소 것만 바꾼다. 목록에 없던 저장소면 더한다. */
+  /**
+   * 저장소 하나만 원격을 받아 와 다시 비교하고 목록에서 그 저장소 것만 바꾼다. 목록에 없던 저장소면 더한다.
+   * 새로고침이 도는 중이면 끝난 뒤 차례로 한다(endBusy). ✕ 로 취소해도 돌던 fetch 는 끝까지 둔다.
+   */
   private void refreshRepo(File root, Vcs vcs) {
+    if (busy) {
+      queuedRepos.put(root, vcs);
+      return;
+    }
     String name = root.getName();
     busy = true;
     tree.setPaintBusy(true);
     String progress = SyncBundle.message("sync.repo.fetching", name);
     showStatus("");
     showGauge(progress, 0, 0);
-    inBackground(progress, () -> {
+    inBackground(progress, false, () -> {
       Repo updated = null;
       List<Change> fresh = List.of();
       String error = null;
@@ -2121,7 +2270,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
         // 브랜치를 바꿨을 수 있어 저장소 정보부터 다시 읽는다.
         updated = vcs == Vcs.GIT ? gitRepo(root) : svnRepo(root);
         if (updated.vcs() == Vcs.GIT) {
-          fetch(updated.root());
+          if (updated.upstream() != null) fetch(updated.root());
           updateReverseNote(updated, true);
           fresh = compare(updated);
         }
@@ -2197,8 +2346,18 @@ final class SyncPanel extends SimpleToolWindowPanel {
     tree.setPaintBusy(false);
     gauge.setVisible(false);
     if (refreshAgain) {
+      // 전체 새로고침이 저장소마다 정보를 다시 읽으므로 기다리던 저장소 하나 새로고침은 따로 하지 않는다.
       refreshAgain = false;
+      queuedRepos.clear();
       refresh();
+      return;
+    }
+    Iterator<Map.Entry<File, Vcs>> next = queuedRepos.entrySet().iterator();
+    if (next.hasNext()) {
+      Map.Entry<File, Vcs> queued = next.next();
+      next.remove();
+      // 끝난 새로고침이 목록 · 상태 글을 다 그린 뒤에 시작한다.
+      SwingUtilities.invokeLater(() -> refreshRepo(queued.getKey(), queued.getValue()));
     }
   }
 
@@ -2206,7 +2365,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private List<Change> remoteCompare(Repo repo, Map<File, String> failures) throws IOException, InterruptedException {
     try {
       if (repo.vcs() == Vcs.GIT) {
-        fetch(repo.root());
+        // 추적 브랜치가 없으면 받아 와도 비교할 원격이 없다(원격이 아예 없는 저장소는 fetch 가 실패한다).
+        if (repo.upstream() != null) fetch(repo.root());
         updateReverseNote(repo, true);
         return compare(repo);
       }
@@ -2220,15 +2380,23 @@ final class SyncPanel extends SimpleToolWindowPanel {
     }
   }
 
-  /** git fetch. 도는 동안 그 루트를 fetching 에 두어 fetch 가 낸 저장소 알림으로 다시 비교하지 않게 한다. */
+  /**
+   * git fetch. 도는 동안 그 루트를 fetching 에 두어 fetch 가 낸 저장소 알림으로 다시 비교하지 않게 한다.
+   * 그 저장소에 다른 fetch · pull 이 돌고 있으면 끝나기를 기다린다(같은 참조를 동시에 바꾸면 cannot lock ref 로 실패한다).
+   */
   private void fetch(File root) throws IOException, InterruptedException {
-    fetching.add(root);
+    lockFetch(root);
     try {
       GitRemoteAuth.run(root, GIT_LONG_TIMEOUT_SEC, false, "fetch", "--quiet");
     }
     finally {
       fetching.remove(root);
     }
+  }
+
+  /** root 를 fetching 에 넣는다. 이미 있으면(그 저장소에 fetch · pull 이 도는 중) 빠질 때까지 기다린다. 놓을 때는 fetching.remove. */
+  private void lockFetch(File root) throws InterruptedException {
+    while (!fetching.add(root)) Thread.sleep(CANCEL_POLL_MS);
   }
 
   /**
@@ -2244,13 +2412,15 @@ final class SyncPanel extends SimpleToolWindowPanel {
     String from = cfg.get(ReverseMerge.CONFIG_FROM);
     // 마지막 합치기가 내 브랜치 → develop 방향이었으면 From 이 내 브랜치라, 그때의 Into(develop)를 기준으로 쓴다.
     if (from != null && from.equals(repo.branch())) from = cfg.get(ReverseMerge.CONFIG_INTO);
-    if (from == null || from.equals(repo.branch())) {
+    // detached HEAD 는 합칠 브랜치가 없어 안내하지 않는다.
+    if (from == null || from.equals(repo.branch()) || GIT_HEAD.equals(repo.branch())) {
       reverseNotes.remove(root);
       return;
     }
     // fetching 은 우리 fetch 가 바꾼 원격 참조 알림을 거르는 표시다. 받지 않고 세기만 할 때 넣으면, 그동안 끝난 합치기 · 푸시의
     // 저장소 알림이 버려져 합치는 도중 읽은 목록(나갈 파일)이 새로고침까지 남는다.
-    if (fetch) fetching.add(root);
+    // 그 저장소에 다른 fetch · pull 이 돌고 있으면 끝나기를 기다린다.
+    if (fetch) lockFetch(root);
     try {
       String remote = ReverseMerge.remoteOf(cfg, repo.branch());
       if (fetch) ReverseMerge.fetchQuietly(root, remote, from);
@@ -2297,7 +2467,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     return compareSvn(repo, false, new LinkedHashMap<>(svnIncoming.getOrDefault(repo.root(), Map.of())));
   }
 
-  /** Git 루트의 실제 최상위 폴더 · 브랜치 · 원격 추적 브랜치를 알아낸다. 추적 브랜치가 없으면 비교할 수 없으므로 오류. */
+  /** Git 루트의 실제 최상위 폴더 · 브랜치 · 원격 추적 브랜치를 알아낸다. 추적 브랜치가 없으면 upstream 이 null 이다. */
   static Repo gitRepo(File dir) throws IOException, InterruptedException {
     // 보통은 한 번에 읽는다(최상위 폴더 · 브랜치 · 추적 브랜치 세 줄). 실패하면 어느 것이 없는지 가리려고 하나씩 읽는다.
     try {
@@ -2313,7 +2483,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
       return new Repo(root, Vcs.GIT, branch, git(root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}").trim());
     }
     catch (IOException noUpstream) {
-      throw new IOException(SyncBundle.message("sync.no.upstream", branch));
+      // 아직 Push 하지 않은 새 브랜치 · detached HEAD 도 목록에 두고 작업본 변경을 보인다.
+      return new Repo(root, Vcs.GIT, branch, null);
     }
   }
 
@@ -2323,28 +2494,35 @@ final class SyncPanel extends SimpleToolWindowPanel {
   }
 
   /** 들어올 · 나갈 · 충돌로 나눈다. 같은 경로가 양쪽에 있으면 충돌로만 보인다. */
-  static List<Change> compare(Repo repo) throws IOException, InterruptedException {
+  private List<Change> compare(Repo repo) throws IOException, InterruptedException {
     return compare(repo, true);
   }
 
-  /** assumed 가 거짓이면 git ls-files -v 를 건너뛰어 모른 척 중(ASSUMED) 항목 없이 돌려준다. 그 항목은 부르는 쪽이 지난 결과의 것을 쓴다. */
-  static List<Change> compare(Repo repo, boolean assumed) throws IOException, InterruptedException {
+  /**
+   * assumed 가 거짓이면 git ls-files -v 를 건너뛰어 모른 척 중(ASSUMED) 항목 없이 돌려준다. 그 항목은 부르는 쪽이 지난 결과의 것을 쓴다.
+   * 추적 브랜치가 없으면 원격과 비교하지 않고 작업본 변경만 나갈 변경으로 보인다. 앞선 · 뒤진 커밋 수는 tracking 에 남긴다.
+   */
+  private List<Change> compare(Repo repo, boolean assumed) throws IOException, InterruptedException {
     File root = repo.root();
+    boolean tracked = repo.upstream() != null;
     // 명령들은 서로 기다릴 필요가 없어 동시에 돌린다. 윈도우는 git 을 띄우는 비용이 커서 차례로 돌리면 그만큼 늦다.
-    List<String[]> commands = new ArrayList<>(List.of(
-      new String[]{"diff", "--name-status", "HEAD...@{u}"},
+    // --no-optional-locks: 저장할 때마다 도는 비교가 index.lock 을 잡아 IntelliJ 의 커밋 · 체크아웃을 막지 않게 한다.
+    List<String[]> commands = new ArrayList<>();
+    commands.add(new String[]{"--no-optional-locks", "-c", "core.untrackedCache=true", "status", "--porcelain=v1", "-b", "-unormal"});
+    if (tracked) {
+      commands.add(new String[]{"diff", "--name-status", "HEAD...@{u}"});
       // 나갈 변경은 내 브랜치 줄기(첫 부모)에서 직접 만든 커밋만 본다. Merge Branches 로 합쳐 들어온 남의 develop 커밋은 Push 전까지도 내 변경이 아니다.
-      new String[]{"log", "--first-parent", "--no-merges", "--format=", "--name-status", "@{u}..HEAD"},
-      // --no-optional-locks: 저장할 때마다 도는 비교가 index.lock 을 잡아 IntelliJ 의 커밋 · 체크아웃을 막지 않게 한다.
-      new String[]{"--no-optional-locks", "-c", "core.untrackedCache=true", "status", "--porcelain=v1", "-b", "-unormal"}));
+      commands.add(new String[]{"log", "--first-parent", "--no-merges", "--format=", "--name-status", "@{u}..HEAD"});
+    }
     if (assumed) commands.add(new String[]{"ls-files", "-v"});
     List<String> out = inParallel(commands, args -> git(root, args));
-    Map<String, String> incoming = parseNameStatus(out.get(0));
-    Map<String, String> outgoing = parseNameStatus(out.get(1));
+    Map<String, String> incoming = tracked ? parseNameStatus(out.get(1)) : new LinkedHashMap<>();
+    Map<String, String> outgoing = tracked ? parseNameStatus(out.get(2)) : new LinkedHashMap<>();
+    tracking.put(root, parseTracking(out.get(0)));
     Set<String> unmerged = new TreeSet<>();
     // 새 파일은 폴더 단위로만 받는다(-unormal). 무시되지 않은 큰 폴더 속을 다 훑으면 느려진다.
     // 폴더는 ".idea/" 처럼 끝이 / 인 한 줄로 나오며, 그대로 .gitignore 에 넣을 수 있다.
-    for (String line : out.get(2).split("\n")) {
+    for (String line : out.get(0).split("\n")) {
       if (line.startsWith(STATUS_BRANCH_LINE)) continue;  // 첫 줄은 브랜치 줄(-b).
       if (line.length() < 4) continue;
       String xy = line.substring(0, 2);
@@ -2361,10 +2539,27 @@ final class SyncPanel extends SimpleToolWindowPanel {
     List<Change> result = merge(repo, incoming, outgoing, unmerged);
     if (!assumed) return result;
     // 부분 체크아웃(sparse checkout)이 밖으로 뺀 파일도 skip-worktree 지만 디스크에 없으므로, 디스크에 있는 것만 모른 척 중으로 본다.
-    for (String path : parseAssumed(out.get(3), p -> new File(root, p).exists())) {
+    for (String path : parseAssumed(out.get(out.size() - 1), p -> new File(root, p).exists())) {
       result.add(new Change(Kind.ASSUMED, "Assume Unchanged", path, repo));
     }
     return result;
+  }
+
+  /** git status --porcelain -b 출력의 브랜치 줄에서 앞선 · 뒤진 커밋 수를 읽는다. 추적 브랜치가 없거나 같으면 0. */
+  static Tracking parseTracking(String status) {
+    int ahead = 0;
+    int behind = 0;
+    for (String line : status.split("\n")) {
+      if (!line.startsWith(STATUS_BRANCH_LINE)) continue;
+      Matcher m = TRACKING_COUNT.matcher(line);
+      while (m.find()) {
+        int n = Integer.parseInt(m.group(2));
+        if (TRACKING_AHEAD.equals(m.group(1))) ahead = n;
+        else behind = n;
+      }
+      break;
+    }
+    return new Tracking(ahead, behind);
   }
 
   /**
@@ -2630,8 +2825,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
       byte[] remote;
       try {
         remote = repo.vcs() == Vcs.GIT
-                 ? gitBytes(repo.root(), "show", repo.upstream() + ":" + change.path())
-                 : runBytes(repo.root(), CMD_TIMEOUT_SEC, "svn", "cat", "-r", "HEAD", change.path());
+                 ? gitBytes(repo.root(), "show", repo.remoteName() + ":" + change.path())
+                 : runBytes(repo.root(), CMD_TIMEOUT_SEC, "svn", "cat", "-r", "HEAD", svnPath(change.path()));
       }
       catch (IOException e) {
         remote = new byte[0];  // 원격에 없는 파일(새로 추가했거나 원격에서 지운 파일)
@@ -2651,6 +2846,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
       byte[] remoteBytes = remote;
       byte[] mineBytes = mine;
       SwingUtilities.invokeLater(() -> {
+        // 읽는 동안 다른 줄로 옮겼으면 늦게 온 이 파일 내용은 버린다(지금 고른 파일의 비교가 따로 온다).
+        if (!(tree.getLastSelectedPathComponent() instanceof DefaultMutableTreeNode now) || !change.equals(now.getUserObject())) return;
         // 바이트로 넘겨 IDE 가 파일 인코딩(프로젝트 설정 · BOM)으로 읽게 한다. MS949 파일의 한글이 깨지지 않는다.
         FilePath path = VcsUtil.getFilePath(local, false);
         DiffContentFactory factory = DiffContentFactory.getInstance();
@@ -2699,7 +2896,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
   }
 
   private static String[] gitArgs(String... args) {
-    List<String> full = new ArrayList<>(List.of("-c", "core.quotepath=false"));
+    // 전역 i18n.logOutputEncoding(예: cp949)이 있어도 커밋 메시지 · 작성자를 UTF-8 로 받는다.
+    List<String> full = new ArrayList<>(List.of("-c", "core.quotepath=false", "-c", "i18n.logOutputEncoding=UTF-8"));
     full.addAll(List.of(args));
     return full.toArray(String[]::new);
   }
@@ -2725,8 +2923,12 @@ final class SyncPanel extends SimpleToolWindowPanel {
       for (String dir : path.split(File.pathSeparator)) {
         if (!new File(dir, GIT_EXE_NAME).isFile()) continue;
         File parent = new File(dir).getParentFile();
-        File real = parent == null ? null : new File(parent, GIT_REAL_EXE);
-        return real != null && real.isFile() ? real.getPath() : GIT;
+        if (parent == null) return GIT;
+        for (String name : GIT_REAL_EXES) {
+          File real = new File(parent, name);
+          if (real.isFile()) return real.getPath();
+        }
+        return GIT;
       }
     }
     return bundled.isFile() ? bundled.getPath() : GIT;
@@ -2772,10 +2974,14 @@ final class SyncPanel extends SimpleToolWindowPanel {
     long started = System.currentTimeMillis();
     try {
       ProcessBuilder builder = new ProcessBuilder(command).directory(dir).redirectOutput(outFile).redirectError(errFile);
-      // 설정 → Git 로그인에 넣은 서버는 git 이 비밀번호 도우미를 띄우지 않게 인증을 미리 넘긴다.
       if (GIT.equals(exe)) {
-        builder.environment().putAll(GitLogins.env(builder.environment()));
-        builder.environment().putAll(GitLogins.env(logins, builder.environment()));
+        builder.environment().put(ENV_TERMINAL_PROMPT, "0");
+        // 설정 → Git 로그인에 넣은 서버는 git 이 비밀번호 도우미를 띄우지 않게 인증을 미리 넘긴다. 서버에 닿는 명령에만 넘긴다.
+        if (GIT_REMOTE_VERBS.contains(verb(args))) {
+          builder.environment().put(ENV_MESSAGE_LANGUAGE, MESSAGE_LANGUAGE_UNTRANSLATED);
+          builder.environment().putAll(GitLogins.env(builder.environment()));
+          builder.environment().putAll(GitLogins.env(logins, builder.environment()));
+        }
       }
       Process process = builder.start();
       process.getOutputStream().close();
