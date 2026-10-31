@@ -19,7 +19,11 @@ import com.intellij.openapi.wm.ToolWindowFactory;
 import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.JBColor;
 import com.intellij.icons.AllIcons;
+import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.actionSystem.ActionManager;
+import com.intellij.openapi.actionSystem.ActionUpdateThread;
+import com.intellij.openapi.actionSystem.AnActionEvent;
+import com.intellij.ui.PopupHandler;
 import com.intellij.openapi.actionSystem.ActionToolbar;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.project.DumbAwareAction;
@@ -115,6 +119,9 @@ final class ProjectHistoryPanel extends JPanel {
   // 찾기 칸 폭(px). 2026-10-29 사용자 요청으로 세 배쯤 넓혔다.
   private static final int SEARCH_W = 400;
   private static final String TOOLBAR_PLACE = "KingGuraGitLogToolbar";
+  private static final String POPUP_PLACE = "KingGuraGitLogPopup";
+  // 「나로 보기」로 더한 다른 계정(History.Me.aliasKey, 줄마다 하나). 앱 수준이라 모든 프로젝트 · 저장소에 같이 쓴다.
+  private static final String ME_ALIASES_KEY = "kinggura.sync.gitlog.me.aliases";
   private static final float LINE_WIDTH = 1.5f;
   // 표와 오른쪽 상세 칸의 폭 비율, 왼쪽 저장소 목록과 나머지의 폭 비율.
   private static final float TABLE_RATIO = 0.62f;
@@ -242,6 +249,12 @@ final class ProjectHistoryPanel extends JPanel {
     fixWidth(commits.getColumnModel().getColumn(COL_TIME), JBUI.scale(TIME_COL_W));
     fixWidth(commits.getColumnModel().getColumn(COL_HASH), JBUI.scale(HASH_COL_W));
     commits.getSelectionModel().addListSelectionListener(e -> { if (!e.getValueIsAdjusting()) showDetail(); });
+    // 오른쪽 단추로 누른 줄을 먼저 고른다(우클릭 메뉴가 그 줄의 작성자를 쓴다). PopupHandler 보다 먼저 달아야 먼저 불린다.
+    commits.addMouseListener(new MouseAdapter() {
+      @Override public void mousePressed(MouseEvent e) { selectRowAt(e); }
+      @Override public void mouseReleased(MouseEvent e) { selectRowAt(e); }
+    });
+    PopupHandler.installPopupMenu(commits, new DefaultActionGroup(new MeAliasAction()), POPUP_PLACE);
     files.setCellRenderer(new FileRenderer());
     files.addMouseListener(new MouseAdapter() {
       @Override public void mouseClicked(MouseEvent e) { if (e.getClickCount() == 2) showDiff(); }
@@ -300,6 +313,54 @@ final class ProjectHistoryPanel extends JPanel {
     add(repos, BorderLayout.CENTER);
 
     reloadTargets();
+  }
+
+  private void selectRowAt(MouseEvent e) {
+    if (!SwingUtilities.isRightMouseButton(e)) return;
+    int row = commits.rowAtPoint(e.getPoint());
+    if (row >= 0) commits.setRowSelectionInterval(row, row);
+  }
+
+  /** 「나로 보기」로 더한 계정들. */
+  private static Set<String> meAliases() {
+    Set<String> result = new LinkedHashSet<>();
+    for (String line : PropertiesComponent.getInstance().getValue(ME_ALIASES_KEY, "").split("\n")) {
+      if (!line.isBlank()) result.add(line.trim());
+    }
+    return result;
+  }
+
+  /**
+   * 우클릭 「○○ 도 나로 보기」 · 「○○ 을 나에서 빼기」: 고른 커밋 작성자를 「나」에 더하거나 뺀다(같은 사람의 다른 계정을 서로 남으로 보지 않게).
+   * git config 의 나인 작성자 · SVN · 고른 줄 없음에는 보이지 않는다. 바꾸면 기록을 다시 읽어 꼬리표를 새로 찾는다.
+   */
+  private final class MeAliasAction extends DumbAwareAction {
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.EDT;
+    }
+
+    @Override
+    public void update(@NotNull AnActionEvent e) {
+      History.Entry entry = selectedEntry();
+      boolean show = entry != null && loaded != null && loaded.target().vcs() == SyncPanel.Vcs.GIT && !loaded.me().configured(entry);
+      e.getPresentation().setEnabledAndVisible(show);
+      if (show) {
+        boolean alias = meAliases().contains(History.Me.aliasKey(entry));
+        e.getPresentation().setText(SyncBundle.message(alias ? "history.me.remove" : "history.me.add", entry.author()));
+      }
+    }
+
+    @Override
+    public void actionPerformed(@NotNull AnActionEvent e) {
+      History.Entry entry = selectedEntry();
+      if (entry == null) return;
+      Set<String> aliases = meAliases();
+      String key = History.Me.aliasKey(entry);
+      if (!aliases.remove(key)) aliases.add(key);
+      PropertiesComponent.getInstance().setValue(ME_ALIASES_KEY, String.join("\n", aliases), "");
+      load();
+    }
   }
 
   /** 표 칸 폭을 고정한다. 남는 폭은 메시지 칸이 차지한다. */
@@ -524,7 +585,7 @@ final class ProjectHistoryPanel extends JPanel {
     Map<String, List<List<History.FileChange>>> sides = before == null ? new HashMap<>() : new HashMap<>(before.sides());
     if (target.vcs() == SyncPanel.Vcs.GIT) {
       if (before == null) {
-        me = History.parseMe(gitOrEmpty(dir, "config", "--get-regexp", "^user\\.(name|email)$"));
+        me = History.parseMe(gitOrEmpty(dir, "config", "--get-regexp", "^user\\.(name|email)$")).withAliases(meAliases());
         branch = gitOrEmpty(dir, "rev-parse", "--abbrev-ref", "HEAD");
         if (DETACHED.equals(branch)) branch = gitOrEmpty(dir, "rev-parse", "--short", "HEAD");
         String head = gitOrEmpty(dir, "rev-parse", "HEAD");
@@ -566,7 +627,7 @@ final class ProjectHistoryPanel extends JPanel {
       if (target.vcs() == SyncPanel.Vcs.GIT && entry.merge()) merges.add(entry.id());
     }
     // 합치기 커밋이 있을 때만 git 을 한 번 더 부른다(부모마다 따로 비교, History.clashes).
-    if (!merges.isEmpty() && !me.equals(History.Me.NONE)) sides.putAll(History.parseSides(SyncPanel.git(dir, History.sideArgs(merges))));
+    if (!merges.isEmpty() && me.known()) sides.putAll(History.parseSides(SyncPanel.git(dir, History.sideArgs(merges))));
     return new Loaded(target, branch, svnRoot, svnPrefix, start, remotes, entries, History.layout(entries), page.size() == LOG_LIMIT,
                       me, sides, History.clashes(entries, me, sides));
   }

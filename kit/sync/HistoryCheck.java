@@ -42,6 +42,12 @@ public class HistoryCheck {
     eq(me.is(log.get(0)), true);
     eq(me.is(log.get(1)), false);
     eq(History.Me.NONE.is(log.get(1)), false);  // 빈 이름 · 메일끼리 같다고 보지 않는다
+    eq(History.Me.aliasKey(log.get(0)), "jm@x");
+    eq(History.Me.aliasKey(log.get(1)), "kim");  // 메일이 없으면 이름
+    History.Me withKim = History.Me.NONE.withAliases(java.util.Set.of("kim"));
+    eq(withKim.known(), true);
+    eq(withKim.is(log.get(1)), true);
+    eq(withKim.configured(log.get(1)), false);
 
     checkLayout();
 
@@ -205,6 +211,8 @@ public class HistoryCheck {
     eq(History.strongest(clashes.get(log.get(0).id())), History.ClashKind.REVERTED);
     // 나를 모르면(user.name · email 없음) 아무것도 찾지 않는다.
     eq(History.clashes(log, History.Me.NONE, sides), java.util.Map.of());
+    // kim 을 「나로 보기」로 더하면 둘 다 나라서 아무것도 나오지 않는다.
+    eq(History.clashes(log, new History.Me("me", "me@x").withAliases(java.util.Set.of("kim@x")), sides), java.util.Map.of());
     eq(History.gitHead(app), "kim");
     git(repo, "checkout", "-q", "--detach", head);
     eq(History.gitHead(app), head.substring(0, 7));

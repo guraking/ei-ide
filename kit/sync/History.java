@@ -330,13 +330,32 @@ final class History {
     return list.getLength() == 0 ? "" : list.item(0).getTextContent();
   }
 
-  /** 이 저장소에서 「나」: git config user.name · user.email. 둘 다 비면 아무 커밋도 내 것이 아니다. */
-  record Me(String name, String email) {
+  /**
+   * 이 저장소에서 「나」: git config user.name · user.email, 그리고 사용자가 「나로 보기」로 더한 다른 계정(aliases, 소문자 메일 또는 이름).
+   * 모두 비면 아무 커밋도 내 것이 아니다.
+   */
+  record Me(String name, String email, Set<String> aliases) {
     static final Me NONE = new Me("", "");
 
-    /** 메일이 같거나(대소문자 무시) 이름이 같으면 내 커밋. */
-    boolean is(Entry entry) {
+    Me(String name, String email) { this(name, email, Set.of()); }
+
+    Me withAliases(Set<String> more) { return new Me(name, email, Set.copyOf(more)); }
+
+    boolean known() { return !name.isEmpty() || !email.isEmpty() || !aliases.isEmpty(); }
+
+    /** git config 의 나: 메일이 같거나(대소문자 무시) 이름이 같다. */
+    boolean configured(Entry entry) {
       return !email.isEmpty() && email.equalsIgnoreCase(entry.email()) || !name.isEmpty() && name.equals(entry.author());
+    }
+
+    /** 내 커밋: git config 의 나이거나 더한 계정(aliasKey)이다. */
+    boolean is(Entry entry) {
+      return configured(entry) || aliases.contains(aliasKey(entry));
+    }
+
+    /** 「나로 보기」에 저장할 값: 메일(소문자), 메일이 없으면 이름(소문자). */
+    static String aliasKey(Entry entry) {
+      return (entry.email().isEmpty() ? entry.author() : entry.email()).toLowerCase(Locale.ROOT);
     }
   }
 
@@ -379,7 +398,7 @@ final class History {
     Map<String, Version> mine = new HashMap<>();
     Map<String, Version> theirs = new HashMap<>();
     Map<String, List<Clash>> result = new HashMap<>();
-    if (me.equals(Me.NONE)) return result;
+    if (!me.known()) return result;
     for (int i = entries.size() - 1; i >= 0; i--) {
       Entry entry = entries.get(i);
       boolean byMe = me.is(entry);
