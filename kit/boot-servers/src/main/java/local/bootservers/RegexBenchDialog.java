@@ -27,7 +27,6 @@ import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.components.JBTabbedPane;
 import com.intellij.ui.components.JBTextArea;
 import com.intellij.ui.components.JBTextField;
-import com.intellij.ui.JBIntSpinner;
 import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.JBUI;
@@ -61,44 +60,36 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 정규식 작업대. JavaScript(프론트) · Java(백엔드) 문법을 골라 패턴을 시험한다.
+ * 정규식 작업대. 맨 위 「조합」 에서 고르기만으로 패턴을 만들고, JavaScript(프론트) · Java(백엔드) 문법으로 시험한다.
  * 입력이 바뀌면 DEBOUNCE_MS 뒤 풀 스레드에서 RegexBench 로 계산하고, 가장 마지막 입력의 결과만 화면에 놓는다.
- * 패턴은 직접 치거나 「자주 쓰는 정규식」 · 「조각 더하기」 로 만든다. 아래 「코드」 칸은 지금 패턴을 코드에 붙일 글로 보이고 「복사」 로 클립보드에 넣는다.
+ * 「확인할 글」 은 글 하나가 패턴에 통째로 맞는지 본다. 아래 「코드」 칸은 지금 패턴을 코드에 붙일 글로 보이고 「복사」 로 클립보드에 넣는다.
+ * 창 글은 IDE 언어와 상관없이 한국어다(BootServersMessages).
  */
 final class RegexBenchDialog extends DialogWrapper {
 
     private static final Logger LOG = Logger.getInstance(RegexBenchDialog.class);
     private static final int DEBOUNCE_MS = 150;
     private static final long TIMEOUT_MS = 1000;
-    private static final int DIALOG_WIDTH = 980;
-    private static final int DIALOG_HEIGHT = 760;
+    private static final int DIALOG_WIDTH = 1000;
+    private static final int DIALOG_HEIGHT = 900;
     private static final float TEXT_TABS_SPLIT = 0.45f;
-    private static final int SAMPLE_ROWS = 6;
+    private static final int SAMPLE_ROWS = 5;
     private static final int RESULT_ROWS = 4;
-    private static final int TEXT_COLUMNS = 12;
-    private static final int NAME_COLUMNS = 8;
-    private static final int MAX_REPEAT = 999;
+    private static final int CHECK_COLUMNS = 24;
     private static final int COPIED_FADE_MS = 1500;
     private static final String FLAVOR_KEY = "KingGura.RegexBench.flavor";
-    // 그룹 표 칸 순서
+    // 그룹 표 칸 수
     private static final int COLUMN_COUNT = 5;
+    private static final Color SUCCESS = JBColor.namedColor("Label.successForeground", new JBColor(0x208A3C, 0x5FB865));
+    private static final Color WARNING = JBColor.namedColor("Label.warningForeground", new JBColor(0xA36200, 0xE0A040));
 
     private final ComboBox<RegexBench.Flavor> flavorBox = new ComboBox<>(RegexBench.Flavor.values());
     private final ComboBox<RegexBench.Preset> presetBox = new ComboBox<>();
+    private final RegexComposer composer = new RegexComposer(this::composed);
     private final JBTextField patternField = new JBTextField();
     private final Map<RegexBench.Flag, JBCheckBox> flagBoxes = new EnumMap<>(RegexBench.Flag.class);
-    private final ComboBox<RegexBench.Kind> kindBox = new ComboBox<>(RegexBench.Kind.values());
-    private final JBTextField pieceText = new JBTextField(TEXT_COLUMNS);
-    private final ComboBox<RegexBench.Repeat> repeatBox = new ComboBox<>(RegexBench.Repeat.values());
-    private final JBLabel minLabel = new JBLabel(BootServersBundle.message("regex.piece.min"));
-    private final JBIntSpinner minSpinner = new JBIntSpinner(1, 0, MAX_REPEAT);
-    private final JBLabel maxLabel = new JBLabel(BootServersBundle.message("regex.piece.max"));
-    private final JBIntSpinner maxSpinner = new JBIntSpinner(2, 0, MAX_REPEAT);
-    private final JBCheckBox captureBox = new JBCheckBox(BootServersBundle.message("regex.piece.capture"));
-    private final JBLabel nameLabel = new JBLabel(BootServersBundle.message("regex.piece.name"));
-    private final JBTextField nameField = new JBTextField(NAME_COLUMNS);
-    private final JButton addButton = new JButton(BootServersBundle.message("regex.piece.add"));
-    private final JBLabel pieceHint = new JBLabel();
+    private final JBTextField checkField = new JBTextField(CHECK_COLUMNS);
+    private final JBLabel checkResult = new JBLabel();
     private final JBLabel status = new JBLabel();
     private final JBTextArea sampleArea = new JBTextArea(SAMPLE_ROWS, 0);
     private final DefaultTableModel groupModel = new DefaultTableModel(new Object[]{
@@ -137,7 +128,7 @@ final class RegexBenchDialog extends DialogWrapper {
         super(project, false);
         setModal(false);
         setTitle(BootServersBundle.message("regex.title"));
-        getCancelAction().putValue(Action.NAME, BootServersBundle.message("common.close"));
+        getCancelAction().putValue(Action.NAME, BootServersBundle.message("regex.close"));
         EditorColorsScheme scheme = EditorColorsManager.getInstance().getGlobalScheme();
         matchPainter = new DefaultHighlighter.DefaultHighlightPainter(matchColor(scheme));
         Color selection = scheme.getColor(EditorColors.SELECTION_BACKGROUND_COLOR);
@@ -178,40 +169,28 @@ final class RegexBenchDialog extends DialogWrapper {
 
         patternField.setFont(mono);
         patternField.getEmptyText().setText(BootServersBundle.message("regex.pattern.empty"));
+        JBLabel patternHint = new JBLabel(BootServersBundle.message("regex.pattern.hint"));
+        patternHint.setForeground(NamedColorUtil.getInactiveTextColor());
 
         JPanel flagRow = row();
         for (RegexBench.Flag flag : RegexBench.Flag.values()) {
-            boolean js = flag.flavor == RegexBench.Flavor.JAVASCRIPT;
-            String meaning = BootServersBundle.message("regex.flag." + flag.name());
-            JBCheckBox box = new JBCheckBox(js ? flag.label + " " + meaning : flag.label);
-            box.setToolTipText(meaning);
+            JBCheckBox box = new JBCheckBox(BootServersBundle.message("regex.flag." + flag.name()));
+            box.setToolTipText(flag.label);
             box.addActionListener(e -> changed());
             flagBoxes.put(flag, box);
             flagRow.add(box);
         }
 
-        // 처음 고른 조각은 글자 칸이 필요 없는 숫자로 둔다
-        kindBox.setSelectedItem(RegexBench.Kind.DIGIT);
-        kindBox.setRenderer(SimpleListCellRenderer.create("", k -> BootServersBundle.message("regex.piece.kind." + k.name())));
-        repeatBox.setRenderer(SimpleListCellRenderer.create("", r -> BootServersBundle.message("regex.piece.repeat." + r.name())));
-        JPanel pieceRow = row(kindBox, pieceText, repeatBox, minLabel, minSpinner, maxLabel, maxSpinner, captureBox, nameLabel, nameField, addButton);
-        pieceHint.setForeground(NamedColorUtil.getInactiveTextColor());
-        pieceHint.setAllowAutoWrapping(true);
-        kindBox.addActionListener(e -> updatePiece());
-        repeatBox.addActionListener(e -> updatePiece());
-        captureBox.addActionListener(e -> updatePiece());
-        minSpinner.addChangeListener(e -> updatePiece());
-        maxSpinner.addChangeListener(e -> updatePiece());
-        pieceText.getDocument().addDocumentListener(listener(this::updatePiece));
-        nameField.getDocument().addDocumentListener(listener(this::updatePiece));
-        addButton.addActionListener(e -> addPiece());
+        checkField.getEmptyText().setText(BootServersBundle.message("regex.check.empty"));
+        JPanel checkRow = row(checkField, checkResult);
 
         JPanel top = FormBuilder.createFormBuilder()
+                .addLabeledComponent(BootServersBundle.message("regex.compose"), composer.component(), true)
                 .addLabeledComponent(BootServersBundle.message("regex.flavor"), flavorRow)
                 .addLabeledComponent(BootServersBundle.message("regex.pattern"), patternField)
+                .addComponentToRightColumn(patternHint)
                 .addLabeledComponent(BootServersBundle.message("regex.flags"), flagRow)
-                .addLabeledComponent(BootServersBundle.message("regex.piece"), pieceRow)
-                .addComponentToRightColumn(pieceHint)
+                .addLabeledComponent(BootServersBundle.message("regex.check"), checkRow)
                 .addComponent(status)
                 .getPanel();
 
@@ -256,6 +235,7 @@ final class RegexBenchDialog extends DialogWrapper {
         flavorBox.addActionListener(e -> flavorChanged(previousFlavor));
         presetBox.addActionListener(e -> applyPreset());
         patternField.getDocument().addDocumentListener(listener(this::changed));
+        checkField.getDocument().addDocumentListener(listener(this::changed));
         sampleArea.getDocument().addDocumentListener(listener(this::changed));
         replacementField.getDocument().addDocumentListener(listener(this::changed));
 
@@ -264,7 +244,6 @@ final class RegexBenchDialog extends DialogWrapper {
         panel.add(split, BorderLayout.CENTER);
         panel.add(codeRow, BorderLayout.SOUTH);
         panel.setPreferredSize(JBUI.size(DIALOG_WIDTH, DIALOG_HEIGHT));
-        updatePiece();
         return panel;
     }
 
@@ -315,6 +294,14 @@ final class RegexBenchDialog extends DialogWrapper {
         super.dispose();
     }
 
+    /** 조합이 바뀌었다. 고칠 점이 없고 비어 있지 않으면 패턴 칸을 조합 결과로 바꾼다. */
+    private void composed() {
+        String pattern = composer.pattern();
+        if (pattern != null && !composer.isEmpty() && !pattern.equals(patternField.getText())) {
+            patternField.setText(pattern);
+        }
+    }
+
     private RegexBench.Flavor flavor() {
         RegexBench.Flavor flavor = (RegexBench.Flavor) flavorBox.getSelectedItem();
         return flavor != null ? flavor : RegexBench.Flavor.JAVA;
@@ -354,71 +341,6 @@ final class RegexBenchDialog extends DialogWrapper {
         sampleArea.setCaretPosition(0);
     }
 
-    /** 조각 종류 · 반복에 따라 쓰는 칸만 보이고, 넣을 글 또는 고칠 점을 안내한다. */
-    private void updatePiece() {
-        RegexBench.Kind kind = (RegexBench.Kind) kindBox.getSelectedItem();
-        RegexBench.Repeat repeat = (RegexBench.Repeat) repeatBox.getSelectedItem();
-        if (kind == null || repeat == null) {
-            return;
-        }
-        boolean anchor = kind == RegexBench.Kind.LINE_START || kind == RegexBench.Kind.LINE_END;
-        boolean min = !anchor && (repeat == RegexBench.Repeat.EXACTLY || repeat == RegexBench.Repeat.AT_LEAST || repeat == RegexBench.Repeat.RANGE);
-        boolean max = !anchor && repeat == RegexBench.Repeat.RANGE;
-        pieceText.setVisible(kind == RegexBench.Kind.TEXT || kind == RegexBench.Kind.ONE_OF || kind == RegexBench.Kind.NONE_OF);
-        pieceText.getEmptyText().setText(BootServersBundle.message("regex.piece.text.empty." + kind.name()));
-        repeatBox.setVisible(!anchor);
-        minLabel.setVisible(min);
-        minSpinner.setVisible(min);
-        maxLabel.setVisible(max);
-        maxSpinner.setVisible(max);
-        captureBox.setVisible(!anchor);
-        boolean named = !anchor && captureBox.isSelected();
-        nameLabel.setVisible(named);
-        nameField.setVisible(named);
-        nameField.getEmptyText().setText(BootServersBundle.message("regex.piece.name.empty"));
-
-        String problem = pieceProblem(min, max, named);
-        addButton.setEnabled(problem == null);
-        if (problem != null) {
-            pieceHint.setForeground(NamedColorUtil.getErrorForeground());
-            pieceHint.setText(problem);
-        } else {
-            pieceHint.setForeground(NamedColorUtil.getInactiveTextColor());
-            pieceHint.setText(BootServersBundle.message("regex.piece.preview", builtPiece(kind, repeat)));
-        }
-        pieceHint.revalidate();
-    }
-
-    private @Nullable String pieceProblem(boolean min, boolean max, boolean named) {
-        if (pieceText.isVisible() && pieceText.getText().isEmpty()) {
-            return BootServersBundle.message("regex.piece.problem.text");
-        }
-        if (min && max && minSpinner.getNumber() > maxSpinner.getNumber()) {
-            return BootServersBundle.message("regex.piece.problem.range");
-        }
-        String name = nameField.getText();
-        if (named && !name.isEmpty() && !RegexBench.GROUP_NAME.matcher(name).matches()) {
-            return BootServersBundle.message("regex.piece.problem.name");
-        }
-        return null;
-    }
-
-    private String builtPiece(RegexBench.Kind kind, RegexBench.Repeat repeat) {
-        return RegexBench.piece(kind, pieceText.getText(), repeat, minSpinner.getNumber(), maxSpinner.getNumber(),
-                captureBox.isSelected(), nameField.getText());
-    }
-
-    /** 만든 조각을 패턴 칸의 커서 자리(고른 글이 있으면 그 자리)에 넣는다. */
-    private void addPiece() {
-        RegexBench.Kind kind = (RegexBench.Kind) kindBox.getSelectedItem();
-        RegexBench.Repeat repeat = (RegexBench.Repeat) repeatBox.getSelectedItem();
-        if (kind == null || repeat == null || !addButton.isEnabled()) {
-            return;
-        }
-        patternField.replaceSelection(builtPiece(kind, repeat));
-        patternField.requestFocusInWindow();
-    }
-
     private Set<RegexBench.Flag> flags() {
         Set<RegexBench.Flag> flags = EnumSet.noneOf(RegexBench.Flag.class);
         RegexBench.Flavor flavor = flavor();
@@ -441,6 +363,7 @@ final class RegexBenchDialog extends DialogWrapper {
         String pattern = patternField.getText();
         if (pattern.isEmpty()) {
             clearResult();
+            checkResult.setText("");
             status.setForeground(NamedColorUtil.getInactiveTextColor());
             status.setText(BootServersBundle.message("regex.status.empty"));
             return;
@@ -450,14 +373,39 @@ final class RegexBenchDialog extends DialogWrapper {
         Set<RegexBench.Flag> flags = flags();
         String text = sampleArea.getText();
         String replacement = replacementField.getText();
+        String input = checkField.getText();
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
             RegexBench.Result result = RegexBench.run(flavor, pattern, flags, text, replacement, TIMEOUT_MS);
+            RegexBench.Check check = input.isEmpty() ? null : RegexBench.check(flavor, pattern, flags, input, TIMEOUT_MS);
             ApplicationManager.getApplication().invokeLater(() -> {
                 if (mine == generation && !isDisposed()) {
                     show(result);
+                    showCheck(check);
                 }
             }, ModalityState.any());
         });
+    }
+
+    /** 확인할 글 결과. 칸이 비었으면 null. 패턴 오류 · 시간 넘김은 위 상태 줄이 알리므로 여기서는 비운다. */
+    private void showCheck(@Nullable RegexBench.Check check) {
+        if (check == null || check.verdict() == null) {
+            checkResult.setText("");
+            return;
+        }
+        switch (check.verdict()) {
+            case FULL -> {
+                checkResult.setForeground(SUCCESS);
+                checkResult.setText(BootServersBundle.message("regex.check.full"));
+            }
+            case PARTIAL -> {
+                checkResult.setForeground(WARNING);
+                checkResult.setText(BootServersBundle.message("regex.check.partial", check.part()));
+            }
+            case NONE -> {
+                checkResult.setForeground(NamedColorUtil.getErrorForeground());
+                checkResult.setText(BootServersBundle.message("regex.check.none"));
+            }
+        }
     }
 
     private void clearResult() {
