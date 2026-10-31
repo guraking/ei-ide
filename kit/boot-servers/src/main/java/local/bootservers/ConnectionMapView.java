@@ -35,6 +35,7 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.RenderingHints;
+import java.awt.event.HierarchyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.geom.CubicCurve2D;
@@ -162,6 +163,11 @@ final class ConnectionMapView {
         top.add(column, BorderLayout.NORTH);
         root.add(ScrollPaneFactory.createScrollPane(top, true), "map");
         root.add(empty, "empty");
+        root.addHierarchyListener(e -> {
+            if ((e.getChangeFlags() & HierarchyEvent.SHOWING_CHANGED) != 0) {
+                monitor.setMapShown(root.isShowing());
+            }
+        });
     }
 
     JComponent component() {

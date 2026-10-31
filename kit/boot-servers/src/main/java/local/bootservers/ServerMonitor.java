@@ -72,6 +72,8 @@ final class ServerMonitor {
     private final ScheduledFuture<?> future;
     private int round;
     private volatile boolean busy;
+    // 연결 지도 탭이 화면에 보이는가. 보일 때만 설정을 읽고 포트를 확인한다(바깥 DB · Redis 에 쓸데없이 붙지 않게).
+    private volatile boolean mapShown;
 
     // 아래는 화면 스레드에서만 읽고 쓴다.
     private final Map<String, Metrics.History> histories = new HashMap<>();
@@ -146,6 +148,17 @@ final class ServerMonitor {
         AppExecutorUtil.getAppExecutorService().execute(this::tick);
     }
 
+    /** 연결 지도 탭이 보이거나 가려질 때 화면 스레드에서 부른다. 보이게 되면 바로 한 번 확인한다. */
+    void setMapShown(boolean shown) {
+        if (shown == mapShown) {
+            return;
+        }
+        mapShown = shown;
+        if (shown) {
+            refreshLinks();
+        }
+    }
+
     /** 스케줄러 스레드. 앞 차례가 아직 돌고 있으면 건너뛴다. */
     private void tick() {
         if (busy || project.isDisposed()) {
@@ -156,7 +169,7 @@ final class ServerMonitor {
             List<Watched> list = snapshot.get();
             String slowName = slowTarget.get();
             String override = profileOverride;
-            boolean checkLinks = round % LINK_ROUNDS == 0;
+            boolean checkLinks = mapShown && round % LINK_ROUNDS == 0;
             boolean checkSlow = round % SLOW_ROUNDS == 0;
             round++;
             AppExecutorUtil.getAppExecutorService().execute(() -> {
