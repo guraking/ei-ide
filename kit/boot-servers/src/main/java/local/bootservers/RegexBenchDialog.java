@@ -70,7 +70,7 @@ final class RegexBenchDialog extends DialogWrapper {
     private static final Logger LOG = Logger.getInstance(RegexBenchDialog.class);
     private static final int DEBOUNCE_MS = 150;
     private static final long TIMEOUT_MS = 1000;
-    private static final int DIALOG_WIDTH = 1000;
+    private static final int DIALOG_WIDTH = 1100;
     private static final int DIALOG_HEIGHT = 900;
     private static final float TEXT_TABS_SPLIT = 0.45f;
     private static final int SAMPLE_ROWS = 5;
@@ -282,7 +282,8 @@ final class RegexBenchDialog extends DialogWrapper {
 
     @Override
     protected @Nullable String getDimensionServiceKey() {
-        return "KingGura.RegexBench";
+        // 판마다 기본 크기를 바꿀 때 이름을 바꿔 지난 크기 기억을 버린다
+        return "KingGura.RegexBench.2";
     }
 
     @Override

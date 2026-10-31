@@ -47,12 +47,12 @@ import java.util.StringJoiner;
  */
 final class RegexComposer {
 
-    private static final int DETAIL_WIDTH = 560;
+    private static final int DETAIL_WIDTH = 720;
     private static final int LIST_HEIGHT = 200;
-    private static final int LIST_WIDTH = 300;
+    private static final int LIST_WIDTH = 260;
     private static final int CHILD_INDENT = 18;
-    private static final int TEXT_COLUMNS = 10;
-    private static final int NAME_COLUMNS = 8;
+    private static final int AROUND_COLUMNS = 10;
+    private static final int NAME_COLUMNS = 12;
     private static final int MAX_REPEAT = 999;
     private static final int DEFAULT_MIN_LENGTH = 8;
 
@@ -117,7 +117,7 @@ final class RegexComposer {
     private final JPanel sourceRow = row();
     private final Map<CharKind, JBCheckBox> kindBoxes = new EnumMap<>(CharKind.class);
     private final JBLabel extraLabel = new JBLabel(BootServersBundle.message("regex.compose.extra"));
-    private final JBTextField extraField = new JBTextField(TEXT_COLUMNS);
+    private final JBTextField extraField = new JBTextField();
     private final JPanel kindsRow = row();
     private final JBLabel wordsLabel = new JBLabel(BootServersBundle.message("regex.compose.words"));
     private final JBTextField wordsField = new JBTextField();
@@ -137,8 +137,8 @@ final class RegexComposer {
     private final JBTextField nameField = new JBTextField(NAME_COLUMNS);
     private final JPanel captureRow = row(captureBox, nameLabel, nameField);
     private final JBLabel aroundLabel = new JBLabel(BootServersBundle.message("regex.compose.around"));
-    private final JBTextField beforeField = new JBTextField(TEXT_COLUMNS / 2);
-    private final JBTextField afterField = new JBTextField(TEXT_COLUMNS / 2);
+    private final JBTextField beforeField = new JBTextField(AROUND_COLUMNS);
+    private final JBTextField afterField = new JBTextField(AROUND_COLUMNS);
     private final JPanel aroundRow = row(new JBLabel(BootServersBundle.message("regex.compose.before")), beforeField,
             new JBLabel(BootServersBundle.message("regex.compose.before.tail")),
             new JBLabel(BootServersBundle.message("regex.compose.after")), afterField,
@@ -272,8 +272,6 @@ final class RegexComposer {
             kindBoxes.put(kind, box);
             kindsRow.add(box);
         }
-        kindsRow.add(extraLabel);
-        kindsRow.add(extraField);
         extraField.getEmptyText().setText(BootServersBundle.message("regex.compose.extra.empty"));
         wordsField.getEmptyText().setText(BootServersBundle.message("regex.compose.words.empty"));
         exceptField.getEmptyText().setText(BootServersBundle.message("regex.compose.except.empty"));
@@ -299,6 +297,7 @@ final class RegexComposer {
                 .addLabeledComponent(bunchLabel, bunchRow)
                 .addLabeledComponent(sourceLabel, sourceRow)
                 .addComponentToRightColumn(kindsRow)
+                .addLabeledComponent(extraLabel, extraField)
                 .addLabeledComponent(wordsLabel, wordsField)
                 .addLabeledComponent(exceptLabel, exceptField)
                 .addLabeledComponent(repeatLabel, repeatRow)
@@ -460,6 +459,9 @@ final class RegexComposer {
             sourceLabel.setVisible(piece);
             sourceRow.setVisible(piece);
             kindsRow.setVisible(piece && model.source == Source.KINDS);
+            // 「이 글자도」 는 체크 줄에 같이 두면 좁은 창에서 다음 줄로 넘어가 가려지므로 따로 한 줄을 쓴다
+            extraLabel.setVisible(piece && model.source == Source.KINDS);
+            extraField.setVisible(piece && model.source == Source.KINDS);
             wordsLabel.setVisible(piece && model.source == Source.WORDS);
             wordsField.setVisible(piece && model.source == Source.WORDS);
             exceptLabel.setVisible(piece && model.source == Source.EXCEPT);
