@@ -6,7 +6,7 @@
   1) 실행 설정 창의 VM 옵션 칸을 처음부터 보이게 한다(원래는 값이 있을 때만 보임).
   2) 에디터 탭 줄 오른쪽에 「세로로 분할」 단추를 둔다(VS Code 의 분할 단추 자리).
   3) 커밋 후 커밋 메시지를 비우는 것을 기본으로 한다.
-  4~9) 이클립스 단축키 · 하위 빌드 파일 자동 연결 · 저장 시 자동 빌드 · 저장 시 import 정리와 바뀐 줄 서식 · 플러그인 본체 포함.
+  4~9) 이클립스 단축키 · 하위 빌드 파일 자동 연결(두 단계 아래까지) · 저장 시 자동 빌드 · 저장 시 import 정리와 바뀐 줄 서식 · 플러그인 본체 포함.
   10) AI 에이전트 연결 · 플러그인 개발용 실행 도구 플러그인 제외.
   11) SVN 플러그인 번들 추가.
   15) 설치 화면 「설치 옵션」 칸을 모두 체크한 채로 띄운다.
@@ -43,7 +43,59 @@ FONT_FILE = "platform/editor-ui-api/src/com/intellij/openapi/editor/colors/FontP
 FONT_SERVICE_FILE = "platform/platform-impl/src/com/intellij/openapi/editor/impl/FontFamilyServiceImpl.java"
 FONT_ORIGINAL = '    if (SystemInfo.isJetBrainsJvm) {\n      return JETBRAINS_MONO;\n    }\n'
 # 예전 판이 넣은 수정 → 원문. 값만 바뀐 수정은 이미 손질된 소스에서 원문을 못 찾으므로, 읽은 뒤 먼저 원문으로 되돌린다.
-OLD_EDITS = {FONT_FILE: [
+# 5) 자동 연결. Clone(CloneIntoProject.BUILD_DEPTH)처럼 두 단계 아래까지 본다. 빌드 파일을 찾은 폴더 아래와 빌드 결과 폴더로는 내려가지 않는다.
+AUTOLINK_FILE = "platform/external-system-impl/src/com/intellij/openapi/externalSystem/autolink/UnlinkedProjectStartupActivity.kt"
+AUTOLINK_ORIGINAL = "        return\n      }\n    }\n    if (LOG.isDebugEnabled) {"
+AUTOLINK_DEPTH1 = (
+    "        return\n      }\n"
+    "      if (isExpectedAutoLink && unlinkedProjects.isEmpty() && linkedProjects.isEmpty()) {\n"
+    "        // KingGura: 이클립스의 기존 프로젝트 가져오기처럼 한 단계 아래 폴더까지만 본다. 숨김 폴더는 건너뛴다.\n"
+    "        val childPaths = readAction {\n"
+    "          LocalFileSystem.getInstance().findFileByPath(externalProjectPath)?.children.orEmpty()\n"
+    "            .filter { it.isDirectory && !it.name.startsWith(\".\") }\n"
+    "            .map { it.path }\n"
+    "        }\n"
+    "        for (childPath in childPaths.sorted()) {\n"
+    "          val (childLinked, childUnlinked) = findLinkedAndUnlinkedProjects(project, childPath)\n"
+    "          if (childLinked.isEmpty() && childUnlinked.isNotEmpty()) {\n"
+    "            childUnlinked.first().linkAndLoadProjectAsync(project, childPath)\n"
+    "          }\n"
+    "        }\n"
+    "        return\n"
+    "      }\n"
+    "    }\n    if (LOG.isDebugEnabled) {")
+AUTOLINK_DEPTH2 = (
+    "        return\n      }\n"
+    "      if (isExpectedAutoLink && unlinkedProjects.isEmpty() && linkedProjects.isEmpty()) {\n"
+    "        // KingGura: 이클립스의 기존 프로젝트 가져오기처럼 두 단계 아래 폴더까지 본다(Clone 과 같은 깊이). 숨김 폴더는 건너뛴다.\n"
+    "        // 빌드 파일이 있거나 이미 연결된 폴더 아래, 빌드 결과 폴더 아래로는 내려가지 않는다(다중 모듈은 맨 위 파일이 아래까지 읽는다).\n"
+    "        val eiSkipDirs = setOf(\"target\", \"build\", \"out\", \"bin\", \"node_modules\")\n"
+    "        var eiParents = listOf(externalProjectPath)\n"
+    "        repeat(2) { _ ->\n"
+    "          val parents = eiParents\n"
+    "          val childPaths = readAction {\n"
+    "            parents.flatMap { parentPath ->\n"
+    "              LocalFileSystem.getInstance().findFileByPath(parentPath)?.children.orEmpty()\n"
+    "                .filter { it.isDirectory && !it.name.startsWith(\".\") }\n"
+    "                .map { it.path }\n"
+    "            }\n"
+    "          }\n"
+    "          val eiNext = ArrayList<String>()\n"
+    "          for (childPath in childPaths.sorted()) {\n"
+    "            val (childLinked, childUnlinked) = findLinkedAndUnlinkedProjects(project, childPath)\n"
+    "            if (childLinked.isEmpty() && childUnlinked.isNotEmpty()) {\n"
+    "              childUnlinked.first().linkAndLoadProjectAsync(project, childPath)\n"
+    "            }\n"
+    "            else if (childLinked.isEmpty() && childPath.substringAfterLast('/') !in eiSkipDirs) {\n"
+    "              eiNext.add(childPath)\n"
+    "            }\n"
+    "          }\n"
+    "          eiParents = eiNext\n"
+    "        }\n"
+    "        return\n"
+    "      }\n"
+    "    }\n    if (LOG.isDebugEnabled) {")
+OLD_EDITS = {AUTOLINK_FILE: [(AUTOLINK_DEPTH1, AUTOLINK_ORIGINAL)], FONT_FILE: [
     ('    if (SystemInfo.isJetBrainsJvm) {\n      return "JetBrainsMonoHangul";  // EI IDE: boot-servers 플러그인이 등록하는 한글 글꼴\n    }\n',
      FONT_ORIGINAL),
     ('    if (SystemInfo.isJetBrainsJvm) {\n      return "JBMono Pretendard";  // EI IDE: boot-servers 플러그인이 등록하는 한글 글꼴\n    }\n',
@@ -74,26 +126,8 @@ EDITS = [
     ("platform/platform-impl/src/com/intellij/openapi/keymap/impl/DefaultKeymap.kt",
      "else -> KeymapManager.DEFAULT_IDEA_KEYMAP",
      'else -> "Eclipse"'),
-    # 5) 상위 폴더로 처음 열었는데 그 폴더에 빌드 파일이 없으면, 바로 아래 폴더들의 build.gradle · pom.xml 을 각각 연결한다.
-    ("platform/external-system-impl/src/com/intellij/openapi/externalSystem/autolink/UnlinkedProjectStartupActivity.kt",
-     "        return\n      }\n    }\n    if (LOG.isDebugEnabled) {",
-     "        return\n      }\n"
-     "      if (isExpectedAutoLink && unlinkedProjects.isEmpty() && linkedProjects.isEmpty()) {\n"
-     "        // KingGura: 이클립스의 기존 프로젝트 가져오기처럼 한 단계 아래 폴더까지만 본다. 숨김 폴더는 건너뛴다.\n"
-     "        val childPaths = readAction {\n"
-     "          LocalFileSystem.getInstance().findFileByPath(externalProjectPath)?.children.orEmpty()\n"
-     "            .filter { it.isDirectory && !it.name.startsWith(\".\") }\n"
-     "            .map { it.path }\n"
-     "        }\n"
-     "        for (childPath in childPaths.sorted()) {\n"
-     "          val (childLinked, childUnlinked) = findLinkedAndUnlinkedProjects(project, childPath)\n"
-     "          if (childLinked.isEmpty() && childUnlinked.isNotEmpty()) {\n"
-     "            childUnlinked.first().linkAndLoadProjectAsync(project, childPath)\n"
-     "          }\n"
-     "        }\n"
-     "        return\n"
-     "      }\n"
-     "    }\n    if (LOG.isDebugEnabled) {"),
+    # 5) 상위 폴더로 처음 열었는데 그 폴더에 빌드 파일이 없으면, 아래 두 단계 폴더들의 build.gradle · pom.xml 을 각각 연결한다.
+    (AUTOLINK_FILE, AUTOLINK_ORIGINAL, AUTOLINK_DEPTH2),
     # 6) 저장하면 자동 빌드(이클립스 Build Automatically). 그래들 위임 빌드에서는 자동 빌드가 돌지 않으므로 새 그래들 프로젝트는 자체 빌드를 기본으로 한다.
     ("java/compiler/openapi/src/com/intellij/compiler/CompilerWorkspaceConfiguration.java",
      "public boolean MAKE_PROJECT_ON_SAVE = false;",

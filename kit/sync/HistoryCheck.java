@@ -12,7 +12,7 @@ public class HistoryCheck {
 
   public static void main(String[] args) throws Exception {
     String out = "\u001eabc\u001fp1 p2\u001f이정민\u001f1761126840\u001fHEAD -> develop, origin/develop, tag: v1\u001f업체선정 요청\n\n둘째 줄\n\u001d\n\nM\tsrc/A.java\nA\t한글 경로/B.xml\nR100\told.txt\tnew.txt\n"
-                 + "\u001edef\u001f\u001fkim\u001f1761120000\u001fHEAD\u001f빈 커밋\n\u001d\n";
+                 + "\u001edef\u001f\u001fkim\u001f1761120000\u001fHEAD, grafted\u001f빈 커밋\n\u001d\n";
     List<History.Entry> log = History.parseGitLog(out);
     eq(log.size(), 2);
     eq(log.get(0).author(), "이정민");
@@ -23,7 +23,7 @@ public class HistoryCheck {
     eq(log.get(0).message(), "업체선정 요청\n\n둘째 줄");
     eq(log.get(0).time(), Instant.ofEpochSecond(1761126840));
     eq(log.get(0).files(), List.of(new History.FileChange("M", "src/A.java"), new History.FileChange("A", "한글 경로/B.xml"),
-                                   new History.FileChange("R", "new.txt")));
+                                   new History.FileChange("R", "new.txt", "old.txt")));
     eq(log.get(1).parents(), List.of());
     eq(log.get(1).refs(), List.of());
     eq(log.get(1).files(), List.of());
@@ -68,12 +68,19 @@ public class HistoryCheck {
                   + "<repository><root>https://svn/repo</root></repository></entry></info>";
     eq(List.of(History.parseSvnInfo(info)), List.of("https://svn/repo", "/trunk/app"));
     bad(() -> History.parseSvnInfo("<info/>"));
+    // 한글 · 공백 · + 가 든 폴더: relative-url 은 인코딩되어 오고 svn log 경로는 풀려 온다.
+    String koInfo = "<?xml version=\"1.0\"?><info><entry><relative-url>^/trunk/%ED%95%9C%EA%B8%80%20%ED%8F%B4%EB%8D%94/a+b</relative-url>"
+                    + "<repository><root>https://svn/repo</root></repository></entry></info>";
+    String koPrefix = History.parseSvnInfo(koInfo)[1];
+    eq(koPrefix, "/trunk/한글 폴더/a+b");
+    String koLog = "<log><logentry revision=\"3\"><paths><path action=\"M\">/trunk/한글 폴더/a+b/src/X.java</path></paths><msg>m</msg></logentry></log>";
+    eq(History.parseSvnLog(koLog, koPrefix).get(0).files(), List.of(new History.FileChange("M", "src/X.java")));
 
     checkRealGit();
     System.out.println("HistoryCheck 통과");
   }
 
-  /** 실제 git log: 프로젝트 폴더 밖 커밋 · 합치기 커밋은 빠지고 경로는 폴더 기준. */
+  /** 실제 git log: 프로젝트 폴더 밖 커밋은 빠지고 경로는 폴더 기준. 합치기 커밋은 첫 부모와 비교한 파일을 보인다. 다음 묶음은 첫 HEAD 에서 센다. */
   private static void checkRealGit() throws Exception {
     File repo = Files.createTempDirectory("history").toFile();
     File app = new File(repo, "app");
@@ -88,16 +95,24 @@ public class HistoryCheck {
     git(repo, "checkout", "-q", "main");
     commit(repo, "app/main.java", "본줄기");
     git(repo, "merge", "-q", "--no-ff", "-m", "Merge branch 'side'", "side");
-    List<History.Entry> log = History.parseGitLog(git(app, History.gitLogArgs(100, 0)));
+    String head = git(repo, "rev-parse", "HEAD").trim();
+    List<History.Entry> log = History.parseGitLog(git(app, History.gitLogArgs(head, 100, 0)));
     eq(log.stream().map(History.Entry::subject).toList(), List.of("Merge branch 'side'", "본줄기", "곁가지", "앱 첫 커밋"));
     eq(log.get(0).parents(), List.of(log.get(1).id(), log.get(2).id()));
     eq(log.get(1).parents(), List.of(log.get(3).id()));  // 폴더 밖 「밖 커밋」을 건너뛴 부모
     eq(log.get(3).files(), List.of(new History.FileChange("A", "한글.java")));
     eq(log.get(1).refs(), List.of());
     eq(log.get(0).refs(), List.of("main"));
+    eq(log.get(0).files(), List.of(new History.FileChange("A", "side.java")));
+    // 첫 묶음 뒤 새 커밋이 생겨도 첫 HEAD 에서 세면 다음 묶음이 어긋나지 않는다.
+    commit(repo, "app/later.java", "나중 커밋");
     // 다음 묶음: 앞의 둘을 건너뛰면 나머지 둘이 같은 순서로 온다.
-    List<History.Entry> next = History.parseGitLog(git(app, History.gitLogArgs(100, 2)));
+    List<History.Entry> next = History.parseGitLog(git(app, History.gitLogArgs(head, 100, 2)));
     eq(next.stream().map(History.Entry::id).toList(), List.of(log.get(2).id(), log.get(3).id()));
+    git(repo, "mv", "app/main.java", "app/renamed.java");
+    git(repo, "commit", "-q", "-m", "이름 바꿈");
+    List<History.Entry> renamed = History.parseGitLog(git(app, History.gitLogArgs("HEAD", 1, 0)));
+    eq(renamed.get(0).files(), List.of(new History.FileChange("R", "renamed.java", "main.java")));
     List<History.Row> rows = History.layout(log);
     // 0 합치기(본줄기 · 곁가지) / 1 본줄기 / 2 곁가지 / 3 첫 커밋. 곁가지는 1 칸, 나머지는 0 칸.
     eq(History.links(log, rows, 0), List.of(new History.Link(History.LinkKind.MERGED_FROM, log.get(2))));

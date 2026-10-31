@@ -26,6 +26,8 @@ public final class GitStagingOff implements StartupActivity.DumbAware {
     if (!settings.isStagingAreaEnabled()) return;
     settings.setStagingAreaEnabled(false);
     // 설정값만 바꾸면 열린 커밋 창은 다음 시작까지 Staged · Unstaged 로 남는다. Git 설정 화면이 하는 것처럼 알린다.
-    ApplicationManager.getApplication().getMessageBus().syncPublisher(CommitModeManager.SETTINGS).settingsChanged();
+    // 시작 작업은 작업 스레드에서 돌고, 커밋 모드를 바꾸는 쪽은 화면 스레드를 요구하므로 화면 스레드에서 알린다.
+    ApplicationManager.getApplication().invokeLater(
+      () -> ApplicationManager.getApplication().getMessageBus().syncPublisher(CommitModeManager.SETTINGS).settingsChanged());
   }
 }

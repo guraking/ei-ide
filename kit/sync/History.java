@@ -8,6 +8,8 @@ import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.IOException;
 import java.io.StringReader;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -28,8 +30,9 @@ final class History {
     boolean merge() { return parents.size() > 1; }
   }
 
-  /** status 는 한 글자(M · A · D · R 등). */
-  record FileChange(String status, String path) {
+  /** status 는 한 글자(M · A · D · R 등). oldPath 는 커밋 직전 경로(이름 바꿈 · 복사는 옛 경로, 나머지는 path 와 같음). */
+  record FileChange(String status, String path, String oldPath) {
+    FileChange(String status, String path) { this(status, path, path); }
     @Override public String toString() { return status + "  " + path; }
   }
 
@@ -98,21 +101,25 @@ final class History {
   private static final int GIT_FIELDS = 6;
   private static final String HEAD_ARROW = "HEAD -> ";
   private static final String HEAD = "HEAD";
+  // 얕은 clone 의 끝 커밋에 git 이 붙이는 표시. 브랜치 · 태그가 아니다.
+  private static final String GRAFTED = "grafted";
 
   private History() {}
 
   /**
-   * 작업 폴더(프로젝트 폴더) 안을 바꾼 커밋을 최근 것부터 skip 개 건너뛰고 limit 개. 날짜 순이되 자식이 부모보다 먼저 온다.
-   * --parents 로 폴더 밖 커밋을 건너뛴 부모를 받아 가지 선이 끊기지 않게 하고, --relative 로 경로를 작업 폴더 기준으로 받는다.
+   * start(커밋 해시 또는 HEAD)에서 닿는 커밋 가운데 작업 폴더(프로젝트 폴더) 안을 바꾼 것을 최근 것부터 skip 개 건너뛰고 limit 개. 날짜 순이되 자식이 부모보다 먼저 온다.
+   * 다음 묶음은 첫 묶음 때의 HEAD 해시를 start 로 넘겨, 그사이 커밋 · pull · 브랜치 전환이 있어도 같은 기록에서 이어 센다.
+   * --parents 로 폴더 밖 커밋을 건너뛴 부모를 받아 가지 선이 끊기지 않게 하고, --full-history 로 합치기 한쪽 가지의 커밋도 남긴다.
+   * 합치기 커밋의 바뀐 파일은 첫 부모와 비교한 것(--diff-merges=first-parent), --relative 로 경로를 작업 폴더 기준으로 받는다.
    */
-  static String[] gitLogArgs(int limit, int skip) {
-    return new String[]{"log", "--date-order", "--parents", "-n", String.valueOf(limit), "--skip", String.valueOf(skip), "--relative",
-                        "--name-status", GIT_FORMAT, "--", "."};
+  static String[] gitLogArgs(String start, int limit, int skip) {
+    return new String[]{"log", start, "--date-order", "--parents", "--full-history", "--diff-merges=first-parent", "-n", String.valueOf(limit),
+                        "--skip", String.valueOf(skip), "--relative", "--name-status", GIT_FORMAT, "--", "."};
   }
 
   /**
    * git log GIT_FORMAT 출력. 한 커밋은 RECORD_SEP 로 시작해 BODY_END 까지가 머리, 그 뒤가 "상태\t경로" 줄이다.
-   * 이름 바꿈 · 복사(R100\t옛\t새)는 새 경로를 쓴다. 필드가 모자라거나 시간이 숫자가 아니면 IOException.
+   * 이름 바꿈 · 복사(R100\t옛\t새)는 새 경로를 path, 옛 경로를 oldPath 로 둔다. 필드가 모자라거나 시간이 숫자가 아니면 IOException.
    */
   static List<Entry> parseGitLog(String output) throws IOException {
     List<Entry> result = new ArrayList<>();
@@ -125,7 +132,7 @@ final class History {
       for (String line : chunk.substring(end + 1).split("\n")) {
         if (line.isBlank()) continue;
         String[] cols = line.split("\t");
-        files.add(new FileChange(cols[0].substring(0, 1), cols[cols.length - 1]));
+        files.add(new FileChange(cols[0].substring(0, 1), cols[cols.length - 1], cols.length > 2 ? cols[1] : cols[cols.length - 1]));
       }
       Instant time;
       try {
@@ -140,12 +147,12 @@ final class History {
     return result;
   }
 
-  /** %D 값("HEAD -> develop, origin/develop, tag: v1")을 이름 목록으로. 홀로 있는 HEAD 는 뺀다. */
+  /** %D 값("HEAD -> develop, origin/develop, tag: v1")을 이름 목록으로. 홀로 있는 HEAD 와 얕은 clone 표시(grafted)는 뺀다. */
   static List<String> parseRefs(String decoration) {
     List<String> refs = new ArrayList<>();
     for (String ref : decoration.split(", ")) {
       String name = ref.startsWith(HEAD_ARROW) ? ref.substring(HEAD_ARROW.length()) : ref.trim();
-      if (!name.isEmpty() && !name.equals(HEAD)) refs.add(name);
+      if (!name.isEmpty() && !name.equals(HEAD) && !name.equals(GRAFTED)) refs.add(name);
     }
     return refs;
   }
@@ -181,13 +188,22 @@ final class History {
     return result;
   }
 
-  /** svn info --xml 의 저장소 루트 URL 과 이 폴더의 저장소 경로(^/ 를 / 로). 둘 중 하나라도 없으면 IOException. */
+  /**
+   * svn info --xml 의 저장소 루트 URL 과 이 폴더의 저장소 경로(^/ 를 / 로). 둘 중 하나라도 없으면 IOException.
+   * relative-url 은 %ED%95%9C · %20 처럼 인코딩되어 오고 svn log 의 경로는 풀려 오므로 UTF-8 로 풀어 돌려준다.
+   * svn 은 「+」를 인코딩하지 않으므로 URLDecoder 가 공백으로 바꾸지 않게 먼저 %2B 로 둔다.
+   */
   static String[] parseSvnInfo(String xml) throws IOException {
     Element doc = parse(xml, "svn info");
     String root = text(doc, "root");
     String relative = text(doc, "relative-url");
     if (root.isEmpty() || !relative.startsWith("^")) throw new IOException("svn info 결과에 저장소 경로가 없습니다.");
-    return new String[]{root, relative.substring(1)};
+    try {
+      return new String[]{root, URLDecoder.decode(relative.substring(1).replace("+", "%2B"), StandardCharsets.UTF_8)};
+    }
+    catch (IllegalArgumentException e) {
+      throw new IOException("svn info 저장소 경로를 풀지 못했습니다: " + relative);
+    }
   }
 
   /**

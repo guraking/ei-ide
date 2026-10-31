@@ -15,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * 설정 → 버전 관리 → Git 로그인에 등록한 서버별 https 로그인.
@@ -42,8 +43,11 @@ final class GitLogins {
   private static final String ENV_COUNT = "GIT_CONFIG_COUNT";
   private static final String ENV_KEY = "GIT_CONFIG_KEY_";
   private static final String ENV_VALUE = "GIT_CONFIG_VALUE_";
+  /** 주소에 적어도 적지 않아도 같은 서버로 보는 기본 포트. */
+  private static final int HTTPS_PORT = 443;
+  private static final int HTTP_PORT = 80;
 
-  /** 마지막으로 만든 환경값. save 때 비운다. */
+  /** 마지막으로 만든 환경값. save · forget 때와, stored 가 읽은 비밀번호 저장소 값과 다를 때(다른 곳에서 지움 · 저장소가 잠겨 있다 열림) 비운다. */
   private static volatile Map<String, String> cachedEnv;
 
   private GitLogins() {}
@@ -65,7 +69,7 @@ final class GitLogins {
   /** 목록을 통째로 바꾼다. secret 이 null 인 줄은 저장된 비밀번호 · 토큰을 그대로 두고, 빠진 서버의 것은 지운다. */
   static void save(List<Login> logins) {
     for (Login old : list()) {
-      if (find(logins, old.server()) == null) PasswordSafe.getInstance().setPassword(attributes(old.server()), null);
+      if (!containsExactly(logins, old.server())) PasswordSafe.getInstance().setPassword(attributes(old.server()), null);
     }
     for (Login login : logins) {
       if (login.secret() != null) PasswordSafe.getInstance().setPassword(attributes(login.server()), login.secret());
@@ -74,17 +78,38 @@ final class GitLogins {
     cachedEnv = null;
   }
 
-  /** 그 서버의 비밀번호 · 토큰이 저장돼 있는지. */
-  static boolean hasSecret(String server) {
-    if (find(list(), server) == null) return false;
-    String secret = PasswordSafe.getInstance().getPassword(attributes(server));
-    return secret != null && !secret.isEmpty();
+  /** 비밀번호 저장소 키는 저장한 주소 그대로라 지울 때는 정확히 같은 주소만 남은 것으로 본다. */
+  private static boolean containsExactly(List<Login> logins, String server) {
+    for (Login login : logins) {
+      if (login.server().equals(server)) return true;
+    }
+    return false;
+  }
+
+  /** 그 서버의 등록 로그인(비밀번호 · 토큰 포함). 등록이 없거나 값이 비었으면 null. 읽은 값이 env 캐시와 다르면 캐시를 비운다. */
+  static Login stored(String server) {
+    Login login = find(list(), server);
+    String secret = login == null ? null : PasswordSafe.getInstance().getPassword(attributes(login.server()));
+    Login result = secret == null || secret.isEmpty() ? null : new Login(login.server(), login.kind(), login.user(), secret);
+    Map<String, String> env = cachedEnv;
+    if (login != null && env != null && !Objects.equals(cachedHeader(env, login.server()), result == null ? null : header(result))) cachedEnv = null;
+    return result;
+  }
+
+  /** 캐시한 환경값에서 그 서버의 머리글. 없으면 null. */
+  private static String cachedHeader(Map<String, String> env, String server) {
+    String key = "http." + server + "/.extraHeader";
+    for (Map.Entry<String, String> entry : env.entrySet()) {
+      if (entry.getKey().startsWith(ENV_KEY) && key.equals(entry.getValue())) return env.get(ENV_VALUE + entry.getKey().substring(ENV_KEY.length()));
+    }
+    return null;
   }
 
   /** 인증에 실패한 값을 지운다. 목록 줄은 남겨 표에서 값만 다시 넣게 한다. 등록이 없는 서버면 아무 일도 안 한다. */
   static void forget(String server) {
-    if (find(list(), server) == null) return;
-    PasswordSafe.getInstance().setPassword(attributes(server), null);
+    Login login = find(list(), server);
+    if (login == null) return;
+    PasswordSafe.getInstance().setPassword(attributes(login.server()), null);
     cachedEnv = null;
   }
 
@@ -95,7 +120,8 @@ final class GitLogins {
     Map<String, String> env = cachedEnv;
     if (env == null) {
       env = env(load(), base);
-      cachedEnv = env;
+      // 등록이 있는데 값이 하나도 없으면 비밀번호 저장소가 잠겨 있었을 수 있어 다음 명령에서 다시 읽는다.
+      if (!env.isEmpty() || list().isEmpty()) cachedEnv = env;
     }
     return env;
   }
@@ -129,7 +155,7 @@ final class GitLogins {
   }
 
   /**
-   * 주소를 `https://host[:port]` 로 다듬는다. 경로 · 아이디 · 끝 / 는 버리고 host 는 소문자.
+   * 주소를 `https://host[:port]` 로 다듬는다. 경로 · 아이디 · 끝 / · 기본 포트(https 443 · http 80)는 버리고 host 는 소문자.
    * https · http 가 아니거나 host 가 없으면 IllegalArgumentException(ssh 원격은 이 방식을 쓰지 않는다).
    */
   static String serverOf(String url) {
@@ -146,14 +172,27 @@ final class GitLogins {
     if (!scheme.equals("https") && !scheme.equals("http") || uri.getHost() == null || uri.getHost().isEmpty()) {
       throw new IllegalArgumentException(SyncBundle.message("gitlogin.error.server"));
     }
-    return scheme + "://" + uri.getHost().toLowerCase(Locale.ROOT) + (uri.getPort() < 0 ? "" : ":" + uri.getPort());
+    int port = uri.getPort();
+    boolean defaultPort = port < 0 || port == (scheme.equals("https") ? HTTPS_PORT : HTTP_PORT);
+    return scheme + "://" + uri.getHost().toLowerCase(Locale.ROOT) + (defaultPort ? "" : ":" + port);
   }
 
+  /** server 와 같은 서버의 줄. 예전에 기본 포트를 적어 저장한 줄(`https://host:443`)도 같은 서버로 본다. */
   static Login find(List<Login> logins, String server) {
+    String wanted = normalized(server);
     for (Login login : logins) {
-      if (login.server().equals(server)) return login;
+      if (normalized(login.server()).equals(wanted)) return login;
     }
     return null;
+  }
+
+  private static String normalized(String server) {
+    try {
+      return serverOf(server);
+    }
+    catch (IllegalArgumentException e) {
+      return server;
+    }
   }
 
   /** 한 줄에 서버 · 방식 · 아이디(탭으로 나눔). 깨진 줄은 건너뛴다. */

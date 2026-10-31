@@ -3,9 +3,9 @@ package kinggura.sync;
 import com.intellij.openapi.editor.colors.EditorColorsManager;
 import com.intellij.diff.DiffContentFactory;
 import com.intellij.diff.DiffManager;
+import com.intellij.diff.requests.MessageDiffRequest;
 import com.intellij.diff.requests.SimpleDiffRequest;
 import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.fileTypes.FileType;
 import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.ide.CopyPasteManager;
 import com.intellij.openapi.module.Module;
@@ -26,6 +26,7 @@ import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.ui.MessageType;
 import com.intellij.openapi.ui.popup.JBPopupFactory;
+import com.intellij.openapi.vcs.FilePath;
 import com.intellij.openapi.vcs.FileStatus;
 import com.intellij.ui.ColoredListCellRenderer;
 import com.intellij.ui.SimpleTextAttributes;
@@ -41,6 +42,7 @@ import com.intellij.ui.content.ContentFactory;
 import com.intellij.ui.table.JBTable;
 import com.intellij.util.IconUtil;
 import com.intellij.util.ui.JBUI;
+import com.intellij.vcsUtil.VcsUtil;
 import org.jetbrains.annotations.NotNull;
 
 import javax.swing.*;
@@ -83,6 +85,13 @@ final class ProjectHistoryPanel extends JPanel {
   private static final DateTimeFormatter ROW_TIME = timeFormat("history.time.row");
   private static final int MINUTES_PER_HOUR = 60;
   private static final int SHORT_HASH = 7;
+  // 비교 창 내용(git show · svn cat)을 읽는 시간 제한(초). SyncPanel.git 의 기본 제한과 같다.
+  private static final long CAT_TIMEOUT_SEC = 120;
+  // rev-parse --abbrev-ref 가 브랜치 대신 돌려주는 값(떨어진 HEAD). 이때는 짧은 해시를 보인다.
+  private static final String DETACHED = "HEAD";
+  // 상태 글자: 추가는 커밋 직전 내용이, 삭제는 커밋 내용이 없다.
+  private static final String ADDED = "A";
+  private static final String DELETED = "D";
   // 꺾임 설명에 넣는 커밋 제목 최대 글자 수.
   private static final int TIP_SUBJECT_MAX = 60;
 
@@ -146,8 +155,11 @@ final class ProjectHistoryPanel extends JPanel {
     @Override public String toString() { return name; }
   }
 
-  /** 읽어 온 기록. branch 는 Git 현재 브랜치 · SVN 저장소 경로. svnRoot · svnPrefix 는 SVN 비교 창용. more 는 다음 묶음이 남았을 수 있음. */
-  private record Loaded(Target target, String branch, String svnRoot, String svnPrefix,
+  /**
+   * 읽어 온 기록. branch 는 Git 현재 브랜치(떨어진 HEAD 면 짧은 해시) · SVN 저장소 경로. svnRoot · svnPrefix 는 SVN 비교 창용. more 는 다음 묶음이 남았을 수 있음.
+   * start 는 첫 묶음 때의 HEAD 해시(Git, 다음 묶음도 여기서 센다), remotes 는 원격 이름(원격 브랜치 알약 색을 고른다). SVN 은 null · 빈 목록.
+   */
+  private record Loaded(Target target, String branch, String svnRoot, String svnPrefix, String start, List<String> remotes,
                         List<History.Entry> entries, List<History.Row> rows, boolean more) {}
 
   private final Project project;
@@ -162,7 +174,7 @@ final class ProjectHistoryPanel extends JPanel {
       int i = rowAtPoint(e.getPoint());
       if (i < 0 || i >= shown.size()) return null;
       History.Entry entry = shown.get(i);
-      return entry.author() + " · " + ROW_TIME.format(entry.time().atZone(ZONE));
+      return entry.author() + " · " + stamp(ROW_TIME, entry.time());
     }
   };
   private final JBList<History.FileChange> files = new JBList<>();
@@ -183,6 +195,9 @@ final class ProjectHistoryPanel extends JPanel {
   private final Font hashFont = new Font(EditorColorsManager.getInstance().getGlobalScheme().getEditorFontName(), Font.PLAIN, JBUI.Fonts.label().getSize());
   private Loaded loaded;
   private boolean loadingMore;
+  // 마지막으로 시작한 load 번호와 화면에 반영한 번호. 새로고침을 연달아 누르면 마지막 결과만 반영하고 그것만 진행 줄을 숨긴다.
+  private int loadSeq;
+  private int shownSeq;
   private boolean graph;
   private int graphWidth;
 
@@ -345,6 +360,7 @@ final class ProjectHistoryPanel extends JPanel {
   private void load() {
     Target target = selectedTarget();
     if (target == null) return;
+    int request = ++loadSeq;
     loading(true);
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       Loaded result;
@@ -363,7 +379,8 @@ final class ProjectHistoryPanel extends JPanel {
       Loaded done = result;
       String failure = error;
       SwingUtilities.invokeLater(() -> {
-        if (!target.equals(selectedTarget())) return;  // 읽는 동안 다른 프로젝트를 골랐다.
+        if (request != loadSeq || !target.equals(selectedTarget())) return;  // 읽는 동안 다시 읽기 시작했거나 다른 프로젝트를 골랐다.
+        shownSeq = request;
         loaded = done;
         String current = done == null ? "" : done.branch();
         branch.setRefs(current.isEmpty() ? List.of() : List.of(current), current);
@@ -377,7 +394,8 @@ final class ProjectHistoryPanel extends JPanel {
   /** 맨 아래까지 내렸을 때 다음 묶음을 읽어 밑에 붙인다. 고른 줄 · 오른쪽 칸은 그대로 둔다. */
   private void loadMore() {
     Loaded before = loaded;
-    if (before == null || !before.more() || loadingMore) return;
+    if (before == null || !before.more() || loadingMore || shownSeq != loadSeq) return;  // 처음부터 다시 읽는 중이면 기다린다.
+    int request = loadSeq;
     loadingMore = true;
     loading(true);
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
@@ -396,11 +414,11 @@ final class ProjectHistoryPanel extends JPanel {
       String failure = error;
       SwingUtilities.invokeLater(() -> {
         loadingMore = false;
-        if (loaded != before) return;  // 읽는 동안 다른 프로젝트를 골랐거나 새로 읽었다.
+        if (loaded != before || request != loadSeq) return;  // 읽는 동안 다른 프로젝트를 골랐거나 새로 읽기 시작했다.
         if (done == null) {
           // 실패한 묶음은 다시 내릴 때 또 시도하지 않도록 끝으로 본다.
-          loaded = new Loaded(before.target(), before.branch(), before.svnRoot(), before.svnPrefix(), before.entries(), before.rows(),
-                              false);
+          loaded = new Loaded(before.target(), before.branch(), before.svnRoot(), before.svnPrefix(), before.start(), before.remotes(),
+                              before.entries(), before.rows(), false);
           loading(false);
           status.setText(Objects.toString(failure, SyncBundle.message("history.count", before.entries().size())));
           return;
@@ -422,8 +440,8 @@ final class ProjectHistoryPanel extends JPanel {
 
   /**
    * 기록을 읽는다. before 가 null 이면 처음 LOG_LIMIT 개, 아니면 before 뒤의 다음 LOG_LIMIT 개를 읽어 before 에 이어 붙인 결과.
-   * Git 은 --skip 으로, SVN 은 마지막 리비전 바로 앞부터(-r N-1:1) 읽는다. SVN 은 부모를 「목록의 다음 리비전」으로 두므로
-   * 앞 묶음 마지막 커밋의 부모를 새 묶음 첫 커밋으로 잇는다.
+   * Git 은 첫 묶음 때의 HEAD 해시에서 --skip 으로, SVN 은 마지막 리비전 바로 앞부터(-r N-1:1) 읽는다. SVN 은 부모를 「목록의 다음 리비전」으로 두므로
+   * 앞 묶음 마지막 커밋의 부모를 새 묶음 첫 커밋으로 잇는다. 이미 목록에 있는 커밋은 다시 붙이지 않는다.
    */
   private static Loaded read(Target target, Loaded before) throws IOException, InterruptedException {
     File dir = target.dir();
@@ -432,9 +450,26 @@ final class ProjectHistoryPanel extends JPanel {
     String branch;
     String svnRoot = null;
     String svnPrefix = null;
+    String start = null;
+    List<String> remotes = List.of();
     if (target.vcs() == SyncPanel.Vcs.GIT) {
-      branch = before == null ? gitOrEmpty(dir, "rev-parse", "--abbrev-ref", "HEAD") : before.branch();
-      page = History.parseGitLog(SyncPanel.git(dir, History.gitLogArgs(LOG_LIMIT, entries.size())));
+      if (before == null) {
+        branch = gitOrEmpty(dir, "rev-parse", "--abbrev-ref", "HEAD");
+        if (DETACHED.equals(branch)) branch = gitOrEmpty(dir, "rev-parse", "--short", "HEAD");
+        String head = gitOrEmpty(dir, "rev-parse", "HEAD");
+        start = head.isEmpty() ? DETACHED : head;
+        List<String> names = new ArrayList<>();
+        for (String name : gitOrEmpty(dir, "remote").split("\n")) {
+          if (!name.isBlank()) names.add(name.trim());
+        }
+        remotes = names;
+      }
+      else {
+        branch = before.branch();
+        start = before.start();
+        remotes = before.remotes();
+      }
+      page = History.parseGitLog(SyncPanel.git(dir, History.gitLogArgs(start, LOG_LIMIT, entries.size())));
     }
     else {
       if (before == null) {
@@ -450,8 +485,12 @@ final class ProjectHistoryPanel extends JPanel {
       page = entries.isEmpty() ? History.parseSvnLog(SyncPanel.run(dir, "svn", "log", "--xml", "-v", "-l", String.valueOf(LOG_LIMIT)), svnPrefix)
                                : nextSvnPage(dir, entries, svnPrefix);
     }
-    entries.addAll(page);
-    return new Loaded(target, branch, svnRoot, svnPrefix, entries, History.layout(entries), page.size() == LOG_LIMIT);
+    Set<String> seen = new HashSet<>();
+    for (History.Entry entry : entries) seen.add(entry.id());
+    for (History.Entry entry : page) {
+      if (seen.add(entry.id())) entries.add(entry);
+    }
+    return new Loaded(target, branch, svnRoot, svnPrefix, start, remotes, entries, History.layout(entries), page.size() == LOG_LIMIT);
   }
 
   /** entries(비어 있지 않음) 의 마지막 리비전 앞의 다음 묶음. 마지막이 1 이하면 빈 목록. 리비전이 숫자가 아니면 IOException. */
@@ -608,7 +647,7 @@ final class ProjectHistoryPanel extends JPanel {
     message.setText(body);
     message.setVisible(!body.isEmpty());
     meta.setText(entry.author() + " · " + when(entry.time()) + " · ");
-    meta.setToolTipText(FULL.format(entry.time().atZone(ZONE)));
+    meta.setToolTipText(stamp(FULL, entry.time()));
     hash.setText(shortId(entry));
     metaRow.setVisible(true);
     // 찾기로 줄인 목록은 가지 선이 없어 꺾임도 없다. 가지 선을 그릴 때는 표 순서가 읽어 온 순서와 같다.
@@ -621,45 +660,70 @@ final class ProjectHistoryPanel extends JPanel {
     files.getEmptyText().setText(SyncBundle.message("history.empty.files"));
   }
 
-  /** 고른 파일의 커밋 직전 내용과 커밋 내용을 비교 창으로 연다. 한쪽에 없으면(추가 · 삭제 · 첫 커밋) 빈 내용. */
+  /**
+   * 고른 파일의 커밋 직전 내용과 커밋 내용을 비교 창으로 연다. 추가된 파일은 직전 쪽, 삭제된 파일은 커밋 쪽이 빈 내용.
+   * 이름을 바꾼 파일은 직전 쪽을 옛 경로로 읽는다. 내용은 바이트로 넘겨 IDE 가 파일 인코딩(프로젝트 설정 · BOM)으로 읽게 한다.
+   * 읽기 실패(시간 초과 · 인증 등)는 빈 내용으로 숨기지 않고 비교 창에 오류 문구로 보인다.
+   */
   private void showDiff() {
     History.Entry entry = selectedEntry();
     History.FileChange file = files.getSelectedValue();
     Loaded source = loaded;
     if (entry == null || file == null || source == null) return;
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
-      String before;
-      String after;
+      byte[] before = null;
+      byte[] after = null;
+      String error = null;
       try {
-        before = contentAt(source, entry, file, true);
-        after = contentAt(source, entry, file, false);
+        before = ADDED.equals(file.status()) ? new byte[0] : contentAt(source, entry, file.oldPath(), true);
+        after = DELETED.equals(file.status()) ? new byte[0] : contentAt(source, entry, file.path(), false);
+      }
+      catch (IOException e) {
+        error = e.getMessage();
       }
       catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         return;
       }
+      byte[] beforeBytes = before;
+      byte[] afterBytes = after;
+      String failure = error;
       SwingUtilities.invokeLater(() -> {
-        FileType type = FileTypeManager.getInstance().getFileTypeByFileName(new File(file.path()).getName());
+        if (failure != null) {
+          DiffManager.getInstance().showDiff(project, new MessageDiffRequest(failure));
+          return;
+        }
+        File dir = source.target().dir();
+        FilePath beforePath = VcsUtil.getFilePath(new File(dir, file.oldPath()), false);
+        FilePath afterPath = VcsUtil.getFilePath(new File(dir, file.path()), false);
         DiffContentFactory factory = DiffContentFactory.getInstance();
-        DiffManager.getInstance().showDiff(project, new SimpleDiffRequest(
-          file.path() + " (" + entry.id() + ")", factory.create(project, before, type), factory.create(project, after, type),
-          SyncBundle.message("history.before"), entry.author() + " · " + FULL.format(entry.time().atZone(ZONE))));
+        try {
+          DiffManager.getInstance().showDiff(project, new SimpleDiffRequest(
+            file.path() + " (" + entry.id() + ")", factory.createFromBytes(project, beforeBytes, beforePath),
+            factory.createFromBytes(project, afterBytes, afterPath),
+            SyncBundle.message("history.before"), entry.author() + " · " + stamp(FULL, entry.time())));
+        }
+        catch (IOException e) {
+          DiffManager.getInstance().showDiff(project, new MessageDiffRequest(e.getMessage()));
+        }
       });
     });
   }
 
-  /** Git 은 「해시:./경로」(작업 폴더 기준), SVN 은 「저장소 URL@리비전」. 그 시점에 파일이 없으면 빈 문자열. */
-  private static String contentAt(Loaded source, History.Entry entry, History.FileChange file, boolean before) throws InterruptedException {
+  /** Git 은 「해시:./경로」(작업 폴더 기준, 직전은 첫 부모), SVN 은 「저장소 URL@리비전」. 실패는 IOException. */
+  private static byte[] contentAt(Loaded source, History.Entry entry, String path, boolean before) throws IOException, InterruptedException {
+    File dir = source.target().dir();
+    if (source.target().vcs() == SyncPanel.Vcs.GIT) {
+      return SyncPanel.gitBytes(dir, "show", entry.id() + (before ? "^" : "") + ":./" + path);
+    }
+    long rev;
     try {
-      if (source.target().vcs() == SyncPanel.Vcs.GIT) {
-        return SyncPanel.git(source.target().dir(), "show", entry.id() + (before ? "^" : "") + ":./" + file.path());
-      }
-      long rev = Long.parseLong(entry.id()) - (before ? 1 : 0);
-      return SyncPanel.run(source.target().dir(), "svn", "cat", source.svnRoot() + source.svnPrefix() + "/" + file.path() + "@" + rev);
+      rev = Long.parseLong(entry.id()) - (before ? 1 : 0);
     }
-    catch (IOException | NumberFormatException e) {
-      return "";
+    catch (NumberFormatException e) {
+      throw new IOException("svn 리비전을 읽지 못했습니다: " + entry.id());
     }
+    return SyncPanel.runBytes(dir, CAT_TIMEOUT_SEC, "svn", "cat", source.svnRoot() + source.svnPrefix() + "/" + path + "@" + rev);
   }
 
   /** 화면 글 묶음에 적힌 시간 모양. 오전 · 오후 글자는 history.locale 을 따른다. */
@@ -667,8 +731,14 @@ final class ProjectHistoryPanel extends JPanel {
     return DateTimeFormatter.ofPattern(SyncBundle.message(key), TIME_LOCALE);
   }
 
-  /** 표에 보일 시간: 한 시간 안은 「N분 전」, 오늘 · 어제는 「오늘 HH:mm」 · 「어제 HH:mm」, 올해는 월-일 시각, 그 전은 날짜만(모양은 화면 글 묶음). */
+  /** 시간을 모양대로. 날짜가 없는 리비전(SVN 권한 없음, Instant.EPOCH)은 빈 글. */
+  private static String stamp(DateTimeFormatter format, Instant time) {
+    return Instant.EPOCH.equals(time) ? "" : format.format(time.atZone(ZONE));
+  }
+
+  /** 표에 보일 시간: 날짜가 없으면 빈 글, 한 시간 안은 「N분 전」, 오늘 · 어제는 「오늘 HH:mm」 · 「어제 HH:mm」, 올해는 월-일 시각, 그 전은 날짜만(모양은 화면 글 묶음). */
   static String when(Instant time) {
+    if (Instant.EPOCH.equals(time)) return "";
     Duration ago = Duration.between(time, Instant.now());
     if (!ago.isNegative() && ago.toMinutes() < MINUTES_PER_HOUR) return SyncBundle.message("history.minutes.ago", Math.max(1, ago.toMinutes()));
     ZonedDateTime at = time.atZone(ZONE);
@@ -689,10 +759,14 @@ final class ProjectHistoryPanel extends JPanel {
     return palette[lane % palette.length];
   }
 
-  private static Color refColor(String ref, boolean head) {
+  /** 알약 색. 원격 브랜치는 원격 이름(remotes)으로 시작하는 것만이라 feature/x 같은 로컬 브랜치는 로컬 색. */
+  private static Color refColor(String ref, boolean head, List<String> remotes) {
     if (head) return HEAD_COLOR;
     if (ref.startsWith(TAG_PREFIX)) return TAG_COLOR;
-    return ref.contains("/") ? REMOTE_COLOR : LOCAL_COLOR;
+    for (String remote : remotes) {
+      if (ref.startsWith(remote + "/")) return REMOTE_COLOR;
+    }
+    return LOCAL_COLOR;
   }
 
   /** 현재 브랜치 알약 안에 그릴 브랜치 아이콘(알약 글자색으로 물들임). 다른 알약은 null. */
@@ -760,7 +834,7 @@ final class ProjectHistoryPanel extends JPanel {
       int w = 0;
       for (String ref : refs) {
         boolean isHead = ref.equals(head);
-        w += pillWidth(fm, ref, pillIcon(isHead, refColor(ref, isHead))) + JBUI.scale(GAP) / 2;
+        w += pillWidth(fm, ref, pillIcon(isHead, refColor(ref, isHead, List.of()))) + JBUI.scale(GAP) / 2;
       }
       return new Dimension(w + 1, JBUI.scale(PILL_H) + 1);
     }
@@ -774,7 +848,7 @@ final class ProjectHistoryPanel extends JPanel {
       int x = 0;
       for (String ref : refs) {
         boolean isHead = ref.equals(head);
-        Color color = refColor(ref, isHead);
+        Color color = refColor(ref, isHead, List.of());
         x += paintPill(this, g2, ref, color, pillIcon(isHead, color), x, 0) + JBUI.scale(GAP) / 2;
       }
       g2.dispose();
@@ -886,7 +960,7 @@ final class ProjectHistoryPanel extends JPanel {
       String head = loaded == null ? null : loaded.branch();
       for (String ref : entry.refs()) {
         boolean isHead = ref.equals(head);
-        Color color = refColor(ref, isHead);
+        Color color = refColor(ref, isHead, loaded == null ? List.of() : loaded.remotes());
         Icon icon = pillIcon(isHead, color);
         if (pillX + pillWidth(fm, ref, icon) > w - gap) break;
         pillX += paintPill(this, g2, ref, color, icon, pillX, cy - JBUI.scale(PILL_H) / 2) + gap / 2;

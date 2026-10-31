@@ -19,6 +19,8 @@ import java.util.List;
  * 이미 추적 중인 파일에는 효과가 없다(그건 git rm --cached 로 빼야 한다). .git 이 폴더가 아닌 저장소(worktree · submodule)는 건너뛴다.
  * 이클립스 파일(.project · .classpath)을 커밋해 쓰는 저장소(회사 저장소)는 새로 생긴 이클립스 파일도 커밋해야 하므로
  * 이클립스 줄(ECLIPSE_LINES)을 넣지 않고, 예전에 넣었으면 뺀다. 추적 여부는 git ls-files 로 보므로 작업 스레드에서 돈다.
+ * 빼는 것은 우리 표시 줄(MARKER) 바로 아래에 이어진 우리 줄뿐이다. 사용자가 직접 적은 줄은 지우지 않는다.
+ * 매핑이 바뀔 때마다 도는 갱신은 한 번에 하나씩 돈다(LOCK). 같은 exclude 를 둘이 동시에 읽고 쓰지 않는다.
  */
 public final class ExcludeIdeFiles implements VcsListener {
 
@@ -27,6 +29,8 @@ public final class ExcludeIdeFiles implements VcsListener {
     private static final List<String> ECLIPSE_LINES = List.of(".project", ".classpath", ".settings/");
     // 저장소 어디든 추적 중인 이클립스 설정 파일.
     private static final String[] TRACKED_ECLIPSE = {"ls-files", "--", ":(glob)**/.project", ":(glob)**/.classpath"};
+    private static final String MARKER = "# EI IDE: IDE 가 만드는 파일. 변경 목록에 띄우지 않는다.";
+    private static final Object LOCK = new Object();
 
     private final Project project;
 
@@ -40,6 +44,12 @@ public final class ExcludeIdeFiles implements VcsListener {
     }
 
     private void update() {
+        synchronized (LOCK) {
+            updateLocked();
+        }
+    }
+
+    private void updateLocked() {
         for (VcsRoot root : ProjectLevelVcsManager.getInstance(project).getAllVcsRoots()) {
             if (root.getVcs() == null || !"Git".equals(root.getVcs().getName())) {
                 continue;
@@ -51,10 +61,7 @@ public final class ExcludeIdeFiles implements VcsListener {
             try {
                 boolean eclipseTracked = !SyncPanel.git(root.getPath().toNioPath().toFile(), TRACKED_ECLIPSE).isBlank();
                 List<String> have = Files.exists(exclude) ? Files.readAllLines(exclude, StandardCharsets.UTF_8) : List.of();
-                List<String> out = new ArrayList<>(have);
-                if (eclipseTracked) {
-                    out.removeAll(ECLIPSE_LINES);
-                }
+                List<String> out = eclipseTracked ? withoutOurEclipseLines(have) : new ArrayList<>(have);
                 List<String> add = new ArrayList<>();
                 for (String line : eclipseTracked ? IDE_LINES : concat(IDE_LINES, ECLIPSE_LINES)) {
                     if (!have.contains(line)) {
@@ -62,7 +69,7 @@ public final class ExcludeIdeFiles implements VcsListener {
                     }
                 }
                 if (!add.isEmpty()) {
-                    out.add("# EI IDE: IDE 가 만드는 파일. 변경 목록에 띄우지 않는다.");
+                    out.add(MARKER);
                     out.addAll(add);
                 }
                 if (out.equals(have)) {
@@ -76,6 +83,33 @@ public final class ExcludeIdeFiles implements VcsListener {
             } catch (Exception e) {
                 LOG.warn("exclude 갱신 실패: " + exclude, e);
             }
+        }
+    }
+
+    /** 우리 표시 줄 바로 아래 이어진 우리 줄(IDE_LINES · ECLIPSE_LINES) 중 이클립스 줄을 뺀다. 그래서 비는 묶음은 표시 줄도 뺀다. 그 밖의 줄은 그대로 둔다. */
+    static List<String> withoutOurEclipseLines(List<String> lines) {
+        List<String> out = new ArrayList<>();
+        // out 안에서 지금 묶음의 표시 줄 위치. 묶음 밖이면 -1.
+        int marker = -1;
+        for (String line : lines) {
+            boolean ours = IDE_LINES.contains(line) || ECLIPSE_LINES.contains(line);
+            if (marker >= 0 && ours) {
+                if (!ECLIPSE_LINES.contains(line)) {
+                    out.add(line);
+                }
+                continue;
+            }
+            dropEmptyBlock(out, marker);
+            marker = line.equals(MARKER) ? out.size() : -1;
+            out.add(line);
+        }
+        dropEmptyBlock(out, marker);
+        return out;
+    }
+
+    private static void dropEmptyBlock(List<String> out, int marker) {
+        if (marker >= 0 && marker == out.size() - 1) {
+            out.remove(marker);
         }
     }
 

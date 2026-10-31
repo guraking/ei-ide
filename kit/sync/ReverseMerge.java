@@ -43,8 +43,8 @@ final class ReverseMerge {
   /** 들어올 파일 하나. author · when · subject 는 기준 브랜치에서 이 파일을 마지막으로 바꾼 커밋. */
   record Incoming(String path, String author, String when, String subject, boolean mine) {}
 
-  /** 미리 보기: 들어올 커밋 수와 파일(내 파일이 앞). */
-  record Preview(int commits, List<Incoming> files) {
+  /** 미리 보기: 들어올 커밋 수와 파일(내 파일이 앞). fromTip 은 미리 본 From 커밋(합칠 때 이 커밋을 합친다). */
+  record Preview(int commits, List<Incoming> files, String fromTip) {
     int mineCount() {
       int n = 0;
       for (Incoming f : files) if (f.mine()) n++;
@@ -52,7 +52,8 @@ final class ReverseMerge {
     }
   }
 
-  enum Result { MERGED, CONFLICT }
+  /** CONFLICT_STASHED 는 충돌이고 이번 합치기가 커밋 안 한 변경을 Stash 해 두었다(finish 에 stashed 로 넘긴다). */
+  enum Result { MERGED, CONFLICT, CONFLICT_STASHED }
 
   /** 커밋 안 한 변경이 있어 합치지 않았다. stash 를 참으로 다시 부르면 그 변경을 Stash 해 두고 합친다. */
   static final class DirtyException extends IOException {
@@ -61,6 +62,8 @@ final class ReverseMerge {
 
   /** 합치기 전에 커밋 안 한 변경을 넣어 두는 Stash 의 이름. 되살릴 때 맨 위 Stash 가 이 이름일 때만 꺼낸다(남의 Stash 를 꺼내지 않게). */
   static final String STASH_MESSAGE = "EI Merge Branches";
+  /** 미리 본 커밋(해시)을 합칠 때의 합치기 커밋 메시지. git 이 원격 브랜치를 이름으로 합칠 때 쓰는 문구와 같다(원격/브랜치, into). */
+  private static final String MERGE_MESSAGE = "Merge remote-tracking branch '%s' into %s";
 
   private ReverseMerge() {}
 
@@ -275,33 +278,45 @@ final class ReverseMerge {
     String f = remoteRef(remote, from);
     String i = intoTip(remote, into, current);
     String email = cfg.get("user.email");
+    // shortcut: rev-parse 를 다른 명령과 동시에 돌려, 그 사이 자동 fetch 가 From 을 바꾸면 목록과 fromTip 이 어긋날 수 있다. 어긋남이 보이면 먼저 rev-parse 만 따로 돌린다.
     List<String[]> first = new ArrayList<>(List.of(
       new String[]{"rev-list", "--count", i + ".." + f},
       new String[]{"diff", "--name-only", i + "..." + f},
-      new String[]{"diff", "--name-only", f + "..." + i}));
-    if (into.equals(current)) first.add(new String[]{"diff", "--name-only", "HEAD"});
+      new String[]{"diff", "--name-only", f + "..." + i},
+      new String[]{"rev-parse", f}));
+    // --no-optional-locks: 작업본과 비교하는 diff 가 index.lock 을 잡아 IntelliJ 의 커밋 · 체크아웃을 막지 않게 한다.
+    if (into.equals(current)) first.add(new String[]{"--no-optional-locks", "diff", "--name-only", "HEAD"});
     if (email != null) first.add(new String[]{"log", "--author=" + email, "--since=" + MINE_DAYS + ".days", "--format=", "--name-only", f, i});
     List<String> out = gitAll(root, first);
     int commits = Integer.parseInt(out.get(0).trim());
     Set<String> theirs = lines(out.get(1));
     Set<String> mine = lines(out.get(2));
-    for (int k = 3; k < out.size(); k++) mine.addAll(lines(out.get(k)));
-    if (theirs.isEmpty()) return new Preview(commits, plan(theirs, mine, Map.of()));
+    String fromTip = out.get(3).trim();
+    for (int k = 4; k < out.size(); k++) mine.addAll(lines(out.get(k)));
+    if (theirs.isEmpty()) return new Preview(commits, plan(theirs, mine, Map.of()), fromTip);
     // 들어올 파일이 있을 때만: 누가 고쳤나(남의 커밋 가리기)와 파일별 마지막 커밋.
     List<String> logs = gitAll(root, List.of(new String[]{"log", AUTHOR_FORMAT, "--name-only", i + ".." + f},
                                              new String[]{"log", LOG_FORMAT, LOG_DATE, "--name-only", i + ".." + f}));
     if (!mine.isEmpty()) mine.retainAll(touchedByOthers(logs.get(0), cfg.get("user.name"), email));
-    return new Preview(commits, plan(theirs, mine, parseLog(logs.get(1))));
+    return new Preview(commits, plan(theirs, mine, parseLog(logs.get(1))), fromTip);
+  }
+
+  /** merge 와 같고 지금 받아 둔 From(remoteRef)을 합친다. */
+  static Result merge(File root, String remote, String from, String into, String current, boolean push, boolean stash) throws IOException, InterruptedException {
+    return merge(root, remote, from, git(root, "rev-parse", remoteRef(remote, from)).trim(), into, current, push, stash);
   }
 
   /**
-   * into 로 옮겨(지금 브랜치가 아니면) 서버 개인 브랜치를 먼저 따라잡고(fast-forward 만), from 을 합친다. 충돌이면 CONFLICT(into 에서 합치기 상태로 둔다).
+   * into 로 옮겨(지금 브랜치가 아니면) 서버 개인 브랜치를 먼저 따라잡고(fast-forward 만), from 의 fromTip 커밋을 합친다. 충돌이면 CONFLICT(into 에서 합치기 상태로 둔다).
+   * fromTip 은 미리 본 From 커밋이다. 그 뒤 자동 fetch 가 From 을 새로 받아 와도 미리 보기에 없던 커밋은 합치지 않는다.
    * push 면 합친 뒤 서버 개인 브랜치로 올린다. 서버 개인 브랜치와 내 것이 갈라져 있으면 합치기 전에 멈춘다.
    * 커밋 안 한 변경(새 파일 빼고)이 있으면 stash 가 거짓이면 아무것도 하지 않고 DirtyException 으로 멈춘다. 그 상태로 합치다 충돌이 나 합치기를 취소하면 git 이 그 변경을 되살리지 못할 수 있다.
-   * stash 가 참이면 그 변경을 Stash(STASH_MESSAGE) 해 두고 합친 뒤 원래 브랜치에서 되살린다. 실패해도 되살린다. 충돌이면 Stash 를 두고, finish 가 마무리한 뒤 되살린다.
-   * into 로 옮겼으면 끝난 뒤(실패 포함, 충돌 빼고) 원래 브랜치로 돌아온다.
+   * stash 가 참이면 그 변경을 Stash(STASH_MESSAGE) 해 두고 합친 뒤 원래 브랜치에서 되살린다. 실패해도(into 로 옮기기 실패 포함) 원래 브랜치로 돌아가 되살린다.
+   * 충돌이면 Stash 를 두고 CONFLICT_STASHED 를 돌려준다. finish 가 마무리한 뒤 되살린다.
+   * into 로 옮겼으면 끝난 뒤(실패 포함, 충돌 빼고) 원래 브랜치로 돌아온다. 되살리지 못하면 그 안내를 예외 메시지에 붙인다.
    */
-  static Result merge(File root, String remote, String from, String into, String current, boolean push, boolean stash) throws IOException, InterruptedException {
+  static Result merge(File root, String remote, String from, String fromTip, String into, String current, boolean push, boolean stash)
+    throws IOException, InterruptedException {
     boolean stashed = false;
     if (!lines(git(root, "status", "--porcelain", "-uno")).isEmpty()) {
       if (!stash) throw new DirtyException();
@@ -310,16 +325,16 @@ final class ReverseMerge {
     }
     String intoRemote = remoteRef(remote, into);
     boolean switched = !into.equals(current);
-    if (switched) {
-      if (hasRef(root, HEADS + into)) git(root, GIT_LONG_TIMEOUT_SEC, "checkout", into);
-      else {
-        // --track 은 fetch 설정이 그 브랜치를 받지 않으면(개인 브랜치만 받는 clone) 실패해서, 추적 설정을 직접 적는다.
-        git(root, GIT_LONG_TIMEOUT_SEC, "checkout", "-b", into, intoRemote);
-        saveConfig(root, "branch." + into + ".remote", remote);
-        saveConfig(root, "branch." + into + ".merge", HEADS + into);
-      }
-    }
     try {
+      if (switched) {
+        if (hasRef(root, HEADS + into)) git(root, GIT_LONG_TIMEOUT_SEC, "checkout", into);
+        else {
+          // --track 은 fetch 설정이 그 브랜치를 받지 않으면(개인 브랜치만 받는 clone) 실패해서, 추적 설정을 직접 적는다.
+          git(root, GIT_LONG_TIMEOUT_SEC, "checkout", "-b", into, intoRemote);
+          saveConfig(root, "branch." + into + ".remote", remote);
+          saveConfig(root, "branch." + into + ".merge", HEADS + into);
+        }
+      }
       if (Integer.parseInt(git(root, "rev-list", "--count", "HEAD.." + intoRemote).trim()) > 0) {
         try {
           git(root, GIT_LONG_TIMEOUT_SEC, "merge", "--ff-only", intoRemote);
@@ -329,20 +344,18 @@ final class ReverseMerge {
         }
       }
       try {
-        git(root, GIT_LONG_TIMEOUT_SEC, "merge", "--no-edit", remoteRef(remote, from));
+        git(root, GIT_LONG_TIMEOUT_SEC, "merge", "--no-edit", "-m", String.format(MERGE_MESSAGE, remote + "/" + from, into), fromTip);
       }
       catch (IOException e) {
-        if (!conflicts(root).isEmpty()) return Result.CONFLICT;
+        if (!conflicts(root).isEmpty()) return stashed ? Result.CONFLICT_STASHED : Result.CONFLICT;
         throw e;
       }
-      push(root, remote, into, push);
+      push(root, remote, into, push, switched);
+      if (switched) git(root, GIT_LONG_TIMEOUT_SEC, "checkout", current);
     }
     catch (IOException e) {
-      if (switched) checkoutBack(root, current, e);
-      if (stashed) unstashAfterFailure(root, e);
-      throw e;
+      throw restore(root, current, switched, stashed, e);
     }
-    if (switched) git(root, GIT_LONG_TIMEOUT_SEC, "checkout", current);
     if (stashed) unstash(root);
     return Result.MERGED;
   }
@@ -358,14 +371,23 @@ final class ReverseMerge {
     }
   }
 
-  /** 합치기가 실패한 뒤 Stash 를 되살린다. 되살리지 못해도 cause 를 그대로 알리도록 그 실패는 cause 에 덧붙인다. */
-  private static void unstashAfterFailure(File root, IOException cause) throws InterruptedException {
-    try {
-      unstash(root);
+  /**
+   * 합치기가 실패한 뒤: into 로 옮겼으면 원래 브랜치(current)로 돌아가고, stashed 면 거기서 Stash 를 되살린다.
+   * 돌아가지 못했거나 되살리지 못하면 Stash 는 그대로 두고, 원래 브랜치에서 되살리라는 안내를 cause 메시지에 붙인 예외를 돌려준다.
+   */
+  private static IOException restore(File root, String current, boolean switched, boolean stashed, IOException cause) throws InterruptedException {
+    boolean back = !switched || checkoutBack(root, current, cause);
+    if (!stashed) return cause;
+    if (back) {
+      try {
+        unstash(root);
+        return cause;
+      }
+      catch (IOException e) {
+        cause.addSuppressed(e);
+      }
     }
-    catch (IOException e) {
-      cause.addSuppressed(e);
-    }
+    return new IOException(cause.getMessage() + "\n" + SyncBundle.message("rmerge.stash.left", current), cause);
   }
 
   /** 아직 해결하지 않은 충돌 파일(저장소 기준 경로). */
@@ -373,45 +395,61 @@ final class ReverseMerge {
     return lines(git(root, "diff", "--name-only", "--diff-filter=U"));
   }
 
+  /** finish 와 같고 합치기 전에 Stash 하지 않은 합치기를 마무리한다. */
+  static boolean finish(File root, String remote, String into, String current, boolean push) throws IOException, InterruptedException {
+    return finish(root, remote, into, current, push, false);
+  }
+
   /**
    * 충돌을 해결한 뒤 합치기를 마무리한다: 합치기 커밋, push 면 서버 개인 브랜치로 올리기, into 로 옮겼으면 원래 브랜치로 돌아오기.
    * 충돌이 남았거나 합치기를 취소해(MERGE_HEAD 없음) 마무리할 것이 없으면 false 를 돌려주고 아무것도 하지 않는다.
-   * 마무리했으면 합치기 전에 넣어 둔 Stash 가 있을 때 되살린다(unstash).
+   * stashed 는 이 합치기가 Stash 를 했는지(merge 가 CONFLICT_STASHED 를 돌려줬는지)다. 참일 때만 원래 브랜치에서 되살린다(unstash).
+   * push · 돌아오기가 실패해도 원래 브랜치로 돌아가 되살린다. 커밋이 실패하면 into 에 남고, Stash 가 남았다는 안내를 붙인다.
    */
-  static boolean finish(File root, String remote, String into, String current, boolean push) throws IOException, InterruptedException {
+  static boolean finish(File root, String remote, String into, String current, boolean push, boolean stashed) throws IOException, InterruptedException {
     if (!hasRef(root, "MERGE_HEAD") || !conflicts(root).isEmpty()) return false;
-    git(root, "commit", "--no-edit");
-    boolean switched = !into.equals(current);
     try {
-      push(root, remote, into, push);
+      git(root, "commit", "--no-edit");
     }
     catch (IOException e) {
-      if (switched) checkoutBack(root, current, e);
-      throw e;
+      if (!stashed) throw e;
+      throw new IOException(e.getMessage() + "\n" + SyncBundle.message("rmerge.stash.left", current), e);
     }
-    if (switched) git(root, GIT_LONG_TIMEOUT_SEC, "checkout", current);
-    unstash(root);
+    boolean switched = !into.equals(current);
+    try {
+      push(root, remote, into, push, switched);
+      if (switched) git(root, GIT_LONG_TIMEOUT_SEC, "checkout", current);
+    }
+    catch (IOException e) {
+      throw restore(root, current, switched, stashed, e);
+    }
+    if (stashed) unstash(root);
     return true;
   }
 
-  /** 합친 결과를 서버 개인 브랜치로 올린다. 실패하면 합치기는 내 PC 에 남아 있다는 안내를 붙인다. */
-  private static void push(File root, String remote, String into, boolean push) throws IOException, InterruptedException {
+  /**
+   * 합친 결과를 서버 개인 브랜치로 올린다. 실패하면 합치기는 내 PC 에 남아 있다는 안내를 붙인다.
+   * switched(into 로 옮겨 합침)면 Merge Branches 를 다시 하면 올라가고, 아니면(지금 브랜치) 다시 열어도 합칠 것이 없어 Git → Push 로 올리라고 안내한다.
+   */
+  private static void push(File root, String remote, String into, boolean push, boolean switched) throws IOException, InterruptedException {
     if (!push) return;
     try {
       GitRemoteAuth.run(root, GIT_LONG_TIMEOUT_SEC, true, "push", remote, "HEAD:" + HEADS + into);
     }
     catch (IOException e) {
-      throw new IOException(e.getMessage() + "\n" + SyncBundle.message("rmerge.push.failed", into), e);
+      throw new IOException(e.getMessage() + "\n" + SyncBundle.message(switched ? "rmerge.push.failed" : "rmerge.push.failed.current", into), e);
     }
   }
 
-  /** 원래 브랜치로 돌아간다. 돌아가지 못해도 cause 를 그대로 알리도록 그 실패는 cause 에 덧붙인다. */
-  private static void checkoutBack(File root, String branch, IOException cause) throws InterruptedException {
+  /** 원래 브랜치로 돌아간다. 돌아가지 못하면 false. cause 를 그대로 알리도록 그 실패는 cause 에 덧붙인다. */
+  private static boolean checkoutBack(File root, String branch, IOException cause) throws InterruptedException {
     try {
       git(root, GIT_LONG_TIMEOUT_SEC, "checkout", branch);
+      return true;
     }
     catch (IOException e) {
       cause.addSuppressed(e);
+      return false;
     }
   }
 
