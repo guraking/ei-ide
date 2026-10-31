@@ -185,14 +185,23 @@ final class ProjectHistoryPanel extends JPanel {
   // 표에 보이는 커밋(찾기로 거른 뒤). 가지 선을 그릴 때는 loaded.entries() 와 순서 · 개수가 같다.
   private final List<History.Entry> shown = new ArrayList<>();
   private final CommitModel commitModel = new CommitModel();
-  // 풍선 도움말: 작성자와 긴 날짜(표에는 짧은 시간만 보인다).
+  // 풍선 도움말: 작성자 · 메일과 긴 날짜(표에는 짧은 시간만 보인다). 줄 전체가 같은 글이라 Swing 은 처음 뜬 자리에 그대로 두므로,
+  // 마우스 가로 위치 · 그 줄 바로 아래로 자리를 매번 알려 마우스를 따라오게 한다.
   private final JBTable commits = new JBTable(commitModel) {
     @Override
     public String getToolTipText(MouseEvent e) {
       int i = rowAtPoint(e.getPoint());
       if (i < 0 || i >= shown.size()) return null;
       History.Entry entry = shown.get(i);
-      return entry.author() + " · " + stamp(ROW_TIME, entry.time());
+      return authorWithEmail(entry) + " · " + stamp(ROW_TIME, entry.time());
+    }
+
+    @Override
+    public Point getToolTipLocation(MouseEvent e) {
+      int i = rowAtPoint(e.getPoint());
+      if (i < 0) return null;
+      Rectangle row = getCellRect(i, 0, true);
+      return new Point(e.getX(), row.y + row.height);
     }
   };
   private final JBList<History.FileChange> files = new JBList<>();
@@ -361,6 +370,11 @@ final class ProjectHistoryPanel extends JPanel {
       PropertiesComponent.getInstance().setValue(ME_ALIASES_KEY, String.join("\n", aliases), "");
       load();
     }
+  }
+
+  /** 「작성자 <메일>」. 메일이 없으면(SVN) 작성자만. */
+  private static String authorWithEmail(History.Entry entry) {
+    return entry.email().isEmpty() ? entry.author() : entry.author() + " <" + entry.email() + ">";
   }
 
   /** 표 칸 폭을 고정한다. 남는 폭은 메시지 칸이 차지한다. */
@@ -797,7 +811,7 @@ final class ProjectHistoryPanel extends JPanel {
     subject.setVisible(true);
     message.setText(body);
     message.setVisible(!body.isEmpty());
-    meta.setText(entry.author() + " · " + when(entry.time()) + " · ");
+    meta.setText(authorWithEmail(entry) + " · " + when(entry.time()) + " · ");
     meta.setToolTipText(stamp(FULL, entry.time()));
     hash.setText(shortId(entry));
     metaRow.setVisible(true);
