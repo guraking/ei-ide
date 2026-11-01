@@ -68,6 +68,11 @@ import com.intellij.ui.TreeSpeedSearch;
 import com.intellij.ui.SimpleColoredComponent;
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.actionSystem.ActionToolbar;
+import com.intellij.openapi.actionSystem.Presentation;
+import com.intellij.openapi.actionSystem.ex.CustomComponentAction;
+import com.intellij.openapi.actionSystem.impl.ActionButtonWithText;
+import com.intellij.ide.ui.AntialiasingType;
+import com.intellij.util.ui.GraphicsUtil;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.CommonShortcuts;
 import com.intellij.openapi.actionSystem.CompositeShortcutSet;
@@ -1566,7 +1571,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
   }
 
   /** 도구줄 보기 거르기. 넷 중 하나만 눌린 상태(라디오)이고, kind 가 null 이면 전체. 아이콘 없이 글만 보인다. */
-  private final class ModeAction extends DumbAwareToggleAction {
+  private final class ModeAction extends DumbAwareToggleAction implements CustomComponentAction {
     private final Kind kind;
 
     ModeAction(String key, Kind kind) {
@@ -1577,6 +1582,22 @@ final class SyncPanel extends SimpleToolWindowPanel {
 
     @Override public @NotNull ActionUpdateThread getActionUpdateThread() { return ActionUpdateThread.EDT; }
     @Override public boolean isSelected(@NotNull AnActionEvent e) { return modeFilter == kind; }
+
+    /**
+     * 도구줄 기본 글 단추와 같되, 글 폭을 그릴 때와 같은 글꼴 다듬기(안티에일리어싱)로 잰다.
+     * 기본 단추는 다듬기 없이 폭을 재고 다듬기를 켜고 그려서, 두 경우 한글 글자 폭이 다른 글꼴(힌팅된 EI Mono)에서는
+     * 글이 단추보다 넓게 그려져 옆 단추 글과 겹친다. 다듬기 설정을 바꾸면 updateUI 가 다시 불려 새 값으로 잰다.
+     */
+    @Override
+    public @NotNull JComponent createCustomComponent(@NotNull Presentation presentation, @NotNull String place) {
+      return new ActionButtonWithText(this, presentation, place, ActionToolbar.DEFAULT_MINIMUM_BUTTON_SIZE) {
+        @Override
+        public void updateUI() {
+          super.updateUI();
+          GraphicsUtil.setAntialiasingType(this, AntialiasingType.getAATextInfoForSwingComponent());
+        }
+      };
+    }
 
     @Override
     public void setSelected(@NotNull AnActionEvent e, boolean state) {
