@@ -5,7 +5,9 @@ import com.intellij.diff.DiffContentFactory;
 import com.intellij.diff.DiffManager;
 import com.intellij.diff.requests.MessageDiffRequest;
 import com.intellij.diff.requests.SimpleDiffRequest;
+import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.project.ModuleListener;
 import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.ide.CopyPasteManager;
 import com.intellij.openapi.module.Module;
@@ -68,6 +70,7 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * 아래쪽 「Git Log」 창. 왼쪽 저장소(모듈) 목록에서 고르면 그 폴더 안을 바꾼 최근 커밋을 표로 보여 준다.
@@ -224,7 +227,7 @@ final class ProjectHistoryPanel extends JPanel {
   // 읽어 온 줄 가운데 가장 많은 가지 수(가지 선을 그리지 않으면 1). 가지 간격을 칸 폭에 맞출 때 쓴다.
   private int graphLanes = 1;
 
-  ProjectHistoryPanel(Project project) {
+  ProjectHistoryPanel(Project project, Disposable parent) {
     super(new BorderLayout());
     this.project = project;
 
@@ -327,6 +330,17 @@ final class ProjectHistoryPanel extends JPanel {
     add(repos, BorderLayout.CENTER);
 
     reloadTargets();
+    // Clone · Close Project · Open Project · 모듈 가져오기 뒤 저장소 목록을 바로 다시 채운다. 한 번에 여러 모듈이 바뀌어도 한 번만 읽는다.
+    AtomicBoolean reloadQueued = new AtomicBoolean();
+    Runnable queueReload = () -> {
+      if (reloadQueued.compareAndSet(false, true)) {
+        ApplicationManager.getApplication().invokeLater(() -> { reloadQueued.set(false); reloadTargets(); }, project.getDisposed());
+      }
+    };
+    project.getMessageBus().connect(parent).subscribe(ModuleListener.TOPIC, new ModuleListener() {
+      @Override public void modulesAdded(@NotNull Project p, @NotNull List<? extends Module> modules) { queueReload.run(); }
+      @Override public void moduleRemoved(@NotNull Project p, @NotNull Module module) { queueReload.run(); }
+    });
   }
 
   private void selectRowAt(MouseEvent e) {
@@ -449,7 +463,8 @@ final class ProjectHistoryPanel extends JPanel {
       File dir = new File(roots[0].getPath());
       byDir.putIfAbsent(dir, target(module.getName(), dir));
     }
-    if (byDir.isEmpty() && project.getBasePath() != null) {
+    // 저장소를 모두 닫은 워크스페이스처럼 프로젝트 폴더가 Git · SVN 저장소가 아니면 넣지 않는다(기록을 읽지 못한다). 목록은 「모듈 없음」.
+    if (byDir.isEmpty() && project.getBasePath() != null && SyncPanel.underVcs(new File(project.getBasePath()))) {
       File base = new File(project.getBasePath());
       byDir.put(base, target(project.getName(), base));
     }
@@ -1285,7 +1300,7 @@ final class ProjectHistoryPanel extends JPanel {
 
     @Override
     public void createToolWindowContent(@NotNull Project project, @NotNull ToolWindow toolWindow) {
-      toolWindow.getContentManager().addContent(ContentFactory.getInstance().createContent(new ProjectHistoryPanel(project), "", false));
+      toolWindow.getContentManager().addContent(ContentFactory.getInstance().createContent(new ProjectHistoryPanel(project, toolWindow.getDisposable()), "", false));
     }
   }
 }
