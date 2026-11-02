@@ -413,7 +413,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
       scroll.setBorder(JBUI.Borders.customLine(JBColor.border(), 1, 0, 1, 0));
       scroll.setPreferredSize(JBUI.size(TABLE_W, TABLE_H));
 
-      // 단계 3: 합친 뒤 Push 여부. 커밋 안 한 변경은 합칠 때 Stash 할지 묻는다(runMerge).
+      // 단계 3: 합친 뒤 Push 여부. 커밋 안 한 변경이 합칠 파일과 겹치면 합칠 때 Stash 할지 묻는다(runMerge).
       push.setBorder(JBUI.Borders.emptyLeft(STEP_INDENT));
       JBLabel stashHint = dim(SyncBundle.message("rmerge.stash.hint", SyncBundle.message("rmerge.stash.button")));
       stashHint.setBorder(JBUI.Borders.emptyLeft(STEP_INDENT));
@@ -601,7 +601,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
     }
 
     /**
-     * 작업 스레드에서 from 의 tip(미리 본 커밋)을 합친다. 커밋 안 한 변경이 있어 멈추면(DirtyException) Stash 해 두고 합칠지 묻고, 고르면 stash 를 참으로 다시 한다.
+     * 작업 스레드에서 from 의 tip(미리 본 커밋)을 합친다. 커밋 안 한 변경이 합칠 파일과 겹쳐 멈추면(DirtyException) Stash 해 두고 합칠지 묻고, 고르면 stash 를 참으로 다시 한다.
      * 충돌이면 충돌 창을 띄워 마무리한다(resolveThenFinish).
      */
     private void runMerge(String from, String tip, String into, boolean pushAfter, boolean stash) {
