@@ -387,7 +387,7 @@ final class History {
 
   /**
    * 커밋마다 다른 쪽 소스를 건드린 파일(커밋 id → 목록, 없으면 빠짐). entries 는 최근 것부터(git log 순서). 다른 사람끼리 · 내 커밋끼리는 보지 않는다.
-   * 오래된 커밋부터 보며 나 · 다른 사람 커밋이 만든 「경로 + 내용 해시」를 따로 기억하고, 파일 변경이 다른 쪽이 만든 내용에서 출발한 것(직전 내용이 다른 쪽 판)을 본다.
+   * 오래된 커밋부터 보며 나 · 다른 사람의 보통 커밋이 만든 「경로 + 내용 해시」를 따로 기억하고(합치기 커밋은 어느 판의 주인도 되지 않는다), 파일 변경이 다른 쪽이 만든 내용에서 출발한 것(직전 내용이 다른 쪽 판)을 본다.
    * 내용 해시로 잇기 때문에 가지가 갈라져 있어도, rebase 로 다시 올린 커밋이어도 맞는다.
    * 결과가 그 판을 만든 커밋 직전 내용과 같으면 되돌림. 아니면 보통 커밋은 이어 고침,
    * 합치기 커밋은 sides(부모마다 따로 비교한 파일)로 본다: 한 부모와만 다른 파일은 다른 부모 판을 그대로 가져온 것이므로 직전 내용이 다른 쪽 판이면
@@ -422,8 +422,9 @@ final class History {
         if (paths.add(f.path())) found.add(new Clash(f, owner.entry(), owner.change(), kind, byMe));
       }
       if (!found.isEmpty()) result.put(entry.id(), found);
+      // 판의 주인은 그 내용을 직접 쓴 보통 커밋이다. 합치기는 받아 온 판을 옮기기만 하므로 주인을 바꾸지 않는다.
       Map<String, Version> own = byMe ? mine : theirs;
-      for (FileChange f : entry.files()) {
+      for (FileChange f : entry.merge() ? List.<FileChange>of() : entry.files()) {
         if (!f.newBlob().isEmpty()) own.put(f.path() + '\0' + f.newBlob(), new Version(entry, f));
       }
       List<List<FileChange>> perParent = sides.get(entry.id());
