@@ -104,6 +104,7 @@ final class ProjectHistoryPanel extends JPanel {
   private static final int ROW_H = 26;
   private static final int LANE_W = 16;
   private static final int GRAPH_PAD = 8;
+  // 가지 선 칸 처음 폭에 넣는 최대 가지 수. 더 많으면 칸 폭 안에 가지 간격을 좁혀 모두 그린다.
   private static final int MAX_LANES = 12;
   private static final int DOT = 7;
   // 표의 작성자 · 날짜 · 해시 칸 처음 폭(JBUI.scale 전, 끌어서 바꿀 수 있음). 메시지 칸이 나머지를 차지한다.
@@ -217,7 +218,8 @@ final class ProjectHistoryPanel extends JPanel {
   private int loadSeq;
   private int shownSeq;
   private boolean graph;
-  private int graphWidth;
+  // 읽어 온 줄 가운데 가장 많은 가지 수(가지 선을 그리지 않으면 1). 가지 간격을 칸 폭에 맞출 때 쓴다.
+  private int graphLanes = 1;
 
   ProjectHistoryPanel(Project project) {
     super(new BorderLayout());
@@ -242,14 +244,14 @@ final class ProjectHistoryPanel extends JPanel {
     commits.getTableHeader().setReorderingAllowed(false);
     commits.getTableHeader().setForeground(DIM);
     commits.setDefaultRenderer(Object.class, new CommitRenderer());
-    // 작성자 · 날짜 · 해시 칸은 머리글 경계를 끌어 넓히고 줄일 수 있다. 가지 선 칸만 폭을 고정한다(updateGraphWidth).
+    // 가지 선 · 작성자 · 날짜 · 해시 칸은 머리글 경계를 끌어 넓히고 줄일 수 있다(가지 선 칸 처음 폭은 updateGraphWidth).
     resizableWidth(commits.getColumnModel().getColumn(COL_AUTHOR), JBUI.scale(AUTHOR_COL_W), COL_AUTHOR);
     resizableWidth(commits.getColumnModel().getColumn(COL_TIME), JBUI.scale(TIME_COL_W), COL_TIME);
     resizableWidth(commits.getColumnModel().getColumn(COL_HASH), JBUI.scale(HASH_COL_W), COL_HASH);
     // 머리글 경계를 끌고 놓으면 그 폭을 기억해 다음에 창을 열 때 쓴다.
     commits.getTableHeader().addMouseListener(new MouseAdapter() {
       @Override public void mouseReleased(MouseEvent e) {
-        for (int col : new int[]{COL_AUTHOR, COL_TIME, COL_HASH}) {
+        for (int col : new int[]{COL_GRAPH, COL_AUTHOR, COL_TIME, COL_HASH}) {
           PropertiesComponent.getInstance().setValue(COL_WIDTH_KEY + col, commits.getColumnModel().getColumn(col).getWidth(), 0);
         }
       }
@@ -388,13 +390,6 @@ final class ProjectHistoryPanel extends JPanel {
     column.setMinWidth(min);
     column.setMaxWidth(max);
     column.setPreferredWidth(saved >= min && saved <= max ? saved : width);
-  }
-
-  /** 표 칸 폭을 고정한다. 남는 폭은 메시지 칸이 차지한다. */
-  private static void fixWidth(TableColumn column, int width) {
-    column.setMinWidth(width);
-    column.setMaxWidth(width);
-    column.setPreferredWidth(width);
   }
 
   /** 오른쪽: 굵은 제목, 본문, 흐린 작성자 · 날짜 · 고정폭 해시(누르면 복사), 꺾인 선 설명, 「바뀐 파일 N」 구분줄, 파일 목록, 맨 아래 안내. */
@@ -731,14 +726,14 @@ final class ProjectHistoryPanel extends JPanel {
     return word.isEmpty() || entry.subject().toLowerCase(Locale.ROOT).contains(word) || entry.author().toLowerCase(Locale.ROOT).contains(word);
   }
 
-  /** 가지 선 칸 폭. 가지 선을 그릴 때만 읽어 온 줄 가운데 가장 넓은 줄에 맞춘다. */
+  /** 가지 선 칸 처음 폭. 가지 선을 그릴 때만 읽어 온 줄 가운데 가장 넓은 줄에 맞춘다(MAX_LANES 까지). 끌어서 바꾼 폭은 기억한다. */
   private void updateGraphWidth() {
     int lanes = 1;
     if (graph) {
       for (History.Row row : loaded.rows()) lanes = Math.max(lanes, laneCount(row));
     }
-    graphWidth = JBUI.scale(Math.min(lanes, MAX_LANES) * LANE_W + GRAPH_PAD * 2);
-    fixWidth(commits.getColumnModel().getColumn(COL_GRAPH), graphWidth);
+    graphLanes = lanes;
+    resizableWidth(commits.getColumnModel().getColumn(COL_GRAPH), JBUI.scale(Math.min(lanes, MAX_LANES) * LANE_W + GRAPH_PAD * 2), COL_GRAPH);
   }
 
   /** 가지 선 · 점 · 글자 밝기의 뜻. 표 가운데에 풍선으로 띄우고 바깥을 누르면 닫는다. */
@@ -1155,8 +1150,11 @@ final class ProjectHistoryPanel extends JPanel {
       return this;
     }
 
+    /** 가지 가운데 x. 간격은 LANE_W 를 넘지 않고, 모든 가지(graphLanes)가 지금 칸 폭 안에 들어오게 좁아진다. */
     private int laneX(int lane) {
-      return JBUI.scale(GRAPH_PAD) + JBUI.scale(LANE_W) * lane + JBUI.scale(LANE_W) / 2;
+      int pad = JBUI.scale(GRAPH_PAD);
+      double step = Math.min(JBUI.scale(LANE_W), Math.max(1, getWidth() - pad * 2) / (double)graphLanes);
+      return pad + (int)Math.round(step * lane + step / 2);
     }
 
     @Override
