@@ -328,6 +328,13 @@ public class SyncCheck {
     eq(SyncPanel.git(mine, "show", "HEAD:B.java").contains("y"), true);
     eq(SyncPanel.git(mine, "stash", "list", "--format=%s").contains(ReverseMerge.STASH_MESSAGE), false);
     sh(mine, "git checkout -q -- A.java");
+    // 올리지 않은 내 커밋이 고친 파일(A.java)을 또 고쳐 두어도, 합치기가 그 파일을 건드리지 않으면 묻지 않는다.
+    sh(mine, "echo unpushed >> A.java && git commit -qam 올리기전 && echo dirty >> A.java");
+    sh(other, "echo e > E.java && git add E.java && git commit -qm e && git push -q origin develop");
+    ReverseMerge.fetch(mine, "origin", "develop", "feature/kim");
+    eq(ReverseMerge.merge(mine, "origin", "develop", "feature/kim", "feature/kim", false, false), ReverseMerge.Result.MERGED);
+    eq(SyncPanel.git(mine, "status", "--porcelain", "-uno"), " M A.java\n");
+    sh(mine, "git checkout -q -- A.java");
     ReverseMerge.saveConfig(mine, ReverseMerge.CONFIG_FROM, "develop");
     eq(ReverseMerge.config(mine, ReverseMerge.CONFIG_FROM), "develop");
     eq(ReverseMerge.config(mine, ReverseMerge.CONFIG_INTO), null);
