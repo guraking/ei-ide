@@ -392,6 +392,7 @@ final class History {
    * 결과가 그 판을 만든 커밋 직전 내용과 같으면 되돌림. 아니면 보통 커밋은 이어 고침,
    * 합치기 커밋은 sides(부모마다 따로 비교한 파일)로 본다: 한 부모와만 다른 파일은 다른 부모 판을 그대로 가져온 것이므로 직전 내용이 다른 쪽 판이면
    * 합치며 그 수정을 버린 것이다(덮어씀). 단 가져온 판이 그 판에서 고쳐 나온 것이면(역머지 뒤 다시 올림) 수정이 남아 있으므로 뺀다.
+   * 앞서 표시한 변화와 같은 「직전 판 → 결과 판」을 옮겨 온 합치기는 그 변화를 처음 만든 커밋만 표시하도록 뺀다.
    * 두 부모 모두와 다른 파일은 양쪽을 합친 결과라 뺀다. sides 에 없는 합치기 커밋은 files 로 본다.
    * 합치며 결과가 다른 쪽의 또 다른 판인 것(그쪽 새 수정이 들어옴)과 모드만 바뀐 변경(내용 같음)은 뺀다.
    */
@@ -400,6 +401,8 @@ final class History {
     Map<String, Version> theirs = new HashMap<>();
     // 「경로 + 내용 해시」 → 그 내용을 만든 변경의 직전 「경로 + 내용 해시」들(합치기는 부모별 비교 모두). descends 가 거슬러 올라간다.
     Map<String, List<String>> parentsOf = new HashMap<>();
+    // 표시한 변화 「경로 + 직전 내용 해시 + 결과 내용 해시」. 합치기가 같은 변화를 다른 가지로 옮긴 것(역머지)은 다시 표시하지 않는다.
+    Set<String> reported = new HashSet<>();
     Map<String, List<Clash>> result = new HashMap<>();
     if (!me.known()) return result;
     for (int i = entries.size() - 1; i >= 0; i--) {
@@ -412,6 +415,8 @@ final class History {
         if (f.oldBlob().isEmpty() || f.oldBlob().equals(f.newBlob())) continue;
         Version owner = owners.get(f.oldPath() + '\0' + f.oldBlob());
         if (owner == null) continue;
+        String change = f.oldPath() + '\0' + f.oldBlob() + '\0' + f.newBlob();
+        if (entry.merge() && reported.contains(change)) continue;
         ClashKind kind;
         if (f.newBlob().equals(owner.change().oldBlob())) kind = ClashKind.REVERTED;
         else if (!entry.merge()) kind = ClashKind.EDITED;
@@ -419,6 +424,7 @@ final class History {
         // 가져온 판이 그 판 위에서 고친 것이면(역머지로 받아 이어 고친 판 등) 그 수정은 결과에 남아 있다.
         else if (descends(f.path() + '\0' + f.newBlob(), f.oldPath() + '\0' + f.oldBlob(), parentsOf)) continue;
         else kind = ClashKind.OVERWRITTEN;
+        reported.add(change);
         if (paths.add(f.path())) found.add(new Clash(f, owner.entry(), owner.change(), kind, byMe));
       }
       if (!found.isEmpty()) result.put(entry.id(), found);

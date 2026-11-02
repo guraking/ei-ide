@@ -97,6 +97,7 @@ public class HistoryCheck {
     checkClashes();
     checkReverseMerge();
     checkMergeOwnsNothing();
+    checkRevertSpread();
     System.out.println("HistoryCheck 통과");
   }
 
@@ -303,6 +304,39 @@ public class HistoryCheck {
       if (found != null) bySubject.put(e.subject(), found.get(0).change().path() + " " + found.get(0).kind());
     }
     eq(bySubject, java.util.Map.of("내 작업", "f EDITED"));  // 내 작업은 kim 의 base 를 이어 고침(남의 소스)
+  }
+
+  /** 되돌림이 역머지로 다른 가지에 퍼져도 처음 되돌린 커밋만 표시한다. */
+  private static void checkRevertSpread() throws Exception {
+    File repo = Files.createTempDirectory("spread").toFile();
+    git(repo, "init", "-q", "-b", "main");
+    git(repo, "config", "user.name", "me");
+    git(repo, "config", "user.email", "me@x");
+    write(repo, "f", "a\n");
+    write(repo, "g", "g\n");
+    git(repo, "add", ".");
+    kim(repo, "base");
+    write(repo, "f", "mine\n");
+    git(repo, "commit", "-q", "-am", "내 작업");
+    git(repo, "checkout", "-q", "-b", "lee");
+    write(repo, "g", "g2\n");
+    git(repo, "-c", "user.name=lee", "-c", "user.email=lee@x", "commit", "-q", "-am", "lee 가지 작업");
+    git(repo, "checkout", "-q", "main");
+    write(repo, "f", "a\n");
+    kim(repo, "kim 되돌림");
+    git(repo, "checkout", "-q", "lee");
+    git(repo, "-c", "user.name=lee", "-c", "user.email=lee@x", "merge", "-q", "--no-ff", "-m", "lee 역머지", "main");
+    List<History.Entry> log = History.parseGitLog(git(repo, History.gitLogArgs("HEAD", 100, 0)));
+    List<String> merges = new java.util.ArrayList<>();
+    for (History.Entry e : log) if (e.merge()) merges.add(e.id());
+    java.util.Map<String, List<List<History.FileChange>>> sides = History.parseSides(git(repo, History.sideArgs(merges)));
+    java.util.Map<String, List<History.Clash>> clashes = History.clashes(log, new History.Me("me", "me@x"), sides);
+    java.util.Map<String, String> bySubject = new java.util.TreeMap<>();
+    for (History.Entry e : log) {
+      List<History.Clash> found = clashes.get(e.id());
+      if (found != null) bySubject.put(e.subject(), found.get(0).change().path() + " " + found.get(0).kind());
+    }
+    eq(bySubject, java.util.Map.of("kim 되돌림", "f REVERTED", "내 작업", "f EDITED"));
   }
 
   private static void write(File repo, String path, String text) throws IOException {
