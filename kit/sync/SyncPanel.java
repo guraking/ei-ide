@@ -54,6 +54,7 @@ import com.intellij.openapi.vcs.changes.ChangeListListener;
 import com.intellij.openapi.vcs.changes.ChangeListManager;
 import com.intellij.openapi.vcs.changes.ContentRevision;
 import com.intellij.openapi.vcs.FilePath;
+import com.intellij.openapi.vcs.changes.VcsDirtyScopeManager;
 import com.intellij.vcsUtil.VcsUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -89,6 +90,7 @@ import com.intellij.ui.OnePixelSplitter;
 import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.util.ui.JBUI;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.treeStructure.Tree;
 import com.intellij.util.ui.tree.TreeUtil;
@@ -381,6 +383,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private final Map<File, String> lastBranch = new HashMap<>();
   // 이 창이 fetch 중인 Git 루트. 그동안 오는 저장소 알림은 fetch 가 낸 것이라 다시 비교하지 않는다.
   private final Set<File> fetching = ConcurrentHashMap.newKeySet();
+  // fetch · pull 중에 저장소 알림이 온 Git 루트. 그 사이 끝난 IntelliJ Push 일 수 있어, 받기가 끝나면(unlockFetch) 한 번 다시 비교한다.
+  private final Set<File> missedRoots = ConcurrentHashMap.newKeySet();
+  // 알림을 모아 마지막 알림 뒤 REPO_CHANGE_DELAY_MS 에 한 번 비교하는 타이머(EDT 에서만).
+  private javax.swing.Timer debounce;
   // SVN 루트별 마지막 서버 확인(svn status -u)의 들어올 변경(경로 → 상태 글자). 작업본만 다시 비교할 때 들어올 변경을 이것으로 가른다.
   // 서버 확인이 실패하면 지워 그때 목록(작업본만)과 맞춘다.
   private final Map<File, Map<String, String>> svnIncoming = new ConcurrentHashMap<>();
@@ -593,12 +599,15 @@ final class SyncPanel extends SimpleToolWindowPanel {
     // 변경 목록이 갱신되면(편집 · 저장마다 온다) 변경 · 새 파일 경로가 달라진 저장소(Git · SVN)만 다시 비교한다.
     // 이 알림으로 하는 비교는 서버에 묻지 않는다. SVN 의 들어올 변경은 마지막 서버 확인 결과를 쓴다.
     // 한 동작에 알림이 여러 번 오므로 마지막 알림 뒤 잠깐 기다렸다가 한 번만 비교한다.
-    javax.swing.Timer debounce = new javax.swing.Timer(REPO_CHANGE_DELAY_MS, e -> recomparePending());
+    debounce = new javax.swing.Timer(REPO_CHANGE_DELAY_MS, e -> recomparePending());
     debounce.setRepeats(false);
     project.getMessageBus().connect(parent).subscribe(GitRepository.GIT_REPO_CHANGE,
       (GitRepositoryChangeListener) repository -> {
         File root = new File(repository.getRoot().getPath());
-        if (fetching.contains(root)) return;
+        if (fetching.contains(root)) {
+          missedRoots.add(root);
+          return;
+        }
         // 브랜치가 없는(detached) HEAD 는 rev-parse --abbrev-ref 처럼 "HEAD" 로 본다.
         String branch = Objects.requireNonNullElse(repository.getCurrentBranchName(), "HEAD");
         SwingUtilities.invokeLater(() -> {
@@ -1424,6 +1433,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
       refreshRepo(root, Vcs.GIT);
     }
     switchedRoots.clear();
+    // 전체 새로고침이 끝날 때 그 결과로 목록을 덮으므로, 그 사이 비교는 덮여 옛 상태가 남는다. 끝난 뒤(endBusy) 한다.
+    if (busy) return;
     if (hidden) {
       stale = true;
       pendingRoots.clear();
@@ -1496,11 +1507,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
         for (List<Change> part : inParallel(targets, repo -> {
           REPO_SLOTS.acquire();
           try {
-            if (repo.vcs() == Vcs.GIT) {
-              // 커밋 · 브랜치 전환 뒤 위쪽 줄의 「develop 보다 N개 뒤 · 내 파일 N개 겹침」도 마지막으로 받아 둔 서버 상태로 다시 센다.
-              if (note) updateReverseNote(repo, false);
-              return compare(repo, assumed);
-            }
+            if (repo.vcs() == Vcs.GIT) return compare(repo, assumed);
             if (!full) return compareSvnLocal(repo);
             try {
               return compareSvnRemote(repo);
@@ -1553,6 +1560,41 @@ final class SyncPanel extends SimpleToolWindowPanel {
         changes = next;
         rebuildTree();
       });
+      // 커밋 · 브랜치 전환 뒤 위쪽 줄의 「develop 보다 N개 뒤 · 내 파일 N개 겹침」도 마지막으로 받아 둔 서버 상태로 다시 센다.
+      // git 을 저장소마다 여러 번 띄우므로 목록을 먼저 보인 뒤에 센다.
+      if (note) updateReverseNotes(targets);
+    });
+  }
+
+  /** targets 가운데 Git 저장소의 역머지 안내를 받아 두지 않고 다시 세어 위쪽 줄 · 저장소 줄을 다시 그린다. 작업 스레드에서 부른다. */
+  private void updateReverseNotes(List<Repo> targets) {
+    List<Repo> git = new ArrayList<>();
+    for (Repo repo : targets) {
+      if (repo.vcs() == Vcs.GIT) git.add(repo);
+    }
+    if (git.isEmpty()) return;
+    try {
+      inParallel(git, repo -> {
+        REPO_SLOTS.acquire();
+        try {
+          updateReverseNote(repo, false);
+        }
+        finally {
+          REPO_SLOTS.release();
+        }
+        return null;
+      });
+    }
+    catch (IOException unreachable) {
+      // updateReverseNote 는 실패를 안내 지우기로 처리하고 던지지 않는다.
+    }
+    catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      return;
+    }
+    SwingUtilities.invokeLater(() -> {
+      showTitle(repos);
+      tree.repaint();
     });
   }
 
@@ -1746,12 +1788,14 @@ final class SyncPanel extends SimpleToolWindowPanel {
     showGauge(progress, 0, 0);
     inBackground(progress, false, () -> {
       Map<File, String> failed = Collections.synchronizedMap(new LinkedHashMap<>());
+      Map<File, String> befores = new ConcurrentHashMap<>();
       List<Pulled> pulled = Collections.synchronizedList(new ArrayList<>());
       try {
         inParallel(roots, root -> {
           lockFetch(root);
           try {
             String before = git(root, "rev-parse", "HEAD").trim();
+            befores.put(root, before);
             GitRemoteAuth.run(root, GIT_LONG_TIMEOUT_SEC, true, "pull", "--ff-only", "--quiet");
             pulled.add(countPulled(git(root, "log", "--format=%x01", "--name-only", before + "..HEAD")));
           }
@@ -1759,7 +1803,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
             failed.put(root, e.getMessage());
           }
           finally {
-            fetching.remove(root);
+            unlockFetch(root);
           }
           return null;
         });
@@ -1769,15 +1813,15 @@ final class SyncPanel extends SimpleToolWindowPanel {
       }
       catch (InterruptedException e) {
         Thread.currentThread().interrupt();
-        LocalFileSystem.getInstance().refreshIoFiles(roots, true, true, null);
+        for (File root : roots) refreshChanged(project, root, befores.get(root));
         SwingUtilities.invokeLater(() -> {
           button.setEnabled(true);
           showStatus(SyncBundle.message("sync.interrupted"));
-          recompare();
+          recompare(targets, true, true);
         });
         return;
       }
-      LocalFileSystem.getInstance().refreshIoFiles(roots, true, true, null);
+      for (File root : roots) refreshChanged(project, root, befores.get(root));
       List<String> names = new ArrayList<>();
       for (File root : failed.keySet()) names.add(root.getName());
       String message = failed.isEmpty()
@@ -1799,10 +1843,61 @@ final class SyncPanel extends SimpleToolWindowPanel {
         button.setEnabled(true);
         showStatus(message);
         if (any) balloon(project, false, text, done, showCommitsAction(project));
-        recompare();
+        recompare(targets, true, true);
         if (!failed.isEmpty()) runAction(text, ACTION_PULL, rootsContext(new ArrayList<>(failed.keySet())));
       }, ModalityState.nonModal(), project.getDisposed());
     });
+  }
+
+  /**
+   * before 커밋 이후 작업본에서 달라진 파일만 IDE 에 다시 읽히고 변경 목록에 알린다(Pull · Merge Branches 뒤). 저장소 전체를 훑으면 파일이 많을수록 느리다.
+   * 파일과 그 폴더(새로 생기거나 지워진 파일을 알게)를 다시 읽고, 폴더째 새로 생겼으면 IDE 가 아는 가장 가까운 위 폴더를 통째로 읽는다.
+   * also 는 before 와 같아졌어도 디스크에서 바뀐 파일이다(합치기 전에 Stash 로 치운 내 수정).
+   * before 가 없거나 차이를 구하지 못하면 저장소 전체를 다시 읽는다. 작업 스레드에서 부른다.
+   */
+  static void refreshChanged(Project project, File root, @Nullable String before) {
+    refreshChanged(project, root, before, Set.of());
+  }
+
+  static void refreshChanged(Project project, File root, @Nullable String before, Set<String> also) {
+    LocalFileSystem fs = LocalFileSystem.getInstance();
+    VcsDirtyScopeManager dirty = VcsDirtyScopeManager.getInstance(project);
+    Set<File> files = new LinkedHashSet<>();
+    Set<File> dirs = new LinkedHashSet<>();
+    List<FilePath> paths = new ArrayList<>();
+    if (before == null) {
+      refreshAll(fs, dirty, root);
+      return;
+    }
+    try {
+      Set<String> changed = ReverseMerge.lines(git(root, "diff", "--name-only", "--no-renames", before));
+      changed.addAll(also);
+      for (String path : changed) {
+        File file = new File(root, unquote(path));
+        files.add(file);
+        paths.add(VcsUtil.getFilePath(file, false));
+        File dir = file.getParentFile();
+        if (fs.findFileByIoFile(dir) != null) {
+          files.add(dir);
+          continue;
+        }
+        while (!dir.equals(root) && fs.findFileByIoFile(dir) == null) dir = dir.getParentFile();
+        dirs.add(dir);
+      }
+    }
+    catch (IOException | InterruptedException e) {
+      if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+      refreshAll(fs, dirty, root);
+      return;
+    }
+    if (!files.isEmpty()) fs.refreshIoFiles(files, true, false, null);
+    if (!dirs.isEmpty()) fs.refreshIoFiles(dirs, true, true, null);
+    if (!paths.isEmpty()) dirty.filePathsDirty(paths, null);
+  }
+
+  private static void refreshAll(LocalFileSystem fs, VcsDirtyScopeManager dirty, File root) {
+    fs.refreshIoFiles(List.of(root), true, true, null);
+    dirty.filePathsDirty(null, List.of(VcsUtil.getFilePath(root, true)));
   }
 
   /** git log --format=%x01 --name-only 출력에서 커밋 수와 겹치지 않는 파일 수. */
@@ -1947,7 +2042,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
         SwingUtilities.invokeLater(() -> {
           showStatus(m);
           balloon(project, !done, text, m);
-          recompare();
+          recompare(targets, true, true);
         });
       }
       finally {
@@ -2380,6 +2475,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     busy = false;
     tree.setPaintBusy(false);
     gauge.setVisible(false);
+    if (!pendingRoots.isEmpty() || !pendingPaths.isEmpty()) debounce.restart();
     if (refreshAgain) {
       // 전체 새로고침이 저장소마다 정보를 다시 읽으므로 기다리던 저장소 하나 새로고침은 따로 하지 않는다.
       refreshAgain = false;
@@ -2425,13 +2521,19 @@ final class SyncPanel extends SimpleToolWindowPanel {
       GitRemoteAuth.run(root, GIT_LONG_TIMEOUT_SEC, false, "fetch", "--quiet");
     }
     finally {
-      fetching.remove(root);
+      unlockFetch(root);
     }
   }
 
-  /** root 를 fetching 에 넣는다. 이미 있으면(그 저장소에 fetch · pull 이 도는 중) 빠질 때까지 기다린다. 놓을 때는 fetching.remove. */
+  /** root 를 fetching 에 넣는다. 이미 있으면(그 저장소에 fetch · pull 이 도는 중) 빠질 때까지 기다린다. 놓을 때는 unlockFetch. */
   private void lockFetch(File root) throws InterruptedException {
     while (!fetching.add(root)) Thread.sleep(CANCEL_POLL_MS);
+  }
+
+  /** lockFetch 를 놓는다. 그동안 저장소 알림이 왔으면 그 저장소를 다시 비교할 차례에 넣는다. */
+  private void unlockFetch(File root) {
+    fetching.remove(root);
+    if (missedRoots.remove(root)) SwingUtilities.invokeLater(() -> { pendingRoots.add(root); debounce.restart(); });
   }
 
   /**
@@ -2473,7 +2575,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       reverseNotes.remove(root);
     }
     finally {
-      if (fetch) fetching.remove(root);
+      if (fetch) unlockFetch(root);
     }
   }
 

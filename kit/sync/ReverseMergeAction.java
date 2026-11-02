@@ -23,9 +23,7 @@ import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.vcs.AbstractVcsHelper;
 import com.intellij.openapi.vcs.FilePath;
-import com.intellij.openapi.vcs.changes.VcsDirtyScopeManager;
 import com.intellij.openapi.vfs.LocalFileSystem;
-import com.intellij.openapi.vfs.VfsUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.ui.ComboboxSpeedSearch;
 import com.intellij.ui.InplaceButton;
@@ -611,6 +609,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
 
         @Override
         public void run(@NotNull ProgressIndicator indicator) {
+          String before = head();
+          Set<String> dirtyBefore = dirtyNow();
           try {
             ReverseMerge.saveConfig(root, ReverseMerge.CONFIG_FROM, from);
             ReverseMerge.saveConfig(root, ReverseMerge.CONFIG_INTO, into);
@@ -625,7 +625,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
             throw new RuntimeException(SyncBundle.message("sync.interrupted"), ex);
           }
           finally {
-            refreshIde();
+            refreshIde(before, dirtyBefore);
           }
         }
 
@@ -664,11 +664,38 @@ public final class ReverseMergeAction extends DumbAwareAction {
                         SyncPanel.showCommitsAction(project));
     }
 
-    /** 성공 · 실패 모두 브랜치 · 파일이 바뀌었을 수 있어 IDE 가 알던 상태를 새로 읽는다. 작업 스레드에서 부른다. */
-    private void refreshIde() {
-      VfsUtil.markDirtyAndRefresh(false, true, true, repo.getRoot());
+    /** 성공 · 실패 모두 브랜치 · 파일이 바뀌었을 수 있어 before(시작 때 HEAD) 이후 달라진 파일과 저장소 정보를 IDE 에 새로 읽힌다. 작업 스레드에서 부른다. */
+    private void refreshIde(@Nullable String before, Set<String> dirtyBefore) {
+      SyncPanel.refreshChanged(project, root, before, dirtyBefore);
       repo.update();
-      VcsDirtyScopeManager.getInstance(project).markEverythingDirty();
+    }
+
+    /** 지금 HEAD 커밋. 읽지 못하면 null(refreshIde 가 저장소 전체를 다시 읽는다). */
+    private @Nullable String head() {
+      try {
+        return SyncPanel.git(root, "rev-parse", "HEAD").trim();
+      }
+      catch (IOException e) {
+        return null;
+      }
+      catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        return null;
+      }
+    }
+
+    /** 지금 커밋 안 한 변경이 있는 파일(Stash 로 치우면 디스크에서 바뀐다). 읽지 못하면 빈 집합. */
+    private Set<String> dirtyNow() {
+      try {
+        return ReverseMerge.lines(SyncPanel.git(root, "diff", "--name-only", "--no-renames", "HEAD"));
+      }
+      catch (IOException e) {
+        return null;
+      }
+      catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        return null;
+      }
     }
 
     /**
@@ -688,6 +715,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
 
         @Override
         public void run(@NotNull ProgressIndicator indicator) {
+          String before = head();
+          Set<String> dirtyBefore = dirtyNow();
           try {
             finished = ReverseMerge.finish(root, remote, into, current, pushAfter, stashed);
           }
@@ -699,7 +728,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
             throw new RuntimeException(SyncBundle.message("sync.interrupted"), ex);
           }
           finally {
-            refreshIde();
+            refreshIde(before, dirtyBefore);
           }
         }
 
