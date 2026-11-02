@@ -37,35 +37,45 @@ import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Point;
+import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.awt.geom.CubicCurve2D;
-import java.awt.geom.Point2D;
+import java.awt.geom.Line2D;
+import java.awt.geom.Path2D;
 import java.awt.geom.RoundRectangle2D;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.TreeMap;
 import java.util.function.Function;
 
 /**
  * 서버 창 「연결 지도」 탭: 실행 중인 스프링 부트 서버와, 그 설정 파일에서 찾은 DB · Redis · 다른 서버 주소를 상자와 선으로 그린다.
  * 왼쪽에서 오른쪽으로: 다른 서버가 붙지 않는 서버 → 그 서버가 붙는 서버 → …, 바깥(점선 상자)은 그 주소를 쓰는 서버 바로 오른쪽. 선은 붙으면 초록 실선, 끊기면 빨강 점선.
+ * 둘째 열부터는 상자를 데이터베이스 · 회사 서버 · 내 PC 구역으로 묶고 구역마다 제목을 단다.
+ * 선은 직각으로 꺾인다: 출발 상자 오른쪽 변의 연결마다 다른 높이에서 나가, 연결마다 다른 세로 길로 내려가고, 대상 상자 왼쪽으로 들어간다.
+ * ms · 「끊김」 글은 대상 상자 바로 왼쪽, 들어가는 선 위에 둔다. 상자 폭은 그 열에서 가장 긴 글에 맞춘다.
  * 선이나 아래 표의 줄을 두 번 누르면 그 주소가 적힌 설정 파일의 줄로 간다.
  */
 final class ConnectionMapView {
 
-    private static final int BOX_WIDTH = 200;
+    // 상자 폭의 아랫값. 글이 길면 그 열의 상자가 다 같이 넓어진다.
+    private static final int MIN_BOX_WIDTH = 160;
     private static final int BOX_HEIGHT = 54;
-    private static final int COLUMN_GAP = 120;
+    // 나란한 선 사이 간격(세로 길 사이 · 출발 높이 사이)
+    private static final int LANE_GAP = 10;
     private static final int ROW_GAP = 24;
+    private static final int SECTION_GAP = 20;
+    private static final int TITLE_GAP = 6;
     private static final int MARGIN = 16;
     private static final int ARC = 8;
     private static final int DOT = 8;
@@ -73,18 +83,39 @@ final class ConnectionMapView {
     private static final int LABEL_PAD = 3;
     private static final float LINE_WIDTH = 2f;
     private static final float[] DASH = {6f, 4f};
-    // 선 위 점까지의 거리가 이 안이면 그 선을 누른 것으로 친다(px, 배율 전)
+    // 선까지의 거리가 이 안이면 그 선을 누른 것으로 친다(px, 배율 전)
     private static final int HIT_DISTANCE = 6;
-    private static final int HIT_SAMPLES = 24;
     private static final long MILLIS_PER_MINUTE = 60_000;
     private static final Color UP = new JBColor(0x208A3C, 0x5FB865);
     private static final DateTimeFormatter CHECKED_TIME = DateTimeFormatter.ofPattern("HH:mm:ss");
 
+    /** 상자 구역. 나열 순서가 위에서 아래 순서다. */
+    private enum Group {
+        DATABASE("map.group.database"), REMOTE("map.group.remote"), LOCAL("map.group.local");
+
+        final String key;
+
+        Group(String key) {
+            this.key = key;
+        }
+    }
+
     /** 상자: 서버(server 가 서버 이름) 또는 바깥 주소(server 가 null). */
-    private record Node(String id, String title, String subtitle, String server) {
+    private record Node(String id, String title, String subtitle, String server, Group group) {
     }
 
     private record Edge(ServerMonitor.Link link, Node from, Node to) {
+    }
+
+    /** 구역 제목. bounds 는 제목 글 자리(배율 곱한 px), 밑줄은 그 아래. */
+    private record Section(String title, Rectangle bounds) {
+    }
+
+    /** 선 하나의 꺾인 점들(배율 곱한 px). 마지막 점이 대상 상자 변, back 이면 대상 상자 오른쪽 변으로 들어간다. */
+    private record Route(List<Point> points, boolean back) {
+        Point end() {
+            return points.get(points.size() - 1);
+        }
     }
 
     private final Project project;
@@ -108,7 +139,9 @@ final class ConnectionMapView {
     private final JBLabel checkedAt = grayLabel(BootServersBundle.message("map.query.none"));
     private final Gauge gauge = Gauge.create(BootServersBundle.message("map.query.running"));
     private List<Edge> edges = List.of();
-    private final Map<String, Point> positions = new HashMap<>();
+    private List<Route> routes = List.of();
+    private final Map<String, Rectangle> boxes = new HashMap<>();
+    private final List<Section> sections = new ArrayList<>();
     private List<Node> nodes = List.of();
     private String selected;
     private boolean updatingProfiles;
@@ -266,7 +299,7 @@ final class ConnectionMapView {
     private void build(List<ServerMonitor.Watched> live) {
         Map<String, Node> byId = new LinkedHashMap<>();
         for (ServerMonitor.Watched w : live) {
-            byId.put(w.name(), new Node(w.name(), w.name(), w.port() == null ? "" : "localhost:" + w.port(), w.name()));
+            byId.put(w.name(), new Node(w.name(), w.name(), w.port() == null ? "" : "localhost:" + w.port(), w.name(), Group.LOCAL));
         }
         List<Edge> result = new ArrayList<>();
         for (ServerMonitor.Link link : monitor.links()) {
@@ -277,8 +310,8 @@ final class ConnectionMapView {
             Links.Target t = link.target();
             String id = link.to() != null ? link.to() : t.kind() + "|" + t.address().toLowerCase(Locale.ROOT);
             Node to = byId.computeIfAbsent(id, k -> link.to() != null
-                    ? new Node(link.to(), link.to(), t.address(), link.to())
-                    : new Node(k, t.title(), t.address(), null));
+                    ? new Node(link.to(), link.to(), t.address(), link.to(), Group.LOCAL)
+                    : new Node(k, t.title(), t.address(), null, groupOf(t)));
             result.add(new Edge(link, from, to));
         }
         edges = result;
@@ -303,12 +336,165 @@ final class ConnectionMapView {
                 depth.merge(e.to().id(), depth.get(e.from().id()) + 1, Math::max);
             }
         }
-        Map<Integer, Integer> rowsInColumn = new HashMap<>();
-        positions.clear();
+        layout(depth);
+    }
+
+    private static Group groupOf(Links.Target t) {
+        if (t.kind() != Links.Kind.HTTP) {
+            return Group.DATABASE;
+        }
+        return ServerMonitor.LOCAL_HOSTS.contains(t.host().toLowerCase(Locale.ROOT)) ? Group.LOCAL : Group.REMOTE;
+    }
+
+    /**
+     * 상자 · 구역 제목 · 선 자리를 배율 곱한 px 로 정한다.
+     * 열 폭은 그 열에서 가장 긴 글, 열 사이 폭은 그 사이를 지나는 세로 길 수와 대상 상자 왼쪽에 둘 상태 글의 가장 긴 폭으로 정한다.
+     * 한 상자의 선은 대상이 위에 있는 것부터 위에서 출발하고, 아래로 가는 선은 먼 대상일수록 왼쪽 세로 길을, 위로 가는 선도 먼 대상일수록 왼쪽 세로 길을 쓴다.
+     * 이 순서면 같은 상자에서 나간 선끼리는 엇갈리지 않는다.
+     * 열을 건너뛰는 선(가운데 열에 상자가 있는 선)은 모든 상자 아래 통로로 돌아, 대상 바로 앞 열 사이의 세로 길로 올라간다.
+     */
+    private void layout(Map<String, Integer> depth) {
+        FontMetrics titleFm = canvas.getFontMetrics(JBUI.Fonts.label());
+        FontMetrics smallFm = canvas.getFontMetrics(JBUI.Fonts.smallFont());
+        Map<Integer, List<Node>> columns = new TreeMap<>();
         for (Node n : nodes) {
-            int col = depth.get(n.id());
-            int row = rowsInColumn.merge(col, 1, Integer::sum) - 1;
-            positions.put(n.id(), new Point(MARGIN + col * (BOX_WIDTH + COLUMN_GAP), MARGIN + row * (BOX_HEIGHT + ROW_GAP)));
+            columns.computeIfAbsent(depth.get(n.id()), k -> new ArrayList<>()).add(n);
+        }
+        Map<String, List<Integer>> out = new HashMap<>();
+        Map<String, List<Integer>> in = new HashMap<>();
+        Map<Integer, Integer> lanes = new HashMap<>();
+        Map<Integer, Integer> labels = new HashMap<>();
+        for (int i = 0; i < edges.size(); i++) {
+            Edge e = edges.get(i);
+            out.computeIfAbsent(e.from().id(), k -> new ArrayList<>()).add(i);
+            in.computeIfAbsent(e.to().id(), k -> new ArrayList<>()).add(i);
+            lanes.merge(depth.get(e.from().id()), 1, Integer::sum);
+            if (depth.get(e.to().id()) > depth.get(e.from().id()) + 1) {
+                lanes.merge(depth.get(e.to().id()) - 1, 1, Integer::sum);
+            }
+            labels.merge(depth.get(e.to().id()), smallFm.stringWidth(stateText(monitor.state(e.link()))), Math::max);
+        }
+        int labelLine = smallFm.getHeight() + JBUI.scale(LABEL_PAD);
+        int pad = JBUI.scale(TEXT_PAD);
+        int dotSpace = JBUI.scale(DOT) + JBUI.scale(UIUtil.DEFAULT_HGAP / 2);
+
+        boxes.clear();
+        sections.clear();
+        int x = JBUI.scale(MARGIN);
+        Map<Integer, Integer> right = new HashMap<>();
+        for (Map.Entry<Integer, List<Node>> column : columns.entrySet()) {
+            int col = column.getKey();
+            List<Node> list = column.getValue();
+            boolean grouped = col > 0;
+            if (grouped) {
+                list.sort(Comparator.comparing(Node::group));
+            }
+            Map<Group, Integer> counts = new HashMap<>();
+            int width = JBUI.scale(MIN_BOX_WIDTH);
+            for (Node n : list) {
+                counts.merge(n.group(), 1, Integer::sum);
+                int title = titleFm.stringWidth(n.title()) + (n.server() != null ? dotSpace : 0);
+                width = Math.max(width, Math.max(title, smallFm.stringWidth(n.subtitle())) + pad * 2);
+            }
+            int y = JBUI.scale(MARGIN);
+            Group current = null;
+            for (Node n : list) {
+                if (grouped && n.group() != current) {
+                    if (current != null) {
+                        y += JBUI.scale(SECTION_GAP);
+                    }
+                    current = n.group();
+                    String title = BootServersBundle.message(current.key, counts.get(current));
+                    width = Math.max(width, titleFm.stringWidth(title));
+                    sections.add(new Section(title, new Rectangle(x, y, 0, titleFm.getHeight())));
+                    y += titleFm.getHeight() + JBUI.scale(TITLE_GAP) * 2;
+                }
+                int lines = Math.max(out.getOrDefault(n.id(), List.of()).size() * JBUI.scale(LANE_GAP),
+                        in.getOrDefault(n.id(), List.of()).size() * labelLine);
+                int h = Math.max(JBUI.scale(BOX_HEIGHT), lines + labelLine);
+                boxes.put(n.id(), new Rectangle(x, y, 0, h));
+                y += h + JBUI.scale(ROW_GAP);
+            }
+            for (Node n : list) {
+                boxes.get(n.id()).width = width;
+            }
+            for (Section s : sections) {
+                if (s.bounds().x == x) {
+                    s.bounds().width = width;
+                }
+            }
+            right.put(col, x + width);
+            int nextLabels = labels.getOrDefault(col + 1, 0);
+            x += width + (lanes.getOrDefault(col, 0) + 1) * JBUI.scale(LANE_GAP)
+                    + (nextLabels > 0 ? nextLabels + JBUI.scale(LABEL_PAD) * 2 : 0);
+        }
+
+        // 아래 통로로 도는 선은 출발 상자 맨 아래에서 나가 맨 왼쪽 세로 길을 쓰고, 대상 상자에는 맨 아래로 들어간다.
+        boolean[] skip = new boolean[edges.size()];
+        for (int i = 0; i < edges.size(); i++) {
+            skip[i] = depth.get(edges.get(i).to().id()) > depth.get(edges.get(i).from().id()) + 1;
+        }
+        int[] y1 = new int[edges.size()];
+        int[] y2 = new int[edges.size()];
+        for (Map.Entry<String, List<Integer>> e : out.entrySet()) {
+            List<Integer> list = e.getValue();
+            list.sort(Comparator.comparingInt(i -> skip[i] ? Integer.MAX_VALUE : boxes.get(edges.get(i).to().id()).y));
+            spread(boxes.get(e.getKey()), list, y1);
+        }
+        for (Map.Entry<String, List<Integer>> e : in.entrySet()) {
+            List<Integer> list = e.getValue();
+            list.sort(Comparator.comparingInt(i -> skip[i] ? Integer.MAX_VALUE : y1[i]));
+            spread(boxes.get(e.getKey()), list, y2);
+        }
+        int[] lane = new int[edges.size()];
+        Map<Integer, Integer> used = new HashMap<>();
+        for (List<Node> list : columns.values()) {
+            for (Node n : list) {
+                List<Integer> mine = new ArrayList<>(out.getOrDefault(n.id(), List.of()));
+                // 아래 통로로 도는 선 → 아래로 가는 선(먼 것부터) → 위로 가는 선(먼 것부터)
+                mine.sort(Comparator.comparingInt((Integer i) -> skip[i] ? 0 : y2[i] >= y1[i] ? 1 : 2)
+                        .thenComparingInt(i -> -Math.abs(y2[i] - y1[i])));
+                for (int i : mine) {
+                    lane[i] = used.merge(depth.get(n.id()), 1, Integer::sum);
+                }
+            }
+        }
+        int bottom = 0;
+        for (Rectangle r : boxes.values()) {
+            bottom = Math.max(bottom, r.y + r.height);
+        }
+        int corridor = 0;
+        List<Route> result = new ArrayList<>();
+        for (int i = 0; i < edges.size(); i++) {
+            int fromCol = depth.get(edges.get(i).from().id());
+            int toCol = depth.get(edges.get(i).to().id());
+            Rectangle a = boxes.get(edges.get(i).from().id());
+            Rectangle b = boxes.get(edges.get(i).to().id());
+            int laneX = right.get(fromCol) + lane[i] * JBUI.scale(LANE_GAP);
+            boolean back = b.x <= a.x;
+            int endX = back ? b.x + b.width : b.x;
+            List<Point> points = new ArrayList<>();
+            points.add(new Point(a.x + a.width, y1[i]));
+            points.add(new Point(laneX, y1[i]));
+            if (skip[i]) {
+                corridor++;
+                int corridorY = bottom + JBUI.scale(ROW_GAP) / 2 + corridor * JBUI.scale(LANE_GAP);
+                int lastX = right.get(toCol - 1) + used.merge(toCol - 1, 1, Integer::sum) * JBUI.scale(LANE_GAP);
+                points.add(new Point(laneX, corridorY));
+                points.add(new Point(lastX, corridorY));
+                laneX = lastX;
+            }
+            points.add(new Point(laneX, y2[i]));
+            points.add(new Point(endX, y2[i]));
+            result.add(new Route(points, back));
+        }
+        routes = result;
+    }
+
+    /** 상자 오른쪽(또는 왼쪽) 변에 선들을 고르게 나눠 놓는다. 위에서부터 list 순서. */
+    private static void spread(Rectangle box, List<Integer> list, int[] ys) {
+        for (int k = 0; k < list.size(); k++) {
+            ys[list.get(k)] = box.y + (int) ((long) box.height * (k + 1) / (list.size() + 1));
         }
     }
 
@@ -366,56 +552,39 @@ final class ConnectionMapView {
         public Dimension getPreferredSize() {
             int w = 0;
             int h = 0;
-            for (Point p : positions.values()) {
-                w = Math.max(w, p.x + BOX_WIDTH + MARGIN);
-                h = Math.max(h, p.y + BOX_HEIGHT + MARGIN);
+            int margin = JBUI.scale(MARGIN);
+            for (Rectangle r : boxes.values()) {
+                w = Math.max(w, r.x + r.width + margin);
+                h = Math.max(h, r.y + r.height + margin);
             }
-            return new Dimension(JBUI.scale(w), JBUI.scale(h));
-        }
-
-        private CubicCurve2D curve(Edge e) {
-            Point a = positions.get(e.from().id());
-            Point b = positions.get(e.to().id());
-            double x1 = JBUI.scale(a.x + BOX_WIDTH);
-            // 한 서버에서 나가는 선이 여럿이면 상자 오른쪽 변을 나눠 위 대상부터 차례로 출발한다. 같은 점에서 겹쳐 나가지 않게 한다.
-            int index = 0;
-            int count = 0;
-            for (int i = 0; i < edges.size(); i++) {
-                Edge other = edges.get(i);
-                if (other.from() == e.from()) {
-                    count++;
-                    int otherY = positions.get(other.to().id()).y;
-                    if (otherY < b.y || otherY == b.y && i < edges.indexOf(e)) {
-                        index++;
-                    }
+            for (Route r : routes) {
+                for (Point p : r.points()) {
+                    h = Math.max(h, p.y + margin);
                 }
             }
-            double y1 = JBUI.scale((float) (a.y + BOX_HEIGHT * (index + 1.0) / (count + 1)));
-            double x2 = JBUI.scale(b.x);
-            double y2 = JBUI.scale(b.y + BOX_HEIGHT / 2);
-            // 오른쪽에서 왼쪽으로 가는 선(같은 열 · 뒤 열의 서버)도 상자를 가로지르지 않게 손잡이를 바깥으로 뺀다.
-            double handle = Math.max(Math.abs(x2 - x1) / 2, JBUI.scale(COLUMN_GAP) / 2.0);
-            return new CubicCurve2D.Double(x1, y1, x1 + handle, y1, x2 - handle, y2, x2, y2);
+            return new Dimension(w, h);
         }
 
         private Edge edgeAt(Point p) {
             double limit = JBUI.scale(HIT_DISTANCE);
-            for (Edge e : edges) {
-                CubicCurve2D c = curve(e);
-                for (int i = 0; i <= HIT_SAMPLES; i++) {
-                    if (pointAt(c, (double) i / HIT_SAMPLES).distance(p) <= limit) {
-                        return e;
+            for (int i = 0; i < routes.size(); i++) {
+                List<Point> pts = routes.get(i).points();
+                for (int k = 1; k < pts.size(); k++) {
+                    if (Line2D.ptSegDist(pts.get(k - 1).x, pts.get(k - 1).y, pts.get(k).x, pts.get(k).y, p.x, p.y) <= limit) {
+                        return edges.get(i);
                     }
                 }
             }
             return null;
         }
 
-        private static Point2D pointAt(CubicCurve2D c, double t) {
-            double u = 1 - t;
-            double x = u * u * u * c.getX1() + 3 * u * u * t * c.getCtrlX1() + 3 * u * t * t * c.getCtrlX2() + t * t * t * c.getX2();
-            double y = u * u * u * c.getY1() + 3 * u * u * t * c.getCtrlY1() + 3 * u * t * t * c.getCtrlY2() + t * t * t * c.getY2();
-            return new Point2D.Double(x, y);
+        private static Path2D path(Route r) {
+            Path2D.Double path = new Path2D.Double();
+            path.moveTo(r.points().get(0).x, r.points().get(0).y);
+            for (int k = 1; k < r.points().size(); k++) {
+                path.lineTo(r.points().get(k).x, r.points().get(k).y);
+            }
+            return path;
         }
 
         @Override
@@ -425,31 +594,32 @@ final class ConnectionMapView {
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g2.setColor(UIUtil.getPanelBackground());
                 g2.fillRect(0, 0, getWidth(), getHeight());
-                g2.setFont(JBUI.Fonts.smallFont());
-                for (Edge e : edges) {
-                    ServerMonitor.LinkState s = monitor.state(e.link());
-                    Color color = lineColor(s);
-                    g2.setColor(color);
-                    g2.setStroke(s.checked() && !s.up()
-                            ? new BasicStroke(JBUI.scale(LINE_WIDTH), BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND, 1f, scaled(DASH), 0f)
-                            : new BasicStroke(JBUI.scale(LINE_WIDTH)));
-                    g2.draw(curve(e));
+                for (Section s : sections) {
+                    paintSection(g2, s);
                 }
-                // 글자는 선을 다 그린 뒤 그린다. 뒤에 그린 선이 앞 선의 글자를 덮지 않게 한다.
-                for (Edge e : edges) {
-                    ServerMonitor.LinkState s = monitor.state(e.link());
-                    Color color = lineColor(s);
-                    Point2D mid = pointAt(curve(e), 0.5);
+                for (int i = 0; i < edges.size(); i++) {
+                    ServerMonitor.LinkState s = monitor.state(edges.get(i).link());
+                    g2.setColor(lineColor(s));
+                    g2.setStroke(s.checked() && !s.up()
+                            ? new BasicStroke(JBUI.scale(LINE_WIDTH), BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10f, scaled(DASH), 0f)
+                            : new BasicStroke(JBUI.scale(LINE_WIDTH), BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER));
+                    g2.draw(path(routes.get(i)));
+                }
+                // 글자는 선을 다 그린 뒤 그린다. 대상 상자 바로 왼쪽(뒤로 가는 선은 오른쪽), 들어가는 선 바로 위.
+                g2.setFont(JBUI.Fonts.smallFont());
+                FontMetrics fm = g2.getFontMetrics();
+                int labelPad = JBUI.scale(LABEL_PAD);
+                for (int i = 0; i < edges.size(); i++) {
+                    ServerMonitor.LinkState s = monitor.state(edges.get(i).link());
+                    Route r = routes.get(i);
                     String label = stateText(s);
-                    FontMetrics fm = g2.getFontMetrics();
-                    // 글자 밑에 바탕을 깔아 선 · 다른 선과 겹쳐도 읽히게 한다.
                     int labelWidth = fm.stringWidth(label);
-                    int labelX = (int) (mid.getX() - labelWidth / 2.0);
-                    int labelY = (int) (mid.getY() - fm.getHeight() / 2.0);
+                    int labelX = r.back() ? r.end().x + labelPad * 2 : r.end().x - labelPad * 2 - labelWidth;
+                    int labelTop = r.end().y - labelPad - fm.getHeight();
                     g2.setColor(UIUtil.getPanelBackground());
-                    g2.fillRect(labelX - JBUI.scale(LABEL_PAD), labelY, labelWidth + JBUI.scale(LABEL_PAD) * 2, fm.getHeight());
-                    g2.setColor(color);
-                    g2.drawString(label, labelX, labelY + fm.getAscent());
+                    g2.fillRect(labelX - labelPad, labelTop, labelWidth + labelPad * 2, fm.getHeight());
+                    g2.setColor(lineColor(s));
+                    g2.drawString(label, labelX, labelTop + fm.getAscent());
                 }
                 for (Node n : nodes) {
                     paintNode(g2, n);
@@ -460,16 +630,28 @@ final class ConnectionMapView {
             }
         }
 
+        /** 구역 제목(흐린 글) 과 그 아래 열 폭만큼의 가는 선. */
+        private void paintSection(Graphics2D g2, Section s) {
+            Rectangle b = s.bounds();
+            g2.setFont(JBUI.Fonts.label());
+            g2.setColor(NamedColorUtil.getInactiveTextColor());
+            g2.drawString(s.title(), b.x, b.y + g2.getFontMetrics().getAscent());
+            g2.setColor(JBColor.border());
+            g2.setStroke(new BasicStroke(JBUI.scale(1f)));
+            int lineY = b.y + b.height + JBUI.scale(TITLE_GAP);
+            g2.drawLine(b.x, lineY, b.x + b.width, lineY);
+        }
+
         private static Color lineColor(ServerMonitor.LinkState s) {
             return !s.checked() ? NamedColorUtil.getInactiveTextColor() : s.up() ? UP : JBUI.CurrentTheme.Label.errorForeground();
         }
 
         private void paintNode(Graphics2D g2, Node n) {
-            Point p = positions.get(n.id());
-            float x = JBUI.scale(p.x);
-            float y = JBUI.scale(p.y);
-            float w = JBUI.scale(BOX_WIDTH);
-            float h = JBUI.scale(BOX_HEIGHT);
+            Rectangle r = boxes.get(n.id());
+            float x = r.x;
+            float y = r.y;
+            float w = r.width;
+            float h = r.height;
             RoundRectangle2D box = new RoundRectangle2D.Float(x, y, w, h, JBUI.scale(ARC), JBUI.scale(ARC));
             g2.setColor(UIUtil.getListBackground());
             g2.fill(box);
@@ -486,21 +668,23 @@ final class ConnectionMapView {
                     : new BasicStroke(JBUI.scale(n.id().equals(selected) ? LINE_WIDTH : 1f)));
             g2.draw(box);
             int pad = JBUI.scale(TEXT_PAD);
+            // 선이 많아 상자가 길어져도 글은 위쪽 기본 높이 안에 둔다.
+            float th = JBUI.scale(BOX_HEIGHT);
             float textX = x + pad;
             if (n.server() != null) {
                 int dot = JBUI.scale(DOT);
                 g2.setColor(stateColor.apply(n.server()));
-                g2.fillOval((int) x + pad, (int) (y + h / 3 - dot / 2f), dot, dot);
+                g2.fillOval((int) x + pad, (int) (y + th / 3 - dot / 2f), dot, dot);
                 textX += dot + JBUI.scale(UIUtil.DEFAULT_HGAP / 2);
             }
             g2.setFont(JBUI.Fonts.label());
             g2.setColor(UIUtil.getLabelForeground());
             FontMetrics fm = g2.getFontMetrics();
-            g2.drawString(clip(n.title(), fm, (int) (x + w - pad - textX)), textX, y + h / 3 + fm.getAscent() / 2f - 1);
+            g2.drawString(clip(n.title(), fm, (int) (x + w - pad - textX)), textX, y + th / 3 + fm.getAscent() / 2f - 1);
             g2.setFont(JBUI.Fonts.smallFont());
             g2.setColor(NamedColorUtil.getInactiveTextColor());
             fm = g2.getFontMetrics();
-            g2.drawString(clip(n.subtitle(), fm, (int) (w - pad * 2)), x + pad, y + h * 2 / 3 + fm.getAscent() / 2f);
+            g2.drawString(clip(n.subtitle(), fm, (int) (w - pad * 2)), x + pad, y + th * 2 / 3 + fm.getAscent() / 2f);
         }
 
         private static String clip(String text, FontMetrics fm, int width) {
