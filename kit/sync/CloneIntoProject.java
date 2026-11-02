@@ -2,6 +2,7 @@ package kinggura.sync;
 
 import com.intellij.ide.RecentProjectsManager;
 import com.intellij.ide.projectView.TreeStructureProvider;
+import com.intellij.ide.projectView.impl.ProjectRootsUtil;
 import com.intellij.ide.projectView.ViewSettings;
 import com.intellij.ide.util.treeView.AbstractTreeNode;
 import com.intellij.openapi.actionSystem.ActionManager;
@@ -67,7 +68,7 @@ import java.util.regex.Pattern;
  * IntelliJ 는 SVN 이 하나라도 섞이면 Commit 창 대신 커밋 대화상자를 쓰므로(CommitModeManager.canSetNonModal) Git 과 SVN 을 한 프로젝트에 섞지 않는다.
  * 받은 폴더가 프로젝트 폴더 안이어도 따로 모듈로 붙인다.
  * 워크스페이스 프로젝트(C:\dev\git 처럼 Git 저장소 밖 폴더를 연 것)는 열 때와 Clone 뒤에 그 폴더 자체 모듈(「git」)을 빼고,
- * 프로젝트 창 맨 위의 프로젝트 폴더 줄은 HideWorkspaceRoot 가 그 안의 줄들(.idea 빼고)로 바꿔 그린다
+ * 프로젝트 창 맨 위의 프로젝트 폴더 줄은 HideWorkspaceRoot 가 그 안의 저장소 모듈 줄들로 바꿔 그린다
  * (IntelliJ 가 열 때마다 다시 등록하므로 등록은 빼지 않는다. 받은 저장소 모듈은 이 폴더 줄 아래에 그려지므로 줄만 지우면 같이 사라진다).
  * 그러면 「git」 줄 없이 받은 저장소 모듈들만 이클립스처럼 나란히 보인다(빈 워크스페이스면 빈 트리, .idea 는 디스크에 그대로).
  * 워크스페이스 판정(workspaceDir): 프로젝트 폴더에 빌드 파일(BUILD_FILES)이 없고, 프로젝트 폴더와 그 위(사용자 폴더 · 드라이브 맨 위는 빼고)에 .git · .svn 이 없고,
@@ -397,6 +398,10 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
         if (VfsUtilCore.isAncestor(baseDir, root, true)) attached = true;
       }
     }
+    // 저장소를 모두 닫아도(Close Project) 워크스페이스로 본다.
+    for (VirtualFile root : CloseRepoAction.closedRoots(project)) {
+      if (VfsUtilCore.isAncestor(baseDir, root, true)) attached = true;
+    }
     return attached ? baseDir : null;
   }
 
@@ -424,7 +429,11 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
     });
   }
 
-  /** 워크스페이스 프로젝트의 프로젝트 창 맨 위에서 프로젝트 폴더 줄을 그 안의 줄들(.idea 빼고)로 바꾼다. */
+  /**
+   * 워크스페이스 프로젝트의 프로젝트 창 맨 위에서 프로젝트 폴더 줄을 그 안의 저장소 모듈 줄들로 바꾼다(모듈로 붙지 않은 폴더 · 파일 · .idea 는 안 보임).
+   * 닫은 저장소(내린 모듈의 콘텐츠 루트)는 닫힌 줄(CloseRepoAction.ClosedRepoNode)로 보인다. IntelliJ 는 다른 모듈의 콘텐츠 루트 안에 있는
+   * 내린 모듈 폴더를 프로젝트 밖으로 보고 트리에서 빼므로(ProjectViewDirectoryHelper.shouldBeShown), 프로젝트 폴더 바로 아래 것은 여기서 넣는다.
+   */
   public static final class HideWorkspaceRoot implements TreeStructureProvider, com.intellij.openapi.project.DumbAware {
     @Override
     public @NotNull Collection<AbstractTreeNode<?>> modify(@NotNull AbstractTreeNode<?> parent,
@@ -439,14 +448,15 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
           shown.add(child);
           continue;
         }
-        VirtualFile store = baseDir.findChild(Project.DIRECTORY_STORE_FOLDER);
         for (AbstractTreeNode<?> inner : child.getChildren()) {
-          if (inner.getValue() instanceof PsiDirectory innerDir && innerDir.getVirtualFile().equals(store)) continue;
+          // 모듈로 붙은 저장소 폴더만 보인다. 워크스페이스 폴더 모듈이 다시 등록된 사이(Maven 다시 읽기 · 모듈 가져오기)에
+          // 붙이지 않은 옆 폴더 · .idea · 낱 파일이 잠깐 보였다 사라지지 않게 한다. 닫은 저장소는 아래 withClosedRepos 가 넣는다.
+          if (!(inner.getValue() instanceof PsiDirectory innerDir) || !ProjectRootsUtil.isModuleContentRoot(innerDir.getVirtualFile(), project)) continue;
           inner.setParent(parent);
           shown.add(inner);
         }
       }
-      return shown;
+      return CloseRepoAction.withClosedRepos(project, parent, shown, baseDir, settings);
     }
   }
 

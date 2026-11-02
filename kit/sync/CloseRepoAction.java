@@ -1,5 +1,10 @@
 package kinggura.sync;
 
+import com.intellij.icons.AllIcons;
+import com.intellij.ide.projectView.PresentationData;
+import com.intellij.ide.projectView.ViewSettings;
+import com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode;
+import com.intellij.ide.util.treeView.AbstractTreeNode;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
@@ -17,10 +22,14 @@ import com.intellij.openapi.vcs.VcsDirectoryMapping;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.pointers.VirtualFilePointer;
+import com.intellij.psi.PsiDirectory;
+import com.intellij.psi.PsiManager;
+import com.intellij.util.ui.UIUtil;
 import org.jetbrains.annotations.NotNull;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -31,7 +40,8 @@ import java.util.Set;
  * 프로젝트 트리 우클릭의 「Close Project」 · 「Open Project」. 이클립스처럼 워크스페이스 안 저장소 하나만 닫고 다시 연다.
  * 닫기: 고른 줄 중 모듈의 콘텐츠 루트인 폴더를 그 모듈째 내린다(ModuleManager 의 unloaded 모듈, IntelliJ Load/Unload Modules 와 같은 상태).
  * 콘텐츠 루트가 그 폴더 안에 있는 다른 모듈(Gradle · Maven 하위 모듈)도 함께 내린다. 열기도 같은 범위를 함께 올린다.
- * 내린 모듈은 색인 · 검색 · 컴파일에서 빠지고 트리에는 UnloadedModule 아이콘 줄로 남는다. 상태는 IntelliJ 가 workspace.xml 에 저장한다.
+ * 내린 모듈은 색인 · 검색 · 컴파일에서 빠지고 트리에는 닫힌 줄(ClosedRepoNode, UnloadedModule 아이콘 · 흐린 글자 · 펼치지 않음)로 남는다.
+ * 상태는 IntelliJ 가 workspace.xml 에 저장한다.
  * 그 폴더의 VCS 매핑도 떼어 동기화 창 · Git Log · 커밋 창에서 빠지게 하고, 「등록 안 된 VCS 루트」 알림이 뜨지 않게 무시 목록에 넣는다.
  * 열기: 내린 모듈의 콘텐츠 루트 줄을 고르면 모듈을 다시 올리고 매핑을 다시 붙인다(CloneIntoProject.addVcsMapping, .git · .svn 으로 판정).
  * 폴더 · 파일은 건드리지 않는다. 여러 줄을 골라 한꺼번에 닫고 열 수 있다.
@@ -128,6 +138,78 @@ public class CloseRepoAction extends DumbAwareAction {
       }
     }
     return targets;
+  }
+
+  /** 내린 모듈의 콘텐츠 루트 중 디스크에 있는 폴더. */
+  static List<VirtualFile> closedRoots(Project project) {
+    List<VirtualFile> roots = new ArrayList<>();
+    for (UnloadedModuleDescription description : ModuleManager.getInstance(project).getUnloadedModuleDescriptions()) {
+      for (VirtualFilePointer pointer : description.getContentRoots()) {
+        VirtualFile root = pointer.getFile();
+        if (root != null && root.isDirectory()) roots.add(root);
+      }
+    }
+    return roots;
+  }
+
+  /**
+   * 워크스페이스 맨 위 줄 목록(shown)에서 닫은 저장소 폴더 줄을 ClosedRepoNode 로 바꾸고,
+   * 워크스페이스 폴더(baseDir) 바로 아래인데 목록에 없는 닫은 저장소는 닫힌 줄로 더한다. 바깥 폴더 · 하위 모듈 폴더는 더하지 않는다.
+   */
+  static List<AbstractTreeNode<?>> withClosedRepos(Project project, AbstractTreeNode<?> parent, List<AbstractTreeNode<?>> shown,
+                                                   VirtualFile baseDir, ViewSettings settings) {
+    List<VirtualFile> closed = closedRoots(project);
+    if (closed.isEmpty()) return shown;
+    PsiManager psi = PsiManager.getInstance(project);
+    Set<VirtualFile> placed = new LinkedHashSet<>();
+    List<AbstractTreeNode<?>> result = new ArrayList<>();
+    for (AbstractTreeNode<?> node : shown) {
+      VirtualFile dir = node.getValue() instanceof PsiDirectory d ? d.getVirtualFile() : null;
+      if (dir == null || !closed.contains(dir) || node instanceof ClosedRepoNode) {
+        result.add(node);
+        if (dir != null) placed.add(dir);
+        continue;
+      }
+      ClosedRepoNode replaced = new ClosedRepoNode(project, (PsiDirectory)node.getValue(), settings);
+      replaced.setParent(parent);
+      result.add(replaced);
+      placed.add(dir);
+    }
+    for (VirtualFile root : closed) {
+      if (placed.contains(root) || !baseDir.equals(root.getParent())) continue;
+      PsiDirectory dir = psi.findDirectory(root);
+      if (dir == null) continue;
+      ClosedRepoNode added = new ClosedRepoNode(project, dir, settings);
+      added.setParent(parent);
+      result.add(added);
+      placed.add(root);
+    }
+    return result;
+  }
+
+  /** 닫은 저장소 폴더 줄. 이클립스의 닫힌 프로젝트처럼 이름만 흐리게 보이고 펼쳐지지 않는다. 우클릭 「Open Project」로 연다. */
+  static final class ClosedRepoNode extends PsiDirectoryNode {
+    ClosedRepoNode(Project project, @NotNull PsiDirectory value, ViewSettings settings) {
+      super(project, value, settings);
+    }
+
+    @Override
+    protected void updateImpl(@NotNull PresentationData data) {
+      super.updateImpl(data);
+      data.setIcon(AllIcons.Modules.UnloadedModule);
+      data.setForcedTextForeground(UIUtil.getInactiveTextColor());
+      data.setTooltip(SyncBundle.message("close.repo.closed.tooltip"));
+    }
+
+    @Override
+    public Collection<AbstractTreeNode<?>> getChildrenImpl() {
+      return List.of();
+    }
+
+    @Override
+    public boolean isAlwaysLeaf() {
+      return true;
+    }
   }
 
   /** 이 경로들과 같은 폴더의 VCS 매핑을 뺀다. 프로젝트 전체(<Project>) 매핑은 폴더별로 뗄 수 없으므로 그대로 둔다. */
