@@ -387,16 +387,19 @@ final class History {
 
   /**
    * 커밋마다 다른 쪽 소스를 건드린 파일(커밋 id → 목록, 없으면 빠짐). entries 는 최근 것부터(git log 순서). 다른 사람끼리 · 내 커밋끼리는 보지 않는다.
-   * 오래된 커밋부터 보며 나 · 다른 사람 커밋이 만든 「경로 + 내용 해시」를 따로 기억하고, 파일 변경이 다른 쪽이 만든 내용에서 출발한 것(직전 내용이 다른 쪽 판)을 본다.
+   * 오래된 커밋부터 보며 나 · 다른 사람의 보통 커밋이 만든 「경로 + 내용 해시」를 따로 기억하고(합치기 커밋은 어느 판의 주인도 되지 않는다), 파일 변경이 다른 쪽이 만든 내용에서 출발한 것(직전 내용이 다른 쪽 판)을 본다.
    * 내용 해시로 잇기 때문에 가지가 갈라져 있어도, rebase 로 다시 올린 커밋이어도 맞는다.
    * 결과가 그 판을 만든 커밋 직전 내용과 같으면 되돌림. 아니면 보통 커밋은 이어 고침,
    * 합치기 커밋은 sides(부모마다 따로 비교한 파일)로 본다: 한 부모와만 다른 파일은 다른 부모 판을 그대로 가져온 것이므로 직전 내용이 다른 쪽 판이면
-   * 합치며 그 수정을 버린 것이다(덮어씀). 두 부모 모두와 다른 파일은 양쪽을 합친 결과라 뺀다. sides 에 없는 합치기 커밋은 files 로 본다.
+   * 합치며 그 수정을 버린 것이다(덮어씀). 단 가져온 판이 그 판에서 고쳐 나온 것이면(역머지 뒤 다시 올림) 수정이 남아 있으므로 뺀다.
+   * 두 부모 모두와 다른 파일은 양쪽을 합친 결과라 뺀다. sides 에 없는 합치기 커밋은 files 로 본다.
    * 합치며 결과가 다른 쪽의 또 다른 판인 것(그쪽 새 수정이 들어옴)과 모드만 바뀐 변경(내용 같음)은 뺀다.
    */
   static Map<String, List<Clash>> clashes(List<Entry> entries, Me me, Map<String, List<List<FileChange>>> sides) {
     Map<String, Version> mine = new HashMap<>();
     Map<String, Version> theirs = new HashMap<>();
+    // 「경로 + 내용 해시」 → 그 내용을 만든 변경의 직전 「경로 + 내용 해시」들(합치기는 부모별 비교 모두). descends 가 거슬러 올라간다.
+    Map<String, List<String>> parentsOf = new HashMap<>();
     Map<String, List<Clash>> result = new HashMap<>();
     if (!me.known()) return result;
     for (int i = entries.size() - 1; i >= 0; i--) {
@@ -413,16 +416,38 @@ final class History {
         if (f.newBlob().equals(owner.change().oldBlob())) kind = ClashKind.REVERTED;
         else if (!entry.merge()) kind = ClashKind.EDITED;
         else if (owners.containsKey(f.path() + '\0' + f.newBlob())) continue;
+        // 가져온 판이 그 판 위에서 고친 것이면(역머지로 받아 이어 고친 판 등) 그 수정은 결과에 남아 있다.
+        else if (descends(f.path() + '\0' + f.newBlob(), f.oldPath() + '\0' + f.oldBlob(), parentsOf)) continue;
         else kind = ClashKind.OVERWRITTEN;
         if (paths.add(f.path())) found.add(new Clash(f, owner.entry(), owner.change(), kind, byMe));
       }
       if (!found.isEmpty()) result.put(entry.id(), found);
+      // 판의 주인은 그 내용을 직접 쓴 보통 커밋이다. 합치기는 받아 온 판을 옮기기만 하므로 주인을 바꾸지 않는다.
       Map<String, Version> own = byMe ? mine : theirs;
-      for (FileChange f : entry.files()) {
+      for (FileChange f : entry.merge() ? List.<FileChange>of() : entry.files()) {
         if (!f.newBlob().isEmpty()) own.put(f.path() + '\0' + f.newBlob(), new Version(entry, f));
+      }
+      List<List<FileChange>> perParent = sides.get(entry.id());
+      for (List<FileChange> changes : perParent == null ? List.of(entry.files()) : perParent) {
+        for (FileChange f : changes) {
+          if (f.newBlob().isEmpty() || f.oldBlob().isEmpty()) continue;
+          parentsOf.computeIfAbsent(f.path() + '\0' + f.newBlob(), k -> new ArrayList<>()).add(f.oldPath() + '\0' + f.oldBlob());
+        }
       }
     }
     return result;
+  }
+
+  /** version 이 ancestor 에서 (여러 커밋을 거쳐) 고쳐 나온 판인가. parentsOf 를 거슬러 올라가며, 한 번 본 판은 다시 보지 않는다. */
+  private static boolean descends(String version, String ancestor, Map<String, List<String>> parentsOf) {
+    Set<String> seen = new HashSet<>();
+    List<String> todo = new ArrayList<>(List.of(version));
+    while (!todo.isEmpty()) {
+      String key = todo.remove(todo.size() - 1);
+      if (key.equals(ancestor)) return true;
+      if (seen.add(key)) todo.addAll(parentsOf.getOrDefault(key, List.of()));
+    }
+    return false;
   }
 
   /** 커밋 한 줄에 보일 대표: 되돌림 > 덮어씀 > 이어 고침 순으로 가장 센 것. clashes 는 비어 있지 않다. */

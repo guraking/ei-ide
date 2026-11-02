@@ -95,6 +95,8 @@ public class HistoryCheck {
 
     checkRealGit();
     checkClashes();
+    checkReverseMerge();
+    checkMergeOwnsNothing();
     System.out.println("HistoryCheck 통과");
   }
 
@@ -217,6 +219,90 @@ public class HistoryCheck {
     git(repo, "checkout", "-q", "--detach", head);
     eq(History.gitHead(app), head.substring(0, 7));
     eq(History.gitHead(Files.createTempDirectory("nogit").toFile()), "");
+  }
+
+  /**
+   * 역머지 뒤 다시 올림: 내가 f 를 고친 뒤 lee 가 그 위에서 이어 고쳤고, kim 의 가지가 main 을 역머지해 lee 판을 받은 다음 main 으로 다시 합친다.
+   * 역머지는 kim 가지의 f(내 판)를 lee 판으로 바꾸지만 lee 판은 내 판에서 고쳐 나온 것이라 내 수정이 남아 있다 → 덮어씀이 아니다.
+   */
+  private static void checkReverseMerge() throws Exception {
+    File repo = Files.createTempDirectory("reverse").toFile();
+    git(repo, "init", "-q", "-b", "main");
+    git(repo, "config", "user.name", "me");
+    git(repo, "config", "user.email", "me@x");
+    write(repo, "f", "a\n");
+    write(repo, "g", "g\n");
+    git(repo, "add", ".");
+    kim(repo, "base");
+    write(repo, "f", "mine\n");
+    git(repo, "commit", "-q", "-am", "내 작업");
+    git(repo, "checkout", "-q", "-b", "feature");
+    write(repo, "g", "g2\n");
+    kim(repo, "kim 가지 작업");
+    git(repo, "checkout", "-q", "main");
+    write(repo, "f", "mine\nlee\n");
+    git(repo, "-c", "user.name=lee", "-c", "user.email=lee@x", "commit", "-q", "-am", "lee 이어 고침");
+    git(repo, "checkout", "-q", "feature");
+    git(repo, "-c", "user.name=kim", "-c", "user.email=kim@x", "merge", "-q", "--no-ff", "-m", "역머지", "main");
+    write(repo, "g", "g3\n");
+    kim(repo, "kim 다시 고침");
+    git(repo, "checkout", "-q", "main");
+    git(repo, "-c", "user.name=kim", "-c", "user.email=kim@x", "merge", "-q", "--no-ff", "-m", "다시 올림", "feature");
+    List<History.Entry> log = History.parseGitLog(git(repo, History.gitLogArgs("HEAD", 100, 0)));
+    List<String> merges = new java.util.ArrayList<>();
+    for (History.Entry e : log) if (e.merge()) merges.add(e.id());
+    eq(merges.size(), 2);
+    java.util.Map<String, List<List<History.FileChange>>> sides = History.parseSides(git(repo, History.sideArgs(merges)));
+    java.util.Map<String, List<History.Clash>> clashes = History.clashes(log, new History.Me("me", "me@x"), sides);
+    java.util.Map<String, String> bySubject = new java.util.TreeMap<>();
+    for (History.Entry e : log) {
+      List<History.Clash> found = clashes.get(e.id());
+      if (found != null) bySubject.put(e.subject(), found.get(0).change().path() + " " + found.get(0).kind());
+    }
+    eq(bySubject, java.util.Map.of("lee 이어 고침", "f EDITED", "내 작업", "f EDITED"));  // 내 작업은 kim 의 base 를 이어 고침(남의 소스)
+  }
+
+  /** 합치기 커밋은 받아 온 판의 주인이 되지 않는다: 역머지로 옮겨진 내 판을 내가 고침, 내가 받아 온 남의 판을 남이 고침 모두 표시하지 않는다. */
+  private static void checkMergeOwnsNothing() throws Exception {
+    File repo = Files.createTempDirectory("mergeowner").toFile();
+    git(repo, "init", "-q", "-b", "main");
+    git(repo, "config", "user.name", "me");
+    git(repo, "config", "user.email", "me@x");
+    write(repo, "f", "a\n");
+    write(repo, "h", "h\n");
+    git(repo, "add", ".");
+    kim(repo, "base");
+    git(repo, "checkout", "-q", "-b", "feature");
+    write(repo, "h", "h2\n");
+    kim(repo, "kim 가지 작업");
+    git(repo, "checkout", "-q", "main");
+    git(repo, "checkout", "-q", "-b", "mine");
+    git(repo, "checkout", "-q", "main");
+    write(repo, "f", "mine\n");
+    git(repo, "commit", "-q", "-am", "내 작업");
+    git(repo, "checkout", "-q", "feature");
+    git(repo, "-c", "user.name=kim", "-c", "user.email=kim@x", "merge", "-q", "--no-ff", "-m", "kim 역머지", "main");
+    git(repo, "checkout", "-q", "main");
+    git(repo, "-c", "user.name=kim", "-c", "user.email=kim@x", "merge", "-q", "--no-ff", "-m", "kim 다시 올림", "feature");
+    write(repo, "f", "mine2\n");
+    git(repo, "commit", "-q", "-am", "내 다시 고침");
+    git(repo, "checkout", "-q", "mine");
+    git(repo, "merge", "-q", "--no-ff", "-m", "내가 develop 받음", "main");
+    git(repo, "checkout", "-q", "main");
+    write(repo, "h", "h3\n");
+    git(repo, "-c", "user.name=lee", "-c", "user.email=lee@x", "commit", "-q", "-am", "lee 가 kim 판 고침");
+    git(repo, "merge", "-q", "--no-ff", "-m", "mine 합침", "mine");
+    List<History.Entry> log = History.parseGitLog(git(repo, History.gitLogArgs("HEAD", 100, 0)));
+    List<String> merges = new java.util.ArrayList<>();
+    for (History.Entry e : log) if (e.merge()) merges.add(e.id());
+    java.util.Map<String, List<List<History.FileChange>>> sides = History.parseSides(git(repo, History.sideArgs(merges)));
+    java.util.Map<String, List<History.Clash>> clashes = History.clashes(log, new History.Me("me", "me@x"), sides);
+    java.util.Map<String, String> bySubject = new java.util.TreeMap<>();
+    for (History.Entry e : log) {
+      List<History.Clash> found = clashes.get(e.id());
+      if (found != null) bySubject.put(e.subject(), found.get(0).change().path() + " " + found.get(0).kind());
+    }
+    eq(bySubject, java.util.Map.of("내 작업", "f EDITED"));  // 내 작업은 kim 의 base 를 이어 고침(남의 소스)
   }
 
   private static void write(File repo, String path, String text) throws IOException {
