@@ -5,7 +5,9 @@ import com.intellij.diff.DiffContentFactory;
 import com.intellij.diff.DiffManager;
 import com.intellij.diff.requests.MessageDiffRequest;
 import com.intellij.diff.requests.SimpleDiffRequest;
+import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.project.ModuleListener;
 import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.ide.CopyPasteManager;
 import com.intellij.openapi.module.Module;
@@ -68,6 +70,7 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * 아래쪽 「Git Log」 창. 왼쪽 저장소(모듈) 목록에서 고르면 그 폴더 안을 바꾼 최근 커밋을 표로 보여 준다.
@@ -104,6 +107,7 @@ final class ProjectHistoryPanel extends JPanel {
   private static final int ROW_H = 26;
   private static final int LANE_W = 16;
   private static final int GRAPH_PAD = 8;
+  // 가지 선 칸 처음 폭에 넣는 최대 가지 수. 더 많으면 칸 폭 안에 가지 간격을 좁혀 모두 그린다.
   private static final int MAX_LANES = 12;
   private static final int DOT = 7;
   // 표의 작성자 · 날짜 · 해시 칸 처음 폭(JBUI.scale 전, 끌어서 바꿀 수 있음). 메시지 칸이 나머지를 차지한다.
@@ -125,9 +129,13 @@ final class ProjectHistoryPanel extends JPanel {
   // 「나로 보기」로 더한 다른 계정(History.Me.aliasKey, 줄마다 하나). 앱 수준이라 모든 프로젝트 · 저장소에 같이 쓴다.
   private static final String ME_ALIASES_KEY = "kinggura.sync.gitlog.me.aliases";
   private static final float LINE_WIDTH = 1.5f;
-  // 표와 오른쪽 상세 칸의 폭 비율, 왼쪽 저장소 목록과 나머지의 폭 비율.
+  // 표와 오른쪽 상세 칸의 폭 비율, 왼쪽 저장소 목록과 나머지의 폭 비율(처음 값). 끌어서 바꾼 비율은 키에 기억한다.
   private static final float TABLE_RATIO = 0.62f;
   private static final float REPO_RATIO = 0.15f;
+  private static final String TABLE_RATIO_KEY = "kinggura.sync.gitlog.table.ratio";
+  private static final String REPO_RATIO_KEY = "kinggura.sync.gitlog.repo.ratio";
+  // 끌어서 바꾼 작성자 · 날짜 · 해시 칸 폭(px)을 칸 번호를 붙여 기억한다.
+  private static final String COL_WIDTH_KEY = "kinggura.sync.gitlog.col.width.";
   // 소스 건드림 꼬리표 색: 되돌림은 빨강, 합치며 덮어씀은 주황, 이어 고침은 보라(브랜치 알약의 초록 · 회색 · 황토 · 파랑과 겹치지 않게). 내 소스 · 남의 소스 모두 같은 색.
   private static final Map<History.ClashKind, Color> CLASH_COLOR = Map.of(
     History.ClashKind.REVERTED, new JBColor(0xC03030, 0xF07070),
@@ -143,14 +151,17 @@ final class ProjectHistoryPanel extends JPanel {
   private static final String[] COLUMN_KEYS = {"", "history.col.message", "history.col.author", "history.col.date", "history.col.hash"};
 
   // 색. 가지 선은 테마 밝기에 맞춘 고정 팔레트, 알약은 글자색 + 옅은 바탕 · 테두리.
-  // 이웃한 가지끼리 비슷한 색이 붙지 않도록 파랑 · 초록 · 주황 · 보라 · 청록 … 순으로 둔다. 밝은 테마는 흰 바탕에서 읽히는 진한 색,
-  // 어두운 테마는 같은 색상을 밝게 한 색(EI White · EI Graphite 의 코드 색과 같은 계열).
+  // 가지 선은 색상환을 16등분(22.5°)한 16색이다. 파랑(215°)에서 시작해 5칸(112.5°)씩 건너뛰는 순서라
+  // 바로 옆 가지와 두 칸 옆 가지는 색상이 110° 넘게 떨어진다. 같은 색은 16번째 가지마다 돌아온다.
+  // 밝은 테마는 흰 바탕에서 읽히는 진한 색(채도 55% · 명도 42%), 어두운 테마는 같은 색상을 밝게 한 색(채도 65% · 명도 70%).
   private static final Color[] LIGHT_PALETTE = {
-    new Color(0x3B6FB6), new Color(0x2F8F5B), new Color(0xC0612B), new Color(0x7A5BB5), new Color(0x2A8C8C),
-    new Color(0xA8862A), new Color(0xB0475E), new Color(0x4E7FA8), new Color(0x6B8E23), new Color(0x8A6A4F)};
+    new Color(0x3061A6), new Color(0xA63070), new Color(0x7FA630), new Color(0x308DA6), new Color(0xA6309C), new Color(0xA6A130),
+    new Color(0x30A692), new Color(0x8430A6), new Color(0xA67530), new Color(0x30A666), new Color(0x5730A6), new Color(0xA64930),
+    new Color(0x30A63A), new Color(0x3035A6), new Color(0xA63044), new Color(0x53A630)};
   private static final Color[] DARK_PALETTE = {
-    new Color(0x6FA8FF), new Color(0x5FCF8F), new Color(0xF0A060), new Color(0xB49AF0), new Color(0x5FD3D3),
-    new Color(0xE0C060), new Color(0xE88A9C), new Color(0x8FB8E0), new Color(0xA8C860), new Color(0xC8A080)};
+    new Color(0x81AAE4), new Color(0xE481B7), new Color(0xC3E481), new Color(0x81D0E4), new Color(0xE481DC), new Color(0xE4E081),
+    new Color(0x81E4D4), new Color(0xC781E4), new Color(0xE4BB81), new Color(0x81E4AE), new Color(0xA281E4), new Color(0xE49581),
+    new Color(0x81E489), new Color(0x8185E4), new Color(0xE48191), new Color(0x9EE481)};
   // 알약 글자색. 밝은 테마(첫 값)에서는 흰 바탕에서 읽히도록 어둡게, 어두운 테마(둘째 값)에서는 밝게.
   // IntelliJ Log 탭의 테마 키(VersionControl.GitLog.*)는 따르지 않는다. 밝은 테마 기본값이 노랑 · 보라라 EI White 와 어울리지 않는다.
   // 현재 브랜치(HEAD)는 테마 강조 파랑 + 브랜치 아이콘, 로컬 브랜치는 초록, 원격(origin/*)은 회색, 태그는 황토.
@@ -213,9 +224,10 @@ final class ProjectHistoryPanel extends JPanel {
   private int loadSeq;
   private int shownSeq;
   private boolean graph;
-  private int graphWidth;
+  // 읽어 온 줄 가운데 가장 많은 가지 수(가지 선을 그리지 않으면 1). 가지 간격을 칸 폭에 맞출 때 쓴다.
+  private int graphLanes = 1;
 
-  ProjectHistoryPanel(Project project) {
+  ProjectHistoryPanel(Project project, Disposable parent) {
     super(new BorderLayout());
     this.project = project;
 
@@ -238,10 +250,18 @@ final class ProjectHistoryPanel extends JPanel {
     commits.getTableHeader().setReorderingAllowed(false);
     commits.getTableHeader().setForeground(DIM);
     commits.setDefaultRenderer(Object.class, new CommitRenderer());
-    // 작성자 · 날짜 · 해시 칸은 머리글 경계를 끌어 넓히고 줄일 수 있다. 가지 선 칸만 폭을 고정한다(updateGraphWidth).
-    resizableWidth(commits.getColumnModel().getColumn(COL_AUTHOR), JBUI.scale(AUTHOR_COL_W));
-    resizableWidth(commits.getColumnModel().getColumn(COL_TIME), JBUI.scale(TIME_COL_W));
-    resizableWidth(commits.getColumnModel().getColumn(COL_HASH), JBUI.scale(HASH_COL_W));
+    // 가지 선 · 작성자 · 날짜 · 해시 칸은 머리글 경계를 끌어 넓히고 줄일 수 있다(가지 선 칸 처음 폭은 updateGraphWidth).
+    resizableWidth(commits.getColumnModel().getColumn(COL_AUTHOR), JBUI.scale(AUTHOR_COL_W), COL_AUTHOR);
+    resizableWidth(commits.getColumnModel().getColumn(COL_TIME), JBUI.scale(TIME_COL_W), COL_TIME);
+    resizableWidth(commits.getColumnModel().getColumn(COL_HASH), JBUI.scale(HASH_COL_W), COL_HASH);
+    // 머리글 경계를 끌고 놓으면 그 폭을 기억해 다음에 창을 열 때 쓴다.
+    commits.getTableHeader().addMouseListener(new MouseAdapter() {
+      @Override public void mouseReleased(MouseEvent e) {
+        for (int col : new int[]{COL_GRAPH, COL_AUTHOR, COL_TIME, COL_HASH}) {
+          PropertiesComponent.getInstance().setValue(COL_WIDTH_KEY + col, commits.getColumnModel().getColumn(col).getWidth(), 0);
+        }
+      }
+    });
     commits.getSelectionModel().addListSelectionListener(e -> { if (!e.getValueIsAdjusting()) showDetail(); });
     // 오른쪽 단추로 누른 줄을 먼저 고른다(우클릭 메뉴가 그 줄의 작성자를 쓴다). PopupHandler 보다 먼저 달아야 먼저 불린다.
     commits.addMouseListener(new MouseAdapter() {
@@ -292,7 +312,9 @@ final class ProjectHistoryPanel extends JPanel {
       if (overflows && scroll.getValue() + scroll.getExtent() >= scroll.getMaximum() - JBUI.scale(ROW_H)) loadMore();
     });
 
-    OnePixelSplitter main = new OnePixelSplitter(false, TABLE_RATIO);
+    // 칸 안 글(긴 제목 · 설명 줄)의 최소 폭이 분할 비율을 이기지 않게 한다. 넘치는 글은 잘려 보인다.
+    OnePixelSplitter main = new OnePixelSplitter(false, TABLE_RATIO_KEY, TABLE_RATIO);
+    main.setHonorComponentsMinimumSize(false);
     main.setFirstComponent(commitScroll);
     main.setSecondComponent(detailPanel());
     JPanel head = new JPanel(new BorderLayout());
@@ -301,12 +323,24 @@ final class ProjectHistoryPanel extends JPanel {
     JPanel right = new JPanel(new BorderLayout());
     right.add(head, BorderLayout.NORTH);
     right.add(main, BorderLayout.CENTER);
-    OnePixelSplitter repos = new OnePixelSplitter(false, REPO_RATIO);
+    OnePixelSplitter repos = new OnePixelSplitter(false, REPO_RATIO_KEY, REPO_RATIO);
+    repos.setHonorComponentsMinimumSize(false);
     repos.setFirstComponent(ScrollPaneFactory.createScrollPane(targets, true));
     repos.setSecondComponent(right);
     add(repos, BorderLayout.CENTER);
 
     reloadTargets();
+    // Clone · Close Project · Open Project · 모듈 가져오기 뒤 저장소 목록을 바로 다시 채운다. 한 번에 여러 모듈이 바뀌어도 한 번만 읽는다.
+    AtomicBoolean reloadQueued = new AtomicBoolean();
+    Runnable queueReload = () -> {
+      if (reloadQueued.compareAndSet(false, true)) {
+        ApplicationManager.getApplication().invokeLater(() -> { reloadQueued.set(false); reloadTargets(); }, project.getDisposed());
+      }
+    };
+    project.getMessageBus().connect(parent).subscribe(ModuleListener.TOPIC, new ModuleListener() {
+      @Override public void modulesAdded(@NotNull Project p, @NotNull List<? extends Module> modules) { queueReload.run(); }
+      @Override public void moduleRemoved(@NotNull Project p, @NotNull Module module) { queueReload.run(); }
+    });
   }
 
   private void selectRowAt(MouseEvent e) {
@@ -363,20 +397,16 @@ final class ProjectHistoryPanel extends JPanel {
   }
 
   /**
-   * 끌어서 바꿀 수 있는 칸: 처음 폭 width, 최소 그 절반, 최대 COL_MAX_FACTOR 배.
+   * 끌어서 바꿀 수 있는 칸: 처음 폭 width, 최소 그 절반, 최대 COL_MAX_FACTOR 배. 기억한 폭이 그 범위 안이면 처음 폭 대신 쓴다.
    * JTable 은 남는 폭을 칸마다 (최대 - 처음 폭) 비율로 나누므로 최대를 묶어 두어야 남는 폭을 최대가 없는 메시지 칸이 거의 다 받는다(창 크기를 바꿀 때도).
    */
-  private static void resizableWidth(TableColumn column, int width) {
-    column.setMinWidth(width / 2);
-    column.setMaxWidth(width * COL_MAX_FACTOR);
-    column.setPreferredWidth(width);
-  }
-
-  /** 표 칸 폭을 고정한다. 남는 폭은 메시지 칸이 차지한다. */
-  private static void fixWidth(TableColumn column, int width) {
-    column.setMinWidth(width);
-    column.setMaxWidth(width);
-    column.setPreferredWidth(width);
+  private static void resizableWidth(TableColumn column, int width, int index) {
+    int min = width / 2;
+    int max = width * COL_MAX_FACTOR;
+    int saved = PropertiesComponent.getInstance().getInt(COL_WIDTH_KEY + index, width);
+    column.setMinWidth(min);
+    column.setMaxWidth(max);
+    column.setPreferredWidth(saved >= min && saved <= max ? saved : width);
   }
 
   /** 오른쪽: 굵은 제목, 본문, 흐린 작성자 · 날짜 · 고정폭 해시(누르면 복사), 꺾인 선 설명, 「바뀐 파일 N」 구분줄, 파일 목록, 맨 아래 안내. */
@@ -433,7 +463,8 @@ final class ProjectHistoryPanel extends JPanel {
       File dir = new File(roots[0].getPath());
       byDir.putIfAbsent(dir, target(module.getName(), dir));
     }
-    if (byDir.isEmpty() && project.getBasePath() != null) {
+    // 저장소를 모두 닫은 워크스페이스처럼 프로젝트 폴더가 Git · SVN 저장소가 아니면 넣지 않는다(기록을 읽지 못한다). 목록은 「모듈 없음」.
+    if (byDir.isEmpty() && project.getBasePath() != null && SyncPanel.underVcs(new File(project.getBasePath()))) {
       File base = new File(project.getBasePath());
       byDir.put(base, target(project.getName(), base));
     }
@@ -713,14 +744,14 @@ final class ProjectHistoryPanel extends JPanel {
     return word.isEmpty() || entry.subject().toLowerCase(Locale.ROOT).contains(word) || entry.author().toLowerCase(Locale.ROOT).contains(word);
   }
 
-  /** 가지 선 칸 폭. 가지 선을 그릴 때만 읽어 온 줄 가운데 가장 넓은 줄에 맞춘다. */
+  /** 가지 선 칸 처음 폭. 가지 선을 그릴 때만 읽어 온 줄 가운데 가장 넓은 줄에 맞춘다(MAX_LANES 까지). 끌어서 바꾼 폭은 기억한다. */
   private void updateGraphWidth() {
     int lanes = 1;
     if (graph) {
       for (History.Row row : loaded.rows()) lanes = Math.max(lanes, laneCount(row));
     }
-    graphWidth = JBUI.scale(Math.min(lanes, MAX_LANES) * LANE_W + GRAPH_PAD * 2);
-    fixWidth(commits.getColumnModel().getColumn(COL_GRAPH), graphWidth);
+    graphLanes = lanes;
+    resizableWidth(commits.getColumnModel().getColumn(COL_GRAPH), JBUI.scale(Math.min(lanes, MAX_LANES) * LANE_W + GRAPH_PAD * 2), COL_GRAPH);
   }
 
   /** 가지 선 · 점 · 글자 밝기의 뜻. 표 가운데에 풍선으로 띄우고 바깥을 누르면 닫는다. */
@@ -1137,8 +1168,11 @@ final class ProjectHistoryPanel extends JPanel {
       return this;
     }
 
+    /** 가지 가운데 x. 간격은 LANE_W 를 넘지 않고, 모든 가지(graphLanes)가 지금 칸 폭 안에 들어오게 좁아진다. */
     private int laneX(int lane) {
-      return JBUI.scale(GRAPH_PAD) + JBUI.scale(LANE_W) * lane + JBUI.scale(LANE_W) / 2;
+      int pad = JBUI.scale(GRAPH_PAD);
+      double step = Math.min(JBUI.scale(LANE_W), Math.max(1, getWidth() - pad * 2) / (double)graphLanes);
+      return pad + (int)Math.round(step * lane + step / 2);
     }
 
     @Override
@@ -1266,7 +1300,7 @@ final class ProjectHistoryPanel extends JPanel {
 
     @Override
     public void createToolWindowContent(@NotNull Project project, @NotNull ToolWindow toolWindow) {
-      toolWindow.getContentManager().addContent(ContentFactory.getInstance().createContent(new ProjectHistoryPanel(project), "", false));
+      toolWindow.getContentManager().addContent(ContentFactory.getInstance().createContent(new ProjectHistoryPanel(project, toolWindow.getDisposable()), "", false));
     }
   }
 }

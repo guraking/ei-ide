@@ -35,6 +35,7 @@ import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.wm.impl.welcomeScreen.cloneableProjects.CloneableProjectsService;
 import com.intellij.psi.PsiDirectory;
+import com.intellij.workspaceModel.ide.JpsProjectLoadedListener;
 import git4idea.GitVcs;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -62,12 +63,13 @@ import java.util.regex.Pattern;
  * 받은 폴더와 그 아래 두 단계의 pom.xml · Gradle 파일은 Maven · Gradle 프로젝트로 연결한다(linkBuildFiles).
  * 열 때와 Clone 뒤에 모듈마다 빌드 결과 · 내려받은 라이브러리 폴더를 제외 폴더로 표시한다(excludeBuildOutput). 인덱스 · 검색 · TODO 가 읽지 않는다.
  * 다음이면 false 를 돌려 IntelliJ 기본 동작(새 프로젝트로 열기)에 맡긴다:
- * 시작 화면(기본 프로젝트)에서 받았을 때, 대소문자만 다른 것까지 같은 이름 모듈이 이미 있을 때(Close Project 로 내린 모듈 포함, 윈도우에서 .iml 이 서로 덮이므로),
+ * 시작 화면(기본 프로젝트)에서 받았을 때, 대소문자만 다른 것까지 같은 이름 모듈이 이미 있을 때(Close Project 로 내린 모듈 포함, 윈도우에서 .iml 이 서로 덮이므로.
+ * 폴더가 없어진 내린 모듈은 켤 때와 받기 전에 지우므로 세지 않는다, dropStaleClosed),
  * SVN 으로 받았을 때, 열린 프로젝트가 SVN 프로젝트일 때(svnProject).
  * IntelliJ 는 SVN 이 하나라도 섞이면 Commit 창 대신 커밋 대화상자를 쓰므로(CommitModeManager.canSetNonModal) Git 과 SVN 을 한 프로젝트에 섞지 않는다.
  * 받은 폴더가 프로젝트 폴더 안이어도 따로 모듈로 붙인다.
  * 워크스페이스 프로젝트(C:\dev\git 처럼 Git 저장소 밖 폴더를 연 것)는 열 때와 Clone 뒤에 그 폴더 자체 모듈(「git」)을 빼고,
- * 프로젝트 창 맨 위의 프로젝트 폴더 줄은 HideWorkspaceRoot 가 그 안의 줄들(.idea 빼고)로 바꿔 그린다
+ * 프로젝트 창 맨 위의 프로젝트 폴더 줄은 HideWorkspaceRoot 가 그 안의 저장소 모듈 줄들로 바꿔 그린다
  * (IntelliJ 가 열 때마다 다시 등록하므로 등록은 빼지 않는다. 받은 저장소 모듈은 이 폴더 줄 아래에 그려지므로 줄만 지우면 같이 사라진다).
  * 그러면 「git」 줄 없이 받은 저장소 모듈들만 이클립스처럼 나란히 보인다(빈 워크스페이스면 빈 트리, .idea 는 디스크에 그대로).
  * 워크스페이스 판정(workspaceDir): 프로젝트 폴더에 빌드 파일(BUILD_FILES)이 없고, 프로젝트 폴더와 그 위(사용자 폴더 · 드라이브 맨 위는 빼고)에 .git · .svn 이 없고,
@@ -101,6 +103,32 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
   public void runActivity(@NotNull Project project) {
     excludeBuildOutput(project);
     ApplicationManager.getApplication().invokeLater(() -> removeWorkspaceModule(project), project.getDisposed());
+    // 캐시 없이 연 프로젝트는 아래 AfterJpsLoad 가 오지 않을 수 있어 색인 뒤에도 한 번 한다. 두 번 해도 결과가 같다.
+    DumbService.getInstance(project).smartInvokeLater(() -> tidyClosed(project));
+  }
+
+  /** 켤 때 닫은 저장소 정리: 폴더가 없어진 것은 지우고(dropStaleClosed), 나머지는 Maven · 편집기를 맞춘다(CloseRepoAction.syncClosed). EDT. */
+  private static void tidyClosed(Project project) {
+    if (project.isDisposed()) return;
+    dropStaleClosed(project, null);
+    CloseRepoAction.syncClosed(project);
+  }
+
+  /**
+   * IntelliJ 는 캐시로 모듈을 먼저 올리고 몇 초 뒤 프로젝트 파일(.iml · modules.xml)을 다시 읽어 맞춘다(JpsProjectModelSynchronizer).
+   * 그 전에 지운 닫힌 모듈은 그때 되살아나므로, 다시 읽기가 끝난 뒤(JpsProjectLoadedListener)에도 정리한다.
+   */
+  public static final class AfterJpsLoad implements JpsProjectLoadedListener {
+    private final Project project;
+
+    public AfterJpsLoad(Project project) {
+      this.project = project;
+    }
+
+    @Override
+    public void loaded() {
+      ApplicationManager.getApplication().invokeLater(() -> tidyClosed(project), project.getDisposed());
+    }
   }
 
   @Override
@@ -110,6 +138,9 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
     VirtualFile dir = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(directory);
     if (dir == null) return false;
     String name = dir.getName();
+    ApplicationManager.getApplication().invokeAndWait(() -> {
+      if (!project.isDisposed()) dropStaleClosed(project, directory);
+    });
     if (moduleNameTaken(project, name)) return false;
     if (Files.isDirectory(directory.resolve(".svn")) || svnProject(project)) return false;
 
@@ -148,6 +179,29 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
     ForgetRecent.ATTACHED.add(path);
     linkBuildFiles(project, directory);
     return true;
+  }
+
+  /**
+   * 폴더가 없어진 닫은 저장소(내린 모듈)를 프로젝트에서 지운다. EDT 에서 부른다.
+   * 콘텐츠 루트가 모두 디스크에 없거나 지금 받은 폴더(cloned) 안이면 지운다(닫은 뒤 탐색기에서 지우고 같은 자리에 다시 받은 경우).
+   * 남겨 두면 다시 열 줄도 없이 이름만 잡고 있어, 같은 이름으로 다시 받은 저장소가 워크스페이스에 붙지 않고 새 창으로 열린다(moduleNameTaken).
+   * 콘텐츠 루트를 알 수 없는 내린 모듈(CloseRepoAction.rootsOf 가 빔)은 건드리지 않는다.
+   */
+  private static void dropStaleClosed(Project project, @Nullable Path cloned) {
+    ModuleManager modules = ModuleManager.getInstance(project);
+    List<UnloadedModuleDescription> stale = new ArrayList<>();
+    for (UnloadedModuleDescription description : modules.getUnloadedModuleDescriptions()) {
+      List<String> roots = CloseRepoAction.rootsOf(project, description);
+      boolean gone = !roots.isEmpty();
+      for (String path : roots) {
+        Path root = Path.of(FileUtil.toSystemDependentName(path));
+        if (Files.exists(root) && (cloned == null || !root.startsWith(cloned))) gone = false;
+      }
+      if (gone) stale.add(description);
+    }
+    if (stale.isEmpty()) return;
+    LOG.info("폴더가 없어진 닫은 저장소를 지웁니다: " + stale);
+    WriteAction.run(() -> modules.removeUnloadedModules(stale));
   }
 
   /** 올라온 모듈이나 내린 모듈 중 대소문자를 가리지 않고 같은 이름이 있으면 true. 새 모듈 만들기는 같은 이름의 내린 모듈을 지우고, 윈도우에서는 .iml 이 대소문자만 달라도 덮인다. */
@@ -377,7 +431,7 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
    * 프로젝트 폴더에 빌드 파일이 있거나(zip 으로 받은 다중 모듈 프로젝트 · 맨 위 묶음 빌드 파일), Git · SVN 저장소 안이거나,
    * 그 폴더 아래에 모듈로 붙은 폴더가 하나도 없으면(그냥 폴더 · SVN 작업본 · 소스 폴더를 아직 안 정한 프로젝트) 워크스페이스가 아니다.
    */
-  private static @Nullable VirtualFile workspaceDir(Project project) {
+  static @Nullable VirtualFile workspaceDir(Project project) {
     String base = project.isDefault() ? null : project.getBasePath();
     if (base == null) return null;
     for (String file : BUILD_FILES) {
@@ -396,6 +450,10 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
       for (VirtualFile root : roots) {
         if (VfsUtilCore.isAncestor(baseDir, root, true)) attached = true;
       }
+    }
+    // 저장소를 모두 닫아도(Close Project) 워크스페이스로 본다.
+    for (VirtualFile root : CloseRepoAction.closedRoots(project)) {
+      if (VfsUtilCore.isAncestor(baseDir, root, true)) attached = true;
     }
     return attached ? baseDir : null;
   }
@@ -424,29 +482,77 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
     });
   }
 
-  /** 워크스페이스 프로젝트의 프로젝트 창 맨 위에서 프로젝트 폴더 줄을 그 안의 줄들(.idea 빼고)로 바꾼다. */
+  /**
+   * 워크스페이스 프로젝트의 프로젝트 창 맨 위에서 프로젝트 폴더 줄을 그 안의 저장소 모듈 줄들로 바꾼다(모듈로 붙지 않은 폴더 · 파일 · .idea 는 안 보임).
+   * 워크스페이스 바로 아래가 아닌 저장소(git\그룹\저장소)는 그것을 품은 중간 폴더 줄(「그룹」) 아래에 보인다. 중간 폴더 줄에도 저장소 · 중간 폴더만 보인다.
+   * 닫은 저장소(내린 모듈의 콘텐츠 루트)는 원래 자리에 닫힌 줄(CloseRepoAction.ClosedRepoNode)로 보인다. IntelliJ 는 내린 모듈 폴더를 프로젝트 밖으로 보고
+   * 트리에서 빼므로(ProjectViewDirectoryHelper.shouldBeShown) 여기서 넣는다. 워크스페이스 밖에 붙였다가 닫은 저장소는 맨 위에 넣는다.
+   */
   public static final class HideWorkspaceRoot implements TreeStructureProvider, com.intellij.openapi.project.DumbAware {
     @Override
     public @NotNull Collection<AbstractTreeNode<?>> modify(@NotNull AbstractTreeNode<?> parent,
                                                            @NotNull Collection<AbstractTreeNode<?>> children,
                                                            ViewSettings settings) {
-      if (!(parent.getValue() instanceof Project project)) return children;
+      Project project = parent.getProject();
+      if (project == null || project.isDisposed()) return children;
       VirtualFile baseDir = workspaceDir(project);
       if (baseDir == null) return children;
-      List<AbstractTreeNode<?>> shown = new ArrayList<>();
-      for (AbstractTreeNode<?> child : children) {
-        if (!(child.getValue() instanceof PsiDirectory dir && baseDir.equals(dir.getVirtualFile()))) {
-          shown.add(child);
-          continue;
-        }
-        VirtualFile store = baseDir.findChild(Project.DIRECTORY_STORE_FOLDER);
-        for (AbstractTreeNode<?> inner : child.getChildren()) {
-          if (inner.getValue() instanceof PsiDirectory innerDir && innerDir.getVirtualFile().equals(store)) continue;
-          inner.setParent(parent);
-          shown.add(inner);
+      // 워크스페이스 폴더 자체 모듈(Maven 다시 읽기 사이 잠깐 다시 등록됨)의 루트는 저장소 루트로 치지 않는다.
+      List<VirtualFile> loaded = new ArrayList<>();
+      for (Module module : ModuleManager.getInstance(project).getModules()) {
+        for (VirtualFile root : ModuleRootManager.getInstance(module).getContentRoots()) {
+          if (!root.equals(baseDir)) loaded.add(root);
         }
       }
-      return shown;
+      List<VirtualFile> repos = new ArrayList<>(loaded);
+      repos.addAll(CloseRepoAction.closedRoots(project));
+      if (parent.getValue() instanceof Project) {
+        List<AbstractTreeNode<?>> shown = new ArrayList<>();
+        AbstractTreeNode<?> workspaceNode = null;
+        for (AbstractTreeNode<?> child : children) {
+          if (child.getValue() instanceof PsiDirectory dir && baseDir.equals(dir.getVirtualFile())) workspaceNode = child;
+          else shown.add(child);
+        }
+        List<AbstractTreeNode<?>> inner = new ArrayList<>();
+        if (workspaceNode != null) {
+          for (AbstractTreeNode<?> node : workspaceNode.getChildren()) {
+            if (!(node.getValue() instanceof PsiDirectory dir) || !leadsToRepo(dir.getVirtualFile(), repos)) continue;
+            node.setParent(parent);
+            inner.add(node);
+          }
+        }
+        shown.addAll(0, inner);
+        // 밖에 붙였다가 닫은 저장소는 IntelliJ 가 맨 위에 보통 폴더 줄로 남기기도 해 맨 위 줄 전체에서 닫힌 줄로 바꾼다.
+        List<AbstractTreeNode<?>> result = CloseRepoAction.withClosedRepos(project, parent, shown, baseDir, settings);
+        CloseRepoAction.addOutsideClosedRepos(project, parent, result, baseDir, loaded, settings);
+        return result;
+      }
+      if (!(parent.getValue() instanceof PsiDirectory parentDir)) return children;
+      VirtualFile dir = parentDir.getVirtualFile();
+      List<AbstractTreeNode<?>> shown = new ArrayList<>(children);
+      if (between(dir, baseDir, loaded)) {
+        // 모듈로 붙은 저장소 폴더와 그것을 품은 중간 폴더만 보인다. 워크스페이스 폴더 모듈이 다시 등록된 사이(Maven 다시 읽기 · 모듈 가져오기)에
+        // 붙이지 않은 옆 폴더 · .idea · 낱 파일이 잠깐 보였다 사라지지 않게 한다.
+        shown.removeIf(node -> !(node.getValue() instanceof PsiDirectory d) || !leadsToRepo(d.getVirtualFile(), repos));
+      }
+      return CloseRepoAction.withClosedRepos(project, parent, shown, dir, settings);
+    }
+
+    /** 이 폴더가 저장소 루트(올라온 · 닫은 모듈의 콘텐츠 루트)이거나 그것을 품으면 true. */
+    private static boolean leadsToRepo(VirtualFile dir, List<VirtualFile> repos) {
+      for (VirtualFile repo : repos) {
+        if (VfsUtilCore.isAncestor(dir, repo, false)) return true;
+      }
+      return false;
+    }
+
+    /** 워크스페이스 폴더 안이고 어느 저장소 모듈 폴더 안도 아닌 중간 폴더면 true. */
+    private static boolean between(VirtualFile dir, VirtualFile baseDir, List<VirtualFile> loaded) {
+      if (!VfsUtilCore.isAncestor(baseDir, dir, true)) return false;
+      for (VirtualFile root : loaded) {
+        if (VfsUtilCore.isAncestor(root, dir, false)) return false;
+      }
+      return true;
     }
   }
 

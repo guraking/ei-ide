@@ -1,0 +1,3 @@
+<idea-plugin>
+  <!-- Maven 클래스(MavenRepos)를 쓰기 위한 선택 의존. 따로 등록하는 것은 없다. -->
+</idea-plugin>

@@ -310,21 +310,25 @@ final class ReverseMerge {
    * into 로 옮겨(지금 브랜치가 아니면) 서버 개인 브랜치를 먼저 따라잡고(fast-forward 만), from 의 fromTip 커밋을 합친다. 충돌이면 CONFLICT(into 에서 합치기 상태로 둔다).
    * fromTip 은 미리 본 From 커밋이다. 그 뒤 자동 fetch 가 From 을 새로 받아 와도 미리 보기에 없던 커밋은 합치지 않는다.
    * push 면 합친 뒤 서버 개인 브랜치로 올린다. 서버 개인 브랜치와 내 것이 갈라져 있으면 합치기 전에 멈춘다.
-   * 커밋 안 한 변경(새 파일 빼고)이 있으면 stash 가 거짓이면 아무것도 하지 않고 DirtyException 으로 멈춘다. 그 상태로 합치다 충돌이 나 합치기를 취소하면 git 이 그 변경을 되살리지 못할 수 있다.
+   * 커밋 안 한 변경이 합치기를 막으면(blocksMerge) stash 가 거짓이면 아무것도 하지 않고 DirtyException 으로 멈춘다. 그 상태로 합치다 충돌이 나 합치기를 취소하면 git 이 그 변경을 되살리지 못할 수 있다.
+   * 막지 않는 수정(합치기가 건드리지 않는 파일)은 그대로 둔 채 합친다. 충돌 마무리 커밋(finish)은 인덱스만 담으므로 그 수정은 커밋에 들어가지 않는다.
    * stash 가 참이면 그 변경을 Stash(STASH_MESSAGE) 해 두고 합친 뒤 원래 브랜치에서 되살린다. 실패해도(into 로 옮기기 실패 포함) 원래 브랜치로 돌아가 되살린다.
    * 충돌이면 Stash 를 두고 CONFLICT_STASHED 를 돌려준다. finish 가 마무리한 뒤 되살린다.
    * into 로 옮겼으면 끝난 뒤(실패 포함, 충돌 빼고) 원래 브랜치로 돌아온다. 되살리지 못하면 그 안내를 예외 메시지에 붙인다.
    */
   static Result merge(File root, String remote, String from, String fromTip, String into, String current, boolean push, boolean stash)
     throws IOException, InterruptedException {
+    String intoRemote = remoteRef(remote, into);
+    boolean switched = !into.equals(current);
     boolean stashed = false;
-    if (!lines(git(root, "status", "--porcelain", "-uno")).isEmpty()) {
+    // 합치기가 시작하는 곳: 옮겨 갈 브랜치(없으면 서버 것으로 만든다) 또는 지금 HEAD. 서버 것이 앞서 있으면 따라잡은 뒤 거기서 합친다.
+    String start = !switched ? "HEAD" : hasRef(root, HEADS + into) ? HEADS + into : intoRemote;
+    String base = Integer.parseInt(git(root, "rev-list", "--count", start + ".." + intoRemote).trim()) > 0 ? intoRemote : start;
+    if (blocksMerge(root, start, base, fromTip)) {
       if (!stash) throw new DirtyException();
       git(root, GIT_LONG_TIMEOUT_SEC, "stash", "push", "-m", STASH_MESSAGE);
       stashed = true;
     }
-    String intoRemote = remoteRef(remote, into);
-    boolean switched = !into.equals(current);
     try {
       if (switched) {
         if (hasRef(root, HEADS + into)) git(root, GIT_LONG_TIMEOUT_SEC, "checkout", into);
@@ -358,6 +362,22 @@ final class ReverseMerge {
     }
     if (stashed) unstash(root);
     return Result.MERGED;
+  }
+
+  /**
+   * 커밋 안 한 변경이 합치기를 막는가. 올려 둔(staged) 변경이 있으면 git merge 가 거부하므로 참이다.
+   * 아니면 고친 파일이 합치기가 바꾸는 파일과 겹칠 때만 참이다: start(옮겨 갈 브랜치 또는 HEAD)로 옮기기, base(따라잡은 서버 브랜치, 따라잡지 않으면 start)로 따라잡기, base 에서 fromTip 합치기.
+   * 이름 바꾸기는 옛 경로 · 새 경로를 모두 바뀐 파일로 본다(--no-renames).
+   */
+  static boolean blocksMerge(File root, String start, String base, String fromTip) throws IOException, InterruptedException {
+    if (!lines(git(root, "diff", "--cached", "--name-only")).isEmpty()) return true;
+    Set<String> mine = lines(git(root, "diff", "--name-only"));
+    if (mine.isEmpty()) return false;
+    Set<String> touched = lines(git(root, "diff", "--name-only", "--no-renames", "HEAD", start));
+    touched.addAll(lines(git(root, "diff", "--name-only", "--no-renames", start, base)));
+    touched.addAll(lines(git(root, "diff", "--name-only", "--no-renames", base + "..." + fromTip)));
+    mine.retainAll(touched);
+    return !mine.isEmpty();
   }
 
   /** 맨 위 Stash 가 합치기 전에 넣어 둔 것(STASH_MESSAGE)이면 꺼내 되살린다. 꺼내지 못하면 Stash 를 그대로 두고 그 안내를 담은 IOException. */

@@ -442,7 +442,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
       <tr><td>Generate DTO from JSON…</td><td>고른 패키지에 DTO 만들기</td></tr>
       <tr><td>Git ▸ Synchronize Workspace · Subversion ▸ Synchronize Workspace</td><td>그 저장소만 비교하는 Synchronize 창</td></tr>
       <tr><td>Git ▸ Merge Branches…</td><td>그 저장소로 역머지 창</td></tr>
-      <tr><td>Close Project · Open Project (맨 아래, 저장소 폴더 줄)</td><td>이클립스처럼 저장소 하나만 닫기 · 다시 열기. 닫힌 저장소는 색인 · 검색 · 컴파일 · 동기화 창 · Git Log 에서 빠지고 트리에 닫힌 아이콘 줄로 남습니다. 파일은 그대로입니다</td></tr>
+      <tr><td>Close Project · Open Project (맨 아래, 저장소 폴더 줄)</td><td>이클립스처럼 저장소 하나만 닫기 · 다시 열기. 닫힌 저장소는 색인 · 검색 · 컴파일 · 동기화 창 · Git Log 에서 빠지고 트리에 닫힌 아이콘 줄로 남습니다. 파일은 그대로입니다. 이 저장소를 쓰는 다른 Maven 모듈은 닫는 동안 로컬 Maven 저장소의 jar 를 씁니다(jar 가 없으면 닫기 전에 묻습니다)</td></tr>
       <tr><td>Assume Unchanged · No Assume Unchanged (맨 아래)</td><td>내 PC 에서만 고친 파일을 변경 목록에서 숨기기 · 되돌리기</td></tr>
       <tr><td><kbd>F5</kbd> (Reload from Disk)</td><td>고른 프로젝트 · 폴더 · 파일을 디스크에서 다시 읽기</td></tr>
     </table>
@@ -747,7 +747,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
     <p class="lead">서버를 고르면 머리줄 아래가 「설정 · 대시보드 · 연결 지도」 탭으로 나뉩니다. 값은 5초마다 재고 최근 10분만 남기며, 서버를 멈추거나 IDE 를 닫으면 지웁니다.</p>
     <ul class="legend">
       <li><span class="mark">D</span><div><b>대시보드</b> <span class="t">CPU · 힙 · 스레드 · 분당 요청 · 평균 응답(최대) · 오류율(5xx) · DB 풀(Hikari) 칸과 CPU · 힙 · 평균 응답 10분 그래프, 느린 요청 상위 5(30초마다). 느린 요청 줄을 두 번 누르면 그 컨트롤러 메서드로 갑니다. 요청 · DB 풀 값은 액추에이터(<code>spring-boot-starter-actuator</code>)가 있는 서버만 보입니다. 서버 창에서 띄우면 <code>spring.jmx.enabled=true</code> 와 JMX 노출 <code>health · metrics</code> 를 저절로 넣어 JMX 로 읽습니다(웹 노출 · 설정 파일은 그대로, 이미 적힌 JMX 노출 목록에 더함). WAS 는 CPU · 힙 · 스레드만.</span></div></li>
-      <li><span class="mark">M</span><div><b>연결 지도</b> <span class="t">실행 중인 스프링 부트 서버의 application*.yml · properties 에서 <code>datasource url</code> · <code>redis</code> · <code>http://…</code> 주소(gateway routes 포함)를 읽어 상자와 선으로 그립니다. 다른 서버의 포트로 가는 localhost 주소는 그 서버 상자로 잇습니다. 연결 지도 탭이 보이는 동안만 10초마다 IDE 가 그 포트에 한 번 붙었다 끊어 보고(핑 · HTTP 아님, 탭을 누르면 바로 한 번), 붙으면 초록 실선 · 끊기면 빨강 점선과 오른쪽 아래 알림(연결 지도 보기 · 다시 확인 · 이 연결 알림 끄기). 프로필은 서버 설정대로 읽고, 위 상자에서 하나로 바꿔 볼 수 있습니다. 선이나 아래 표의 줄을 두 번 누르면 그 설정 줄로 갑니다. 내 PC 의 설정만 읽으므로, 개발 서버에 떠 있는 게이트웨이 뒤(게이트웨이 → API 서버)는 보이지 않습니다. 게이트웨이를 내 PC 에서 같이 띄우면 그 routes 까지 이어집니다. <code>${…}</code> 는 같은 설정 안의 값 · 기본값으로 풉니다. 그리지 않는 것: <code>lb://서비스이름</code>(유레카), <code>host:port</code> 만 적힌 값(Redis 클러스터 nodes 등), Kafka · MongoDB · RabbitMQ, 환경변수 · Config 서버 · bootstrap.yml 값.</span></div></li>
+      <li><span class="mark">M</span><div><b>연결 지도</b> <span class="t">실행 중인 스프링 부트 서버의 application*.yml · properties 에서 <code>datasource url</code> · <code>redis</code> · <code>http://…</code> 주소(gateway routes 포함)를 읽어 상자와 선으로 그립니다. 바깥 상자는 「데이터베이스 · 회사 서버 · 내 PC」 구역으로 묶이고, 선은 직각으로 꺾여 연결마다 따로 들어가며, ms · 「끊김」 글은 대상 상자 바로 왼쪽에 붙습니다. 다른 서버의 포트로 가는 localhost 주소는 그 서버 상자로 잇습니다. 위쪽 「조회」 단추를 누를 때만 IDE 가 설정을 읽고 그 포트에 한 번 붙었다 끊어 보고(핑 · HTTP 아님, 저절로 조회하지 않음, 단추 옆에 마지막 조회 시각), 붙으면 초록 실선 · 끊기면 빨강 점선과 오른쪽 아래 알림(연결 지도 보기 · 다시 확인 · 이 연결 알림 끄기). 프로필은 서버 설정대로 읽고, 위 상자에서 하나로 바꿔 볼 수 있습니다. 선이나 아래 표의 줄을 두 번 누르면 그 설정 줄로 갑니다. 내 PC 의 설정만 읽으므로, 개발 서버에 떠 있는 게이트웨이 뒤(게이트웨이 → API 서버)는 보이지 않습니다. 게이트웨이를 내 PC 에서 같이 띄우면 그 routes 까지 이어집니다. <code>${…}</code> 는 같은 설정 안의 값 · 기본값으로 풉니다. 그리지 않는 것: <code>lb://서비스이름</code>(유레카), <code>host:port</code> 만 적힌 값(Redis 클러스터 nodes 등), Kafka · MongoDB · RabbitMQ, 환경변수 · Config 서버 · bootstrap.yml 값.</span></div></li>
       <li><span class="mark">C</span><div><b>모아 보기</b> <span class="t">도구줄 「모아 보기」를 누르면 실행 중인 서버를 한 표로 비교합니다. 평균 응답 300 ms · DB 풀 80 % 이상은 주황, 오류율 0.5 % 이상은 빨강. 줄을 누르면 그 서버의 대시보드로 갑니다.</span></div></li>
     </ul>
 
@@ -1103,7 +1103,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
         <li><span class="mark">2</span><div><b>From ⇄ Into</b> <span class="t">왼쪽이 가져올 브랜치, 오른쪽이 합칠 곳입니다. 가운데 ⇄ 는 두 브랜치를 맞바꾸고 바로 다시 비교합니다.</span></div></li>
         <li><span class="mark">3</span><div><b>미리보기</b> <span class="t">Compare 를 누르면 커밋 · 파일 · 내 파일 수와 들어올 파일이 나옵니다.</span></div></li>
         <li><span class="mark">4</span><div><b>주황 줄</b> <span class="t">내가 고친 파일을 다른 사람도 고친 것입니다. 먼저 두 번 눌러 비교해 보세요.</span></div></li>
-        <li><span class="mark">5</span><div><b>Push · Merge</b> <span class="t">Push 를 켜 두면 합친 뒤 서버로 올립니다. 커밋 안 한 변경이 있으면 Stash 하고 합칠지 묻습니다.</span></div></li>
+        <li><span class="mark">5</span><div><b>Push · Merge</b> <span class="t">Push 를 켜 두면 합친 뒤 서버로 올립니다. 커밋 안 한 변경이 합칠 파일과 겹칠 때만 Stash 하고 합칠지 묻습니다. 겹치지 않으면 그대로 둔 채 합칩니다.</span></div></li>
       </ol>
     </div>
     <table class="keys map" style="margin-bottom:18px">
