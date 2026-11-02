@@ -68,6 +68,11 @@ import com.intellij.ui.TreeSpeedSearch;
 import com.intellij.ui.SimpleColoredComponent;
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.actionSystem.ActionToolbar;
+import com.intellij.openapi.actionSystem.Presentation;
+import com.intellij.openapi.actionSystem.ex.CustomComponentAction;
+import com.intellij.openapi.actionSystem.impl.ActionButtonWithText;
+import com.intellij.ide.ui.UISettings;
+import com.intellij.util.ui.GraphicsUtil;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.CommonShortcuts;
 import com.intellij.openapi.actionSystem.CompositeShortcutSet;
@@ -1566,7 +1571,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
   }
 
   /** 도구줄 보기 거르기. 넷 중 하나만 눌린 상태(라디오)이고, kind 가 null 이면 전체. 아이콘 없이 글만 보인다. */
-  private final class ModeAction extends DumbAwareToggleAction {
+  private final class ModeAction extends DumbAwareToggleAction implements CustomComponentAction {
     private final Kind kind;
 
     ModeAction(String key, Kind kind) {
@@ -1577,6 +1582,36 @@ final class SyncPanel extends SimpleToolWindowPanel {
 
     @Override public @NotNull ActionUpdateThread getActionUpdateThread() { return ActionUpdateThread.EDT; }
     @Override public boolean isSelected(@NotNull AnActionEvent e) { return modeFilter == kind; }
+
+    /**
+     * 도구줄 기본 글 단추와 같되, 글 폭을 실제로 그리는 그래픽(화면 배율 · 글꼴 다듬기 포함)의 글꼴 치수로 잰다.
+     * 기본 단추는 컴포넌트 글꼴 치수로 재는데, 윈도우에서 EI Mono 한글은 그 치수(영문 1.5칸)보다 넓게(영문 2칸) 그려져
+     * 글이 단추를 넘쳐 옆 단추 글과 겹친다. 그릴 때와 같은 그래픽에서 재면 그린 폭과 같다.
+     * 화면에 붙기 전에는 그래픽이 없어 기본 치수로 재고, 붙을 때 다시 잰다.
+     */
+    @Override
+    public @NotNull JComponent createCustomComponent(@NotNull Presentation presentation, @NotNull String place) {
+      return new ActionButtonWithText(this, presentation, place, ActionToolbar.DEFAULT_MINIMUM_BUTTON_SIZE) {
+        @Override
+        public FontMetrics getFontMetrics(Font font) {
+          Graphics g = GraphicsUtil.safelyGetGraphics(this);
+          if (g == null) return super.getFontMetrics(font);
+          try {
+            UISettings.setupAntialiasing(g);
+            return g.getFontMetrics(font);
+          }
+          finally {
+            g.dispose();
+          }
+        }
+
+        @Override
+        public void addNotify() {
+          super.addNotify();
+          revalidate();
+        }
+      };
+    }
 
     @Override
     public void setSelected(@NotNull AnActionEvent e, boolean state) {

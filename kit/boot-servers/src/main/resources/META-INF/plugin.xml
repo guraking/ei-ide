@@ -158,6 +158,11 @@
             <action id="KingGura.CaseUpperSnake" class="local.bootservers.CaseConvertActions$UpperSnake" icon="/icons/ei/caseUpperSnake.svg"/>
             <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EditorToggleColumnMode"/>
         </group>
+        <!-- Search 메뉴 · 편집기 우클릭(표기법 바꾸기 아래): 정규식 작업대. 편집기에서 고른 글이 시험 글이 된다. -->
+        <action id="KingGura.RegexBench" class="local.bootservers.RegexBenchAction" icon="AllIcons.Actions.Regex">
+            <add-to-group group-id="KG.SearchMenu" anchor="last"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="KingGura.CaseConvert"/>
+        </action>
         <!-- 편집기 · 콘솔 우클릭 「AI」: 고른 코드 · 로그를 프롬프트 파일로 만들어 터미널 새 탭에서 Claude Code 를 시작한다 -->
         <group id="KingGura.AiEditor" popup="true" icon="AllIcons.Toolwindows.ToolWindowAskAI">
             <action id="KingGura.AiExplain" class="local.bootservers.ai.AiActions$Explain" icon="/icons/ei/aiExplain.svg"/>

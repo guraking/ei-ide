@@ -249,7 +249,6 @@ final class DashboardView {
         return switch (access) {
             case OK -> null;
             case NOT_EXPOSED -> BootServersBundle.message("dashboard.notice.not.exposed");
-            case FORBIDDEN -> BootServersBundle.message("dashboard.notice.forbidden");
             case UNREACHABLE -> BootServersBundle.message("dashboard.notice.unreachable");
             case NONE -> BootServersBundle.message("dashboard.notice.none");
         };

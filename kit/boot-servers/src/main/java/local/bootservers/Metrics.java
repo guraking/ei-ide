@@ -2,6 +2,7 @@ package local.bootservers;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.LinkedHashMap;
@@ -10,11 +11,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.ToDoubleFunction;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
- * 서버 대시보드의 계산: 액추에이터 /actuator/metrics 응답 읽기, 5초마다 잰 값의 10분 기록, 분당 · 평균 값, 노출 설정 합치기.
+ * 서버 대시보드의 계산: 액추에이터 metrics 끝점(JMX) 응답 읽기, 5초마다 잰 값의 10분 기록, 분당 · 평균 값, 노출 설정 합치기.
  * 값을 모르면 NaN(소수) · -1(개수). 인텔리제이 클래스를 쓰지 않는다(MetricsCheck 로 점검).
  */
 final class Metrics {
@@ -36,74 +35,58 @@ final class Metrics {
     static final double SLOW_AVG_MILLIS = 300;
     static final double POOL_BUSY_RATIO = 0.8;
     static final double ERROR_RATE = 0.005;
-    static final String EXPOSURE_KEY = "management.endpoints.web.exposure.include";
+    static final String EXPOSURE_KEY = "management.endpoints.jmx.exposure.include";
     static final List<String> NEEDED_ENDPOINTS = List.of("health", "metrics");
     private static final String EXPOSE_ALL = "*";
     private static final double MILLIS_PER_SECOND = 1000;
     private static final double MILLIS_PER_MINUTE = 60_000;
-
-    private static final Pattern MEASUREMENT = Pattern.compile(
-            "\\{\\s*\"statistic\"\\s*:\\s*\"(\\w+)\"\\s*,\\s*\"value\"\\s*:\\s*(-?[0-9.]+(?:[eE][-+]?\\d+)?|NaN)\\s*}");
-    private static final String TAGS_START = "\"tag\"\\s*:\\s*\"";
-    private static final String TAGS_VALUES = "\"\\s*,\\s*\"values\"\\s*:\\s*\\[";
-    private static final Pattern NAMES = Pattern.compile("\"names\"\\s*:\\s*\\[");
+    // metrics 끝점 응답의 칸 이름(스프링 부트 MetricsEndpoint 의 JSON 과 같다)
+    private static final String MEASUREMENTS = "measurements";
+    private static final String STATISTIC = "statistic";
+    private static final String VALUE_FIELD = "value";
+    private static final String AVAILABLE_TAGS = "availableTags";
+    private static final String TAG = "tag";
+    private static final String TAG_VALUES = "values";
+    private static final String NAMES = "names";
 
     private Metrics() {
     }
 
-    /** /actuator/metrics/{이름} 응답의 measurements: statistic(COUNT · TOTAL_TIME · MAX · VALUE …) → 값. */
-    static Map<String, Double> measurements(String json) {
+    /** metrics 끝점 metric(이름) 응답의 measurements: statistic(COUNT · TOTAL_TIME · MAX · VALUE …) → 값. 모양이 다른 칸은 건너뛴다. */
+    static Map<String, Double> measurements(Map<?, ?> answer) {
         Map<String, Double> result = new LinkedHashMap<>();
-        Matcher m = MEASUREMENT.matcher(json);
-        while (m.find()) {
-            result.put(m.group(1), m.group(2).equals("NaN") ? Double.NaN : Double.parseDouble(m.group(2)));
+        for (Object item : list(answer.get(MEASUREMENTS))) {
+            if (item instanceof Map<?, ?> m && m.get(STATISTIC) instanceof String statistic && m.get(VALUE_FIELD) instanceof Number value) {
+                result.put(statistic, value.doubleValue());
+            }
         }
         return result;
     }
 
     /** availableTags 에서 한 태그(uri · outcome · method …)의 값들. 없으면 빈 목록. */
-    static List<String> tagValues(String json, String tag) {
-        Matcher m = Pattern.compile(TAGS_START + Pattern.quote(tag) + TAGS_VALUES).matcher(json);
-        return m.find() ? strings(json, m.end()) : List.of();
+    static List<String> tagValues(Map<?, ?> answer, String tag) {
+        for (Object item : list(answer.get(AVAILABLE_TAGS))) {
+            if (item instanceof Map<?, ?> m && tag.equals(m.get(TAG))) {
+                return strings(m.get(TAG_VALUES));
+            }
+        }
+        return List.of();
     }
 
-    /** /actuator/metrics 응답의 names(지표 이름들). */
-    static Set<String> names(String json) {
-        Matcher m = NAMES.matcher(json);
-        return m.find() ? new LinkedHashSet<>(strings(json, m.end())) : Set.of();
+    /** metrics 끝점 listNames 응답의 names(지표 이름들). */
+    static Set<String> names(Map<?, ?> answer) {
+        return new LinkedHashSet<>(strings(answer.get(NAMES)));
     }
 
-    /** from 부터 「]」 까지의 JSON 글 값들(따옴표 · 역사선 · 유니코드 이스케이프를 푼다). */
-    private static List<String> strings(String json, int from) {
+    private static List<?> list(Object value) {
+        return value instanceof Collection<?> c ? new ArrayList<>(c) : List.of();
+    }
+
+    private static List<String> strings(Object value) {
         List<String> result = new ArrayList<>();
-        StringBuilder current = null;
-        for (int i = from; i < json.length(); i++) {
-            char c = json.charAt(i);
-            if (current == null) {
-                if (c == ']') {
-                    break;
-                }
-                if (c == '"') {
-                    current = new StringBuilder();
-                }
-                continue;
-            }
-            if (c == '"') {
-                result.add(current.toString());
-                current = null;
-            }
-            else if (c == '\\' && i + 1 < json.length()) {
-                char next = json.charAt(++i);
-                if (next == 'u' && i + 4 < json.length()) {
-                    current.append((char) Integer.parseInt(json.substring(i + 1, i + 5), 16));
-                    i += 4;
-                }
-                else {
-                    current.append(next == 'n' ? '\n' : next == 't' ? '\t' : next);
-                }
-            }
-            else {
-                current.append(c);
+        for (Object item : list(value)) {
+            if (item instanceof String text) {
+                result.add(text);
             }
         }
         return result;

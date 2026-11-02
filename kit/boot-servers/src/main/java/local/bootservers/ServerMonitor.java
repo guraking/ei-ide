@@ -17,6 +17,7 @@ import com.intellij.util.concurrency.AppExecutorUtil;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import javax.management.MBeanServerConnection;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -33,14 +34,14 @@ import java.util.function.Supplier;
 
 /**
  * 서버 대시보드 · 연결 지도의 값을 모은다. 5초마다 화면 스레드에서 서버 목록을 받아(snapshot), 화면 스레드 밖에서 JVM · 액추에이터 값을 재고,
- * 10초마다 설정 파일의 연결 주소에 포트로 붙어 본 뒤, 화면 스레드에서 기록을 고치고 onChange 를 부른다.
+ * 연결 지도의 「조회」를 눌렀을 때만 설정 파일의 연결 주소에 포트로 붙어 본 뒤, 화면 스레드에서 기록을 고치고 onChange 를 부른다.
  * 실행 중인 서버가 없으면 재지 않는다. 서버를 멈추면 그 서버 기록을 지운다. 기록은 디스크에 남기지 않는다.
  * 연결이 끊기면(처음 확인에서 끊겨 있어도) 알림을 한 번 띄우고, 다시 붙을 때까지 같은 연결로 또 띄우지 않는다.
  */
 final class ServerMonitor {
 
-    /** 서버 창의 줄 하나. module 은 스프링 부트만(WAS 는 null), pid 는 실행 중일 때만(-1), actuator 는 「…/actuator」 또는 null. */
-    record Watched(String name, Module module, String vmProfile, boolean live, long pid, String actuator, Integer port) {
+    /** 서버 창의 줄 하나. module 은 스프링 부트만(WAS 는 null), pid 는 실행 중일 때만(-1). */
+    record Watched(String name, Module module, String vmProfile, boolean live, long pid, Integer port) {
     }
 
     /** 한 연결의 마지막 확인. checked 가 false 면 아직 확인 전. downSince 는 끊긴 것을 처음 본 시각(붙어 있으면 0). */
@@ -56,12 +57,11 @@ final class ServerMonitor {
     }
 
     private static final long SAMPLE_SECONDS = 5;
-    // 연결 확인은 재기 두 번에 한 번(10초), 느린 요청 목록은 여섯 번에 한 번(30초)
-    private static final int LINK_ROUNDS = 2;
+    // 느린 요청 목록은 재기 여섯 번에 한 번(30초)
     private static final int SLOW_ROUNDS = 6;
     private static final int CONNECT_TIMEOUT_MILLIS = 1500;
     private static final int SLOW_TOP = 5;
-    private static final Set<String> LOCAL_HOSTS = Set.of("localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]");
+    static final Set<String> LOCAL_HOSTS = Set.of("localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]");
     private static final String NOTIFICATION_GROUP = "서버 연결";
 
     private final Project project;
@@ -72,8 +72,10 @@ final class ServerMonitor {
     private final ScheduledFuture<?> future;
     private int round;
     private volatile boolean busy;
-    // 연결 지도 탭이 화면에 보이는가. 보일 때만 설정을 읽고 포트를 확인한다(바깥 DB · Redis 에 쓸데없이 붙지 않게).
-    private volatile boolean mapShown;
+    // 연결 확인은 refreshLinks 로 부탁받았을 때 한 번만 한다(바깥 DB · Redis 에 쓸데없이 붙지 않게).
+    // requested 는 다음 차례가 가져갈 부탁, inFlight 는 그 차례가 도는 중.
+    private volatile boolean linksRequested;
+    private volatile boolean linksInFlight;
 
     // 아래는 화면 스레드에서만 읽고 쓴다.
     private final Map<String, Metrics.History> histories = new HashMap<>();
@@ -86,6 +88,7 @@ final class ServerMonitor {
     private final Set<String> notified = new HashSet<>();
     private Set<String> profileNames = Set.of();
     private String profileOverride;
+    private long linksCheckedAt;
 
     /**
      * @param snapshot   화면 스레드에서 부르는 서버 목록
@@ -142,21 +145,20 @@ final class ServerMonitor {
         refreshLinks();
     }
 
-    /** 연결을 지금 다시 찾고 확인한다(알림의 「다시 확인」 · 프로필 바꾸기). */
+    /** 연결을 지금 다시 찾고 확인한다(연결 지도의 「조회」 · 알림의 「다시 확인」 · 프로필 바꾸기). 앞 차례가 돌고 있으면 다음 차례(최대 5초 뒤)가 한다. */
     void refreshLinks() {
-        round = 0;
+        linksRequested = true;
         AppExecutorUtil.getAppExecutorService().execute(this::tick);
     }
 
-    /** 연결 지도 탭이 보이거나 가려질 때 화면 스레드에서 부른다. 보이게 되면 바로 한 번 확인한다. */
-    void setMapShown(boolean shown) {
-        if (shown == mapShown) {
-            return;
-        }
-        mapShown = shown;
-        if (shown) {
-            refreshLinks();
-        }
+    /** 조회를 부탁했거나 도는 중이면 true. 끝나면 onChange 가 불린다. */
+    boolean linksPending() {
+        return linksRequested || linksInFlight;
+    }
+
+    /** 마지막으로 연결을 확인한 시각(밀리초), 아직 안 했으면 0. 화면 스레드에서 읽는다. */
+    long linksCheckedAt() {
+        return linksCheckedAt;
     }
 
     /** 스케줄러 스레드. 앞 차례가 아직 돌고 있으면 건너뛴다. */
@@ -169,7 +171,9 @@ final class ServerMonitor {
             List<Watched> list = snapshot.get();
             String slowName = slowTarget.get();
             String override = profileOverride;
-            boolean checkLinks = mapShown && round % LINK_ROUNDS == 0;
+            boolean checkLinks = linksRequested;
+            linksRequested = false;
+            linksInFlight = checkLinks;
             boolean checkSlow = round % SLOW_ROUNDS == 0;
             round++;
             AppExecutorUtil.getAppExecutorService().execute(() -> {
@@ -177,6 +181,7 @@ final class ServerMonitor {
                     measure(list, slowName, override, checkLinks, checkSlow);
                 }
                 finally {
+                    linksInFlight = false;
                     busy = false;
                 }
             });
@@ -195,14 +200,16 @@ final class ServerMonitor {
             }
             anyLive = true;
             ServerProbe.Jvm jvm = w.pid() < 0 ? null : ServerProbe.jvm(w.pid());
-            MetricsProbe.Requests r = MetricsProbe.requests(w.actuator());
+            MBeanServerConnection server = w.module() == null || w.pid() < 0 ? null : ServerProbe.connection(w.pid());
+            MetricsProbe.Requests r = w.module() == null ? MetricsProbe.Requests.of(MetricsProbe.Access.NONE) : MetricsProbe.requests(server);
             accesses.put(w.name(), r.access());
             samples.put(w.name(), sample(jvm, r));
             if (checkSlow && w.name().equals(slowName) && r.access() == MetricsProbe.Access.OK) {
-                slows.put(w.name(), Metrics.slowest(MetricsProbe.slow(w.actuator()), SLOW_TOP));
+                slows.put(w.name(), Metrics.slowest(MetricsProbe.slow(server), SLOW_TOP));
             }
         }
-        List<Link> found = null;
+        // 확인한 차례면 서버가 없어도 빈 목록을 넘겨 조회 시각을 남긴다.
+        List<Link> found = checkLinks ? List.of() : null;
         Set<String> names = null;
         Map<String, LinkState> checked = new HashMap<>();
         if (checkLinks && anyLive) {
@@ -317,6 +324,9 @@ final class ServerMonitor {
             }
             linkStates.keySet().retainAll(keys);
             notified.retainAll(keys);
+        }
+        if (found != null) {
+            linksCheckedAt = System.currentTimeMillis();
         }
         onChange.run();
     }

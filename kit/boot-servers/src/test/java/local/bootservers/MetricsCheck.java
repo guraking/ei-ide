@@ -14,14 +14,16 @@ public final class MetricsCheck {
     }
 
     private static void parse() {
-        String json = "{\"name\":\"http.server.requests\",\"measurements\":[{\"statistic\":\"COUNT\",\"value\":12.0},"
-                + "{\"statistic\":\"TOTAL_TIME\",\"value\":0.53},{\"statistic\":\"MAX\",\"value\":1.2E-2}],"
-                + "\"availableTags\":[{\"tag\":\"method\",\"values\":[\"GET\"]},{\"tag\":\"uri\",\"values\":[\"/api/{id}\",\"/a\\\"b\",\"\\u002Fx\"]}]}";
-        Map<String, Double> m = Metrics.measurements(json);
-        check(m.get("COUNT") == 12.0 && m.get("TOTAL_TIME") == 0.53 && m.get("MAX") == 0.012, "measurements " + m);
-        check(Metrics.tagValues(json, "uri").equals(List.of("/api/{id}", "/a\"b", "/x")), "uri " + Metrics.tagValues(json, "uri"));
-        check(Metrics.tagValues(json, "outcome").isEmpty(), "없는 태그");
-        check(Metrics.names("{\"names\":[\"jvm.threads.live\",\"hikaricp.connections.active\"]}").contains("hikaricp.connections.active"), "names");
+        Map<String, Object> answer = Map.of("name", "http.server.requests",
+                "measurements", List.of(Map.of("statistic", "COUNT", "value", 12.0), Map.of("statistic", "TOTAL_TIME", "value", 0.53),
+                        Map.of("statistic", "MAX", "value", 0.012), Map.of("statistic", "BROKEN")),
+                "availableTags", List.of(Map.of("tag", "method", "values", List.of("GET")), Map.of("tag", "uri", "values", List.of("/api/{id}", "/x"))));
+        Map<String, Double> m = Metrics.measurements(answer);
+        check(m.size() == 3 && m.get("COUNT") == 12.0 && m.get("TOTAL_TIME") == 0.53 && m.get("MAX") == 0.012, "measurements " + m);
+        check(Metrics.tagValues(answer, "uri").equals(List.of("/api/{id}", "/x")), "uri " + Metrics.tagValues(answer, "uri"));
+        check(Metrics.tagValues(answer, "outcome").isEmpty(), "없는 태그");
+        check(Metrics.measurements(Map.of()).isEmpty() && Metrics.names(Map.of("names", "x")).isEmpty(), "모양이 다름");
+        check(Metrics.names(Map.of("names", List.of("jvm.threads.live", "hikaricp.connections.active"))).contains("hikaricp.connections.active"), "names");
     }
 
     private static void exposure() {
