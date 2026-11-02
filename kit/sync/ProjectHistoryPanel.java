@@ -148,14 +148,17 @@ final class ProjectHistoryPanel extends JPanel {
   private static final String[] COLUMN_KEYS = {"", "history.col.message", "history.col.author", "history.col.date", "history.col.hash"};
 
   // 색. 가지 선은 테마 밝기에 맞춘 고정 팔레트, 알약은 글자색 + 옅은 바탕 · 테두리.
-  // 이웃한 가지끼리 비슷한 색이 붙지 않도록 파랑 · 초록 · 주황 · 보라 · 청록 … 순으로 둔다. 밝은 테마는 흰 바탕에서 읽히는 진한 색,
-  // 어두운 테마는 같은 색상을 밝게 한 색(EI White · EI Graphite 의 코드 색과 같은 계열).
+  // 가지 선은 색상환을 16등분(22.5°)한 16색이다. 파랑(215°)에서 시작해 5칸(112.5°)씩 건너뛰는 순서라
+  // 바로 옆 가지와 두 칸 옆 가지는 색상이 110° 넘게 떨어진다. 같은 색은 16번째 가지마다 돌아온다.
+  // 밝은 테마는 흰 바탕에서 읽히는 진한 색(채도 55% · 명도 42%), 어두운 테마는 같은 색상을 밝게 한 색(채도 65% · 명도 70%).
   private static final Color[] LIGHT_PALETTE = {
-    new Color(0x3B6FB6), new Color(0x2F8F5B), new Color(0xC0612B), new Color(0x7A5BB5), new Color(0x2A8C8C),
-    new Color(0xA8862A), new Color(0xB0475E), new Color(0x4E7FA8), new Color(0x6B8E23), new Color(0x8A6A4F)};
+    new Color(0x3061A6), new Color(0xA63070), new Color(0x7FA630), new Color(0x308DA6), new Color(0xA6309C), new Color(0xA6A130),
+    new Color(0x30A692), new Color(0x8430A6), new Color(0xA67530), new Color(0x30A666), new Color(0x5730A6), new Color(0xA64930),
+    new Color(0x30A63A), new Color(0x3035A6), new Color(0xA63044), new Color(0x53A630)};
   private static final Color[] DARK_PALETTE = {
-    new Color(0x6FA8FF), new Color(0x5FCF8F), new Color(0xF0A060), new Color(0xB49AF0), new Color(0x5FD3D3),
-    new Color(0xE0C060), new Color(0xE88A9C), new Color(0x8FB8E0), new Color(0xA8C860), new Color(0xC8A080)};
+    new Color(0x81AAE4), new Color(0xE481B7), new Color(0xC3E481), new Color(0x81D0E4), new Color(0xE481DC), new Color(0xE4E081),
+    new Color(0x81E4D4), new Color(0xC781E4), new Color(0xE4BB81), new Color(0x81E4AE), new Color(0xA281E4), new Color(0xE49581),
+    new Color(0x81E489), new Color(0x8185E4), new Color(0xE48191), new Color(0x9EE481)};
   // 알약 글자색. 밝은 테마(첫 값)에서는 흰 바탕에서 읽히도록 어둡게, 어두운 테마(둘째 값)에서는 밝게.
   // IntelliJ Log 탭의 테마 키(VersionControl.GitLog.*)는 따르지 않는다. 밝은 테마 기본값이 노랑 · 보라라 EI White 와 어울리지 않는다.
   // 현재 브랜치(HEAD)는 테마 강조 파랑 + 브랜치 아이콘, 로컬 브랜치는 초록, 원격(origin/*)은 회색, 태그는 황토.
