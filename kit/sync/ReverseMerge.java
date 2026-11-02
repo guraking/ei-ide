@@ -321,7 +321,10 @@ final class ReverseMerge {
     String intoRemote = remoteRef(remote, into);
     boolean switched = !into.equals(current);
     boolean stashed = false;
-    if (blocksMerge(root, switched && hasRef(root, HEADS + into) ? HEADS + into : intoRemote, intoRemote, fromTip)) {
+    // 합치기가 시작하는 곳: 옮겨 갈 브랜치(없으면 서버 것으로 만든다) 또는 지금 HEAD. 서버 것이 앞서 있으면 따라잡은 뒤 거기서 합친다.
+    String start = !switched ? "HEAD" : hasRef(root, HEADS + into) ? HEADS + into : intoRemote;
+    String base = Integer.parseInt(git(root, "rev-list", "--count", start + ".." + intoRemote).trim()) > 0 ? intoRemote : start;
+    if (blocksMerge(root, start, base, fromTip)) {
       if (!stash) throw new DirtyException();
       git(root, GIT_LONG_TIMEOUT_SEC, "stash", "push", "-m", STASH_MESSAGE);
       stashed = true;
@@ -363,16 +366,16 @@ final class ReverseMerge {
 
   /**
    * 커밋 안 한 변경이 합치기를 막는가. 올려 둔(staged) 변경이 있으면 git merge 가 거부하므로 참이다.
-   * 아니면 고친 파일이 합치기가 바꾸는 파일과 겹칠 때만 참이다: start(옮겨 갈 브랜치 또는 지금 HEAD)로 옮기기, intoRemote 로 따라잡기, fromTip 합치기.
+   * 아니면 고친 파일이 합치기가 바꾸는 파일과 겹칠 때만 참이다: start(옮겨 갈 브랜치 또는 HEAD)로 옮기기, base(따라잡은 서버 브랜치, 따라잡지 않으면 start)로 따라잡기, base 에서 fromTip 합치기.
    * 이름 바꾸기는 옛 경로 · 새 경로를 모두 바뀐 파일로 본다(--no-renames).
    */
-  static boolean blocksMerge(File root, String start, String intoRemote, String fromTip) throws IOException, InterruptedException {
+  static boolean blocksMerge(File root, String start, String base, String fromTip) throws IOException, InterruptedException {
     if (!lines(git(root, "diff", "--cached", "--name-only")).isEmpty()) return true;
     Set<String> mine = lines(git(root, "diff", "--name-only"));
     if (mine.isEmpty()) return false;
     Set<String> touched = lines(git(root, "diff", "--name-only", "--no-renames", "HEAD", start));
-    touched.addAll(lines(git(root, "diff", "--name-only", "--no-renames", start, intoRemote)));
-    touched.addAll(lines(git(root, "diff", "--name-only", "--no-renames", intoRemote + "..." + fromTip)));
+    touched.addAll(lines(git(root, "diff", "--name-only", "--no-renames", start, base)));
+    touched.addAll(lines(git(root, "diff", "--name-only", "--no-renames", base + "..." + fromTip)));
     mine.retainAll(touched);
     return !mine.isEmpty();
   }
