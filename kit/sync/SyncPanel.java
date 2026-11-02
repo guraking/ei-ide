@@ -71,7 +71,7 @@ import com.intellij.openapi.actionSystem.ActionToolbar;
 import com.intellij.openapi.actionSystem.Presentation;
 import com.intellij.openapi.actionSystem.ex.CustomComponentAction;
 import com.intellij.openapi.actionSystem.impl.ActionButtonWithText;
-import com.intellij.ide.ui.AntialiasingType;
+import com.intellij.ide.ui.UISettings;
 import com.intellij.util.ui.GraphicsUtil;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.CommonShortcuts;
@@ -1584,17 +1584,31 @@ final class SyncPanel extends SimpleToolWindowPanel {
     @Override public boolean isSelected(@NotNull AnActionEvent e) { return modeFilter == kind; }
 
     /**
-     * 도구줄 기본 글 단추와 같되, 글 폭을 그릴 때와 같은 글꼴 다듬기(안티에일리어싱)로 잰다.
-     * 기본 단추는 다듬기 없이 폭을 재고 다듬기를 켜고 그려서, 두 경우 한글 글자 폭이 다른 글꼴(힌팅된 EI Mono)에서는
-     * 글이 단추보다 넓게 그려져 옆 단추 글과 겹친다. 다듬기 설정을 바꾸면 updateUI 가 다시 불려 새 값으로 잰다.
+     * 도구줄 기본 글 단추와 같되, 글 폭을 실제로 그리는 그래픽(화면 배율 · 글꼴 다듬기 포함)의 글꼴 치수로 잰다.
+     * 기본 단추는 컴포넌트 글꼴 치수로 재는데, 윈도우에서 EI Mono 한글은 그 치수(영문 1.5칸)보다 넓게(영문 2칸) 그려져
+     * 글이 단추를 넘쳐 옆 단추 글과 겹친다. 그릴 때와 같은 그래픽에서 재면 그린 폭과 같다.
+     * 화면에 붙기 전에는 그래픽이 없어 기본 치수로 재고, 붙을 때 다시 잰다.
      */
     @Override
     public @NotNull JComponent createCustomComponent(@NotNull Presentation presentation, @NotNull String place) {
       return new ActionButtonWithText(this, presentation, place, ActionToolbar.DEFAULT_MINIMUM_BUTTON_SIZE) {
         @Override
-        public void updateUI() {
-          super.updateUI();
-          GraphicsUtil.setAntialiasingType(this, AntialiasingType.getAATextInfoForSwingComponent());
+        public FontMetrics getFontMetrics(Font font) {
+          Graphics g = GraphicsUtil.safelyGetGraphics(this);
+          if (g == null) return super.getFontMetrics(font);
+          try {
+            UISettings.setupAntialiasing(g);
+            return g.getFontMetrics(font);
+          }
+          finally {
+            g.dispose();
+          }
+        }
+
+        @Override
+        public void addNotify() {
+          super.addNotify();
+          revalidate();
         }
       };
     }
