@@ -397,6 +397,10 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
         if (VfsUtilCore.isAncestor(baseDir, root, true)) attached = true;
       }
     }
+    // 저장소를 모두 닫아도(Close Project) 워크스페이스로 본다.
+    for (VirtualFile root : CloseRepoAction.closedRoots(project)) {
+      if (VfsUtilCore.isAncestor(baseDir, root, true)) attached = true;
+    }
     return attached ? baseDir : null;
   }
 
@@ -424,7 +428,11 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
     });
   }
 
-  /** 워크스페이스 프로젝트의 프로젝트 창 맨 위에서 프로젝트 폴더 줄을 그 안의 줄들(.idea 빼고)로 바꾼다. */
+  /**
+   * 워크스페이스 프로젝트의 프로젝트 창 맨 위에서 프로젝트 폴더 줄을 그 안의 줄들(.idea 빼고)로 바꾼다.
+   * 닫은 저장소(내린 모듈의 콘텐츠 루트)는 닫힌 줄(CloseRepoAction.ClosedRepoNode)로 보인다. IntelliJ 는 다른 모듈의 콘텐츠 루트 안에 있는
+   * 내린 모듈 폴더를 프로젝트 밖으로 보고 트리에서 빼므로(ProjectViewDirectoryHelper.shouldBeShown), 프로젝트 폴더 바로 아래 것은 여기서 넣는다.
+   */
   public static final class HideWorkspaceRoot implements TreeStructureProvider, com.intellij.openapi.project.DumbAware {
     @Override
     public @NotNull Collection<AbstractTreeNode<?>> modify(@NotNull AbstractTreeNode<?> parent,
@@ -446,7 +454,7 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
           shown.add(inner);
         }
       }
-      return shown;
+      return CloseRepoAction.withClosedRepos(project, parent, shown, baseDir, settings);
     }
   }
 
