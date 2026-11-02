@@ -306,7 +306,7 @@ public class HistoryCheck {
     eq(bySubject, java.util.Map.of("내 작업", "f EDITED"));  // 내 작업은 kim 의 base 를 이어 고침(남의 소스)
   }
 
-  /** 되돌림이 역머지로 다른 가지에 퍼져도 처음 되돌린 커밋만 표시한다. */
+  /** 되돌림이 역머지 · 체리픽으로 다른 가지에 퍼져도 처음 되돌린 커밋만 표시한다. */
   private static void checkRevertSpread() throws Exception {
     File repo = Files.createTempDirectory("spread").toFile();
     git(repo, "init", "-q", "-b", "main");
@@ -326,6 +326,11 @@ public class HistoryCheck {
     kim(repo, "kim 되돌림");
     git(repo, "checkout", "-q", "lee");
     git(repo, "-c", "user.name=lee", "-c", "user.email=lee@x", "merge", "-q", "--no-ff", "-m", "lee 역머지", "main");
+    // 같은 되돌림을 체리픽으로 옮긴 커밋도 다시 표시하지 않는다.
+    String revert = git(repo, "rev-parse", "main").trim();
+    git(repo, "checkout", "-q", "-b", "park", "lee~1");
+    git(repo, "-c", "user.name=park", "-c", "user.email=park@x", "cherry-pick", revert);
+    git(repo, "-c", "user.name=lee", "-c", "user.email=lee@x", "merge", "-q", "--no-ff", "-m", "park 합침", "lee");
     List<History.Entry> log = History.parseGitLog(git(repo, History.gitLogArgs("HEAD", 100, 0)));
     List<String> merges = new java.util.ArrayList<>();
     for (History.Entry e : log) if (e.merge()) merges.add(e.id());
@@ -337,6 +342,7 @@ public class HistoryCheck {
       if (found != null) bySubject.put(e.subject(), found.get(0).change().path() + " " + found.get(0).kind());
     }
     eq(bySubject, java.util.Map.of("kim 되돌림", "f REVERTED", "내 작업", "f EDITED"));
+    eq(clashes.size(), 2);  // 체리픽은 제목이 같아 bySubject 로는 갈리지 않는다
   }
 
   private static void write(File repo, String path, String text) throws IOException {
