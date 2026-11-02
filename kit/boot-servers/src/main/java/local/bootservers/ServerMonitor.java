@@ -61,7 +61,7 @@ final class ServerMonitor {
     private static final int SLOW_ROUNDS = 6;
     private static final int CONNECT_TIMEOUT_MILLIS = 1500;
     private static final int SLOW_TOP = 5;
-    private static final Set<String> LOCAL_HOSTS = Set.of("localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]");
+    static final Set<String> LOCAL_HOSTS = Set.of("localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]");
     private static final String NOTIFICATION_GROUP = "서버 연결";
 
     private final Project project;
