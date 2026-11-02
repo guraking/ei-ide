@@ -31,7 +31,8 @@ RESOURCES = {
     "kinggura-sync": KIT / "sync/resources",
 }
 # 리소스 폴더 밖에 있어 jar 의 META-INF 로 넣는 파일.
-META_INF_FILES = {"kinggura-sync": [KIT / "sync/plugin.xml", KIT / "sync/kinggura-sync-svn.xml"]}
+META_INF_FILES = {"kinggura-sync": [KIT / "sync/plugin.xml", KIT / "sync/kinggura-sync-svn.xml",
+                                    KIT / "sync/kinggura-sync-maven.xml"]}
 CHECK_SOURCES = {
     "ei-db": KIT / "ei-db/test",
     "boot-servers": KIT / "boot-servers/src/test/java",

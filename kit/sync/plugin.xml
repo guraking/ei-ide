@@ -12,6 +12,8 @@
   <depends>Git4Idea</depends>
   <!-- SVN 플러그인이 있으면 트리 우클릭 Subversion 묶음에도 「작업 공간 동기화」를 넣는다. -->
   <depends optional="true" config-file="kinggura-sync-svn.xml">Subversion</depends>
+  <!-- Maven 플러그인이 있으면 Close Project 가 닫은 저장소의 pom 을 Maven 에서 뺀다(MavenRepos). 없으면 그 일만 건너뛴다. -->
+  <depends optional="true" config-file="kinggura-sync-maven.xml">org.jetbrains.idea.maven</depends>
 
   <!-- 화면 글 묶음: 기본 영어, _ko 한국어. -->
   <resource-bundle>messages.SyncBundle</resource-bundle>
@@ -44,6 +46,10 @@
     <!-- 저장소 목록이 잡힐 때마다 .git/info/exclude 에 IDE · 이클립스 파일 줄을 넣는다.
          topic 은 VCS_CONFIGURATION_CHANGED 가 쓰는 VcsMappingListener 여야 한다(VcsListener 이름으로는 알림이 오지 않는다). -->
     <listener class="kinggura.sync.ExcludeIdeFiles" topic="com.intellij.openapi.vcs.VcsMappingListener"/>
+    <!-- 모듈이 내려가거나 올라올 때(우리 Close · Open Project, IntelliJ Load/Unload Modules · Remove Module) VCS 매핑 · Maven · 편집기를 맞춘다. -->
+    <listener class="kinggura.sync.CloseRepoAction$ModuleSync" topic="com.intellij.openapi.project.ModuleListener"/>
+    <!-- 프로젝트 파일을 다시 읽어 맞춘 뒤 폴더가 없어진 닫은 저장소를 지운다(일찍 지우면 그 다시 읽기가 되살린다). -->
+    <listener class="kinggura.sync.CloneIntoProject$AfterJpsLoad" topic="com.intellij.workspaceModel.ide.JpsProjectLoadedListener"/>
   </projectListeners>
   <applicationListeners>
     <!-- Clone 해 워크스페이스에 붙인 폴더를 IntelliJ 가 최근 목록에 올린 뒤 뺀다 -->
