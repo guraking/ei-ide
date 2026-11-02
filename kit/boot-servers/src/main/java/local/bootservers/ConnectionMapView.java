@@ -1,5 +1,6 @@
 package local.bootservers;
 
+import com.intellij.ide.ui.laf.darcula.ui.DarculaButtonUI;
 import com.intellij.openapi.application.WriteIntentReadAction;
 import com.intellij.openapi.fileEditor.OpenFileDescriptor;
 import com.intellij.openapi.project.Project;
@@ -14,10 +15,12 @@ import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.NamedColorUtil;
 import com.intellij.util.ui.UIUtil;
+import local.bootservers.ui.Gauge;
 
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.DefaultComboBoxModel;
+import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.table.DefaultTableCellRenderer;
@@ -35,12 +38,14 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.RenderingHints;
-import java.awt.event.HierarchyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.geom.CubicCurve2D;
 import java.awt.geom.Point2D;
 import java.awt.geom.RoundRectangle2D;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -73,6 +78,7 @@ final class ConnectionMapView {
     private static final int HIT_SAMPLES = 24;
     private static final long MILLIS_PER_MINUTE = 60_000;
     private static final Color UP = new JBColor(0x208A3C, 0x5FB865);
+    private static final DateTimeFormatter CHECKED_TIME = DateTimeFormatter.ofPattern("HH:mm:ss");
 
     /** 상자: 서버(server 가 서버 이름) 또는 바깥 주소(server 가 null). */
     private record Node(String id, String title, String subtitle, String server) {
@@ -98,6 +104,9 @@ final class ConnectionMapView {
     };
     private final JBTable sourceTable = new JBTable(sourceModel);
     private final JBPanelWithEmptyText empty = new JBPanelWithEmptyText();
+    private final JButton query = new JButton(BootServersBundle.message("map.query"));
+    private final JBLabel checkedAt = grayLabel(BootServersBundle.message("map.query.none"));
+    private final Gauge gauge = Gauge.create(BootServersBundle.message("map.query.running"));
     private List<Edge> edges = List.of();
     private final Map<String, Point> positions = new HashMap<>();
     private List<Node> nodes = List.of();
@@ -113,10 +122,19 @@ final class ConnectionMapView {
         profile.addActionListener(e -> {
             if (!updatingProfiles) {
                 monitor.setProfileOverride((String) profile.getSelectedItem());
+                updateQuery();
             }
+        });
+        query.putClientProperty(DarculaButtonUI.DEFAULT_STYLE_KEY, true);
+        query.addActionListener(e -> {
+            monitor.refreshLinks();
+            updateQuery();
         });
         JPanel bar = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(UIUtil.DEFAULT_HGAP * 2), 0));
         bar.setBorder(JBUI.Borders.empty(UIUtil.DEFAULT_VGAP, 0));
+        bar.add(query);
+        bar.add(gauge);
+        bar.add(checkedAt);
         JPanel profileBox = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(UIUtil.DEFAULT_HGAP), 0));
         profileBox.add(new JBLabel(BootServersBundle.message("map.profile")));
         profileBox.add(profile);
@@ -124,7 +142,6 @@ final class ConnectionMapView {
         bar.add(legend(BootServersBundle.message("map.legend.up"), UP));
         bar.add(legend(BootServersBundle.message("map.legend.down"), JBUI.CurrentTheme.Label.errorForeground()));
         bar.add(grayLabel(BootServersBundle.message("map.legend.outside")));
-        bar.add(grayLabel(BootServersBundle.message("map.legend.interval")));
 
         sourceTable.setShowGrid(false);
         sourceTable.getColumnModel().getColumn(3).setCellRenderer(new DefaultTableCellRenderer() {
@@ -161,13 +178,22 @@ final class ConnectionMapView {
         }
         JPanel top = new JPanel(new BorderLayout());
         top.add(column, BorderLayout.NORTH);
-        root.add(ScrollPaneFactory.createScrollPane(top, true), "map");
+        JPanel mapCard = new JPanel(new BorderLayout());
+        mapCard.add(gauge.line(), BorderLayout.NORTH);
+        mapCard.add(ScrollPaneFactory.createScrollPane(top, true), BorderLayout.CENTER);
+        root.add(mapCard, "map");
         root.add(empty, "empty");
-        root.addHierarchyListener(e -> {
-            if ((e.getChangeFlags() & HierarchyEvent.SHOWING_CHANGED) != 0) {
-                monitor.setMapShown(root.isShowing());
-            }
-        });
+    }
+
+    /** 「조회」 단추 · 진행 표시 · 마지막 조회 시각을 monitor 의 지금 상태에 맞춘다. 조회 중에는 단추를 잠근다. */
+    private void updateQuery() {
+        boolean pending = monitor.linksPending();
+        query.setEnabled(!pending);
+        gauge.setVisible(pending);
+        long at = monitor.linksCheckedAt();
+        checkedAt.setVisible(!pending);
+        checkedAt.setText(at == 0 ? BootServersBundle.message("map.query.none")
+                : BootServersBundle.message("map.query.last", CHECKED_TIME.format(Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault()))));
     }
 
     JComponent component() {
@@ -190,6 +216,7 @@ final class ConnectionMapView {
     void show(String selectedServer) {
         selected = selectedServer;
         updateProfiles();
+        updateQuery();
         List<ServerMonitor.Watched> live = new ArrayList<>();
         for (ServerMonitor.Watched w : monitor.servers()) {
             if (w.live() && w.module() != null) {
