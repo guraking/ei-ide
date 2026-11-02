@@ -1,6 +1,6 @@
 package local.bootservers;
 
-import com.intellij.icons.AllIcons;
+import com.intellij.ide.ui.laf.darcula.ui.DarculaButtonUI;
 import com.intellij.openapi.application.WriteIntentReadAction;
 import com.intellij.openapi.fileEditor.OpenFileDescriptor;
 import com.intellij.openapi.project.Project;
@@ -104,7 +104,7 @@ final class ConnectionMapView {
     };
     private final JBTable sourceTable = new JBTable(sourceModel);
     private final JBPanelWithEmptyText empty = new JBPanelWithEmptyText();
-    private final JButton query = new JButton(BootServersBundle.message("map.query"), AllIcons.Actions.Refresh);
+    private final JButton query = new JButton(BootServersBundle.message("map.query"));
     private final JBLabel checkedAt = grayLabel(BootServersBundle.message("map.query.none"));
     private final Gauge gauge = Gauge.create(BootServersBundle.message("map.query.running"));
     private List<Edge> edges = List.of();
@@ -125,6 +125,7 @@ final class ConnectionMapView {
                 updateQuery();
             }
         });
+        query.putClientProperty(DarculaButtonUI.DEFAULT_STYLE_KEY, true);
         query.addActionListener(e -> {
             monitor.refreshLinks();
             updateQuery();
