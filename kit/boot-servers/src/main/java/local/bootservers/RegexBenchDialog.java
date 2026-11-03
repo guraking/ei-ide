@@ -75,14 +75,15 @@ final class RegexBenchDialog extends DialogWrapper {
     private static final long TIMEOUT_MS = 1000;
     private static final int DIALOG_WIDTH = 1100;
     private static final int DIALOG_HEIGHT = 900;
-    private static final float TEXT_TABS_SPLIT = 0.45f;
+    private static final float TEXT_TABS_SPLIT = 0.3f;
     private static final int SAMPLE_ROWS = 5;
     private static final int RESULT_ROWS = 4;
+    private static final int RESULT_MIN_HEIGHT = 120;
     private static final int COPIED_FADE_MS = 1500;
     private static final String FLAVOR_KEY = "KingGura.RegexBench.flavor";
     private static final String DETAILS_KEY = "KingGura.RegexBench.details";
     private static final int PRESET_COLUMNS = 3;
-    private static final int MAKE_HEIGHT = 330;
+    private static final int MAKE_HEIGHT = 280;
     // 만들기 탭이 글 전체 패턴을 줄 때 켜는 플래그: 시험 글의 줄마다 따로 맞춘다
     private static final String LINE_FLAGS = "gm";
     // 그룹 표 칸 수
@@ -233,9 +234,9 @@ final class RegexBenchDialog extends DialogWrapper {
                 .addLabeledComponent(BootServersBundle.message("regex.replacement"), replacementField)
                 .addComponentToRightColumn(replacementHint)
                 .addComponentToRightColumn(replacementError)
-                .addLabeledComponentFillVertically(BootServersBundle.message("regex.replaced"), new JBScrollPane(replacedArea))
+                .addLabeledComponentFillVertically(BootServersBundle.message("regex.replaced"), resultScroll(replacedArea))
                 .getPanel();
-        tabs.addTab(BootServersBundle.message("regex.tab.groups"), new JBScrollPane(groupTable));
+        tabs.addTab(BootServersBundle.message("regex.tab.groups"), resultScroll(groupTable));
         tabs.addTab(BootServersBundle.message("regex.tab.replace"), replacePanel);
 
         OnePixelSplitter split = new OnePixelSplitter(true, TEXT_TABS_SPLIT);
@@ -328,6 +329,13 @@ final class RegexBenchDialog extends DialogWrapper {
         sampleArea.setCaretPosition(0);
     }
 
+    /** 결과 칸은 창이 낮아져도 RESULT_ROWS 줄은 보이게 최소 높이를 둔다. */
+    private static JBScrollPane resultScroll(JComponent view) {
+        JBScrollPane scroll = new JBScrollPane(view);
+        scroll.setMinimumSize(JBUI.size(0, RESULT_MIN_HEIGHT));
+        return scroll;
+    }
+
     private static List<RegexBench.Preset> presets() {
         try {
             return RegexBench.loadPresets();
@@ -362,7 +370,7 @@ final class RegexBenchDialog extends DialogWrapper {
     @Override
     protected @Nullable String getDimensionServiceKey() {
         // 판마다 기본 크기를 바꿀 때 이름을 바꿔 지난 크기 기억을 버린다
-        return "KingGura.RegexBench.3";
+        return "KingGura.RegexBench.4";
     }
 
     @Override
