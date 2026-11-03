@@ -68,6 +68,8 @@ final class MavenRepos {
     if (change.isEmpty()) return;
     manager.setIgnoredState(change, closed);
     manager.forceUpdateAllProjectsOrFindAllAvailablePomFiles();
+    // 다시 읽는 동안 Maven 이 그 모듈을 지웠다 새로 만들어 트리에서 줄이 잠깐 빈다.
+    if (!closed) SyncPanel.balloon(project, false, SyncBundle.message("open.repo.maven.title"), SyncBundle.message("open.repo.maven"));
   }
 
   /**
