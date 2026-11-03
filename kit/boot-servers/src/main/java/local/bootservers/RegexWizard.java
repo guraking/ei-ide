@@ -30,7 +30,6 @@ import java.util.Map;
  */
 final class RegexWizard {
 
-    private static final int EXTRA_COLUMNS = 12;
     private static final int MAX_LENGTH = 999;
     // 띄어쓰기는 5번 질문이 맡는다
     private static final EnumSet<CharKind> KINDS = EnumSet.complementOf(EnumSet.of(CharKind.SPACE));
@@ -40,7 +39,7 @@ final class RegexWizard {
     private final JBRadioButton wholeRadio = new JBRadioButton(BootServersBundle.message("regex.ask.whole"), true);
     private final JBRadioButton findRadio = new JBRadioButton(BootServersBundle.message("regex.ask.find"));
     private final Map<CharKind, JBCheckBox> kindBoxes = new EnumMap<>(CharKind.class);
-    private final JBTextField extraField = new JBTextField(EXTRA_COLUMNS);
+    private final JBTextField extraField = new JBTextField();
     private final ComboBox<Repeat> lengthBox = new ComboBox<>(LENGTHS);
     private final JBIntSpinner nSpinner = new JBIntSpinner(4, 1, MAX_LENGTH);
     private final JBLabel mLabel = new JBLabel(BootServersBundle.message("regex.compose.m"));
@@ -94,7 +93,7 @@ final class RegexWizard {
         panel = FormBuilder.createFormBuilder()
                 .addLabeledComponent(BootServersBundle.message("regex.ask.where"), RegexComposer.row(wholeRadio, findRadio))
                 .addLabeledComponent(BootServersBundle.message("regex.ask.kinds"), kindsRow)
-                .addLabeledComponent(BootServersBundle.message("regex.ask.extra"), RegexComposer.row(extraField))
+                .addLabeledComponent(BootServersBundle.message("regex.ask.extra"), extraField)
                 .addLabeledComponent(BootServersBundle.message("regex.ask.length"), RegexComposer.row(lengthBox, nSpinner, mLabel, mSpinner, lengthTail))
                 .addLabeledComponent(BootServersBundle.message("regex.ask.spaced"), spacedBox)
                 .addLabeledComponent(needsLabel, needsRow)
