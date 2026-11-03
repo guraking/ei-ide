@@ -19,6 +19,7 @@
   <resource-bundle>messages.SyncBundle</resource-bundle>
 
   <extensions defaultExtensionNs="com.intellij">
+    <actionConfigurationCustomizer implementation="kinggura.sync.CloseRepoAction$MenuFirst" order="last"/>
     <toolWindow id="Synchronize" anchor="bottom" icon="AllIcons.Actions.Refresh"
                 factoryClass="kinggura.sync.SyncToolWindowFactory"/>
     <!-- 「Git Log」: 프로젝트(모듈)를 골라 그 폴더의 커밋만 GitKraken 처럼 본다. 기존 Git 로그 창은 그대로 둔다. -->
@@ -72,12 +73,12 @@
       <separator/>
       <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
     </group>
-    <!-- 이클립스 Close Project · Open Project: 워크스페이스 안 저장소 하나만 내리고 다시 올린다. -->
+    <!-- 이클립스 Close Project · Open Project: 저장소 하나만 내리고 다시 올린다. -->
+    <!-- 우클릭 메뉴 맨 위(Sync Project 위). 다른 플러그인이 first 로 넣는 항목보다 위에 두려고 CloseRepoAction$MenuFirst 가 넣는다. -->
     <group id="KingGura.CloseRepoGroup">
-      <separator/>
       <action id="KingGura.CloseRepo" class="kinggura.sync.CloseRepoAction" icon="AllIcons.Actions.Close"/>
       <action id="KingGura.OpenRepo" class="kinggura.sync.CloseRepoAction$Open" icon="AllIcons.Actions.MenuOpen"/>
-      <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+      <separator/>
     </group>
     <action id="KingGura.SynchronizeWorkspace" class="kinggura.sync.SyncToolWindowFactory$OpenAction" icon="AllIcons.Actions.Refresh">
       <add-to-group group-id="Git.MainMenu" anchor="first"/>
