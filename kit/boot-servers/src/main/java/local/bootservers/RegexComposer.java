@@ -320,7 +320,7 @@ final class RegexComposer {
                 .getPanel();
     }
 
-    private static JPanel row(JComponent... components) {
+    static JPanel row(JComponent... components) {
         JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(UIUtil.DEFAULT_HGAP), 0));
         for (JComponent c : components) {
             row.add(c);

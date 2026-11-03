@@ -1,23 +1,72 @@
-# 정규식 작업대 「자주 쓰는 정규식」. 칸: 이름 TAB 패턴 TAB JS 플래그(g i m s u) TAB 바꿀 글 TAB 예시 글(\n 은 줄바꿈)
+# 정규식 작업대 「자주 쓰는 정규식」. 「## 분류」 줄 아래가 그 분류다.
+# 칸: 이름 TAB 패턴 TAB JS 플래그(g i m s u) TAB 바꿀 글 TAB 예시 글(\n 은 줄바꿈)
 # 패턴은 JavaScript 와 Java 모두에서 같은 뜻이어야 한다(점검 RegexBenchCheck).
+## 연락처 · 개인정보
 이메일	^[\w.+-]+@[\w-]+(\.[\w-]+)+$	gm		hong@example.com\nkim.lee+tag@mail.co.kr\nwrong@\n@nouser.com
 휴대폰 번호	^(01[016789])-?(\d{3,4})-?(\d{4})$	gm	$1-$2-$3	010-1234-5678\n01012345678\n011-123-4567\n02-123-4567
 일반 전화번호	^(0\d{1,2})-?(\d{3,4})-?(\d{4})$	gm	$1-$2-$3	02-123-4567\n031-1234-5678\n0511234567\n1588-1234
+대표번호(1588 등)	^(1[5-9]\d{2})-?(\d{4})$	gm	$1-$2	1588-1234\n15441234\n1234-5678
 사업자등록번호	^(\d{3})-?(\d{2})-?(\d{5})$	gm	$1-$2-$3	123-45-67890\n1234567890\n123-456-7890
+법인등록번호	^(\d{6})-?(\d{7})$	gm	$1-$2	110111-1234567\n1101111234567\n110111-123456
 주민등록번호 형식	^(\d{6})-?([1-4])\d{6}$	gm	$1-$2******	900101-1234567\n0001013234567\n900101-5234567
 우편번호	^\d{5}$	gm		06236\n1234\n135-080
+차량 번호	^\d{2,3}[가-힣] ?\d{4}$	gm		12가3456\n123나 4567\n12AB3456
+카드 번호 가리기	\b(\d{4})-?(\d{4})-?(\d{4})-?(\d{4})\b	g	$1-****-****-$4	결제 카드 1234-5678-9012-3456\n1234567890123456
+휴대폰 번호 가운데 가리기	(01[016789])-?(\d{3,4})-?(\d{4})	g	$1-****-$3	연락처 010-1234-5678 / 01098765432
+이메일 아이디 가리기	([\w.+-]{2})[\w.+-]*@	g	$1***@	hong.gildong@example.com\nab@mail.com
+## 웹 · 네트워크
 URL	https?://[\w.-]+(:\d+)?(/[^\s]*)?	g		홈페이지 https://example.com/path?q=1 참고\nhttp://localhost:8080/api/users\nftp://old.example.com
+도메인 이름	^([A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-z]{2,}$	gm		example.com\nmail.co.kr\n-bad.com\nlocalhost
 IP 주소(IPv4)	\b((25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(25[0-5]|2[0-4]\d|1?\d?\d)\b	g		192.168.0.1\n10.0.0.255\n256.1.1.1\n127.0.0.1:8080
+호스트:포트	^(?<host>[\w.-]+):(?<port>\d{1,5})$	gm		localhost:8080\n10.0.0.1:1521\nexample.com
+주소의 쿼리 값(키=값)	[?&](?<key>[^=&#\s]+)=(?<value>[^&#\s]*)	g		/api/users?page=1&size=20&sort=name
+MAC 주소	^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$	gm		00:1A:2B:3C:4D:5E\n00-1a-2b-3c-4d-5e\n001A2B3C4D5E
+색상 코드(#fff, #1e90ff)	#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})\b	g		color: #fff; background: #1E90FF; border: #12345;
+파일 확장자	\.(?<ext>[A-Za-z0-9]+)$	gm		report.pdf\narchive.tar.gz\nREADME
+경로에서 파일 이름	[^\\/]+$	gm		C:\work\src\Main.java\n/home/user/app.yml
+## 날짜 · 시간 · 숫자
 날짜(yyyy-MM-dd)	(?<year>\d{4})-(?<month>0[1-9]|1[0-2])-(?<day>0[1-9]|[12]\d|3[01])	g	$<year>.$<month>.$<day>	작성일 2026-10-31, 수정일 2026-11-01\n2026-13-01\n2026-02-30
+날짜(. / - 아무거나)	\b(\d{4})[./-](0[1-9]|1[0-2])[./-](0[1-9]|[12]\d|3[01])\b	g	$1-$2-$3	2026.10.31\n2026/11/01\n2026-12-25\n2026.13.01
+yyyyMMdd → yyyy-MM-dd	\b(\d{4})(\d{2})(\d{2})\b	g	$1-$2-$3	20261031\n작성일 20261101\n2026-10-31
 시간(HH:mm, HH:mm:ss)	\b([01]\d|2[0-3]):([0-5]\d)(:[0-5]\d)?\b	g		09:30 회의, 13:05:59 종료\n24:00\n7:15
+정수(음수 포함)	^-?\d+$	gm		123\n-45\n1.5\nabc
+소수	^-?\d+(\.\d+)?$	gm		3.14\n-0.5\n10\n1.\n.5
+금액(천 단위 쉼표, 원)	^\d{1,3}(,\d{3})*원?$	gm		1,000\n12,345,678원\n1000\n12,34
+퍼센트	\d+(\.\d+)?%	g		성장률 12.5% · 3% · 100%
+숫자 천 단위 쉼표 넣기	\B(?=(\d{3})+(?!\d))	g	,	1234567\n1000\n12
+쉼표 빼기	,	g		1,234,567\n12,000원
+## 글자 검사
 한글만	^[가-힣]+$	gm		홍길동\n홍길동1\nHong\n김 철수
 한글 이름(띄어쓰기 포함)	^[가-힣]+(?:\s[가-힣]+)*$	gm		홍길동\n김 철수\n남궁 민 수\n홍길동1\nHong
-영문 · 숫자 아이디(영문 시작 4~20자)	^[A-Za-z][A-Za-z0-9_]{3,19}$	gm		kinggura\nuser_01\n1user\nab
-비밀번호(영문 · 숫자 · 특수문자 8자 이상)	^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$	gm		abc123!@\npassword\n12345678\nAb1!
-숫자 천 단위 쉼표 넣기	\B(?=(\d{3})+(?!\d))	g	,	1234567\n1000\n12
+영문만	^[A-Za-z]+$	gm		Hello\nhello123\n안녕
+숫자만	^\d+$	gm		12345\n12a45\n-1
+영문 · 숫자만	^[A-Za-z0-9]+$	gm		abc123\nabc_123\n안녕1
+특수문자 없는 글	^[가-힣A-Za-z0-9 ]+$	gm		홍길동 Hong 1\n홍길동!\nhello@
+아이디(영문 시작 4~20자)	^[A-Za-z][A-Za-z0-9_]{3,19}$	gm		kinggura\nuser_01\n1user\nab
+비밀번호 기본(8자 이상)	^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$	gm		abc123!@\npassword\n12345678\nAb1!
+비밀번호 강하게(10자 이상)	^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[^A-Za-z0-9]).{10,}$	gm		Abcdef12!@\nabcdef12!@\nAbcdefgh12
+같은 글자 3번 이상 연속	(.)\1{2,}	g		aaa 1111 ㅋㅋㅋㅋ ab\nhello
+## 글 다듬기
+특수문자 찾기	[^가-힣A-Za-z0-9 ]	g		안녕!하세요? 반가워요^^
 HTML 태그 지우기	<[^>]+>	g		<p>안녕하세요 <b>홍길동</b>님</p>
 공백 여러 개를 하나로	\s{2,}	g	 	이름    홍길동   나이  30
 줄 앞뒤 공백	^[ \t]+|[ \t]+$	gm		   앞에 공백\n뒤에 공백   \n  양쪽  
-MyBatis 파라미터 #{…}	#\{(?<name>\w+)[^}]*\}	g		WHERE USER_ID = #{userId} AND REG_DT >= #{fromDate, jdbcType=DATE}
-로그 ERROR 줄	^.*\bERROR\b.*$	gm		2026-10-31 10:00:01 INFO  시작\n2026-10-31 10:00:02 ERROR 연결 실패\n2026-10-31 10:00:03 WARN  재시도
+빈 줄 지우기	^[ \t]*\r?\n	gm		첫 줄\n\n   \n둘째 줄
+같은 낱말 두 번	\b(\w+) +\1\b	g	$1	the the cat\nis is it
+괄호 안 글	\(([^)]*)\)	g		홍길동(개발팀) 김철수(영업)
 큰따옴표 안 글	"((?:[^"\\]|\\.)*)"	g		name = "홍길동", memo = "그가 \"안녕\" 했다"
+작은따옴표 안 글	'((?:[^'\\]|\\.)*)'	g		WHERE NAME = '홍길동' AND MEMO = 'it\'s'
+낙타 표기에 _ 넣기	([a-z0-9])([A-Z])	g	$1_$2	userName\ncreatedAtDate
+## 개발 · SQL · 로그
+MyBatis 파라미터 #{…}	#\{(?<name>\w+)[^}]*\}	g		WHERE USER_ID = #{userId} AND REG_DT >= #{fromDate, jdbcType=DATE}
+MyBatis ${…}(SQL 주입 주의)	\$\{(?<name>\w+)\}	g		ORDER BY ${sortColumn} WHERE ID = #{id}
+설정 값 ${이름:기본값}	\$\{(?<name>[\w.-]+)(?::(?<fallback>[^}]*))?\}	g		url: ${DB_URL:jdbc:oracle:thin:@localhost:1521:XE}\nport: ${server.port}
+Java 클래스 이름	\bclass\s+(?<name>[A-Z]\w*)	g		public class UserService {\nfinal class UserDto
+Java 패키지 이름	^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$	gm		local.bootservers\ncom.example.app\nCom.Example
+예외 이름	\b[\w.]*(?:Exception|Error)\b	g		java.lang.NullPointerException: x\nCaused by: java.sql.SQLException\nOutOfMemoryError
+TODO · FIXME 주석	//\s*(TODO|FIXME)\b:?(.*)	g		int a = 1; // TODO: 값 확인\n// FIXME 임시 코드\n// 일반 주석
+JSON 키	"(?<key>[^"]+)"\s*:	g		{"name": "홍길동", "age": 30}
+버전 번호	\bv?(\d+)\.(\d+)\.(\d+)\b	g		v1.2.3 · 2026.2.3 · 1.2
+UUID	^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$	gm		550e8400-e29b-41d4-a716-446655440000\n550e8400e29b41d4a716446655440000
+로그 ERROR 줄	^.*\bERROR\b.*$	gm		2026-10-31 10:00:01 INFO  시작\n2026-10-31 10:00:02 ERROR 연결 실패\n2026-10-31 10:00:03 WARN  재시도
+로그 시각	^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}([.,]\d{3})?	gm		2026-10-31 10:00:01.123 INFO 시작\n2026-10-31 10:00:02,456 ERROR 실패

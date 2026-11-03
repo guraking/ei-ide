@@ -34,6 +34,8 @@ public final class RegexBenchCheck {
         checks();
         code();
         presets();
+        asks();
+        guesses();
         System.out.println("RegexBenchCheck 통과");
     }
 
@@ -189,6 +191,9 @@ public final class RegexBenchCheck {
     private static void presets() {
         eq(1, RegexBench.parsePresets("# 주석\n\na\tb\tg\t\tx\\ny\n").size(), "주석 · 빈 줄 건너뜀");
         eq("x\ny", RegexBench.parsePresets("a\tb\tg\t\tx\\ny").get(0).sample(), "예시 줄바꿈");
+        var grouped = RegexBench.parsePresets("a\tb\tg\t\tx\n## 분류 1\nc\td\tg\t\ty\n");
+        eq("", grouped.get(0).category(), "분류 줄 앞은 빈 분류");
+        eq("분류 1", grouped.get(1).category(), "분류 줄 아래");
         try {
             RegexBench.parsePresets("a\tb");
             throw new AssertionError("칸 수가 틀린 줄을 받음");
@@ -200,6 +205,9 @@ public final class RegexBenchCheck {
             throw new AssertionError("자주 쓰는 정규식이 비었음");
         }
         for (Preset preset : list) {
+            if (preset.category().isEmpty()) {
+                throw new AssertionError(preset.name() + ": 분류가 없음");
+            }
             for (Flavor flavor : Flavor.values()) {
                 Result result = run(flavor, preset.pattern(), RegexBench.flagsOf(preset.flags()), preset.sample(), RegexBench.convertReplacement(flavor, preset.replacement()));
                 eq(Problem.NONE, result.problem(), preset.name() + " · " + flavor + " 오류 " + result.detail());
@@ -213,6 +221,34 @@ public final class RegexBenchCheck {
             Result jsResult = run(Flavor.JAVASCRIPT, preset.pattern(), RegexBench.flagsOf(preset.flags()), preset.sample(), "");
             Result javaResult = run(Flavor.JAVA, preset.pattern(), RegexBench.flagsOf(preset.flags()), preset.sample(), "");
             eq(jsResult.matches().size(), javaResult.matches().size(), preset.name() + ": 두 문법 일치 수가 같음");
+        }
+    }
+
+    private static void asks() {
+        Repeating any = new Repeating(Repeat.ONE_OR_MORE, 0, 0, false, false, "");
+        eq("^[가-힣]+(?:\\s[가-힣]+)*$", RegexBench.ask(true, EnumSet.of(CharKind.KOREAN), "", any, true, Set.of()), "한글 이름");
+        eq("\\d{4}", RegexBench.ask(false, EnumSet.of(CharKind.DIGIT), "", new Repeating(Repeat.EXACTLY, 4, 0, false, false, ""), false, Set.of(Need.DIGIT)),
+                "찾기는 꼭 들어갈 것 · 낱말 경계 없음");
+        eq("^(?=.*\\d)[a-z0-9_]{4,20}$", RegexBench.ask(true, EnumSet.of(CharKind.LOWER, CharKind.DIGIT), "_",
+                new Repeating(Repeat.RANGE, 4, 20, false, false, ""), false, Set.of(Need.DIGIT)), "아이디");
+        eq(null, RegexBench.ask(true, EnumSet.noneOf(CharKind.class), "", any, false, Set.of()), "고른 글자가 없으면 null");
+    }
+
+    private static void guesses() {
+        eq(null, RegexBench.guess(List.of("", ""), List.of()), "맞아야 할 글이 없으면 null");
+        RegexBench.Guess phone = RegexBench.guess(List.of("010-1234-5678", "011-123-4567"), List.of("02-123-4567"));
+        eq("^\\d{3}[\\-]\\d{3,4}[\\-]\\d{4}$", phone.pattern(), "같은 차례 · 길이");
+        eq(true, phone.rejectsAll(), "틀려야 할 글 걸러냄");
+        RegexBench.Guess name = RegexBench.guess(List.of("홍길동", "김 철수", "남궁 민 수"), List.of("홍길동1", " 김철수"));
+        eq("^[가-힣]+(?:\\s[가-힣]+)*$", name.pattern(), "띄어쓰기로 이은 낱말");
+        eq(true, name.rejectsAll(), "이름 아닌 것 걸러냄");
+        RegexBench.Guess id = RegexBench.guess(List.of("kinggura", "user_01"), List.of("1user_00"));
+        eq("^[a-z0-9_]{7,8}$", id.pattern(), "글자 종류 모아 길이");
+        eq(false, id.rejectsAll(), "걸러내지 못하면 알림");
+        RegexBench.Guess code = RegexBench.guess(List.of("AB-12", "CD-345"), List.of("AB-1234"));
+        eq("^[A-Z]{2}[\\-]\\d{2,3}$", code.pattern(), "대문자 · 숫자 꼴");
+        for (String text : List.of("010-1234-5678", "011-123-4567")) {
+            eq(Verdict.FULL, RegexBench.check(Flavor.JAVASCRIPT, phone.pattern(), Set.of(), text, TIMEOUT_MS).verdict(), "JS 에서도 맞음 " + text);
         }
     }
 
