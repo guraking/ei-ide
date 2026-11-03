@@ -496,7 +496,7 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
       Project project = parent.getProject();
       if (project == null || project.isDisposed()) return children;
       VirtualFile baseDir = workspaceDir(project);
-      if (baseDir == null) return children;
+      if (baseDir == null) return withClosedOnly(project, parent, children, settings);
       // 워크스페이스 폴더 자체 모듈(Maven 다시 읽기 사이 잠깐 다시 등록됨)의 루트는 저장소 루트로 치지 않는다.
       List<VirtualFile> loaded = new ArrayList<>();
       for (Module module : ModuleManager.getInstance(project).getModules()) {
@@ -536,6 +536,26 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
         shown.removeIf(node -> !(node.getValue() instanceof PsiDirectory d) || !leadsToRepo(d.getVirtualFile(), repos));
       }
       return CloseRepoAction.withClosedRepos(project, parent, shown, dir, settings);
+    }
+
+    /**
+     * 워크스페이스가 아닌 프로젝트(저장소를 프로젝트 폴더 밖에 붙인 창 등)에서는 줄을 숨기지 않고 닫은 저장소 줄만 넣는다.
+     * IntelliJ 는 내린 모듈 폴더를 그리지 않아 닫힌 줄이 없으면 다시 열 수 없다.
+     */
+    private static Collection<AbstractTreeNode<?>> withClosedOnly(Project project, AbstractTreeNode<?> parent,
+                                                                  Collection<AbstractTreeNode<?>> children, ViewSettings settings) {
+      if (CloseRepoAction.closedRoots(project).isEmpty()) return children;
+      List<AbstractTreeNode<?>> shown = new ArrayList<>(children);
+      if (parent.getValue() instanceof PsiDirectory dir) return CloseRepoAction.withClosedRepos(project, parent, shown, dir.getVirtualFile(), settings);
+      if (!(parent.getValue() instanceof Project)) return children;
+      String base = project.getBasePath();
+      VirtualFile baseDir = base == null ? null : LocalFileSystem.getInstance().findFileByPath(base);
+      if (baseDir == null) return children;
+      List<VirtualFile> loaded = new ArrayList<>();
+      for (Module module : ModuleManager.getInstance(project).getModules()) loaded.addAll(List.of(ModuleRootManager.getInstance(module).getContentRoots()));
+      List<AbstractTreeNode<?>> result = CloseRepoAction.withClosedRepos(project, parent, shown, baseDir, settings);
+      CloseRepoAction.addOutsideClosedRepos(project, parent, result, baseDir, loaded, settings);
+      return result;
     }
 
     /** 이 폴더가 저장소 루트(올라온 · 닫은 모듈의 콘텐츠 루트)이거나 그것을 품으면 true. */

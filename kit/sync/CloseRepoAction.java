@@ -5,7 +5,12 @@ import com.intellij.ide.projectView.PresentationData;
 import com.intellij.ide.projectView.ViewSettings;
 import com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode;
 import com.intellij.ide.util.treeView.AbstractTreeNode;
+import com.intellij.openapi.actionSystem.ActionManager;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
+import com.intellij.openapi.actionSystem.AnAction;
+import com.intellij.openapi.actionSystem.Constraints;
+import com.intellij.openapi.actionSystem.DefaultActionGroup;
+import com.intellij.openapi.actionSystem.impl.ActionConfigurationCustomizer;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.application.ApplicationManager;
@@ -56,7 +61,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * 내린 모듈은 색인 · 검색 · 컴파일에서 빠지고 트리에는 닫힌 줄(ClosedRepoNode, UnloadedModule 아이콘 · 흐린 글자 · 펼치지 않음)로 남는다.
  * 상태는 IntelliJ 가 workspace.xml 에 저장한다.
  * 닫기 · 열기 뒤의 정리(VCS 매핑 · Maven · 편집기)는 sync 가 한다. IntelliJ 의 Load/Unload Modules · Remove Module 로 바꿔도 ModuleSync 가 같은 sync 를 부른다.
- * 닫기는 워크스페이스 프로젝트(CloneIntoProject.workspaceDir)의 저장소 줄에서만 보인다. 열기는 어느 프로젝트에서나 보여 예전에 닫은 것도 열 수 있다.
+ * 우클릭 메뉴 맨 위에 둔다. 닫기는 모듈 폴더 줄이면 어느 프로젝트에서나 보이고, 프로젝트 폴더 줄에서는 보이지 않는다(누르면 프로젝트 전체가 내려간다).
  * 닫을 저장소를 다른 모듈이 쓰는데 그 jar 가 로컬 Maven 저장소에 없으면(그 모듈이 오류 남) 닫기 전에 묻는다.
  * 폴더 · 파일은 건드리지 않는다. 여러 줄을 골라 한꺼번에 닫고 열 수 있다.
  */
@@ -98,8 +103,8 @@ public class CloseRepoAction extends DumbAwareAction {
     List<String> roots = new ArrayList<>();
     for (List<String> paths : targets.values()) roots.addAll(paths);
     // 열기는 고른 줄을 우리가 닫은 것으로 본다. 이 판 전에 닫아 CLOSED_KEY 에 없는 저장소도 매핑 · Maven 이 돌아온다.
-    if (close()) sync(project, roots, List.of());
-    else sync(project, List.of(), roots);
+    if (close()) sync(project, roots, List.of(), true);
+    else sync(project, List.of(), roots, true);
   }
 
   /**
@@ -144,12 +149,11 @@ public class CloseRepoAction extends DumbAwareAction {
       if (file == null) return targets;
       files = new VirtualFile[]{file};
     }
-    VirtualFile workspace = close() ? CloneIntoProject.workspaceDir(project) : null;
-    if (close() && workspace == null) return targets;
+    String base = project.getBasePath();
     for (VirtualFile file : files) {
       if (!file.isDirectory()) continue;
       if (close()) {
-        if (file.equals(workspace)) continue;
+        if (base != null && FileUtil.pathsEqual(file.getPath(), base)) continue;
         Module module = ModuleUtilCore.findModuleForFile(file, project);
         if (module == null || !List.of(ModuleRootManager.getInstance(module).getContentRoots()).contains(file)) continue;
         for (Module inner : ModuleManager.getInstance(project).getModules()) {
@@ -313,18 +317,15 @@ public class CloseRepoAction extends DumbAwareAction {
   private static final String MAVEN_PLUGIN = "org.jetbrains.idea.maven";
 
   /**
-   * 닫기 · 열기 뒤 정리. EDT 에서 부른다. 워크스페이스 프로젝트가 아니면 열기 단추로 고른 것(opened)만 되돌린다. 같은 일을 두 번 불러도 결과가 같다.
+   * 닫기 · 열기 뒤 정리. EDT 에서 부른다. 같은 일을 두 번 불러도 결과가 같다.
+   * explicit: 우리 단추 · 켤 때 정리에서 부르면 true. false(모듈 리스너)면 워크스페이스 프로젝트에서만 한다(일반 프로젝트의 IntelliJ 기본 동작은 건드리지 않는다).
    * removed: 방금 빠진 모듈의 콘텐츠 루트. 같은 경로를 콘텐츠 루트로 가진 올라온 모듈이 있으면(Maven 이 모듈을 다시 만듦) 건너뛴다.
    *   내린 모듈의 루트면 닫힘: VCS 매핑을 떼고, 등록 안 된 루트 알림 무시 목록 · CLOSED_KEY 에 넣고, 그 폴더 파일 편집기를 저장해 닫고, Maven 에서 그 아래 pom 을 뺀다.
    *   모듈째 지운 것(Remove Module)이면 VCS 매핑만 뗀다.
    * opened: 열기 단추로 고른 루트. 올라온 모듈의 루트 중 CLOSED_KEY 에 있는 것과 함께 열림: 무시 목록 · CLOSED_KEY 에서 빼고 VCS 매핑을 붙이고 Maven pom 을 되돌린다.
    */
-  static void sync(Project project, Collection<String> removed, Collection<String> opened) {
-    if (project.isDisposed()) return;
-    if (CloneIntoProject.workspaceDir(project) == null) {
-      if (opened.isEmpty()) return;
-      removed = List.of();
-    }
+  static void sync(Project project, Collection<String> removed, Collection<String> opened, boolean explicit) {
+    if (project.isDisposed() || (!explicit && CloneIntoProject.workspaceDir(project) == null)) return;
     List<String> loaded = new ArrayList<>();
     for (Module module : ModuleManager.getInstance(project).getModules()) {
       for (VirtualFile root : ModuleRootManager.getInstance(module).getContentRoots()) loaded.add(root.getPath());
@@ -377,7 +378,7 @@ public class CloseRepoAction extends DumbAwareAction {
   static void syncClosed(Project project) {
     List<String> roots = new ArrayList<>();
     for (VirtualFile root : closedRoots(project)) roots.add(root.getPath());
-    sync(project, roots, List.of());
+    sync(project, roots, List.of(), true);
   }
 
   private static boolean containsPath(Collection<String> paths, String path) {
@@ -413,6 +414,23 @@ public class CloseRepoAction extends DumbAwareAction {
    * 모듈이 빠지거나 더해질 때 sync 를 부른다(우리 단추 · IntelliJ Load/Unload Modules · Remove Module · Maven 다시 읽기 모두).
    * 빠지기 직전에 콘텐츠 루트를 모아 두고, 한 번에 여러 모듈이 바뀌어도 EDT 에서 한 번만 돈다.
    */
+  /**
+   * 닫기 · 열기 묶음(KingGura.CloseRepoGroup)을 프로젝트 트리 우클릭 메뉴 맨 위에 넣는다.
+   * 주 메뉴 손질(KingGuraMainMenuCustomizer)이 Maven Sync Project 를 first 로 넣으므로 그보다 늦게(order="last") 돌아 그 위에 선다.
+   */
+  public static final class MenuFirst implements ActionConfigurationCustomizer {
+    private static final String GROUP_ID = "KingGura.CloseRepoGroup";
+    private static final String POPUP_ID = "ProjectViewPopupMenu";
+
+    @Override
+    public void customize(@NotNull ActionManager actionManager) {
+      AnAction group = actionManager.getAction(GROUP_ID);
+      if (group == null || !(actionManager.getAction(POPUP_ID) instanceof DefaultActionGroup popup)) return;
+      popup.remove(group, actionManager);
+      popup.add(group, Constraints.FIRST, actionManager);
+    }
+  }
+
   public static final class ModuleSync implements ModuleListener {
     private final Set<String> removed = ConcurrentHashMap.newKeySet();
     private final AtomicBoolean scheduled = new AtomicBoolean();
@@ -434,7 +452,7 @@ public class CloseRepoAction extends DumbAwareAction {
         scheduled.set(false);
         List<String> roots = new ArrayList<>(removed);
         removed.removeAll(roots);
-        sync(project, roots, List.of());
+        sync(project, roots, List.of(), false);
       }, project.getDisposed());
     }
   }
