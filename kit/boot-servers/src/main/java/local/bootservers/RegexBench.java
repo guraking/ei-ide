@@ -523,6 +523,197 @@ final class RegexBench {
         return words;
     }
 
+    private static final Repeating ONE_OR_MORE = new Repeating(Repeat.ONE_OR_MORE, 0, 0, false, false, "");
+    private static final Repeating ZERO_OR_MORE = new Repeating(Repeat.ZERO_OR_MORE, 0, 0, false, false, "");
+    private static final Piece ONE_SPACE = new Piece(Source.KINDS, EnumSet.of(CharKind.SPACE), "", Repeating.ONCE, "", "");
+
+    /**
+     * 「질문 따라가기」 답으로 만든 패턴. 한 낱말은 kinds · extra 글자로 length 만큼, spaced 면 그 낱말이 띄어쓰기 한 칸을 사이에 두고
+     * 여럿 올 수 있다(예: 김 철수). whole 이면 글 전체(^…$)이고 needs 를 앞에 건다. 고른 글자가 없으면 null.
+     * 찾기에서 낱말 경계(\b)는 걸지 않는다. \b 는 ASCII 기준이라 한글 앞뒤에서는 맞지 않는다.
+     */
+    static String ask(boolean whole, Set<CharKind> kinds, String extra, Repeating length, boolean spaced, Set<Need> needs) {
+        Piece word = new Piece(Source.KINDS, kinds, extra, length, "", "");
+        if (problem(word) != null) {
+            return null;
+        }
+        List<Part> parts = new ArrayList<>();
+        parts.add(word);
+        if (spaced) {
+            parts.add(new Bunch(List.of(ONE_SPACE, word), false, ZERO_OR_MORE));
+        }
+        return compose(parts, new Shape(whole, false, whole ? needs : Set.of(), 0));
+    }
+
+    /** 「예시로 만들기」 결과. rejectsAll 이면 틀려야 할 글이 모두 맞지 않는다. */
+    record Guess(String pattern, boolean rejectsAll) {}
+
+    // 예시 하나를 맞춰 볼 때 시간 한도. 만든 패턴은 되돌이가 없어 넉넉하다.
+    private static final long GUESS_TIMEOUT_MS = 200;
+
+    /** 같은 종류 글자가 이어진 한 토막. kind 가 null 이면 literal 글자 하나가 count 번. */
+    private record Run(CharKind kind, String literal, int count) {
+        boolean sameAs(Run other) {
+            return kind != null ? kind == other.kind : other.kind == null && literal.equals(other.literal);
+        }
+    }
+
+    /**
+     * 맞아야 할 글(good)에 모두 맞는 글 전체 패턴(^…$)을 만든다. 빈 줄은 뺀다. good 이 비면 null.
+     * 후보를 좁은 것부터 차례로 보고, good 에 모두 맞으면서 bad 에 하나도 맞지 않는 첫 후보를 고른다. 그런 후보가 없으면 첫 후보.
+     * 후보: 1 글자 종류 차례와 길이가 같은 꼴(010-1234-5678), 2 차례만 같은 꼴, 3 띄어쓰기로 이은 낱말(김 철수),
+     * 4 나온 글자 종류만으로 최소~최대 길이, 5 나온 글자 종류만으로 아무 길이.
+     */
+    static Guess guess(List<String> good, List<String> bad) {
+        List<List<Run>> shapes = new ArrayList<>();
+        for (String text : good) {
+            if (!text.isEmpty()) {
+                shapes.add(runs(text));
+            }
+        }
+        if (shapes.isEmpty()) {
+            return null;
+        }
+        List<String> candidates = new ArrayList<>();
+        if (sameOrder(shapes)) {
+            candidates.add(sequence(shapes, false));
+            candidates.add(sequence(shapes, true));
+        }
+        Set<CharKind> kinds = EnumSet.noneOf(CharKind.class);
+        StringBuilder literals = new StringBuilder();
+        int min = Integer.MAX_VALUE;
+        int max = 0;
+        for (List<Run> shape : shapes) {
+            int length = 0;
+            for (Run run : shape) {
+                length += run.count();
+                if (run.kind() != null) {
+                    kinds.add(run.kind());
+                } else if (literals.indexOf(run.literal()) < 0) {
+                    literals.append(run.literal());
+                }
+            }
+            min = Math.min(min, length);
+            max = Math.max(max, length);
+        }
+        if (kinds.remove(CharKind.SPACE)) {
+            String words = ask(true, kinds, literals.toString(), ONE_OR_MORE, true, Set.of());
+            if (words != null) {
+                candidates.add(words);
+            }
+            kinds.add(CharKind.SPACE);
+        }
+        Piece bag = new Piece(Source.KINDS, kinds, literals.toString(), count(min, max), "", "");
+        candidates.add(compose(List.of(bag), new Shape(true, false, Set.of(), 0)));
+        candidates.add(compose(List.of(new Piece(Source.KINDS, kinds, literals.toString(), ONE_OR_MORE, "", "")), new Shape(true, false, Set.of(), 0)));
+
+        String first = null;
+        for (String candidate : candidates) {
+            if (!fitsAll(candidate, good)) {
+                continue;
+            }
+            if (first == null) {
+                first = candidate;
+            }
+            if (missesAll(candidate, bad)) {
+                return new Guess(candidate, true);
+            }
+        }
+        // 마지막 후보는 나온 글자를 모두 담은 + 라 good 에 늘 맞는다
+        return new Guess(first, false);
+    }
+
+    private static Repeating count(int min, int max) {
+        if (min == max) {
+            return min == 1 ? Repeating.ONCE : new Repeating(Repeat.EXACTLY, min, 0, false, false, "");
+        }
+        return new Repeating(Repeat.RANGE, min, max, false, false, "");
+    }
+
+    private static List<Run> runs(String text) {
+        List<Run> runs = new ArrayList<>();
+        for (int cp : text.codePoints().toArray()) {
+            CharKind kind = kindOf(cp);
+            Run run = new Run(kind, kind == null ? Character.toString(cp) : "", 1);
+            Run last = runs.isEmpty() ? null : runs.get(runs.size() - 1);
+            if (last != null && last.sameAs(run)) {
+                runs.set(runs.size() - 1, new Run(last.kind(), last.literal(), last.count() + 1));
+            } else {
+                runs.add(run);
+            }
+        }
+        return runs;
+    }
+
+    /** CharKind 범위에 드는 글자의 종류. 특수문자는 종류로 넓히지 않고 그 글자 그대로 쓰도록 null. */
+    private static CharKind kindOf(int cp) {
+        if (cp >= '가' && cp <= '힣') {
+            return CharKind.KOREAN;
+        }
+        if (cp >= 'A' && cp <= 'Z') {
+            return CharKind.UPPER;
+        }
+        if (cp >= 'a' && cp <= 'z') {
+            return CharKind.LOWER;
+        }
+        if (cp >= '0' && cp <= '9') {
+            return CharKind.DIGIT;
+        }
+        return cp == ' ' || cp == '\t' ? CharKind.SPACE : null;
+    }
+
+    private static boolean sameOrder(List<List<Run>> shapes) {
+        List<Run> first = shapes.get(0);
+        for (List<Run> shape : shapes) {
+            if (shape.size() != first.size()) {
+                return false;
+            }
+            for (int i = 0; i < shape.size(); i++) {
+                if (!shape.get(i).sameAs(first.get(i))) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /** 토막마다 한 조각. anyLength 면 글자 종류 토막은 「하나 이상」, 아니면 예시의 최소~최대 길이. 특수문자 토막은 늘 길이 그대로. */
+    private static String sequence(List<List<Run>> shapes, boolean anyLength) {
+        List<Part> parts = new ArrayList<>();
+        for (int i = 0; i < shapes.get(0).size(); i++) {
+            int min = Integer.MAX_VALUE;
+            int max = 0;
+            for (List<Run> shape : shapes) {
+                min = Math.min(min, shape.get(i).count());
+                max = Math.max(max, shape.get(i).count());
+            }
+            Run run = shapes.get(0).get(i);
+            Repeating repeating = anyLength && run.kind() != null ? ONE_OR_MORE : count(min, max);
+            parts.add(run.kind() != null
+                    ? new Piece(Source.KINDS, EnumSet.of(run.kind()), "", repeating, "", "")
+                    : new Piece(Source.KINDS, EnumSet.noneOf(CharKind.class), run.literal(), repeating, "", ""));
+        }
+        return compose(parts, new Shape(true, false, Set.of(), 0));
+    }
+
+    private static boolean fitsAll(String pattern, List<String> texts) {
+        for (String text : texts) {
+            if (!text.isEmpty() && check(Flavor.JAVA, pattern, Set.of(), text, GUESS_TIMEOUT_MS).verdict() != Verdict.FULL) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean missesAll(String pattern, List<String> texts) {
+        for (String text : texts) {
+            if (!text.isEmpty() && check(Flavor.JAVA, pattern, Set.of(), text, GUESS_TIMEOUT_MS).verdict() == Verdict.FULL) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     enum Verdict { FULL, PARTIAL, NONE }
 
     /** 「확인할 글」 결과. PARTIAL 이면 part 가 처음 맞은 부분. problem 이 NONE 이 아니면 verdict 는 null. */
@@ -620,22 +811,28 @@ final class RegexBench {
         return out.toString();
     }
 
-    /** 자주 쓰는 정규식 하나. flags 는 JS 플래그 글자(g i m s u)이고 Java 에서는 같은 뜻의 플래그로 바꿔 쓴다. */
-    record Preset(String name, String pattern, String flags, String replacement, String sample) {}
+    /** 자주 쓰는 정규식 하나. category 는 화면에서 묶는 분류, flags 는 JS 플래그 글자(g i m s u)이고 Java 에서는 같은 뜻의 플래그로 바꿔 쓴다. */
+    record Preset(String category, String name, String pattern, String flags, String replacement, String sample) {}
 
     private static final String PRESET_COLUMN = "\t";
     private static final String PRESET_RESOURCE = "/regex/presets.tsv";
     private static final int PRESET_COLUMNS = 5;
+    private static final String CATEGORY_PREFIX = "## ";
 
     /**
-     * 「이름 TAB 패턴 TAB 플래그 TAB 바꿀 글 TAB 예시 글」 줄들을 읽는다. 빈 줄과 # 로 시작하는 줄은 건너뛴다.
-     * 예시 글의 「\n」 은 줄바꿈이다. 칸 수가 맞지 않으면 줄 번호와 함께 IllegalArgumentException.
+     * 「이름 TAB 패턴 TAB 플래그 TAB 바꿀 글 TAB 예시 글」 줄들을 읽는다. 「## 분류」 줄은 그 아래 줄들의 분류다(앞에 없으면 빈 분류).
+     * 빈 줄과 그 밖의 # 로 시작하는 줄은 건너뛴다. 예시 글의 「\n」 은 줄바꿈이다. 칸 수가 맞지 않으면 줄 번호와 함께 IllegalArgumentException.
      */
     static List<Preset> parsePresets(String tsv) {
         List<Preset> presets = new ArrayList<>();
+        String category = "";
         String[] lines = tsv.split("\r?\n");
         for (int i = 0; i < lines.length; i++) {
             String line = lines[i];
+            if (line.startsWith(CATEGORY_PREFIX)) {
+                category = line.substring(CATEGORY_PREFIX.length()).strip();
+                continue;
+            }
             if (line.isBlank() || line.startsWith("#")) {
                 continue;
             }
@@ -643,7 +840,7 @@ final class RegexBench {
             if (cols.length != PRESET_COLUMNS) {
                 throw new IllegalArgumentException((i + 1) + "번째 줄: 칸이 " + cols.length + "개(" + PRESET_COLUMNS + "개여야 함)");
             }
-            presets.add(new Preset(cols[0], cols[1], cols[2], cols[3], cols[4].replace("\\n", "\n")));
+            presets.add(new Preset(category, cols[0], cols[1], cols[2], cols[3], cols[4].replace("\\n", "\n")));
         }
         return presets;
     }

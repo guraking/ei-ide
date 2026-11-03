@@ -49,18 +49,21 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.GridLayout;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.datatransfer.StringSelection;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 /**
- * 정규식 작업대. 맨 위 「조합」 에서 고르기만으로 패턴을 만들고, JavaScript(프론트) · Java(백엔드) 문법으로 시험한다.
+ * 정규식 작업대. 맨 위 「만들기」 탭(자주 쓰는 것 · 질문 따라가기 · 예시로 만들기 · 직접 만들기)에서 패턴을 만들고,
+ * JavaScript(프론트) · Java(백엔드) 문법으로 시험한다. 플래그 · 그룹 표 · 바꾸기는 「자세히 보기」 를 켤 때만 보인다.
  * 입력이 바뀌면 DEBOUNCE_MS 뒤 풀 스레드에서 RegexBench 로 계산하고, 가장 마지막 입력의 결과만 화면에 놓는다.
  * 「확인할 글」 은 글 하나가 패턴에 통째로 맞는지 본다. 아래 「코드」 칸은 지금 패턴을 코드에 붙일 글로 보이고 「복사」 로 클립보드에 넣는다.
  * 창 글은 IDE 언어와 상관없이 한국어다(BootServersMessages).
@@ -72,19 +75,30 @@ final class RegexBenchDialog extends DialogWrapper {
     private static final long TIMEOUT_MS = 1000;
     private static final int DIALOG_WIDTH = 1100;
     private static final int DIALOG_HEIGHT = 900;
-    private static final float TEXT_TABS_SPLIT = 0.45f;
+    private static final float TEXT_TABS_SPLIT = 0.3f;
     private static final int SAMPLE_ROWS = 5;
     private static final int RESULT_ROWS = 4;
+    private static final int RESULT_MIN_HEIGHT = 120;
     private static final int COPIED_FADE_MS = 1500;
     private static final String FLAVOR_KEY = "KingGura.RegexBench.flavor";
+    private static final String DETAILS_KEY = "KingGura.RegexBench.details";
+    private static final int PRESET_COLUMNS = 3;
+    private static final int MAKE_HEIGHT = 280;
+    // 만들기 탭이 글 전체 패턴을 줄 때 켜는 플래그: 시험 글의 줄마다 따로 맞춘다
+    private static final String LINE_FLAGS = "gm";
     // 그룹 표 칸 수
     private static final int COLUMN_COUNT = 5;
     private static final Color SUCCESS = JBColor.namedColor("Label.successForeground", new JBColor(0x208A3C, 0x5FB865));
     private static final Color WARNING = JBColor.namedColor("Label.warningForeground", new JBColor(0xA36200, 0xE0A040));
 
     private final ComboBox<RegexBench.Flavor> flavorBox = new ComboBox<>(RegexBench.Flavor.values());
-    private final ComboBox<RegexBench.Preset> presetBox = new ComboBox<>();
     private final RegexComposer composer = new RegexComposer(this::composed);
+    private final RegexWizard wizard = new RegexWizard(this::use);
+    private final RegexExamples examples = new RegexExamples(this::use);
+    private final JBTabbedPane makeTabs = new JBTabbedPane();
+    private final JBLabel flagsLabel = new JBLabel(BootServersBundle.message("regex.flags"));
+    private final JPanel flagRow = row();
+    private final JBCheckBox detailsBox = new JBCheckBox(BootServersBundle.message("regex.details"));
     private final JBTextField patternField = new JBTextField();
     private final Map<RegexBench.Flag, JBCheckBox> flagBoxes = new EnumMap<>(RegexBench.Flag.class);
     private final JBTextField checkField = new JBTextField();
@@ -117,8 +131,8 @@ final class RegexBenchDialog extends DialogWrapper {
     private Object selectedHighlight;
     // 입력이 바뀔 때마다 오른다. 계산이 끝났을 때 값이 다르면 그 결과는 버린다.
     private int generation;
-    // 자주 쓰는 정규식이 마지막으로 채운 예시 글. 사용자가 고친 글은 다른 것을 골라도 덮지 않는다.
-    private String presetSample = "";
+    // 만들기 탭이 마지막으로 채운 시험 글. 사용자가 고친 글은 다른 것을 골라도 덮지 않는다.
+    private String filledSample = "";
     // 문법 상자가 바뀌기 전 값. 바꿀 글의 이름 그룹 표기를 옮길 때 쓴다.
     private RegexBench.Flavor previousFlavor;
 
@@ -159,19 +173,16 @@ final class RegexBenchDialog extends DialogWrapper {
     protected @Nullable JComponent createCenterPanel() {
         Font mono = EditorColorsManager.getInstance().getGlobalScheme().getFont(EditorFontType.PLAIN);
         flavorBox.setRenderer(SimpleListCellRenderer.create("", f -> BootServersBundle.message("regex.flavor." + f.name())));
-        presetBox.setRenderer(SimpleListCellRenderer.create(BootServersBundle.message("regex.preset.pick"), RegexBench.Preset::name));
-        presetBox.addItem(null);
-        for (RegexBench.Preset preset : presets()) {
-            presetBox.addItem(preset);
-        }
-        JPanel flavorRow = row(flavorBox, new JBLabel(BootServersBundle.message("regex.preset")), presetBox);
+        makeTabs.addTab(BootServersBundle.message("regex.make.presets"), presetsPanel());
+        makeTabs.addTab(BootServersBundle.message("regex.make.ask"), wizard.component());
+        makeTabs.addTab(BootServersBundle.message("regex.make.examples"), examples.component());
+        makeTabs.addTab(BootServersBundle.message("regex.make.compose"), composer.component());
 
         patternField.setFont(mono);
         patternField.getEmptyText().setText(BootServersBundle.message("regex.pattern.empty"));
         JBLabel patternHint = new JBLabel(BootServersBundle.message("regex.pattern.hint"));
         patternHint.setForeground(NamedColorUtil.getInactiveTextColor());
 
-        JPanel flagRow = row();
         for (RegexBench.Flag flag : RegexBench.Flag.values()) {
             JBCheckBox box = new JBCheckBox(BootServersBundle.message("regex.flag." + flag.name()));
             box.setToolTipText(flag.label);
@@ -186,14 +197,20 @@ final class RegexBenchDialog extends DialogWrapper {
         checkRow.add(checkField, BorderLayout.CENTER);
         checkRow.add(checkResult, BorderLayout.EAST);
 
+        detailsBox.setSelected(PropertiesComponent.getInstance().getBoolean(DETAILS_KEY, false));
+        detailsBox.addActionListener(e -> showDetails());
+        JPanel statusRow = new JPanel(new BorderLayout(JBUI.scale(UIUtil.DEFAULT_HGAP), 0));
+        statusRow.add(status, BorderLayout.CENTER);
+        statusRow.add(detailsBox, BorderLayout.EAST);
+
         JPanel top = FormBuilder.createFormBuilder()
-                .addLabeledComponent(BootServersBundle.message("regex.compose"), composer.component(), true)
-                .addLabeledComponent(BootServersBundle.message("regex.flavor"), flavorRow)
+                .addComponent(makeTabs)
+                .addLabeledComponent(BootServersBundle.message("regex.flavor"), row(flavorBox))
                 .addLabeledComponent(BootServersBundle.message("regex.pattern"), patternField)
                 .addComponentToRightColumn(patternHint)
-                .addLabeledComponent(BootServersBundle.message("regex.flags"), flagRow)
+                .addLabeledComponent(flagsLabel, flagRow)
                 .addLabeledComponent(BootServersBundle.message("regex.check"), checkRow)
-                .addComponent(status)
+                .addComponent(statusRow)
                 .getPanel();
 
         sampleArea.setFont(mono);
@@ -217,9 +234,9 @@ final class RegexBenchDialog extends DialogWrapper {
                 .addLabeledComponent(BootServersBundle.message("regex.replacement"), replacementField)
                 .addComponentToRightColumn(replacementHint)
                 .addComponentToRightColumn(replacementError)
-                .addLabeledComponentFillVertically(BootServersBundle.message("regex.replaced"), new JBScrollPane(replacedArea))
+                .addLabeledComponentFillVertically(BootServersBundle.message("regex.replaced"), resultScroll(replacedArea))
                 .getPanel();
-        tabs.addTab(BootServersBundle.message("regex.tab.groups"), new JBScrollPane(groupTable));
+        tabs.addTab(BootServersBundle.message("regex.tab.groups"), resultScroll(groupTable));
         tabs.addTab(BootServersBundle.message("regex.tab.replace"), replacePanel);
 
         OnePixelSplitter split = new OnePixelSplitter(true, TEXT_TABS_SPLIT);
@@ -235,7 +252,6 @@ final class RegexBenchDialog extends DialogWrapper {
         codeRow.add(copyButton, BorderLayout.EAST);
 
         flavorBox.addActionListener(e -> flavorChanged(previousFlavor));
-        presetBox.addActionListener(e -> applyPreset());
         patternField.getDocument().addDocumentListener(listener(this::changed));
         checkField.getDocument().addDocumentListener(listener(this::changed));
         sampleArea.getDocument().addDocumentListener(listener(this::changed));
@@ -246,7 +262,78 @@ final class RegexBenchDialog extends DialogWrapper {
         panel.add(split, BorderLayout.CENTER);
         panel.add(codeRow, BorderLayout.SOUTH);
         panel.setPreferredSize(JBUI.size(DIALOG_WIDTH, DIALOG_HEIGHT));
+        showDetails();
         return panel;
+    }
+
+    /** 자주 쓰는 정규식을 분류마다 단추로. 누르면 패턴 · 플래그 · 바꿀 글 · 예시 글을 채운다. */
+    private JComponent presetsPanel() {
+        Map<String, List<RegexBench.Preset>> byCategory = new LinkedHashMap<>();
+        for (RegexBench.Preset preset : presets()) {
+            byCategory.computeIfAbsent(preset.category(), k -> new ArrayList<>()).add(preset);
+        }
+        FormBuilder form = FormBuilder.createFormBuilder();
+        for (Map.Entry<String, List<RegexBench.Preset>> e : byCategory.entrySet()) {
+            JPanel grid = new JPanel(new GridLayout(0, PRESET_COLUMNS, JBUI.scale(UIUtil.DEFAULT_HGAP), JBUI.scale(UIUtil.DEFAULT_VGAP)));
+            for (RegexBench.Preset preset : e.getValue()) {
+                JButton button = new JButton(preset.name());
+                button.setToolTipText(preset.name() + "  " + preset.pattern());
+                button.addActionListener(event -> applyPreset(preset));
+                grid.add(button);
+            }
+            form.addLabeledComponent(new JBLabel(e.getKey()), grid, true);
+        }
+        JBScrollPane scroll = new JBScrollPane(form.getPanel());
+        scroll.setBorder(JBUI.Borders.empty());
+        scroll.setPreferredSize(JBUI.size(DIALOG_WIDTH, MAKE_HEIGHT));
+        return scroll;
+    }
+
+    /** 플래그 · 그룹 표 · 바꾸기는 「자세히 보기」 일 때만. 선택은 다음에 열 때도 이어진다. */
+    private void showDetails() {
+        boolean details = detailsBox.isSelected();
+        flagsLabel.setVisible(details);
+        flagRow.setVisible(details);
+        tabs.setVisible(details);
+        PropertiesComponent.getInstance().setValue(DETAILS_KEY, details, false);
+    }
+
+    /** 만들기 탭이 만든 패턴을 넣는 곳. */
+    interface Use {
+        /** lines 면 글 전체 패턴이라 줄마다 맞추는 플래그를 켠다. sample 이 null 이 아니면 시험 글로 채운다(사용자가 고친 글은 덮지 않음). */
+        void use(String pattern, boolean lines, @Nullable String sample);
+    }
+
+    private void use(String pattern, boolean lines, @Nullable String sample) {
+        if (lines) {
+            Set<RegexBench.Flag> flags = RegexBench.flagsOf(LINE_FLAGS);
+            for (Map.Entry<RegexBench.Flag, JBCheckBox> e : flagBoxes.entrySet()) {
+                if (flags.contains(e.getKey())) {
+                    e.getValue().setSelected(true);
+                }
+            }
+        }
+        patternField.setText(pattern);
+        if (sample != null) {
+            fillSample(sample);
+        }
+        changed();
+    }
+
+    private void fillSample(String sample) {
+        String current = sampleArea.getText();
+        if (current.isEmpty() || current.equals(filledSample)) {
+            sampleArea.setText(sample);
+            filledSample = sample;
+        }
+        sampleArea.setCaretPosition(0);
+    }
+
+    /** 결과 칸은 창이 낮아져도 RESULT_ROWS 줄은 보이게 최소 높이를 둔다. */
+    private static JBScrollPane resultScroll(JComponent view) {
+        JBScrollPane scroll = new JBScrollPane(view);
+        scroll.setMinimumSize(JBUI.size(0, RESULT_MIN_HEIGHT));
+        return scroll;
     }
 
     private static List<RegexBench.Preset> presets() {
@@ -283,7 +370,7 @@ final class RegexBenchDialog extends DialogWrapper {
     @Override
     protected @Nullable String getDimensionServiceKey() {
         // 판마다 기본 크기를 바꿀 때 이름을 바꿔 지난 크기 기억을 버린다
-        return "KingGura.RegexBench.2";
+        return "KingGura.RegexBench.4";
     }
 
     @Override
@@ -325,23 +412,20 @@ final class RegexBenchDialog extends DialogWrapper {
         changed();
     }
 
-    private void applyPreset() {
-        RegexBench.Preset preset = (RegexBench.Preset) presetBox.getSelectedItem();
-        if (preset == null) {
-            return;
-        }
+    private void applyPreset(RegexBench.Preset preset) {
         Set<RegexBench.Flag> flags = RegexBench.flagsOf(preset.flags());
         for (Map.Entry<RegexBench.Flag, JBCheckBox> e : flagBoxes.entrySet()) {
             e.getValue().setSelected(flags.contains(e.getKey()));
         }
         patternField.setText(preset.pattern());
         replacementField.setText(RegexBench.convertReplacement(flavor(), preset.replacement()));
-        String current = sampleArea.getText();
-        if (current.isEmpty() || current.equals(presetSample)) {
-            sampleArea.setText(preset.sample());
-            presetSample = preset.sample();
+        fillSample(preset.sample());
+        // 바꿀 글이 있는 것은 바꾸기 결과를 보여야 뜻이 있다
+        if (!preset.replacement().isEmpty()) {
+            detailsBox.setSelected(true);
+            showDetails();
+            tabs.setSelectedIndex(1);
         }
-        sampleArea.setCaretPosition(0);
     }
 
     private Set<RegexBench.Flag> flags() {
