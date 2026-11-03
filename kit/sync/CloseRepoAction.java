@@ -222,7 +222,20 @@ public class CloseRepoAction extends DumbAwareAction {
       for (VirtualFilePointer pointer : description.getContentRoots()) roots.add(VfsUtilCore.urlToPath(pointer.getUrl()));
       if (!roots.isEmpty()) properties.setList(ROOTS_KEY + description.getName(), roots);
     }
-    for (Module module : ModuleManager.getInstance(project).getModules()) properties.unsetValue(ROOTS_KEY + module.getName());
+    // 루트 없이 올라온 모듈(IDE 를 다시 켜 Maven 이 아직 루트를 안 채움)은 기록을 남겨 다시 닫을 때(reclose) 쓴다.
+    for (Module module : ModuleManager.getInstance(project).getModules()) {
+      if (ModuleRootManager.getInstance(module).getContentRoots().length > 0) properties.unsetValue(ROOTS_KEY + module.getName());
+    }
+  }
+
+  /** 올라온 모듈의 콘텐츠 루트. 루트가 없으면 닫을 때 적어 둔 경로(ROOTS_KEY). */
+  private static List<String> loadedRootsOf(Project project, Module module) {
+    List<String> roots = new ArrayList<>();
+    for (VirtualFile root : ModuleRootManager.getInstance(module).getContentRoots()) roots.add(root.getPath());
+    if (!roots.isEmpty()) return roots;
+    List<String> saved = PropertiesComponent.getInstance(project).getList(ROOTS_KEY + module.getName());
+    if (saved != null) roots.addAll(saved);
+    return roots;
   }
 
   /**
@@ -370,15 +383,40 @@ public class CloseRepoAction extends DumbAwareAction {
     for (String root : closing) {
       if (!containsPath(ours, root)) ours.add(root);
     }
-    ours.removeIf(root -> containsPath(opening, root) || !containsPath(unloaded, root));
+    List<String> rootless = new ArrayList<>();
+    for (Module module : ModuleManager.getInstance(project).getModules()) {
+      if (ModuleRootManager.getInstance(module).getContentRoots().length == 0) rootless.addAll(loadedRootsOf(project, module));
+    }
+    ours.removeIf(root -> containsPath(opening, root) || (!containsPath(unloaded, root) && !containsPath(rootless, root)));
     properties.setList(CLOSED_KEY, ours);
   }
 
-  /** 켤 때 한 번: 이 판 전에 닫아 둔 저장소도 Maven 에서 빼고 편집기를 닫는다. 색인이 끝난 뒤(Maven 목록이 읽힌 뒤) 부른다. */
+  /**
+   * 켤 때 한 번: 이 판 전에 닫아 둔 저장소도 Maven 에서 빼고 편집기를 닫는다. 색인이 끝난 뒤(Maven 목록이 읽힌 뒤) 부른다.
+   * 닫아 둔 저장소(CLOSED_KEY)가 올라와 있으면 다시 닫는다. IntelliJ 가 켜며 프로젝트 정보를 맞추다 내린 모듈을 다시 올리는 일이 있는데,
+   * 그것을 열기로 보면 닫힘이 재시작에 풀린다. 열기는 Open Project 단추나 IntelliJ 모듈 올리기 창으로만 한다.
+   */
   static void syncClosed(Project project) {
+    reclose(project);
     List<String> roots = new ArrayList<>();
     for (VirtualFile root : closedRoots(project)) roots.add(root.getPath());
     sync(project, roots, List.of(), true);
+  }
+
+  /** 닫아 둔 저장소 폴더(CLOSED_KEY)를 콘텐츠 루트로 가진 올라온 모듈을 내린다. 없으면 아무것도 하지 않는다. EDT. */
+  private static void reclose(Project project) {
+    List<String> ours = PropertiesComponent.getInstance(project).getList(CLOSED_KEY);
+    if (ours == null || ours.isEmpty()) return;
+    ModuleManager modules = ModuleManager.getInstance(project);
+    Set<String> unloaded = new LinkedHashSet<>();
+    for (UnloadedModuleDescription description : modules.getUnloadedModuleDescriptions()) unloaded.add(description.getName());
+    boolean found = false;
+    for (Module module : modules.getModules()) {
+      for (String root : loadedRootsOf(project, module)) {
+        if (containsPath(ours, root) && unloaded.add(module.getName())) found = true;
+      }
+    }
+    if (found) modules.setUnloadedModulesSync(new ArrayList<>(unloaded));
   }
 
   private static boolean containsPath(Collection<String> paths, String path) {
