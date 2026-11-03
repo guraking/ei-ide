@@ -80,6 +80,10 @@
       <action id="KingGura.OpenRepo" class="kinggura.sync.CloseRepoAction$Open" icon="AllIcons.Actions.MenuOpen"/>
       <separator/>
     </group>
+    <!-- File 메뉴: Recent Projects 하위에 있던 스톡 Manage Projects… 를 최상위 Close Project 바로 위에도 둔다. -->
+    <reference ref="ManageRecentProjects">
+      <add-to-group group-id="FileOpenGroup" anchor="before" relative-to-action="CloseProject"/>
+    </reference>
     <action id="KingGura.SynchronizeWorkspace" class="kinggura.sync.SyncToolWindowFactory$OpenAction" icon="AllIcons.Actions.Refresh">
       <add-to-group group-id="Git.MainMenu" anchor="first"/>
       <add-to-group group-id="Git.ContextMenu" anchor="first"/>
