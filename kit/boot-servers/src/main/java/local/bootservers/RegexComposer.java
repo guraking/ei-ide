@@ -32,6 +32,7 @@ import javax.swing.JPanel;
 import javax.swing.event.DocumentEvent;
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;
+import java.awt.GridLayout;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
@@ -51,8 +52,6 @@ final class RegexComposer {
     private static final int LIST_HEIGHT = 200;
     private static final int LIST_WIDTH = 260;
     private static final int CHILD_INDENT = 18;
-    private static final int AROUND_COLUMNS = 10;
-    private static final int NAME_COLUMNS = 12;
     private static final int MAX_REPEAT = 999;
     private static final int DEFAULT_MIN_LENGTH = 8;
 
@@ -134,15 +133,14 @@ final class RegexComposer {
     private final JBLabel captureLabel = new JBLabel(BootServersBundle.message("regex.compose.capture"));
     private final JBCheckBox captureBox = new JBCheckBox(BootServersBundle.message("regex.compose.capture.box"));
     private final JBLabel nameLabel = new JBLabel(BootServersBundle.message("regex.compose.name"));
-    private final JBTextField nameField = new JBTextField(NAME_COLUMNS);
-    private final JPanel captureRow = row(captureBox, nameLabel, nameField);
+    private final JBTextField nameField = new JBTextField();
+    private final JPanel captureRow = stretch(row(captureBox, nameLabel), nameField, null);
     private final JBLabel aroundLabel = new JBLabel(BootServersBundle.message("regex.compose.around"));
-    private final JBTextField beforeField = new JBTextField(AROUND_COLUMNS);
-    private final JBTextField afterField = new JBTextField(AROUND_COLUMNS);
-    private final JPanel aroundRow = row(new JBLabel(BootServersBundle.message("regex.compose.before")), beforeField,
-            new JBLabel(BootServersBundle.message("regex.compose.before.tail")),
-            new JBLabel(BootServersBundle.message("regex.compose.after")), afterField,
-            new JBLabel(BootServersBundle.message("regex.compose.after.tail")));
+    private final JBTextField beforeField = new JBTextField();
+    private final JBTextField afterField = new JBTextField();
+    private final JPanel aroundRow = pair(
+            stretch(new JBLabel(BootServersBundle.message("regex.compose.before")), beforeField, new JBLabel(BootServersBundle.message("regex.compose.before.tail"))),
+            stretch(new JBLabel(BootServersBundle.message("regex.compose.after")), afterField, new JBLabel(BootServersBundle.message("regex.compose.after.tail"))));
     private final JBLabel problemLabel = new JBLabel();
     private final JComponent component;
 
@@ -318,6 +316,25 @@ final class RegexComposer {
                 .addComponent(master)
                 .addComponent(problemLabel)
                 .getPanel();
+    }
+
+    /** 글 칸이 남는 폭을 다 쓰는 줄: 앞 · 칸 · 뒤(없으면 null). */
+    private static JPanel stretch(JComponent west, JComponent field, @Nullable JComponent east) {
+        JPanel row = new JPanel(new BorderLayout(JBUI.scale(UIUtil.DEFAULT_HGAP), 0));
+        row.add(west, BorderLayout.WEST);
+        row.add(field, BorderLayout.CENTER);
+        if (east != null) {
+            row.add(east, BorderLayout.EAST);
+        }
+        return row;
+    }
+
+    /** 두 줄을 반씩 나란히. */
+    private static JPanel pair(JComponent left, JComponent right) {
+        JPanel row = new JPanel(new GridLayout(1, 2, JBUI.scale(UIUtil.DEFAULT_HGAP), 0));
+        row.add(left);
+        row.add(right);
+        return row;
     }
 
     static JPanel row(JComponent... components) {
