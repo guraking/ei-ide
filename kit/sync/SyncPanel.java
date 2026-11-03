@@ -366,6 +366,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private boolean busy;
   // 새로고침이 도는 동안 VCS 매핑이 바뀌었다(EDT 에서만). 끝나면 한 번만 다시 새로고침한다(fetch 가 겹치지 않게).
   private boolean refreshAgain;
+  // 새로고침이 도는 동안 VCS 매핑이 바뀌었다(EDT 에서만). 끝나면 mappingChanged 를 한 번 한다.
+  private boolean remapAgain;
+  // 조회 뒤 매핑에 목록에 없는 저장소가 생겼다(EDT 에서만). 위쪽 줄에 「새로고침 필요」를 붙이고, 전체 새로고침이 끝나면 내린다.
+  private boolean unlisted;
   // 위쪽 요약 끝의 회색 글(「원격 확인 HH:mm」 등, EDT 에서만). fetch 없는 다시 비교 뒤에도 같은 글로 요약을 다시 그린다.
   private String summaryTail = "";
 
@@ -517,8 +521,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     setContent(content);
 
     tree.setRootVisible(false);
-    tree.getEmptyText().setText(SyncBundle.message("sync.empty"))
-      .appendSecondaryText(SyncBundle.message("sync.empty.link"), SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES, e -> { if (!busy) refresh(); });
+    updateEmptyText();
     // 묶음 줄과 파일 줄은 종류별로 IDE 의 파일 상태 색(테마를 따름)으로 그린다. 충돌 빨강 · 들어올 파랑(수정됨) · 나갈 보라(병합됨).
     // 묶음 줄: 굵은 이름 · 회색 개수. 파일 줄: 회색 상태 글자 · 이름 · 회색 상위 폴더(길면 가운데를 … 로 줄임), 풍선 도움말은 전체 경로.
     ColoredTreeCellRenderer renderer = new ColoredTreeCellRenderer() {
@@ -649,13 +652,9 @@ final class SyncPanel extends SimpleToolWindowPanel {
         }
       }
     });
-    // IDE 를 켠 직후에는 VCS 매핑이 잡히기 전에 창이 먼저 비교를 시작해 프로젝트 폴더로 대신 비교할 수 있다
-    // (워크스페이스 폴더는 저장소가 아니라 rev-parse 가 실패한다). 매핑이 잡히거나 바뀌면 다시 비교한다.
+    // 매핑이 바뀌어도(IDE 시작 · 저장소 열기 · 닫기) 서버에 묻지 않는다. 조회는 사용자가 누를 때만 한다.
     project.getMessageBus().connect(parent).subscribe(ProjectLevelVcsManager.VCS_CONFIGURATION_CHANGED,
-      (com.intellij.openapi.vcs.VcsMappingListener) () -> SwingUtilities.invokeLater(() -> {
-        if (busy) refreshAgain = true;
-        else refresh();
-      }));
+      (com.intellij.openapi.vcs.VcsMappingListener) () -> SwingUtilities.invokeLater(this::mappingChanged));
     javax.swing.Timer tick = new javax.swing.Timer(TICK_MS, e -> tick());
     tick.start();
     Disposer.register(parent, tick::stop);
@@ -2124,7 +2123,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       long minutes = TimeUnit.MILLISECONDS.toMinutes(System.currentTimeMillis() - lastCheck);
       status.append(SUMMARY_SEP + (minutes == 0 ? SyncBundle.message("sync.checked.now") : SyncBundle.message("sync.checked.ago", minutes)),
                     SimpleTextAttributes.GRAYED_ATTRIBUTES);
-      if (minutes >= STALE_MINUTES) {
+      if (minutes >= STALE_MINUTES || unlisted) {
         status.append(SUMMARY_SEP + SyncBundle.message("sync.checked.stale"),
                       new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, ReverseMergeAction.MINE_COLOR));
       }
@@ -2336,6 +2335,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
         repoErrors.clear();
         repoErrors.putAll(failed);
         lastCheck = System.currentTimeMillis();
+        unlisted = false;
         // 그사이 다시 비교(recompare)가 시작됐으면 목록은 그쪽 결과를 따르고, 원격 확인 결과 · 오류는 그대로 알린다.
         showSummary(finalResult, null);
         for (Map.Entry<File, String> failure : failed.entrySet()) notifyRepoError(failure.getKey(), vcsOf.get(failure.getKey()), failure.getValue());
@@ -2483,6 +2483,11 @@ final class SyncPanel extends SimpleToolWindowPanel {
       refresh();
       return;
     }
+    if (remapAgain) {
+      remapAgain = false;
+      // 끝난 새로고침이 목록을 바꾼 뒤에 맞춘다.
+      SwingUtilities.invokeLater(this::mappingChanged);
+    }
     Iterator<Map.Entry<File, Vcs>> next = queuedRepos.entrySet().iterator();
     if (next.hasNext()) {
       Map.Entry<File, Vcs> queued = next.next();
@@ -2490,6 +2495,45 @@ final class SyncPanel extends SimpleToolWindowPanel {
       // 끝난 새로고침이 목록 · 상태 글을 다 그린 뒤에 시작한다.
       SwingUtilities.invokeLater(() -> refreshRepo(queued.getKey(), queued.getValue()));
     }
+  }
+
+  /**
+   * VCS 매핑이 바뀌었을 때 서버에 묻지 않고 목록만 맞춘다. 조회한 저장소가 없으면 아무것도 하지 않는다.
+   * 매핑에서 빠진 저장소(닫은 저장소 등)의 줄 · 오류 표시를 지우고, 목록에 없는 저장소가 매핑에 생겼으면 위쪽 줄에 「새로고침 필요」를 붙인다.
+   */
+  private void mappingChanged() {
+    if (busy) {
+      remapAgain = true;
+      return;
+    }
+    if (repos.isEmpty()) return;
+    Set<File> mapped = new HashSet<>();
+    for (Map.Entry<File, Vcs> entry : vcsRoots()) mapped.add(entry.getKey());
+    Set<File> listed = new HashSet<>();
+    List<Repo> kept = new ArrayList<>();
+    for (Repo repo : repos) {
+      listed.add(repo.root());
+      if (mapped.contains(repo.root())) kept.add(repo);
+      else repoErrors.remove(repo.root());
+    }
+    List<Change> next = new ArrayList<>();
+    for (Change c : changes) {
+      if (mapped.contains(c.repo().root())) next.add(c);
+    }
+    unlisted = !listed.containsAll(mapped);
+    repos = List.copyOf(kept);
+    changes = List.copyOf(next);
+    showTitle(repos);
+    rebuildTree();
+    showSummary(changes, null);
+  }
+
+  /** 목록이 비었을 때 가운데 글. 조회한 저장소가 없으면 「아직 조회하지 않았습니다 · 조회」, 있으면 「원격과 같습니다 · 다시 비교」. 링크는 전체 조회. */
+  private void updateEmptyText() {
+    boolean queried = !repos.isEmpty();
+    tree.getEmptyText().setText(SyncBundle.message(queried ? "sync.empty" : "sync.not.queried"))
+      .appendSecondaryText(SyncBundle.message(queried ? "sync.empty.link" : "sync.query.link"), SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES,
+                           e -> { if (!busy) refresh(); });
   }
 
   /** 원격을 받아 와 다시 비교한다. 원격 실패는 failures 에 저장소별로 적고 지금 상태 비교 결과를 돌려준다. */
@@ -2849,6 +2893,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
 
   /** 저장소가 하나면 종류별 묶음만, 둘 이상이면 저장소 → 종류별 묶음으로 보인다. */
   private void rebuildTree() {
+    updateEmptyText();
     // IntelliJ 변경 트리처럼 다시 만들어도 고른 줄과 접어 둔 줄을 그대로 둔다. 줄은 저장소 · 묶음 · 파일 이름으로 이어 붙인 열쇠로 맞춘다.
     Set<String> selected = new HashSet<>();
     TreePath[] oldSelection = tree.getSelectionPaths();
