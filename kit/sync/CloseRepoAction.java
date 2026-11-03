@@ -18,7 +18,6 @@ import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.ide.plugins.PluginManagerCore;
 import com.intellij.ide.util.PropertiesComponent;
-import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.extensions.PluginId;
 import com.intellij.openapi.project.ModuleListener;
@@ -67,7 +66,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * 폴더 · 파일은 건드리지 않는다. 여러 줄을 골라 한꺼번에 닫고 열 수 있다.
  */
 public class CloseRepoAction extends DumbAwareAction {
-  private static final Logger LOG = Logger.getInstance(CloseRepoAction.class);
 
   /** 트리 우클릭의 「Open Project」. */
   public static final class Open extends CloseRepoAction {
@@ -391,7 +389,6 @@ public class CloseRepoAction extends DumbAwareAction {
     }
     ours.removeIf(root -> containsPath(opening, root) || (!containsPath(unloaded, root) && !containsPath(rootless, root)));
     properties.setList(CLOSED_KEY, ours);
-    LOG.info("닫기 정리(" + (explicit ? "단추 · 켤 때" : "모듈 변화") + "): 닫음 " + closing + " 열림 " + opening + " 기록 " + ours);
   }
 
   /**
@@ -400,23 +397,10 @@ public class CloseRepoAction extends DumbAwareAction {
    * 그것을 열기로 보면 닫힘이 재시작에 풀린다. 열기는 Open Project 단추나 IntelliJ 모듈 올리기 창으로만 한다.
    */
   static void syncClosed(Project project) {
-    LOG.info("켤 때 정리 전: " + closedState(project));
     reclose(project);
     List<String> roots = new ArrayList<>();
     for (VirtualFile root : closedRoots(project)) roots.add(root.getPath());
-    LOG.info("켤 때 정리 뒤: " + closedState(project) + " 닫힌 줄 " + roots);
     sync(project, roots, List.of(), true);
-  }
-
-  /** 로그용: 올라온 모듈과 루트, 내린 모듈과 루트(rootsOf), 닫힌 기록(CLOSED_KEY). */
-  private static String closedState(Project project) {
-    StringBuilder text = new StringBuilder("올라옴 {");
-    for (Module module : ModuleManager.getInstance(project).getModules()) text.append(module.getName()).append('=').append(loadedRootsOf(project, module)).append(' ');
-    text.append("} 내림 {");
-    for (UnloadedModuleDescription description : ModuleManager.getInstance(project).getUnloadedModuleDescriptions()) {
-      text.append(description.getName()).append('=').append(rootsOf(project, description)).append(' ');
-    }
-    return text.append("} 기록 ").append(PropertiesComponent.getInstance(project).getList(CLOSED_KEY)).toString();
   }
 
   /** 닫아 둔 저장소 폴더(CLOSED_KEY)를 콘텐츠 루트로 가진 올라온 모듈을 내린다. 없으면 아무것도 하지 않는다. EDT. */
@@ -432,7 +416,6 @@ public class CloseRepoAction extends DumbAwareAction {
         if (containsPath(ours, root) && unloaded.add(module.getName())) found = true;
       }
     }
-    if (found) LOG.info("닫힌 기록이 있는데 올라온 모듈을 다시 닫습니다: " + unloaded);
     if (found) modules.setUnloadedModulesSync(new ArrayList<>(unloaded));
   }
 
@@ -507,7 +490,6 @@ public class CloseRepoAction extends DumbAwareAction {
         scheduled.set(false);
         List<String> roots = new ArrayList<>(removed);
         removed.removeAll(roots);
-        LOG.info("모듈 변화 알림: 빠진 루트 " + roots + " " + closedState(project));
         sync(project, roots, List.of(), false);
       }, project.getDisposed());
     }
