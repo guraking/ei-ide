@@ -39,7 +39,9 @@ import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.application.WriteIntentReadAction;
 import com.intellij.openapi.module.Module;
+import com.intellij.openapi.module.Module;
 import com.intellij.openapi.project.DumbService;
+import com.intellij.openapi.project.ModuleListener;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.DumbAwareToggleAction;
 import com.intellij.openapi.project.Project;
@@ -344,6 +346,18 @@ final class ServersPanel extends SimpleToolWindowPanel {
                 reload();
             }
         });
+        // 모듈이 올라오거나 내려가면(Close/Open Project, Maven 다시 읽기) 서버 목록을 다시 찾는다. 알림은 쓰기 동작 안에서 오므로 화면 스레드에 미룬다.
+        project.getMessageBus().connect(parent).subscribe(ModuleListener.TOPIC, new ModuleListener() {
+            @Override
+            public void modulesAdded(@NotNull Project p, @NotNull List<? extends Module> modules) {
+                reloadLater();
+            }
+
+            @Override
+            public void moduleRemoved(@NotNull Project p, @NotNull Module module) {
+                reloadLater();
+            }
+        });
         // 실행 설정 대화상자에서 설정을 더하거나 지우거나 이름을 바꾸면 줄을 다시 맞춘다. 알림은 아무 스레드에서나 오므로 화면 스레드로 넘긴다.
         project.getMessageBus().connect(parent).subscribe(RunManagerListener.TOPIC, new RunManagerListener() {
             @Override
@@ -378,6 +392,10 @@ final class ServersPanel extends SimpleToolWindowPanel {
                             .appendSecondaryText(BootServersBundle.message("servers.action.add.was"), SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES, e -> editWas(null));
                 })
                 .submit(AppExecutorUtil.getAppExecutorService());
+    }
+
+    private void reloadLater() {
+        ApplicationManager.getApplication().invokeLater(this::reload, ModalityState.any(), project.getDisposed());
     }
 
     private void rebuildLater() {
