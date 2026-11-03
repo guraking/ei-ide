@@ -22,7 +22,7 @@ import org.jetbrains.annotations.NotNull;
 /** 아래쪽 「동기화」 창. 처음 열 때 한 번 원격과 비교한다. 창 id 는 설정 · 단축키 호환을 위해 영어 그대로 두고 표시 이름만 바꾼다. */
 public final class SyncToolWindowFactory implements ToolWindowFactory, DumbAware {
   static final String ID = "Synchronize";
-  /** 우클릭으로 창을 열 때 비교할 파일. 있으면 창을 처음 만들 때 전체 비교를 건너뛰고 그 저장소만 비교한다. */
+  /** 우클릭으로 창을 열 때 비교할 파일. 창을 연 뒤 그 저장소만 조회한다. 창을 그냥 열 때는 조회하지 않는다(사용자가 ⟳ · 「조회」를 누를 때만). */
   private static final Key<VirtualFile> ONLY_FILE = Key.create("kinggura.sync.onlyFile");
   // 처음 열릴 때 창 높이: IDE 창 내용 높이의 이 비율(2026-10-29 사용자 캡처). 한 번만 맞추고, 그 뒤는 IDE 가 기억하는 크기를 쓴다.
   private static final float INITIAL_HEIGHT_RATIO = 0.3f;
@@ -38,7 +38,6 @@ public final class SyncToolWindowFactory implements ToolWindowFactory, DumbAware
     SyncPanel panel = new SyncPanel(project, toolWindow.getDisposable());
     Content content = ContentFactory.getInstance().createContent(panel, "", false);
     toolWindow.getContentManager().addContent(content);
-    if (project.getUserData(ONLY_FILE) == null) panel.refresh();
     applyInitialHeight(project, toolWindow);
   }
 
