@@ -81,6 +81,10 @@ public class SyncCheck {
     eq(SyncPanel.shortDir("src/main/java/com/shop/order"), "src/main/java/\u2026/order");
     eq(SyncPanel.shortDir("src/main/resources/mapper"), "src/main/resources/mapper");
     eq(SyncPanel.shortDir("src"), "src");
+    eq(SyncPanel.nameSlash("src/a/Foo.java"), 5);
+    eq(SyncPanel.nameSlash("src/a/tooling/"), 5);
+    eq(SyncPanel.nameSlash("tooling/"), -1);
+    eq(SyncPanel.nameSlash("Foo.java"), -1);
     // 받기 알림: 커밋 수와 겹치지 않는 파일 수.
     eq(SyncPanel.countPulled("\u0001\n\nA.java\nb/B.xml\n\u0001\n\nA.java\n"), new SyncPanel.Pulled(2, 2));
     eq(SyncPanel.countPulled(""), new SyncPanel.Pulled(0, 0));

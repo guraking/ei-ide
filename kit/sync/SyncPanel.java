@@ -542,7 +542,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
         }
         else if (item instanceof Change change) {
           String path = change.path();
-          int slash = path.lastIndexOf('/');
+          int slash = nameSlash(path);
           String name = path.substring(slash + 1);
           Font label = JBUI.Fonts.label();
           FontMetrics metrics = getFontMetrics(label);
@@ -1002,7 +1002,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
   /** 글자 찾기에 쓸 줄 이름: 파일 줄은 파일 이름, 저장소 줄은 폴더 이름, 폴더 줄은 경로, 묶음 줄은 묶음 이름. */
   private static String speedSearchText(TreePath path) {
     Object value = ((DefaultMutableTreeNode) path.getLastPathComponent()).getUserObject();
-    if (value instanceof Change c) return c.path().substring(c.path().lastIndexOf('/') + 1);
+    if (value instanceof Change c) return c.path().substring(nameSlash(c.path()) + 1);
     if (value instanceof Repo r) return r.root().getName();
     if (value instanceof Folder f) return f.path();
     return value instanceof Group g ? g.kind().label() : "";
@@ -1024,6 +1024,11 @@ final class SyncPanel extends SimpleToolWindowPanel {
    * 아래 단추를 지금 목록에 맞춘다: Pull Selected 끝에 받을 파일 수, Push 끝에 올릴 커밋 수(고른 저장소, 없으면 전부. 커밋 안 한 파일은 세지 않는다),
    * 충돌이 없으면 Resolve Conflicts 를 끈다. EDT 에서 부른다.
    */
+  /** 이름 앞 / 의 위치(없으면 -1). 새 폴더("src/a/tooling/")는 끝 / 를 건너뛰어 "tooling/" 이 이름, "src/a" 가 상위 폴더가 된다. */
+  static int nameSlash(String path) {
+    return path.lastIndexOf('/', path.length() - 2);
+  }
+
   /** 파일 줄 옆 상위 폴더. 다섯 단계 이상이면 앞 셋과 마지막만 남기고 가운데를 … 로 줄인다(src/main/java/…/order). */
   static String shortDir(String dir) {
     String[] parts = dir.split("/");
@@ -2970,7 +2975,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
         // 상위 폴더별로 한 번 더 묶는다(폴더 이름 차례). 저장소 맨 위 파일은 「/」 줄 아래.
         Map<String, List<Change>> folders = new TreeMap<>();
         for (Change c : ofKind) {
-          int slash = c.path().lastIndexOf('/');
+          int slash = nameSlash(c.path());
           folders.computeIfAbsent(slash < 0 ? "" : c.path().substring(0, slash), k -> new ArrayList<>()).add(c);
         }
         for (Map.Entry<String, List<Change>> folder : folders.entrySet()) {
