@@ -451,7 +451,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
     <table class="keys map">
       <tr><th>항목 · 보이는 곳</th><th>하는 일</th></tr>
       <tr><td>Run · Run All · Explain Plan · Format SQL · To Upper Case · To Lower Case<br>SQL 콘솔 (맨 위)</td><td>문장 실행 · 전체 실행 · 실행 계획 · 정렬 · 대소문자 (<a href="#db">데이터베이스</a>)</td></tr>
-      <tr><td>Run MyBatis Query · Generate Layer Code… · Copy Call Code · Rename Column… · Generate Dynamic Conditions… · Generate Paging Query · Generate resultMap from SELECT · Insert MyBatis Tag ▸<br>매퍼 XML (맨 위)</td><td>매퍼 문장 실행과 코드 만들기 (<a href="#mybatis">MyBatis</a>)</td></tr>
+      <tr><td>Run MyBatis Query · Find Slow Spots · Generate Layer Code… · Copy Call Code · Rename Column… · Generate Dynamic Conditions… · Generate Paging Query · Generate resultMap from SELECT · Insert MyBatis Tag ▸<br>매퍼 XML (맨 위)</td><td>매퍼 문장 실행과 코드 만들기 (<a href="#mybatis">MyBatis</a>)</td></tr>
       <tr><td>Generate Layer Code…<br>매퍼 인터페이스 메서드</td><td>컨트롤러 · 서비스 · 매퍼 코드</td></tr>
       <tr><td>Clean Up String SQL…<br>자바</td><td>이어 붙인 문자열 SQL 을 매퍼 문장으로 (<a href="#code">코드 도구</a>)</td></tr>
       <tr><td>Go to Controller<br>JSP (맨 위)</td><td>그 JSP 를 돌려주는 컨트롤러 메서드로</td></tr>
@@ -494,7 +494,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
       <tr><th>키</th><th>하는 일</th><th class="where">어디서</th></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td><td>커서 문장(또는 선택 영역) 실행 (Run)</td><td class="where">SQL 콘솔</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd></td><td>모든 문장 차례로 실행 (Run All)</td><td class="where">SQL 콘솔</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd></td><td>실행 계획, 실행하지 않음 (Explain Plan)</td><td class="where">SQL 콘솔</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd></td><td>실행 계획 · 느린 곳 · 고칠 법, 실행하지 않음 (Explain Plan)</td><td class="where">SQL 콘솔</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></td><td>SQL 정렬 (Format SQL). 콘솔 밖에서는 원래 서식 맞추기</td><td class="where">SQL 콘솔</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> · <kbd>Y</kbd></td><td>대문자 · 소문자 (문자열 · 주석은 그대로)</td><td class="where">SQL 콘솔</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td><td>결과 안에서 찾기</td><td class="where">Result 창</td></tr>
@@ -1288,9 +1288,9 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
         <li><span class="mark">2</span><div><b>정렬 · 대소문자</b> <span class="t">선택 영역에만, 없으면 전체에. 정렬 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd>, 대문자 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd>, 소문자 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Y</kbd>. 문자열 · 주석 · <code>#{}</code> 는 그대로. <kbd>Ctrl</kbd>+<kbd>Z</kbd> 로 되돌림.</span></div></li>
         <li><span class="mark">3</span><div><b>접속 · 조회 건수</b> <span class="t">콘솔마다 접속을 바꿀 수 있습니다. 건수는 500 · 1000 · 5000 · 10000 을 고르거나 숫자를 쓰고 Enter.</span></div></li>
         <li><span class="mark">4</span><div><b>자동 커밋 · 커밋 · 롤백</b> <span class="t">자동 커밋은 기본 꺼짐. 변경을 실행하면 「미반영 변경 N건」이 뜨고 커밋 · 롤백이 켜집니다.</span></div></li>
-        <li><span class="mark">5</span><div><b>중지 · 실행 계획 · 기록</b> <span class="t">■ 는 실행 중인 쿼리를 끊습니다. 「계획」(<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd>)은 문장을 실행하지 않고 실행 계획만 보입니다. 「기록」은 최근 500개 실행 목록 — 고르면 콘솔에 붙이고 두 번 누르면 다시 실행.</span></div></li>
+        <li><span class="mark">5</span><div><b>중지 · 실행 계획 · 기록</b> <span class="t">■ 는 실행 중인 쿼리를 끊습니다. 「계획」(<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd>)은 문장을 실행하지 않고 실행 계획을 단계 표로 보이며, 확연히 느린 단계를 빨강 · 노랑으로 칠하고 오른쪽 칸에 원인 · 고칠 법 · 예시 SQL 을 적습니다(DB 가 낸 글 그대로는 「원문」 탭). Oracle 은 「실제 시간 재기」로 조회를 한 번 실행해 단계마다 실제 건수 · 시간 · 읽은 블록을 잽니다. 「기록」은 최근 500개 실행 목록 — 고르면 콘솔에 붙이고 두 번 누르면 다시 실행.</span></div></li>
         <li><span class="mark">B</span><div><b>바인드 변수</b> <span class="t">문장에 <code>:name</code> · <code>#{name}</code> 이 있으면 실행 전에 값을 묻습니다. 비우면 NULL, 따옴표는 문자열, 숫자는 숫자. 마지막 값을 기억합니다.</span></div></li>
-        <li><span class="mark">S</span><div><b>자동 저장</b> <span class="t">콘솔에 쓴 SQL 은 저절로 저장돼 IDE 를 다시 켜도 그대로 있습니다.</span></div></li>
+        <li><span class="mark">S</span><div><b>자동 저장</b> <span class="t">콘솔에 쓴 SQL 은 저절로 저장되고, IDE 를 닫을 때 열려 있던 콘솔 탭은 다시 켜면 그대로 열립니다(DB 연결은 첫 실행 때).</span></div></li>
         <li><span class="mark">+</span><div><b>자동완성</b> <span class="t">표 이름과 칼럼, 한글 주석을 함께 보여 줍니다. <code>t.</code> 를 치면 그 별칭 표의 칼럼만. 소문자로 치면 소문자로 넣습니다.</span></div></li>
       </ol>
     </div>
@@ -1443,6 +1443,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       <tr><td><code>AS</code> 별칭 자동 완성<br>매퍼 XML select 안</td><td><code>AS </code> 를 치면 resultType DTO 필드 가운데 SELECT 에 아직 없는 것이 뜹니다. <code>ORDER_ID</code> 처럼 쳐도 찾고, 필드 이름 그대로 넣습니다.</td></tr>
       <tr><td>Run MyBatis Query <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Enter</kbd><br>매퍼 XML 우클릭 · 문장 옆 ▶</td><td>매개변수를 넣으면 <code>&lt;if&gt;</code> · <code>&lt;foreach&gt;</code> 를 푼 SQL 을 보여 주고 실행해 결과 창에 띄웁니다.</td></tr>
       <tr><td>Run in Database Console · Send to Query Console<br>실행 · 서버 콘솔 우클릭 맨 위</td><td>MyBatis · log4jdbc 로그의 <code>?</code> 에 값을 채운 SQL 을 바로 실행하거나 콘솔에 붙입니다.</td></tr>
+      <tr><td>Find Slow Spots<br>매퍼 XML 우클릭</td><td>Run MyBatis Query 와 같은 창에서 값을 받아 그 문장의 느린 단계 · 고칠 법을 결과 창에 보입니다. 실행하지 않습니다.</td></tr>
       <tr><td>Generate Layer Code…<br>매퍼 XML 문장 · 매퍼 메서드 우클릭</td><td>그 문장을 부르는 컨트롤러 · 서비스 · 매퍼 코드, 문장 두 개면 부모-자식 코드를 만듭니다.</td></tr>
       <tr><td>Generate Mapper Skeleton · Generate Feature Set…<br>데이터베이스 창 표 우클릭 · Source 메뉴</td><td>표 하나로 매퍼 XML · 인터페이스(뼈대), 또는 DTO · 매퍼 · 서비스 · 컨트롤러 한 벌을 만듭니다.</td></tr>
       <tr><td>Generate Dynamic Conditions…<br>동적 조건 · 매퍼 XML 문장 안</td><td>DTO 필드를 고르면 <code>&lt;where&gt;</code> · <code>&lt;if test="x != null and x != ''"&gt;</code> 조건을 넣습니다. 비교는 = · LIKE · &gt;= · &lt;=(CDATA).</td></tr>
