@@ -34,6 +34,8 @@
     <gotoDeclarationHandler implementation="ei.db.mybatis.MapperNav$GotoXml"/>
     <!-- MyBatis: include refid → sql, resultMap · extends → resultMap -->
     <gotoDeclarationHandler implementation="ei.db.mybatis.MapperRefNav"/>
+    <!-- MyBatis: 매퍼 XML 의 parameterType · resultType 등 → 클래스, namespace → 인터페이스, 문장 id → 메서드 -->
+    <gotoDeclarationHandler implementation="ei.db.mybatis.MapperXmlNav"/>
     <externalAnnotator language="XML" implementationClass="ei.db.mybatis.ParamFieldAnnotator"/>
     <!-- MyBatis: 매퍼 XML 의 #{} 매개변수 · select AS 별칭 자동 완성, #{} 에서 필드 · 매개변수로 이동 -->
     <completion.contributor language="XML" order="first" implementationClass="ei.db.mybatis.MapperCompletion"/>
