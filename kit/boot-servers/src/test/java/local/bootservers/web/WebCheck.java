@@ -25,6 +25,7 @@ public final class WebCheck {
             files();
             node(tmp);
             servers(tmp);
+            choose(tmp);
             vue(tmp);
             bridge();
             dist(tmp);
@@ -113,6 +114,23 @@ public final class WebCheck {
         eq(base.resolve("servers").toString(), plugin.get("location").getAsString(), "플러그인 위치");
         eq("[\"vue\"]", plugin.get("languages").toString(), "플러그인 언어");
         yes(plugin.get("enableForWorkspaceTypeScriptVersions").getAsBoolean(), "작업공간 판에도 플러그인");
+    }
+
+    private static void choose(Path tmp) throws IOException {
+        Path bundled = tmp.resolve("install/plugins/boot-servers/web");
+        Path user = tmp.resolve("home/.ei-web");
+        eq(user, WebTools.chooseBase(bundled, user, true), "설치본에 없음");
+        Path modules = bundled.resolve("servers/node_modules");
+        touch(modules.resolve("@vtsls/language-server/bin/vtsls.js"));
+        touch(modules.resolve("@vue/language-server/bin/vue-language-server.js"));
+        touch(modules.resolve("typescript/lib/tsserver.js"));
+        Files.createDirectories(modules.resolve("@vue/typescript-plugin"));
+        eq(user, WebTools.chooseBase(bundled, user, true), "설치본에 node 없음");
+        Path node = WebTools.bundledNode(bundled, true);
+        Files.createDirectories(node.getParent());
+        Files.createFile(node);
+        eq(bundled, WebTools.chooseBase(bundled, user, true), "설치본 우선");
+        eq(user, WebTools.chooseBase(bundled, user, false), "유닉스 node 없음");
     }
 
     private static void vue(Path tmp) throws IOException {
