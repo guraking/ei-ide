@@ -22,6 +22,7 @@ import com.intellij.psi.PsiManager;
 import com.intellij.psi.PsiMethod;
 import com.intellij.psi.PsiNameIdentifierOwner;
 import com.intellij.psi.search.GlobalSearchScope;
+import com.intellij.psi.util.PsiTreeUtil;
 import ei.db.EiDbBundle;
 import ei.db.Notify;
 import org.jetbrains.annotations.NotNull;
@@ -158,7 +159,11 @@ final class MapperNav {
     @Override
     public PsiElement @Nullable [] getGotoDeclarationTargets(@Nullable PsiElement source, int offset, Editor editor) {
       if (source == null) return null;
-      Target t = xmlTarget(source);
+      // 받은 토큰이 이름 토큰 그 자체가 아닐 수 있어, 감싼 메서드 · 클래스의 이름 범위에 offset 이 드는지로 고른다.
+      PsiNameIdentifierOwner owner = PsiTreeUtil.getParentOfType(source, PsiNameIdentifierOwner.class, false);
+      PsiElement name = owner == null ? null : owner.getNameIdentifier();
+      if (name == null || !name.getTextRange().containsOffset(offset)) return null;
+      Target t = xmlTarget(name);
       if (t == null) return null;
       PsiFile xml = PsiManager.getInstance(source.getProject()).findFile(t.file());
       if (xml == null) return null;

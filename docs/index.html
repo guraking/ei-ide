@@ -1438,7 +1438,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
     <p class="lead">매퍼 인터페이스와 매퍼 XML 을 오가며 쓰는 기능입니다. 우클릭 항목은 커서가 매퍼 XML 문장(또는 매퍼 인터페이스 메서드) 안에 있을 때만 보입니다.</p>
     <table class="keys map">
       <tr><th>기능 · 자리</th><th>하는 일</th></tr>
-      <tr><td>인터페이스 ↔ XML 이동<br>줄 옆 아이콘 · <kbd>Ctrl</kbd>+클릭</td><td>매퍼 메서드에서 같은 namespace XML 의 같은 id 문장으로, XML 문장에서 메서드로 갑니다. <code>&lt;include refid&gt;</code> · <code>resultMap</code> · <code>extends</code> 도 <kbd>Ctrl</kbd>+클릭으로 갑니다.</td></tr>
+      <tr><td>인터페이스 ↔ XML 이동<br>줄 옆 아이콘 · <kbd>Ctrl</kbd>+클릭</td><td>매퍼 메서드에서 같은 namespace XML 의 같은 id 문장으로, XML 문장에서 메서드로 갑니다. <code>&lt;include refid&gt;</code> · <code>resultMap</code> · <code>extends</code> 도 <kbd>Ctrl</kbd>+클릭으로 갑니다. XML 의 <code>parameterType</code> · <code>resultType</code> · <code>type</code> · <code>ofType</code> · <code>javaType</code> 은 그 클래스로, <code>namespace</code> 는 인터페이스로, 문장 <code>id</code> 는 메서드로 갑니다.</td></tr>
       <tr><td><code>#{</code> 자동 완성 · 이동<br>매퍼 XML 문장 안</td><td><code>#{</code> · <code>${</code> 를 치면 parameterType DTO 필드, 없으면 매퍼 메서드 매개변수(<code>@Param</code> 이름 우선)와 bind · foreach 이름이 뜹니다. 이름에서 <kbd>Ctrl</kbd>+클릭 · <kbd>Ctrl</kbd>+<kbd>B</kbd> → 그 필드 · 매개변수로. DTO 에 없는 이름은 경고합니다.</td></tr>
       <tr><td><code>AS</code> 별칭 자동 완성<br>매퍼 XML select 안</td><td><code>AS </code> 를 치면 resultType DTO 필드 가운데 SELECT 에 아직 없는 것이 뜹니다. <code>ORDER_ID</code> 처럼 쳐도 찾고, 필드 이름 그대로 넣습니다.</td></tr>
       <tr><td>Run MyBatis Query <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Enter</kbd><br>매퍼 XML 우클릭 · 문장 옆 ▶</td><td>매개변수를 넣으면 <code>&lt;if&gt;</code> · <code>&lt;foreach&gt;</code> 를 푼 SQL 을 보여 주고 실행해 결과 창에 띄웁니다.</td></tr>
@@ -1460,7 +1460,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       <div class="arrow">⇄</div>
       <div class="box"><b>XML 문장</b><span>옆 아이콘 → 인터페이스 메서드로. ▶ 실행 아이콘과 따로 붙습니다.</span></div>
       <div class="arrow">·</div>
-      <div class="box"><b>XML 안에서</b><span><code>&lt;include refid&gt;</code> → <code>&lt;sql&gt;</code>, <code>resultMap</code> · <code>extends</code> → <code>&lt;resultMap&gt;</code> 으로 <kbd>Ctrl</kbd>+클릭. 다른 namespace 도 갑니다.</span></div>
+      <div class="box"><b>XML 안에서</b><span><code>&lt;include refid&gt;</code> → <code>&lt;sql&gt;</code>, <code>resultMap</code> · <code>extends</code> → <code>&lt;resultMap&gt;</code>, <code>parameterType</code> · <code>resultType</code> → DTO 클래스로 <kbd>Ctrl</kbd>+클릭. 다른 namespace 도 갑니다.</span></div>
       <div class="arrow">·</div>
       <div class="box"><b>#{필드} 검사</b><span>parameterType DTO 에 없는 필드면 경고: 「ProductDto 에 productNm 필드가 없습니다」.</span></div>
     </div>
