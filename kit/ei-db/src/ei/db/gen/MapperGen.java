@@ -21,9 +21,10 @@ public final class MapperGen {
 
   /**
    * oldJoin 은 단일 표 문장이라 지금 글에는 영향이 없다(조인이 생기면 콤마 + WHERE 로 쓴다는 약속만 보존).
+   * updateIf 면 UPDATE 의 SET 칼럼마다 &lt;if test="필드 != null"&gt; 로 감싸 null 필드는 건너뛰고, 아니면 모든 칼럼을 그대로 SET 한다.
    * kind 는 이름 표기(Names.sql)와 LIKE 이어 붙이기(MySQL 은 CONCAT)를 정한다.
    */
-  public record Options(boolean oldJoin, boolean cdata, boolean where11, boolean sqlComments, DbKind kind) {}
+  public record Options(boolean oldJoin, boolean cdata, boolean where11, boolean sqlComments, boolean updateIf, DbKind kind) {}
 
   /** id 는 XML 문장 id 또는 자바 메서드 이름, text 는 덧붙일 글 그대로. */
   public record Block(String id, String text) {}
@@ -195,15 +196,25 @@ public final class MapperGen {
     return useMap ? " resultMap=\"" + id(Kind.RESULT_MAP) + "\"" : " resultType=\"" + dtoType + "\"";
   }
 
-  /** SELECT 는 키워드만 한 줄, 칼럼은 다음 줄부터 앞 쉼표(첫 칼럼 앞 7칸, 다음부터 「     , 」, XML 안 4칸 위에). */
-  private String selectColumns() {
+  /**
+   * SELECT 는 키워드만 한 줄, 칼럼은 다음 줄부터 앞 쉼표(첫 칼럼 앞 7칸, 다음부터 「     , 」, XML 안 4칸 위에).
+   * resultMap 을 쓰지 않으면(resultType 으로 DTO 에 바로 담음) 칼럼마다 「AS 필드」 별칭을 붙여
+   * mapUnderscoreToCamelCase 설정 없이도 DTO 필드에 들어가게 한다.
+   */
+  private String selectColumns(boolean useMap) {
+    List<String> names = new ArrayList<>();
     int width = 0;
-    for (Meta.Column c : cols) width = Math.max(width, name(c.name()).length());
+    for (Meta.Column c : cols) {
+      String n = useMap ? name(c.name()) : name(c.name()) + " AS " + Names.camel(c.name());
+      names.add(n);
+      width = Math.max(width, n.length());
+    }
     StringBuilder b = new StringBuilder("    SELECT\n");
     boolean first = true;
-    for (Meta.Column c : cols) {
+    for (int i = 0; i < cols.size(); i++) {
+      Meta.Column c = cols.get(i);
       b.append(first ? LEAD_FIRST : LEAD_NEXT).append(alias).append('.');
-      String name = name(c.name());
+      String name = names.get(i);
       if (o.sqlComments() && !c.comment().isBlank()) {
         b.append(pad(name, width)).append(' ').append(sqlComment(c.comment()));
       } else {
@@ -218,7 +229,7 @@ public final class MapperGen {
 
   private String selectList(boolean useMap) {
     StringBuilder b = new StringBuilder(head(Kind.LIST, "select", " parameterType=\"map\"" + resultAttr(useMap)));
-    b.append(selectColumns());
+    b.append(selectColumns(useMap));
     String indent = "    ";
     if (o.where11()) {
       b.append("     WHERE 1 = 1\n");
@@ -244,7 +255,7 @@ public final class MapperGen {
 
   private String selectOne(boolean useMap) {
     StringBuilder b = new StringBuilder(head(Kind.ONE, "select", " parameterType=\"" + dtoType + "\"" + resultAttr(useMap)));
-    b.append(selectColumns());
+    b.append(selectColumns(useMap));
     pkWhere(b, alias + ".");
     return b.append("  </select>\n").toString();
   }
@@ -269,14 +280,24 @@ public final class MapperGen {
   private String update() {
     StringBuilder b = new StringBuilder(head(Kind.UPDATE, "update", " parameterType=\"" + dtoType + "\""));
     b.append("    UPDATE ").append(name(table)).append('\n');
-    b.append("    <set>\n");
-    for (Meta.Column c : cols) {
-      if (c.pk()) continue;
-      String f = Names.camel(c.name());
-      b.append("      <if test=\"").append(f).append(" != null\">").append(name(c.name()))
-       .append(" = #{").append(f).append("},</if>\n");
+    if (o.updateIf()) {
+      b.append("    <set>\n");
+      for (Meta.Column c : cols) {
+        if (c.pk()) continue;
+        String f = Names.camel(c.name());
+        b.append("      <if test=\"").append(f).append(" != null\">").append(name(c.name()))
+         .append(" = #{").append(f).append("},</if>\n");
+      }
+      b.append("    </set>\n");
+    } else {
+      boolean first = true;
+      for (Meta.Column c : cols) {
+        if (c.pk()) continue;
+        b.append(first ? "       SET " : LEAD_NEXT).append(name(c.name()))
+         .append(" = #{").append(Names.camel(c.name())).append("}\n");
+        first = false;
+      }
     }
-    b.append("    </set>\n");
     pkWhere(b, "");
     return b.append("  </update>\n").toString();
   }

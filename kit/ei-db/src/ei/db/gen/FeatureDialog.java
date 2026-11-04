@@ -107,6 +107,7 @@ public final class FeatureDialog extends DialogWrapper {
   private final JBCheckBox cdata = new JBCheckBox(EiDbBundle.message("mapper.cdata"), true);
   private final JBCheckBox where11 = new JBCheckBox(EiDbBundle.message("mapper.where11"), true);
   private final JBCheckBox sqlComments = new JBCheckBox(EiDbBundle.message("mapper.sql.comments"), true);
+  private final JBCheckBox updateIf = new JBCheckBox(EiDbBundle.message("mapper.update.if"), true);
   private DefaultTableModel columnModel;
 
   private final JBTabbedPane tabs = new JBTabbedPane();
@@ -199,7 +200,7 @@ public final class FeatureDialog extends DialogWrapper {
       f.setFont(Ui.mono());
       Ui.onChange(f, this::refresh);
     }
-    for (JBCheckBox b : List.of(makeDto, split, mvc, cdata, where11, sqlComments)) b.addActionListener(e -> refresh());
+    for (JBCheckBox b : List.of(makeDto, split, mvc, cdata, where11, sqlComments, updateIf)) b.addActionListener(e -> refresh());
     split.addActionListener(e -> implField.setEnabled(split.isSelected()));
     implField.setEnabled(false);
     oldJoin.setEnabled(false);
@@ -220,7 +221,7 @@ public final class FeatureDialog extends DialogWrapper {
         .addComponent(mvc)
         .addLabeledComponent(EiDbBundle.message("feature.base.url"), urlField, true)
         .addLabeledComponent(EiDbBundle.message("mapper.statements"), statements(), true)
-        .addLabeledComponent(EiDbBundle.message("mapper.style"), stack(oldJoin, cdata, where11, sqlComments), true);
+        .addLabeledComponent(EiDbBundle.message("mapper.style"), stack(oldJoin, cdata, where11, sqlComments, updateIf), true);
     String note = gen().missingNote();
     if (note != null) {
       JBLabel warn = new JBLabel(note, AllIcons.General.Warning, JBLabel.LEFT);
@@ -270,7 +271,7 @@ public final class FeatureDialog extends DialogWrapper {
     JPanel p = new JPanel();
     p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
     for (MapperGen.Kind k : MapperGen.Kind.values()) {
-      JBCheckBox box = new JBCheckBox(k == MapperGen.Kind.RESULT_MAP ? "resultMap " + probe.id(k) : probe.id(k), k != MapperGen.Kind.MERGE);
+      JBCheckBox box = new JBCheckBox(k == MapperGen.Kind.RESULT_MAP ? "resultMap " + probe.id(k) : probe.id(k), k != MapperGen.Kind.MERGE && k != MapperGen.Kind.RESULT_MAP);
       box.setFont(Ui.mono());
       String hint = switch (k) {
         case LIST -> EiDbBundle.message("feature.hint.list");
@@ -370,7 +371,7 @@ public final class FeatureDialog extends DialogWrapper {
 
   private FeatureGen gen() {
     MapperGen.Options style = new MapperGen.Options(oldJoin.isSelected(), cdata.isSelected(), where11.isSelected(),
-                                                    sqlComments.isSelected(), config.kind);
+                                                    sqlComments.isSelected(), updateIf.isSelected(), config.kind);
     return new FeatureGen(new FeatureGen.Spec(table, cols, style, kinds(), dtoType(), mapperField.getText().strip(),
         serviceField.getText().strip(), split.isSelected() ? implField.getText().strip() : null,
         controllerField.getText().strip(), !mvc.isSelected(), baseUrl(), searchColumns()));
