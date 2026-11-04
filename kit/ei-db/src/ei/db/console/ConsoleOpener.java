@@ -1,6 +1,11 @@
 package ei.db.console;
 
+import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.ide.util.PsiNavigationSupport;
+import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.project.ProjectCloseListener;
+import com.intellij.openapi.startup.StartupActivity;
+import org.jetbrains.annotations.NotNull;
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
@@ -27,6 +32,8 @@ import java.util.Map;
  * 파일 사용자 데이터에 접속 id 를 둔다. 콘솔에서 바꾼 자동 커밋은 접속마다 하나(DbSessions.autoCommitOverride)라 같은 접속의 콘솔이 같이 쓴다.
  * 탭을 닫아도 파일(내용)은 프로젝트가 닫힐 때까지 남는다.
  * 콘솔 글은 ConsoleStore 가 접속 id · 콘솔 번호별로 저장하고, 다음 세션에 같은 번호의 콘솔을 처음 만들 때 되살린다.
+ * 프로젝트를 닫을 때 열려 있던 콘솔 탭(접속 · 번호 · 탭 순서 · 보던 탭)을 기억했다가 다시 열 때 같은 탭을 연다(Remember · Restore).
+ * 되살린 콘솔은 탭만 열고 DB 에는 붙지 않는다(연결은 첫 실행 때). 지워진 접속의 콘솔은 열지 않는다.
  */
 public final class ConsoleOpener {
   private ConsoleOpener() {}
@@ -36,6 +43,83 @@ public final class ConsoleOpener {
   private static final Key<Map<String, LightVirtualFile>> CONSOLES = Key.create("ei.db.console.files");
   /** 접속 id → 지금까지 연 콘솔 수. 두 번째부터 탭 이름에 번호를 붙인다. */
   private static final Key<Map<String, Integer>> COUNTS = Key.create("ei.db.console.counts");
+  /** 그 콘솔의 접속 안 번호(1부터). 저장 파일 자리와 같다. */
+  private static final Key<Integer> NUMBER = Key.create("ei.db.console.number");
+  /** 프로젝트 설정에 남기는 열린 콘솔 목록(「접속 id \t 번호」, 탭 순서)과 보던 콘솔. */
+  private static final String OPEN_KEY = "ei.db.console.openTabs";
+  private static final String SELECTED_KEY = "ei.db.console.selectedTab";
+  private static final String SEPARATOR = "\t";
+
+  /** 프로젝트를 닫을 때(설정 저장 전) 열린 콘솔 탭을 기억한다. */
+  public static final class Remember implements ProjectCloseListener {
+    @Override
+    public void projectClosingBeforeSave(@NotNull Project project) {
+      remember(project);
+    }
+  }
+
+  /** 프로젝트를 열면 기억한 콘솔 탭을 다시 연다. 시작 작업은 작업 스레드라 화면 스레드로 넘긴다. */
+  public static final class Restore implements StartupActivity.DumbAware {
+    @Override
+    public void runActivity(@NotNull Project project) {
+      ApplicationManager.getApplication().invokeLater(() -> restore(project), project.getDisposed());
+    }
+  }
+
+  static void remember(Project project) {
+    List<String> open = new ArrayList<>();
+    for (VirtualFile f : openConsoles(project)) {
+      String key = tabKey(f);
+      if (key != null) open.add(key);
+    }
+    PropertiesComponent props = PropertiesComponent.getInstance(project);
+    props.setList(OPEN_KEY, open);
+    VirtualFile[] selected = FileEditorManager.getInstance(project).getSelectedFiles();
+    String current = selected.length > 0 && isConsole(selected[0]) ? tabKey(selected[0]) : null;
+    props.setValue(SELECTED_KEY, current);
+  }
+
+  static void restore(Project project) {
+    PropertiesComponent props = PropertiesComponent.getInstance(project);
+    List<String> open = props.getList(OPEN_KEY);
+    if (open == null || open.isEmpty()) return;
+    String selectedKey = props.getValue(SELECTED_KEY);
+    FileEditorManager editors = FileEditorManager.getInstance(project);
+    VirtualFile selected = null;
+    for (String key : open) {
+      String[] parts = key.split(SEPARATOR);
+      DbConfig c = parts.length == 2 ? DbSettings.getInstance().find(parts[0]) : null;
+      int n = parts.length == 2 ? parseNumber(parts[1]) : 0;
+      if (c == null || n < 1 || hasNumber(project, c.id, n)) continue;
+      LightVirtualFile file = create(project, c, n);
+      editors.openFile(file, false);
+      if (key.equals(selectedKey)) selected = file;
+    }
+    if (selected != null) editors.openFile(selected, false);
+  }
+
+  private static String tabKey(VirtualFile f) {
+    Integer n = f.getUserData(NUMBER);
+    String id = f.getUserData(CONFIG_ID);
+    return n == null || id == null ? null : id + SEPARATOR + n;
+  }
+
+  /** 손상된 번호는 0(되살리지 않음). */
+  private static int parseNumber(String text) {
+    try {
+      return Integer.parseInt(text);
+    } catch (NumberFormatException e) {
+      return 0;
+    }
+  }
+
+  /** 이미 연 같은 접속 · 번호 콘솔이 있는지(사용자가 시작 직후 먼저 연 경우). */
+  private static boolean hasNumber(Project project, String id, int n) {
+    for (VirtualFile f : openConsoles(project)) {
+      if (id.equals(f.getUserData(CONFIG_ID)) && Integer.valueOf(n).equals(f.getUserData(NUMBER))) return true;
+    }
+    return false;
+  }
 
   /** 그 접속에서 마지막으로 연 콘솔 탭을 열고(없으면 만든다) initialSql 이 null 이 아니면 끝에 덧붙인다. 연 콘솔을 돌려준다. */
   public static VirtualFile open(Project project, DbConfig c, String initialSql) {
@@ -76,11 +160,17 @@ public final class ConsoleOpener {
   }
 
   private static LightVirtualFile create(Project project, DbConfig c) {
-    int n = counts(project).merge(c.id, 1, Integer::sum);
+    return create(project, c, counts(project).getOrDefault(c.id, 0) + 1);
+  }
+
+  /** 접속 c 의 n 번째 콘솔. 번호 세기는 지금까지 쓴 가장 큰 번호로 맞춘다(되살린 번호 뒤로 새 콘솔이 붙게). */
+  private static LightVirtualFile create(Project project, DbConfig c, int n) {
+    counts(project).merge(c.id, n, Math::max);
     ConsoleStore store = ConsoleStore.get(project);
     String saved = store.load(c.id, n);
     LightVirtualFile file = new LightVirtualFile(n == 1 ? fileName(c) : EiDbBundle.message("console.file.name.numbered", c.name, n), saved == null ? "" : saved);
     file.putUserData(CONFIG_ID, c.id);
+    file.putUserData(NUMBER, n);
     consoles(project).put(c.id, file);
     if (saved != null) store.track(file, c.id, n);
     return file;
@@ -129,7 +219,9 @@ public final class ConsoleOpener {
     consoles.remove(file.getUserData(CONFIG_ID));
     if (file instanceof LightVirtualFile light) consoles.put(target.id, light);
     file.putUserData(CONFIG_ID, target.id);
-    counts(project).put(target.id, ConsoleStore.get(project).rebind(file, target.id, counts(project).getOrDefault(target.id, 0)));
+    int n = ConsoleStore.get(project).rebind(file, target.id, counts(project).getOrDefault(target.id, 0));
+    counts(project).put(target.id, n);
+    file.putUserData(NUMBER, n);
     try {
       file.rename(ConsoleOpener.class, fileName(target));
     } catch (IOException e) {
