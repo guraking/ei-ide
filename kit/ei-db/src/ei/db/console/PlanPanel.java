@@ -13,7 +13,7 @@ import com.intellij.ui.OnePixelSplitter;
 import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.components.ActionLink;
 import com.intellij.ui.components.JBLabel;
-import com.intellij.ui.components.JBScrollPane;
+import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.components.JBTabbedPane;
 import com.intellij.ui.components.JBTextArea;
 import com.intellij.ui.table.JBTable;
@@ -95,18 +95,18 @@ final class PlanPanel extends JPanel {
 
     OnePixelSplitter split = new OnePixelSplitter(false, SPLIT_KEY, SPLIT_DEFAULT);
     split.setHonorComponentsMinimumSize(false);
-    split.setFirstComponent(new JBScrollPane(table));
-    JBScrollPane sideScroll = new JBScrollPane(side);
-    sideScroll.setBorder(JBUI.Borders.empty());
-    split.setSecondComponent(sideScroll);
+    // 테두리는 분할선 한 줄만 둔다. 스크롤 칸 · 탭 내용 테두리가 겹치면 바깥이 두꺼워진다.
+    split.setFirstComponent(ScrollPaneFactory.createScrollPane(table, true));
+    split.setSecondComponent(ScrollPaneFactory.createScrollPane(side, true));
 
     JBTextArea raw = new JBTextArea(plan.raw());
     raw.setEditable(false);
     raw.setFont(monospace());
     raw.setBorder(JBUI.Borders.empty(6, 10));
     JBTabbedPane tabs = new JBTabbedPane();
+    tabs.setTabComponentInsets(JBUI.emptyInsets());
     tabs.addTab(EiDbBundle.message("plan.tab.analysis"), split);
-    tabs.addTab(EiDbBundle.message("plan.tab.raw"), new JBScrollPane(raw));
+    tabs.addTab(EiDbBundle.message("plan.tab.raw"), ScrollPaneFactory.createScrollPane(raw, true));
 
     add(header(project, c), BorderLayout.NORTH);
     add(tabs, BorderLayout.CENTER);
