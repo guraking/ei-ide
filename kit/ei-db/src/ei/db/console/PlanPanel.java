@@ -26,7 +26,12 @@ import ei.db.console.PlanAdvisor.Finding;
 import ei.db.console.PlanAdvisor.Level;
 import ei.db.console.PlanAdvisor.Step;
 
+import com.intellij.openapi.diagnostic.Logger;
+
 import javax.swing.BoxLayout;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.DefaultHighlighter;
+import java.awt.FlowLayout;
 import javax.swing.Icon;
 import javax.swing.JButton;
 import javax.swing.JComponent;
@@ -57,6 +62,7 @@ import java.util.Map;
  * 두 칸은 끌 수 있는 분할선(비율 기억), 표 칸은 창 폭을 따라 늘고 사용자가 끈 폭을 기억한다. 「원문」 탭은 DB 가 낸 계획 글 그대로.
  */
 final class PlanPanel extends JPanel {
+  private static final Logger LOG = Logger.getInstance(PlanPanel.class);
   private static final String SPLIT_KEY = "ei.db.plan.split";
   private static final float SPLIT_DEFAULT = 0.6f;
   private static final String WIDTHS_KEY = "ei.db.plan.widths.";
@@ -71,7 +77,10 @@ final class PlanPanel extends JPanel {
   private static final Color DANGER_ROW = UiColors.DANGER_BAND;
   private static final Color WARNING_ROW = JBUI.CurrentTheme.Banner.WARNING_BACKGROUND;
 
+  private final Project project;
+  private final DbConfig c;
   private final ExplainPlan.Plan plan;
+  private final SqlRewrite.Result rewrite;
   private final Map<Integer, Level> levels;
   private final Map<Integer, Double> shares;
   private final JBTable table;
@@ -79,7 +88,10 @@ final class PlanPanel extends JPanel {
 
   PlanPanel(Project project, DbConfig c, ExplainPlan.Plan plan) {
     super(new BorderLayout());
+    this.project = project;
+    this.c = c;
     this.plan = plan;
+    this.rewrite = SqlRewrite.rewrite(plan.source(), plan.kind());
     this.levels = PlanAdvisor.levels(plan.findings());
     this.shares = PlanAdvisor.shares(plan.steps(), PlanAdvisor.children(plan.steps()), false);
     side.setLayout(new BoxLayout(side, BoxLayout.Y_AXIS));
@@ -137,7 +149,7 @@ final class PlanPanel extends JPanel {
       JButton measure = new JButton(EiDbBundle.message("plan.measure"), AllIcons.Actions.Profile);
       measure.putClientProperty(DarculaButtonUI.DEFAULT_STYLE_KEY, true);
       measure.setToolTipText(EiDbBundle.message("plan.measure.tooltip"));
-      measure.addActionListener(e -> ExplainPlan.measure(project, c, plan.sql(), plan.binds()));
+      measure.addActionListener(e -> ExplainPlan.measure(project, c, plan.sql(), plan.binds(), plan.source()));
       head.add(measure, BorderLayout.EAST);
     }
     return head;
@@ -185,28 +197,84 @@ final class PlanPanel extends JPanel {
     title.setFont(title.getFont().deriveFont(Font.BOLD));
     title.setBorder(JBUI.Borders.emptyTop(side.getComponentCount() == 0 ? 0 : 14));
     side.add(left(title));
+    side.add(prose(EiDbBundle.message(key + "summary", args)));
+    if (!addRewrite(f)) {
+      if (f.example() != null && f.example().startsWith("CREATE INDEX")) {
+        side.add(prose(EiDbBundle.message("plan.side.index.only")));
+        addCode("plan.side.index", f.example());
+      } else if (f.example() != null) {
+        addCode("plan.side.example", f.example());
+      }
+    }
     side.add(heading("plan.side.cause"));
     side.add(prose(EiDbBundle.message(key + "cause", args)));
     side.add(heading("plan.side.fix"));
     side.add(prose(EiDbBundle.message(key + "fix", args)));
-    if (f.example() != null) addCode("plan.side.example", f.example());
+  }
+
+  /**
+   * 이 지적의 칼럼 · 모양을 SqlRewrite 가 바꿨으면 「지금 쿼리」 · 「이렇게 바꾸세요」 두 상자(바뀐 곳 칠함)를 넣고 참.
+   * 바꾼 쿼리는 그 문장의 고칠 곳을 모두 바꾼 것이다(한 곳만 고쳐 다시 계획을 볼 일을 줄인다).
+   */
+  private boolean addRewrite(Finding f) {
+    String rule = f.rule().startsWith("fn.") ? f.rule().substring(3) : null;
+    if (rule == null || f.args().isEmpty()) return false;
+    String column = f.args().get(0).toString().toUpperCase(java.util.Locale.ROOT);
+    boolean match = false;
+    for (SqlRewrite.Change ch : rewrite.changes()) match |= ch.rule().equals(rule) && ch.column().equals(column);
+    if (!match) return false;
+    JBTextArea before = codeArea(plan.source());
+    JBTextArea after = codeArea(rewrite.sql());
+    for (SqlRewrite.Change ch : rewrite.changes()) {
+      paint(before, ch.beforeStart(), ch.beforeEnd(), DANGER_ROW);
+      paint(after, ch.afterStart(), ch.afterEnd(), UiColors.SUCCESS_BG);
+    }
+    addBox("plan.side.before", before, plan.source(), false);
+    addBox("plan.side.after", after, rewrite.sql(), true);
+    if (rule.equals("case")) side.add(prose(EiDbBundle.message("plan.side.case.note")));
+    return true;
+  }
+
+  private static void paint(JBTextArea area, int start, int end, Color color) {
+    try {
+      area.getHighlighter().addHighlight(start, end, new DefaultHighlighter.DefaultHighlightPainter(color));
+    } catch (BadLocationException e) {
+      // start · end 는 같은 글에서 구한 위치라 벗어나지 않는다. 벗어나면 칠하지 않고 글만 보인다.
+      LOG.warn("바뀐 곳 칠하기 실패", e);
+    }
   }
 
   /** 제목 + 고정폭 글 상자 + 「복사」. 글이 비면 아무것도 넣지 않는다. */
   private void addCode(String titleKey, String code) {
     if (code == null || code.isBlank()) return;
+    addBox(titleKey, codeArea(code), code, false);
+  }
+
+  private static JBTextArea codeArea(String code) {
     JBTextArea area = new JBTextArea(code);
     area.setEditable(false);
     area.setLineWrap(true);
     area.setFont(monospace());
     area.setBorder(JBUI.Borders.empty(6, 8));
-    ActionLink copy = new ActionLink(EiDbBundle.message("common.copy"), e -> {
+    return area;
+  }
+
+  /** 제목 줄(오른쪽에 「복사」, toConsole 이면 「콘솔에 넣기」도) + 테두리 상자. */
+  private void addBox(String titleKey, JBTextArea area, String code, boolean toConsole) {
+    JPanel links = new JPanel(new FlowLayout(FlowLayout.RIGHT, JBUI.scale(10), 0));
+    links.setOpaque(false);
+    if (toConsole) {
+      links.add(new ActionLink(EiDbBundle.message("plan.side.to.console"), e -> {
+        ConsoleOpener.open(project, c, code);
+      }));
+    }
+    links.add(new ActionLink(EiDbBundle.message("common.copy"), e -> {
       CopyPasteManager.getInstance().setContents(new StringSelection(code));
-    });
+    }));
     JPanel head = new JPanel(new BorderLayout());
     head.setOpaque(false);
     head.add(heading(titleKey), BorderLayout.CENTER);
-    head.add(copy, BorderLayout.EAST);
+    head.add(links, BorderLayout.EAST);
     JPanel box = new JPanel(new BorderLayout());
     box.setBorder(JBUI.Borders.customLine(JBColor.border(), 1));
     box.add(area, BorderLayout.CENTER);

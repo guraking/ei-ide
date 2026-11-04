@@ -55,8 +55,10 @@ public final class PlanAdvisor {
   private static final String COLUMN = "(?:\"?\\w+\"?\\.)?\"?(\\w+)\"?";
   private static final Pattern WRAPPED = Pattern.compile(
       "(?i)\\b(TO_CHAR|TO_NUMBER|TO_DATE|NVL|NVL2|COALESCE|UPPER|LOWER|SUBSTR|SUBSTRING|TRUNC|DATE_TRUNC|TRIM|LTRIM|RTRIM|REPLACE|DECODE|INTERNAL_FUNCTION)\\(\\s*" + COLUMN);
-  /** PostgreSQL 형 변환 (col)::text. 칼럼과 값의 형이 달라 붙는다. */
-  private static final Pattern PG_CAST = Pattern.compile("\\(" + COLUMN + "\\)::\\w+");
+  /** PostgreSQL 형 변환 (col)::numeric 등. 칼럼과 값의 형이 달라 붙는다. */
+  private static final Pattern PG_CAST = Pattern.compile("\\(" + COLUMN + "\\)::(\\w+)");
+  /** varchar · char 칼럼을 글자와 비교하면 계획에 ::text 가 찍히지만 인덱스는 그대로 쓴다(같은 연산자족). 지적하지 않는다. */
+  private static final Set<String> HARMLESS_CASTS = Set.of("text", "varchar", "bpchar", "character", "name");
   /** TO_CHAR(날짜칼럼, '형식') = '값' 은 범위 조건으로 바꿔 보일 수 있다. */
   private static final Pattern TO_CHAR_EQ = Pattern.compile("(?i)TO_CHAR\\(\\s*" + COLUMN + "\\s*,\\s*'([^']+)'\\s*\\)\\s*=\\s*'([^']+)'");
   private static final Pattern LEADING_WILDCARD = Pattern.compile("(?i)(\\bLIKE|~~\\*?)\\s*'%");
@@ -88,7 +90,7 @@ public final class PlanAdvisor {
         default -> { }
       }
       extra(s, out);
-      predicates(s, out);
+      predicates(s, share, out);
       Double time = timeShare.get(s.id());
       if (time != null && time >= SHARE_DANGER) out.add(new Finding(s.id(), Level.DANGER, "time", List.of(percent(time)), null));
       misestimate(s, out);
@@ -198,7 +200,7 @@ public final class PlanAdvisor {
   }
 
   /** 조건 글에서 인덱스를 막는 모양: 칼럼에 씌운 함수 · 형 변환, 앞에 % 가 붙은 LIKE. 같은 칼럼 · 함수는 한 번만. */
-  private static void predicates(Step s, List<Finding> out) {
+  private static void predicates(Step s, double share, List<Finding> out) {
     String text = s.predicates();
     Set<String> seen = new LinkedHashSet<>();
     Matcher m = WRAPPED.matcher(text);
@@ -206,17 +208,20 @@ public final class PlanAdvisor {
       String fn = m.group(1).toUpperCase(Locale.ROOT);
       String col = m.group(2);
       if (!seen.add(fn + "." + col)) continue;
-      out.add(new Finding(s.id(), wrapLevel(s), "fn." + family(fn), List.of(col, fn), fnExample(fn, col, text, s)));
+      out.add(new Finding(s.id(), wrapLevel(s, share), "fn." + family(fn), List.of(col, fn), fnExample(fn, col, text, s)));
     }
     Matcher cast = PG_CAST.matcher(text);
     while (cast.find()) {
-      if (seen.add("CAST." + cast.group(1))) out.add(new Finding(s.id(), wrapLevel(s), "fn.convert", List.of(cast.group(1), "::"), null));
+      if (HARMLESS_CASTS.contains(cast.group(2).toLowerCase(Locale.ROOT))) continue;
+      if (seen.add("CAST." + cast.group(1))) out.add(new Finding(s.id(), wrapLevel(s, share), "fn.convert", List.of(cast.group(1), "::"), null));
     }
-    if (LEADING_WILDCARD.matcher(text).find()) out.add(new Finding(s.id(), wrapLevel(s), "likeprefix", List.of(), null));
+    if (LEADING_WILDCARD.matcher(text).find()) out.add(new Finding(s.id(), wrapLevel(s, share), "likeprefix", List.of(), null));
   }
 
-  /** 전체 읽기 단계에서 걸린 함수 조건은 그 읽기의 원인이라 「심각」, 그 밖은 「주의」. */
-  private static Level wrapLevel(Step s) { return s.kind() == Kind.FULL_SCAN ? Level.DANGER : Level.WARNING; }
+  /** 큰 전체 읽기(비용 SHARE_WARNING 이상 또는 BIG_ROWS 건 이상)에 걸린 함수 조건은 그 읽기의 원인이라 「심각」, 그 밖은 「주의」. */
+  private static Level wrapLevel(Step s, double share) {
+    return s.kind() == Kind.FULL_SCAN && (share >= SHARE_WARNING || rowsOf(s) >= BIG_ROWS) ? Level.DANGER : Level.WARNING;
+  }
 
   /** 함수 이름 → 문구 묶음. 형 변환(INTERNAL_FUNCTION · TO_NUMBER)은 칼럼과 값의 형이 달라 DB 가 몰래 씌운 것이다. */
   static String family(String fn) {

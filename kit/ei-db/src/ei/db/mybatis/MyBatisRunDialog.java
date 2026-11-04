@@ -357,7 +357,7 @@ public final class MyBatisRunDialog extends DialogWrapper {
     DbConfig c = selected();
     DynamicSql.Result r = result;
     super.doOKAction();
-    if (findSlow) ExplainPlan.analyze(project, c, r.sql, new ArrayList<>(r.binds));
+    if (findSlow) ExplainPlan.analyze(project, c, r.sql, new ArrayList<>(r.binds), r.inlined());
     else SqlRunner.run(project, c, r.sql, new ArrayList<>(r.binds));
   }
 

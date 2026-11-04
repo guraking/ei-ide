@@ -79,8 +79,11 @@ public final class ExplainPlan {
   private static final int ORA_NO_TABLE = 942;
   private static final int ORA_NO_PRIVILEGE = 1031;
 
-  /** 화면 하나 분의 결과. actual 이면 실제 시간을 잰 것, millis · fetched 는 그때만 뜻이 있다. note 는 덧붙일 안내(없으면 null). */
-  public record Plan(String sql, List<Object> binds, DbKind kind, List<Step> steps, List<Finding> findings, String raw,
+  /**
+   * 화면 하나 분의 결과. actual 이면 실제 시간을 잰 것, millis · fetched 는 그때만 뜻이 있다. note 는 덧붙일 안내(없으면 null).
+   * source 는 사용자가 쓴 모양의 문장(콘솔은 바인드 전 글, 매퍼는 값을 넣은 글)으로 「이렇게 바꾸세요」를 이것으로 만든다.
+   */
+  public record Plan(String sql, List<Object> binds, String source, DbKind kind, List<Step> steps, List<Finding> findings, String raw,
                      String note, boolean actual, long millis, long fetched) {}
 
   public static void run(Project project, Editor editor, VirtualFile file) {
@@ -97,16 +100,16 @@ public final class ExplainPlan {
     List<SqlParams.Bound> bound = BindDialog.ask(project, List.of(sql));
     if (bound == null) return;
     SqlParams.Bound stmt = bound.get(0);
-    analyze(project, c, stmt.sql(), stmt.binds());
+    analyze(project, c, stmt.sql(), stmt.binds(), sql);
   }
 
-  /** sql 의 ? 자리에 binds 를 넣은 문장을 분석해 결과 창에 탭을 더한다. binds 는 없으면 null. 화면 스레드. */
-  public static void analyze(Project project, DbConfig c, String sql, List<Object> binds) {
+  /** sql 의 ? 자리에 binds 를 넣은 문장을 분석해 결과 창에 탭을 더한다. binds 는 없으면 null. source 는 Plan.source. 화면 스레드. */
+  public static void analyze(Project project, DbConfig c, String sql, List<Object> binds, String source) {
     new Task.Backgroundable(project, EiDbBundle.message("plan.progress", c.name), true) {
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
         try {
-          Plan plan = plan(DbSessions.get(project), c, sql, binds);
+          Plan plan = plan(DbSessions.get(project), c, sql, binds, source);
           ApplicationManager.getApplication().invokeLater(() -> ResultView.showPlan(project, c, plan));
         } catch (Exception e) {
           ApplicationManager.getApplication().invokeLater(() -> ResultView.showError(project, c, sql, e));
@@ -116,7 +119,7 @@ public final class ExplainPlan {
   }
 
   /** 「실제 시간 재기」. Oracle 의 조회 문장만. 진행 창의 멈춤으로 실행 중에도 멈춘다. 화면 스레드. */
-  static void measure(Project project, DbConfig c, String sql, List<Object> binds) {
+  static void measure(Project project, DbConfig c, String sql, List<Object> binds, String source) {
     if (c.kind != DbKind.ORACLE) {
       Notify.info(project, EiDbBundle.message("plan.measure.oracle.only"));
       return;
@@ -129,7 +132,7 @@ public final class ExplainPlan {
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
         try {
-          Plan plan = measured(DbSessions.get(project), c, sql, binds, indicator);
+          Plan plan = measured(DbSessions.get(project), c, sql, binds, source, indicator);
           ApplicationManager.getApplication().invokeLater(() -> {
             ResultView.showPlan(project, c, plan);
             Notify.info(project, EiDbBundle.message("plan.measure.done", c.name, plan.millis(), plan.fetched()));
@@ -163,7 +166,7 @@ public final class ExplainPlan {
     return text.endsWith(";") ? text.substring(0, text.length() - 1).strip() : text;
   }
 
-  private static Plan plan(DbSessions sessions, DbConfig c, String sql, List<Object> binds) throws SQLException {
+  private static Plan plan(DbSessions sessions, DbConfig c, String sql, List<Object> binds, String source) throws SQLException {
     List<Step> steps;
     String raw;
     if (c.kind == DbKind.ORACLE) {
@@ -183,14 +186,14 @@ public final class ExplainPlan {
       steps = c.kind == DbKind.POSTGRES ? PlanParse.postgres(firstColumn(r)) : PlanParse.mysql(r.columns(), r.rows());
       raw = c.kind == DbKind.POSTGRES ? lines(r) : table(r);
     }
-    return finish(sessions, c, sql, binds, steps, raw, false, 0, 0);
+    return finish(sessions, c, sql, binds, source, steps, raw, false, 0, 0);
   }
 
   /**
    * 문장을 한 번 실행해 단계마다 실제 값을 읽는다. 받은 행은 세기만 하고 버린다.
    * STATISTICS_LEVEL = ALL 은 이 세션에서 재는 동안만 두고 끝나면(실패해도) 기본값으로 돌린다.
    */
-  private static Plan measured(DbSessions sessions, DbConfig c, String sql, List<Object> binds, ProgressIndicator indicator) throws SQLException {
+  private static Plan measured(DbSessions sessions, DbConfig c, String sql, List<Object> binds, String source, ProgressIndicator indicator) throws SQLException {
     Connection conn = sessions.connection(c);
     String marker = "/* " + MEASURE_PREFIX + System.nanoTime() + " */ ";
     long start = System.currentTimeMillis();
@@ -221,7 +224,7 @@ public final class ExplainPlan {
       List<Object> key = List.of(cursor.rows().get(0).get(0), cursor.rows().get(0).get(1));
       QueryResult rows = sessions.run(c, CURSOR_STEPS, key, DbSessions.ALL_ROWS);
       String raw = lines(sessions.run(c, CURSOR_DISPLAY, key, DbSessions.ALL_ROWS));
-      return finish(sessions, c, sql, binds, PlanParse.oracle(rows.columns(), rows.rows()), raw, true, millis, fetched);
+      return finish(sessions, c, sql, binds, source, PlanParse.oracle(rows.columns(), rows.rows()), raw, true, millis, fetched);
     } catch (SQLException e) {
       if (e.getErrorCode() == ORA_NO_TABLE || e.getErrorCode() == ORA_NO_PRIVILEGE) {
         throw new SQLException(EiDbBundle.message("plan.measure.no.privilege", e.getMessage()), e);
@@ -246,7 +249,7 @@ public final class ExplainPlan {
     }
   }
 
-  private static Plan finish(DbSessions sessions, DbConfig c, String sql, List<Object> binds, List<Step> steps, String raw,
+  private static Plan finish(DbSessions sessions, DbConfig c, String sql, List<Object> binds, String source, List<Step> steps, String raw,
                              boolean actual, long millis, long fetched) throws SQLException {
     String note = null;
     Map<String, List<Index>> indexes = Map.of();
@@ -255,7 +258,7 @@ public final class ExplainPlan {
     } catch (SQLException e) {
       note = EiDbBundle.message("plan.index.failed", ResultView.message(e));
     }
-    return new Plan(sql, binds, c.kind, steps, PlanAdvisor.analyze(steps, indexes), raw, note, actual, millis, fetched);
+    return new Plan(sql, binds, source, c.kind, steps, PlanAdvisor.analyze(steps, indexes), raw, note, actual, millis, fetched);
   }
 
   /**

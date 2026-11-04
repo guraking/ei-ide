@@ -80,6 +80,14 @@ public class PlanAdvisorCheck {
     // ORD 단계 자기 몫 97% 는 「비용 몰림」.
     eq(rule(fs, "cost").args(), List.of(97L));
 
+    // 작은 표 전체 읽기에 걸린 함수 조건은 「주의」.
+    List<Step> smallFn = PlanParse.oracle(ORACLE_COLS, List.of(
+        row(n(0), null, n(0), "SELECT STATEMENT", null, null, null, n(100), n(5), null, null),
+        row(n(1), n(0), n(1), "HASH JOIN", null, null, null, n(100), n(5), null, null),
+        row(n(2), n(1), n(2), "TABLE ACCESS", "FULL", "HR", "CODE", n(3), n(20), null, "NVL(\"C\".\"USE_YN\",'Y')='Y'"),
+        row(n(3), n(1), n(2), "TABLE ACCESS", "BY INDEX ROWID", "HR", "ORD", n(97), n(5), null, null)));
+    eq(rule(analyze(smallFn, Map.of()), "fn.nvl").level(), Level.WARNING);
+
     // 중첩 반복 안쪽의 전체 읽기, 곱하기 조인, 정렬.
     List<Step> loop = PlanParse.oracle(ORACLE_COLS, List.of(
         row(n(0), null, n(0), "SELECT STATEMENT", null, null, null, n(5000), n(20000), null, null),
@@ -123,7 +131,7 @@ public class PlanAdvisorCheck {
         "  ->  Hash Join  (cost=10.00..1500.00 rows=40000 width=64)",
         "        Hash Cond: (e.dept_id = d.id)",
         "        ->  Seq Scan on emp e  (cost=0.00..1400.00 rows=40000 width=32)",
-        "              Filter: ((emp_no)::text = '10'::text)",
+        "              Filter: (((emp_no)::numeric = 10::numeric) AND ((use_yn)::text = 'Y'::text))",
         "        ->  Hash  (cost=5.00..5.00 rows=100 width=32)",
         "              ->  Seq Scan on dept d  (cost=0.00..5.00 rows=100 width=32)"));
     eq(pg.size(), 5);
@@ -131,11 +139,15 @@ public class PlanAdvisorCheck {
     eq(pg.get(2).parentId(), 1);
     eq(pg.get(4).parentId(), 3);
     eq(pg.get(1).access(), "(e.dept_id = d.id)");
-    eq(pg.get(2).filter(), "((emp_no)::text = '10'::text)");
+    eq(pg.get(2).filter(), "(((emp_no)::numeric = 10::numeric) AND ((use_yn)::text = 'Y'::text))");
     eq(pg.get(0).kind(), Kind.SORT);
     fs = analyze(pg, Map.of());
     eq(rule(fs, "fullnoindex").stepId(), 2);
     eq(rule(fs, "fn.convert").args(), List.of("emp_no", "::"));
+    // varchar 를 글자와 비교한 ::text 는 인덱스를 막지 않으므로 지적하지 않는다.
+    int converts = 0;
+    for (Finding f : fs) if (f.rule().equals("fn.convert")) converts++;
+    eq(converts, 1);
     ok(!has(fs, "fullnowhere"), "dept 는 작은 표");
 
     // MySQL 표: type=ALL, Extra.
@@ -153,7 +165,7 @@ public class PlanAdvisorCheck {
     // 나온 지적의 문구가 모두 있고 자리값으로 만들어진다.
     ResourceBundle messages = ResourceBundle.getBundle("messages.EiDbMessages", Locale.ROOT);
     for (Finding f : ALL) {
-      for (String part : List.of("title", "cause", "fix")) {
+      for (String part : List.of("title", "summary", "cause", "fix")) {
         String key = "plan." + f.rule() + "." + part;
         ok(messages.containsKey(key), "문구 없음: " + key);
         String text = new MessageFormat(messages.getString(key), Locale.ROOT).format(f.args().toArray());
