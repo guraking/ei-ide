@@ -62,7 +62,7 @@ public class GenCheck {
     eq(TypeMap.anyFraction(rows, 0), true);
     eq(TypeMap.anyFraction(List.of(List.of(new BigDecimal("3.00"))), 0), false);
 
-    MapperGen.Options style = new MapperGen.Options(true, true, true, true, DbKind.ORACLE);
+    MapperGen.Options style = new MapperGen.Options(true, true, true, true, true, DbKind.ORACLE);
     MapperGen g = new MapperGen("PRODUCT", COLS, "com.example.mapper.ProductMapper", "com.example.dto.ProductDto", style);
     String xml = g.xmlFile(MapperGen.allKinds());
     if (args.length > 0) System.out.println(xml + "\n" + g.interfaceFile(MapperGen.allKinds()));
@@ -85,7 +85,19 @@ public class GenCheck {
     ok(xml.contains("<if test=\"productName != null\">PRODUCT_NAME = #{productName},</if>"), "update set if");
     ok(xml.contains("AND PRODUCT_ID = #{productId}"), "PK 조건");
 
-    MapperGen plain = new MapperGen("PRODUCT", COLS, "m.ProductMapper", "ProductDto", new MapperGen.Options(false, false, false, false, DbKind.MYSQL));
+    // resultMap 없이 resultType: 칼럼마다 AS 필드 별칭. updateIf 끔: <if> 없이 모든 칼럼 SET
+    java.util.Set<MapperGen.Kind> noMap = MapperGen.allKinds();
+    noMap.remove(MapperGen.Kind.RESULT_MAP);
+    MapperGen flat = new MapperGen("PRODUCT", COLS, "m.ProductMapper", "m.ProductDto", new MapperGen.Options(true, true, true, true, false, DbKind.ORACLE));
+    String flatXml = flat.xmlFile(noMap);
+    parse(flatXml);
+    ok(!flatXml.contains("<resultMap") && flatXml.contains("resultType=\"m.ProductDto\""), "resultType 연결");
+    ok(flatXml.contains("    SELECT\n           p.PRODUCT_ID AS productId     /* 상품 ID */\n         , p.SUPPLIER_ID AS supplierId   /* 공급사 ID */\n"), "AS 별칭");
+    ok(flatXml.contains("    UPDATE PRODUCT\n       SET SUPPLIER_ID = #{supplierId}\n         , PRODUCT_NAME = #{productName}\n")
+       && !flatXml.contains("<set>"), "update if 끔");
+    ok(!xml.contains(" AS "), "resultMap 쓰면 별칭 없음");
+
+    MapperGen plain = new MapperGen("PRODUCT", COLS, "m.ProductMapper", "ProductDto", new MapperGen.Options(false, false, false, false, true, DbKind.MYSQL));
     String plainXml = plain.xmlFile(MapperGen.allKinds());
     parse(plainXml);
     ok(plainXml.contains("&gt;= #{createdAtFrom}") && plainXml.contains("<where>"), "CDATA 끔 · where 태그");
@@ -103,7 +115,7 @@ public class GenCheck {
     eq(pkOnly.xmlBlocks(MapperGen.allKinds()).size(), 5);
 
     MapperGen pg = new MapperGen("order_item", List.of(new Meta.Column("Qty", "int4", 10, 0, true, false, false, "")), "a.M", "a.D",
-                                 new MapperGen.Options(true, true, true, false, DbKind.POSTGRES));
+                                 new MapperGen.Options(true, true, true, false, true, DbKind.POSTGRES));
     ok(pg.xmlFile(MapperGen.allKinds()).contains("      FROM ORDER_ITEM oi\n") && pg.xmlFile(MapperGen.allKinds()).contains("oi.\"Qty\""), "PostgreSQL 이름 표기");
 
     // MERGE: PK 로 ON, PK 아닌 칼럼만 UPDATE SET, 모든 칼럼 INSERT
@@ -115,7 +127,7 @@ public class GenCheck {
     ok(xml.contains("          ) VALUES (\n                 #{productId}\n               , #{supplierId}\n"), "MERGE VALUES");
     ok(g.interfaceFile(MapperGen.allKinds()).contains("int mergeProduct(ProductDto param);"), "MERGE 메서드");
     ok(plainXml.contains("    ON DUPLICATE KEY UPDATE\n           SUPPLIER_ID = VALUES(SUPPLIER_ID)\n         , PRODUCT_NAME = VALUES(PRODUCT_NAME)\n"), "MySQL MERGE");
-    MapperGen pgMerge = new MapperGen("ITEM", COLS, "a.M", "a.D", new MapperGen.Options(true, true, true, false, DbKind.POSTGRES));
+    MapperGen pgMerge = new MapperGen("ITEM", COLS, "a.M", "a.D", new MapperGen.Options(true, true, true, false, true, DbKind.POSTGRES));
     ok(pgMerge.xmlFile(MapperGen.allKinds()).contains("    ON CONFLICT (\"PRODUCT_ID\") DO UPDATE SET\n           \"SUPPLIER_ID\" = EXCLUDED.\"SUPPLIER_ID\"\n"), "PostgreSQL MERGE");
     ok(!noPk.possible(MapperGen.Kind.MERGE) && !pkOnly.possible(MapperGen.Kind.MERGE), "PK 없거나 PK 만 있으면 MERGE 없음");
 

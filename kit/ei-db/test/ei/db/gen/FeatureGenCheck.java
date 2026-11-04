@@ -39,7 +39,7 @@ public class FeatureGenCheck {
 
   static FeatureGen gen(List<Meta.Column> cols, String table, DbKind kind, boolean split, boolean rest, Set<String> search,
                         Set<MapperGen.Kind> kinds) {
-    return new FeatureGen(new FeatureGen.Spec(table, cols, new MapperGen.Options(true, true, true, true, kind), kinds, "com.x.dto.OrderItemDto", "com.x.mapper.OrderItemMapper",
+    return new FeatureGen(new FeatureGen.Spec(table, cols, new MapperGen.Options(true, true, true, true, true, kind), kinds, "com.x.dto.OrderItemDto", "com.x.mapper.OrderItemMapper",
         "com.x.service.OrderItemService", split ? "com.x.service.impl.OrderItemServiceImpl" : null,
         "com.x.controller.OrderItemController", rest, FeatureGen.defaultBaseUrl(table), search));
   }
