@@ -79,8 +79,11 @@
       <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt ENTER"/>
       <add-to-group group-id="EditorPopupMenu" anchor="first"/>
     </action>
-    <action id="EiDb.MyBatis.LayerCode" class="ei.db.mybatis.LayerCodeAction" icon="AllIcons.Actions.Lightning">
+    <action id="EiDb.MyBatis.FindSlow" class="ei.db.mybatis.RunStatementAction$FindSlow" icon="AllIcons.Actions.Preview">
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EiDb.MyBatis.Run"/>
+    </action>
+    <action id="EiDb.MyBatis.LayerCode" class="ei.db.mybatis.LayerCodeAction" icon="AllIcons.Actions.Lightning">
+      <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EiDb.MyBatis.FindSlow"/>
     </action>
     <action id="EiDb.MyBatis.ServiceCall" class="ei.db.mybatis.ServiceCallAction" icon="AllIcons.Actions.Copy">
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EiDb.MyBatis.LayerCode"/>

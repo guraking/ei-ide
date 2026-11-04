@@ -32,6 +32,7 @@ import ei.db.EiDbBundle;
 import ei.db.Notify;
 import ei.db.SqlRunner;
 import ei.db.console.ConsoleOpener;
+import ei.db.console.ExplainPlan;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -82,6 +83,8 @@ public final class MyBatisRunDialog extends DialogWrapper {
   private final PsiClass dto;
   private final List<String> dtoFields;
   private final Set<String> textParams;
+  /** 참이면 「느린 곳 찾기」 창: 확인 단추가 실행 대신 실행 계획 분석(ExplainPlan.analyze)을 한다. */
+  private final boolean findSlow;
   private DynamicSql.Result result;
 
   private static final class Row {
@@ -92,6 +95,11 @@ public final class MyBatisRunDialog extends DialogWrapper {
 
   /** 문서 글자 text 에서 offset 을 감싸는 문장을 찾아 창을 연다. 화면 스레드에서 부른다. */
   public static void openAt(Project project, CharSequence text, int offset) {
+    openAt(project, text, offset, false);
+  }
+
+  /** findSlow 가 참이면 같은 창을 「느린 곳 찾기」로 연다. */
+  public static void openAt(Project project, CharSequence text, int offset, boolean findSlow) {
     MapperDoc doc = MapperDoc.parse(text);
     MapperDoc.Node s = doc.statementAt(offset);
     if (s == null) {
@@ -102,7 +110,7 @@ public final class MyBatisRunDialog extends DialogWrapper {
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
         DtoFields.ForRun types = ReadAction.nonBlocking(() -> DtoFields.forRun(project, doc, s)).wrapProgress(indicator).executeSynchronously();
-        ApplicationManager.getApplication().invokeLater(() -> new MyBatisRunDialog(project, doc, s, null, types).show(), project.getDisposed());
+        ApplicationManager.getApplication().invokeLater(() -> new MyBatisRunDialog(project, doc, s, null, types, findSlow).show(), project.getDisposed());
       }
     }.queue();
   }
@@ -113,7 +121,13 @@ public final class MyBatisRunDialog extends DialogWrapper {
    */
   public MyBatisRunDialog(Project project, MapperDoc doc, MapperDoc.Node statement, @Nullable Map<String, String> prefill,
                           DtoFields.ForRun types) {
+    this(project, doc, statement, prefill, types, false);
+  }
+
+  private MyBatisRunDialog(Project project, MapperDoc doc, MapperDoc.Node statement, @Nullable Map<String, String> prefill,
+                           DtoFields.ForRun types, boolean findSlow) {
     super(project);
+    this.findSlow = findSlow;
     this.project = project;
     this.doc = doc;
     this.statement = statement;
@@ -133,9 +147,9 @@ public final class MyBatisRunDialog extends DialogWrapper {
     dto = types.result();
     dtoFields = types.resultFields();
     textParams = types.textParams();
-    setTitle(EiDbBundle.message("action.EiDb.MyBatis.Run.text"));
-    setOKButtonText(EiDbBundle.message("common.run"));
-    getOKAction().putValue(Action.SMALL_ICON, AllIcons.Actions.Execute);
+    setTitle(EiDbBundle.message(findSlow ? "action.EiDb.MyBatis.FindSlow.text" : "action.EiDb.MyBatis.Run.text"));
+    setOKButtonText(findSlow ? EiDbBundle.message("plan.find.button") : EiDbBundle.message("common.run"));
+    getOKAction().putValue(Action.SMALL_ICON, findSlow ? AllIcons.Actions.Preview : AllIcons.Actions.Execute);
     setCancelButtonText(EiDbBundle.message("common.cancel"));
     init();
     refresh();
@@ -343,7 +357,8 @@ public final class MyBatisRunDialog extends DialogWrapper {
     DbConfig c = selected();
     DynamicSql.Result r = result;
     super.doOKAction();
-    SqlRunner.run(project, c, r.sql, new ArrayList<>(r.binds));
+    if (findSlow) ExplainPlan.analyze(project, c, r.sql, new ArrayList<>(r.binds));
+    else SqlRunner.run(project, c, r.sql, new ArrayList<>(r.binds));
   }
 
   /** 어떤 단추로 닫든 넣은 값과 고른 접속을 기억한다. */

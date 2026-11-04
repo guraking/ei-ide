@@ -63,6 +63,17 @@ public final class ResultView {
     ConsoleRun.finished(project, c, sql, false);
   }
 
+  /** 「느린 곳」 탭. 심각한 곳이 있으면 오류 아이콘, 주의만 있으면 경고 아이콘. */
+  public static void showPlan(Project project, DbConfig c, ExplainPlan.Plan plan) {
+    String name = firstTable(plan.sql());
+    String title = tabTitle(project, EiDbBundle.message(plan.actual() ? "plan.tab.actual" : "plan.tab",
+        name == null ? EiDbBundle.message("result.tab.query") : name));
+    java.util.Collection<PlanAdvisor.Level> levels = PlanAdvisor.levels(plan.findings()).values();
+    Icon icon = levels.contains(PlanAdvisor.Level.DANGER) ? AllIcons.General.Error
+        : levels.isEmpty() ? AllIcons.Actions.Preview : AllIcons.General.Warning;
+    addTab(project, title, icon, new PlanPanel(project, c, plan));
+  }
+
   /** 사용자가 멈춘 실행. 오류가 아니므로 알림 없이 탭만 더하고, 같은 접속의 남은 문장은 버린다. */
   public static void showCancelled(Project project, DbConfig c, String sql) {
     JBLabel label = new JBLabel(EiDbBundle.message("result.cancelled", c.name));
