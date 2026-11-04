@@ -103,6 +103,8 @@ public final class FeatureDialog extends DialogWrapper {
   private final JBCheckBox mvc = new JBCheckBox(EiDbBundle.message("feature.mvc"), false);
   private final JBTextField urlField = new JBTextField();
   private final Map<MapperGen.Kind, JBCheckBox> kindBoxes = new EnumMap<>(MapperGen.Kind.class);
+  /** resultMap 칸은 만들 문장 목록과 헷갈리지 않게 「결과 받기」 줄에 따로 둔다(statements() 가 채운다). */
+  private final JPanel resultRow = new JPanel(new BorderLayout());
   private final JBCheckBox oldJoin = new JBCheckBox(EiDbBundle.message("mapper.old.join"), true);
   private final JBCheckBox cdata = new JBCheckBox(EiDbBundle.message("mapper.cdata"), true);
   private final JBCheckBox where11 = new JBCheckBox(EiDbBundle.message("mapper.where11"), true);
@@ -220,6 +222,7 @@ public final class FeatureDialog extends DialogWrapper {
         .addLabeledComponent(EiDbBundle.message("feature.controller"), controllerField, true)
         .addComponent(mvc)
         .addLabeledComponent(EiDbBundle.message("feature.base.url"), urlField, true)
+        .addLabeledComponent(EiDbBundle.message("mapper.result"), resultRow, true)
         .addLabeledComponent(EiDbBundle.message("mapper.statements"), statements(), true)
         .addLabeledComponent(EiDbBundle.message("mapper.style"), stack(oldJoin, cdata, where11, sqlComments, updateIf), true);
     String note = gen().missingNote();
@@ -294,7 +297,7 @@ public final class FeatureDialog extends DialogWrapper {
       JPanel row = new JPanel(new BorderLayout());
       row.add(box, BorderLayout.CENTER);
       row.add(h, BorderLayout.EAST);
-      p.add(row);
+      (k == MapperGen.Kind.RESULT_MAP ? resultRow : p).add(row);
     }
     return p;
   }
