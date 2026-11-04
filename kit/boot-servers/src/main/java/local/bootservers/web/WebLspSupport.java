@@ -4,6 +4,7 @@ import com.intellij.notification.Notification;
 import com.intellij.notification.NotificationAction;
 import com.intellij.notification.NotificationGroupManager;
 import com.intellij.notification.NotificationType;
+import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.project.ProjectUtil;
 import com.intellij.openapi.util.Key;
@@ -68,7 +69,8 @@ public final class WebLspSupport implements LspServerSupportProvider {
     }
 
     static Path baseDir() {
-        return WebTools.baseDir(System.getProperty("user.home"));
+        return WebTools.chooseBase(Path.of(PathManager.getHomePath(), WebTools.BUNDLED_WEB),
+                WebTools.baseDir(System.getProperty("user.home")), SystemInfo.isWindows);
     }
 
     static @Nullable Path projectRoot(Project project) {
