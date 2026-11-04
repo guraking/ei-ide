@@ -129,7 +129,8 @@ final class PlanPanel extends JPanel {
     long danger = 0;
     for (Level l : levels.values()) if (l == Level.DANGER) danger++;
     long warning = levels.size() - danger;
-    String text = levels.isEmpty() ? EiDbBundle.message("plan.summary.none") : EiDbBundle.message("plan.summary", levels.size(), danger, warning);
+    String none = !plan.actual() && PlanAdvisor.isSmall(plan.steps()) ? "plan.summary.small" : "plan.summary.none";
+    String text = levels.isEmpty() ? EiDbBundle.message(none) : EiDbBundle.message("plan.summary", levels.size(), danger, warning);
     if (plan.actual()) text += EiDbBundle.message("plan.summary.actual", plan.millis(), plan.fetched());
     Icon icon = danger > 0 ? AllIcons.General.Error : warning > 0 ? AllIcons.General.Warning : AllIcons.General.InspectionsOK;
     JBLabel summary = new JBLabel(text, icon, SwingConstants.LEFT);
@@ -176,7 +177,8 @@ final class PlanPanel extends JPanel {
   private void showSide(Step step) {
     side.removeAll();
     if (step == null) {
-      side.add(prose(EiDbBundle.message(levels.isEmpty() ? "plan.summary.none" : "plan.side.pick")));
+      side.add(prose(EiDbBundle.message(!levels.isEmpty() ? "plan.side.pick"
+          : !plan.actual() && PlanAdvisor.isSmall(plan.steps()) ? "plan.summary.small" : "plan.summary.none")));
     } else {
       List<Finding> mine = new ArrayList<>();
       for (Finding f : plan.findings()) if (f.stepId() == step.id()) mine.add(f);

@@ -69,24 +69,57 @@ public class PlanAdvisorCheck {
     eq(rule(fs, "fullunused").args(), List.of("EMP", "IX_EMP_DEPT", "DEPT_ID"));
     ok(!has(fs, "fullnoindex"), "인덱스가 있으면 후보를 내지 않는다");
 
-    // 작은 표 전체 읽기는 넘긴다(비용 비율 < 20%, 건수 < BIG_ROWS).
-    List<Step> small = PlanParse.oracle(ORACLE_COLS, List.of(
-        row(n(0), null, n(0), "SELECT STATEMENT", null, null, null, n(100), n(5), null, null),
-        row(n(1), n(0), n(1), "HASH JOIN", null, null, null, n(100), n(5), "\"A\".\"ID\"=\"B\".\"A_ID\"", null),
-        row(n(2), n(1), n(2), "TABLE ACCESS", "FULL", "HR", "CODE", n(3), n(20), null, null),
-        row(n(3), n(1), n(2), "TABLE ACCESS", "BY INDEX ROWID", "HR", "ORD", n(97), n(5), null, null)));
-    fs = analyze(small, Map.of());
+    // 큰 쿼리의 작은 표 전체 읽기는 넘긴다(비용 비율 < 20%, 건수 < BIG_ROWS). 한 단계가 97% 면 「비용 몰림」.
+    List<Step> mid = PlanParse.oracle(ORACLE_COLS, List.of(
+        row(n(0), null, n(0), "SELECT STATEMENT", null, null, null, n(10000), n(5), null, null),
+        row(n(1), n(0), n(1), "HASH JOIN", null, null, null, n(10000), n(5), "\"A\".\"ID\"=\"B\".\"A_ID\"", null),
+        row(n(2), n(1), n(2), "TABLE ACCESS", "FULL", "HR", "CODE", n(300), n(20), null, null),
+        row(n(3), n(1), n(2), "TABLE ACCESS", "BY INDEX ROWID", "HR", "ORD", n(9700), n(5), null, null)));
+    fs = analyze(mid, Map.of());
     ok(!has(fs, "fullnowhere") && !has(fs, "fullnoindex"), "작은 표 전체 읽기는 지적하지 않는다: " + fs);
-    // ORD 단계 자기 몫 97% 는 「비용 몰림」.
     eq(rule(fs, "cost").args(), List.of(97L));
 
-    // 작은 표 전체 읽기에 걸린 함수 조건은 「주의」.
-    List<Step> smallFn = PlanParse.oracle(ORACLE_COLS, List.of(
-        row(n(0), null, n(0), "SELECT STATEMENT", null, null, null, n(100), n(5), null, null),
-        row(n(1), n(0), n(1), "HASH JOIN", null, null, null, n(100), n(5), null, null),
-        row(n(2), n(1), n(2), "TABLE ACCESS", "FULL", "HR", "CODE", n(3), n(20), null, "NVL(\"C\".\"USE_YN\",'Y')='Y'"),
-        row(n(3), n(1), n(2), "TABLE ACCESS", "BY INDEX ROWID", "HR", "ORD", n(97), n(5), null, null)));
-    eq(rule(analyze(smallFn, Map.of()), "fn.nvl").level(), Level.WARNING);
+    // 헛경고 사례: 아래는 아무 지적도 나오면 안 된다.
+    // 1) 오늘 본 작은 PostgreSQL 쿼리(전체 비용 31): 173건 전체 읽기 · Y/N 조건 · 정렬.
+    List<Step> today = PlanParse.postgres(List.of(
+        "Group  (cost=29.10..31.10 rows=283 width=100)",
+        "  ->  Sort  (cost=29.10..29.80 rows=283 width=100)",
+        "        ->  Hash Left Join  (cost=2.20..17.50 rows=283 width=100)",
+        "              ->  Hash Join  (cost=1.00..15.00 rows=283 width=80)",
+        "                    ->  Seq Scan on t_cm_auth_menu_auth_d b  (cost=0.00..6.00 rows=290 width=20)",
+        "                    ->  Seq Scan on t_cm_auth_menu_m a  (cost=0.00..6.00 rows=173 width=60)",
+        "                          Filter: ((upper_menuid IS NOT NULL) AND ((use_yn)::text = 'Y'::text))",
+        "              ->  Seq Scan on t_cm_sys_mnl_m c  (cost=0.00..1.00 rows=10 width=20)"));
+    ok(PlanAdvisor.isSmall(today), "전체 비용 31 은 작은 쿼리");
+    eq(analyze(today, Map.of()), List.of());
+    // 2) 코드표(10건, 한 번 비용 1)를 500번 반복: 반복 일 500 은 전체 20000 의 20% 미만.
+    List<Step> codes = PlanParse.oracle(ORACLE_COLS, List.of(
+        row(n(0), null, n(0), "SELECT STATEMENT", null, null, null, n(20000), n(500), null, null),
+        row(n(1), n(0), n(1), "NESTED LOOPS", null, null, null, n(20000), n(500), null, null),
+        row(n(2), n(1), n(2), "TABLE ACCESS", "BY INDEX ROWID", "HR", "ORD", n(19500), n(500), null, null),
+        row(n(3), n(1), n(2), "TABLE ACCESS", "FULL", "HR", "CODE", n(1), n(1), null, "\"C\".\"CD\"=\"O\".\"CD\"")));
+    ok(!has(analyze(codes, Map.of()), "loopfull"), "작은 코드표 반복은 짚지 않는다");
+    // 3) COUNT(*) 의 인덱스 빠른 전체 읽기.
+    List<Step> count = PlanParse.oracle(ORACLE_COLS, List.of(
+        row(n(0), null, n(0), "SELECT STATEMENT", null, null, null, n(5000), n(1), null, null),
+        row(n(1), n(0), n(1), "SORT", "AGGREGATE", null, null, null, n(1), null, null),
+        row(n(2), n(1), n(2), "INDEX", "FAST FULL SCAN", "HR", "PK_ORD", n(5000), n(900000), null, null)));
+    eq(analyze(count, Map.of()), List.of());
+
+    // Y/N 칼럼만 걸린 큰 전체 읽기 → 인덱스 대신 「조건이 넓음」.
+    List<Step> yn = PlanParse.oracle(ORACLE_COLS, List.of(
+        row(n(0), null, n(0), "SELECT STATEMENT", null, null, null, n(5000), n(90000), null, null),
+        row(n(1), n(0), n(1), "TABLE ACCESS", "FULL", "HR", "ORD", n(5000), n(90000), null, "\"O\".\"USE_YN\"='Y'")));
+    fs = analyze(yn, Map.of());
+    eq(rule(fs, "fullnarrow").args(), List.of("ORD", "USE_YN"));
+    ok(!has(fs, "fullnoindex"), "Y/N 칼럼 인덱스는 권하지 않는다");
+
+    // 함수 조건: 인덱스를 읽었고 그 칼럼 인덱스가 없으면 함수 탓을 하지 않는다. 있으면 한다.
+    List<Step> fnPlan = PlanParse.oracle(ORACLE_COLS, List.of(
+        row(n(0), null, n(0), "SELECT STATEMENT", null, null, null, n(5000), n(90000), null, null),
+        row(n(1), n(0), n(1), "TABLE ACCESS", "FULL", "HR", "ORD", n(5000), n(90000), null, "NVL(\"O\".\"STATUS\",'A')='A'")));
+    ok(!has(analyze(fnPlan, Map.of("ORD", List.of())), "fn.nvl"), "인덱스 없는 칼럼은 함수 탓이 아니다");
+    eq(rule(analyze(fnPlan, Map.of("ORD", List.of(new Index("IX_ORD_STATUS", List.of("STATUS"))))), "fn.nvl").level(), Level.DANGER);
 
     // 중첩 반복 안쪽의 전체 읽기, 곱하기 조인, 정렬.
     List<Step> loop = PlanParse.oracle(ORACLE_COLS, List.of(
@@ -153,7 +186,7 @@ public class PlanAdvisorCheck {
     // MySQL 표: type=ALL, Extra.
     List<Step> my = PlanParse.mysql(List.of("id", "select_type", "table", "type", "possible_keys", "key", "rows", "Extra"), List.of(
         row(1L, "SIMPLE", "orders", "ALL", null, null, 120000L, "Using where; Using filesort"),
-        row(1L, "SIMPLE", "users", "ALL", null, null, 300L, "Using join buffer (hash join)")));
+        row(1L, "SIMPLE", "users", "ALL", null, null, 30000L, "Using join buffer (hash join)")));
     fs = analyze(my, Map.of());
     eq(rule(fs, "fullunknown").args(), List.of("ORDERS"));
     eq(rule(fs, "sort").stepId(), 0);

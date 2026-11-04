@@ -17,7 +17,6 @@ import ei.db.QueryResult;
 import ei.db.SqlGuard;
 import ei.db.console.PlanAdvisor.Finding;
 import ei.db.console.PlanAdvisor.Index;
-import ei.db.console.PlanAdvisor.Kind;
 import ei.db.console.PlanAdvisor.Step;
 import ei.db.mybatis.SqlValues;
 import org.jetbrains.annotations.NotNull;
@@ -262,14 +261,14 @@ public final class ExplainPlan {
   }
 
   /**
-   * 전체 읽기 단계 표의 인덱스(표 이름 대문자 → 인덱스들). approximate=true 로 부른다:
+   * 계획에 나온 표의 인덱스(표 이름 대문자 → 인덱스들). Oracle INDEX 단계는 대상이 인덱스 이름이라 뺀다. approximate=true 로 부른다:
    * Oracle 드라이버는 false 면 표를 ANALYZE 한다.
    */
   private static Map<String, List<Index>> indexes(Connection conn, DbConfig c, List<Step> steps) throws SQLException {
     Map<String, List<Index>> out = new HashMap<>();
     DatabaseMetaData md = conn.getMetaData();
     for (Step s : steps) {
-      if (s.kind() != Kind.FULL_SCAN || s.object().isEmpty()) continue;
+      if (s.object().isEmpty() || s.operation().startsWith("INDEX")) continue;
       String key = s.object().toUpperCase(Locale.ROOT);
       if (out.containsKey(key)) continue;
       String catalog = c.kind == DbKind.MYSQL ? conn.getCatalog() : null;

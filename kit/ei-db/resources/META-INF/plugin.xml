@@ -12,6 +12,8 @@
   <depends>com.intellij.java</depends>
 
   <extensions defaultExtensionNs="com.intellij">
+    <!-- 지난번에 열려 있던 SQL 콘솔 탭을 다시 연다. -->
+    <postStartupActivity implementation="ei.db.console.ConsoleOpener$Restore"/>
     <notificationGroup id="EI Database" displayType="BALLOON" key="notification.group.ei.database"/>
     <!-- 탐색기 -->
     <toolWindow id="EI Database" anchor="right" icon="AllIcons.Nodes.DataTables" factoryClass="ei.db.ui.DbToolWindowFactory"/>
@@ -49,6 +51,11 @@
     <completion.contributor language="JAVA" implementationClass="ei.db.mybatis.ServiceMethodCompletion"/>
     <!-- ERD 도구 창은 ErdView 가 처음 열 때 등록한다. -->
   </extensions>
+
+  <applicationListeners>
+    <!-- 프로젝트를 닫을 때 열린 SQL 콘솔 탭을 기억한다. -->
+    <listener class="ei.db.console.ConsoleOpener$Remember" topic="com.intellij.openapi.project.ProjectCloseListener"/>
+  </applicationListeners>
 
   <actions>
     <action id="ei.db.console.Run" class="ei.db.console.ConsoleRun$Statement" icon="AllIcons.Actions.Execute">

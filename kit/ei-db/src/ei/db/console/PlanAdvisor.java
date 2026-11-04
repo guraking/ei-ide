@@ -29,6 +29,12 @@ public final class PlanAdvisor {
   /** 예상 · 실제 건수가 이 배수 이상 다르고 큰 쪽이 MISESTIMATE_MIN_ROWS 이상이면 통계가 낡았다고 본다. */
   static final double MISESTIMATE_RATIO = 10;
   static final long MISESTIMATE_MIN_ROWS = 100;
+  /** 전체 비용(비용이 없으면 읽는 건수)이 이 아래면 작은 쿼리로 보고 곱하기 조인 말고는 짚지 않는다. 그 정도는 전체 읽기가 가장 빠르다. */
+  static final long SMALL_PLAN_COST = 1000;
+  /** 값이 몇 가지뿐인 칼럼(Y/N · 플래그). 인덱스를 만들어도 DB 가 거의 쓰지 않아 후보에서 뺀다. */
+  private static final Pattern FEW_VALUES = Pattern.compile("(?i)(.*_)?(YN|FLAG|FLG|YN_CD|AT)$");
+  /** IN 목록에도 INTERNAL_FUNCTION 이 찍힌다. 그때는 형 변환이 아니다. */
+  private static final Pattern IN_LIST = Pattern.compile("(?i)^\\s*\"?\\)?\\s*(NOT\\s+)?IN\\b");
 
   public enum Kind { FULL_SCAN, INDEX_FULL, INDEX_SKIP, CARTESIAN, NESTED_LOOP, SORT, SUBQUERY_FILTER, OTHER }
 
@@ -66,39 +72,77 @@ public final class PlanAdvisor {
   private static final Pattern COMPARED = Pattern.compile("(?i)" + COLUMN + "\\s*(=|>=|<=|<>|!=|>|<|\\bLIKE\\b|~~|\\bBETWEEN\\b|\\bIN\\b)");
   private static final Set<String> NOT_COLUMNS = Set.of("AND", "OR", "NOT", "NULL", "IS", "TEXT", "NUMERIC", "INTEGER", "BIGINT");
 
+  /**
+   * 지적 목록. 헛경고를 줄이려고: 작은 쿼리(isSmall)는 곱하기 조인만, 그 밖은 그 단계가 무거울 때(비율 SHARE_WARNING 이상 또는 BIG_ROWS 건 이상)만 짚는다.
+   * 실제 시간을 잰 계획(actual)은 비율을 비용 대신 실제 시간으로 잰다.
+   * indexes 에 그 표가 있으면(읽은 표) 칼럼에 인덱스가 없을 때 「함수 때문에 인덱스를 못 씀」을 말하지 않는다. 표가 없으면(못 읽음) 말한다.
+   */
   public static List<Finding> analyze(List<Step> steps, Map<String, List<Index>> indexes) {
     List<Finding> out = new ArrayList<>();
     if (steps.isEmpty()) return out;
     Map<Integer, List<Step>> children = children(steps);
-    Map<Integer, Double> costShare = shares(steps, children, false);
-    Map<Integer, Double> timeShare = shares(steps, children, true);
+    boolean actual = isActual(steps);
+    boolean small = !actual && isSmall(steps);
+    Map<Integer, Double> shares = shares(steps, children, actual);
+    int leaves = 0;
+    for (Step s : steps) if (!children.containsKey(s.id())) leaves++;
     for (Step s : steps) {
-      double share = costShare.getOrDefault(s.id(), 0.0);
+      if (s.kind() == Kind.CARTESIAN) out.add(new Finding(s.id(), Level.DANGER, "cartesian", List.of(), null));
+      if (small) continue;
+      double share = shares.getOrDefault(s.id(), 0.0);
+      boolean heavy = share >= SHARE_WARNING || rowsOf(s) >= BIG_ROWS;
       int before = out.size();
       switch (s.kind()) {
-        case FULL_SCAN -> fullScan(s, share, steps, children, indexes, out);
-        case CARTESIAN -> out.add(new Finding(s.id(), Level.DANGER, "cartesian", List.of(), null));
+        case FULL_SCAN -> fullScan(s, share, steps, children, indexes, actual, out);
         case INDEX_FULL, INDEX_SKIP -> {
-          if (share >= SHARE_WARNING) out.add(new Finding(s.id(), Level.WARNING, s.kind() == Kind.INDEX_SKIP ? "skip" : "indexfull", List.of(name(s)), null));
+          if (share >= SHARE_WARNING && !underAggregate(s, steps)) out.add(new Finding(s.id(), Level.WARNING, s.kind() == Kind.INDEX_SKIP ? "skip" : "indexfull", List.of(name(s)), null));
         }
         case SORT -> {
           if (share >= SHARE_WARNING || rowsOf(s) >= BIG_ROWS) out.add(new Finding(s.id(), level(share), "sort", List.of(rowsOf(s)), null));
         }
         case SUBQUERY_FILTER -> {
-          if (children.getOrDefault(s.id(), List.of()).size() > 1) out.add(new Finding(s.id(), Level.WARNING, "subquery", List.of(), null));
+          if (heavy && children.getOrDefault(s.id(), List.of()).size() > 1) out.add(new Finding(s.id(), Level.WARNING, "subquery", List.of(), null));
         }
         default -> { }
       }
-      extra(s, out);
-      predicates(s, share, out);
-      Double time = timeShare.get(s.id());
-      if (time != null && time >= SHARE_DANGER) out.add(new Finding(s.id(), Level.DANGER, "time", List.of(percent(time)), null));
+      if (heavy) {
+        extra(s, out);
+        predicates(s, share, indexes, out);
+      }
+      if (actual && share >= SHARE_DANGER) out.add(new Finding(s.id(), Level.DANGER, "time", List.of(percent(share)), null));
       misestimate(s, out);
-      if (out.size() == before && share >= SHARE_DANGER && s.parentId() >= 0) {
+      // 표를 하나만 읽는 쿼리는 비용이 그 한 곳에 몰리는 것이 당연하다. 읽는 곳이 둘 이상일 때만 짚는다.
+      if (!actual && leaves > 1 && out.size() == before && share >= SHARE_DANGER && s.parentId() >= 0) {
         out.add(new Finding(s.id(), Level.WARNING, "cost", List.of(percent(share)), null));
       }
     }
     return out;
+  }
+
+  /** 실제 시간을 잰 계획인지(어느 단계든 실제 시간이 있음). */
+  static boolean isActual(List<Step> steps) {
+    for (Step s : steps) {
+      if (s.elapsedMicros() != null) return true;
+    }
+    return false;
+  }
+
+  /** 뿌리 단계 비용(비용이 없으면 읽는 건수) 합이 SMALL_PLAN_COST 아래인 계획. 값을 모르면 작다고 보지 않는다. */
+  public static boolean isSmall(List<Step> steps) {
+    long total = 0;
+    for (Step s : steps) {
+      if (s.parentId() >= 0) continue;
+      Long w = weight(s);
+      if (w == null) return false;
+      total += w;
+    }
+    return total < SMALL_PLAN_COST;
+  }
+
+  /** COUNT · 집계 바로 아래의 인덱스 전체 읽기는 인덱스만 훑는 빠른 방법이라 짚지 않는다. */
+  private static boolean underAggregate(Step s, List<Step> steps) {
+    Step parent = byId(steps, s.parentId());
+    return parent != null && parent.operation().toUpperCase(Locale.ROOT).contains("AGGREGATE");
   }
 
   /** 단계 id → 가장 무거운 지적 수준. 지적 없는 단계는 없음. */
@@ -146,16 +190,23 @@ public final class PlanAdvisor {
   }
 
   private static void fullScan(Step s, double share, List<Step> steps, Map<Integer, List<Step>> children,
-                               Map<String, List<Index>> indexes, List<Finding> out) {
+                               Map<String, List<Index>> indexes, boolean actual, List<Finding> out) {
     Loop loop = loopParent(s, steps, children);
-    if (loop != null) {
+    // 반복 수 × 안쪽 한 번 비용이 전체의 SHARE_WARNING 이상일 때만. 코드표처럼 작은 안쪽은 수백 번 읽어도 빠르다.
+    if (loop != null && (actual ? share >= SHARE_WARNING : loopWork(s, loop) >= SHARE_WARNING * total(steps))) {
       out.add(new Finding(s.id(), Level.DANGER, "loopfull", List.of(name(s), loop.outerRows()), indexExample(s, candidates(s))));
       return;
     }
     boolean big = rowsOf(s) >= BIG_ROWS;
     if (share < SHARE_WARNING && !big) return;
     Level level = share >= SHARE_DANGER || (big && s.cost() == null) ? Level.DANGER : Level.WARNING;
-    List<String> cols = candidates(s);
+    List<String> all = candidates(s);
+    List<String> cols = new ArrayList<>();
+    for (String col : all) if (!FEW_VALUES.matcher(col).matches()) cols.add(col);
+    if (cols.isEmpty() && !all.isEmpty()) {
+      out.add(new Finding(s.id(), level, "fullnarrow", List.of(name(s), String.join(", ", all)), null));
+      return;
+    }
     if (cols.isEmpty()) {
       // 조건 글을 주지 않는 DB(MySQL)는 조건이 없다고 단정할 수 없다.
       out.add(new Finding(s.id(), level, s.cost() == null ? "fullunknown" : "fullnowhere", List.of(name(s)), null));
@@ -170,6 +221,19 @@ public final class PlanAdvisor {
   }
 
   private record Loop(long outerRows) {}
+
+  private static double loopWork(Step s, Loop loop) {
+    Long once = weight(s);
+    return once == null ? 0 : (double) once * loop.outerRows();
+  }
+
+  private static double total(List<Step> steps) {
+    double t = 0;
+    for (Step s : steps) {
+      if (s.parentId() < 0) t += value(s, false);
+    }
+    return t;
+  }
 
   /**
    * s 가 중첩 반복의 안쪽(두 번째 자식)이고 바깥이 LOOP_OUTER_ROWS 건 이상이면 그 바깥 건수. 실제 반복 횟수가 있으면 그것을 쓴다.
@@ -200,19 +264,23 @@ public final class PlanAdvisor {
   }
 
   /** 조건 글에서 인덱스를 막는 모양: 칼럼에 씌운 함수 · 형 변환, 앞에 % 가 붙은 LIKE. 같은 칼럼 · 함수는 한 번만. */
-  private static void predicates(Step s, double share, List<Finding> out) {
+  private static void predicates(Step s, double share, Map<String, List<Index>> indexes, List<Finding> out) {
     String text = s.predicates();
     Set<String> seen = new LinkedHashSet<>();
+    List<Index> known = indexes.get(upper(s.object()));
     Matcher m = WRAPPED.matcher(text);
     while (m.find()) {
       String fn = m.group(1).toUpperCase(Locale.ROOT);
       String col = upper(m.group(2));
+      if (fn.equals("INTERNAL_FUNCTION") && IN_LIST.matcher(text.substring(m.end())).find()) continue;
+      if (known != null && !indexedFirst(known, col)) continue; // 인덱스가 없는 칼럼이라 함수 탓이 아니다
       if (!seen.add(fn + "." + col)) continue;
       out.add(new Finding(s.id(), wrapLevel(s, share), "fn." + family(fn), List.of(col, fn), fnExample(fn, col, text, s)));
     }
     Matcher cast = PG_CAST.matcher(text);
     while (cast.find()) {
       if (HARMLESS_CASTS.contains(cast.group(2).toLowerCase(Locale.ROOT))) continue;
+      if (known != null && !indexedFirst(known, upper(cast.group(1)))) continue;
       if (seen.add("CAST." + cast.group(1))) out.add(new Finding(s.id(), wrapLevel(s, share), "fn.convert", List.of(upper(cast.group(1)), "::"), null));
     }
     if (LEADING_WILDCARD.matcher(text).find()) out.add(new Finding(s.id(), wrapLevel(s, share), "likeprefix", List.of(), null));
@@ -297,6 +365,13 @@ public final class PlanAdvisor {
     List<String> out = new ArrayList<>(eq);
     out.addAll(other);
     return out;
+  }
+
+  private static boolean indexedFirst(List<Index> list, String col) {
+    for (Index i : list) {
+      if (!i.columns().isEmpty() && i.columns().get(0).equals(col)) return true;
+    }
+    return false;
   }
 
   /** 후보 칼럼 중 하나로 시작하는 기존 인덱스. 없으면 null. */
