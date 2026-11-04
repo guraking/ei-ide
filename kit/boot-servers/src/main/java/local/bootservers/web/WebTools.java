@@ -20,11 +20,14 @@ import java.util.Set;
 
 /**
  * 웹 언어 서버(vtsls · Vue)용 경로 · 명령 · 파일 판별(IntelliJ 클래스 없음).
- * 도구는 모두 사용자 폴더의 .ei-web 아래: node(Node.js), servers(npm 으로 받은 언어 서버).
+ * 도구는 기준 폴더 아래 node(Node.js), servers(npm 으로 받은 언어 서버)에 둔다.
+ * 기준 폴더는 설치본에 함께 넣은 plugins/boot-servers/web(kit/web/apply_web.py), 없으면 사용자 폴더의 .ei-web.
  */
 final class WebTools {
 
     static final String BASE_DIR = ".ei-web";
+    /** 설치 폴더 기준 함께 넣은 Node · 언어 서버 위치. 바꾸면 kit/web/apply_web.py 의 TARGET 도 맞춘다. */
+    static final String BUNDLED_WEB = "plugins/boot-servers/web";
     static final String NODE_DIR = "node";
     static final String SERVERS_DIR = "servers";
     static final String PACKAGE_JSON = "package.json";
@@ -65,6 +68,11 @@ final class WebTools {
 
     static Path baseDir(String userHome) {
         return Path.of(userHome, BASE_DIR);
+    }
+
+    /** 설치본에 Node 와 언어 서버가 모두 있으면 그 폴더, 하나라도 없으면 사용자 폴더(받기 알림이 이리로 받는다). */
+    static Path chooseBase(Path bundled, Path user, boolean windows) {
+        return serversInstalled(bundled) && Files.isRegularFile(bundledNode(bundled, windows)) ? bundled : user;
     }
 
     static boolean isScript(String extension) {

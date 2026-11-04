@@ -10,6 +10,7 @@ bundled-plugins/lombok/
 build-number.txt
 intellij-community-new/
 bundled-plugins/kinggura-sync/git/
+bundled-plugins/boot-servers/web/
 __pycache__/
 bundled-plugins/GrepConsole/
 bundled-plugins/intellij-rainbow-brackets-lite/
