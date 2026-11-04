@@ -10,6 +10,9 @@ import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.fileEditor.FileEditorManager;
+import com.intellij.openapi.fileEditor.ex.FileEditorManagerEx;
+import com.intellij.openapi.fileEditor.impl.EditorWindow;
+import com.intellij.openapi.fileEditor.impl.FileEditorOpenOptions;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -32,7 +35,7 @@ import java.util.Map;
  * 파일 사용자 데이터에 접속 id 를 둔다. 콘솔에서 바꾼 자동 커밋은 접속마다 하나(DbSessions.autoCommitOverride)라 같은 접속의 콘솔이 같이 쓴다.
  * 탭을 닫아도 파일(내용)은 프로젝트가 닫힐 때까지 남는다.
  * 콘솔 글은 ConsoleStore 가 접속 id · 콘솔 번호별로 저장하고, 다음 세션에 같은 번호의 콘솔을 처음 만들 때 되살린다.
- * 프로젝트를 닫을 때 열려 있던 콘솔 탭(접속 · 번호 · 탭 순서 · 보던 탭)을 기억했다가 다시 열 때 같은 탭을 연다(Remember · Restore).
+ * 프로젝트를 닫을 때 열려 있던 콘솔 탭(접속 · 번호 · 전체 탭 중 자리 · 보던 탭)을 기억했다가 다시 열 때 같은 자리에 연다(Remember · Restore).
  * 되살린 콘솔은 탭만 열고 DB 에는 붙지 않는다(연결은 첫 실행 때). 지워진 접속의 콘솔은 열지 않는다.
  */
 public final class ConsoleOpener {
@@ -45,7 +48,7 @@ public final class ConsoleOpener {
   private static final Key<Map<String, Integer>> COUNTS = Key.create("ei.db.console.counts");
   /** 그 콘솔의 접속 안 번호(1부터). 저장 파일 자리와 같다. */
   private static final Key<Integer> NUMBER = Key.create("ei.db.console.number");
-  /** 프로젝트 설정에 남기는 열린 콘솔 목록(「접속 id \t 번호」, 탭 순서)과 보던 콘솔. */
+  /** 프로젝트 설정에 남기는 열린 콘솔 목록(「접속 id \t 번호 \t 전체 탭 중 자리」, 탭 순서)과 보던 콘솔(「접속 id \t 번호」). 자리가 없는 옛 형식은 끝에 연다. */
   private static final String OPEN_KEY = "ei.db.console.openTabs";
   private static final String SELECTED_KEY = "ei.db.console.selectedTab";
   private static final String SEPARATOR = "\t";
@@ -68,9 +71,10 @@ public final class ConsoleOpener {
 
   static void remember(Project project) {
     List<String> open = new ArrayList<>();
+    List<VirtualFile> tabs = tabFiles(project);
     for (VirtualFile f : openConsoles(project)) {
       String key = tabKey(f);
-      if (key != null) open.add(key);
+      if (key != null) open.add(key + SEPARATOR + tabs.indexOf(f));
     }
     PropertiesComponent props = PropertiesComponent.getInstance(project);
     props.setList(OPEN_KEY, open);
@@ -88,14 +92,41 @@ public final class ConsoleOpener {
     VirtualFile selected = null;
     for (String key : open) {
       String[] parts = key.split(SEPARATOR);
-      DbConfig c = parts.length == 2 ? DbSettings.getInstance().find(parts[0]) : null;
-      int n = parts.length == 2 ? parseNumber(parts[1]) : 0;
+      boolean valid = parts.length == 2 || parts.length == 3;
+      DbConfig c = valid ? DbSettings.getInstance().find(parts[0]) : null;
+      int n = valid ? parseNumber(parts[1]) : 0;
       if (c == null || n < 1 || hasNumber(project, c.id, n)) continue;
       LightVirtualFile file = create(project, c, n);
-      editors.openFile(file, false);
-      if (key.equals(selectedKey)) selected = file;
+      int index = parts.length == 3 ? parseNumber(parts[2]) : -1;
+      openAt(project, file, index);
+      if ((parts[0] + SEPARATOR + parts[1]).equals(selectedKey)) selected = file;
     }
     if (selected != null) editors.openFile(selected, false);
+  }
+
+  /** 지금 편집기 창의 탭 파일들(탭 순서). 창이 없으면 열린 파일 전체. */
+  private static List<VirtualFile> tabFiles(Project project) {
+    EditorWindow window = FileEditorManagerEx.getInstanceEx(project).getCurrentWindow();
+    return window != null ? window.getFileList() : List.of(FileEditorManager.getInstance(project).getOpenFiles());
+  }
+
+  /**
+   * 콘솔을 지금 창의 index 번째 탭으로 연다(선택 · 포커스는 옮기지 않는다). index 가 0 보다 작거나 탭 수를 넘으면 맨 끝.
+   * 기억한 목록이 탭 순서라 앞 콘솔부터 넣으면 뒤 콘솔의 자리도 맞는다.
+   * shortcut: 창을 나눠 쓴 경우 자리는 지금 창 기준이다, 나눈 창별 자리가 필요해지면 창 번호도 기억한다.
+   */
+  private static void openAt(Project project, VirtualFile file, int index) {
+    FileEditorManagerEx editors = FileEditorManagerEx.getInstanceEx(project);
+    EditorWindow window = editors.getCurrentWindow();
+    if (window == null) {
+      editors.openFile(file, false);
+      return;
+    }
+    int at = index < 0 || index > window.getTabCount() ? window.getTabCount() : index;
+    FileEditorOpenOptions d = new FileEditorOpenOptions();
+    FileEditorOpenOptions options = d.copy(false, d.reuseOpen, d.usePreviewTab, false, d.pin, at, d.isExactState,
+        d.openMode, d.waitForCompositeOpen, d.isSingletonEditorInWindow, d.forceFocus, d.internalHint);
+    editors.openFile(file, window, options);
   }
 
   private static String tabKey(VirtualFile f) {
