@@ -182,8 +182,8 @@ final class PlanPanel extends JPanel {
       for (Finding f : plan.findings()) if (f.stepId() == step.id()) mine.add(f);
       if (mine.isEmpty()) side.add(prose(EiDbBundle.message("plan.side.none")));
       for (Finding f : mine) addFinding(f);
-      addCode("plan.side.access", step.access());
-      addCode("plan.side.filter", step.filter());
+      addCode("plan.side.access", PlanAdvisor.readable(step.access()));
+      addCode("plan.side.filter", PlanAdvisor.readable(step.filter()));
     }
     side.revalidate();
     side.repaint();

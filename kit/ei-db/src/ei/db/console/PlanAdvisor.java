@@ -206,14 +206,14 @@ public final class PlanAdvisor {
     Matcher m = WRAPPED.matcher(text);
     while (m.find()) {
       String fn = m.group(1).toUpperCase(Locale.ROOT);
-      String col = m.group(2);
+      String col = upper(m.group(2));
       if (!seen.add(fn + "." + col)) continue;
       out.add(new Finding(s.id(), wrapLevel(s, share), "fn." + family(fn), List.of(col, fn), fnExample(fn, col, text, s)));
     }
     Matcher cast = PG_CAST.matcher(text);
     while (cast.find()) {
       if (HARMLESS_CASTS.contains(cast.group(2).toLowerCase(Locale.ROOT))) continue;
-      if (seen.add("CAST." + cast.group(1))) out.add(new Finding(s.id(), wrapLevel(s, share), "fn.convert", List.of(cast.group(1), "::"), null));
+      if (seen.add("CAST." + cast.group(1))) out.add(new Finding(s.id(), wrapLevel(s, share), "fn.convert", List.of(upper(cast.group(1)), "::"), null));
     }
     if (LEADING_WILDCARD.matcher(text).find()) out.add(new Finding(s.id(), wrapLevel(s, share), "likeprefix", List.of(), null));
   }
@@ -240,7 +240,7 @@ public final class PlanAdvisor {
       case "date" -> {
         Matcher m = TO_CHAR_EQ.matcher(text);
         while (m.find()) {
-          if (m.group(1).equals(col)) {
+          if (upper(m.group(1)).equals(col)) {
             String start = "TO_DATE('" + m.group(3) + "', '" + m.group(2) + "')";
             return col + " >= " + start + "\n   AND " + col + " < " + start + " + 1";
           }
@@ -255,7 +255,7 @@ public final class PlanAdvisor {
       }
       case "case" -> {
         return s.object() == null || s.object().isEmpty() ? null
-            : "CREATE INDEX IX_" + s.object() + "_" + col + "_" + fn + " ON " + s.object() + " (" + fn + "(" + col + "))";
+            : "CREATE INDEX IX_" + upper(s.object()) + "_" + col + "_" + fn + " ON " + upper(s.object()) + " (" + fn + "(" + col + "))";
       }
       default -> {
         return null;
@@ -275,7 +275,7 @@ public final class PlanAdvisor {
     double ratio = Math.max(expected / actual, actual / expected);
     if (ratio < MISESTIMATE_RATIO || Math.max(expected, actual) < MISESTIMATE_MIN_ROWS) return;
     String example = s.operation().startsWith("INDEX") ? null
-        : "EXEC DBMS_STATS.GATHER_TABLE_STATS('" + (s.owner() == null ? "" : s.owner()) + "', '" + s.object() + "')";
+        : "EXEC DBMS_STATS.GATHER_TABLE_STATS('" + upper(s.owner()) + "', '" + upper(s.object()) + "')";
     out.add(new Finding(s.id(), Level.WARNING, "estimate", List.of((long) expected, (long) actual), example));
   }
 
@@ -310,8 +310,8 @@ public final class PlanAdvisor {
 
   private static String indexExample(Step s, List<String> cols) {
     if (cols.isEmpty() || s.object() == null) return null;
-    String table = (s.owner() == null || s.owner().isEmpty() ? "" : s.owner() + ".") + s.object();
-    return "CREATE INDEX IX_" + s.object() + "_" + cols.get(0) + " ON " + table + " (" + String.join(", ", cols) + ")";
+    String table = (s.owner() == null || s.owner().isEmpty() ? "" : upper(s.owner()) + ".") + upper(s.object());
+    return "CREATE INDEX IX_" + upper(s.object()) + "_" + cols.get(0) + " ON " + table + " (" + String.join(", ", cols) + ")";
   }
 
   private static Level level(double share) { return share >= SHARE_DANGER ? Level.DANGER : Level.WARNING; }
@@ -321,9 +321,37 @@ public final class PlanAdvisor {
     return s.rows() == null ? 0 : s.rows();
   }
 
-  private static String name(Step s) { return s.object() == null || s.object().isEmpty() ? s.operation() : s.object(); }
+  /** 화면에 보일 대상 이름. 표 · 칼럼은 SQL 쓰는 규칙대로 대문자. */
+  private static String name(Step s) { return s.object() == null || s.object().isEmpty() ? s.operation() : upper(s.object()); }
 
   private static String upper(String s) { return s == null ? "" : s.toUpperCase(Locale.ROOT); }
+
+  private static final Pattern NOOP_CAST = Pattern.compile("(?i)::(text|character varying|varchar|bpchar|name)\\b");
+  /** 함수 호출이 아닌 괄호 하나로 감싼 이름: (use_yn) · ("E"."ID"). */
+  private static final Pattern WRAPPED_NAME = Pattern.compile("(?<![\\w$#])\\((\\w+(?:\\.\\w+)?)\\)");
+  private static final Pattern QUOTED_STRING = Pattern.compile("'(?:[^']|'')*'");
+
+  /**
+   * 계획의 조건 글을 사람이 쓴 SQL 처럼 보이게 한다: 뜻 없는 글자 변환(::text 등)과 이름 따옴표 · 이름만 감싼 괄호를 빼고,
+   * 따옴표 문자열 밖은 대문자로. 뜻이 있는 변환(::numeric 등)은 남긴다. 화면에만 쓰고 분석에는 원래 글을 쓴다.
+   */
+  public static String readable(String predicate) {
+    if (predicate == null || predicate.isBlank()) return predicate;
+    String t = NOOP_CAST.matcher(predicate).replaceAll("").replace("\"", "");
+    String prev;
+    do {
+      prev = t;
+      t = WRAPPED_NAME.matcher(t).replaceAll("$1");
+    } while (!t.equals(prev));
+    StringBuilder out = new StringBuilder();
+    Matcher q = QUOTED_STRING.matcher(t);
+    int at = 0;
+    while (q.find()) {
+      out.append(t.substring(at, q.start()).toUpperCase(Locale.ROOT)).append(q.group());
+      at = q.end();
+    }
+    return out.append(t.substring(at).toUpperCase(Locale.ROOT)).toString();
+  }
 
   static long percent(double share) { return Math.round(share * 100); }
 }

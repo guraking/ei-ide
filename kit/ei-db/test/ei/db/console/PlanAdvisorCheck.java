@@ -143,7 +143,7 @@ public class PlanAdvisorCheck {
     eq(pg.get(0).kind(), Kind.SORT);
     fs = analyze(pg, Map.of());
     eq(rule(fs, "fullnoindex").stepId(), 2);
-    eq(rule(fs, "fn.convert").args(), List.of("emp_no", "::"));
+    eq(rule(fs, "fn.convert").args(), List.of("EMP_NO", "::"));
     // varchar 를 글자와 비교한 ::text 는 인덱스를 막지 않으므로 지적하지 않는다.
     int converts = 0;
     for (Finding f : fs) if (f.rule().equals("fn.convert")) converts++;
@@ -155,9 +155,15 @@ public class PlanAdvisorCheck {
         row(1L, "SIMPLE", "orders", "ALL", null, null, 120000L, "Using where; Using filesort"),
         row(1L, "SIMPLE", "users", "ALL", null, null, 300L, "Using join buffer (hash join)")));
     fs = analyze(my, Map.of());
-    eq(rule(fs, "fullunknown").args(), List.of("orders"));
+    eq(rule(fs, "fullunknown").args(), List.of("ORDERS"));
     eq(rule(fs, "sort").stepId(), 0);
     eq(rule(fs, "joinbuffer").stepId(), 1);
+
+    // 조건 글 보이기: 뜻 없는 ::text · 이름 괄호 · 따옴표를 빼고 대문자, 문자열 · 뜻 있는 변환은 그대로.
+    eq(PlanAdvisor.readable("((upper_menuid IS NOT NULL) AND ((use_yn)::text = 'Y'::text))"), "((UPPER_MENUID IS NOT NULL) AND (USE_YN = 'Y'))");
+    eq(PlanAdvisor.readable("((emp_no)::numeric = 10::numeric)"), "(EMP_NO::NUMERIC = 10::NUMERIC)");
+    eq(PlanAdvisor.readable("NVL(\"E\".\"USE_YN\",'y')='y'"), "NVL(E.USE_YN,'y')='y'");
+    eq(PlanAdvisor.readable(null), null);
 
     // 빈 계획.
     eq(PlanAdvisor.analyze(List.of(), Map.of()), List.of());
