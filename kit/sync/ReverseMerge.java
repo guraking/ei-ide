@@ -459,6 +459,9 @@ final class ReverseMerge {
     catch (IOException e) {
       throw new IOException(e.getMessage() + "\n" + SyncBundle.message(switched ? "rmerge.push.failed" : "rmerge.push.failed.current", into), e);
     }
+    // 개인 브랜치만 받는 clone 은 fetch 설정에 into 가 없어 git push 가 원격 추적 ref 를 옮기지 않는다.
+    // 그대로 두면 동기화 창이 다음 조회까지 옛 into 로 「into 에 안 합쳐진 내 커밋」을 센다. 방금 올린 커밋으로 맞춘다.
+    git(root, "update-ref", remoteRef(remote, into), "HEAD");
   }
 
   /** 원래 브랜치로 돌아간다. 돌아가지 못하면 false. cause 를 그대로 알리도록 그 실패는 cause 에 덧붙인다. */
