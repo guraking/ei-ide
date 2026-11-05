@@ -2612,7 +2612,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
       if (fetch) ReverseMerge.fetchQuietly(root, remote, from);
       ReverseMerge.Preview preview = ReverseMerge.preview(root, cfg, remote, from, repo.branch(), repo.branch());
       int mine = preview.mineCount();
-      int ahead = Integer.parseInt(git(root, "rev-list", "--count", ReverseMerge.remoteRef(remote, from) + "..HEAD").trim());
+      // 합치기 커밋은 세지 않는다. develop 을 내 브랜치로 합친 뒤 Push 하지 않은 합치기 커밋은 내용이 이미 develop 에 있어 머지 요청할 것이 아니다.
+      int ahead = Integer.parseInt(git(root, "rev-list", "--count", "--no-merges", ReverseMerge.remoteRef(remote, from) + "..HEAD").trim());
       List<String> parts = new ArrayList<>();
       if (preview.commits() > 0) parts.add(mine > 0 ? SyncBundle.message("rmerge.note.mine", from, preview.commits(), mine)
                                                     : SyncBundle.message("rmerge.note", from, preview.commits()));

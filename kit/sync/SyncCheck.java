@@ -294,6 +294,8 @@ public class SyncCheck {
     // 다른 브랜치에 합쳤으면 원래 브랜치로 돌아온다.
     eq(SyncPanel.git(mine, "rev-parse", "--abbrev-ref", "HEAD").trim(), "feature/kim");
     eq(SyncPanel.git(mine, "rev-parse", "feature/new").trim(), SyncPanel.git(server, "rev-parse", "feature/new").trim());
+    // fetch 설정에 없는 브랜치로 올려도 원격 추적 ref 가 서버와 같다(동기화 창이 조회 없이 바로 센다).
+    eq(SyncPanel.git(mine, "rev-parse", ReverseMerge.remoteRef("origin", "feature/new")).trim(), SyncPanel.git(server, "rev-parse", "feature/new").trim());
     // 서버와 갈라져 멈춰도 원래 브랜치로 돌아온다.
     sh(other, "git fetch -q origin feature/new && git checkout -q -b fnew origin/feature/new && echo o > O.java && git add O.java && git commit -qm o && git push -q origin fnew:feature/new");
     sh(mine, "git checkout -q feature/new && echo l > L.java && git add L.java && git commit -qm l && git checkout -q feature/kim");
