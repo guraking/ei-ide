@@ -352,8 +352,8 @@ public class SyncCheck {
     // fetch 와 push 사이에 서버가 앞서면(push 주소를 앞선 저장소로 돌려 흉내) 합치기를 되돌리고 PushRejectedException. 커밋 안 한 변경은 그대로.
     sh(tmp.toFile(), "git clone -q --bare server.git ahead.git");
     sh(other, "git fetch -q origin feature/kim && git checkout -q FETCH_HEAD && echo h > H.java && git add H.java && git commit -qm h"
-              + " && git push -q " + tmp.resolve("ahead.git") + " HEAD:feature/kim && git checkout -q develop && echo g > G.java && git add G.java && git commit -qm g && git push -q origin develop");
-    sh(mine, "git config remote.origin.pushurl " + tmp.resolve("ahead.git") + " && echo dirty >> A.java");
+              + " && git push -q " + tmp.resolve("ahead.git").toString().replace('\\', '/') + " HEAD:feature/kim && git checkout -q develop && echo g > G.java && git add G.java && git commit -qm g && git push -q origin develop");
+    sh(mine, "git config remote.origin.pushurl " + tmp.resolve("ahead.git").toString().replace('\\', '/') + " && echo dirty >> A.java");
     String beforeRejected = SyncPanel.git(mine, "rev-parse", "HEAD").trim();
     try {
       ReverseMerge.merge(mine, "origin", "develop", "feature/kim", "feature/kim", true, false);
