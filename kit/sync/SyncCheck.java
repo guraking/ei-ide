@@ -339,6 +339,34 @@ public class SyncCheck {
     eq(ReverseMerge.merge(mine, "origin", "develop", "feature/kim", "feature/kim", false, false), ReverseMerge.Result.MERGED);
     eq(SyncPanel.git(mine, "status", "--porcelain", "-uno"), " M A.java\n");
     sh(mine, "git checkout -q -- A.java");
+    // 미리 보기 뒤 남이 서버 개인 브랜치에 올려도, merge 가 into 를 다시 받아 그 위에서 합치고 Push 한다.
+    sh(mine, "git push -q origin feature/kim");
+    sh(other, "git fetch -q origin feature/kim && git checkout -q FETCH_HEAD && echo k > K2.java && git add K2.java && git commit -qm k2"
+              + " && git push -q origin HEAD:feature/kim && git checkout -q develop && echo f > F.java && git add F.java && git commit -qm f && git push -q origin develop");
+    ReverseMerge.fetch(mine, "origin", "develop");
+    eq(ReverseMerge.merge(mine, "origin", "develop", "feature/kim", "feature/kim", true, false), ReverseMerge.Result.MERGED);
+    eq(SyncPanel.git(mine, "rev-parse", "HEAD").trim(), SyncPanel.git(server, "rev-parse", "feature/kim").trim());
+    eq(SyncPanel.git(mine, "log", "-1", "--format=%s", "HEAD^1").trim(), "k2");
+    // fetch 와 push 사이에 서버가 앞서면(push 주소를 앞선 저장소로 돌려 흉내) 합치기를 되돌리고 PushRejectedException. 커밋 안 한 변경은 그대로.
+    sh(tmp.toFile(), "git clone -q --bare server.git ahead.git");
+    sh(other, "git fetch -q origin feature/kim && git checkout -q FETCH_HEAD && echo h > H.java && git add H.java && git commit -qm h"
+              + " && git push -q " + tmp.resolve("ahead.git") + " HEAD:feature/kim && git checkout -q develop && echo g > G.java && git add G.java && git commit -qm g && git push -q origin develop");
+    sh(mine, "git config remote.origin.pushurl " + tmp.resolve("ahead.git") + " && echo dirty >> A.java");
+    String beforeRejected = SyncPanel.git(mine, "rev-parse", "HEAD").trim();
+    try {
+      ReverseMerge.merge(mine, "origin", "develop", "feature/kim", "feature/kim", true, false);
+      throw new AssertionError("서버가 앞서면 Push 가 거절돼야 한다");
+    }
+    catch (ReverseMerge.PushRejectedException expected) {
+      eq(SyncPanel.git(mine, "rev-parse", "HEAD").trim(), beforeRejected);
+      eq(SyncPanel.git(mine, "status", "--porcelain", "-uno"), " M A.java\n");
+    }
+    eq(ReverseMerge.behindServer("! [remote rejected] HEAD -> develop (pre-receive hook declined)"), false);
+    sh(mine, "git config --unset remote.origin.pushurl && git checkout -q -- A.java");
+    eq(ReverseMerge.lastUnpushed(mine, "origin", "feature/kim"), "");
+    sh(mine, "git commit -q --allow-empty -m 올릴것");
+    eq(ReverseMerge.lastUnpushed(mine, "origin", "feature/kim"), "올릴것");
+    sh(mine, "git reset -q --hard HEAD~1");
     ReverseMerge.saveConfig(mine, ReverseMerge.CONFIG_FROM, "develop");
     eq(ReverseMerge.config(mine, ReverseMerge.CONFIG_FROM), "develop");
     eq(ReverseMerge.config(mine, ReverseMerge.CONFIG_INTO), null);
