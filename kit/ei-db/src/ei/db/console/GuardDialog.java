@@ -80,7 +80,7 @@ public final class GuardDialog extends DialogWrapper {
 
     JBTextArea box = new JBTextArea(sql);
     box.setEditable(false);
-    box.setFont(EditorColorsManager.getInstance().getGlobalScheme().getFont(EditorFontType.PLAIN));
+    box.setFont(UIUtil.getFontWithFallback(EditorColorsManager.getInstance().getGlobalScheme().getFont(EditorFontType.PLAIN)));
     box.setRows(Math.min(SQL_ROWS, (int) sql.lines().count()));
     box.setBorder(JBUI.Borders.empty(6, 10));
     JBScrollPane scroll = new JBScrollPane(box);

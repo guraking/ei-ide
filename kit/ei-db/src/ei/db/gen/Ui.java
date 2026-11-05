@@ -44,7 +44,7 @@ final class Ui {
   }
 
   static Font mono() {
-    return new Font(EditorColorsManager.getInstance().getGlobalScheme().getEditorFontName(), Font.PLAIN, JBUI.Fonts.label().getSize());
+    return UIUtil.getFontWithFallback(EditorColorsManager.getInstance().getGlobalScheme().getEditorFontName(), Font.PLAIN, JBUI.Fonts.label().getSize());
   }
 
   static void onChange(JTextComponent field, Runnable r) {
