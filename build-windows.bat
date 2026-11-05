@@ -2,7 +2,7 @@
 chcp 949 >nul
 rem 위 줄: 이전 실행에서 바뀐 코드 페이지가 남아 있어도 아래 한글 줄을 바르게 읽도록, 한글이 나오기 전에 949 로 맞춘다.
 rem KingGura IDE 윈도우 빌드. 이 파일과 같은 폴더에 intellij-community 소스가 받아져 있어야 한다.
-rem 결과물: intellij-community\out\idea-ce\artifacts\eiide-*.exe. 기록: logs\build-windows.log
+rem 결과물: intellij-community\out\idea-ce\artifacts\moaide-*.exe. 기록: logs\build-windows.log
 setlocal
 cd /d "%~dp0"
 
@@ -22,7 +22,7 @@ if not exist "bundled-plugins\boot-servers\web\servers\node_modules\typescript\l
     echo 웹 언어 서버가 없습니다. 먼저 python kit\web\apply_web.py 를 실행하세요.
     exit /b 1
 )
-findstr /c:"EI IDE" "intellij-community\community-resources\resources\idea\IdeaApplicationInfo.xml" >nul || (
+findstr /c:"Moa IDE" "intellij-community\community-resources\resources\idea\IdeaApplicationInfo.xml" >nul || (
     echo 이름 바꾸기가 적용되지 않은 소스입니다. 먼저 이름 바꾸기를 적용해야 합니다.
     exit /b 1
 )
@@ -64,17 +64,17 @@ if not "%BUILD_RC%"=="0" (
 echo 완료. 결과물은 %CD%\out\idea-ce\artifacts 에 있습니다.
 >"%~dp0build-number.txt" echo %N%
 rem 노트북에 가져갈 수 있게 설치 파일을 release 폴더에도 둔다.
-copy /Y "%~dp0intellij-community\out\idea-ce\artifacts\eiide-*.exe" "%~dp0release\" >nul && echo 설치 파일을 release 폴더에도 복사했습니다.
+copy /Y "%~dp0intellij-community\out\idea-ce\artifacts\moaide-*.exe" "%~dp0release\" >nul && echo 설치 파일을 release 폴더에도 복사했습니다.
 rem 릴리스 설명은 수정내역.md 의 맨 위 절(「## 」 줄부터 다음 「## 」 줄 전까지)이다. 읽지 못하면 판 번호만 적는다.
 rem 경로는 환경 변수로 넘겨 한글 경로를 PowerShell 따옴표 안에 쓰지 않는다.
 set "CHANGELOG=%~dp0수정내역.md"
-set "NOTES=%TEMP%\eiide-release-notes.md"
+set "NOTES=%TEMP%\moaide-release-notes.md"
 set "NOTESOPT=--notes-file"
 set "NOTESVAL=%NOTES%"
 powershell -NoProfile -Command "$t=[IO.File]::ReadAllText($env:CHANGELOG,[Text.Encoding]::UTF8); $m=[regex]::Match($t,'(?ms)^## .*?(?=^## |\z)'); if(-not $m.Success){exit 1}; [IO.File]::WriteAllText($env:NOTES,$m.Value.Trim(),(New-Object Text.UTF8Encoding $false))" || (set "NOTESOPT=--notes" & set "NOTESVAL=빌드 %BUILD_NUMBER%")
 rem GitHub 릴리스로 올린다. gh 명령줄 도구가 있고 로그인돼 있어야 한다(winget install GitHub.cli → gh auth login). 없으면 건너뛴다.
 where gh >nul 2>&1 && (
-    gh release create "v%BUILD_NUMBER%" "%~dp0release\eiide-%BUILD_NUMBER%.exe" --repo guraking/ei-ide --title "EI IDE %BUILD_NUMBER%" %NOTESOPT% "%NOTESVAL%" && echo GitHub 릴리스 v%BUILD_NUMBER% 로 올렸습니다.
+    gh release create "v%BUILD_NUMBER%" "%~dp0release\moaide-%BUILD_NUMBER%.exe" --repo guraking/ei-ide --title "Moa IDE %BUILD_NUMBER%" %NOTESOPT% "%NOTESVAL%" && echo GitHub 릴리스 v%BUILD_NUMBER% 로 올렸습니다.
 ) || echo gh 명령줄 도구가 없어 GitHub 릴리스 업로드는 건너뜁니다.
 rem 더블클릭으로 돌렸을 때 결과를 읽을 수 있게 창을 닫지 않는다.
 pause

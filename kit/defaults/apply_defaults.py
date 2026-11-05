@@ -16,13 +16,14 @@
   19) SVN 실행 파일 기본 경로를 설치본에 같이 넣은 svn.exe(plugins/kinggura-sync/svn/bin)로 한다.
   20) 콘솔에 남기는 글 양(cycle buffer)을 기본 1 MB 에서 30 MB 로 늘린다.
   21) 프로젝트 창에서 바뀐 파일 · 새 파일이 든 폴더 · 패키지 이름도 그 색으로 보인다.
-  22) 첫 실행 기본 어두운 테마를 EI Graphite(boot-servers 플러그인)로 한다. 예전에 넣은 다른 default-laf 줄(EI Glass 등)은 지운다.
-  23) 테마 키가 있을 때만 켜지는 그리기: 창 전체 빛 배경, 트리 · 목록 선택 테두리, 툴바 알약, 열린 툴 창 단추 색(EI Graphite · EI White 는 키를 두지 않아 그리지 않는다).
+  22) 첫 실행 기본 어두운 테마를 Moa Graphite(boot-servers 플러그인)로 한다. 예전에 넣은 다른 default-laf 줄(EI Glass · EI Graphite 등)은 지운다.
+  23) 테마 키가 있을 때만 켜지는 그리기: 창 전체 빛 배경, 트리 · 목록 선택 테두리, 툴바 알약, 열린 툴 창 단추 색(Moa Graphite · Moa White 는 키를 두지 않아 그리지 않는다).
   24) 프로젝트 머리글자 아이콘에 한글 같은 JetBrains Mono 에 없는 글자가 오면 대체 글꼴이 있는 Dialog 글꼴로 그린다.
   26) 프로젝트 창 모듈 줄을 모두 폴더 이름만 굵게 그린다(뒤의 [모듈 이름] 을 뺀다).
   27) TextMate html 번들이 .jsp 를 잡지 않게 하여 .jsp 는 언제나 jsp 번들(지시문 · 스크립틀릿 · ${} 을 아는 쪽)이 맡는다.
   28) 설치 파일(.exe) 압축을 lzma 에서 zlib 로 바꿔 빌드 시간을 줄인다.
   29) 단추 글자를 글자 상자가 아니라 대문자 · 한글 높이 기준으로 세로 가운데에 둔다(맑은 고딕에서 1~2px 아래로 처지던 것).
+  30) 새 설정 폴더(MoaIDE…)로 처음 켤 때, 이름을 바꾸기 전 설정 폴더(EIIDE…)도 가져올 후보로 본다.
 고치기 전 원본은 <intellij-community>/../backup/<시각>-before/ 에 같은 상대경로로 남긴다.
 모든 원문을 먼저 찾아 본 뒤에 쓴다. 하나라도 못 찾으면 아무 파일도 바꾸지 않는다. 줄끝(LF · CRLF)은 파일마다 원래대로 둔다.
 두 번 실행해도 같은 결과가 된다.
@@ -36,10 +37,10 @@ from pathlib import Path
 # (파일, 바꿀 원문, 바꿀 내용). 원문은 2026.2.3 소스에서 정확히 한 번 나오는 것만 쓴다.
 BUTTON_UI_FILE = "platform/platform-impl/src/com/intellij/ide/ui/laf/darcula/ui/DarculaButtonUI.java"
 DEFAULT_LAF_FILE = "community-resources/resources/idea/IdeaApplicationInfo.xml"
-DEFAULT_LAF_LINE = '  <default-laf dark="EI Graphite"/>\n'
+DEFAULT_LAF_LINE = '  <default-laf dark="Moa Graphite"/>\n'
 # 수정 전에 지울 옛 줄: 파일 → 줄 정규식. 지금 넣을 줄과 같은 줄은 남긴다.
 FONT_FILE = "platform/editor-ui-api/src/com/intellij/openapi/editor/colors/FontPreferences.java"
-# 글꼴 목록을 만드는 서비스. EI Mono 를 목록보다 먼저 등록하는 곳(12-1).
+# 글꼴 목록을 만드는 서비스. Moa Mono 를 목록보다 먼저 등록하는 곳(12-1).
 FONT_SERVICE_FILE = "platform/platform-impl/src/com/intellij/openapi/editor/impl/FontFamilyServiceImpl.java"
 FONT_ORIGINAL = '    if (SystemInfo.isJetBrainsJvm) {\n      return JETBRAINS_MONO;\n    }\n'
 # 예전 판이 넣은 수정 → 원문. 값만 바뀐 수정은 이미 손질된 소스에서 원문을 못 찾으므로, 읽은 뒤 먼저 원문으로 되돌린다.
@@ -99,6 +100,8 @@ OLD_EDITS = {AUTOLINK_FILE: [(AUTOLINK_DEPTH1, AUTOLINK_ORIGINAL)], FONT_FILE: [
     ('    if (SystemInfo.isJetBrainsJvm) {\n      return "JetBrainsMonoHangul";  // EI IDE: boot-servers 플러그인이 등록하는 한글 글꼴\n    }\n',
      FONT_ORIGINAL),
     ('    if (SystemInfo.isJetBrainsJvm) {\n      return "JBMono Pretendard";  // EI IDE: boot-servers 플러그인이 등록하는 한글 글꼴\n    }\n',
+     FONT_ORIGINAL),
+    ('    if (SystemInfo.isJetBrainsJvm) {\n      return "EI Mono";  // EI IDE: boot-servers 플러그인이 등록하는 한글 글꼴\n    }\n',
      FONT_ORIGINAL)]}
 STALE_LINES = {DEFAULT_LAF_FILE: re.compile(r'^ *<default-laf [^\n]*/>\n', re.M)}
 
@@ -180,12 +183,12 @@ EDITS = [
     ("build/src/org/jetbrains/intellij/build/IdeaCommunityProperties.kt",
      '      "intellij.dev",  // KingGura: 플러그인 개발용 실행 도구는 쓰지 않는다\n    ))\n',
      '      "intellij.dev",  // KingGura: 플러그인 개발용 실행 도구는 쓰지 않는다\n    )).add("intellij.vcs.svn")  // KingGura: SVN 저장소도 쓴다\n'),
-    # 12) 편집기 기본 글꼴을 EI Mono(JetBrains Mono + Pretendard 한글)로 한다. 글꼴 파일은 boot-servers 플러그인이 켤 때 등록한다(BundledFonts).
+    # 12) 편집기 기본 글꼴을 Moa Mono(JetBrains Mono + Pretendard 한글)로 한다. 글꼴 파일은 boot-servers 플러그인이 켤 때 등록한다(BundledFonts).
     (FONT_FILE, FONT_ORIGINAL,
-     '    if (SystemInfo.isJetBrainsJvm) {\n      return "EI Mono";  // EI IDE: boot-servers 플러그인이 등록하는 한글 글꼴\n    }\n'),
-    # 12-1) EI Mono 를 IDE 글꼴 목록(FontFamilyServiceImpl)이 만들어지기 전에 등록한다. 목록은 처음 한 번 getAllFonts() 로 만들고 다시 읽지 않는다.
-    #       boot-servers 플러그인은 첫 창이 뜰 때 등록하므로, 편집기 설정에 EI Mono 가 적혀 있으면 그보다 먼저 목록이 만들어져
-    #       설정 창 글꼴 상자에 「Font missing: EI Mono」로 보인다. 글꼴 파일은 본체에 든 boot-servers jar 의 /fonts/*.ttf 를 그대로 읽는다.
+     '    if (SystemInfo.isJetBrainsJvm) {\n      return "Moa Mono";  // Moa IDE: boot-servers 플러그인이 등록하는 한글 글꼴\n    }\n'),
+    # 12-1) Moa Mono 를 IDE 글꼴 목록(FontFamilyServiceImpl)이 만들어지기 전에 등록한다. 목록은 처음 한 번 getAllFonts() 로 만들고 다시 읽지 않는다.
+    #       boot-servers 플러그인은 첫 창이 뜰 때 등록하므로, 편집기 설정에 Moa Mono 가 적혀 있으면 그보다 먼저 목록이 만들어져
+    #       설정 창 글꼴 상자에 「Font missing: Moa Mono」로 보인다. 글꼴 파일은 본체에 든 boot-servers jar 의 /fonts/*.ttf 를 그대로 읽는다.
     (FONT_SERVICE_FILE,
      '    try {\n      Font[] fonts = GraphicsEnvironment.getLocalGraphicsEnvironment().getAllFonts();\n',
      '    registerEiFonts();  // EI IDE: 목록을 읽기 전에 EI Mono 를 등록한다\n'
@@ -309,7 +312,7 @@ EDITS = [
     ("platform/vcs-api/shared/src/com/intellij/openapi/vcs/VcsConfiguration.java",
      "public boolean SHOW_DIRTY_RECURSIVELY = false;",
      "public boolean SHOW_DIRTY_RECURSIVELY = true;"),
-    # 22) 새 UI 의 기본 어두운 테마는 제품 정보의 default-laf dark 값이다(없으면 Islands Dark). EI Graphite 는 boot-servers 의
+    # 22) 새 UI 의 기본 어두운 테마는 제품 정보의 default-laf dark 값이다(없으면 Islands Dark). Moa Graphite 는 boot-servers 의
     #     themeProvider 로 들어온다. 그 테마를 못 찾으면 IDE 가 오류를 남기고 Islands Dark 로 연다.
     #     이미 고른 테마가 laf.xml 에 남아 있는 설정 폴더는 그 테마를 따른다.
     #     예전 판이 넣은 다른 default-laf 줄은 main 이 먼저 지운다(STALE_LINES). 두 줄이 남으면 앞의 옛 테마가 쓰인다.
@@ -317,7 +320,7 @@ EDITS = [
      '  <icon-eap svg="/idea-ce-eap.svg" svg-small="/idea-ce-eap_16.svg"/>\n',
      '  <icon-eap svg="/idea-ce-eap.svg" svg-small="/idea-ce-eap_16.svg"/>\n'
      + DEFAULT_LAF_LINE),
-    # 23) 테마 키로 켜는 그리기. 모두 테마 키가 있을 때만 그리므로, 키를 두지 않은 테마(EI Graphite · EI White 포함)는 원래 모습 그대로다.
+    # 23) 테마 키로 켜는 그리기. 모두 테마 키가 있을 때만 그리므로, 키를 두지 않은 테마(Moa Graphite · Moa White 포함)는 원래 모습 그대로다.
     #  23-1) 창 전체 빛 배경: Island.colorGradient 가 참이면 레지스트리 idea.islands.color.gradient.enabled 를 켠 것과 같이
     #        창 바탕 · 툴바 · 옆줄 · 상태 줄에 ProjectGradients 색을 깐다. 테마를 바꾼 뒤에는 IDE 를 다시 켜야 툴 창 바탕까지 맞는다.
     ("platform/platform-impl/src/com/intellij/openapi/application/impl/islands/IslandsGradientPainter.kt",
@@ -429,6 +432,13 @@ EDITS = [
      "  }\n"
      "\n"
      "  protected int getMnemonicIndex(AbstractButton b) {\n"),
+    # 30) 설정 폴더 이름은 제품 이름에서 온다(customize.py brand). EI IDE → Moa IDE 로 바꾸면 새 설정 폴더(MoaIDE2026.2)가 비어
+    #     첫 실행이 새 설치처럼 된다. 처음 켤 때 가져올 후보에 옛 이름(EIIDE2026.2)을 더해 설정 · 플러그인을 저절로 가져오게 한다.
+    #     새 이름의 설정 폴더가 이미 있으면 가져오기는 돌지 않는다(ConfigImportHelper 는 새 설정 폴더가 없을 때만 가져온다).
+    ("platform/platform-impl/initial-config-import/src/com/intellij/openapi/application/ConfigImportHelper.java",
+     "    var otherEditionPrefixes = settings != null ? settings.getEditionsToImportFrom() : List.<String>of();\n",
+     "    var otherEditionPrefixes = ContainerUtil.append(settings != null ? settings.getEditionsToImportFrom() : List.<String>of(),\n"
+     "                                                    \"EIIDE\");  // Moa IDE: 이름을 바꾸기 전 설정 폴더도 가져온다\n"),
 ]
 
 

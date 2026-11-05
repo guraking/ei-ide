@@ -25,6 +25,8 @@ from check_update import ROOT, current_build, prefix  # noqa: E402
 PACK_DIR = "localization-ko"
 # 팩을 찾는 곳. 앞의 것이 먼저다.
 PACK_SOURCES = [ROOT / "release" / PACK_DIR, ROOT / "release" / "plugins" / PACK_DIR,
+                Path(os.environ.get("APPDATA", "")) / "JetBrains" / "MoaIDE2026.2" / "plugins" / PACK_DIR,
+                # 이름을 Moa IDE 로 바꾸기 전 설정 폴더. 새 설정 폴더가 아직 없는 PC 에서 쓴다.
                 Path(os.environ.get("APPDATA", "")) / "JetBrains" / "EIIDE2026.2" / "plugins" / PACK_DIR]
 OUT = ROOT / "bundled-plugins" / PACK_DIR
 OVERRIDE = KIT / "ko" / "override"

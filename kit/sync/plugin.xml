@@ -1,7 +1,7 @@
 <idea-plugin>
   <id>kinggura.sync</id>
-  <name>EI Synchronize</name>
-  <vendor>EI IDE</vendor>
+  <name>Moa Synchronize</name>
+  <vendor>Moa IDE</vendor>
   <description><![CDATA[
     Shows incoming changes, outgoing changes and conflicts against the remote in one window, like Eclipse Team › Synchronize Workspace.
   ]]></description>

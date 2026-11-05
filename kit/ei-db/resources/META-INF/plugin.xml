@@ -1,7 +1,7 @@
 <idea-plugin>
   <id>ei.database</id>
-  <name>EI Database</name>
-  <vendor>EI IDE</vendor>
+  <name>Moa Database</name>
+  <vendor>Moa IDE</vendor>
   <description><![CDATA[
     Oracle, MySQL and PostgreSQL connections, SQL console, result tables, direct MyBatis query runs, SQL log conversion, mapper and DTO generation, ERD.
   ]]></description>

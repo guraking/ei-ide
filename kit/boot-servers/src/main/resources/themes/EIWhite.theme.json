@@ -1,9 +1,9 @@
 {
-  "name": "EI White",
+  "name": "Moa White",
   "dark": false,
-  "author": "EI IDE",
+  "author": "Moa IDE",
   "parentTheme": "Islands Light",
-  "editorScheme": "EI White",
+  "editorScheme": "Moa White",
   "colors": {
     "main-window-bg": "#E4E4E4",
     "layer-0-bg": "#F5F5F5",

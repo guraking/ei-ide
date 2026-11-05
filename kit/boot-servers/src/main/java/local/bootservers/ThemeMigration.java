@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 없어진 테마를 고른 설정을 새 테마로 옮긴다. EI Glass → EI Graphite, EI Gray → EI White.
+ * 없어진 테마를 고른 설정을 새 테마로 옮긴다. EI Glass · EI Graphite → Moa Graphite, EI Gray · EI White → Moa White.
  * 없어진 테마 id 는 LafManager 가 읽을 때 기본 테마로 대신하므로, 저장된 laf.xml 글을 직접 읽어 판단한다
  * (laf.xml 은 설정을 저장할 때 다시 쓰이므로 첫 창이 뜰 때까지는 옛 id 가 남아 있다).
  * IDE 설정마다 한 번만 적용한다. 그 뒤 사용자가 고른 테마는 그대로 둔다.
@@ -24,10 +24,12 @@ import java.util.Map;
 public final class ThemeMigration implements AppLifecycleListener {
 
     private static final Logger LOG = Logger.getInstance(ThemeMigration.class);
-    /** 적용했다는 표시. 앱 수준 PropertiesComponent(other.xml)에 남는다. */
-    private static final String APPLIED_KEY = "eiide.theme.graphiteWhite.applied";
+    /** 적용했다는 표시. 앱 수준 PropertiesComponent(other.xml)에 남는다. EI 이름 때 옮긴 설정도 Moa 이름으로 한 번 더 옮기도록 새 키를 쓴다. */
+    private static final String APPLIED_KEY = "moaide.theme.moaRename.applied";
     /** 옛 테마 id → 새 테마 id (plugin.xml themeProvider id). */
-    private static final Map<String, String> RENAMED = Map.of("EI Glass", "EI Graphite", "EI Gray", "EI White");
+    private static final Map<String, String> RENAMED = Map.of(
+            "EI Glass", "Moa Graphite", "EI Gray", "Moa White",
+            "EI Graphite", "Moa Graphite", "EI White", "Moa White");
 
     @Override
     public void appFrameCreated(@NotNull List<String> commandLineArgs) {

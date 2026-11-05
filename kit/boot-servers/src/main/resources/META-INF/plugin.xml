@@ -31,7 +31,7 @@
         <defaultToolWindowLayout implementation="local.bootservers.ToolWindowOrder" order="last"/>
         <!-- 모든 메뉴에서 GitHub 「Create Gist…」를 뺀다(당사 소스를 GitHub 에 올리지 않는다) -->
         <actionConfigurationCustomizer implementation="local.bootservers.GistMenuOff"/>
-        <notificationGroup id="EI IDE 새 판" key="notification.group.update" displayType="STICKY_BALLOON"/>
+        <notificationGroup id="Moa IDE 새 판" key="notification.group.update" displayType="STICKY_BALLOON"/>
         <notificationGroup id="서버 실행" key="notification.group.servers" displayType="BALLOON"/>
         <notificationGroup id="서버 연결" key="notification.group.links" displayType="BALLOON"/>
         <notificationGroup id="프로그램 목록" key="notification.group.programs" displayType="BALLOON"/>
@@ -49,12 +49,12 @@
         <!-- JDK 24 이상 실행에 sun-misc-unsafe-memory-access=allow 옵션을 더해 Unsafe 경고를 끈다 -->
         <java.programPatcher implementation="local.bootservers.UnsafeWarningPatcher"/>
         <java.programPatcher implementation="local.bootservers.ActuatorExposurePatcher"/>
-        <!-- EI Graphite: Islands Dark 위에 회색 판 · 흰 글자 · 회색 선택 줄(강조색 없음)을 얹은 테마와 그 에디터 색. 첫 실행 기본 테마는 apply_defaults 22번 -->
-        <themeProvider id="EI Graphite" path="/themes/EIGraphite.theme.json" targetUi="islands"/>
-        <bundledColorScheme id="EI Graphite" path="/themes/EIGraphite.xml"/>
-        <!-- EI White: 같은 키 구조로 Islands Light 위에 흰 편집기 · 연회색 창 · 회색 선택 줄을 얹은 테마와 그 에디터 색(부모 Default) -->
-        <themeProvider id="EI White" path="/themes/EIWhite.theme.json" targetUi="islands"/>
-        <bundledColorScheme id="EI White" path="/themes/EIWhite.xml"/>
+        <!-- Moa Graphite: Islands Dark 위에 회색 판 · 흰 글자 · 회색 선택 줄(강조색 없음)을 얹은 테마와 그 에디터 색. 첫 실행 기본 테마는 apply_defaults 22번 -->
+        <themeProvider id="Moa Graphite" path="/themes/EIGraphite.theme.json" targetUi="islands"/>
+        <bundledColorScheme id="Moa Graphite" path="/themes/EIGraphite.xml"/>
+        <!-- Moa White: 같은 키 구조로 Islands Light 위에 흰 편집기 · 연회색 창 · 회색 선택 줄을 얹은 테마와 그 에디터 색(부모 Default) -->
+        <themeProvider id="Moa White" path="/themes/EIWhite.theme.json" targetUi="islands"/>
+        <bundledColorScheme id="Moa White" path="/themes/EIWhite.xml"/>
     </extensions>
 
     <extensions defaultExtensionNs="JavaScript">
@@ -77,7 +77,7 @@
     <applicationListeners>
         <listener class="local.bootservers.UpdateCheck" topic="com.intellij.ide.AppLifecycleListener"/>
         <listener class="local.bootservers.BundledFonts" topic="com.intellij.ide.AppLifecycleListener"/>
-        <!-- 없어진 테마(EI Glass · EI Gray)를 고른 설정을 EI Graphite · EI White 로 한 번 옮김 -->
+        <!-- 없어진 테마(EI Glass · EI Gray · EI Graphite · EI White)를 고른 설정을 Moa Graphite · Moa White 로 한 번 옮김 -->
         <listener class="local.bootservers.ThemeMigration" topic="com.intellij.ide.AppLifecycleListener"/>
         <!-- 실제 메모리 16 GB 이상인 PC 는 IDE 최대 메모리를 4096 MB 로 한 번 올림 -->
         <listener class="local.bootservers.MemoryDefault" topic="com.intellij.ide.AppLifecycleListener"/>

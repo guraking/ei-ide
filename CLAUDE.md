@@ -1,11 +1,11 @@
-# EI IDE — 작업 안내 (Claude 용)
+# Moa IDE — 작업 안내 (Claude 용)
 
 인텔리제이 커뮤니티 2026.2.3(태그 `idea/262.10968.63`)을 바탕으로 이클립스 흐름을 얹은 개인 IDE.
 지금 상태 · 다음 할 일은 `진행상황.md`, 바뀐 내용은 `수정내역.md`, 사용법은 `README.md` · `docs/index.html`.
 
 ## 폴더
 - 사용자 PC 원본: `D:\myide` (이 저장소 + 받은 소스 `intellij-community` + `backup` · `logs` · `tmpjars` · `release` 내용물)
-- 사용자 설정 폴더: `%APPDATA%\JetBrains\EIIDE2026.2` (시험용 플러그인은 `plugins\<이름>-N.jar`, 옛 판은 `..\_to_delete`)
+- 사용자 설정 폴더: `%APPDATA%\JetBrains\MoaIDE2026.2` (시험용 플러그인은 `plugins\<이름>-N.jar`, 옛 판은 `..\_to_delete`)
 - `kit/` 소스 손질 대본과 우리 플러그인 소스
   - `kit/ei-db` 데이터베이스(접속 · 콘솔 · 결과 · MyBatis · 생성 · ERD), 점검 `kit/ei-db/test/**/*Check.java`
   - `kit/boot-servers` 서버 창(스프링 부트 · WAS), 점검 `src/test/java`
@@ -20,7 +20,7 @@
 
 ## 바꿀 때마다 반영할 곳 (빠짐없이)
 1. 본체 jar `D:\myide\bundled-plugins\<플러그인>\lib\*.jar`
-2. 바로 시험할 사용자 플러그인 `%APPDATA%\JetBrains\EIIDE2026.2\plugins\<이름>-N.jar` (N 하나 올림, 옛 것은 `_to_delete` 로 옮김)
+2. 바로 시험할 사용자 플러그인 `%APPDATA%\JetBrains\MoaIDE2026.2\plugins\<이름>-N.jar` (N 하나 올림, 옛 것은 `_to_delete` 로 옮김)
 3. kit 소스 (`D:\myide\kit\...`)
 4. 이 저장소(깃허브 `guraking/ei-ide`) — 커밋 · 푸시
 5. `README.md` · `docs/index.html` · `진행상황.md` · `수정내역.md`
@@ -48,8 +48,8 @@
 ## 빌드 (사용자 PC, cmd)
 ```
 get-source.bat
-python kit\customize.py intellij-community "EI IDE" brand
-python kit\customize.py intellij-community "EI IDE" slim
+python kit\customize.py intellij-community "Moa IDE" brand
+python kit\customize.py intellij-community "Moa IDE" slim
 python kit\menu\apply_menu.py intellij-community
 python kit\defaults\apply_defaults.py intellij-community
 python kit\git-auth\apply_git_auth.py intellij-community
@@ -61,7 +61,7 @@ kit\brand\apply_brand.bat
 python kit\compile_plugins.py
 build-windows.bat
 ```
-- 판 번호 `262.10968.N`, N 은 GitHub 마지막 릴리스 번호와 이 PC 의 `build-number.txt` 중 큰 쪽 + 1(1000 이상, 성공한 빌드만 기록). 노트북에서 빌드하는 법은 `docs/노트북-빌드.md`. 결과 `release\eiide-262.10968.N.exe`, 끝나면 GitHub 릴리스로 올림.
+- 판 번호 `262.10968.N`, N 은 GitHub 마지막 릴리스 번호와 이 PC 의 `build-number.txt` 중 큰 쪽 + 1(1000 이상, 성공한 빌드만 기록). 노트북에서 빌드하는 법은 `docs/노트북-빌드.md`. 결과 `release\moaide-262.10968.N.exe`, 끝나면 GitHub 릴리스로 올림.
 - 커뮤니티 새 판: `python kit\check_update.py` (새 소스를 `intellij-community-new` 에 받아 kit 적용 · 플러그인 컴파일 · 판 번호 박힌 곳 보고).
 
 ## 플러그인 컴파일 · 점검

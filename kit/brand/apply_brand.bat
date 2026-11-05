@@ -1,5 +1,5 @@
 @echo off
-rem EI IDE 그림(아이콘 · 시작 화면 · 설치 프로그램)을 소스에 넣는다. 새로 받은 소스에 한 번 실행한다.
+rem Moa IDE 그림(아이콘 · 시작 화면 · 설치 프로그램)을 소스에 넣는다. 새로 받은 소스에 한 번 실행한다.
 set "SRC=%~dp0..\..\intellij-community"
 copy /Y "%~dp0win\*" "%SRC%\build\idea-community-images\win\" >nul || goto fail
 copy /Y "%~dp0linux\*" "%SRC%\build\idea-community-images\linux\" >nul || goto fail
