@@ -61,6 +61,21 @@ final class ReverseMerge {
   }
 
   /** 합치기 전에 커밋 안 한 변경을 넣어 두는 Stash 의 이름. 되살릴 때 맨 위 Stash 가 이 이름일 때만 꺼낸다(남의 Stash 를 꺼내지 않게). */
+  /**
+   * 합친 뒤 Push 를 서버가 받지 않았다: 미리 보기 뒤 다른 사람이 into 에 먼저 올렸다. merge 는 방금 만든 합치기 커밋을 되돌려 두었으므로
+   * merge 를 다시 부르면 서버의 새 into 위에서 다시 합친다.
+   */
+  static final class PushRejectedException extends IOException {
+    PushRejectedException(String message, Throwable cause) {
+      super(message, cause);
+    }
+  }
+
+  /** git push 오류가 서버 쪽이 앞서 있어서인가(「! [rejected] … (fetch first | non-fast-forward)」). 서버 훅의 거절「[remote rejected]」은 아니다. */
+  static boolean behindServer(String pushError) {
+    return pushError != null && pushError.contains("[rejected]");
+  }
+
   static final String STASH_MESSAGE = "EI Merge Branches";
   /** 미리 본 커밋(해시)을 합칠 때의 합치기 커밋 메시지. git 이 원격 브랜치를 이름으로 합칠 때 쓰는 문구와 같다(원격/브랜치, into). */
   private static final String MERGE_MESSAGE = "Merge remote-tracking branch '%s' into %s";
@@ -314,10 +329,13 @@ final class ReverseMerge {
    * 막지 않는 수정(합치기가 건드리지 않는 파일)은 그대로 둔 채 합친다. 충돌 마무리 커밋(finish)은 인덱스만 담으므로 그 수정은 커밋에 들어가지 않는다.
    * stash 가 참이면 그 변경을 Stash(STASH_MESSAGE) 해 두고 합친 뒤 원래 브랜치에서 되살린다. 실패해도(into 로 옮기기 실패 포함) 원래 브랜치로 돌아가 되살린다.
    * 충돌이면 Stash 를 두고 CONFLICT_STASHED 를 돌려준다. finish 가 마무리한 뒤 되살린다.
+   * 시작 전에 into 를 서버에서 다시 받아, 미리 보기 뒤 남이 올린 into 커밋 위에서 합친다.
+   * 그래도 Push 를 서버가 앞서 있어 거절하면(behindServer) 방금 만든 합치기 커밋만 되돌리고(reset --keep, 커밋 안 한 변경은 그대로) PushRejectedException.
    * into 로 옮겼으면 끝난 뒤(실패 포함, 충돌 빼고) 원래 브랜치로 돌아온다. 되살리지 못하면 그 안내를 예외 메시지에 붙인다.
    */
   static Result merge(File root, String remote, String from, String fromTip, String into, String current, boolean push, boolean stash)
     throws IOException, InterruptedException {
+    fetch(root, remote, into);
     String intoRemote = remoteRef(remote, into);
     boolean switched = !into.equals(current);
     boolean stashed = false;
@@ -347,6 +365,7 @@ final class ReverseMerge {
           throw new IOException(SyncBundle.message("rmerge.diverged", into));
         }
       }
+      String beforeMerge = git(root, "rev-parse", "HEAD").trim();
       try {
         git(root, GIT_LONG_TIMEOUT_SEC, "merge", "--no-edit", "-m", String.format(MERGE_MESSAGE, remote + "/" + from, into), fromTip);
       }
@@ -354,7 +373,20 @@ final class ReverseMerge {
         if (!conflicts(root).isEmpty()) return stashed ? Result.CONFLICT_STASHED : Result.CONFLICT;
         throw e;
       }
-      push(root, remote, into, push, switched);
+      try {
+        push(root, remote, into, push, switched);
+      }
+      catch (IOException e) {
+        if (!behindServer(e.getMessage())) throw e;
+        try {
+          git(root, GIT_LONG_TIMEOUT_SEC, "reset", "--quiet", "--keep", beforeMerge);
+        }
+        catch (IOException resetFailed) {
+          e.addSuppressed(resetFailed);
+          throw e;
+        }
+        throw new PushRejectedException(SyncBundle.message("rmerge.push.rejected", remote + "/" + into), e);
+      }
       if (switched) git(root, GIT_LONG_TIMEOUT_SEC, "checkout", current);
     }
     catch (IOException e) {
@@ -477,6 +509,11 @@ final class ReverseMerge {
   static int unpushed(File root, String remote, String branch) throws IOException, InterruptedException {
     if (!hasRef(root, HEADS + branch)) return 0;
     return Integer.parseInt(git(root, "rev-list", "--count", remoteRef(remote, branch) + ".." + HEADS + branch).trim());
+  }
+
+  /** unpushed 커밋 가운데 맨 위 커밋의 제목. 없으면 빈 글. */
+  static String lastUnpushed(File root, String remote, String branch) throws IOException, InterruptedException {
+    return git(root, "log", "-1", "--format=%s", remoteRef(remote, branch) + ".." + HEADS + branch).trim();
   }
 
   private static boolean hasRef(File root, String ref) throws InterruptedException {

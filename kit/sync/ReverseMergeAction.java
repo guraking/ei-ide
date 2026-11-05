@@ -21,6 +21,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.ComboBox;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.openapi.ui.Messages;
+import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vcs.AbstractVcsHelper;
 import com.intellij.openapi.vcs.FilePath;
 import com.intellij.openapi.vfs.LocalFileSystem;
@@ -496,6 +497,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
         String error = null;
         int localOnly = 0;
         int intoLocalOnly = 0;
+        String localOnlyTop = "";
         try {
           List<String> missing = new ArrayList<>();
           for (String b : List.of(from, into)) {
@@ -507,6 +509,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
           }
           preview = ReverseMerge.preview(root, remote, from, into, current);
           localOnly = ReverseMerge.unpushed(root, remote, from);
+          if (localOnly > 0) localOnlyTop = ReverseMerge.lastUnpushed(root, remote, from);
           intoLocalOnly = ReverseMerge.unpushed(root, remote, into);
         }
         catch (IOException ex) {
@@ -520,6 +523,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
         String failure = error;
         int notOnServer = localOnly;
         int intoNotOnServer = intoLocalOnly;
+        String notOnServerTop = localOnlyTop;
         SwingUtilities.invokeLater(() -> {
           if (mySeq != seq || isDisposed()) return;
           table.setPaintBusy(false);
@@ -530,7 +534,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
             return;
           }
           model.set(result.files());
-          if (notOnServer > 0) unpushed.setText(SyncBundle.message("rmerge.unpushed", remote, from, notOnServer));
+          if (notOnServer > 0) unpushed.setText(SyncBundle.message("rmerge.unpushed", remote, from, notOnServer, StringUtil.escapeXmlEntities(notOnServerTop)));
           if (intoNotOnServer > 0) intoUnpushed.setText(SyncBundle.message("rmerge.unpushed.into", into, intoNotOnServer));
           if (result.commits() == 0) {
             status(SyncBundle.message("rmerge.up.to.date", into, from));
@@ -649,6 +653,14 @@ public final class ReverseMergeAction extends DumbAwareAction {
             if (Messages.showOkCancelDialog(project, SyncBundle.message("rmerge.dirty.ask"), SyncBundle.message("rmerge.title"),
                                             SyncBundle.message("rmerge.stash.button"), Messages.getCancelButton(), Messages.getQuestionIcon()) == Messages.OK) {
               runMerge(from, tip, into, pushAfter, true);
+            }
+            return;
+          }
+          if (error.getCause() instanceof ReverseMerge.PushRejectedException) {
+            if (Messages.showOkCancelDialog(project, error.getMessage() + "\n\n" + SyncBundle.message("rmerge.retry.ask", remote + "/" + into),
+                                            SyncBundle.message("rmerge.title"), SyncBundle.message("rmerge.retry.button"), Messages.getCancelButton(),
+                                            Messages.getQuestionIcon()) == Messages.OK) {
+              runMerge(from, tip, into, pushAfter, stash);
             }
             return;
           }
