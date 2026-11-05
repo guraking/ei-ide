@@ -220,6 +220,11 @@ footer{padding:56px 0 40px; color:var(--muted); font-size:13px}
 .cols2{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:14px; align-items:start}
 .check.on::before{content:"✓"; display:grid; place-items:center; font-size:10px; border-color:var(--ok); color:var(--ok)}
 .nolig{font-variant-ligatures:none}
+.cards.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (max-width:640px){.cards.two{grid-template-columns:minmax(0,1fr)}}
+.hit{background:var(--info-soft); box-shadow:inset 0 -2px 0 var(--info)}
+table.grid tr.sev-hi td{background:var(--accent-soft)} table.grid tr.sev-mid td{background:var(--warn-soft)}
+.uline{text-decoration:underline; text-decoration-color:var(--info); text-underline-offset:3px; color:var(--info)}
 @media (max-width:1000px){.cols2{grid-template-columns:minmax(0,1fr)}}
 
 @media (max-width:1000px){
@@ -679,6 +684,48 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
       <tr><td>Manage Remotes…</td><td>원격 저장소 주소를 연결하거나 바꿉니다.</td><td class="where">Git 저장소의 Remote 설정</td></tr>
     </table>
     <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note"><b>빼고 싶을 때</b>모듈 우클릭 → Remove Module. 트리에서만 빠지고 실제 파일은 그대로입니다.</div></div>
+
+    <h3>저장소 받기 · 닫기 · 다시 열기 (이클립스 작업공간처럼)</h3>
+    <p class="lead">상위 폴더 하나를 프로젝트로 열고, 그 안의 저장소마다 한 줄(모듈)로 붙여 씁니다. 맨 위에 프로젝트 줄이 따로 생기지 않고, 받은 저장소도 새 창이 아니라 지금 창에 붙습니다.</p>
+    <div class="figure">
+      <div>
+        <div class="scroll">
+          <div class="ide rel" style="min-width:600px; min-height:330px">
+            <div class="title"><span class="dots"><i></i><i></i><i></i></span>Project — C:\pjt\git</div>
+            <div class="treeview">
+              <div><span class="mark">1</span> basic <span class="tag">Git · develop</span></div>
+              <div class="l1">jpa-mybatis-multi <span class="tag in">Maven</span></div>
+              <div class="sel"><span class="mark">2</span> supp-backend <span class="tag">Git · feature/order</span></div>
+              <div><span class="mark">3</span> <span class="muted">vue-front (닫힘)</span></div>
+              <div>dxplm <span class="tag">SVN</span></div>
+            </div>
+            <div class="menu" style="left:250px; top:96px">
+              <div class="on"><span class="mark">2</span> Close Project</div>
+              <div class="muted">Open Project</div>
+              <div>Sync Project</div>
+              <hr>
+              <div>Git ▸</div>
+              <div>Workspace ▸</div>
+              <div>Remove Module</div>
+            </div>
+          </div>
+        </div>
+        <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
+      </div>
+      <ol class="legend">
+        <li><span class="mark">1</span><div><b>받은 저장소가 한 줄로</b> <span class="t">Git → Clone 이 끝나면 받은 폴더를 지금 프로젝트에 모듈로 붙이고 Git 저장소로 바로 잡습니다. 저장소와 그 아래 두 단계까지의 <code>pom.xml</code> · Gradle 파일도 찾아 Maven · Gradle 프로젝트로 연결합니다(그림의 jpa-mybatis-multi). 안의 <code>target</code> · <code>bin</code> · <code>build</code> · <code>node_modules</code> 폴더는 저절로 색인에서 뺍니다. 최근 프로젝트 목록에는 따로 올리지 않습니다.</span></div></li>
+        <li><span class="mark">2</span><div><b>Close Project</b> <span class="t">저장소 줄 우클릭 맨 위. 이클립스처럼 그 저장소 하나만 닫습니다. 닫는 동안 색인 · 검색 · 컴파일 · 동기화 창 · Git Log 에서 빠지고, 파일은 그대로입니다. 이 저장소를 쓰는 다른 Maven 모듈은 로컬 Maven 저장소의 jar 를 씁니다(jar 가 없으면 닫기 전에 묻습니다).</span></div></li>
+        <li><span class="mark">3</span><div><b>닫힌 줄 · Open Project</b> <span class="t">닫은 저장소는 닫힌 아이콘의 흐린 줄로 남고, IDE 를 다시 켜도 닫힌 채입니다. 그 줄 우클릭 「Open Project」 로 다시 엽니다. Maven 저장소면 「Maven 다시 읽는 중」 알림이 뜨고, 그동안 줄이 잠깐 사라졌다가 돌아옵니다.</span></div></li>
+      </ol>
+    </div>
+    <table class="keys" style="margin-top:18px">
+      <tr><th>하려는 일</th><th>이렇게</th><th class="where">이클립스로 치면</th></tr>
+      <tr><td>Git 저장소 받기</td><td>Git → Clone… 에서 주소를 넣습니다. 폴더 칸 기본값은 지금 프로젝트 폴더 안(저장소 안에서 열었으면 그 저장소 옆)이라 받은 폴더가 작업공간에 나란히 놓입니다.</td><td class="where">Import → Projects from Git</td></tr>
+      <tr><td>SVN 받기</td><td>File → New → Project from Version Control… 에서 Subversion 을 고릅니다. 받은 폴더를 붙인 뒤 SVN 저장소로 바로 잡아 동기화 창 · Subversion 메뉴에 보입니다. SVN 프로젝트에서 SVN Checkout · Git Clone 을 하면 새 창으로 엽니다.</td><td class="where">Checkout Projects from SVN</td></tr>
+      <tr><td>저장소 하나만 잠시 빼기</td><td>저장소 줄 우클릭 → Close Project. 다시 쓸 때 Open Project.</td><td class="where">Close Project · Open Project</td></tr>
+      <tr><td>트리에서 아주 빼기</td><td>모듈 우클릭 → Remove Module. 파일은 지우지 않습니다.</td><td class="where">Delete (내용은 남김)</td></tr>
+      <tr><td>최근 프로젝트 정리</td><td>File → Manage Projects… (Close Project 바로 위). 다른 프로젝트는 Recent Projects 로 고르면 새 창에 열립니다.</td><td class="where">Switch Workspace</td></tr>
+    </table>
   </div>
 </section>
 
@@ -1172,6 +1219,44 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
       <tr><td>오른쪽 칸</td><td>작성자 · 해시(누르면 복사) · 전체 메시지 · 바뀐 파일. 파일을 두 번 누르면 커밋 전 · 후 비교 창.</td></tr>
       <tr><td>소스 꼬리표</td><td>「내 소스 …」는 다른 사람이 내 파일을, 「남의 소스 …」는 내가 남의 파일을 건드린 커밋입니다. 빨강 되돌림: 커밋 전 내용으로 되돌림(옛 작업본을 그대로 올린 경우). 주황 덮어씀: 합치며(Merge) 그 수정을 버리고 다른 쪽 판을 택함. 보라 이어 고침: 그 판을 받아 위에서 고침. 오른쪽 칸 「… 소스를 건드린 파일」에 파일마다 바뀌기 전 판을 만든 커밋(누구 · 해시 · 날짜)이 보이고, 두 번 누르면 그 판 ↔ 이 커밋 판 비교 창. 「나」는 그 저장소의 git user.email · user.name 이고, 내 다른 계정은 커밋 우클릭 「○○도 나로 보기」로 묶습니다. 읽어 온 커밋 안에서만 찾습니다(내리면 더 찾음). 이미 pull 받은 지난 일도 기록에 남아 있어 찾아집니다.</td></tr>
     </table>
+
+    <h3>Git 로그인 · 설정 → 버전 관리 → Git 로그인</h3>
+    <p class="lead">회사 GitLab 처럼 https 로 쓰는 서버의 아이디 · 비밀번호(또는 토큰)를 한 번 넣어 두면, Push · Pull · Fetch 할 때 git 이 비밀번호를 다시 묻지 않습니다. 보안 프로그램 때문에 비밀번호 묻는 창(sh.exe)이 막혀 「could not read Username」 으로 Push 가 실패하는 PC 에서 이것으로 됩니다.</p>
+    <div class="figure">
+      <div>
+        <div class="scroll">
+          <div class="ide" style="min-width:620px">
+            <div class="title"><span class="dots"><i></i><i></i><i></i></span>설정 — 버전 관리 › Git 로그인</div>
+            <div class="sub">https 서버의 로그인을 여기 넣어 두면 git 이 비밀번호를 묻지 않고 바로 씁니다. 비밀번호 로그인이 막힌 서버는 「토큰」으로 넣으세요.</div>
+            <div class="bar"><span class="mark">1</span><span class="btn">＋</span><span class="btn">−</span><span class="btn">✎</span></div>
+            <table class="grid">
+              <tr><th>서버</th><th>방식</th><th>아이디</th></tr>
+              <tr class="sel"><td>https://gitlab.example.com</td><td>아이디 · 비밀번호</td><td>hong.gd</td></tr>
+              <tr><td>https://github.com</td><td>토큰</td><td class="muted">(비움)</td></tr>
+            </table>
+            <div style="padding:14px">
+              <div class="dialog" style="max-width:none">
+                <div class="dh"><span class="mark">2</span> Git 로그인 추가</div>
+                <div class="form">
+                  <label>서버 <span class="f">https://gitlab.example.com</span></label>
+                  <label>방식 <span><span class="check on">아이디 · 비밀번호</span>&nbsp;&nbsp;<span class="check">토큰</span></span></label>
+                  <label>아이디 <span class="f">hong.gd</span></label>
+                  <label>비밀번호 <span class="f">••••••••</span></label>
+                </div>
+                <div class="df"><span class="btn">취소</span><span class="btn fill blue">확인</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
+      </div>
+      <ol class="legend">
+        <li><span class="mark">1</span><div><b>서버 목록</b> <span class="t">설정(<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd>) → 버전 관리(Version Control) → Git 로그인. 표에는 서버 · 방식 · 아이디만 보이고, 비밀번호 · 토큰은 IDE 비밀번호 저장소에 따로 둡니다.</span></div></li>
+        <li><span class="mark">2</span><div><b>추가 · 고치기</b> <span class="t">＋ 로 서버 주소(<code>https://</code> 로 시작)와 방식을 고릅니다. 토큰이면 아이디는 비워도 됩니다. 고칠 때 비밀번호 칸을 비워 두면 저장된 값을 그대로 씁니다.</span></div></li>
+        <li><span class="mark">!</span><div><b>서버 이름은 원격 주소와 똑같이</b> <span class="t">저장소 원격 주소의 서버 이름 · 포트가 같은 줄을 씁니다. 뒤의 경로 · 대소문자 · 기본 포트(443)는 따지지 않지만, <code>gitlab.example.com</code> 과 <code>www.gitlab.example.com</code> 은 다른 서버로 봅니다. ssh 원격(<code>git@…</code>)에는 쓰지 않습니다.</span></div></li>
+        <li><span class="mark">+</span><div><b>어디에 쓰이나</b> <span class="t">동기화 창의 받기 · 올리기, IntelliJ 기본 Push · Pull · Fetch · Update Project · Commit and Push 모두. 목록에 없으면 IntelliJ 가 기억한 비밀번호 · GitLab · GitHub 계정 토큰을 쓰고, 틀려서 실패하면 그 값을 지우고 로그인 창을 한 번 띄웁니다.</span></div></li>
+      </ol>
+    </div>
   </div>
 </section>
 
@@ -1424,10 +1509,66 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
         <li><span class="mark">!</span><div><b>표 이름을 입력해야 실행</b> <span class="t">WHERE 없는 UPDATE · DELETE, DROP · TRUNCATE, 그리고 운영 접속의 모든 변경.</span></div></li>
         <li><span class="mark">!</span><div><b>운영 접속 띠</b> <span class="t">운영으로 표시한 접속의 콘솔은 위에 붉은 띠 「운영 접속 · 변경은 매번 확인합니다」가 붙습니다.</span></div></li>
         <li><span class="mark">!</span><div><b>읽기 전용 접속</b> <span class="t">변경 문장은 실행하지 않고 알림만 띄웁니다. <code>WITH … DELETE</code> · <code>REPLACE INTO</code> · 프로시저 호출도 변경으로 봅니다.</span></div></li>
+        <li><span class="mark">!</span><div><b>이름 안의 WHERE 는 조건이 아님</b> <span class="t"><code>UPDATE t SET "WHERE" = 1</code> · MySQL <code>`WHERE`</code> 처럼 따옴표 · 백틱으로 감싼 이름 안의 WHERE 는 조건절로 보지 않아, 이런 문장도 「WHERE 없는 UPDATE」 로 막습니다.</span></div></li>
         <li><span class="mark">!</span><div><b>DDL 은 앞 변경까지 커밋</b> <span class="t">자동 커밋이 꺼진 Oracle · MySQL 에서 CREATE · DROP 같은 DDL 은 미반영 변경을 함께 커밋하므로 먼저 묻습니다. 접속을 끊거나 닫을 때 커밋하지 않은 변경은 롤백합니다.</span></div></li>
       </ul>
     </div>
 
+
+    <h3 id="slow">느린 곳 찾기 · 콘솔 「계획」 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd></h3>
+    <p class="lead">쿼리를 실행하지 않고 DB 의 실행 계획을 읽어, 느려질 단계와 그 이유 · 고칠 법을 한국어로 보여 줍니다. SQL 콘솔에서 커서를 문장에 두고 「계획」, 매퍼 XML 에서는 문장 우클릭 「Find Slow Spots」(매개변수 값은 Run MyBatis Query 와 같은 창에서 받음). Oracle · MySQL · PostgreSQL 모두 되고, 분석 내용은 밖(AI · 클라우드)으로 보내지 않습니다.</p>
+    <div class="figure wide">
+      <div>
+        <div class="scroll">
+          <div class="ide" style="min-width:980px">
+            <div class="tabs"><span>결과 · dev</span><span class="on">느린 곳 · dev <span class="x">✕</span></span></div>
+            <div class="statusline"><span class="mark">1</span><span class="w">⚠ 느린 곳 2곳 (심각 1 · 주의 1)</span><span class="gap"></span><span class="mark">5</span><span class="btn fill blue">⏱ 실제 시간 재기</span></div>
+            <div class="tabs"><span class="on">분석</span><span>원문</span></div>
+            <div class="split" style="grid-template-columns:minmax(0,1.1fr) minmax(0,1fr)">
+              <div>
+                <table class="grid">
+                  <tr><th><span class="mark">2</span> 단계</th><th>대상</th><th>예상 건수</th><th>비용</th><th>비용 비율</th></tr>
+                  <tr><td>SELECT STATEMENT</td><td></td><td>1,204</td><td>8,412</td><td>100%</td></tr>
+                  <tr><td>&nbsp;&nbsp;HASH JOIN</td><td></td><td>1,204</td><td>8,412</td><td>2%</td></tr>
+                  <tr class="sev-hi sel"><td>&nbsp;&nbsp;&nbsp;&nbsp;TABLE ACCESS FULL</td><td>ORDERS</td><td>1,820,000</td><td>7,950</td><td>94%</td></tr>
+                  <tr><td>&nbsp;&nbsp;&nbsp;&nbsp;INDEX RANGE SCAN</td><td>PK_CUSTOMER</td><td>3,100</td><td>12</td><td>0%</td></tr>
+                  <tr class="sev-mid"><td>&nbsp;&nbsp;SORT ORDER BY</td><td></td><td>1,204</td><td>450</td><td>4%</td></tr>
+                </table>
+              </div>
+              <div style="padding:10px 12px; font-size:12.5px; display:grid; gap:8px">
+                <div><span class="mark">3</span> <b class="bad">심각 · ORDERS 에 NVL 를 씌움</b></div>
+                <div><span class="muted">원인</span> NVL(USE_YN, …) 처럼 칼럼을 감싸서 USE_YN 인덱스를 쓰지 못합니다.</div>
+                <div><span class="muted">고칠 법</span> 값이 없는 경우를 OR 로 풀어 쓰세요. 매퍼라면 &lt;if&gt; 로 조건 자체를 빼는 것이 더 빠릅니다.</div>
+                <div class="ba" style="grid-template-columns:minmax(0,1fr)">
+                  <div class="side"><h5><span class="mark">4</span> 지금 쿼리</h5><pre>WHERE <span class="chg">NVL(o.USE_YN, 'Y') = 'Y'</span></pre></div>
+                  <div class="side"><h5>이렇게 바꾸세요</h5><pre>WHERE <span class="chg">(o.USE_YN = 'Y' OR o.USE_YN IS NULL)</span></pre></div>
+                </div>
+                <div><span class="btn">콘솔에 넣기</span> <span class="btn">복사</span></div>
+                <div class="muted">찾는 조건 (access) · 거르는 조건 (filter): NVL(O.USE_YN,'Y')='Y'</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
+      </div>
+      <ol class="legend" style="grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:14px">
+        <li><span class="mark">1</span><div><b>한 줄 요약</b> <span class="t">결과 창에 「느린 곳 · 콘솔 이름」 탭이 열리고 맨 위에 몇 곳이 느린지 적습니다. 전체 비용이 1000 미만인 작은 쿼리는 「전체 비용이 작아 손볼 곳이 없습니다」만 보입니다.</span></div></li>
+        <li><span class="mark">2</span><div><b>계획 단계 표</b> <span class="t">단계 · 대상 · 예상 건수 · 비용 · 비용 비율. 심각은 빨강, 주의는 노랑 바탕이고, 처음에는 가장 무거운 단계가 골라져 있습니다. 두 칸 사이 분할선은 끌 수 있고 비율을 기억합니다. DB 가 낸 계획 글 그대로는 「원문」 탭에 있습니다.</span></div></li>
+        <li><span class="mark">3</span><div><b>원인 · 고칠 법</b> <span class="t">고른 단계의 지적마다 한 줄 제목, 원인, 고칠 법, 예시 SQL(인덱스 만들기 · 통계 다시 모으기 등)을 보이고, 아래에 그 단계의 찾는 조건 · 거르는 조건을 읽기 쉽게 다듬어 보입니다.</span></div></li>
+        <li><span class="mark">4</span><div><b>지금 쿼리 → 이렇게 바꾸세요</b> <span class="t">쿼리를 고쳐야 하면 문장 전체를 두 상자에 나란히 보이고 바뀐 곳을 칠합니다. 「콘솔에 넣기」 · 「복사」. 인덱스만 만들면 되는 경우는 그렇게 적고 <code>CREATE INDEX</code> 문장을 보입니다.</span></div></li>
+        <li><span class="mark">5</span><div><b>실제 시간 재기</b> <span class="t">Oracle 의 SELECT · WITH 만. 문장을 한 번 실제로 실행해(받은 행은 버림) 단계마다 반복 · 실제 건수 · 실제 ms · 읽은 블록을 새 탭 「실제 시간 · 콘솔 이름」 에 보이고, 시간의 절반 넘게 쓰는 단계와 예상 건수가 실제와 10배 넘게 다른 단계를 짚습니다. 진행 창의 멈춤으로 끊을 수 있습니다.</span></div></li>
+        <li><span class="mark">!</span><div><b>권한이 없다고 나오면</b> <span class="t">실제 시간 재기는 <code>V$SQL</code> · <code>V$SQL_PLAN_STATISTICS_ALL</code> 을 읽습니다. 볼 수 없으면 그렇다고 알리니 DBA 에게 <code>SELECT_CATALOG_ROLE</code> 을 부탁합니다. 계획만 보는 것은 권한 없이 됩니다.</span></div></li>
+      </ol>
+    </div>
+    <table class="keys" style="margin-top:18px">
+      <tr><th>이런 것을 잡습니다</th><th>이렇게 고치라고 알립니다</th></tr>
+      <tr><td>큰 표 전체 읽기</td><td>조건 칼럼에 인덱스가 없으면 <code>CREATE INDEX</code> 후보를, 있는데 안 쓰면 그 인덱스 이름과 못 쓰는 이유를 적습니다. Y/N · 플래그 칼럼(<code>_YN</code> · <code>_FLAG</code>)은 인덱스 후보에서 뺍니다.</td></tr>
+      <tr><td>칼럼에 씌운 함수 · 형 변환</td><td><code>TO_CHAR(날짜, 'YYYYMMDD') = 값</code> · <code>TRUNC(날짜) = 값</code> → 날짜 범위, <code>NVL</code> · <code>COALESCE</code> → <code>OR … IS NULL</code>, <code>SUBSTR(칼럼, 1, n) = 값</code> → <code>LIKE 값 || '%'</code>, <code>UPPER</code> · <code>LOWER</code> → 값 쪽으로, 형이 다른 비교 → 값의 형 맞추기.</td></tr>
+      <tr><td>반복 안쪽의 전체 읽기 · 곱하기 조인</td><td>조인 칼럼 인덱스 또는 <code>USE_HASH</code> 힌트, 빠진 조인 조건(<code>A.키 = B.키</code>) 확인.</td></tr>
+      <tr><td>앞에 % 붙은 LIKE · 큰 정렬 · 묶기</td><td>앞 <code>%</code> 빼기, 필요 없는 <code>ORDER BY</code> · <code>DISTINCT</code> 빼기, <code>UNION</code> → <code>UNION ALL</code>.</td></tr>
+      <tr><td>행마다 도는 서브쿼리 · 인덱스 전체 · 건너뛰며 읽기</td><td><code>IN</code> → <code>EXISTS</code>, 스칼라 서브쿼리 → 조인, 인덱스 첫 칼럼에 조건 주기.</td></tr>
+      <tr><td>MySQL 계획</td><td><code>type=ALL</code> · <code>Using filesort</code> · <code>Using temporary</code> · <code>Using join buffer</code> 를 같은 식으로 풀어 적습니다.</td></tr>
+    </table>
   </div>
 </section>
 
@@ -1470,6 +1611,74 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       <div class="arrow">·</div>
       <div class="box"><b>AS 별칭 자동 완성</b><span>select 에서 <code>AS </code> 를 치면 resultType DTO 필드 중 SELECT 에 아직 없는 것이 뜹니다. <code>ORDER_ID</code> 처럼 쳐도 찾고, 필드 이름 그대로 넣습니다. Map · resultMap 문장은 내지 않습니다.</span></div>
     </div>
+
+    <h3>매퍼 XML 우클릭 메뉴 · 무엇을 더할 수 있나</h3>
+    <p class="lead">매퍼 XML 의 select · insert · update · delete 문장 안에서 우클릭하면 맨 위에 MyBatis 항목이 모여 나옵니다. 문장 밖이면 쓸 수 없는 항목은 숨습니다(페이징 · resultMap 은 select 안에서만).</p>
+    <div class="figure">
+      <div>
+        <div class="scroll">
+          <div class="ide rel" style="min-width:640px; min-height:680px">
+            <div class="title"><span class="dots"><i></i><i></i><i></i></span>UserMapper.xml</div>
+<pre class="sql nolig"><span class="ln">&lt;<span class="kw">select</span> id=<span class="st">"selectUserList"</span> parameterType=<span class="st">"UserDto"</span> resultType=<span class="st">"UserDto"</span>&gt;</span><span class="ln">    <span class="kw">SELECT</span></span><span class="ln">           u.USER_ID   <span class="kw">AS</span> userId</span><span class="ln">         , u.USER_NM   <span class="kw">AS</span> userNm</span><span class="ln">      <span class="kw">FROM</span> TB_USER u</span><span class="ln">     <span class="kw">WHERE</span> 1 = 1</span><span class="ln">       <span class="kw">AND</span> u.USE_YN = #{useYn}</span><span class="ln">&lt;/<span class="kw">select</span>&gt;</span></pre>
+            <div class="menu" style="left:110px; top:225px; min-width:300px">
+              <div><span class="mark">1</span> ▷ Run MyBatis Query <span class="key">Ctrl+Alt+Enter</span></div>
+              <div><span class="mark">2</span> Find Slow Spots</div>
+              <div><span class="mark">3</span> Generate Layer Code…</div>
+              <div><span class="mark">4</span> Copy Call Code</div>
+              <div><span class="mark">5</span> Rename Column…</div>
+              <div><span class="mark">6</span> Generate Dynamic Conditions…</div>
+              <div><span class="mark">7</span> Generate Paging Query</div>
+              <div class="on"><span class="mark">8</span> Insert MyBatis Tag ▸</div>
+              <div><span class="mark">9</span> Generate resultMap from SELECT</div>
+              <hr>
+              <div class="muted">Show Context Actions · Paste · …</div>
+              <div class="muted">Change Case ▸ · Regex Workbench…</div>
+              <div class="muted">AI ▸ · Refactor ▸ · Git ▸</div>
+            </div>
+            <div class="menu" style="left:412px; top:418px; min-width:150px">
+              <div>select · insert · update · delete</div><div>MERGE 틀</div><div>resultMap · sql · include</div><hr><div class="on">if</div><div>choose · when · otherwise</div><div>where · set · trim</div><div>foreach · bind · selectKey</div><div>CDATA</div>
+            </div>
+          </div>
+        </div>
+        <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
+      </div>
+      <ol class="legend">
+        <li><span class="mark">1</span><div><b>Run MyBatis Query</b> <span class="t">매개변수 값을 넣으면 <code>&lt;if&gt;</code> · <code>&lt;foreach&gt;</code> 를 푼 SQL 을 보여 주고 실행합니다. 문장 옆 ▶ 와 같습니다.</span></div></li>
+        <li><span class="mark">2</span><div><b>Find Slow Spots</b> <span class="t">같은 값으로 실행 계획만 읽어 느린 곳 · 고칠 법을 보입니다(<a href="#slow">느린 곳 찾기</a>).</span></div></li>
+        <li><span class="mark">3</span><div><b>Generate Layer Code…</b> <span class="t">이 문장을 부르는 컨트롤러 · 서비스 · 매퍼 코드를 만듭니다. 문장 두 개를 고르면 부모-자식 코드.</span></div></li>
+        <li><span class="mark">4</span><div><b>Copy Call Code</b> <span class="t">서비스에서 이 문장을 부르는 줄(매개변수 객체 채우기 + 호출)을 클립보드에 넣습니다.</span></div></li>
+        <li><span class="mark">5</span><div><b>Rename Column…</b> <span class="t">모든 매퍼 XML 과 짝 DTO 필드에서 칼럼 이름을 미리 보고 바꿉니다.</span></div></li>
+        <li><span class="mark">6</span><div><b>Generate Dynamic Conditions…</b> <span class="t">DTO 필드를 골라 <code>&lt;where&gt;</code> · <code>&lt;if test&gt;</code> 조건을 넣습니다.</span></div></li>
+        <li><span class="mark">7</span><div><b>Generate Paging Query</b> <span class="t">select 아래에 ROWNUM 페이징 문장과 건수 문장, 인터페이스 메서드 두 줄을 더합니다.</span></div></li>
+        <li><span class="mark">8</span><div><b>Insert MyBatis Tag ▸</b> <span class="t">고른 줄을 태그로 감싸 한 단계 들이거나, 고른 것이 없으면 커서 자리에 빈 틀을 넣고 커서를 <code>id</code> · <code>test</code> 칸에 둡니다. CDATA 는 고른 글자(예: <code>&lt;=</code>)만 감쌉니다.</span></div></li>
+        <li><span class="mark">9</span><div><b>Generate resultMap from SELECT</b> <span class="t">SELECT 칼럼과 resultType DTO 필드를 짝지어 resultMap 을 만들고 문장을 그쪽으로 잇습니다.</span></div></li>
+      </ol>
+    </div>
+
+    <h3>매퍼 <kbd>Ctrl</kbd>+클릭 · 어디서 누르면 어디로 가나</h3>
+    <p class="lead"><kbd>Ctrl</kbd> 을 누른 채 이름에 마우스를 올리면 밑줄이 생기고, 누르면 갑니다(<kbd>F3</kbd> · <kbd>Ctrl</kbd>+<kbd>B</kbd> 도 같음). 매퍼 인터페이스에서는 「쓰는 곳」 목록 대신 바로 XML 문장으로 갑니다.</p>
+    <div class="ba">
+      <div class="side"><h5>매퍼 XML — 밑줄이 이동할 수 있는 이름</h5><pre>&lt;mapper namespace="<span class="uline">com.app.user.UserMapper</span>"&gt;  <span class="mark">1</span>
+&lt;select id="<span class="uline">selectUserList</span>"  <span class="mark">2</span>
+        parameterType="<span class="uline">UserDto</span>"  <span class="mark">3</span>
+        resultMap="<span class="uline">userResultMap</span>"&gt;  <span class="mark">4</span>
+  &lt;include refid="<span class="uline">userColumns</span>"/&gt;  <span class="mark">5</span>
+  AND u.USER_NM = #{<span class="uline">userNm</span>}  <span class="mark">6</span></pre></div>
+      <div class="side"><h5>자바 — 가는 곳</h5><pre><span class="mark">1</span> interface UserMapper
+<span class="mark">2</span> List&lt;UserDto&gt; selectUserList(UserDto p);
+<span class="mark">3</span> class UserDto
+<span class="mark">4</span> &lt;resultMap id="userResultMap"&gt;  (XML)
+<span class="mark">5</span> &lt;sql id="userColumns"&gt;  (XML)
+<span class="mark">6</span> private String userNm;  (DTO 필드)</pre></div>
+    </div>
+    <table class="keys" style="margin-top:18px">
+      <tr><th>누르는 곳</th><th>가는 곳</th></tr>
+      <tr><td>매퍼 인터페이스의 메서드 · 인터페이스 이름</td><td>같은 namespace XML 의 같은 id 문장, 인터페이스 이름은 그 매퍼 XML. 줄 옆 아이콘과 같습니다.</td></tr>
+      <tr><td>XML <code>&lt;mapper namespace&gt;</code> · 문장 <code>id</code></td><td>매퍼 인터페이스 · 같은 이름 메서드.</td></tr>
+      <tr><td><code>parameterType</code> · <code>resultType</code> · <code>type</code> · <code>ofType</code> · <code>javaType</code></td><td>그 클래스(전체 이름이나 별칭 모두). <code>map</code> · <code>string</code> 같은 기본 형식은 가지 않습니다.</td></tr>
+      <tr><td><code>&lt;include refid&gt;</code> · <code>resultMap</code> · <code>extends</code></td><td>그 <code>&lt;sql&gt;</code> · <code>&lt;resultMap&gt;</code>. 다른 namespace 에 있어도 갑니다.</td></tr>
+      <tr><td><code>#{이름}</code> · <code>${이름}</code></td><td>parameterType DTO 의 필드, 없으면 매퍼 메서드 매개변수(<code>@Param</code> 이름 먼저) · bind · foreach 이름.</td></tr>
+    </table>
 
     <h3>MyBatis 바로 실행 <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Enter</kbd></h3>
     <div class="flow">
@@ -1769,6 +1978,61 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
     </div>
     <p class="lead" style="margin-top:18px">커서를 SQL 문자열 위에 두고 우클릭합니다. <code>dto.getUserId()</code> 는 <code>#{userId}</code> 로 바꾸고, 문장 종류(select · insert · update · delete)는 SQL 첫 낱말로 정합니다. 부등호가 있으면 CDATA 로 감쌉니다. 자바 코드는 바꾸지 않고 창에서 보여 주고 복사만 합니다.</p>
 
+
+    <h3 id="regex">정규식 작업대 · Search → 「Regex Workbench…」 · 편집기 우클릭</h3>
+    <p class="lead">정규식을 외우지 않아도 단추 · 질문 · 예시로 만들고, 시험 글에 바로 맞춰 보고, 코드에 붙일 글로 복사합니다. 편집기에서 글을 골라 열면 그 글이 시험 글이 되고, .js · .ts · .vue · .html · .jsp 에서 열면 JavaScript, 그 밖은 Java 문법으로 열립니다. 창 글은 IDE 언어와 상관없이 한국어입니다.</p>
+    <div class="figure wide">
+      <div>
+        <div class="scroll">
+          <div class="ide" style="min-width:900px">
+            <div class="title"><span class="dots"><i></i><i></i><i></i></span>정규식 작업대 <span class="gap" style="flex:1"></span><span class="mark">1</span> 만들기 탭 넷</div>
+            <div class="tabs"><span class="on">자주 쓰는 것</span><span>질문 따라가기</span><span>예시로 만들기</span><span>직접 만들기</span></div>
+            <div class="form" style="border-bottom:1px solid var(--line)">
+              <div class="muted">연락처 · 개인정보</div>
+              <div class="flow" style="gap:6px"><span class="btn">이메일</span><span class="btn fill blue">휴대폰 번호</span><span class="btn">일반 전화번호</span><span class="btn">사업자등록번호</span><span class="btn">주민등록번호 형식</span><span class="btn">우편번호</span><span class="btn">휴대폰 번호 가운데 가리기</span><span class="btn">…</span></div>
+              <div class="muted">웹 · 네트워크 &nbsp;·&nbsp; 날짜 · 시간 · 숫자 &nbsp;·&nbsp; 글자 검사 &nbsp;·&nbsp; 글 다듬기 &nbsp;·&nbsp; 개발 · SQL · 로그</div>
+            </div>
+            <div class="form">
+              <label><span><span class="mark">2</span> 문법:</span><span class="combo">Java (백엔드)</span></label>
+              <label>패턴: <span class="f">^(01[016789])-?(\d{3,4})-?(\d{4})$</span></label>
+              <div class="muted">직접 고쳐도 됩니다. 위 탭에서 다시 고르면 그 결과로 바뀝니다.</div>
+              <label><span><span class="mark">3</span> 확인할 글:</span><span style="display:flex; gap:10px; align-items:center"><span class="f" style="flex:1">010-1234-5678</span><span style="color:var(--ok)">✓ 이 정규식에 맞습니다</span></span></label>
+              <div class="statusline" style="border:0; padding:0"><span class="mark">4</span><span>2개 일치</span><span class="gap"></span><span class="check">자세히 보기(플래그 · 그룹 · 바꾸기)</span></div>
+            </div>
+            <div class="sub"><span class="mark">5</span> 시험 글</div>
+<pre class="term" style="border-top:0; color:var(--fg)"><span class="hit">010-1234-5678</span>
+02-123-4567
+<span class="hit">01098765432</span></pre>
+            <div class="statusline" style="border-top:1px solid var(--line); border-bottom:0"><span class="mark">6</span><span class="m">코드:</span><span class="f mono" style="flex:1; border:1px solid var(--line); border-radius:6px; padding:2px 8px">Pattern.compile("^(01[016789])-?(\\d{3,4})-?(\\d{4})$", Pattern.MULTILINE)</span><span class="btn">복사</span><span class="btn">닫기</span></div>
+          </div>
+        </div>
+        <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
+      </div>
+      <ol class="legend" style="grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:14px">
+        <li><span class="mark">1</span><div><b>만들기 탭 넷</b> <span class="t">아래 표처럼 편한 방법 하나로 만듭니다. 어느 탭에서 만들든 바로 아래 패턴 칸이 다시 채워집니다.</span></div></li>
+        <li><span class="mark">2</span><div><b>문법</b> <span class="t">JavaScript(프론트) · Java(백엔드). 플래그 이름 · 바꿀 글 표기(<code>$&lt;이름&gt;</code> · <code>${이름}</code>) · 코드 모양이 따라 바뀝니다. JavaScript 의 <code>\s</code> 처럼 두 언어의 뜻이 다른 곳은 JavaScript 뜻대로 맞춰 시험합니다.</span></div></li>
+        <li><span class="mark">3</span><div><b>확인할 글</b> <span class="t">낱말 하나를 치면 「✓ 맞습니다」 · 「△ 일부만 맞습니다」 · 「✗ 맞지 않습니다」 로 글 전체가 맞는지 바로 알려 줍니다.</span></div></li>
+        <li><span class="mark">4</span><div><b>자세히 보기</b> <span class="t">켜면 플래그(전체 찾기 · 대소문자 무시 · 줄마다 …), 그룹 표(일치 · 그룹 · 이름 · 값 · 위치)와 「바꾸기」 탭이 보입니다. 켜 둔 것은 다음에도 이어집니다. 그룹 표의 줄을 누르면 시험 글의 그 부분을 다른 색으로 칠합니다.</span></div></li>
+        <li><span class="mark">5</span><div><b>시험 글</b> <span class="t">치는 대로 맞는 곳을 칠하고 일치 수를 셉니다. 처음 1000개까지 보이고, 1초 안에 끝나지 않는 패턴(같은 글을 여러 번 되짚는 꼴)은 멈추고 알립니다. 패턴 오류는 몇 번째 글자인지 함께 적습니다.</span></div></li>
+        <li><span class="mark">6</span><div><b>코드 · 복사</b> <span class="t">지금 패턴을 코드에 붙일 글(<code>/…/gm</code>, <code>Pattern.compile("…")</code>)로 보이고 「복사」 로 클립보드에 넣습니다. 이 줄은 늘 보입니다.</span></div></li>
+      </ol>
+    </div>
+    <div class="cards two" style="margin-top:18px">
+      <div class="card"><h4>자주 쓰는 것</h4><p>분류별 단추 63개. 이메일 · 휴대폰 · 사업자번호 · 번호 가리기, URL · IP · 쿼리 값, 날짜 · 시간 · 금액, 한글만 · 아이디 · 비밀번호 규칙, HTML 태그 · 빈 줄 지우기, MyBatis <code>#{}</code> · <code>${}</code> · 설정 값 · 예외 이름 · TODO 등. 누르면 패턴 · 플래그 · 예시 글이 채워지고, 바꾸기가 있는 것은 「자세히 보기」 를 켜고 바꾸기 탭을 엽니다.</p></div>
+      <div class="card"><h4>질문 따라가기</h4><p>1 어디에 쓰나요(입력값 검사 · 글 안에서 찾기) → 2 어떤 글자 → 3 그 밖의 글자 → 4 몇 자 → 5 띄어쓰기 → 6 꼭 들어갈 것(영문 · 숫자 · 특수문자 …). 답을 바꾸면 패턴이 바로 바뀝니다.</p></div>
+      <div class="card"><h4>예시로 만들기</h4><p>맞아야 할 글(한 줄에 하나)과 틀려야 할 글을 넣고 「패턴 만들기」. 가장 좁은 꼴부터 찾고, 틀려야 할 글을 못 거르면 「예시를 더 넣거나 직접 만들기로 다듬으세요」 라고 알립니다.</p></div>
+      <div class="card"><h4>직접 만들기</h4><p>정규식을 치지 않고 조각을 쌓습니다. ＋ 조각(종류에서 고르기 · 정해진 낱말 · 아무 글자 · 이 글자 빼고) · ＋ 묶음(차례로 · 그중 하나)에 몇 번 · 가능한 짧게 · 값 꺼내기(그룹) · 앞에/뒤에 조건을 정합니다. 고칠 점은 빨간 글로 알립니다.</p></div>
+    </div>
+
+    <h3>표기법 바꾸기 · 편집기 우클릭 「Change Case ▸」</h3>
+    <table class="keys">
+      <tr><th>메뉴</th><th>user_name 을 고르고 누르면</th></tr>
+      <tr><td>Camel (userName)</td><td><code>userName</code> · 자바 필드 · 변수</td></tr>
+      <tr><td>Pascal (UserName)</td><td><code>UserName</code> · 클래스 이름</td></tr>
+      <tr><td>Snake (user_name)</td><td><code>user_name</code></td></tr>
+      <tr><td>Upper Snake (USER_NAME)</td><td><code>USER_NAME</code> · DB 칼럼 · 상수</td></tr>
+    </table>
+    <p class="lead" style="margin-top:12px">글을 골라야 메뉴가 보입니다. 이미 그 표기면 바꾸지 않고 편집기 위에 알림만 띄웁니다. <kbd>Ctrl</kbd>+<kbd>Z</kbd> 한 번으로 되돌립니다.</p>
   </div>
 </section>
 
@@ -1878,9 +2142,27 @@ python kit\menu\apply_menu.py intellij-community
 python kit\defaults\apply_defaults.py intellij-community
 python kit\git-auth\apply_git_auth.py intellij-community
 python kit\textmate\apply_textmate.py intellij-community
+python kit\ko\apply_ko.py
+python kit\mingit\apply_mingit.py
+python kit\web\apply_web.py
+kit\brand\apply_brand.bat
 python kit\compile_plugins.py
 build-windows.bat
 <span class="cm">rem 결과: intellij-community\out\idea-ce\artifacts\moaide-262.10968.N.exe</span></pre>
+    <table class="keys" style="margin-top:14px">
+      <tr><th>대본</th><th>하는 일</th></tr>
+      <tr><td><code>get-source.bat</code></td><td>intellij-community 소스를 태그 <code>idea/262.10968.63</code> 로 받습니다.</td></tr>
+      <tr><td><code>kit\customize.py … brand · slim</code></td><td>제품 이름 · 설정 폴더 이름(<code>MoaIDE2026.2</code>)을 바꾸고, 쓰지 않는 번들 플러그인을 덜어 냅니다.</td></tr>
+      <tr><td><code>kit\menu\apply_menu.py</code> · <code>kit\defaults\apply_defaults.py</code></td><td>이클립스식 메뉴와 <a href="#defaults">02</a> 의 기본값을 넣습니다.</td></tr>
+      <tr><td><code>kit\git-auth\apply_git_auth.py</code></td><td>IntelliJ Git 이 https 원격에 <a href="#sync">Git 로그인</a> 값을 넘기게 손질합니다.</td></tr>
+      <tr><td><code>kit\textmate\apply_textmate.py</code></td><td>여러 줄 주석(<code>&lt;!-- --&gt;</code> 등)이 닫힌 뒤 색이 어긋나던 TextMate 색칠을 고칩니다.</td></tr>
+      <tr><td><code>kit\ko\apply_ko.py</code></td><td>한국어 팩을 메뉴 · 단추만 영어로 남기게 깎아 본체에 넣습니다.</td></tr>
+      <tr><td><code>kit\mingit\apply_mingit.py</code></td><td>PC 에 Git 이 없을 때 쓸 MinGit 을 받아 넣습니다(판 · SHA-256 고정).</td></tr>
+      <tr><td><code>kit\web\apply_web.py</code></td><td>Node.js 와 JavaScript · TypeScript · Vue 언어 서버를 받아 넣습니다. 인터넷이 막힌 PC 에서도 언어 서버가 뜹니다.</td></tr>
+      <tr><td><code>kit\brand\apply_brand.bat</code></td><td>Moa IDE 로고 · 설치 그림을 넣습니다.</td></tr>
+      <tr><td><code>kit\compile_plugins.py</code></td><td>우리 플러그인 셋(서버 창 · 동기화 · 데이터베이스)을 함께 컴파일 · 점검해 본체 jar 를 바꿉니다. 하나라도 실패하면 아무것도 바꾸지 않습니다.</td></tr>
+      <tr><td><code>build-windows.bat</code></td><td>설치 파일 <code>release\moaide-262.10968.N.exe</code> 를 만들고, gh 가 있으면 GitHub 릴리스로 올립니다(설명은 <code>수정내역.md</code> 맨 위 절).</td></tr>
+    </table>
     <div class="notes">
       <div class="note"><b>판 번호 N</b>GitHub 마지막 릴리스 번호 다음 번호입니다(이 PC 의 <code>build-number.txt</code> 가 더 크면 그 다음). 데스크탑 · 노트북 어디서 빌드해도 이어집니다.</div>
       <div class="note warn"><b>N 은 1000 부터</b>바탕 판(.63)보다 작으면 JetBrains 마켓의 Java · Gradle 등 번들 플러그인을 새 판으로 보고 내려받아 본체를 덮어 버립니다.</div>
