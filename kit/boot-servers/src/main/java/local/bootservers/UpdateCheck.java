@@ -77,7 +77,7 @@ public final class UpdateCheck implements AppLifecycleListener {
         String version = base + "." + latest;
         boolean installable = url.startsWith(DOWNLOAD_PREFIX) && url.endsWith(".exe");
         ApplicationManager.getApplication().invokeLater(() -> NotificationGroupManager.getInstance()
-                .getNotificationGroup("EI IDE 새 판")
+                .getNotificationGroup("Moa IDE 새 판")
                 .createNotification(BootServersBundle.message("update.available", version), BootServersBundle.message("update.current", build), NotificationType.INFORMATION)
                 .addActions(List.of(
                         installable
@@ -88,7 +88,7 @@ public final class UpdateCheck implements AppLifecycleListener {
     }
 
     private static void download(String url, String version) {
-        File target = new File(PathManager.getTempPath(), "eiide-" + version + ".exe");
+        File target = new File(PathManager.getTempPath(), "moaide-" + version + ".exe");
         new Task.Backgroundable(null, BootServersBundle.message("update.progress", version), true) {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {

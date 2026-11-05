@@ -40,20 +40,29 @@ SLIM_REMOVE = [
 ]
 
 
+# 예전 판에서 쓴 제품 이름. 이미 그 이름으로 바뀐 소스도 새 이름으로 바꿀 수 있게 원문 후보에 넣는다.
+PREVIOUS_NAMES = ["EI IDE"]
+
+
 def brand_edits(name: str):
     slug = re.sub(r"[^A-Za-z0-9]", "", name)
     if not slug:
         raise SystemExit("제품 이름에는 영문자나 숫자가 하나 이상 있어야 합니다(설정 폴더 이름에 쓰입니다).")
+    olds = [(n, re.sub(r"[^A-Za-z0-9]", "", n)) for n in PREVIOUS_NAMES]
     return [
-        (APP_INFO, 'fullname="IntelliJ IDEA"', f'fullname="{name}"'),
+        (APP_INFO, ('fullname="IntelliJ IDEA"', *[f'fullname="{n}"' for n, _ in olds]), f'fullname="{name}"'),
         (APP_INFO, 'motto="The Leading IDE for Professional Development in Java and Kotlin"',
          'motto="Personal Java IDE"'),
-        (PROPS, 'fullName { "IntelliJ IDEA Open Source" }', f'fullName {{ "{name}" }}'),
-        (PROPS, 'installDirNameHandler { "IntelliJ IDEA OSS" }', f'installDirNameHandler {{ "{name}" }}'),
+        (PROPS, ('fullName { "IntelliJ IDEA Open Source" }', *[f'fullName {{ "{n}" }}' for n, _ in olds]),
+         f'fullName {{ "{name}" }}'),
+        (PROPS, ('installDirNameHandler { "IntelliJ IDEA OSS" }', *[f'installDirNameHandler {{ "{n}" }}' for n, _ in olds]),
+         f'installDirNameHandler {{ "{name}" }}'),
         # 설정 · 캐시 폴더 이름. 원래 인텔리제이와 섞이지 않게 한다.
-        (PROPS, 'return "IdeaIC${appInfo.majorVersion}.${appInfo.minorVersionMainPart}"',
+        (PROPS, ('return "IdeaIC${appInfo.majorVersion}.${appInfo.minorVersionMainPart}"',
+                 *[f'return "{s}${{appInfo.majorVersion}}.${{appInfo.minorVersionMainPart}}"' for _, s in olds]),
          f'return "{slug}${{appInfo.majorVersion}}.${{appInfo.minorVersionMainPart}}"'),
-        (PROPS, '= "ideaIC-$buildNumber"', f'= "{slug.lower()}-$buildNumber"'),
+        (PROPS, ('= "ideaIC-$buildNumber"', *[f'= "{s.lower()}-$buildNumber"' for _, s in olds]),
+         f'= "{slug.lower()}-$buildNumber"'),
     ]
 
 
@@ -94,11 +103,14 @@ def apply(root: Path, edits):
     changed = set()
     for rel, old, new in edits:
         text = texts[rel]
-        if (new and new in text) or (not new and old not in text):
+        # old 는 원문 하나 또는 후보 묶음(원래 원문, 예전 이름으로 바뀐 원문). 소스에 있는 첫 후보를 고친다.
+        candidates = old if isinstance(old, tuple) else (old,)
+        if (new and new in text) or (not new and all(c not in text for c in candidates)):
             continue  # 이미 바뀐 상태
-        if text.count(old) != 1:
-            raise SystemExit(f"고칠 문구를 정확히 한 번 찾지 못했습니다 ({text.count(old)}번): {rel}\n  {old[:80]}")
-        texts[rel] = text.replace(old, new)
+        found = next((c for c in candidates if c in text), candidates[0])
+        if text.count(found) != 1:
+            raise SystemExit(f"고칠 문구를 정확히 한 번 찾지 못했습니다 ({text.count(found)}번): {rel}\n  {found[:80]}")
+        texts[rel] = text.replace(found, new)
         changed.add(rel)
     for rel in changed:
         # 바이트로 써서 운영체제가 줄끝을 바꾸지 않게 한다(윈도우의 write_text 는 \n 을 \r\n 으로 바꾼다).

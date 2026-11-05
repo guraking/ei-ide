@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<title>EI IDE README 그림</title>
+<title>Moa IDE README 그림</title>
 <!-- README 그림 원본. section.cap 하나가 docs/img/readme-<id>.png 한 장이 된다(docs/readme/capture.js). -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap">
@@ -98,7 +98,7 @@ pre .p{color:var(--accent)}
 <section class="cap" id="install">
   <h2>설치</h2>
   <div class="steps">
-    <div class="card"><div class="n">1</div><h3>설치 파일 실행</h3><p>릴리스에서 <code>eiide-262.10968.N.exe</code> 를 받아 설치합니다.</p></div>
+    <div class="card"><div class="n">1</div><h3>설치 파일 실행</h3><p>릴리스에서 <code>moaide-262.10968.N.exe</code> 를 받아 설치합니다.</p></div>
     <div class="card"><div class="n">2</div><h3>한 번 켰다 끄기</h3><p>설정 폴더가 만들어집니다.</p></div>
     <div class="card"><div class="n">3</div><h3>플러그인 설치</h3><p><code>release\플러그인설치.bat</code> 을 실행합니다.</p></div>
     <div class="card"><div class="n">4</div><h3>한국어 고르기</h3><p>설정 → Language and Region 에서 Korean.</p></div>
@@ -110,20 +110,20 @@ pre .p{color:var(--accent)}
   <h2>빌드</h2>
   <p style="margin-bottom:14px">Windows cmd 기준입니다. 처음은 30분 안팎 걸립니다.</p>
   <div class="card"><pre><span class="p">&gt;</span> get-source.bat
-<span class="p">&gt;</span> python kit\customize.py intellij-community "EI IDE" brand
-<span class="p">&gt;</span> python kit\customize.py intellij-community "EI IDE" slim
+<span class="p">&gt;</span> python kit\customize.py intellij-community "Moa IDE" brand
+<span class="p">&gt;</span> python kit\customize.py intellij-community "Moa IDE" slim
 <span class="p">&gt;</span> python kit\menu\apply_menu.py intellij-community
 <span class="p">&gt;</span> python kit\defaults\apply_defaults.py intellij-community
 <span class="p">&gt;</span> python kit\git-auth\apply_git_auth.py intellij-community
 <span class="p">&gt;</span> python kit\textmate\apply_textmate.py intellij-community
 <span class="p">&gt;</span> kit\brand\apply_brand.bat
 <span class="p">&gt;</span> build-windows.bat</pre></div>
-  <p class="foot">결과는 <code>release\eiide-262.10968.N.exe</code> 입니다. 대본별 설명은 사용 설명서의 빌드 절에 있습니다.</p>
+  <p class="foot">결과는 <code>release\moaide-262.10968.N.exe</code> 입니다. 대본별 설명은 사용 설명서의 빌드 절에 있습니다.</p>
 </section>
 
 <section class="cap" id="license">
   <h2>라이선스</h2>
-  <div class="card"><p>바탕인 intellij-community 와 이 저장소의 대본 · 플러그인 소스는 Apache License 2.0 입니다. 들어 있는 글꼴 EI Mono(JetBrains Mono · Pretendard · Noto Sans CJK)는 SIL OFL 1.1, TextMate 문법(vue · svelte · astro)은 MIT 입니다. IntelliJ · JetBrains 이름과 로고는 JetBrains 의 상표입니다.</p></div>
+  <div class="card"><p>바탕인 intellij-community 와 이 저장소의 대본 · 플러그인 소스는 Apache License 2.0 입니다. 들어 있는 글꼴 Moa Mono(JetBrains Mono · Pretendard · Noto Sans CJK)는 SIL OFL 1.1, TextMate 문법(vue · svelte · astro)은 MIT 입니다. IntelliJ · JetBrains 이름과 로고는 JetBrains 의 상표입니다.</p></div>
 </section>
 
 </body>

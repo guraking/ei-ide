@@ -1,6 +1,6 @@
-# EI IDE
+# Moa IDE
 
-![EI IDE](docs/img/banner.png)
+![Moa IDE](docs/img/banner.png)
 
 **[사용 설명서](https://raw.githack.com/guraking/ei-ide/main/docs/index.html)** · **[수정 내역](수정내역.md)** · **[내려받기](https://github.com/guraking/ei-ide/releases)**
 

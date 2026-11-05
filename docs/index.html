@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>EI IDE 사용 설명서</title>
-<meta name="description" content="EI IDE 설치 순서와 서버 창 · Synchronize · 데이터베이스 사용법을 화면 그림으로 정리한 설명서">
+<title>Moa IDE 사용 설명서</title>
+<meta name="description" content="Moa IDE 설치 순서와 서버 창 · Synchronize · 데이터베이스 사용법을 화면 그림으로 정리한 설명서">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
@@ -299,7 +299,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
 
 <header class="top">
   <div class="wrap">
-    <div class="eyebrow">EI IDE · 사용 설명서</div>
+    <div class="eyebrow">Moa IDE · 사용 설명서</div>
     <h1>설치하고, 서버 띄우고, DB 까지<br>한 화면씩 따라 하기</h1>
     <p>인텔리제이 커뮤니티를 바탕으로 이클립스 흐름을 얹은 가벼운 자바 개발 도구입니다. 설치 순서와 직접 만든 기능(서버 창 · Git · 데이터베이스 · MyBatis · 코드 도구)을 기능별로 나누고, 어느 메뉴에 무엇이 있는지와 단축키를 앞쪽에 모았습니다.</p>
     <div class="chips">
@@ -337,7 +337,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
 <section id="install">
   <div class="wrap">
     <h2><span class="no">01</span>설치</h2>
-    <p class="lead">처음 설치와 판 올리기 모두 같은 네 단계입니다. 설정(단축키 · 실행 설정 · 플러그인)은 <code>%APPDATA%\JetBrains\EIIDE2026.2</code> 에 있어 다시 설치해도 남습니다.</p>
+    <p class="lead">처음 설치와 판 올리기 모두 같은 네 단계입니다. 설정(단축키 · 실행 설정 · 플러그인)은 <code>%APPDATA%\JetBrains\MoaIDE2026.2</code> 에 있어 다시 설치해도 남습니다.</p>
 
     <div class="steps">
       <div class="step">
@@ -345,13 +345,13 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
         <h4>설치 파일 실행</h4>
         <p>서버 창 · Synchronize · 데이터베이스 · Lombok · SVN 은 본체에 들어 있습니다.</p>
         <p>Full Line · Rainbow Brackets Lite · POJO to JSON · Grep Console 도 본체에 들어 있습니다.</p>
-        <div class="file">eiide-262.10968.N.exe</div>
+        <div class="file">moaide-262.10968.N.exe</div>
       </div>
       <div class="step">
         <div class="n">2</div>
         <h4>한 번 켰다가 끄기</h4>
         <p>설정 폴더가 만들어집니다. 플러그인을 넣을 자리가 생기는 단계입니다.</p>
-        <div class="file">%APPDATA%\JetBrains\EIIDE2026.2</div>
+        <div class="file">%APPDATA%\JetBrains\MoaIDE2026.2</div>
       </div>
       <div class="step">
         <div class="n">3</div>
@@ -375,7 +375,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
 
     <h3>release 폴더</h3>
     <div class="tree">release\
-├─ <span class="hl">eiide-262.10968.N.exe</span>        <span class="c">설치 파일</span>
+├─ <span class="hl">moaide-262.10968.N.exe</span>        <span class="c">설치 파일</span>
 ├─ <span class="hl">플러그인설치.bat</span>               <span class="c">3번 단계</span>
 ├─ plugins\
 │  ├─ localization-ko\              <span class="c">한국어 팩 원본 (빌드 때 kit\ko\apply_ko.py 가 깎아 본체에 넣음)</span>
@@ -397,7 +397,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
       <div class="card"><h4>메뉴는 영어, 안내는 한국어</h4><p>한국어를 고르면 메뉴 · 단추 · 탭 이름은 영어, 오류 · 알림 · 대화 상자 글은 한국어로 나옵니다. 이 설명서도 메뉴 이름을 영어로 적었습니다.</p><span class="was">전부 한국어 또는 전부 영어</span></div>
       <div class="card"><h4>이클립스 단축키 · 메뉴</h4><p>File · Edit · Source · Refactor · Navigate · Search · Project · Run · Git · Window · Help</p><span class="was">Windows 단축키, View · Code · Build · Tools</span></div>
       <div class="card"><h4>저장하면 자동 빌드</h4><p>자바 import 정리, 바뀐 줄만 서식. Gradle 빌드 · 실행도 IDE 가 직접.</p><span class="was">끔, Gradle 에 위임</span></div>
-      <div class="card"><h4>한글 폭이 맞는 글꼴</h4><p>EI Mono 내장(JetBrains Mono + Pretendard 한글 + Noto Sans CJK 한자 · 일본어). 편집기와 메뉴 · 창 글자를 모두 이 글꼴로 씁니다.</p><span class="was">JetBrains Mono, 한글 폭 어긋남</span></div>
+      <div class="card"><h4>한글 폭이 맞는 글꼴</h4><p>Moa Mono 내장(JetBrains Mono + Pretendard 한글 + Noto Sans CJK 한자 · 일본어). 편집기와 메뉴 · 창 글자를 모두 이 글꼴로 씁니다.</p><span class="was">JetBrains Mono, 한글 폭 어긋남</span></div>
       <div class="card"><h4>실행 설정 창</h4><p>VM 옵션 칸이 처음부터 보입니다.</p><span class="was">「Modify options」로 꺼내야 함</span></div>
       <div class="card"><h4>프론트 파일 색</h4><p>JS · JSX · TS · TSX · HTML · CSS · SCSS · LESS · JSON · Vue · Svelte · Astro</p><span class="was">Vue · Svelte · Astro 없음</span></div>
       <div class="card"><h4>형상 관리</h4><p>Git · GitHub · GitLab · SVN. IDE 파일(<code>*.iml</code> · <code>.idea/</code> · <code>.project</code> · <code>.classpath</code> · <code>.settings/</code>)은 변경 목록에 안 뜸. 커밋 전 코드 분석 · TODO 검사 끔.</p><span class="was">SVN 없음, 커밋 전 검사 켬</span></div>
@@ -416,7 +416,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
 <section id="find">
   <div class="wrap">
     <h2><span class="no">03</span>기능 찾기 · 메뉴 지도</h2>
-    <p class="lead">EI IDE 가 더한 기능이 어느 메뉴 · 우클릭 · 창에 있는지 모았습니다. 메뉴 이름은 화면에 보이는 영어 그대로입니다. 우클릭 항목은 쓸 수 있는 파일 · 자리에서만 보입니다. 이름을 알면 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd> 로 쳐서 바로 실행할 수도 있습니다.</p>
+    <p class="lead">Moa IDE 가 더한 기능이 어느 메뉴 · 우클릭 · 창에 있는지 모았습니다. 메뉴 이름은 화면에 보이는 영어 그대로입니다. 우클릭 항목은 쓸 수 있는 파일 · 자리에서만 보입니다. 이름을 알면 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd> 로 쳐서 바로 실행할 수도 있습니다.</p>
 
     <h3>위 메뉴줄</h3>
     <table class="keys map">
@@ -489,7 +489,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
 <section id="keys">
   <div class="wrap">
     <h2><span class="no">04</span>단축키 모음</h2>
-    <p class="lead">Eclipse 키맵이 기본입니다. 아래 첫 표는 EI IDE 가 더한 키(각 플러그인 <code>plugin.xml</code> 에 적힌 값)와 우리 기능에서 쓰는 마우스 · 자동 완성 동작입니다.</p>
+    <p class="lead">Eclipse 키맵이 기본입니다. 아래 첫 표는 Moa IDE 가 더한 키(각 플러그인 <code>plugin.xml</code> 에 적힌 값)와 우리 기능에서 쓰는 마우스 · 자동 완성 동작입니다.</p>
     <table class="keys">
       <tr><th>키</th><th>하는 일</th><th class="where">어디서</th></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td><td>커서 문장(또는 선택 영역) 실행 (Run)</td><td class="where">SQL 콘솔</td></tr>
@@ -647,13 +647,13 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
       <div class="dialog" style="max-width:none">
         <div class="dh">설정 → 빌드, 실행, 배포 → 빌드 도구 → Gradle</div>
         <div class="db form" style="padding:14px">
-          <label><span>빌드 및 실행에 사용 <span class="mark">1</span></span><span class="f">IntelliJ IDEA   (EI IDE 기본값)</span></label>
+          <label><span>빌드 및 실행에 사용 <span class="mark">1</span></span><span class="f">IntelliJ IDEA   (Moa IDE 기본값)</span></label>
           <label><span>Gradle JVM <span class="mark">2</span></span><span class="f">프로젝트 SDK (17)</span></label>
           <label>Gradle 사용자 홈 <span class="f">C:\Users\나\.gradle</span></label>
         </div>
       </div>
       <ol class="legend">
-        <li><span class="mark">1</span><div><b>IDE 가 직접 빌드</b> <span class="t">원래 인텔리제이는 Gradle 에 맡기지만 EI IDE 는 새 프로젝트를 「IntelliJ IDEA」 로 둡니다. 그래야 저장할 때 자동 빌드가 돌고 서버 재시작이 빠릅니다. 예전에 「Gradle」 로 정해 둔 프로젝트는 여기서 바꿉니다.</span></div></li>
+        <li><span class="mark">1</span><div><b>IDE 가 직접 빌드</b> <span class="t">원래 인텔리제이는 Gradle 에 맡기지만 Moa IDE 는 새 프로젝트를 「IntelliJ IDEA」 로 둡니다. 그래야 저장할 때 자동 빌드가 돌고 서버 재시작이 빠릅니다. 예전에 「Gradle」 로 정해 둔 프로젝트는 여기서 바꿉니다.</span></div></li>
         <li><span class="mark">2</span><div><b>Gradle JVM</b> <span class="t">build.gradle 을 읽을 때 쓰는 자바입니다. 프로젝트 JDK 와 같게 두는 것이 가장 덜 꼬입니다. 설치 3번에서 넣은 Temurin 17 · 21 · 27 이 목록에 있습니다.</span></div></li>
         <li><span class="mark">G</span><div><b>사내망에서 wrapper 가 못 받을 때</b> <span class="t">프로젝트가 Gradle 8.14.6 이면 미리 넣어 둔 것을 그대로 씁니다. 다른 판이면 「Gradle 위치」를 「지정한 위치」로 바꾸고 <code>%USERPROFILE%\.gradle\wrapper\dists\gradle-8.14.6-bin\…\gradle-8.14.6</code> 을 고릅니다.</span></div></li>
         <li><span class="mark">↻</span><div><b>build.gradle 을 고친 뒤</b> <span class="t">프로젝트 트리 우클릭 맨 위의 Gradle 다시 읽기(전체, Sync All Gradle Projects). 이클립스 Gradle → Refresh 와 같습니다. 트리에 Gradle 프로젝트가 있을 때만 보입니다.</span></div></li>
@@ -985,7 +985,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
     <p class="lead">아래쪽 「Synchronize」 창과 「Git Log」 창 두 개입니다. 커밋 · 올리기(Push)는 Git 메뉴(SVN 은 Subversion 메뉴)의 기본 기능을 그대로 씁니다. Git 은 설치본에 함께 들어 있어(MinGit) PC 에 Git 이 없어도 됩니다. PC 에 Git 이 있으면 그쪽을 씁니다.</p>
     <table class="keys map" style="margin-bottom:12px">
       <tr><th>내장 Git(MinGit 2.56.0.4)</th><th>위치 · 쓰임</th></tr>
-      <tr><td>폴더</td><td><code>C:\Program Files\JetBrains\EI IDE\plugins\kinggura-sync\git</code> (설치 경로를 바꿨으면 앞부분만 다릅니다)</td></tr>
+      <tr><td>폴더</td><td><code>C:\Program Files\JetBrains\Moa IDE\plugins\kinggura-sync\git</code> (설치 경로를 바꿨으면 앞부분만 다릅니다)</td></tr>
       <tr><td><code>cmd\git.exe</code></td><td>IntelliJ Git 메뉴 · 커밋 창이 씁니다. 직접 정하려면 Settings(설정) → Version Control(버전 관리) → Git 의 실행 파일 경로 칸에 이 경로를 넣습니다.</td></tr>
       <tr><td><code>ucrt64\bin\git.exe</code></td><td>Synchronize · Merge Branches · Git Log 가 씁니다.</td></tr>
       <tr><td><code>ei-mingit-version.txt</code></td><td>들어 있는 판 번호</td></tr>
@@ -1780,7 +1780,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
     <table class="keys map">
       <tr><th>기능 · 자리</th><th>하는 일</th></tr>
       <tr><td>보안 메모<br>오른쪽 옆줄 「Secure Memo」</td><td>내가 정한 비밀번호로만 열리는 메모장 하나. 처음 열 때 비밀번호를 정하고(4자 이상), 내용은 그 비밀번호로 암호화해 설정 폴더 <code>ei-secure-memo.bin</code> 에 둡니다. 「Lock」 이나 IDE 를 닫으면 저장하고 잠깁니다. 비밀번호는 어디에도 저장하지 않으므로 잊으면 되살릴 수 없고, 「Reset…」 으로 지우고 새로 시작합니다. 「Preview」 는 메모를 Markdown(표 · 목록 · 코드 · 링크)으로 그려 보여 줍니다.</td></tr>
-      <tr><td>테마 EI Graphite · EI White<br>Settings → Appearance → Theme</td><td>EI Graphite(기본, 회색 판 · 흰 글자 · 회색 선택 줄)와 EI White(흰 편집기 · 연회색 창 · 회색 선택 줄). 강조색 없이 글자 대비를 높인 테마이고, 편집기 색도 테마와 같은 이름으로 따라 바뀝니다. 코드 색은 둘 다 키워드 파랑 · 문자열 초록 · 숫자 주황 · 클래스 청록 · 함수 노랑(밝게는 갈색) · 변수 연보라(밝게는 보라) · @애너테이션 황토.</td></tr>
+      <tr><td>테마 Moa Graphite · Moa White<br>Settings → Appearance → Theme</td><td>Moa Graphite(기본, 회색 판 · 흰 글자 · 회색 선택 줄)와 Moa White(흰 편집기 · 연회색 창 · 회색 선택 줄). 강조색 없이 글자 대비를 높인 테마이고, 편집기 색도 테마와 같은 이름으로 따라 바뀝니다. 코드 색은 둘 다 키워드 파랑 · 문자열 초록 · 숫자 주황 · 클래스 청록 · 함수 노랑(밝게는 갈색) · 변수 연보라(밝게는 보라) · @애너테이션 황토.</td></tr>
       <tr><td>새 판 알림<br>IDE 를 켤 때</td><td>이 저장소의 최신 릴리스를 보고 새 판이 있으면 오른쪽 아래에 「지금 업데이트」 풍선이 뜹니다. 누르면 설치 파일을 받고, IDE 를 닫은 뒤 설치 화면이 뜹니다. JetBrains 서버에는 묻지 않습니다.</td></tr>
       <tr><td>Change Case ▸<br>편집기 우클릭 붙여넣기 묶음 아래</td><td>고른 글 안의 식별자를 Camel(userName) · Pascal(UserName) · Snake(user_name) · Upper Snake(USER_NAME) 로. 문자열 · 주석 · 키워드 · 타입 이름은 둡니다.</td></tr>
       <tr><td>메뉴 · 폴더 · 파일 아이콘</td><td>아이콘이 없던 메뉴 · 우클릭 항목, 이름으로 고른 폴더 · 패키지(mapper · controller · service · dto …), 매퍼 XML · application.yml · 엑셀 · 한글 같은 파일에 아이콘이 붙습니다.</td></tr>
@@ -1814,13 +1814,13 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
 <section id="settings">
   <div class="wrap">
     <h2><span class="no">13</span>설정 바꾸는 곳</h2>
-    <p class="lead">설정 창은 <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd>. 설정 창 검색칸에 이름을 치면 바로 찾아갑니다. 설정 파일은 <code>%APPDATA%\JetBrains\EIIDE2026.2</code> 에 있어 다시 설치해도 남습니다.</p>
+    <p class="lead">설정 창은 <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd>. 설정 창 검색칸에 이름을 치면 바로 찾아갑니다. 설정 파일은 <code>%APPDATA%\JetBrains\MoaIDE2026.2</code> 에 있어 다시 설치해도 남습니다.</p>
     <table class="keys">
       <tr><th>바꾸고 싶은 것</th><th>위치</th></tr>
       <tr><td>단축키</td><td>Keymap (Eclipse 를 복제한 뒤 고치기)</td></tr>
       <tr><td>언어</td><td>Appearance &amp; Behavior → System Settings → Language and Region</td></tr>
-      <tr><td>테마 · UI 글꼴</td><td>Appearance &amp; Behavior → Appearance. 우리 테마: EI Graphite(기본, 어둡게) · EI White(밝게). 편집기 색은 테마와 같은 이름으로 따라 바뀝니다.</td></tr>
-      <tr><td>편집기 글꼴</td><td>Editor → Font (EI Mono)</td></tr>
+      <tr><td>테마 · UI 글꼴</td><td>Appearance &amp; Behavior → Appearance. 우리 테마: Moa Graphite(기본, 어둡게) · Moa White(밝게). 편집기 색은 테마와 같은 이름으로 따라 바뀝니다.</td></tr>
+      <tr><td>편집기 글꼴</td><td>Editor → Font (Moa Mono)</td></tr>
       <tr><td>여백선(120자)</td><td>Editor → General → Appearance 「시각적 안내선 표시」</td></tr>
       <tr><td>콘솔에 남는 글 양</td><td>Editor → General → Console 「Override console cycle buffer size」 (30720 KB)</td></tr>
       <tr><td>저장할 때 import 정리 · 서식</td><td>Tools → Actions on Save</td></tr>
@@ -1852,7 +1852,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       <tr><td>API 요청이 「연결할 수 없습니다」</td><td>서버 창에서 서버가 떠 있는지, 요청 화면 주소의 포트 · 컨텍스트 경로가 맞는지 봅니다.</td></tr>
       <tr><td>JS · Vue 자동 완성이 없음</td><td>설치 폴더 <code>plugins\boot-servers\web</code> 가 있는지 봅니다. 없으면 다시 설치하거나 알림의 받기 단추를 누릅니다.</td></tr>
       <tr><td>AI 메뉴를 눌러도 Claude 탭에서 오류</td><td>터미널에서 <code>claude</code> 가 실행되는지(PATH) 봅니다.</td></tr>
-      <tr><td>우리 메뉴가 안 보임</td><td>설정 → Plugins 에서 서버 창 · EI Synchronize · EI Database 가 켜져 있는지, 시험용 jar 가 두 판 겹쳐 있지 않은지 봅니다.</td></tr>
+      <tr><td>우리 메뉴가 안 보임</td><td>설정 → Plugins 에서 서버 창 · Moa Synchronize · Moa Database 가 켜져 있는지, 시험용 jar 가 두 판 겹쳐 있지 않은지 봅니다.</td></tr>
     </table>
   </div>
 </section>
@@ -1869,18 +1869,18 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       <div class="arrow">→</div>
       <div class="box"><b>메뉴 · 기본값</b><span>이클립스식 메뉴, 02 의 기본값</span></div>
       <div class="arrow">→</div>
-      <div class="box"><b>빌드</b><span><code>eiide-262.10968.N.exe</code></span></div>
+      <div class="box"><b>빌드</b><span><code>moaide-262.10968.N.exe</code></span></div>
     </div>
 <pre class="cmd">get-source.bat
-python kit\customize.py intellij-community "EI IDE" brand
-python kit\customize.py intellij-community "EI IDE" slim
+python kit\customize.py intellij-community "Moa IDE" brand
+python kit\customize.py intellij-community "Moa IDE" slim
 python kit\menu\apply_menu.py intellij-community
 python kit\defaults\apply_defaults.py intellij-community
 python kit\git-auth\apply_git_auth.py intellij-community
 python kit\textmate\apply_textmate.py intellij-community
 python kit\compile_plugins.py
 build-windows.bat
-<span class="cm">rem 결과: intellij-community\out\idea-ce\artifacts\eiide-262.10968.N.exe</span></pre>
+<span class="cm">rem 결과: intellij-community\out\idea-ce\artifacts\moaide-262.10968.N.exe</span></pre>
     <div class="notes">
       <div class="note"><b>판 번호 N</b>GitHub 마지막 릴리스 번호 다음 번호입니다(이 PC 의 <code>build-number.txt</code> 가 더 크면 그 다음). 데스크탑 · 노트북 어디서 빌드해도 이어집니다.</div>
       <div class="note warn"><b>N 은 1000 부터</b>바탕 판(.63)보다 작으면 JetBrains 마켓의 Java · Gradle 등 번들 플러그인을 새 판으로 보고 내려받아 본체를 덮어 버립니다.</div>
@@ -1890,7 +1890,7 @@ build-windows.bat
 </section>
 
 <footer>
-  <div class="wrap">개인 학습용 프로젝트 · 바탕 intellij-community(Apache 2.0) · 글꼴 EI Mono(JetBrains Mono · Pretendard · Noto Sans CJK, SIL OFL 1.1) · IntelliJ · JetBrains 이름과 로고는 JetBrains 의 상표입니다.</div>
+  <div class="wrap">개인 학습용 프로젝트 · 바탕 intellij-community(Apache 2.0) · 글꼴 Moa Mono(JetBrains Mono · Pretendard · Noto Sans CJK, SIL OFL 1.1) · IntelliJ · JetBrains 이름과 로고는 JetBrains 의 상표입니다.</div>
 </footer>
 
 <script>

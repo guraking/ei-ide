@@ -27,7 +27,7 @@ KIT = Path(__file__).resolve().parent
 ROOT = KIT.parent
 NEW_SRC = ROOT / "intellij-community-new"
 TAG_MARK = ".ei-tag"
-PRODUCT_NAME = "EI IDE"
+PRODUCT_NAME = "Moa IDE"
 COMMUNITY_GIT = "https://github.com/JetBrains/intellij-community.git"
 ANDROID_GIT = "https://github.com/JetBrains/android.git"
 # 2025.3 부터 커뮤니티 판 배포가 통합판(IIU)으로 합쳐져, 정식판 판 번호는 IIU 목록에서 읽는다.

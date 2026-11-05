@@ -1,5 +1,5 @@
-<scheme name="EI White" version="142" parent_scheme="Default">
-    <!-- IntelliJ Light 색 체계(Apache 2.0, intellij-community idea/262.10968.63 themes/expUI/expUI_lightScheme.xml)를 바탕으로 EI White 색(흰 편집기 · 연회색 창 · 회색 선택 줄, 구문은 파랑 · 초록 · 주황 · 청록 · 갈색 · 보라)으로 바꾼 것. 글꼴은 적지 않아 IDE 글꼴 설정을 쓴다. -->
+<scheme name="Moa White" version="142" parent_scheme="Default">
+    <!-- IntelliJ Light 색 체계(Apache 2.0, intellij-community idea/262.10968.63 themes/expUI/expUI_lightScheme.xml)를 바탕으로 Moa White 색(흰 편집기 · 연회색 창 · 회색 선택 줄, 구문은 파랑 · 초록 · 주황 · 청록 · 갈색 · 보라)으로 바꾼 것. 글꼴은 적지 않아 IDE 글꼴 설정을 쓴다. -->
     <metaInfo>
         <property name="ide">idea</property>
         <property name="ideVersion">2022.1.0.0</property>

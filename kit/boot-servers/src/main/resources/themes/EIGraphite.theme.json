@@ -1,9 +1,9 @@
 {
-  "name": "EI Graphite",
+  "name": "Moa Graphite",
   "dark": true,
-  "author": "EI IDE",
+  "author": "Moa IDE",
   "parentTheme": "Islands Dark",
-  "editorScheme": "EI Graphite",
+  "editorScheme": "Moa Graphite",
   "colors": {
     "main-window-bg": "#141414",
     "layer-0-bg": "#1A1A1A",

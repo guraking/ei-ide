@@ -1,10 +1,10 @@
-"""EI Mono 글꼴 4개에 한자 · 일본어 가나 · 주음부호 · 전각 기호를 더한다.
+"""Moa Mono 글꼴 4개에 한자 · 일본어 가나 · 주음부호 · 전각 기호를 더한다.
 
 쓰는 법: python kit/font/add_cjk.py <NotoSansCJK-Regular.ttc> <NotoSansCJK-Bold.ttc> [글꼴 폴더]
-  - 글꼴 폴더 기본값은 kit/boot-servers/src/main/resources/fonts (그 안의 EIMono-*.ttf 를 덮어쓴다).
-  - Noto Sans CJK(OFL 1.1)의 간체 중국어(SC) 글꼴에서 EI Mono 에 없는 CJK 글자만 가져온다.
+  - 글꼴 폴더 기본값은 kit/boot-servers/src/main/resources/fonts (그 안의 MoaMono-*.ttf 를 덮어쓴다).
+  - Noto Sans CJK(OFL 1.1)의 간체 중국어(SC) 글꼴에서 Moa Mono 에 없는 CJK 글자만 가져온다.
     영문 · 한글 · 기존 글자와 그 힌팅은 건드리지 않는다.
-  - 크기는 EI Mono 한글과 맞춘다: 글자 폭은 한글과 같은 900, 모양은 0.92 배, 세로 가운데는 한글 가운데에 맞춘다.
+  - 크기는 Moa Mono 한글과 맞춘다: 글자 폭은 한글과 같은 900, 모양은 0.92 배, 세로 가운데는 한글 가운데에 맞춘다.
   - 기울임 글꼴은 post.italicAngle 만큼 기울인다.
   - TrueType 글자 수 한도(65535)에 닿으면 확장 B 이후의 드문 한자는 빠진다(그 글자는 IDE 가 다른 글꼴로 대신 그린다).
   - 새 글자에는 TrueType 힌팅이 없다(ttfautohint 가 한자를 힌팅하지 못한다).
@@ -26,11 +26,11 @@ SOURCE_NAME = 'Noto Sans CJK SC'
 RANGES = [(0x2E80, 0x2FFF), (0x3000, 0x31FF), (0x3200, 0x33FF), (0x3400, 0x4DBF), (0x4E00, 0x9FFF),
           (0xF900, 0xFAFF), (0xFE10, 0xFE1F), (0xFE30, 0xFE4F), (0xFF00, 0xFFEF), (0x1F200, 0x1F2FF),
           (0x20000, 0x3FFFF)]
-# EI Mono 한글 글자 폭(Pretendard 를 900 에 맞춰 넣었다). 원본 전각 폭 1000 이 이 폭이 된다.
+# Moa Mono 한글 글자 폭(Pretendard 를 900 에 맞춰 넣었다). 원본 전각 폭 1000 이 이 폭이 된다.
 ADVANCE_RATIO = 0.9
-# 원본 한글과 EI Mono 한글의 잉크 높이 비(858/904 ≈ 0.95)와 전각 폭 900 안에 한자가 들어가는 크기의 절충값.
+# 원본 한글과 Moa Mono 한글의 잉크 높이 비(858/904 ≈ 0.95)와 전각 폭 900 안에 한자가 들어가는 크기의 절충값.
 SCALE = 0.92
-# 원본 한글 세로 가운데(-77..827)를 EI Mono 한글 세로 가운데(-78..780)로 옮긴다.
+# 원본 한글 세로 가운데(-77..827)를 Moa Mono 한글 세로 가운데(-78..780)로 옮긴다.
 SOURCE_MID = 375
 TARGET_MID = 351
 MAX_GLYPHS = 65535
@@ -116,7 +116,7 @@ def merge(target_path, ttc):
 def check(folder):
     """모든 글꼴에 기본 한자 · 가나가 있고 영문 · 한글 폭이 그대로인지 확인한다."""
     for style in STYLE_SOURCE:
-        font = TTFont(os.path.join(folder, f'EIMono-{style}.ttf'))
+        font = TTFont(os.path.join(folder, f'MoaMono-{style}.ttf'))
         cmap = font.getBestCmap()
         for ch in '中国語日本あア漢字한A':
             assert ord(ch) in cmap, f'{style}: {ch} 없음'
@@ -132,7 +132,7 @@ def main():
     ttcs = [sys.argv[1], sys.argv[2]]
     folder = sys.argv[3] if len(sys.argv) > 3 else DEFAULT_DIR
     with ProcessPoolExecutor() as pool:
-        jobs = [pool.submit(merge, os.path.join(folder, f'EIMono-{style}.ttf'), ttcs[src])
+        jobs = [pool.submit(merge, os.path.join(folder, f'MoaMono-{style}.ttf'), ttcs[src])
                 for style, src in STYLE_SOURCE.items()]
         for job in jobs:
             name, codes, glyphs, total, skipped, last = job.result()
