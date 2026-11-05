@@ -186,8 +186,9 @@ final class ResultPanel extends SimpleToolWindowPanel {
     return text;
   }
 
+  // 편집기 글꼴에 없는 글자(드문 한자, 이모지 등)는 IDE 가 다른 글꼴로 대신 그리게 한다.
   private static Font monoFont() {
-    return EditorColorsManager.getInstance().getGlobalScheme().getFont(EditorFontType.PLAIN);
+    return UIUtil.getFontWithFallback(EditorColorsManager.getInstance().getGlobalScheme().getFont(EditorFontType.PLAIN));
   }
 
   private void buildUpdate(DbConfig c) {

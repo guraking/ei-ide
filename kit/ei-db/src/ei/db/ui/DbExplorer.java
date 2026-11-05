@@ -45,6 +45,7 @@ import com.intellij.ui.treeStructure.Tree;
 import com.intellij.util.Alarm;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import com.intellij.util.ui.JBUI;
+import com.intellij.util.ui.UIUtil;
 import ei.db.Comments;
 import ei.db.DbConfig;
 import ei.db.DbKind;
@@ -978,9 +979,9 @@ final class DbExplorer extends SimpleToolWindowPanel {
       }
     }
 
-    /** 편집기 글꼴(고정폭)을 나무 글자 크기로. */
+    /** 편집기 글꼴(고정폭)을 나무 글자 크기로. 글꼴에 없는 글자는 IDE 가 다른 글꼴로 대신 그린다. */
     private static Font codeFont(Font treeFont) {
-      return EditorColorsManager.getInstance().getGlobalScheme().getFont(EditorFontType.PLAIN).deriveFont(treeFont.getSize2D());
+      return UIUtil.getFontWithFallback(EditorColorsManager.getInstance().getGlobalScheme().getFont(EditorFontType.PLAIN)).deriveFont(treeFont.getSize2D());
     }
   }
 
