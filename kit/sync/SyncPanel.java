@@ -2624,7 +2624,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
       if (repo.vcs() == Vcs.GIT) {
         // 추적 브랜치가 없으면 받아 와도 비교할 원격이 없다(원격이 아예 없는 저장소는 fetch 가 실패한다).
         if (repo.upstream() != null) fetch(repo.root());
-        updateReverseNote(repo, true);
+        // 방금 fetch 가 그 원격(branch.<이름>.remote)의 브랜치를 다 받았으므로 역머지 안내는 서버에 다시 묻지 않는다. 추적 브랜치가 없을 때만 기준 브랜치를 받는다.
+        updateReverseNote(repo, repo.upstream() == null);
         return compareFetched(repo, localOf(local));
       }
       return compareSvnRemote(repo);
@@ -2699,9 +2700,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
       ReverseMerge.Preview preview = ReverseMerge.preview(root, cfg, remote, from, repo.branch(), repo.branch());
       int mine = preview.mineCount();
       // 합치기 커밋은 세지 않는다. develop 을 내 브랜치로 합친 뒤 Push 하지 않은 합치기 커밋은 내용이 이미 develop 에 있어 머지 요청할 것이 아니다.
-      int ahead = Integer.parseInt(git(root, "rev-list", "--count", "--no-merges", ReverseMerge.remoteRef(remote, from) + "..HEAD").trim());
-      // 「N개 뒤」도 합치기 커밋은 세지 않는다. 내 브랜치를 develop 에 합친 GitLab 머지 커밋만 있으면 받을 내용이 없다.
-      int behind = Integer.parseInt(git(root, "rev-list", "--count", "--no-merges", "HEAD.." + ReverseMerge.remoteRef(remote, from)).trim());
+      // 「N개 뒤」도 합치기 커밋은 세지 않는다. 내 브랜치를 develop 에 합친 GitLab 머지 커밋만 있으면 받을 내용이 없다. 앞선 · 뒤진 수는 git 한 번으로 센다.
+      Tracking counts = parseLeftRight(git(root, "rev-list", "--left-right", "--count", "--no-merges", "HEAD..." + ReverseMerge.remoteRef(remote, from)));
+      int ahead = counts.ahead();
+      int behind = counts.behind();
       List<String> parts = new ArrayList<>();
       if (behind > 0) parts.add(mine > 0 ? SyncBundle.message("rmerge.note.mine", from, behind, mine)
                                          : SyncBundle.message("rmerge.note", from, behind));
