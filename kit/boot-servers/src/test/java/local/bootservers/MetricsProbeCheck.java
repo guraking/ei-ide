@@ -16,9 +16,11 @@ public final class MetricsProbeCheck {
 
     private static final String REQUESTS = "http.server.requests";
     private static final Map<String, Map<String, Object>> ANSWERS = Map.of(
-            REQUESTS, m(110, 2.0, 0.9, List.of(tag("outcome", "SUCCESS", "SERVER_ERROR"), tag("uri", "/actuator/prometheus", "/api/{id}", "/slow"))),
-            REQUESTS + "[uri:/actuator/prometheus]", m(10, 0.1, 0.01, List.of()),
-            REQUESTS + "[outcome:SERVER_ERROR]", m(3, 0.3, 0.2, List.of()),
+            // 액추에이터 주소가 가장 느리고(2.5 초) 5xx 도 2번 있다. 서버 값에서는 빠져야 한다.
+            REQUESTS, m(110, 2.0, 2.5, List.of(tag("outcome", "SUCCESS", "SERVER_ERROR"), tag("uri", "/actuator/prometheus", "/api/{id}", "/slow"))),
+            REQUESTS + "[uri:/actuator/prometheus]", m(10, 0.1, 2.5, List.of(tag("outcome", "SUCCESS", "SERVER_ERROR"))),
+            REQUESTS + "[uri:/actuator/prometheus, outcome:SERVER_ERROR]", m(2, 0.05, 2.5, List.of()),
+            REQUESTS + "[outcome:SERVER_ERROR]", m(5, 0.35, 2.5, List.of()),
             REQUESTS + "[uri:/api/{id}]", m(90, 0.9, 0.05, List.of(tag("method", "GET"), tag("outcome", "SUCCESS"))),
             REQUESTS + "[uri:/slow]", m(10, 1.0, 0.9, List.of(tag("method", "POST"), tag("outcome", "SERVER_ERROR"))),
             REQUESTS + "[uri:/slow, outcome:SERVER_ERROR]", m(3, 0.3, 0.2, List.of()),
@@ -37,7 +39,8 @@ public final class MetricsProbeCheck {
             MetricsProbe.Requests r = MetricsProbe.requests(server);
             check(r.access() == MetricsProbe.Access.OK, "OK");
             check(r.count() == 100 && Math.abs(r.totalSeconds() - 1.9) < 1e-9, "액추에이터 뺌: " + r);
-            check(r.serverErrors() == 3 && r.clientErrors() == 0, "오류 수");
+            check(r.serverErrors() == 3 && r.clientErrors() == 0, "오류 수에서 액추에이터 뺌: " + r);
+            check(r.maxSeconds() == 0.9, "최대에서 액추에이터 뺌: " + r);
             check(r.poolActive() == 4 && r.poolMax() == 10 && Double.isNaN(r.poolPending()), "DB 풀");
             for (String a : asked) {
                 check(a.equals("listNames") || ANSWERS.containsKey(a), "없는 지표를 물음: " + a);

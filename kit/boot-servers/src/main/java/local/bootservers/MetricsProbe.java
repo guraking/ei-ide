@@ -44,7 +44,7 @@ final class MetricsProbe {
     private static final String TAG_METHOD = "method";
     private static final String SERVER_ERROR = "SERVER_ERROR";
     private static final String CLIENT_ERROR = "CLIENT_ERROR";
-    // 액추에이터 요청의 uri 태그 앞부분. 서버 요청 수에서 뺀다.
+    // 액추에이터 요청의 uri 태그 앞부분. 서버 요청 수 · 시간 · 최대 · 오류 수에서 뺀다.
     private static final String ACTUATOR_URI = "/actuator";
     // 어느 매핑에도 맞지 않은 요청(404)의 uri 태그. 느린 요청 목록에서 뺀다.
     private static final String UNMATCHED_URI = "/**";
@@ -78,18 +78,40 @@ final class MetricsProbe {
                 count = m.getOrDefault(COUNT, 0d);
                 total = m.getOrDefault(TOTAL_TIME, 0d);
                 max = m.getOrDefault(MAX, 0d);
-                for (String uri : Metrics.tagValues(all, TAG_URI)) {
-                    if (uri.startsWith(ACTUATOR_URI)) {
-                        Map<String, Double> own = Metrics.measurements(metric(server, endpoint, REQUESTS, TAG_URI, uri));
-                        count -= own.getOrDefault(COUNT, 0d);
-                        total -= own.getOrDefault(TOTAL_TIME, 0d);
-                    }
-                }
                 List<String> outcomes = Metrics.tagValues(all, TAG_OUTCOME);
                 serverErrors = outcomes.contains(SERVER_ERROR) ? countOf(server, endpoint, TAG_OUTCOME, SERVER_ERROR) : 0;
                 clientErrors = outcomes.contains(CLIENT_ERROR) ? countOf(server, endpoint, TAG_OUTCOME, CLIENT_ERROR) : 0;
+                List<String> uris = Metrics.tagValues(all, TAG_URI);
+                boolean actuator = false;
+                for (String uri : uris) {
+                    if (!uri.startsWith(ACTUATOR_URI)) {
+                        continue;
+                    }
+                    actuator = true;
+                    Map<?, ?> one = metric(server, endpoint, REQUESTS, TAG_URI, uri);
+                    Map<String, Double> own = Metrics.measurements(one);
+                    count -= own.getOrDefault(COUNT, 0d);
+                    total -= own.getOrDefault(TOTAL_TIME, 0d);
+                    List<String> ownOutcomes = Metrics.tagValues(one, TAG_OUTCOME);
+                    if (ownOutcomes.contains(SERVER_ERROR)) {
+                        serverErrors -= countOf(server, endpoint, TAG_URI, uri, TAG_OUTCOME, SERVER_ERROR);
+                    }
+                    if (ownOutcomes.contains(CLIENT_ERROR)) {
+                        clientErrors -= countOf(server, endpoint, TAG_URI, uri, TAG_OUTCOME, CLIENT_ERROR);
+                    }
+                }
+                // 최대는 빼서 구할 수 없어 액추에이터 주소가 있을 때만 나머지 주소의 최대를 하나씩 읽는다.
+                // shortcut: 주소가 MAX_URIS 를 넘으면 앞의 MAX_URIS 개 주소에서만 최대를 고른다. 넘는 서버가 생기면 한도를 설정으로 뺀다.
+                if (actuator) {
+                    max = 0;
+                    for (String uri : uris.subList(0, Math.min(uris.size(), MAX_URIS))) {
+                        if (!uri.startsWith(ACTUATOR_URI)) {
+                            max = Math.max(max, Metrics.measurements(metric(server, endpoint, REQUESTS, TAG_URI, uri)).getOrDefault(MAX, 0d));
+                        }
+                    }
+                }
             }
-            return new Requests(Access.OK, Math.max(count, 0), Math.max(total, 0), max, serverErrors, clientErrors,
+            return new Requests(Access.OK, Math.max(count, 0), Math.max(total, 0), max, Math.max(serverErrors, 0), Math.max(clientErrors, 0),
                     names.contains(POOL_ACTIVE) ? value(server, endpoint, POOL_ACTIVE) : Double.NaN,
                     names.contains(POOL_MAX) ? value(server, endpoint, POOL_MAX) : Double.NaN,
                     names.contains(POOL_PENDING) ? value(server, endpoint, POOL_PENDING) : Double.NaN);
@@ -136,8 +158,9 @@ final class MetricsProbe {
         return result;
     }
 
-    private static double countOf(MBeanServerConnection server, ObjectName endpoint, String tag, String value) throws IOException, JMException {
-        return Metrics.measurements(metric(server, endpoint, REQUESTS, tag, value)).getOrDefault(COUNT, 0d);
+    /** tags 는 키 · 값 차례(metric 과 같다). */
+    private static double countOf(MBeanServerConnection server, ObjectName endpoint, String... tags) throws IOException, JMException {
+        return Metrics.measurements(metric(server, endpoint, REQUESTS, tags)).getOrDefault(COUNT, 0d);
     }
 
     private static double value(MBeanServerConnection server, ObjectName endpoint, String name) throws IOException, JMException {
