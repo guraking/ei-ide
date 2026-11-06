@@ -713,7 +713,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
         <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
       </div>
       <ol class="legend">
-        <li><span class="mark">1</span><div><b>받은 저장소가 한 줄로</b> <span class="t">Git → Clone 이 끝나면 받은 폴더를 지금 프로젝트에 모듈로 붙이고 Git 저장소로 바로 잡습니다. 저장소와 그 아래 두 단계까지의 <code>pom.xml</code> · Gradle 파일도 찾아 Maven · Gradle 프로젝트로 연결합니다(그림의 jpa-mybatis-multi). 안의 <code>target</code> · <code>bin</code> · <code>build</code> · <code>node_modules</code> 폴더는 저절로 색인에서 뺍니다. 최근 프로젝트 목록에는 따로 올리지 않습니다.</span></div></li>
+        <li><span class="mark">1</span><div><b>받은 저장소가 한 줄로</b> <span class="t">Git → Clone 이 끝나면 받은 폴더를 지금 프로젝트에 모듈로 붙이고 Git 저장소로 바로 잡습니다. 저장소와 그 아래 두 단계까지의 <code>pom.xml</code> · Gradle 파일도 찾아 Maven · Gradle 프로젝트로 연결합니다(그림의 jpa-mybatis-multi). 안의 <code>target</code> · <code>bin</code> · <code>build</code> · <code>node_modules</code> 폴더는 저절로 색인에서 뺍니다. 최근 프로젝트 목록에는 따로 올리지 않습니다. 서버 브랜치가 여럿이면 붙이기 전에 「받을 브랜치」 창이 떠서 작업할 브랜치를 고릅니다(찾기 칸, 내 이름이 들어간 브랜치는 맨 위). 「받기」는 그 브랜치를 꺼내 서버 브랜치를 추적하게 하고, 「기본 브랜치로」는 서버 기본 브랜치 그대로 둡니다.</span></div></li>
         <li><span class="mark">2</span><div><b>Close Project</b> <span class="t">저장소 줄 우클릭 맨 위. 이클립스처럼 그 저장소 하나만 닫습니다. 닫는 동안 색인 · 검색 · 컴파일 · 동기화 창 · Git Log 에서 빠지고, 파일은 그대로입니다. 이 저장소를 쓰는 다른 Maven 모듈은 로컬 Maven 저장소의 jar 를 씁니다(jar 가 없으면 닫기 전에 묻습니다).</span></div></li>
         <li><span class="mark">3</span><div><b>닫힌 줄 · Open Project</b> <span class="t">닫은 저장소는 닫힌 아이콘의 흐린 줄로 남고, IDE 를 다시 켜도 닫힌 채입니다. 그 줄 우클릭 「Open Project」 로 다시 엽니다. Maven 저장소면 「Maven 다시 읽는 중」 알림이 뜨고, 그동안 줄이 잠깐 사라졌다가 돌아옵니다.</span></div></li>
       </ol>
@@ -1057,6 +1057,8 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
       <tr><td>저장소 줄 우클릭</td><td>Pull · Push · Refresh This Repository(이 저장소만 원격 확인) · Merge Branches… · Undo Last Git Action… · Show in Git Log · 탐색기에서 열기</td></tr>
       <tr><td>파일 줄 우클릭 아래</td><td>IntelliJ 기본 Jump to Source · Show History · Copy Absolute Path · Select in Project View. 메뉴 키 · Shift+F10 으로도 뜹니다</td></tr>
       <tr><td>알림 풍선</td><td>받기가 끝나면 「받기 끝: 저장소 · 커밋 · 파일 수」와 「커밋 보기」(Git Log 창). 원격 확인에 실패한 저장소마다 「다시 시도」 · 「자세히」, 그 저장소 줄 끝에 빨간 「⚠ 원격 확인 실패」. 받아 온 브랜치 기록이 어긋나 실패하면(cannot lock ref … but expected, 윈도우에서 Feature/ · feature/ 가 겹칠 때 등) 그 기록만 지우고 저절로 한 번 더 받습니다</td></tr>
+      <tr><td>저장소 줄 주황 표시</td><td>합치기 · rebase · cherry-pick 이 도중에 멈춰 있으면 「합치는 중(커밋 안 함)」 등. 저장소에 대소문자만 다른 두 이름(Foo.vue · foo.vue)이 함께 커밋돼 윈도우에서 한 파일로 겹치면 「대소문자만 다른 파일 N개 겹침」(마우스를 올리면 목록). 그런 파일은 늘 바뀐 파일로 보이고 되돌려도 없어지지 않아, 한쪽 이름을 지우는 커밋이 필요합니다</td></tr>
+      <tr><td>받는 동안</td><td>Pull All · Pull Selected · 새로고침이 함께 꺼지고, 같은 저장소에서 Merge Branches · Undo 가 도는 중이면 그 저장소는 받지 않고 알립니다</td></tr>
       <tr><td>진행 · 멈추기</td><td>새로고침 · 받기가 IDE 아래 상태 표시줄에 진행 막대로 보이고 ✕ 로 멈춥니다</td></tr>
       <tr><td>단추 숫자</td><td>Pull Selected 끝에 받을 파일 수, Push 끝에 올릴 커밋 수. 충돌이 없으면 Resolve Conflicts 는 꺼집니다</td></tr>
       <tr><td>도구줄</td><td>모두 펼치기 · 모두 접기 · 폴더별로 묶기 · 이전 파일 · 다음 파일(Alt+← · Alt+→, 비교 화면에서도)</td></tr>
@@ -1161,6 +1163,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
       <tr><td>주황 줄 · ⚠</td><td>내 파일을 다른 사람이 From 에서 고친 것. 충돌 없이 조용히 합쳐져 내 소스가 바뀔 수 있으니 먼저 비교해 보세요. 내 파일은 개인 브랜치에서 바꾼 파일 · 고치는 중인 파일 · 최근 30일 안에 내 Git 이메일로 커밋한 파일입니다.</td></tr>
       <tr><td>Push to … after merge</td><td>켜 두면(기본) 합친 뒤 서버의 개인 브랜치로 바로 올립니다.</td></tr>
       <tr><td>Merge</td><td>합치기. 충돌이 나면 IntelliJ 충돌 창이 뜨고, 해결 · 커밋한 뒤 푸시합니다. 서버의 개인 브랜치와 내 PC 의 것이 서로 다르면 먼저 받기(Pull) 하라고 알리고 멈춥니다. 누르는 순간 Into 브랜치를 서버에서 한 번 더 받아 그 위에서 합칩니다. 그래도 그사이 다른 사람이 먼저 올려 Push 가 거절되면 방금 합친 것만 되돌리고(고치던 파일은 그대로) 「다시 합치고 Push」 를 묻습니다.</td></tr>
+      <tr><td>대소문자만 바뀐 이름</td><td>합쳐 올 쪽에서 누가 파일 이름의 대소문자만 바꿨으면(예: Designchanges.vue → DesignChanges.vue) 윈도우에서는 git 이 「untracked working tree files would be overwritten」으로 멈춥니다. Merge 를 누르면 이런 이름을 먼저 찾아 목록으로 보여 주고, 「Match Case and Merge」 를 누르면 내 브랜치에서 이름을 먼저 맞춰 커밋한 뒤 합칩니다. 합치기가 실패하면 그 커밋도 되돌립니다.</td></tr>
     </table>
     <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note"><b>Synchronize 창 위쪽 줄</b>한 번 역머지하면 그 뒤로는 Synchronize 창을 새로 고칠 때 From 브랜치도 받아 와서 「develop 보다 3개 뒤 · 내 파일 2개 겹침」을 보여 줍니다(겹치면 주황). 그 글을 누르면 Merge Branches 창이 열립니다.</div></div>
 

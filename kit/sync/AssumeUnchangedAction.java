@@ -99,7 +99,7 @@ public class AssumeUnchangedAction extends AnAction implements DumbAware {
         String title = on() ? "Assume Unchanged" : "No Assume Unchanged";
         if (error) VcsNotifier.getInstance(project).notifyError(NOTIFICATION_ID, title, m);
         else VcsNotifier.getInstance(project).notifyInfo(NOTIFICATION_ID, title, m);
-      });
+      }, project.getDisposed());
     });
   }
 
@@ -116,7 +116,9 @@ public class AssumeUnchangedAction extends AnAction implements DumbAware {
       if (file.isDirectory() || changes.isUnversioned(file) || changes.isIgnoredFile(file)) continue;
       VcsRoot root = vcs.getVcsRootObjectFor(file);
       if (root == null || root.getVcs() == null || !"Git".equals(root.getVcs().getName()) || root.getPath() == null) continue;
-      String rel = file.getPath().substring(root.getPath().getPath().length() + 1);
+      // VfsUtilCore.getRelativePath 는 루트가 드라이브 맨 위(D:/)여도 맞게 자른다.
+      String rel = com.intellij.openapi.vfs.VfsUtilCore.getRelativePath(file, root.getPath());
+      if (rel == null || rel.isEmpty()) continue;
       result.computeIfAbsent(new File(root.getPath().getPath()), k -> new ArrayList<>()).add(rel);
     }
     return result;

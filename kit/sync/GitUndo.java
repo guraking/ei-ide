@@ -43,6 +43,11 @@ final class GitUndo {
   // 진행 중인 합치기 · cherry-pick · revert · 리베이스를 나타내는 .git 안 파일 · 폴더.
   private static final List<String> IN_PROGRESS = List.of("MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply");
   private static final int SHORT_HASH = 8;
+  // 브랜치 reflog 를 위에서 몇 줄까지 읽는지. 커밋을 옮기지 않은 줄(stash 등)을 건너뛰고 앞 위치를 찾을 만큼.
+  private static final int REFLOG_SCAN = 20;
+  // 「rebase (finish): refs/heads/x onto <커밋>」. upstream 위로 다시 얹은(IntelliJ Update 의 rebase) 동작인지 가린다.
+  private static final String REBASE_FINISH_PREFIX = "rebase (finish): ";
+  private static final String ONTO = " onto ";
   // 서버에서 받아 온 동작의 reflog 제목 앞부분(pull · pull --ff-only · pull --rebase 등).
   private static final String PULL_PREFIX = "pull";
   // 「merge origin/main: Fast-forward」 · 「reset: moving to origin/main」 처럼 upstream 을 받아 들인 동작.
@@ -65,7 +70,7 @@ final class GitUndo {
       throw new IOException(SyncBundle.message("undo.detached"));
     }
     String head = headTop(root);
-    String log = SyncPanel.git(root, "log", "-g", "-n", "2", REFLOG_DATE, REFLOG_FORMAT, "refs/heads/" + branch).trim();
+    String log = SyncPanel.git(root, "log", "-g", "-n", String.valueOf(REFLOG_SCAN), REFLOG_DATE, REFLOG_FORMAT, "refs/heads/" + branch).trim();
     Plan plan = plan(head, log, branch);
     if (plan == null) throw new IOException(SyncBundle.message("undo.nothing", branch));
     if (plan.mode() == Mode.CHECKOUT) {
@@ -77,13 +82,16 @@ final class GitUndo {
       }
       return new Plan(plan.mode(), plan.subject(), plan.when(), plan.target(), false, head);
     }
+    // 없어질 커밋(target..HEAD) 가운데 이미 서버(@{u})에 있는 것이 있으면 알린다. 서버에서 받아 온 동작(pull 등)을 되돌리는 것은 내 PC 에서만 빠진다.
     boolean onServer;
     try {
-      SyncPanel.git(root, "merge-base", "--is-ancestor", "HEAD", "@{u}");
       String upstream = SyncPanel.git(root, "rev-parse", "--abbrev-ref", "@{u}").trim();
-      onServer = !fromUpstream(plan.subject(), upstream);
+      String upstreamHash = SyncPanel.git(root, "rev-parse", "@{u}").trim();
+      String shared = SyncPanel.git(root, "merge-base", "HEAD", "@{u}").trim();
+      int lost = Integer.parseInt(SyncPanel.git(root, "rev-list", "--count", plan.target() + ".." + shared).trim());
+      onServer = lost > 0 && !fromUpstream(plan.subject(), upstream, upstreamHash);
     }
-    catch (IOException notAncestorOrNoUpstream) {
+    catch (IOException | NumberFormatException noUpstream) {
       onServer = false;
     }
     return new Plan(plan.mode(), plan.subject(), plan.when(), plan.target(), onServer, head);
@@ -95,10 +103,11 @@ final class GitUndo {
   }
 
   /** reflog 제목이 서버(upstream, 예: origin/main)에서 받아 온 동작인지. 그 커밋을 되돌려도 서버 커밋을 없애는 것이 아니다. */
-  static boolean fromUpstream(String subject, String upstream) {
+  static boolean fromUpstream(String subject, String upstream, String upstreamHash) {
     return subject.startsWith(PULL_PREFIX)
            || subject.startsWith(MERGE_PREFIX + upstream + ":")
-           || subject.startsWith(RESET_TO_PREFIX + upstream);
+           || subject.startsWith(RESET_TO_PREFIX + upstream)
+           || subject.startsWith(REBASE_FINISH_PREFIX) && subject.endsWith(ONTO + upstreamHash);
   }
 
   /**
@@ -113,9 +122,12 @@ final class GitUndo {
       return new Plan(Mode.CHECKOUT, head[2], whenOf(head[1]), from, false);
     }
     String[] lines = branchLog.split("\n");
-    if (lines.length < 2) return null;
-    String[] top = lines[0].split(FIELD, -1);
-    String[] before = lines[1].split(FIELD, -1);
+    // 커밋을 옮기지 않은 줄(stash · Shelve 가 남기는 「reset: moving to HEAD」 등)은 되돌릴 것이 없어 건너뛴다.
+    int at = 0;
+    while (at + 1 < lines.length && lines[at].split(FIELD, -1)[0].equals(lines[at + 1].split(FIELD, -1)[0])) at++;
+    if (lines.length < at + 2) return null;
+    String[] top = lines[at].split(FIELD, -1);
+    String[] before = lines[at + 1].split(FIELD, -1);
     if (top.length != 3 || before.length != 3) return null;
     for (String prefix : NO_UNDO_PREFIXES) {
       if (top[2].startsWith(prefix)) return null;
@@ -164,7 +176,7 @@ final class GitUndo {
         if (matches(root, plan.target())) SyncPanel.git(root, "reset", "--soft", plan.target());
         else keep(root, plan.target());
       }
-      case CHECKOUT -> SyncPanel.git(root, SyncPanel.GIT_LONG_TIMEOUT_SEC, "checkout", plan.target());
+      case CHECKOUT -> withLockHint(root, () -> SyncPanel.git(root, SyncPanel.GIT_LONG_TIMEOUT_SEC, "checkout", plan.target()));
     }
     return SyncBundle.message("undo.done", root.getName(), plan.subject());
   }
@@ -175,8 +187,31 @@ final class GitUndo {
       SyncPanel.git(root, SyncPanel.GIT_LONG_TIMEOUT_SEC, "reset", "--keep", target);
     }
     catch (IOException e) {
-      throw new IOException(SyncBundle.message("undo.keep.failed") + "\n\n" + e.getMessage());
+      throw new IOException(SyncBundle.message("undo.keep.failed") + "\n\n" + lockHint(root, e.getMessage()));
     }
+  }
+
+  private interface GitStep {
+    String run() throws IOException, InterruptedException;
+  }
+
+  /** step 이 실패하면 남은 .git/index.lock 안내를 붙여 다시 던진다. */
+  private static void withLockHint(File root, GitStep step) throws IOException, InterruptedException {
+    try {
+      step.run();
+    }
+    catch (IOException e) {
+      throw new IOException(lockHint(root, e.getMessage()), e);
+    }
+  }
+
+  /**
+   * 시간 초과로 끊긴 git 은 .git/index.lock 을 남겨 다음 git 이 모두 멈춘다. 그 파일이 남았으면 지우는 법을 오류 끝에 붙인다.
+   * 다른 git 이 아직 쓰고 있을 수 있어 직접 지우지 않는다.
+   */
+  static String lockHint(File root, String message) {
+    File lock = new File(root, ".git/index.lock");
+    return lock.isFile() ? message + "\n\n" + SyncBundle.message("undo.index.lock", lock.getPath()) : message;
   }
 
   /** 색인과 작업본(추적 중인 파일)이 커밋 target 과 같은가. */
