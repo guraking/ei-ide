@@ -440,7 +440,8 @@ public class SyncCheck {
     sh(other, "git checkout -q develop && git pull -q origin develop && mkdir -p ui && echo x > ui/X.vue && seq 1 30 > Big.vue && git add ui Big.vue && git commit -qm ui && git push -q origin develop");
     ReverseMerge.fetch(mine, "origin", "develop", "feature/kim");
     eq(ReverseMerge.merge(mine, "origin", "develop", "feature/kim", "feature/kim", true, false), ReverseMerge.Result.MERGED);
-    sh(other, "git mv Big.vue big.vue && echo more >> big.vue && mkdir UI && git mv ui/X.vue UI/X.vue && git commit -qam 대소문자 && git push -q origin develop");
+    // 대소문자를 가리지 않는 파일 시스템(윈도우)에서도 돌도록 임시 이름을 거쳐 옮긴다.
+    sh(other, "git mv Big.vue big.tmp && git mv big.tmp big.vue && echo more >> big.vue && git mv ui/X.vue X.tmp && rm -rf ui && mkdir UI && git mv X.tmp UI/X.vue && git commit -qam 대소문자 && git push -q origin develop");
     ReverseMerge.fetch(mine, "origin", "develop", "feature/kim");
     String tipBefore = SyncPanel.git(mine, "rev-parse", "HEAD").trim();
     // 대소문자를 가리는 저장소면 git 이 그대로 합칠 수 있어 묻지 않는다. 가리지 않는 저장소(윈도우)면 아무것도 하지 않고 멈춘다.
