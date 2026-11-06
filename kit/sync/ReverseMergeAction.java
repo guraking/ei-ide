@@ -135,6 +135,11 @@ public final class ReverseMergeAction extends DumbAwareAction {
           remote = ReverseMerge.remoteOf(cfg, current);
           savedFrom = cfg.get(ReverseMerge.CONFIG_FROM);
           savedInto = cfg.get(ReverseMerge.CONFIG_INTO);
+          // 다른 브랜치에서 한 합치기의 기억(featureA → develop)은 쓰지 않는다. 그대로 열면 남의 브랜치를 develop 에 올리게 된다.
+          if (!ReverseMerge.rememberedFor(savedFrom, savedInto, current)) {
+            savedFrom = null;
+            savedInto = null;
+          }
           // 받아 둔 브랜치 목록으로 바로 열고 서버 목록은 창이 뜬 뒤 합친다(VPN 에서 ls-remote 는 몇 초 걸린다).
           // 아직 기준 브랜치를 받은 적이 없으면(처음 쓰는 저장소) 서버에 물어야 From 을 채울 수 있다.
           names = ReverseMerge.knownBranches(root, remote);
@@ -186,6 +191,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
     private final JBLabel intoUnpushed = new JBLabel();
     // 미리 보기 계산을 하나씩 차례로 돌린다. 같은 저장소에 fetch 가 겹치면 「cannot lock ref」로 실패한다.
     private final ExecutorService worker = AppExecutorUtil.createBoundedApplicationPoolExecutor("EI Merge Branches", 1);
+    // 서버 브랜치 목록 받기(addServerBranches). 창을 닫으면 끊는다.
+    private Future<?> serverList;
     private final RowModel model = new RowModel();
     // 미리 보기 표. 비교 전 · 받는 중 · 실패 · 합칠 것 없음은 표의 빈 글(StatusText)로 보인다.
     private final JBTable table = new JBTable(model);
@@ -241,12 +248,15 @@ public final class ReverseMergeAction extends DumbAwareAction {
       addServerBranches();
     }
 
-    /** 서버 브랜치 목록을 뒤에서 받아 받아 둔 목록에 없던 것을 두 상자에 더한다. 서버에 닿지 못하면 받아 둔 목록만 남는다(미리 보기의 fetch 가 그 오류를 보인다). */
+    /**
+     * 서버 브랜치 목록을 뒤에서 받아 받아 둔 목록에 없던 것을 두 상자에 더한다. 서버에 닿지 못하면 받아 둔 목록만 남는다(미리 보기의 fetch 가 그 오류를 보인다).
+     * 미리 보기 worker 밖에서 짧은 시간 제한으로 돌려, 서버가 멈춰도 비교가 그 뒤에 줄 서지 않게 한다. 창을 닫으면 끊는다.
+     */
     private void addServerBranches() {
-      worker.execute(() -> {
+      serverList = ApplicationManager.getApplication().executeOnPooledThread(() -> {
         List<String> names;
         try {
-          names = ReverseMerge.serverBranches(root, remote);
+          names = ReverseMerge.serverBranches(root, remote, SyncPanel.CMD_TIMEOUT_SEC);
         }
         catch (IOException unreachable) {
           return;
@@ -265,6 +275,12 @@ public final class ReverseMergeAction extends DumbAwareAction {
           }
         });
       });
+    }
+
+    @Override
+    protected void dispose() {
+      if (serverList != null) serverList.cancel(true);
+      super.dispose();
     }
 
     /**
@@ -728,11 +744,11 @@ public final class ReverseMergeAction extends DumbAwareAction {
         return ReverseMerge.lines(SyncPanel.git(root, "diff", "--name-only", "--no-renames", "HEAD"));
       }
       catch (IOException e) {
-        return null;
+        return Set.of();
       }
       catch (InterruptedException e) {
         Thread.currentThread().interrupt();
-        return null;
+        return Set.of();
       }
     }
 

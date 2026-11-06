@@ -7,6 +7,59 @@ import java.util.Set;
 
 /** 자체 점검: java -cp out:test-out:<IDE jar> kinggura.sync.SyncCheck */
 public class SyncCheck {
+  /** 2026-11-06 동기화 전수조사에서 고친 순수 판단들. */
+  static void checkAudit1106() throws Exception {
+    SyncPanel.Repo r = new SyncPanel.Repo(new File("."), SyncPanel.Vcs.GIT, "main", "origin/main");
+    // 대소문자만 다른 경로: 윈도우(대소문자 안 가림)에서는 같은 파일이라 충돌, 리눅스에서는 따로.
+    List<SyncPanel.Change> ci = SyncPanel.merge(r, java.util.Map.of("Foo.vue", "M"), java.util.Map.of("foo.vue", "R"), Set.of(), false);
+    eq(ci.size(), 1);
+    eq(ci.get(0).kind(), SyncPanel.Kind.CONFLICT);
+    eq(SyncPanel.merge(r, java.util.Map.of("Foo.vue", "M"), java.util.Map.of("foo.vue", "R"), Set.of(), true).size(), 2);
+    // 저장소에 대소문자만 다른 두 이름이 함께 커밋된 것 찾기.
+    eq(SyncPanel.caseClashes(SyncPanel.lsFilesPaths("H a/Designchanges.vue\nH a/DesignChanges.vue\nH b.txt\n"), false),
+       List.of("a/DesignChanges.vue", "a/Designchanges.vue"));
+    eq(SyncPanel.caseClashes(List.of("A", "a"), true), List.of());
+    // 멈춘 합치기 표시.
+    File repo = java.nio.file.Files.createTempDirectory("state").toFile();
+    new File(repo, ".git").mkdir();
+    eq(SyncPanel.gitState(repo), null);
+    java.nio.file.Files.writeString(new File(repo, ".git/MERGE_HEAD").toPath(), "x");
+    eq(SyncPanel.gitState(repo), SyncBundle.message("sync.state.merge"));
+    // 정션 · 링크로 연 경로가 git 맨 위 폴더와 실제로 같으면 IntelliJ 경로를 쓰고, 안쪽 폴더 매핑이면 git 맨 위 폴더.
+    File inner = new File(repo, "inner");
+    inner.mkdir();
+    eq(SyncPanel.topLevel(repo, repo.getCanonicalPath() + "\n"), repo);
+    eq(SyncPanel.topLevel(inner, repo.getPath()), repo);
+    // 우리 Stash 는 맨 위가 아니어도 찾는다.
+    eq(ReverseMerge.ourStash("stash@{0}\tOn feature/kim: 남의것\nstash@{1}\tOn feature/kim: " + ReverseMerge.STASH_MESSAGE + "\n"), "stash@{1}");
+    eq(ReverseMerge.ourStash("stash@{0}\tOn main: 남의것\n"), null);
+    eq(ReverseMerge.ourStash(""), null);
+    // 기억된 합치기가 지금 브랜치와 관련 있을 때만 쓴다.
+    eq(ReverseMerge.rememberedFor("develop", "featureB", "featureB"), true);
+    eq(ReverseMerge.rememberedFor("featureB", "develop", "featureB"), true);
+    eq(ReverseMerge.rememberedFor("featureA", "develop", "featureB"), false);
+    eq(ReverseMerge.rememberedFor(null, null, "featureB"), false);
+    // Undo: 커밋을 옮기지 않은 reflog 줄(stash 의 reset: moving to HEAD)은 건너뛴다.
+    String f = "\u001f";
+    GitUndo.Plan p = GitUndo.plan("", "b" + f + "main@{t3}" + f + "reset: moving to HEAD\nb" + f + "main@{t2}" + f + "commit: 고침\na" + f + "main@{t1}" + f + "commit: 앞", "main");
+    eq(p, new GitUndo.Plan(GitUndo.Mode.SOFT, "commit: 고침", "t2", "a", false));
+    eq(GitUndo.plan("", "b" + f + "x" + f + "reset: moving to HEAD\nb" + f + "x" + f + "commit (initial): one", "main"), null);
+    eq(GitUndo.fromUpstream("rebase (finish): refs/heads/kim onto abc123", "origin/kim", "abc123"), true);
+    eq(GitUndo.fromUpstream("rebase (finish): refs/heads/kim onto abc123", "origin/kim", "fff000"), false);
+    eq(GitUndo.fromUpstream("commit: 고침", "origin/kim", "abc123"), false);
+    // 머리글 인증은 https · http 원격만. 파일 경로 · ssh 원격은 서버로 보지 않는다.
+    eq(GitLogins.isHttpUrl("https://axplm-gitlab.example.com/a.git"), true);
+    eq(GitLogins.isHttpUrl("D:/git/x.git"), false);
+    eq(GitLogins.isHttpUrl("git@host:2024/repo.git"), false);
+    eq(GitRemoteAuth.serverUrls(List.of("D:/git/x.git", "git@host:2024/repo.git", "https://Git.Example.com:443/a.git")).keySet(),
+       Set.of("https://git.example.com"));
+    // 다른 서버의 비밀번호는 넘기지 않는다.
+    GitLogins.Login a = new GitLogins.Login("https://a.example.com", GitLogins.Kind.PASSWORD, "kim", "pw");
+    GitLogins.Login b = new GitLogins.Login("https://b.example.com:8443", GitLogins.Kind.TOKEN, "", "tok");
+    eq(GitLogins.matching(List.of(a, b), Set.of("https://b.example.com:8443")), List.of(b));
+    eq(GitLogins.matching(List.of(a, b), Set.of()), List.of());
+  }
+
   static void eq(Object a, Object b) { if (!java.util.Objects.equals(a, b)) throw new AssertionError(a + " != " + b); }
 
   public static void main(String[] args) throws Exception {
@@ -49,6 +102,7 @@ public class SyncCheck {
     eq(SyncPanel.unquote("\"\\355\\225\\234.txt\""), "한.txt");
     eq(SyncPanel.unquote("plain.txt"), "plain.txt");
     checkNestedRepo();
+    checkAudit1106();
     checkCloneBranch();
 
     // Push 단추 숫자 · 받을 저장소: git status -b 브랜치 줄의 ahead · behind.
@@ -62,6 +116,7 @@ public class SyncCheck {
     eq(SyncPanel.refRace("error: cannot lock ref 'refs/heads/main': is at 1a but expected 2b"), null);
     eq(SyncPanel.refRace("fatal: Authentication failed"), null);
     eq(SyncPanel.refRace(null), null);
+    eq(SyncPanel.refRace("error: 'refs/remotes/origin/Feature' exists; cannot create 'refs/remotes/origin/feature/x'"), "refs/remotes/origin/Feature");
     // 경로 묶음: 명령줄 한도를 넘지 않게 나누고 순서 · 개수는 그대로.
     List<String> many = new java.util.ArrayList<>();
     for (int i = 0; i < 3000; i++) many.add("src/main/java/com/shop/order/Order" + i + ".java");

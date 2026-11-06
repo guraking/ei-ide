@@ -98,6 +98,15 @@ final class GitRemoteAuth {
       }
     }
 
+    /** failed 가운데 아직 실패 기록이 남은 첫 서버의 git 오류. 모두 지워졌으면 null. */
+    String knownBadError(Collection<String> failed) {
+      for (String server : failed) {
+        Rejection rejection = REJECTED.get(server);
+        if (rejection != null) return rejection.error();
+      }
+      return null;
+    }
+
     /** 앞서 실패한 값을 그대로 들고 가는 서버들. */
     List<String> knownBad() {
       List<String> bad = new ArrayList<>();
@@ -123,7 +132,7 @@ final class GitRemoteAuth {
         break;
       }
     }
-    if (project == null || urls.isEmpty()) return SyncPanel.gitWith(root, timeoutSec, List.of(), args);
+    if (project == null || urls.isEmpty()) return runStored(root, timeoutSec, args);
 
     Attempt first = silentAttempt(project, root, urls);
     List<ReentrantLock> held = new ArrayList<>();
@@ -148,8 +157,10 @@ final class GitRemoteAuth {
     throws IOException, InterruptedException {
     IOException failure;
     Collection<String> failed = first.knownBad();
-    if (!failed.isEmpty()) {
-      failure = new IOException(REJECTED.get(failed.iterator().next()).error());
+    // 그 사이 다른 명령이 성공해 실패 기록을 지웠으면(knownBadError 가 null) 보통처럼 보낸다.
+    String knownError = first.knownBadError(failed);
+    if (knownError != null) {
+      failure = new IOException(knownError);
       if (!ask) throw failure;
     }
     else {
@@ -187,6 +198,44 @@ final class GitRemoteAuth {
       }
       throw retry;
     }
+  }
+
+  /**
+   * IntelliJ 가 모르는 저장소(VCS 매핑 밖 · 아직 VFS 에 없음 · Clone): 설정 → Git 로그인 값만 넣어 돌린다(runBytes 가 이 명령이 닿는 서버 것을 고른다).
+   * 그 값이 앞서 인증에 실패했으면 다시 보내지 않고 그 오류로 끝내고(자동 원격 확인이 같은 틀린 비밀번호로 계정을 잠그지 않게), 실패하면 기록한다.
+   */
+  private static String runStored(File root, long timeoutSec, String... args) throws IOException, InterruptedException {
+    Attempt attempt = new Attempt();
+    for (String server : configServers(root, args).keySet()) {
+      GitLogins.Login stored = ApplicationManager.getApplication() == null ? null : GitLogins.stored(server);
+      if (stored != null) attempt.use(server, stored, null);
+    }
+    String knownError = attempt.knownBadError(attempt.knownBad());
+    if (knownError != null) throw new IOException(knownError);
+    try {
+      String output = SyncPanel.gitWith(root, timeoutSec, List.of(), args);
+      if (attempt.headers.size() == 1) attempt.verified(attempt.headers.keySet());
+      return output;
+    }
+    catch (IOException e) {
+      if (SyncPanel.isGitAuthError(e.getMessage())) attempt.rejected(failedServers(attempt.headers.keySet(), e.getMessage()), e.getMessage());
+      throw e;
+    }
+  }
+
+  /** 명령이 닿을 https 서버(주소 → 그 서버의 첫 원격 주소): 인자에 적힌 주소(Clone 등)와 root 저장소 설정의 원격 주소. 읽지 못한 것은 뺀다. */
+  static Map<String, String> configServers(File root, String... args) throws InterruptedException {
+    List<String> urls = new ArrayList<>(List.of(args));
+    try {
+      for (String line : SyncPanel.git(root, "config", "--get-regexp", "^remote\\..*\\.(push)?url$").split("\n")) {
+        int space = line.indexOf(' ');
+        if (space > 0) urls.add(line.substring(space + 1).trim());
+      }
+    }
+    catch (IOException noRemote) {
+      // 저장소가 아니거나(Clone 의 상위 폴더) 원격이 없다.
+    }
+    return serverUrls(urls);
   }
 
   private static List<String> remoteUrls(GitRepository repo) {
@@ -259,6 +308,7 @@ final class GitRemoteAuth {
   static Map<String, String> serverUrls(List<String> urls) {
     Map<String, String> servers = new LinkedHashMap<>();
     for (String url : urls) {
+      if (!GitLogins.isHttpUrl(url)) continue;
       try {
         servers.putIfAbsent(GitLogins.serverOf(url), url);
       }
