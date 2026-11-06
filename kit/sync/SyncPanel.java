@@ -127,6 +127,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -298,6 +299,11 @@ final class SyncPanel extends SimpleToolWindowPanel {
                                                               "인증 실패", "인증이 실패", "인증에 실패");
   // 서버에 닿는 git 하위 명령. Git 로그인 머리글은 이 명령에만 넘긴다(status · checkout 등 로컬 명령이 부르는 저장소 훅이 읽지 못하게).
   private static final Set<String> GIT_REMOTE_VERBS = Set.of("fetch", "pull", "push", "ls-remote", "clone");
+  // 저장소(정규 경로)별 원격 명령 차례. 프로젝트 창이 여럿이어도 하나를 함께 쓴다.
+  private static final Map<String, ReentrantLock> REMOTE_LOCKS = new ConcurrentHashMap<>();
+  // 원격 추적 참조를 읽은 값과 잠글 때 값이 달라 fetch · pull 이 멈출 때 git 이 내는 문구(LANGUAGE=C 로 띄워 영어로 온다). 1번 묶음이 참조 이름.
+  // 다른 git 과 겹친 경우와, 윈도우에서 대소문자만 다른 폴더(Feature/ · feature/)에 든 낱개 참조와 packed-refs 값이 어긋난 경우에 난다.
+  private static final Pattern REF_RACE = Pattern.compile("cannot lock ref '(refs/remotes/[^']+)': is at \\p{XDigit}+ but expected \\p{XDigit}+");
   // 터미널에서 아이디 · 비밀번호를 묻지 않고 곧바로 실패하게 한다(표준 입력이 닫혀 있어 물어도 답할 수 없다).
   private static final String ENV_TERMINAL_PROMPT = "GIT_TERMINAL_PROMPT";
   // 서버 명령의 오류 문구 언어를 영어로 고정해 인증 실패를 GIT_AUTH_ERRORS 로 알아보게 한다. 메시지 번역만 바꾸고 파일 이름 출력은 그대로다.
@@ -3071,7 +3077,32 @@ final class SyncPanel extends SimpleToolWindowPanel {
 
   /** git 과 같고 logins 의 인증을 더 넘긴다(GitRemoteAuth). */
   static String gitWith(File dir, long timeoutSec, List<GitLogins.Login> logins, String... args) throws IOException, InterruptedException {
-    return new String(runBytes(dir, timeoutSec, logins, GIT, gitArgs(args)), StandardCharsets.UTF_8).replace("\r\n", "\n");
+    // 같은 저장소의 원격 명령은 창 · 기능(동기화 · Merge Branches)이 달라도 하나씩 돌린다. 겹치면 같은 원격 추적 참조를 두고 cannot lock ref 로 실패한다.
+    ReentrantLock lock = REMOTE_LOCKS.computeIfAbsent(dir.getCanonicalPath(), key -> new ReentrantLock());
+    lock.lockInterruptibly();
+    try {
+      try {
+        return new String(runBytes(dir, timeoutSec, logins, GIT, gitArgs(args)), StandardCharsets.UTF_8).replace("\r\n", "\n");
+      }
+      catch (IOException e) {
+        // 어긋난 원격 추적 참조 하나만 지우고 한 번 더 한다. 원격 추적 참조는 서버 브랜치의 사본이라 다음 fetch 가 다시 만든다.
+        String ref = refRace(e.getMessage());
+        if (ref == null) throw e;
+        LOG.info("어긋난 원격 추적 참조를 지우고 다시 실행: " + e.getMessage());
+        runBytes(dir, CMD_TIMEOUT_SEC, List.of(), GIT, gitArgs("update-ref", "-d", ref));
+        return new String(runBytes(dir, timeoutSec, logins, GIT, gitArgs(args)), StandardCharsets.UTF_8).replace("\r\n", "\n");
+      }
+    }
+    finally {
+      lock.unlock();
+    }
+  }
+
+  /** git 오류가 원격 추적 참조 값 어긋남(cannot lock ref 'refs/remotes/…': is at A but expected B)이면 그 참조 이름, 아니면 null. */
+  static String refRace(String message) {
+    if (message == null) return null;
+    Matcher m = REF_RACE.matcher(message);
+    return m.find() ? m.group(1) : null;
   }
 
   static boolean isGitAuthError(String message) {

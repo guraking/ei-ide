@@ -55,6 +55,12 @@ public class SyncCheck {
     eq(SyncPanel.parseTracking("## main...origin/main [behind 1]\n"), new SyncPanel.Tracking(0, 1));
     eq(SyncPanel.parseTracking("## feature/new\n?? b/\n"), new SyncPanel.Tracking(0, 0));
     eq(SyncPanel.parseTracking("## HEAD (no branch)\n"), new SyncPanel.Tracking(0, 0));
+    // 원격 추적 참조 값이 어긋난 fetch 오류만 그 참조를 지우고 다시 한다.
+    eq(SyncPanel.refRace("git fetch 실패: error: cannot lock ref 'refs/remotes/origin/Feature/gpm/dxplmdev.hbchoi': is at d48d7dda02013f87869d5fceb73715e59df608b5 but expected 85a32cc78e90fdc3bdf1104f2e992970614da35e"), "refs/remotes/origin/Feature/gpm/dxplmdev.hbchoi");
+    eq(SyncPanel.refRace("error: cannot lock ref 'refs/remotes/origin/a': unable to resolve reference"), null);
+    eq(SyncPanel.refRace("error: cannot lock ref 'refs/heads/main': is at 1a but expected 2b"), null);
+    eq(SyncPanel.refRace("fatal: Authentication failed"), null);
+    eq(SyncPanel.refRace(null), null);
     // 경로 묶음: 명령줄 한도를 넘지 않게 나누고 순서 · 개수는 그대로.
     List<String> many = new java.util.ArrayList<>();
     for (int i = 0; i < 3000; i++) many.add("src/main/java/com/shop/order/Order" + i + ".java");
