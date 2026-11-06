@@ -47,8 +47,10 @@ final class GitLogins {
   private static final int HTTPS_PORT = 443;
   private static final int HTTP_PORT = 80;
 
-  /** 마지막으로 만든 환경값. save · forget 때와, stored 가 읽은 비밀번호 저장소 값과 다를 때(다른 곳에서 지움 · 저장소가 잠겨 있다 열림) 비운다. */
-  private static volatile Map<String, String> cachedEnv;
+  /** 마지막으로 읽은 로그인(비밀번호 포함). save · forget 때와, stored 가 읽은 비밀번호 저장소 값과 다를 때(다른 곳에서 지움 · 저장소가 잠겨 있다 열림) 비운다. */
+  private static volatile List<Login> cachedLogins;
+  /** 캐시를 비울 때마다 하나 올린다. 읽는 도중 비워졌으면 읽은 옛 값을 캐시에 넣지 않는다. */
+  private static final java.util.concurrent.atomic.AtomicInteger VERSION = new java.util.concurrent.atomic.AtomicInteger();
 
   private GitLogins() {}
 
@@ -75,7 +77,7 @@ final class GitLogins {
       if (login.secret() != null) PasswordSafe.getInstance().setPassword(attributes(login.server()), login.secret());
     }
     PropertiesComponent.getInstance().setValue(LIST_KEY, format(logins), "");
-    cachedEnv = null;
+    dropCache();
   }
 
   /** 비밀번호 저장소 키는 저장한 주소 그대로라 지울 때는 정확히 같은 주소만 남은 것으로 본다. */
@@ -91,18 +93,18 @@ final class GitLogins {
     Login login = find(list(), server);
     String secret = login == null ? null : PasswordSafe.getInstance().getPassword(attributes(login.server()));
     Login result = secret == null || secret.isEmpty() ? null : new Login(login.server(), login.kind(), login.user(), secret);
-    Map<String, String> env = cachedEnv;
-    if (login != null && env != null && !Objects.equals(cachedHeader(env, login.server()), result == null ? null : header(result))) cachedEnv = null;
+    List<Login> cached = cachedLogins;
+    if (login != null && cached != null) {
+      Login before = find(cached, login.server());
+      String old = before == null || before.secret() == null || before.secret().isEmpty() ? null : before.secret();
+      if (!Objects.equals(old, result == null ? null : result.secret())) dropCache();
+    }
     return result;
   }
 
-  /** 캐시한 환경값에서 그 서버의 머리글. 없으면 null. */
-  private static String cachedHeader(Map<String, String> env, String server) {
-    String key = "http." + server + "/.extraHeader";
-    for (Map.Entry<String, String> entry : env.entrySet()) {
-      if (entry.getKey().startsWith(ENV_KEY) && key.equals(entry.getValue())) return env.get(ENV_VALUE + entry.getKey().substring(ENV_KEY.length()));
-    }
-    return null;
+  private static synchronized void dropCache() {
+    VERSION.incrementAndGet();
+    cachedLogins = null;
   }
 
   /** 인증에 실패한 값을 지운다. 목록 줄은 남겨 표에서 값만 다시 넣게 한다. 등록이 없는 서버면 아무 일도 안 한다. */
@@ -110,20 +112,44 @@ final class GitLogins {
     Login login = find(list(), server);
     if (login == null) return;
     PasswordSafe.getInstance().setPassword(attributes(login.server()), null);
-    cachedEnv = null;
+    dropCache();
   }
 
-  /** git 을 띄울 때 더할 환경값. 등록이 없으면 빈 맵. base 는 IDE 의 환경(이미 GIT_CONFIG_COUNT 가 있으면 그 뒤에 잇는다). */
-  static Map<String, String> env(Map<String, String> base) {
+  /**
+   * git 을 띄울 때 더할 환경값. servers(serverOf 로 다듬은 주소)에 든 서버의 로그인만 넣는다. 등록이 없으면 빈 맵.
+   * git 은 이 환경값을 훅(pre-push 등)에도 물려주므로, 그 명령이 닿지 않는 다른 서버의 비밀번호는 넘기지 않는다.
+   * base 는 IDE 의 환경(이미 GIT_CONFIG_COUNT 가 있으면 그 뒤에 잇는다).
+   */
+  static Map<String, String> env(java.util.Set<String> servers, Map<String, String> base) {
     // IDE 없이 도는 점검(SyncCheck)에서는 저장한 로그인이 없다.
-    if (ApplicationManager.getApplication() == null) return Map.of();
-    Map<String, String> env = cachedEnv;
-    if (env == null) {
-      env = env(load(), base);
-      // 등록이 있는데 값이 하나도 없으면 비밀번호 저장소가 잠겨 있었을 수 있어 다음 명령에서 다시 읽는다.
-      if (!env.isEmpty() || list().isEmpty()) cachedEnv = env;
+    if (ApplicationManager.getApplication() == null || servers.isEmpty()) return Map.of();
+    List<Login> logins = cachedLogins;
+    if (logins == null) {
+      int version = VERSION.get();
+      logins = load();
+      boolean any = list().isEmpty();
+      for (Login login : logins) any |= login.secret() != null && !login.secret().isEmpty();
+      // 등록이 있는데 값이 하나도 없으면 비밀번호 저장소가 잠겨 있었을 수 있어 다음 명령에서 다시 읽는다. 읽는 사이 비워졌으면 넣지 않는다.
+      synchronized (GitLogins.class) {
+        if (any && VERSION.get() == version) cachedLogins = logins;
+      }
     }
-    return env;
+    return env(matching(logins, servers), base);
+  }
+
+  /** logins 가운데 servers 에 든 서버의 것. */
+  static List<Login> matching(List<Login> logins, java.util.Set<String> servers) {
+    List<Login> result = new ArrayList<>();
+    for (Login login : logins) {
+      if (servers.contains(normalized(login.server()))) result.add(login);
+    }
+    return result;
+  }
+
+  /** git 원격 주소가 https · http 인가. 파일 경로(D:/git/x.git) · ssh(git@host:repo) 원격은 머리글 인증을 쓰지 않는다. */
+  static boolean isHttpUrl(String url) {
+    String lower = url == null ? "" : url.trim().toLowerCase(Locale.ROOT);
+    return lower.startsWith("https://") || lower.startsWith("http://");
   }
 
   /** env 의 순수 부분. 비밀번호 · 토큰이 빈 로그인은 건너뛴다. */

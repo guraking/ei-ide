@@ -85,6 +85,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
   private static final JBColor FILES_FG = new JBColor(0x5A5D63, 0xB0B3B8);
   private static final int TABLE_W = 1000;
   private static final int TABLE_H = 420;
+  /** 대소문자만 바뀐 이름을 묻는 창에 보이는 줄 수. 나머지는 개수로 알린다. */
+  private static final int CASE_LIST_MAX = 10;
   private static final int PATH_COL_W = 480;
   // From · Into 상자의 최소 너비. 두 상자는 창 너비를 반씩 나눠 꽉 채우고, 창을 늘리면 같이 늘어난다(「fe-기능이름/날짜/아이디」 같은 긴 이름).
   private static final int COMBO_W = 300;
@@ -133,6 +135,11 @@ public final class ReverseMergeAction extends DumbAwareAction {
           remote = ReverseMerge.remoteOf(cfg, current);
           savedFrom = cfg.get(ReverseMerge.CONFIG_FROM);
           savedInto = cfg.get(ReverseMerge.CONFIG_INTO);
+          // 다른 브랜치에서 한 합치기의 기억(featureA → develop)은 쓰지 않는다. 그대로 열면 남의 브랜치를 develop 에 올리게 된다.
+          if (!ReverseMerge.rememberedFor(savedFrom, savedInto, current)) {
+            savedFrom = null;
+            savedInto = null;
+          }
           // 받아 둔 브랜치 목록으로 바로 열고 서버 목록은 창이 뜬 뒤 합친다(VPN 에서 ls-remote 는 몇 초 걸린다).
           // 아직 기준 브랜치를 받은 적이 없으면(처음 쓰는 저장소) 서버에 물어야 From 을 채울 수 있다.
           names = ReverseMerge.knownBranches(root, remote);
@@ -184,6 +191,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
     private final JBLabel intoUnpushed = new JBLabel();
     // 미리 보기 계산을 하나씩 차례로 돌린다. 같은 저장소에 fetch 가 겹치면 「cannot lock ref」로 실패한다.
     private final ExecutorService worker = AppExecutorUtil.createBoundedApplicationPoolExecutor("EI Merge Branches", 1);
+    // 서버 브랜치 목록 받기(addServerBranches). 창을 닫으면 끊는다.
+    private Future<?> serverList;
     private final RowModel model = new RowModel();
     // 미리 보기 표. 비교 전 · 받는 중 · 실패 · 합칠 것 없음은 표의 빈 글(StatusText)로 보인다.
     private final JBTable table = new JBTable(model);
@@ -239,12 +248,15 @@ public final class ReverseMergeAction extends DumbAwareAction {
       addServerBranches();
     }
 
-    /** 서버 브랜치 목록을 뒤에서 받아 받아 둔 목록에 없던 것을 두 상자에 더한다. 서버에 닿지 못하면 받아 둔 목록만 남는다(미리 보기의 fetch 가 그 오류를 보인다). */
+    /**
+     * 서버 브랜치 목록을 뒤에서 받아 받아 둔 목록에 없던 것을 두 상자에 더한다. 서버에 닿지 못하면 받아 둔 목록만 남는다(미리 보기의 fetch 가 그 오류를 보인다).
+     * 미리 보기 worker 밖에서 짧은 시간 제한으로 돌려, 서버가 멈춰도 비교가 그 뒤에 줄 서지 않게 한다. 창을 닫으면 끊는다.
+     */
     private void addServerBranches() {
-      worker.execute(() -> {
+      serverList = ApplicationManager.getApplication().executeOnPooledThread(() -> {
         List<String> names;
         try {
-          names = ReverseMerge.serverBranches(root, remote);
+          names = ReverseMerge.serverBranches(root, remote, SyncPanel.CMD_TIMEOUT_SEC);
         }
         catch (IOException unreachable) {
           return;
@@ -263,6 +275,12 @@ public final class ReverseMergeAction extends DumbAwareAction {
           }
         });
       });
+    }
+
+    @Override
+    protected void dispose() {
+      if (serverList != null) serverList.cancel(true);
+      super.dispose();
     }
 
     /**
@@ -599,14 +617,15 @@ public final class ReverseMergeAction extends DumbAwareAction {
       super.doOKAction();
       // 열린 편집기의 저장 안 한 내용이 합치기에 빠지지 않게 먼저 저장한다. 단추 클릭은 쓰기 락 없이 오므로 락을 잡는다.
       WriteIntentReadAction.run((Runnable) () -> FileDocumentManager.getInstance().saveAllDocuments());
-      runMerge(from, tip, into, pushAfter, false);
+      runMerge(from, tip, into, pushAfter, false, false);
     }
 
     /**
      * 작업 스레드에서 from 의 tip(미리 본 커밋)을 합친다. 커밋 안 한 변경이 합칠 파일과 겹쳐 멈추면(DirtyException) Stash 해 두고 합칠지 묻고, 고르면 stash 를 참으로 다시 한다.
+     * From 쪽이 파일 이름 대소문자만 바꿔 멈추면(CaseRenameException) 목록을 보여 이름을 맞추고 합칠지 묻고, 고르면 matchCase 를 참으로 다시 한다.
      * 충돌이면 충돌 창을 띄워 마무리한다(resolveThenFinish).
      */
-    private void runMerge(String from, String tip, String into, boolean pushAfter, boolean stash) {
+    private void runMerge(String from, String tip, String into, boolean pushAfter, boolean stash, boolean matchCase) {
       ProgressManager.getInstance().run(new Task.Backgroundable(project, SyncBundle.message("rmerge.running", from, into), false) {
         private ReverseMerge.Result result;
         private Set<String> conflicts = Set.of();
@@ -618,7 +637,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
           try {
             ReverseMerge.saveConfig(root, ReverseMerge.CONFIG_FROM, from);
             ReverseMerge.saveConfig(root, ReverseMerge.CONFIG_INTO, into);
-            result = ReverseMerge.merge(root, remote, from, tip, into, current, pushAfter, stash);
+            result = ReverseMerge.merge(root, remote, from, tip, into, current, pushAfter, stash, matchCase);
             if (result != ReverseMerge.Result.MERGED) conflicts = ReverseMerge.conflicts(root);
           }
           catch (IOException ex) {
@@ -649,10 +668,18 @@ public final class ReverseMergeAction extends DumbAwareAction {
 
         @Override
         public void onThrowable(@NotNull Throwable error) {
+          if (error.getCause() instanceof ReverseMerge.CaseRenameException caseError) {
+            if (Messages.showOkCancelDialog(project, SyncBundle.message("rmerge.case.ask", remote + "/" + from, renameList(caseError.renames), into),
+                                            SyncBundle.message("rmerge.title"), SyncBundle.message("rmerge.case.button"), Messages.getCancelButton(),
+                                            Messages.getQuestionIcon()) == Messages.OK) {
+              runMerge(from, tip, into, pushAfter, stash, true);
+            }
+            return;
+          }
           if (error.getCause() instanceof ReverseMerge.DirtyException) {
             if (Messages.showOkCancelDialog(project, SyncBundle.message("rmerge.dirty.ask"), SyncBundle.message("rmerge.title"),
                                             SyncBundle.message("rmerge.stash.button"), Messages.getCancelButton(), Messages.getQuestionIcon()) == Messages.OK) {
-              runMerge(from, tip, into, pushAfter, true);
+              runMerge(from, tip, into, pushAfter, true, matchCase);
             }
             return;
           }
@@ -660,13 +687,28 @@ public final class ReverseMergeAction extends DumbAwareAction {
             if (Messages.showOkCancelDialog(project, error.getMessage() + "\n\n" + SyncBundle.message("rmerge.retry.ask", remote + "/" + into),
                                             SyncBundle.message("rmerge.title"), SyncBundle.message("rmerge.retry.button"), Messages.getCancelButton(),
                                             Messages.getQuestionIcon()) == Messages.OK) {
-              runMerge(from, tip, into, pushAfter, stash);
+              runMerge(from, tip, into, pushAfter, stash, matchCase);
             }
             return;
           }
           Messages.showErrorDialog(project, error.getMessage(), SyncBundle.message("rmerge.title"));
         }
       });
+    }
+
+    /** 「지금 이름 → 새 이름」 줄 목록. 폴더 이름이 바뀌면 파일이 많아 CASE_LIST_MAX 줄까지만 보이고 나머지는 개수로 알린다. */
+    private static String renameList(Map<String, String> renames) {
+      StringBuilder text = new StringBuilder();
+      int shown = 0;
+      for (Map.Entry<String, String> r : renames.entrySet()) {
+        if (shown == CASE_LIST_MAX) {
+          text.append(SyncBundle.message("rmerge.case.more", renames.size() - shown));
+          break;
+        }
+        text.append(r.getKey()).append("\n  → ").append(r.getValue()).append('\n');
+        shown++;
+      }
+      return text.toString().trim();
     }
 
     /** 합치기가 끝났다는 알림 풍선. 누르지 않아도 사라지고, 「커밋 보기」로 Git Log 창을 연다. */
@@ -702,11 +744,11 @@ public final class ReverseMergeAction extends DumbAwareAction {
         return ReverseMerge.lines(SyncPanel.git(root, "diff", "--name-only", "--no-renames", "HEAD"));
       }
       catch (IOException e) {
-        return null;
+        return Set.of();
       }
       catch (InterruptedException e) {
         Thread.currentThread().interrupt();
-        return null;
+        return Set.of();
       }
     }
 

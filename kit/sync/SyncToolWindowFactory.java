@@ -41,17 +41,30 @@ public final class SyncToolWindowFactory implements ToolWindowFactory, DumbAware
     applyInitialHeight(project, toolWindow);
   }
 
-  /** 이 PC 에서 처음 열 때 한 번, 창 높이를 IDE 창 높이의 INITIAL_HEIGHT_RATIO 로 늘리거나 줄인다. 창이 아직 그려지기 전이면 다음 그리기 뒤에 잰다. */
+  /**
+   * 이 PC 에서 처음 열 때 한 번, 창 높이를 IDE 창 높이의 INITIAL_HEIGHT_RATIO 로 늘리거나 줄인다.
+   * 창이 숨은 채 만들어졌거나 아직 그려지기 전이면(높이 0) 창이 보일 때 다시 잰다.
+   */
   private static void applyInitialHeight(Project project, ToolWindow toolWindow) {
     PropertiesComponent properties = PropertiesComponent.getInstance();
     if (properties.getBoolean(INITIAL_SIZE_DONE_KEY) || !(toolWindow instanceof ToolWindowEx ex)) return;
-    ApplicationManager.getApplication().invokeLater(() -> {
+    com.intellij.util.messages.MessageBusConnection connection = project.getMessageBus().connect(toolWindow.getDisposable());
+    Runnable apply = () -> {
+      if (properties.getBoolean(INITIAL_SIZE_DONE_KEY) || project.isDisposed()) return;
       JFrame frame = WindowManager.getInstance().getFrame(project);
       int current = toolWindow.getComponent().getHeight();
-      if (frame == null || current <= 0) return;
+      if (frame == null || current <= 0 || !toolWindow.isVisible()) return;
       ex.stretchHeight(Math.round(frame.getContentPane().getHeight() * INITIAL_HEIGHT_RATIO) - current);
       properties.setValue(INITIAL_SIZE_DONE_KEY, true);
+      connection.disconnect();
+    };
+    connection.subscribe(com.intellij.openapi.wm.ex.ToolWindowManagerListener.TOPIC, new com.intellij.openapi.wm.ex.ToolWindowManagerListener() {
+      @Override
+      public void stateChanged(@NotNull ToolWindowManager manager) {
+        ApplicationManager.getApplication().invokeLater(apply, project.getDisposed());
+      }
     });
+    ApplicationManager.getApplication().invokeLater(apply, project.getDisposed());
   }
 
   /**

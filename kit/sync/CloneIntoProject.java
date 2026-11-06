@@ -28,6 +28,7 @@ import com.intellij.openapi.roots.ModuleRootModificationUtil;
 import com.intellij.openapi.startup.StartupActivity;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vcs.ProjectLevelVcsManager;
+import com.intellij.openapi.vcs.VcsConfiguration;
 import com.intellij.openapi.vcs.VcsDirectoryMapping;
 import com.intellij.openapi.vcs.checkout.CheckoutListener;
 import com.intellij.openapi.vfs.LocalFileSystem;
@@ -133,6 +134,8 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
 
   @Override
   public boolean processCheckedOutDirectory(@NotNull Project project, @NotNull Path directory) {
+    // 이클립스 Clone 의 「Initial branch」: 모듈로 붙이거나 새 창으로 열기 전에 받을 브랜치로 바꿔 Maven · Gradle 이 그 브랜치 파일을 읽게 한다.
+    CloneBranch.choose(project.isDefault() || project.isDisposed() ? null : project, directory.toFile());
     String base = project.isDefault() || project.isDisposed() ? null : project.getBasePath();
     if (base == null) return false;
     VirtualFile dir = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(directory);
@@ -190,6 +193,7 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
   private static void dropStaleClosed(Project project, @Nullable Path cloned) {
     ModuleManager modules = ModuleManager.getInstance(project);
     List<UnloadedModuleDescription> stale = new ArrayList<>();
+    List<String> staleRoots = new ArrayList<>();
     for (UnloadedModuleDescription description : modules.getUnloadedModuleDescriptions()) {
       List<String> roots = CloseRepoAction.rootsOf(project, description);
       boolean gone = !roots.isEmpty();
@@ -197,11 +201,16 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
         Path root = Path.of(FileUtil.toSystemDependentName(path));
         if (Files.exists(root) && (cloned == null || !root.startsWith(cloned))) gone = false;
       }
-      if (gone) stale.add(description);
+      if (gone) {
+        stale.add(description);
+        staleRoots.addAll(roots);
+      }
     }
     if (stale.isEmpty()) return;
     LOG.info("폴더가 없어진 닫은 저장소를 지웁니다: " + stale);
     WriteAction.run(() -> modules.removeUnloadedModules(stale));
+    // 닫을 때 넣은 「등록 안 된 루트 무시」도 뺀다. 남으면 같은 자리에 IDE 밖에서 다시 받은 저장소를 IntelliJ 가 찾지 않아 동기화 창 · Git Log 에 안 보인다.
+    VcsConfiguration.getInstance(project).removeFromIgnoredUnregisteredRoots(staleRoots);
   }
 
   /** 올라온 모듈이나 내린 모듈 중 대소문자를 가리지 않고 같은 이름이 있으면 true. 새 모듈 만들기는 같은 이름의 내린 모듈을 지우고, 윈도우에서는 .iml 이 대소문자만 달라도 덮인다. */

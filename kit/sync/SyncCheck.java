@@ -7,6 +7,60 @@ import java.util.Set;
 
 /** 자체 점검: java -cp out:test-out:<IDE jar> kinggura.sync.SyncCheck */
 public class SyncCheck {
+  /** 2026-11-06 동기화 전수조사에서 고친 순수 판단들. */
+  static void checkAudit1106() throws Exception {
+    SyncPanel.Repo r = new SyncPanel.Repo(new File("."), SyncPanel.Vcs.GIT, "main", "origin/main");
+    // 대소문자만 다른 경로: 윈도우(대소문자 안 가림)에서는 같은 파일이라 충돌, 리눅스에서는 따로.
+    List<SyncPanel.Change> ci = SyncPanel.merge(r, java.util.Map.of("Foo.vue", "M"), java.util.Map.of("foo.vue", "R"), Set.of(), false);
+    eq(ci.size(), 1);
+    eq(ci.get(0).kind(), SyncPanel.Kind.CONFLICT);
+    eq(SyncPanel.merge(r, java.util.Map.of("Foo.vue", "M"), java.util.Map.of("foo.vue", "R"), Set.of(), true).size(), 2);
+    // 저장소에 대소문자만 다른 두 이름이 함께 커밋된 것 찾기.
+    eq(SyncPanel.caseClashes(SyncPanel.lsFilesPaths("H a/Designchanges.vue\nH a/DesignChanges.vue\nH b.txt\n"), false),
+       List.of("a/DesignChanges.vue", "a/Designchanges.vue"));
+    eq(SyncPanel.caseClashes(List.of("A", "a"), true), List.of());
+    eq(SyncPanel.caseClashes(SyncPanel.lsFilesPaths("M a/Foo.vue\nM a/Foo.vue\nM a/Foo.vue\n"), false), List.of());
+    // 멈춘 합치기 표시.
+    File repo = java.nio.file.Files.createTempDirectory("state").toFile();
+    new File(repo, ".git").mkdir();
+    eq(SyncPanel.gitState(repo), null);
+    java.nio.file.Files.writeString(new File(repo, ".git/MERGE_HEAD").toPath(), "x");
+    eq(SyncPanel.gitState(repo), SyncBundle.message("sync.state.merge"));
+    // 정션 · 링크로 연 경로가 git 맨 위 폴더와 실제로 같으면 IntelliJ 경로를 쓰고, 안쪽 폴더 매핑이면 git 맨 위 폴더.
+    File inner = new File(repo, "inner");
+    inner.mkdir();
+    eq(SyncPanel.topLevel(repo, repo.getCanonicalPath() + "\n"), repo);
+    eq(SyncPanel.topLevel(inner, repo.getPath()), repo);
+    // 우리 Stash 는 맨 위가 아니어도 찾는다.
+    eq(ReverseMerge.ourStash("stash@{0}\tOn feature/kim: 남의것\nstash@{1}\tOn feature/kim: " + ReverseMerge.STASH_MESSAGE + "\n"), "stash@{1}");
+    eq(ReverseMerge.ourStash("stash@{0}\tOn main: 남의것\n"), null);
+    eq(ReverseMerge.ourStash(""), null);
+    // 기억된 합치기가 지금 브랜치와 관련 있을 때만 쓴다.
+    eq(ReverseMerge.rememberedFor("develop", "featureB", "featureB"), true);
+    eq(ReverseMerge.rememberedFor("featureB", "develop", "featureB"), true);
+    eq(ReverseMerge.rememberedFor("featureA", "develop", "featureB"), false);
+    eq(ReverseMerge.rememberedFor(null, null, "featureB"), false);
+    // Undo: 커밋을 옮기지 않은 reflog 줄(stash 의 reset: moving to HEAD)은 건너뛴다.
+    String f = "\u001f";
+    GitUndo.Plan p = GitUndo.plan("", "b" + f + "main@{t3}" + f + "reset: moving to HEAD\nb" + f + "main@{t2}" + f + "commit: 고침\na" + f + "main@{t1}" + f + "commit: 앞", "main");
+    eq(p, new GitUndo.Plan(GitUndo.Mode.SOFT, "commit: 고침", "t2", "a", false));
+    eq(GitUndo.plan("", "b" + f + "x" + f + "reset: moving to HEAD\nb" + f + "x" + f + "commit (initial): one", "main"), null);
+    eq(GitUndo.fromUpstream("rebase (finish): refs/heads/kim onto abc123", "origin/kim", "abc123"), true);
+    eq(GitUndo.fromUpstream("rebase (finish): refs/heads/kim onto abc123", "origin/kim", "fff000"), false);
+    eq(GitUndo.fromUpstream("commit: 고침", "origin/kim", "abc123"), false);
+    // 머리글 인증은 https · http 원격만. 파일 경로 · ssh 원격은 서버로 보지 않는다.
+    eq(GitLogins.isHttpUrl("https://axplm-gitlab.example.com/a.git"), true);
+    eq(GitLogins.isHttpUrl("D:/git/x.git"), false);
+    eq(GitLogins.isHttpUrl("git@host:2024/repo.git"), false);
+    eq(GitRemoteAuth.serverUrls(List.of("D:/git/x.git", "git@host:2024/repo.git", "https://Git.Example.com:443/a.git")).keySet(),
+       Set.of("https://git.example.com"));
+    // 다른 서버의 비밀번호는 넘기지 않는다.
+    GitLogins.Login a = new GitLogins.Login("https://a.example.com", GitLogins.Kind.PASSWORD, "kim", "pw");
+    GitLogins.Login b = new GitLogins.Login("https://b.example.com:8443", GitLogins.Kind.TOKEN, "", "tok");
+    eq(GitLogins.matching(List.of(a, b), Set.of("https://b.example.com:8443")), List.of(b));
+    eq(GitLogins.matching(List.of(a, b), Set.of()), List.of());
+  }
+
   static void eq(Object a, Object b) { if (!java.util.Objects.equals(a, b)) throw new AssertionError(a + " != " + b); }
 
   public static void main(String[] args) throws Exception {
@@ -49,6 +103,8 @@ public class SyncCheck {
     eq(SyncPanel.unquote("\"\\355\\225\\234.txt\""), "한.txt");
     eq(SyncPanel.unquote("plain.txt"), "plain.txt");
     checkNestedRepo();
+    checkAudit1106();
+    checkCloneBranch();
 
     // Push 단추 숫자 · 받을 저장소: git status -b 브랜치 줄의 ahead · behind.
     eq(SyncPanel.parseTracking("## main...origin/main [ahead 2, behind 13]\n M a.txt\n"), new SyncPanel.Tracking(2, 13));
@@ -61,6 +117,7 @@ public class SyncCheck {
     eq(SyncPanel.refRace("error: cannot lock ref 'refs/heads/main': is at 1a but expected 2b"), null);
     eq(SyncPanel.refRace("fatal: Authentication failed"), null);
     eq(SyncPanel.refRace(null), null);
+    eq(SyncPanel.refRace("error: 'refs/remotes/origin/Feature' exists; cannot create 'refs/remotes/origin/feature/x'"), "refs/remotes/origin/Feature");
     // 경로 묶음: 명령줄 한도를 넘지 않게 나누고 순서 · 개수는 그대로.
     List<String> many = new java.util.ArrayList<>();
     for (int i = 0; i < 3000; i++) many.add("src/main/java/com/shop/order/Order" + i + ".java");
@@ -375,6 +432,38 @@ public class SyncCheck {
     sh(mine, "git commit -q --allow-empty -m 올릴것");
     eq(ReverseMerge.lastUnpushed(mine, "origin", "feature/kim"), "올릴것");
     sh(mine, "git reset -q --hard HEAD~1");
+    // 대소문자만 바뀐 이름: From 쪽이 바꾼 것만 잡고(갈라진 곳에 지금 이름이 있음), 내 쪽이 바꾼 것은 두며, 폴더 이름도 잡는다.
+    eq(ReverseMerge.caseRenames(Set.of("A.vue", "b/C.vue", "D.vue"), Set.of("a.vue", "B/C.vue", "D.vue", "e.vue"), Set.of("A.vue", "b/C.vue", "D.vue")),
+       java.util.Map.of("A.vue", "a.vue", "b/C.vue", "B/C.vue"));
+    eq(ReverseMerge.caseRenames(Set.of("a.vue"), Set.of("A.vue"), Set.of("A.vue")), java.util.Map.of());
+    // 다른 개발자가 develop 에서 Big.vue → big.vue, ui/X.vue → UI/X.vue 로 이름의 대소문자만 바꾸고 내용도 고쳤다(내용이 비슷해 git 이 이름 바꾸기로 본다).
+    sh(other, "git checkout -q develop && git pull -q origin develop && mkdir -p ui && echo x > ui/X.vue && seq 1 30 > Big.vue && git add ui Big.vue && git commit -qm ui && git push -q origin develop");
+    ReverseMerge.fetch(mine, "origin", "develop", "feature/kim");
+    eq(ReverseMerge.merge(mine, "origin", "develop", "feature/kim", "feature/kim", true, false), ReverseMerge.Result.MERGED);
+    sh(other, "git mv Big.vue big.vue && echo more >> big.vue && mkdir UI && git mv ui/X.vue UI/X.vue && git commit -qam 대소문자 && git push -q origin develop");
+    ReverseMerge.fetch(mine, "origin", "develop", "feature/kim");
+    String tipBefore = SyncPanel.git(mine, "rev-parse", "HEAD").trim();
+    // 대소문자를 가리는 저장소면 git 이 그대로 합칠 수 있어 묻지 않는다. 가리지 않는 저장소(윈도우)면 아무것도 하지 않고 멈춘다.
+    sh(mine, "git config core.ignorecase true");
+    try {
+      ReverseMerge.merge(mine, "origin", "develop", "feature/kim", "feature/kim", true, false);
+      throw new AssertionError("대소문자만 바뀐 이름이 있으면 묻기 전에 합치지 않아야 한다");
+    }
+    catch (ReverseMerge.CaseRenameException expected) {
+      eq(expected.renames, java.util.Map.of("Big.vue", "big.vue", "ui/X.vue", "UI/X.vue"));
+      eq(SyncPanel.git(mine, "rev-parse", "HEAD").trim(), tipBefore);
+      eq(SyncPanel.git(mine, "status", "--porcelain"), "");
+    }
+    // 이름을 맞춰 커밋하고 합친 뒤 Push 한다. 새 이름만 남고 From 쪽 내용이 들어온다.
+    String rDevelop = SyncPanel.git(mine, "rev-parse", ReverseMerge.remoteRef("origin", "develop")).trim();
+    eq(ReverseMerge.merge(mine, "origin", "develop", rDevelop, "feature/kim", "feature/kim", true, false, true), ReverseMerge.Result.MERGED);
+    Set<String> files = ReverseMerge.lines(SyncPanel.git(mine, "ls-tree", "-r", "--name-only", "HEAD"));
+    eq(files.contains("big.vue") && files.contains("UI/X.vue") && !files.contains("Big.vue") && !files.contains("ui/X.vue"), true);
+    eq(SyncPanel.git(mine, "show", "HEAD:big.vue").contains("more"), true);
+    eq(SyncPanel.git(mine, "log", "-1", "--format=%s", "HEAD^1"), "파일 이름 대소문자를 origin/develop 에 맞춤\n");
+    eq(SyncPanel.git(mine, "rev-parse", "HEAD").trim(), SyncPanel.git(server, "rev-parse", "feature/kim").trim());
+    eq(SyncPanel.git(mine, "status", "--porcelain"), "");
+    sh(mine, "git config core.ignorecase false");
     ReverseMerge.saveConfig(mine, ReverseMerge.CONFIG_FROM, "develop");
     eq(ReverseMerge.config(mine, ReverseMerge.CONFIG_FROM), "develop");
     eq(ReverseMerge.config(mine, ReverseMerge.CONFIG_INTO), null);
@@ -481,6 +570,34 @@ public class SyncCheck {
     eq(SyncPanel.isNestedRepo(new File(outer, "plain/")), false);
     // git 은 중첩 저장소를 「?? inner/」 로 보고하므로 compare 가 이 줄을 거른다.
     eq(SyncPanel.git(outer, "status", "--porcelain=v1", "-unormal").contains("?? inner/"), true);
+  }
+
+  /** 받을 브랜치: 서버 브랜치 읽기 · 내 브랜치 위로 · 찾기 · 추적 걸고 꺼내기. */
+  private static void checkCloneBranch() throws Exception {
+    eq(CloneBranch.parseBranches("refs/remotes/origin/HEAD\nrefs/remotes/origin/main\nrefs/remotes/origin/feature/gpm/dxplmdev.jmlee\nrefs/remotes/up/x\n", "origin"),
+       List.of("feature/gpm/dxplmdev.jmlee", "main"));
+    eq(CloneBranch.nameParts(List.of("이 정민", "JMLee@corp.com", "jm", " ")), java.util.Set.of("이정민", "jmlee"));
+    List<String> all = List.of("develop", "feature/a.kim", "feature/b.JMLEE", "main");
+    eq(CloneBranch.mine(all, java.util.Set.of("jmlee")), List.of("feature/b.JMLEE"));
+    CloneBranch.Remote remote = new CloneBranch.Remote("origin", "main", all);
+    eq(CloneBranch.ordered(remote, List.of("feature/b.JMLEE"), ""), List.of("feature/b.JMLEE", "main", "develop", "feature/a.kim"));
+    eq(CloneBranch.ordered(remote, List.of(), " FEATURE "), List.of("feature/a.kim", "feature/b.JMLEE"));
+    eq(CloneBranch.ordered(remote, List.of(), "없음"), List.of());
+
+    java.nio.file.Path tmp = java.nio.file.Files.createTempDirectory("clone-branch");
+    sh(tmp.toFile(), "git init -q -b main src && cd src && git -c user.name=t -c user.email=t@x commit -q --allow-empty -m init"
+                     + " && git branch dev/jmlee && git clone -q . ../work");
+    File work = tmp.resolve("work").toFile();
+    CloneBranch.Remote cloned = CloneBranch.remote(work);
+    eq(cloned, new CloneBranch.Remote("origin", "main", List.of("dev/jmlee", "main")));
+    CloneBranch.checkout(work, "origin", "dev/jmlee");
+    eq(SyncPanel.git(work, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}").trim(), "origin/dev/jmlee");
+    // 같은 이름 내 브랜치가 있으면 그리로 바꾼다.
+    CloneBranch.checkout(work, "origin", "main");
+    eq(SyncPanel.git(work, "rev-parse", "--abbrev-ref", "HEAD").trim(), "main");
+    // 빈 저장소(추적 대상 없음)는 고를 것이 없다.
+    sh(tmp.toFile(), "git init -q empty");
+    eq(CloneBranch.remote(tmp.resolve("empty").toFile()), null);
   }
 
   private static void sh(File dir, String command) throws Exception {
