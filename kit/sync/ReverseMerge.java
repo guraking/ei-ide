@@ -60,6 +60,19 @@ final class ReverseMerge {
     DirtyException() { super(SyncBundle.message("rmerge.dirty")); }
   }
 
+  /**
+   * 합쳐 올 From 쪽이 파일 · 폴더 이름의 대소문자만 바꿨다(renames: 지금 이름 → From 쪽 이름). 대소문자를 가리지 않는 파일 시스템(core.ignorecase)에서는
+   * git merge 가 새 이름을 「추적 안 된 파일을 덮어씀」으로 보고 멈춘다. 아무것도 바꾸지 않았고, matchCase 를 참으로 다시 부르면 이름을 먼저 맞춰 커밋하고 합친다.
+   */
+  static final class CaseRenameException extends IOException {
+    final Map<String, String> renames;
+
+    CaseRenameException(Map<String, String> renames) {
+      super(SyncBundle.message("rmerge.case", renames.size()));
+      this.renames = renames;
+    }
+  }
+
   /** 합치기 전에 커밋 안 한 변경을 넣어 두는 Stash 의 이름. 되살릴 때 맨 위 Stash 가 이 이름일 때만 꺼낸다(남의 Stash 를 꺼내지 않게). */
   /**
    * 합친 뒤 Push 를 서버가 받지 않았다: 미리 보기 뒤 다른 사람이 into 에 먼저 올렸다. merge 는 방금 만든 합치기 커밋을 되돌려 두었으므로
@@ -79,6 +92,10 @@ final class ReverseMerge {
   static final String STASH_MESSAGE = "EI Merge Branches";
   /** 미리 본 커밋(해시)을 합칠 때의 합치기 커밋 메시지. git 이 원격 브랜치를 이름으로 합칠 때 쓰는 문구와 같다(원격/브랜치, into). */
   private static final String MERGE_MESSAGE = "Merge remote-tracking branch '%s' into %s";
+  /** 합치기 전에 파일 이름 대소문자를 From(원격/브랜치)에 맞추는 커밋의 메시지. */
+  private static final String CASE_MESSAGE = "파일 이름 대소문자를 %s 에 맞춤";
+  /** 대소문자만 다른 이름으로 옮길 때 거쳐 가는 임시 이름의 꼬리. 같은 폴더에 이 이름의 파일이 있으면 옮기기가 실패하고 아무것도 바꾸지 않는다. */
+  private static final String CASE_TMP_SUFFIX = ".moa-case-tmp";
 
   private ReverseMerge() {}
 
@@ -147,6 +164,22 @@ final class ReverseMerge {
     Set<String> set = new LinkedHashSet<>();
     for (String line : output.split("\n")) if (!line.isBlank()) set.add(line.trim());
     return set;
+  }
+
+  /**
+   * 대소문자만 바뀐 이름: ours 에만 있는 경로 가운데 theirs 에만 있는 경로와 대소문자만 다르고, 갈라진 곳(fork)에 ours 쪽 이름이 있던 것.
+   * fork 에 있던 이름이어야 theirs 쪽이 바꾼 것이다(ours 쪽이 바꿨으면 그대로 두어야 한다). 결과는 ours 경로 → theirs 경로, ours 경로순.
+   */
+  static Map<String, String> caseRenames(Set<String> ours, Set<String> theirs, Set<String> fork) {
+    Map<String, String> theirsByLower = new HashMap<>();
+    for (String path : theirs) if (!ours.contains(path)) theirsByLower.put(path.toLowerCase(Locale.ROOT), path);
+    Map<String, String> renames = new TreeMap<>();
+    for (String path : ours) {
+      if (theirs.contains(path) || !fork.contains(path)) continue;
+      String target = theirsByLower.get(path.toLowerCase(Locale.ROOT));
+      if (target != null) renames.put(path, target);
+    }
+    return renames;
   }
 
   /** 들어올 경로 · 내 경로 · 커밋 정보로 미리 보기 줄을 만든다. 내 파일이 앞, 그 안에서는 경로순. */
@@ -318,7 +351,7 @@ final class ReverseMerge {
 
   /** merge 와 같고 지금 받아 둔 From(remoteRef)을 합친다. */
   static Result merge(File root, String remote, String from, String into, String current, boolean push, boolean stash) throws IOException, InterruptedException {
-    return merge(root, remote, from, git(root, "rev-parse", remoteRef(remote, from)).trim(), into, current, push, stash);
+    return merge(root, remote, from, git(root, "rev-parse", remoteRef(remote, from)).trim(), into, current, push, stash, false);
   }
 
   /**
@@ -332,8 +365,10 @@ final class ReverseMerge {
    * 시작 전에 into 를 서버에서 다시 받아, 미리 보기 뒤 남이 올린 into 커밋 위에서 합친다.
    * 그래도 Push 를 서버가 앞서 있어 거절하면(behindServer) 방금 만든 합치기 커밋만 되돌리고(reset --keep, 커밋 안 한 변경은 그대로) PushRejectedException.
    * into 로 옮겼으면 끝난 뒤(실패 포함, 충돌 빼고) 원래 브랜치로 돌아온다. 되살리지 못하면 그 안내를 예외 메시지에 붙인다.
+   * 대소문자를 가리지 않는 저장소(core.ignorecase)에서 From 쪽이 이름의 대소문자만 바꿨으면(caseRenames) matchCase 가 거짓이면 아무것도 하지 않고 CaseRenameException.
+   * 참이면 합치기 바로 전에 into 에서 그 이름을 git mv 로 맞춰 커밋(CASE_MESSAGE)한다. 합치기가 충돌 없이 실패하거나 Push 가 거절되면 그 커밋까지 되돌린다.
    */
-  static Result merge(File root, String remote, String from, String fromTip, String into, String current, boolean push, boolean stash)
+  static Result merge(File root, String remote, String from, String fromTip, String into, String current, boolean push, boolean stash, boolean matchCase)
     throws IOException, InterruptedException {
     fetch(root, remote, into);
     String intoRemote = remoteRef(remote, into);
@@ -342,6 +377,8 @@ final class ReverseMerge {
     // 합치기가 시작하는 곳: 옮겨 갈 브랜치(없으면 서버 것으로 만든다) 또는 지금 HEAD. 서버 것이 앞서 있으면 따라잡은 뒤 거기서 합친다.
     String start = !switched ? "HEAD" : hasRef(root, HEADS + into) ? HEADS + into : intoRemote;
     String base = Integer.parseInt(git(root, "rev-list", "--count", start + ".." + intoRemote).trim()) > 0 ? intoRemote : start;
+    Map<String, String> renames = ignoreCase(root) ? caseRenames(tree(root, base), tree(root, fromTip), tree(root, forkPoint(root, base, fromTip))) : Map.of();
+    if (!renames.isEmpty() && !matchCase) throw new CaseRenameException(renames);
     if (blocksMerge(root, start, base, fromTip)) {
       if (!stash) throw new DirtyException();
       git(root, GIT_LONG_TIMEOUT_SEC, "stash", "push", "-m", STASH_MESSAGE);
@@ -366,11 +403,13 @@ final class ReverseMerge {
         }
       }
       String beforeMerge = git(root, "rev-parse", "HEAD").trim();
+      if (!renames.isEmpty()) matchCase(root, renames, String.format(CASE_MESSAGE, remote + "/" + from));
       try {
         git(root, GIT_LONG_TIMEOUT_SEC, "merge", "--no-edit", "-m", String.format(MERGE_MESSAGE, remote + "/" + from, into), fromTip);
       }
       catch (IOException e) {
         if (!conflicts(root).isEmpty()) return stashed ? Result.CONFLICT_STASHED : Result.CONFLICT;
+        if (!renames.isEmpty()) undoCommit(root, beforeMerge, e);
         throw e;
       }
       try {
@@ -378,13 +417,7 @@ final class ReverseMerge {
       }
       catch (IOException e) {
         if (!behindServer(e.getMessage())) throw e;
-        try {
-          git(root, GIT_LONG_TIMEOUT_SEC, "reset", "--quiet", "--keep", beforeMerge);
-        }
-        catch (IOException resetFailed) {
-          e.addSuppressed(resetFailed);
-          throw e;
-        }
+        if (!undoCommit(root, beforeMerge, e)) throw e;
         throw new PushRejectedException(SyncBundle.message("rmerge.push.rejected", remote + "/" + into), e);
       }
       if (switched) git(root, GIT_LONG_TIMEOUT_SEC, "checkout", current);
@@ -410,6 +443,92 @@ final class ReverseMerge {
     touched.addAll(lines(git(root, "diff", "--name-only", "--no-renames", base + "..." + fromTip)));
     mine.retainAll(touched);
     return !mine.isEmpty();
+  }
+
+  /** HEAD 를 before 로 되돌린다(reset --keep, 커밋 안 한 변경은 그대로). 되돌리지 못하면 그 실패를 cause 에 덧붙이고 false. */
+  private static boolean undoCommit(File root, String before, IOException cause) throws InterruptedException {
+    try {
+      git(root, GIT_LONG_TIMEOUT_SEC, "reset", "--quiet", "--keep", before);
+      return true;
+    }
+    catch (IOException resetFailed) {
+      cause.addSuppressed(resetFailed);
+      return false;
+    }
+  }
+
+  /**
+   * renames(지금 이름 → 새 이름)를 caseMove 로 옮기고 message 로 커밋한다. 새 이름의 폴더가 없으면 만든다(폴더 이름 대소문자가 바뀐 경우).
+   * 옮기다 실패하면 이미 옮긴 것을 거꾸로 되돌리고 그 실패를 던진다. 부르기 전에 올려 둔(staged) 변경이 없어야 한다(blocksMerge).
+   */
+  private static void matchCase(File root, Map<String, String> renames, String message) throws IOException, InterruptedException {
+    List<Map.Entry<String, String>> moved = new ArrayList<>();
+    try {
+      for (Map.Entry<String, String> r : renames.entrySet()) {
+        File parent = new File(root, r.getValue()).getParentFile();
+        if (parent != null && !parent.isDirectory() && !parent.mkdirs()) throw new IOException(SyncBundle.message("rmerge.case.mkdir", parent));
+        caseMove(root, r.getKey(), r.getValue());
+        moved.add(r);
+      }
+      git(root, "commit", "--quiet", "--no-verify", "-m", message);
+    }
+    catch (IOException e) {
+      for (int i = moved.size() - 1; i >= 0; i--) {
+        try {
+          caseMove(root, moved.get(i).getValue(), moved.get(i).getKey());
+        }
+        catch (IOException undoFailed) {
+          e.addSuppressed(undoFailed);
+        }
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * from 을 to 로 git mv 한다. 대소문자만 다른 이름으로 바로 옮기면 윈도우 git 이 거부하는 경우가 있어 같은 폴더의 임시 이름(CASE_TMP_SUFFIX)을 거쳐 두 번 옮긴다.
+   * 두 번째가 실패하면 임시 이름을 from 으로 되돌리고 그 실패를 던진다.
+   */
+  private static void caseMove(File root, String from, String to) throws IOException, InterruptedException {
+    String tmp = from + CASE_TMP_SUFFIX;
+    git(root, "mv", "--", from, tmp);
+    try {
+      git(root, "mv", "--", tmp, to);
+    }
+    catch (IOException e) {
+      try {
+        git(root, "mv", "--", tmp, from);
+      }
+      catch (IOException undoFailed) {
+        e.addSuppressed(undoFailed);
+      }
+      throw e;
+    }
+  }
+
+  /** 저장소가 파일 이름 대소문자를 가리지 않는가(core.ignorecase). 설정이 없으면 가린다. */
+  private static boolean ignoreCase(File root) throws InterruptedException {
+    try {
+      return Boolean.parseBoolean(git(root, "config", "--bool", "core.ignorecase").trim());
+    }
+    catch (IOException unset) {
+      return false;
+    }
+  }
+
+  /** 두 커밋이 갈라진 곳. 공통 조상이 없으면 null. */
+  private static String forkPoint(File root, String a, String b) throws InterruptedException {
+    try {
+      return git(root, "merge-base", a, b).trim();
+    }
+    catch (IOException none) {
+      return null;
+    }
+  }
+
+  /** 커밋 ref 의 모든 파일 경로. ref 가 null 이면 빈 집합. */
+  private static Set<String> tree(File root, String ref) throws IOException, InterruptedException {
+    return ref == null ? Set.of() : lines(git(root, "ls-tree", "-r", "--name-only", ref));
   }
 
   /** 맨 위 Stash 가 합치기 전에 넣어 둔 것(STASH_MESSAGE)이면 꺼내 되살린다. 꺼내지 못하면 Stash 를 그대로 두고 그 안내를 담은 IOException. */
