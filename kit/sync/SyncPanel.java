@@ -1936,7 +1936,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       Set<String> changed = ReverseMerge.lines(git(root, "diff", "--name-only", "--no-renames", before));
       changed.addAll(also);
       for (String path : changed) {
-        File file = new File(root, unquote(path));
+        File file = new File(root, path);
         files.add(file);
         paths.add(VcsUtil.getFilePath(file, false));
         File dir = file.getParentFile();
@@ -2858,10 +2858,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       if (line.startsWith(STATUS_BRANCH_LINE)) continue;  // 첫 줄은 브랜치 줄(-b).
       if (line.length() < 4) continue;
       String xy = line.substring(0, 2);
-      String path = line.substring(3);
-      int arrow = path.indexOf(" -> ");
-      if (arrow >= 0) path = path.substring(arrow + 4);
-      path = unquote(path);
+      String path = statusPath(line.substring(3));
       // 저장소 안의 다른 저장소(회사 supp-backend 안의 basic 등)는 바깥 저장소의 새 파일이 아니다. 무시 목록에 넣으면 팀 .gitignore 가 바뀐다.
       if (UNTRACKED_STATUS.contains(xy) && isNestedRepo(new File(root, path))) continue;
       // 작업본 상태가 커밋된 상태보다 우선한다. 첫 글자(HEAD ↔ 색인)가 A · R · C 인지로 되돌리기 대상을 가르기 때문이다(undoOf).
@@ -3058,6 +3055,32 @@ final class SyncPanel extends SimpleToolWindowPanel {
       });
     }
     return bytes.toString(StandardCharsets.UTF_8);
+  }
+
+  /**
+   * git status --porcelain=v1 줄에서 상태 두 글자와 공백을 뺀 나머지 → 지금 경로. 이름 바꿈(옛 -> 새)이면 새 경로다.
+   * 감싼 경로 안의 " -> "(파일 이름의 일부)는 화살표로 보지 않는다. 감싸지 않은 경로에는 공백이 없으므로 첫 " -> " 가 화살표다.
+   */
+  static String statusPath(String rest) {
+    int from = 0;
+    if (rest.startsWith("\"")) {
+      from = rest.length();
+      for (int i = 1; i < rest.length(); i++) {
+        char c = rest.charAt(i);
+        if (c == '\\') i++;
+        else if (c == '"') {
+          from = i + 1;
+          break;
+        }
+      }
+    }
+    int arrow = rest.indexOf(" -> ", from);
+    return unquote(arrow >= 0 ? rest.substring(arrow + 4) : rest);
+  }
+
+  /** --name-only 같은 경로 한 줄 → 실제 경로. 앞뒤 공백도 이름의 일부이므로 자르지 않고 줄 끝 \r 만 뗀다. */
+  static String pathLine(String line) {
+    return unquote(line.endsWith("\r") ? line.substring(0, line.length() - 1) : line);
   }
 
   static String summary(List<Change> changes) {

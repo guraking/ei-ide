@@ -172,8 +172,9 @@ final class History {
       String[] cols = line.split("\t");
       String[] meta = cols[0].substring(1).split(" ");
       if (meta.length < RAW_FIELDS || cols.length < 2) throw new IOException("git log 파일 줄을 읽지 못했습니다: " + line);
-      String path = cols[cols.length - 1];
-      files.add(new FileChange(meta[4].substring(0, 1), path, cols.length > 2 ? cols[1] : path, meta[2], meta[3]));
+      // 따옴표 · 역슬래시 · 제어 문자가 든 경로는 git 이 감싸 내보낸다.
+      String path = SyncPanel.unquote(cols[cols.length - 1]);
+      files.add(new FileChange(meta[4].substring(0, 1), path, cols.length > 2 ? SyncPanel.unquote(cols[1]) : path, meta[2], meta[3]));
     }
     return files;
   }

@@ -138,7 +138,7 @@ final class ReverseMerge {
         commit = parts.length == 3 ? parts : null;
       }
       else if (commit != null) {
-        latest.putIfAbsent(line.trim(), commit);
+        latest.putIfAbsent(SyncPanel.pathLine(line), commit);
       }
     }
     return latest;
@@ -159,16 +159,16 @@ final class ReverseMerge {
         others = !byMe;
       }
       else if (others) {
-        paths.add(line.trim());
+        paths.add(SyncPanel.pathLine(line));
       }
     }
     return paths;
   }
 
-  /** 줄마다 경로 하나인 출력 → 경로 집합. */
+  /** 줄마다 경로 하나인 출력 → 경로 집합(git 이 감싼 경로는 풀어서). */
   static Set<String> lines(String output) {
     Set<String> set = new LinkedHashSet<>();
-    for (String line : output.split("\n")) if (!line.isBlank()) set.add(line.trim());
+    for (String line : output.split("\n")) if (!line.isBlank()) set.add(SyncPanel.pathLine(line));
     return set;
   }
 
