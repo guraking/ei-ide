@@ -56,6 +56,8 @@ public final class DbSessions implements Disposable {
   private static final Pattern IDENT = Pattern.compile("[A-Za-z_][\\w$#]*");
   /** 열린 접속이 살아 있는지 기다리는 초. */
   private static final int VALID_TIMEOUT_SEC = 3;
+  /** 닫을 때 롤백 · 닫기 응답을 기다리는 밀리초. 방화벽이 몰래 끊은 접속은 응답이 없어 한도가 없으면 IDE 종료가 몇십 초씩 멈춘다. */
+  static final int CLOSE_TIMEOUT_MS = 2000;
   /** 이름으로만 판별하는 Oracle 값 클래스(드라이버를 직접 참조하지 않는다). */
   private static final String ORACLE_SQL = "oracle.sql.";
 
@@ -433,6 +435,11 @@ public final class DbSessions implements Disposable {
 
   /** 자동 커밋이 꺼져 있으면 롤백 후 닫는다. 롤백 · 닫기가 실패하면 close() 가 커밋할 수 있으니(Oracle) 접속을 끊어 서버가 롤백하게 한다. */
   private static void closeWithoutCommit(Connection conn) {
+    try {
+      conn.setNetworkTimeout(Runnable::run, CLOSE_TIMEOUT_MS);
+    } catch (SQLException | RuntimeException e) {
+      // 한도를 못 거는 드라이버는 한도 없이 닫는다(전과 같음).
+    }
     try {
       if (!conn.getAutoCommit()) conn.rollback();
       conn.close();
