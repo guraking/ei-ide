@@ -2728,7 +2728,15 @@ final class SyncPanel extends SimpleToolWindowPanel {
     List<String> clashes = caseClashes.get(repo.root());
     if (clashes != null) {
       component.append("   " + SyncBundle.message("sync.case.clash", clashes.size()), warn);
-      component.setToolTipText(SyncBundle.message("sync.case.clash.tip") + "\n" + String.join("\n", clashes));
+      // 일반 글 풍선은 줄을 바꾸지 않으므로 HTML 로 쓰고, 앞서 넣은 풍선 글(역머지 안내 실패 등)은 위에 남긴다.
+      List<String> lines = new ArrayList<>();
+      String before = component.getToolTipText();
+      if (before != null) lines.add(before);
+      lines.add(SyncBundle.message("sync.case.clash.tip"));
+      lines.addAll(clashes);
+      List<String> escaped = new ArrayList<>();
+      for (String line : lines) escaped.add(StringUtil.escapeXmlEntities(line).replace("\n", "<br>"));
+      component.setToolTipText("<html>" + String.join("<br>", escaped) + "</html>");
     }
   }
 
@@ -2750,7 +2758,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
   static List<String> caseClashes(List<String> paths, boolean caseSensitiveFs) {
     if (caseSensitiveFs) return List.of();
     Map<String, List<String>> byKey = new HashMap<>();
-    for (String path : paths) byKey.computeIfAbsent(path.toLowerCase(Locale.ROOT), k -> new ArrayList<>()).add(path);
+    // 충돌 중인 경로는 ls-files 에 단계(1 · 2 · 3)마다 한 줄씩 나오므로 같은 글자는 한 번만 센다.
+    for (String path : new LinkedHashSet<>(paths)) byKey.computeIfAbsent(path.toLowerCase(Locale.ROOT), k -> new ArrayList<>()).add(path);
     List<String> result = new ArrayList<>();
     for (List<String> same : byKey.values()) {
       if (same.size() > 1) result.addAll(same);

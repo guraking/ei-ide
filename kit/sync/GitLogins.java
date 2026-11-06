@@ -102,7 +102,7 @@ final class GitLogins {
     return result;
   }
 
-  private static void dropCache() {
+  private static synchronized void dropCache() {
     VERSION.incrementAndGet();
     cachedLogins = null;
   }
@@ -130,7 +130,9 @@ final class GitLogins {
       boolean any = list().isEmpty();
       for (Login login : logins) any |= login.secret() != null && !login.secret().isEmpty();
       // 등록이 있는데 값이 하나도 없으면 비밀번호 저장소가 잠겨 있었을 수 있어 다음 명령에서 다시 읽는다. 읽는 사이 비워졌으면 넣지 않는다.
-      if (any && VERSION.get() == version) cachedLogins = logins;
+      synchronized (GitLogins.class) {
+        if (any && VERSION.get() == version) cachedLogins = logins;
+      }
     }
     return env(matching(logins, servers), base);
   }

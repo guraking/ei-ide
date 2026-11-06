@@ -19,6 +19,7 @@ public class SyncCheck {
     eq(SyncPanel.caseClashes(SyncPanel.lsFilesPaths("H a/Designchanges.vue\nH a/DesignChanges.vue\nH b.txt\n"), false),
        List.of("a/DesignChanges.vue", "a/Designchanges.vue"));
     eq(SyncPanel.caseClashes(List.of("A", "a"), true), List.of());
+    eq(SyncPanel.caseClashes(SyncPanel.lsFilesPaths("M a/Foo.vue\nM a/Foo.vue\nM a/Foo.vue\n"), false), List.of());
     // 멈춘 합치기 표시.
     File repo = java.nio.file.Files.createTempDirectory("state").toFile();
     new File(repo, ".git").mkdir();

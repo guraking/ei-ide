@@ -250,8 +250,8 @@ final class GitRemoteAuth {
       String server = entry.getKey();
       GitLogins.Login stored = GitLogins.stored(server);
       if (stored != null) {
-        // 표 값은 runBytes 가 넣으므로 logins 에는 넣지 않고 머리글만 기억한다.
-        attempt.headers.put(server, GitLogins.header(stored));
+        // runBytes 는 넘긴 logins 가 있으면 그것만 넣으므로 표 값도 logins 에 담는다.
+        attempt.use(server, stored, null);
         continue;
       }
       GitLogins.Login session = SESSION.get(server);
