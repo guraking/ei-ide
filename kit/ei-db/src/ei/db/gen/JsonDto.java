@@ -204,7 +204,8 @@ public final class JsonDto {
     if (v == null) return NULL;
     if (v instanceof String) return new Scalar(TypeMap.STRING);
     if (v instanceof Boolean) return new Scalar(BOOLEAN);
-    if (v instanceof BigInteger) return new Scalar(TypeMap.LONG);
+    // Long 에 안 들어가는 정수(64비트 넘음)는 BigDecimal 로 둔다. Long 이면 Jackson 이 읽다 넘침 오류를 낸다.
+    if (v instanceof BigInteger i) return new Scalar(i.bitLength() < Long.SIZE ? TypeMap.LONG : TypeMap.DECIMAL);
     if (v instanceof BigDecimal) return new Scalar(TypeMap.DECIMAL);
     if (v instanceof Map<?, ?> m) {
       Map<String, Shape> fields = new LinkedHashMap<>();

@@ -62,6 +62,8 @@ public class JsonDtoCheck {
           "list": {"x": 1}
         }
         """;
+    String big = JsonDto.dto("{\"a\": 9223372036854775807, \"b\": 9223372036854775808}", "p", "Big", true);
+    if (!big.contains("private Long a;") || !big.contains("private BigDecimal b;")) throw new AssertionError("Long 넘는 정수는 BigDecimal: " + big);
     String lombok = JsonDto.dto(json, "com.example.dto", "ResponseDto", true);
     if (args.length > 0) System.out.println(lombok);
     eq(lombok, """

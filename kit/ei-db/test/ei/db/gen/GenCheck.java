@@ -155,6 +155,10 @@ public class GenCheck {
     eq(mr.added().size(), 6);
     ok(mr.text().startsWith(existing.substring(0, existing.indexOf("</mapper>"))), "원래 글 보존");
     eq(Merge.xml("<x/>", List.of()).text(), null);
+    // 다른 종류(resultMap)의 같은 id 는 충돌이 아니다. 같은 종류(문장끼리)는 태그가 달라도 충돌이다.
+    String mapSame = Xml.HEADER + "<mapper namespace=\"x\">\n  <resultMap id=\"selectProduct\" type=\"x\"/>\n  <update id=\"insertProduct\">x</update>\n</mapper>\n";
+    Merge.Result ms = Merge.xml(mapSame, g.xmlBlocks(MapperGen.allKinds()));
+    ok(ms.added().contains("selectProduct") && ms.skipped().equals(List.of("insertProduct")), "다른 종류 id 는 넣음: " + ms.skipped());
 
     String itfOld = "package com.example.mapper;\n\nimport java.util.List;\n\npublic interface ProductMapper {\n    int insertProduct(ProductDto param);\n}\n";
     Merge.Result jr = Merge.java(itfOld, g.methods(MapperGen.allKinds()), g.interfaceImports(MapperGen.allKinds()));
