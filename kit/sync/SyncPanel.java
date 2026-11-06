@@ -301,10 +301,9 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static final Set<String> GIT_REMOTE_VERBS = Set.of("fetch", "pull", "push", "ls-remote", "clone");
   // 저장소(정규 경로)별 원격 명령 차례. 프로젝트 창이 여럿이어도 하나를 함께 쓴다.
   private static final Map<String, ReentrantLock> REMOTE_LOCKS = new ConcurrentHashMap<>();
-  // 다른 git 이 같은 참조를 먼저 바꿔 fetch · pull 이 멈출 때 git 이 내는 문구(LANGUAGE=C 로 띄워 영어로 온다).
-  private static final Pattern REF_RACE = Pattern.compile("cannot lock ref '[^']+': is at \\p{XDigit}+ but expected \\p{XDigit}+");
-  // REF_RACE 로 실패했을 때 다시 하기 전 기다리는 시간. 겹친 git 이 끝나기를 기다린다.
-  private static final long REF_RACE_RETRY_MS = 1500;
+  // 원격 추적 참조를 읽은 값과 잠글 때 값이 달라 fetch · pull 이 멈출 때 git 이 내는 문구(LANGUAGE=C 로 띄워 영어로 온다). 1번 묶음이 참조 이름.
+  // 다른 git 과 겹친 경우와, 윈도우에서 대소문자만 다른 폴더(Feature/ · feature/)에 든 낱개 참조와 packed-refs 값이 어긋난 경우에 난다.
+  private static final Pattern REF_RACE = Pattern.compile("cannot lock ref '(refs/remotes/[^']+)': is at \\p{XDigit}+ but expected \\p{XDigit}+");
   // 터미널에서 아이디 · 비밀번호를 묻지 않고 곧바로 실패하게 한다(표준 입력이 닫혀 있어 물어도 답할 수 없다).
   private static final String ENV_TERMINAL_PROMPT = "GIT_TERMINAL_PROMPT";
   // 서버 명령의 오류 문구 언어를 영어로 고정해 인증 실패를 GIT_AUTH_ERRORS 로 알아보게 한다. 메시지 번역만 바꾸고 파일 이름 출력은 그대로다.
@@ -3086,10 +3085,11 @@ final class SyncPanel extends SimpleToolWindowPanel {
         return new String(runBytes(dir, timeoutSec, logins, GIT, gitArgs(args)), StandardCharsets.UTF_8).replace("\r\n", "\n");
       }
       catch (IOException e) {
-        // IntelliJ 자체 fetch 등 우리 밖의 git 과 겹친 경우: 참조는 이미 새 값으로 받아져 있어 잠시 뒤 한 번 더 하면 된다.
-        if (!isRefRace(e.getMessage())) throw e;
-        LOG.info("원격 추적 참조를 다른 git 이 먼저 바꿔 다시 실행: " + e.getMessage());
-        Thread.sleep(REF_RACE_RETRY_MS);
+        // 어긋난 원격 추적 참조 하나만 지우고 한 번 더 한다. 원격 추적 참조는 서버 브랜치의 사본이라 다음 fetch 가 다시 만든다.
+        String ref = refRace(e.getMessage());
+        if (ref == null) throw e;
+        LOG.info("어긋난 원격 추적 참조를 지우고 다시 실행: " + e.getMessage());
+        runBytes(dir, CMD_TIMEOUT_SEC, List.of(), GIT, gitArgs("update-ref", "-d", ref));
         return new String(runBytes(dir, timeoutSec, logins, GIT, gitArgs(args)), StandardCharsets.UTF_8).replace("\r\n", "\n");
       }
     }
@@ -3098,9 +3098,11 @@ final class SyncPanel extends SimpleToolWindowPanel {
     }
   }
 
-  /** git 오류가 「참조를 읽은 뒤 다른 git 이 먼저 바꿨다」(cannot lock ref '…': is at A but expected B)인지. */
-  static boolean isRefRace(String message) {
-    return message != null && REF_RACE.matcher(message).find();
+  /** git 오류가 원격 추적 참조 값 어긋남(cannot lock ref 'refs/remotes/…': is at A but expected B)이면 그 참조 이름, 아니면 null. */
+  static String refRace(String message) {
+    if (message == null) return null;
+    Matcher m = REF_RACE.matcher(message);
+    return m.find() ? m.group(1) : null;
   }
 
   static boolean isGitAuthError(String message) {
