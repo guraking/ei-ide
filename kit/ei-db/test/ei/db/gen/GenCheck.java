@@ -35,6 +35,11 @@ public class GenCheck {
     eq(Names.camel("productId"), "productId");
     eq(Names.camel("COUNT(*)"), "count");
     eq(Names.camel("1ST_NO"), "f1stNo");
+    eq(Names.camel("CLASS"), "class_");
+    eq(Names.camel("INT"), "int_");
+    eq(Names.camel("NEW"), "new_");
+    eq(Names.camel("CLASS_NO"), "classNo");
+    eq(Names.pascal("CLASS"), "Class");
     eq(Names.pascal("ORDER_ITEM"), "OrderItem");
     eq(Names.alias("ORDER_ITEM"), "oi");
     eq(Names.alias("ORDER_REQUEST"), "t");
