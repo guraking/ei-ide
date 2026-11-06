@@ -37,6 +37,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 스프링 부트 모듈의 애플리케이션 실행 설정 하나를 서버 하나로 보고 시작 · 중지 · 재시작한다.
@@ -103,6 +104,9 @@ final class ServerLauncher {
         return result;
     }
 
+    /** 메인 클래스를 찾는 중인 모듈. 서버 묶음이 이 동안을 준비 중으로 본다. 찾기는 뒤 스레드에서 끝나므로 동시 집합이다. */
+    private static final Set<Module> FINDING = ConcurrentHashMap.newKeySet();
+
     static boolean isRunning(Module module) {
         return !liveSettings(module).isEmpty();
     }
@@ -124,13 +128,21 @@ final class ServerLauncher {
         if (annotation == null) {
             return false;
         }
+        FINDING.add(module);
         ReadAction.nonBlocking(() -> mainClasses(module, annotation))
                 .inSmartMode(module.getProject())
                 .expireWhen(module::isDisposed)
                 .finishOnUiThread(ModalityState.defaultModalityState(),
                         found -> WriteIntentReadAction.run(() -> startFound(module, found, executor)))
-                .submit(AppExecutorUtil.getAppExecutorService());
+                .submit(AppExecutorUtil.getAppExecutorService())
+                .onProcessed(found -> FINDING.remove(module))
+                .onError(e -> FINDING.remove(module));
         return true;
+    }
+
+    /** start(Module, …) 가 메인 클래스를 찾는 중(색인이 끝나길 기다리는 때 포함)인가. 찾아 시작을 넘기거나 취소 · 실패하면 false. */
+    static boolean isFinding(Module module) {
+        return FINDING.contains(module);
     }
 
     /** 찾은 메인 클래스로 실행 설정을 만들어 시작한다. 찾는 사이에 모듈 이름의 실행 설정이 생겼으면 그것으로 시작한다. */

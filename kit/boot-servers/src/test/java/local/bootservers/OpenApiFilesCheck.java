@@ -33,7 +33,11 @@ public final class OpenApiFilesCheck {
         JsonObject b = parse(OpenApiFiles.toJson("{\"openapi\":\"3.0.0\",\"servers\":[{\"url\":\"/v1\"}]}", "http://x"));
         eq("/v1", b.getAsJsonArray("servers").get(0).getAsJsonObject().get("url").getAsString(), "있는 servers 는 그대로");
         JsonObject c = parse(OpenApiFiles.toJson("swagger: '2.0'\npaths: {}", "http://x"));
-        yes(!c.has("servers"), "2.0 은 servers 넣지 않음");
+        yes(!c.has("servers") && !c.has("basePath"), "2.0 은 servers 넣지 않음 · 앱 경로 없으면 basePath 도 그대로");
+        JsonObject d = parse(OpenApiFiles.toJson("swagger: '2.0'\npaths: {}", "http://localhost:8080/app"));
+        eq("/app", d.get("basePath").getAsString(), "2.0 basePath 없으면 앱 경로");
+        JsonObject e = parse(OpenApiFiles.toJson("swagger: '2.0'\nbasePath: /v2\npaths: {}", "http://localhost:8080/app"));
+        eq("/v2", e.get("basePath").getAsString(), "있는 basePath 는 그대로");
         fails("openapi: [", "YAML 오류");
         fails("- a\n- b", "목록 최상위");
         fails("{\"openapi\": ", "JSON 오류");
