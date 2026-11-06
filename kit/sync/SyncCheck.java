@@ -49,6 +49,7 @@ public class SyncCheck {
     eq(SyncPanel.unquote("\"\\355\\225\\234.txt\""), "한.txt");
     eq(SyncPanel.unquote("plain.txt"), "plain.txt");
     checkNestedRepo();
+    checkCloneBranch();
 
     // Push 단추 숫자 · 받을 저장소: git status -b 브랜치 줄의 ahead · behind.
     eq(SyncPanel.parseTracking("## main...origin/main [ahead 2, behind 13]\n M a.txt\n"), new SyncPanel.Tracking(2, 13));
@@ -513,6 +514,34 @@ public class SyncCheck {
     eq(SyncPanel.isNestedRepo(new File(outer, "plain/")), false);
     // git 은 중첩 저장소를 「?? inner/」 로 보고하므로 compare 가 이 줄을 거른다.
     eq(SyncPanel.git(outer, "status", "--porcelain=v1", "-unormal").contains("?? inner/"), true);
+  }
+
+  /** 받을 브랜치: 서버 브랜치 읽기 · 내 브랜치 위로 · 찾기 · 추적 걸고 꺼내기. */
+  private static void checkCloneBranch() throws Exception {
+    eq(CloneBranch.parseBranches("refs/remotes/origin/HEAD\nrefs/remotes/origin/main\nrefs/remotes/origin/feature/gpm/dxplmdev.jmlee\nrefs/remotes/up/x\n", "origin"),
+       List.of("feature/gpm/dxplmdev.jmlee", "main"));
+    eq(CloneBranch.nameParts(List.of("이 정민", "JMLee@corp.com", "jm", " ")), java.util.Set.of("이정민", "jmlee"));
+    List<String> all = List.of("develop", "feature/a.kim", "feature/b.JMLEE", "main");
+    eq(CloneBranch.mine(all, java.util.Set.of("jmlee")), List.of("feature/b.JMLEE"));
+    CloneBranch.Remote remote = new CloneBranch.Remote("origin", "main", all);
+    eq(CloneBranch.ordered(remote, List.of("feature/b.JMLEE"), ""), List.of("feature/b.JMLEE", "main", "develop", "feature/a.kim"));
+    eq(CloneBranch.ordered(remote, List.of(), " FEATURE "), List.of("feature/a.kim", "feature/b.JMLEE"));
+    eq(CloneBranch.ordered(remote, List.of(), "없음"), List.of());
+
+    java.nio.file.Path tmp = java.nio.file.Files.createTempDirectory("clone-branch");
+    sh(tmp.toFile(), "git init -q -b main src && cd src && git -c user.name=t -c user.email=t@x commit -q --allow-empty -m init"
+                     + " && git branch dev/jmlee && git clone -q . ../work");
+    File work = tmp.resolve("work").toFile();
+    CloneBranch.Remote cloned = CloneBranch.remote(work);
+    eq(cloned, new CloneBranch.Remote("origin", "main", List.of("dev/jmlee", "main")));
+    CloneBranch.checkout(work, "origin", "dev/jmlee");
+    eq(SyncPanel.git(work, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}").trim(), "origin/dev/jmlee");
+    // 같은 이름 내 브랜치가 있으면 그리로 바꾼다.
+    CloneBranch.checkout(work, "origin", "main");
+    eq(SyncPanel.git(work, "rev-parse", "--abbrev-ref", "HEAD").trim(), "main");
+    // 빈 저장소(추적 대상 없음)는 고를 것이 없다.
+    sh(tmp.toFile(), "git init -q empty");
+    eq(CloneBranch.remote(tmp.resolve("empty").toFile()), null);
   }
 
   private static void sh(File dir, String command) throws Exception {
