@@ -22,6 +22,7 @@ import com.intellij.psi.PsiJavaFile;
 import com.intellij.psi.PsiLiteralExpression;
 import com.intellij.psi.PsiMethod;
 import com.intellij.psi.PsiMethodCallExpression;
+import com.intellij.psi.PsiModifier;
 import com.intellij.psi.PsiParameter;
 import com.intellij.psi.PsiReferenceExpression;
 import com.intellij.psi.PsiStatement;
@@ -29,6 +30,7 @@ import com.intellij.psi.codeStyle.CodeStyleManager;
 import com.intellij.psi.util.InheritanceUtil;
 import com.intellij.psi.util.PsiMethodUtil;
 import com.intellij.psi.util.PsiTreeUtil;
+import com.intellij.psi.util.PsiUtil;
 import local.bootservers.BootServersBundle;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -165,14 +167,21 @@ public final class LogUsageInspection extends LocalInspectionTool {
         return name;
     }
 
-    /** 안쪽 클래스부터 바깥으로: @Slf4j 면 log, 자기 필드 중 org.slf4j.Logger 형이 있으면 그 이름. 없으면 null. */
+    /**
+     * 안쪽 클래스부터 바깥으로: @Slf4j 면 log, 자기 필드 중 org.slf4j.Logger 형이 있으면 그 이름. 없으면 null.
+     * 그 클래스에서 보아 static 자리(static 메서드 · 초기화 · static 안쪽 클래스)면 static 로거만 쓴다. @Slf4j 의 log 는 static 이다.
+     */
     private static @Nullable String loggerName(PsiElement element) {
         for (PsiClass c = PsiTreeUtil.getParentOfType(element, PsiClass.class); c != null;
              c = PsiTreeUtil.getParentOfType(c, PsiClass.class)) {
             if (c.hasAnnotation(LOMBOK_SLF4J)) {
                 return LOMBOK_LOG;
             }
+            boolean staticOnly = PsiUtil.getEnclosingStaticElement(element, c) != null;
             for (PsiField f : c.getFields()) {
+                if (staticOnly && !f.hasModifierProperty(PsiModifier.STATIC)) {
+                    continue;
+                }
                 if (SLF4J_LOGGER.equals(f.getType().getCanonicalText())) {
                     return f.getName();
                 }

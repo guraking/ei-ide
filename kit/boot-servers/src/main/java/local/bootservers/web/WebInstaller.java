@@ -28,6 +28,8 @@ final class WebInstaller {
     /** 설치 실패 알림에 보이는 npm 출력 끝 줄 수. */
     private static final int OUTPUT_TAIL_LINES = 30;
     private static final String TEMP_SUFFIX = ".tmp";
+    /** 새 Node 를 넣는 동안 옛 Node 를 옮겨 두는 폴더 꼬리. 다 넣은 뒤 지우고, 실패하면 되돌린다. */
+    private static final String OLD_SUFFIX = ".old";
 
     private WebInstaller() {
     }
@@ -92,12 +94,40 @@ final class WebInstaller {
             indicator.setText(BootServersBundle.message("web.install.node.unzip"));
             FileUtil.delete(unpacked);
             NodeDist.unzipFlatten(zip, unpacked);
-            FileUtil.delete(nodeDir);
-            Files.move(unpacked, nodeDir);
+            replace(nodeDir, unpacked, base.resolve(WebTools.NODE_DIR + OLD_SUFFIX));
         } finally {
             Files.deleteIfExists(zip);
             FileUtil.delete(unpacked);
         }
+    }
+
+    /**
+     * 옛 폴더를 지우지 않고 old 로 이름만 바꾼 뒤 새 폴더를 옮기고, 그다음에 old 를 지운다.
+     * 이름 바꾸기는 통째로 되거나 안 되므로, 언어 서버가 node.exe 를 잡고 있으면 옛 설치가 그대로 남고 IOException 이다.
+     * 새 폴더를 옮기다 실패하면 old 를 되돌린다.
+     */
+    private static void replace(Path target, Path fresh, Path old) throws IOException {
+        if (!FileUtil.delete(old.toFile())) {
+            throw new IOException(BootServersBundle.message("web.install.node.old", old));
+        }
+        boolean had = Files.exists(target);
+        if (had) {
+            try {
+                Files.move(target, old);
+            } catch (IOException e) {
+                throw new IOException(BootServersBundle.message("web.install.node.busy", e.getMessage()), e);
+            }
+        }
+        try {
+            Files.move(fresh, target);
+        } catch (IOException e) {
+            if (had) {
+                FileUtil.delete(target.toFile());
+                Files.move(old, target);
+            }
+            throw e;
+        }
+        FileUtil.delete(old.toFile());
     }
 
     /** node 로 npm install 을 돌려 <base>/servers 에 언어 서버를 받는다. */

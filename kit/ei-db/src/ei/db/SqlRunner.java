@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 /**
  * 실행의 공통 입구(콘솔 · MyBatis 실행 · 로그 변환 · 표 데이터 보기). 화면 스레드에서 부른다.
@@ -32,6 +33,14 @@ public final class SqlRunner {
   private static final long CANCEL_POLL_MS = 200;
 
   public static void run(Project project, DbConfig c, String sql, List<Object> binds) {
+    run(project, c, sql, binds, null);
+  }
+
+  /**
+   * onSuccess 는 실행이 오류 · 취소 없이 끝나 결과 창에 보인 뒤 화면 스레드에서 결과와 함께 불린다.
+   * 읽기 전용 거절 · 확인창 취소 · 실행 오류 · 실행 취소면 불리지 않는다. null 이면 부르지 않는다.
+   */
+  public static void run(Project project, DbConfig c, String sql, List<Object> binds, Consumer<QueryResult> onSuccess) {
     boolean write = SqlGuard.isWrite(sql);
     if (write && c.readOnly) {
       Notify.error(project, EiDbBundle.message("runner.read.only", c.name));
@@ -54,7 +63,10 @@ public final class SqlRunner {
         long start = System.currentTimeMillis();
         try {
           QueryResult result = DbSessions.get(project).run(c, sql, binds, indicator::isCanceled);
-          ApplicationManager.getApplication().invokeLater(() -> ResultView.show(project, c, result));
+          ApplicationManager.getApplication().invokeLater(() -> {
+            ResultView.show(project, c, result);
+            if (onSuccess != null && !project.isDisposed()) onSuccess.accept(result);
+          });
           record(project, c, sql, binds, result.millis(), result.isQuery() ? result.rows().size() : result.updateCount(), true);
         } catch (DbSessions.CancelledException e) {
           ApplicationManager.getApplication().invokeLater(() -> ResultView.showCancelled(project, c, sql));

@@ -10,6 +10,7 @@ import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.SafeConstructor;
 
+import java.net.URI;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -49,8 +50,9 @@ final class OpenApiFiles {
     }
 
     /**
-     * 사양 글(JSON 또는 YAML)을 JSON 으로 바꾼다. servers 가 없고 defaultServer 가 있으면 그 주소를 넣는다
-     * (Swagger 2.0 은 servers 가 없으므로 그대로). 읽을 수 없으면 IllegalArgumentException(위치를 담은 메시지).
+     * 사양 글(JSON 또는 YAML)을 JSON 으로 바꾼다. servers 가 없고 defaultServer 가 있으면 그 주소를 넣는다.
+     * Swagger 2.0 은 servers 대신 basePath 를 쓴다: basePath 가 없으면 기본값이 「/」라 앱 경로가 빠지므로 defaultServer 의 경로를 넣는다
+     * (host 는 미리보기가 서버 주소에서 열리므로 넣지 않는다). 읽을 수 없으면 IllegalArgumentException(위치를 담은 메시지).
      */
     static String toJson(String text, String defaultServer) {
         JsonElement root;
@@ -78,6 +80,12 @@ final class OpenApiFiles {
             JsonArray servers = new JsonArray();
             servers.add(server);
             spec.add("servers", servers);
+        }
+        if (spec.has("swagger") && !spec.has("basePath") && defaultServer != null && !defaultServer.isBlank()) {
+            String path = URI.create(defaultServer.strip()).getPath();
+            if (path != null && !path.isEmpty() && !path.equals("/")) {
+                spec.addProperty("basePath", path);
+            }
         }
         return spec.toString();
     }

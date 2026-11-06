@@ -207,10 +207,10 @@ final class ConsoleBar extends JPanel {
     return c != null && DbSessions.get(project).isRunning(c.id);
   }
 
-  /** 커밋 · 롤백은 자동 커밋이 꺼진 접속에서만 보인다. */
+  /** 커밋 · 롤백은 자동 커밋이 꺼진 접속에서만 보인다. 이번 세션에 토글한 값이 있으면 그 값을 본다. */
   private boolean manualCommit() {
     DbConfig c = ConsoleOpener.config(project, file);
-    return c != null && !c.autoCommit;
+    return c != null && !DbSessions.get(project).autoCommit(c);
   }
 
   private boolean hasPending() {
@@ -267,7 +267,7 @@ final class ConsoleBar extends JPanel {
       bandTarget.append(c.name, BAND_BOLD);
       bandTarget.append(DOT + c.effectiveSchema() + DOT + c.host, BAND_PLAIN);
       autoCommit.setEnabled(true);
-      autoCommit.setSelected(c.autoCommit);
+      autoCommit.setSelected(DbSessions.get(project).autoCommit(c));
       // 미반영 건수는 짧은 꼬리표로, 전체 문구는 툴팁으로 보인다.
       badge.setText(null);
       badge.setIcon(new Badge(EiDbBundle.message("console.badge.pending.short", pending), UiColors.PENDING_BG, UiColors.PENDING));

@@ -19,6 +19,7 @@ import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.NamedColorUtil;
 import com.intellij.util.ui.UIUtil;
+import local.bootservers.was.ExplodedSync;
 import local.bootservers.was.JeusBase;
 import local.bootservers.was.WasSettings;
 import org.jetbrains.annotations.NotNull;
@@ -32,6 +33,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /** WAS 추가 · 편집 대화 상자. 확인을 누르면 {@link #result()} 로 고친 사본을 돌려준다(원본은 건드리지 않는다). */
@@ -285,7 +287,8 @@ final class WasDialog extends DialogWrapper {
             if (!r.contextPath.startsWith("/") || r.contextPath.contains(" ")) {
                 return new ValidationInfo(BootServersBundle.message("was.dialog.context.invalid", r.module));
             }
-            if (!paths.add(r.contextPath.replaceAll("/+$", ""))) {
+            // 실제 배포 이름(앞뒤 / 를 뺀 이름)으로 비교한다. 윈도우 파일 이름은 대소문자를 가리지 않아 대소문자도 무시한다.
+            if (!paths.add(ExplodedSync.warName(r.contextPath).toLowerCase(Locale.ROOT))) {
                 return new ValidationInfo(BootServersBundle.message("was.dialog.context.duplicate", r.contextPath));
             }
         }

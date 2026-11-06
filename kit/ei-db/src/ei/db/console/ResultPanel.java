@@ -830,22 +830,45 @@ final class ResultPanel extends SimpleToolWindowPanel {
   /**
    * 고친 행마다 UPDATE 문(SET 은 고친 칼럼, WHERE 는 PK 처음 값)을 만들어 미리보기로 확인받고 SqlRunner 로 차례로 실행한다.
    * 실행은 ? 자리 + binds 로 하고(값 이스케이프를 드라이버에 맡김) 미리보기에만 리터럴 문장을 보인다.
-   * 운영 접속 확인 · 읽기 전용 거절은 SqlRunner 가 한다. 실행에 넘긴 뒤 화면 값은 고친 값으로 둔다.
+   * 운영 접속 확인 · 읽기 전용 거절은 SqlRunner 가 한다.
+   * 앞 문장이 행을 바꾼 뒤에만 다음 문장을 실행하고, 그 행만 화면 값을 고친 값으로 바꾸고 고친 표시를 지운다.
+   * 오류 · 취소 · 거절이면 그 행부터 고친 표시를 남겨 다시 반영할 수 있게 한다. 바뀐 행이 0 이면 알리고 멈춘다.
    */
   private void applyEdits() {
     if (grid.isEditing() && !grid.getCellEditor().stopCellEditing()) return;
     if (edits.isEmpty()) return;
+    List<Integer> rows = new ArrayList<>();
+    List<Map<Integer, Object>> values = new ArrayList<>();
     List<SqlText.Update> statements = new ArrayList<>();
-    for (Map.Entry<Integer, Map<Integer, Object>> e : edits.entrySet()) statements.add(updateStatement(e.getKey(), e.getValue()));
-    if (!confirmApply(statements)) return;
-    for (SqlText.Update u : statements) SqlRunner.run(project, config, u.sql(), u.binds());
     for (Map.Entry<Integer, Map<Integer, Object>> e : edits.entrySet()) {
-      for (Map.Entry<Integer, Object> v : e.getValue().entrySet()) result.rows().get(e.getKey()).set(v.getKey(), v.getValue());
+      rows.add(e.getKey());
+      values.add(new TreeMap<>(e.getValue()));
+      statements.add(updateStatement(e.getKey(), e.getValue()));
     }
-    edits.clear();
-    updateEditButtons();
-    grid.repaint();
-    Notify.info(project, EiDbBundle.message("result.apply.done", statements.size()));
+    if (!confirmApply(statements)) return;
+    applyNext(rows, values, statements, 0);
+  }
+
+  /** applyEdits 의 i 번째 문장을 실행한다. 실행 중 사용자가 같은 칸을 다시 고쳤으면 그 칸의 고친 표시는 남긴다. */
+  private void applyNext(List<Integer> rows, List<Map<Integer, Object>> values, List<SqlText.Update> statements, int i) {
+    SqlText.Update u = statements.get(i);
+    SqlRunner.run(project, config, u.sql(), u.binds(), done -> {
+      int row = rows.get(i);
+      if (done.updateCount() == 0) {
+        Notify.error(project, EiDbBundle.message("result.apply.missed", row + 1, i, statements.size()));
+        return;
+      }
+      Map<Integer, Object> changed = edits.get(row);
+      for (Map.Entry<Integer, Object> v : values.get(i).entrySet()) {
+        result.rows().get(row).set(v.getKey(), v.getValue());
+        if (changed != null && literal(v.getValue()).equals(literal(changed.get(v.getKey())))) changed.remove(v.getKey());
+      }
+      if (changed != null && changed.isEmpty()) edits.remove(row);
+      updateEditButtons();
+      grid.repaint();
+      if (i + 1 < statements.size()) applyNext(rows, values, statements, i + 1);
+      else Notify.info(project, EiDbBundle.message("result.apply.done", statements.size()));
+    });
   }
 
   private SqlText.Update updateStatement(int row, Map<Integer, Object> changed) {

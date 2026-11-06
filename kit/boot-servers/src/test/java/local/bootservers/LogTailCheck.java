@@ -21,6 +21,7 @@ public final class LogTailCheck {
             rotateAndMissing(dir.resolve("c.log"));
             fallbackCharset(dir.resolve("d.log"));
             longLine(dir.resolve("e.log"));
+            longLineSplitChar(dir.resolve("g.log"));
             backlog(dir.resolve("f.log"));
         }
         finally {
@@ -83,6 +84,21 @@ public final class LogTailCheck {
         check(tail.poll().text().length() == LogTail.MAX_READ_BYTES, "줄바꿈 없는 긴 글은 한도만큼");
         append(f, "\n");
         check(tail.poll().text().equals("x".repeat(10) + "\n"), "나머지");
+    }
+
+    /** 줄바꿈 없는 긴 줄의 한도 경계가 한글(3바이트) 가운데여도 두 번에 나눠 깨지지 않고 읽는다. */
+    private static void longLineSplitChar(Path f) throws Exception {
+        String head = "x".repeat(LogTail.MAX_READ_BYTES - 1);
+        Files.writeString(f, head + "한글\n", StandardCharsets.UTF_8);
+        LogTail tail = new LogTail(f, MS949, LogTail.MAX_READ_BYTES * 2L);
+        check(tail.poll().text().equals(head), "글자 앞에서 자름");
+        check(tail.poll().text().equals("한글\n"), "나머지 글자는 다음에");
+        byte[] ascii = "abc".getBytes(StandardCharsets.UTF_8);
+        check(LogTail.utf8Boundary(ascii, 0) == 3, "ASCII 는 그대로");
+        byte[] whole = "a한".getBytes(StandardCharsets.UTF_8);
+        check(LogTail.utf8Boundary(whole, 0) == whole.length, "끝 글자가 온전하면 그대로");
+        check(LogTail.utf8Boundary(java.util.Arrays.copyOf(whole, 3), 0) == 1, "반쪽 글자 앞에서");
+        check(LogTail.utf8Boundary(new byte[] {(byte) 0x80, (byte) 0x80}, 0) == 2, "UTF-8 이 아니면 그대로");
     }
 
     /** 1초 사이에 수 MB 가 쌓여도 한 poll 에 다 읽고, 한도를 넘는 몫만 다음 poll 로 미룬다. */

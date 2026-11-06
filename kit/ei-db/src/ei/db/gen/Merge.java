@@ -9,6 +9,9 @@ public final class Merge {
   private Merge() {}
 
   private static final String MAPPER_END = "</mapper>";
+  /** 블록 첫 태그 이름. 같은 종류의 태그에서만 같은 id 를 찾는다(MyBatis 는 문장 · resultMap · sql id 를 따로 관리한다). */
+  private static final Pattern FIRST_TAG = Pattern.compile("<(\\w+)");
+  private static final String STATEMENT_TAGS = "select|insert|update|delete";
 
   /** text 가 null 이면 끼울 자리를 못 찾은 것. */
   public record Result(String text, List<String> added, List<String> skipped) {}
@@ -21,7 +24,7 @@ public final class Merge {
     List<String> skipped = new ArrayList<>();
     StringBuilder ins = new StringBuilder();
     for (MapperGen.Block b : blocks) {
-      if (Pattern.compile("\\bid\\s*=\\s*[\"']" + Pattern.quote(b.id()) + "[\"']").matcher(existing).find()) {
+      if (Pattern.compile("<(" + sameKind(b.text()) + ")\\b[^>]*\\bid\\s*=\\s*[\"']" + Pattern.quote(b.id()) + "[\"']").matcher(existing).find()) {
         skipped.add(b.id());
       } else {
         added.add(b.id());
@@ -31,6 +34,14 @@ public final class Merge {
     String before = existing.substring(0, end);
     if (!added.isEmpty() && !before.endsWith("\n")) ins.insert(0, '\n');
     return new Result(before + ins + existing.substring(end), added, skipped);
+  }
+
+  /** 블록 첫 태그와 같은 종류의 태그 이름들(정규식 고르기). 문장이면 select · insert · update · delete, 아니면 그 태그 하나. */
+  private static String sameKind(String blockText) {
+    var m = FIRST_TAG.matcher(blockText);
+    if (!m.find()) return "\\w+";
+    String tag = m.group(1);
+    return tag.matches(STATEMENT_TAGS) ? STATEMENT_TAGS : Pattern.quote(tag);
   }
 
   /** 마지막 } 앞에 메서드를, package 줄(또는 마지막 import) 뒤에 없는 import 를 넣는다. */

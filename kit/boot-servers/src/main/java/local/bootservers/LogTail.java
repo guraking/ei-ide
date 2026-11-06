@@ -19,7 +19,8 @@ import java.nio.file.attribute.FileTime;
  * <ul>
  *   <li>처음 읽을 때 파일이 initialBytes 보다 크면 끝의 initialBytes 만, 첫 줄바꿈 뒤부터 읽는다.</li>
  *   <li>줄바꿈으로 끝난 줄까지만 돌려주고, 끝나지 않은 줄은 다음 poll 로 미룬다.
- *       한 번에 MAX_READ_BYTES 를 채우고도 줄바꿈이 없으면 그만큼을 그대로 돌려준다(아주 긴 한 줄에서 멈추지 않게).</li>
+ *       한 번에 MAX_READ_BYTES 를 채우고도 줄바꿈이 없으면 그만큼을 그대로 돌려준다(아주 긴 한 줄에서 멈추지 않게).
+ *       이때 끝이 UTF-8 글자 중간이면 그 글자 앞에서 자르고 남은 바이트는 다음 poll 에 읽는다.</li>
  *   <li>파일이 읽은 자리보다 작아지거나 만든 시각이 바뀌면 순환(새 파일)으로 보고 처음부터 읽는다.</li>
  *   <li>파일이 없으면 MISSING 을 한 번 알리고, 다시 생기면 APPEARED 와 함께 처음부터 읽는다.</li>
  *   <li>글은 UTF-8 로 풀고, UTF-8 이 아니면 fallback 문자셋(보통 OS 기본, 한국어 윈도는 MS949)으로 푼다.</li>
@@ -29,6 +30,8 @@ public final class LogTail {
 
     // poll 한 번에 읽는 최대 크기. 1초 간격 poll 에서 초당 이만큼까지는 밀리지 않고 따라가고, 그보다 많이 쌓이면 다음 poll 로 나눠 넣는다.
     static final int MAX_READ_BYTES = 4 * 1024 * 1024;
+    /** UTF-8 한 글자는 첫 바이트 뒤에 이어지는 바이트가 최대 3개다(RFC 3629). */
+    private static final int UTF8_MAX_CONTINUATION = 3;
 
     public enum Event { NONE, MISSING, APPEARED, ROTATED, ERROR }
 
@@ -129,7 +132,7 @@ public final class LogTail {
         }
         int end = lastNewline(bytes) + 1;
         if (end <= start) {
-            end = bytes.length == MAX_READ_BYTES ? bytes.length : start;
+            end = bytes.length == MAX_READ_BYTES ? utf8Boundary(bytes, start) : start;
         }
         position += end;
         return new Poll(event, decode(bytes, start, end - start), null);
@@ -154,6 +157,20 @@ public final class LogTail {
             }
         }
         return -1;
+    }
+
+    /**
+     * bytes 끝이 UTF-8 글자 중간이면 그 글자의 첫 바이트 자리, 아니면 bytes.length.
+     * 이어지는 바이트(10xxxxxx)는 최대 3개라 그 이상 거슬러 가지 않고, start 앞으로는 가지 않는다.
+     */
+    static int utf8Boundary(byte[] bytes, int start) {
+        int lead = bytes.length - 1;
+        while (lead > start && bytes.length - lead <= UTF8_MAX_CONTINUATION && (bytes[lead] & 0xC0) == 0x80) {
+            lead--;
+        }
+        int b = bytes[lead] & 0xFF;
+        int need = b >= 0xF0 ? 4 : b >= 0xE0 ? 3 : b >= 0xC0 ? 2 : 1;
+        return bytes.length - lead < need && lead > start ? lead : bytes.length;
     }
 
     private static int lastNewline(byte[] bytes) {

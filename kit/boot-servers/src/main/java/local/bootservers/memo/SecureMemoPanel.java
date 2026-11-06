@@ -63,6 +63,8 @@ final class SecureMemoPanel extends JPanel implements Disposable {
     }
 
     private static final String FILE_NAME = "ei-secure-memo.bin";
+    /** 닫을 때 저장하지 못한 글의 암호화 사본 꼬리. 이름을 메모 파일 이름으로 바꾸면 그 글로 열린다. */
+    private static final String UNSAVED_SUFFIX = ".unsaved";
     private static final String LOCKED = "locked";
     private static final String OPEN = "open";
     private static final String EDIT = "edit";
@@ -308,6 +310,20 @@ final class SecureMemoPanel extends JPanel implements Disposable {
         return true;
     }
 
+    /**
+     * 닫을 때 저장이 실패한 글을 같은 비밀번호로 암호화해 메모 파일 옆 「이름.unsaved」에 남기고 그 경로를 알린다.
+     * 평문으로는 남기지 않는다. 이것도 실패하면 글을 잃었다고 알린다.
+     */
+    private void keepUnsaved(String text) {
+        Path copy = file.resolveSibling(file.getFileName() + UNSAVED_SUFFIX);
+        try {
+            Files.write(copy, SecureMemoCipher.encrypt(password, text));
+            Messages.showErrorDialog(project, BootServersBundle.message("memo.unsaved.kept", copy), title());
+        } catch (IOException | GeneralSecurityException e) {
+            Messages.showErrorDialog(project, BootServersBundle.message("memo.unsaved.lost", e.getMessage()), title());
+        }
+    }
+
     private boolean isOpen() {
         return password != null;
     }
@@ -334,8 +350,8 @@ final class SecureMemoPanel extends JPanel implements Disposable {
     @Override
     public void dispose() {
         if (isOpen()) {
-            if (!area.getText().equals(saved)) {
-                save();
+            if (!area.getText().equals(saved) && !save()) {
+                keepUnsaved(area.getText());
             }
             clear();
         }

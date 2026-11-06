@@ -1008,6 +1008,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
         }
         ServerLauncher.State state = stateOf(row);
         if (isStartable(state) && (key.equals(groupStartingKey) || buildsRunning.get() > 0
+                || row instanceof Boot b && b.module() != null && ServerLauncher.isFinding(b.module())
                 || row instanceof WasSettings.Server s && WasRunner.getInstance(project).isLaunching(s))) {
             return GroupSequence.Status.PREPARING;
         }
