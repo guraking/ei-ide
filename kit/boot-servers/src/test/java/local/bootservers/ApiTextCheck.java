@@ -67,8 +67,11 @@ public final class ApiTextCheck {
         eq("http://localhost:9090/", ApiText.join("http://localhost:9090", ""), "빈 경로");
         eq(21, ApiText.hostEnd("http://localhost:8090/basic/list?a=1"), "서버 끝");
         eq(32, ApiText.queryStart("http://localhost:8090/basic/list?a=1"), "쿼리 시작");
-        eq(10, ApiText.hostEnd("https://h?"), "경로 없음");
-        eq(10, ApiText.queryStart("https://h?"), "서버 뒤 ? 는 경로 없는 주소 끝");
+        eq(9, ApiText.hostEnd("https://h?"), "경로 없음");
+        eq(9, ApiText.queryStart("https://h?"), "경로 없이 서버 뒤 ? 는 쿼리 시작");
+        eq(9, ApiText.hostEnd("https://h?x=1"), "경로 없는 쿼리는 서버 부분이 아님");
+        eq(9, ApiText.hostEnd("https://h#a"), "# 앞에서 서버 끝");
+        eq(9, ApiText.hostEnd("https://h"), "주소 전체가 서버");
         eq(0, ApiText.hostEnd("/basic/list"), "scheme 없음");
         eq(11, ApiText.queryStart("/basic/list"), "쿼리 없음");
         eq("http://h/list?a=1&b=%ED%85%8C+%26", ApiText.withQuery("http://h/list",

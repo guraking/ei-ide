@@ -156,14 +156,22 @@ final class ApiText {
         return base + "/" + p;
     }
 
-    /** 주소 앞 흐리게 보일 부분(scheme://host[:port])의 끝 자리. 「://」 가 없으면 0, 경로가 없으면 주소 길이. */
+    /**
+     * 주소 앞 흐리게 보일 부분(scheme://host[:port])의 끝 자리: 「://」 뒤 처음 나오는 「/」 · 「?」 · 「#」 자리(RFC 3986 authority 끝).
+     * 「://」 가 없으면 0, 셋 다 없으면 주소 길이.
+     */
     static int hostEnd(String url) {
         int scheme = url.indexOf("://");
         if (scheme < 0) {
             return 0;
         }
-        int slash = url.indexOf('/', scheme + 3);
-        return slash < 0 ? url.length() : slash;
+        for (int i = scheme + 3; i < url.length(); i++) {
+            char c = url.charAt(i);
+            if (c == '/' || c == '?' || c == '#') {
+                return i;
+            }
+        }
+        return url.length();
     }
 
     /** 쿼리(「?」 부터)의 시작 자리. 없으면 주소 길이. 경로 앞의 「?」 는 쿼리로 치지 않는다. */
@@ -201,7 +209,8 @@ final class ApiText {
         String host = scheme < 0 ? "" : u.substring(scheme + 3, hostEnd);
         String path = u.substring(hostEnd);
         StringBuilder out = new StringBuilder();
-        out.append(method).append(' ').append(withQuery(path.isEmpty() ? "/" : path, query)).append(" HTTP/1.1\n");
+        // 경로 없이 쿼리만 있으면(https://h?x=1) 요청줄은 「/?x=1」 이다.
+        out.append(method).append(' ').append(withQuery(path.startsWith("/") ? path : "/" + path, query)).append(" HTTP/1.1\n");
         if (!host.isEmpty()) {
             out.append("Host: ").append(host).append('\n');
         }
