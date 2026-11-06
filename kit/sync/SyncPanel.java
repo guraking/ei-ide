@@ -425,8 +425,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
   /** 추적 브랜치보다 앞선(올릴) · 뒤진(받을) 커밋 수. */
   record Tracking(int ahead, int behind) {}
 
-  /** 위쪽 줄 · 저장소 줄 끝에 붙는 역머지 안내. warn 이면 내 파일과 겹쳐 주황으로 보인다. */
-  record ReverseNote(String text, boolean warn) {}
+  /** 위쪽 줄 · 저장소 줄 끝에 붙는 역머지 안내. warn 이면 내 파일과 겹쳐 주황으로 보인다. error 는 세지 못했을 때 git 오류 원문(풍선 도움말), 아니면 null. */
+  record ReverseNote(String text, boolean warn, String error) {}
 
   // 아래 단추 줄의 바탕색(흰 글자). 같은 일은 같은 색: 받기는 IntelliJ 기본 단추 파랑, 올리기 초록, 충돌 붉은색, 브랜치 합치기 보라.
   private static final JBColor PUSH_BG = new JBColor(0x2F8F5B, 0x3A8F5E);
@@ -2605,7 +2605,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     // 마지막 합치기가 내 브랜치 → develop 방향이었으면 From 이 내 브랜치라, 그때의 Into(develop)를 기준으로 쓴다.
     if (from != null && from.equals(repo.branch())) from = cfg.get(ReverseMerge.CONFIG_INTO);
     // detached HEAD 는 합칠 브랜치가 없어 안내하지 않는다.
-    if (from == null || from.equals(repo.branch()) || GIT_HEAD.equals(repo.branch())) {
+    if ((from != null && from.equals(repo.branch())) || GIT_HEAD.equals(repo.branch())) {
       reverseNotes.remove(root);
       return;
     }
@@ -2615,6 +2615,12 @@ final class SyncPanel extends SimpleToolWindowPanel {
     if (fetch) lockFetch(root);
     try {
       String remote = ReverseMerge.remoteOf(cfg, repo.branch());
+      // Merge Branches 로 합친 적이 없어 기억된 기준이 없으면 Merge Branches 창과 같은 기본(develop 등 받아 둔 첫 후보)을 쓴다.
+      if (from == null) from = ReverseMerge.pick(ReverseMerge.knownBranches(root, remote), null, ReverseMerge.FROM_CANDIDATES);
+      if (from == null || from.equals(repo.branch())) {
+        reverseNotes.remove(root);
+        return;
+      }
       if (fetch) ReverseMerge.fetchQuietly(root, remote, from);
       ReverseMerge.Preview preview = ReverseMerge.preview(root, cfg, remote, from, repo.branch(), repo.branch());
       int mine = preview.mineCount();
@@ -2625,10 +2631,12 @@ final class SyncPanel extends SimpleToolWindowPanel {
                                                     : SyncBundle.message("rmerge.note", from, preview.commits()));
       if (ahead > 0) parts.add(SyncBundle.message("rmerge.note.ahead", from, ahead));
       if (parts.isEmpty()) reverseNotes.remove(root);
-      else reverseNotes.put(root, new ReverseNote(String.join(NOTE_SEP, parts), mine > 0));
+      else reverseNotes.put(root, new ReverseNote(String.join(NOTE_SEP, parts), mine > 0, null));
     }
     catch (IOException e) {
-      reverseNotes.remove(root);
+      // 세지 못한 이유를 숨기지 않는다: 줄 끝에 「기준 비교 실패」, 풍선 도움말에 git 오류 원문.
+      LOG.warn("역머지 안내를 세지 못함 " + root + ": " + e.getMessage());
+      reverseNotes.put(root, new ReverseNote(SyncBundle.message("rmerge.note.failed", from == null ? "" : from), false, e.getMessage()));
     }
     finally {
       if (fetch) unlockFetch(root);
@@ -2645,6 +2653,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     Color color = note.warn() ? ReverseMergeAction.MINE_COLOR : SimpleTextAttributes.GRAYED_ATTRIBUTES.getFgColor();
     component.append("   ");
     component.append(note.text() + NOTE_LINK_MARK, new SimpleTextAttributes(SimpleTextAttributes.STYLE_UNDERLINE, color), tag);
+    if (note.error() != null) component.setToolTipText(note.error());
   }
 
   /** 서버에 물어 SVN 저장소를 비교하고, 받은 들어올 변경을 svnIncoming 에 남긴다. 서버에 닿지 못하면 IOException(남긴 것은 그대로). */
