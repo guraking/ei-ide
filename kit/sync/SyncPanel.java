@@ -127,6 +127,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -298,6 +299,12 @@ final class SyncPanel extends SimpleToolWindowPanel {
                                                               "인증 실패", "인증이 실패", "인증에 실패");
   // 서버에 닿는 git 하위 명령. Git 로그인 머리글은 이 명령에만 넘긴다(status · checkout 등 로컬 명령이 부르는 저장소 훅이 읽지 못하게).
   private static final Set<String> GIT_REMOTE_VERBS = Set.of("fetch", "pull", "push", "ls-remote", "clone");
+  // 저장소(정규 경로)별 원격 명령 차례. 프로젝트 창이 여럿이어도 하나를 함께 쓴다.
+  private static final Map<String, ReentrantLock> REMOTE_LOCKS = new ConcurrentHashMap<>();
+  // 다른 git 이 같은 참조를 먼저 바꿔 fetch · pull 이 멈출 때 git 이 내는 문구(LANGUAGE=C 로 띄워 영어로 온다).
+  private static final Pattern REF_RACE = Pattern.compile("cannot lock ref '[^']+': is at \\p{XDigit}+ but expected \\p{XDigit}+");
+  // REF_RACE 로 실패했을 때 다시 하기 전 기다리는 시간. 겹친 git 이 끝나기를 기다린다.
+  private static final long REF_RACE_RETRY_MS = 1500;
   // 터미널에서 아이디 · 비밀번호를 묻지 않고 곧바로 실패하게 한다(표준 입력이 닫혀 있어 물어도 답할 수 없다).
   private static final String ENV_TERMINAL_PROMPT = "GIT_TERMINAL_PROMPT";
   // 서버 명령의 오류 문구 언어를 영어로 고정해 인증 실패를 GIT_AUTH_ERRORS 로 알아보게 한다. 메시지 번역만 바꾸고 파일 이름 출력은 그대로다.
@@ -3071,7 +3078,29 @@ final class SyncPanel extends SimpleToolWindowPanel {
 
   /** git 과 같고 logins 의 인증을 더 넘긴다(GitRemoteAuth). */
   static String gitWith(File dir, long timeoutSec, List<GitLogins.Login> logins, String... args) throws IOException, InterruptedException {
-    return new String(runBytes(dir, timeoutSec, logins, GIT, gitArgs(args)), StandardCharsets.UTF_8).replace("\r\n", "\n");
+    // 같은 저장소의 원격 명령은 창 · 기능(동기화 · Merge Branches)이 달라도 하나씩 돌린다. 겹치면 같은 원격 추적 참조를 두고 cannot lock ref 로 실패한다.
+    ReentrantLock lock = REMOTE_LOCKS.computeIfAbsent(dir.getCanonicalPath(), key -> new ReentrantLock());
+    lock.lockInterruptibly();
+    try {
+      try {
+        return new String(runBytes(dir, timeoutSec, logins, GIT, gitArgs(args)), StandardCharsets.UTF_8).replace("\r\n", "\n");
+      }
+      catch (IOException e) {
+        // IntelliJ 자체 fetch 등 우리 밖의 git 과 겹친 경우: 참조는 이미 새 값으로 받아져 있어 잠시 뒤 한 번 더 하면 된다.
+        if (!isRefRace(e.getMessage())) throw e;
+        LOG.info("원격 추적 참조를 다른 git 이 먼저 바꿔 다시 실행: " + e.getMessage());
+        Thread.sleep(REF_RACE_RETRY_MS);
+        return new String(runBytes(dir, timeoutSec, logins, GIT, gitArgs(args)), StandardCharsets.UTF_8).replace("\r\n", "\n");
+      }
+    }
+    finally {
+      lock.unlock();
+    }
+  }
+
+  /** git 오류가 「참조를 읽은 뒤 다른 git 이 먼저 바꿨다」(cannot lock ref '…': is at A but expected B)인지. */
+  static boolean isRefRace(String message) {
+    return message != null && REF_RACE.matcher(message).find();
   }
 
   static boolean isGitAuthError(String message) {

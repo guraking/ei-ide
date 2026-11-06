@@ -49,6 +49,11 @@ public class SyncCheck {
     eq(SyncPanel.unquote("\"\\355\\225\\234.txt\""), "한.txt");
     eq(SyncPanel.unquote("plain.txt"), "plain.txt");
     checkNestedRepo();
+    // 다른 git 과 겹쳐 참조가 먼저 바뀐 fetch 오류만 다시 한다.
+    eq(SyncPanel.isRefRace("git fetch 실패: error: cannot lock ref 'refs/remotes/origin/Feature/gpm/dxplmdev.hbchoi': is at d48d7dda02013f87869d5fceb73715e59df608b5 but expected 85a32cc78e90fdc3bdf1104f2e992970614da35e"), true);
+    eq(SyncPanel.isRefRace("error: cannot lock ref 'refs/remotes/origin/a': unable to resolve reference"), false);
+    eq(SyncPanel.isRefRace("fatal: Authentication failed"), false);
+    eq(SyncPanel.isRefRace(null), false);
 
     // Push 단추 숫자 · 받을 저장소: git status -b 브랜치 줄의 ahead · behind.
     eq(SyncPanel.parseTracking("## main...origin/main [ahead 2, behind 13]\n M a.txt\n"), new SyncPanel.Tracking(2, 13));
