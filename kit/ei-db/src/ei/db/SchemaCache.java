@@ -24,13 +24,16 @@ public final class SchemaCache {
   private static final Map<String, List<Meta.Table>> TABLES = new ConcurrentHashMap<>();
   private static final Map<String, List<Meta.Column>> COLUMNS = new ConcurrentHashMap<>();
   private static final Set<String> LOADING = ConcurrentHashMap.newKeySet();
+  /** 접속마다 clear 할 때 오르는 번호. 읽기 시작 뒤 번호가 바뀌었으면 그 결과는 새로고침 전 것이라 버린다. */
+  private static final Map<String, Integer> GENERATION = new ConcurrentHashMap<>();
 
   /** 기본 스키마의 표 · 뷰. 아직 없으면 null(읽기 시작). */
   public static List<Meta.Table> tables(Project project, DbConfig c) {
     List<Meta.Table> t = TABLES.get(c.id);
     if (t == null) load(c.id, () -> {
+      int gen = generation(c.id);
       Connection conn = DbSessions.get(project).connection(c);
-      TABLES.put(c.id, Meta.tables(conn, c, Meta.schemaOf(c), TABLE_TYPES));
+      putIfCurrent(TABLES, c.id, Meta.tables(conn, c, Meta.schemaOf(c), TABLE_TYPES), c.id, gen);
     });
     return t;
   }
@@ -40,6 +43,7 @@ public final class SchemaCache {
     String key = c.id + "|" + table.toUpperCase(Locale.ROOT);
     List<Meta.Column> cols = COLUMNS.get(key);
     if (cols == null) load(key, () -> {
+      int gen = generation(c.id);
       String name = table;
       List<Meta.Table> known = TABLES.get(c.id);
       if (known != null) {
@@ -48,14 +52,28 @@ public final class SchemaCache {
         }
       }
       Connection conn = DbSessions.get(project).connection(c);
-      COLUMNS.put(key, Meta.columns(conn, c, Meta.schemaOf(c), name));
+      putIfCurrent(COLUMNS, key, Meta.columns(conn, c, Meta.schemaOf(c), name), c.id, gen);
     });
     return cols;
   }
 
   public static void clear(String configId) {
-    TABLES.remove(configId);
-    COLUMNS.keySet().removeIf(k -> k.startsWith(configId + "|"));
+    synchronized (GENERATION) {
+      GENERATION.merge(configId, 1, Integer::sum);
+      TABLES.remove(configId);
+      COLUMNS.keySet().removeIf(k -> k.startsWith(configId + "|"));
+    }
+  }
+
+  private static int generation(String configId) {
+    return GENERATION.getOrDefault(configId, 0);
+  }
+
+  /** 읽기 시작한 뒤 그 접속에 clear 가 없었을 때만 넣는다. clear 와 같은 잠금 안에서 확인하고 넣는다. */
+  private static <T> void putIfCurrent(Map<String, T> cache, String key, T value, String configId, int gen) {
+    synchronized (GENERATION) {
+      if (generation(configId) == gen) cache.put(key, value);
+    }
   }
 
   private interface Loader { void run() throws Exception; }

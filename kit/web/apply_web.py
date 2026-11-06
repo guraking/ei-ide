@@ -73,15 +73,22 @@ def main():
         for f in CHECK_FILES:
             if not (unpacked / f).is_file():
                 sys.exit(f"아무것도 바꾸지 않았습니다. {f} 가 없습니다.")
+        # 옛 설치는 옮겨 두었다가 새 것이 다 들어간 뒤에 지운다. 넣다가 실패하면 옛 것을 되돌린다.
+        old = TARGET.with_name(TARGET.name + ".old")
+        if old.exists():
+            shutil.rmtree(old)
         if TARGET.exists():
-            shutil.rmtree(TARGET)
+            TARGET.rename(old)
         # 임시 폴더와 드라이브가 다를 수 있으므로 rename 대신 move(복사 뒤 지우기)를 쓴다.
         try:
             shutil.move(str(unpacked), str(TARGET))
             marker.write_text(version_text() + "\n", encoding="utf-8")
         except BaseException:
             shutil.rmtree(TARGET, ignore_errors=True)
+            if old.exists():
+                old.rename(TARGET)
             raise
+        shutil.rmtree(old, ignore_errors=True)
     print(f"넣음: {TARGET} (Node {NODE_VERSION})")
 
 
