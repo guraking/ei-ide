@@ -2335,6 +2335,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     int seq = ++compareSeq;
     Map<File, Vcs> vcsOf = new HashMap<>();
     for (Map.Entry<File, Vcs> entry : roots) vcsOf.put(entry.getKey(), entry.getValue());
+    long refreshStarted = System.currentTimeMillis();
     inBackground(progress, true, () -> {
       // 저장소별 실패(저장소 정보 읽기 · 원격 확인). 끝나면 저장소마다 알림 풍선 하나, 실패한 저장소 줄은 빨간 표시.
       Map<File, String> failures = Collections.synchronizedMap(new LinkedHashMap<>());
@@ -2406,6 +2407,9 @@ final class SyncPanel extends SimpleToolWindowPanel {
       List<Change> finalResult = result;
       boolean stopped = interrupted;
       Map<File, String> failed = new LinkedHashMap<>(failures);
+      if (TIME_LOG.isDebugEnabled()) {
+        TIME_LOG.debug("새로고침 전체 " + (System.currentTimeMillis() - refreshStarted) + " ms, 저장소 " + roots.size() + "개");
+      }
       SwingUtilities.invokeLater(() -> {
         endBusy();
         showTitle(repos);
@@ -2624,8 +2628,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
       if (repo.vcs() == Vcs.GIT) {
         // 추적 브랜치가 없으면 받아 와도 비교할 원격이 없다(원격이 아예 없는 저장소는 fetch 가 실패한다).
         if (repo.upstream() != null) fetch(repo.root());
-        // 방금 fetch 가 그 원격(branch.<이름>.remote)의 브랜치를 다 받았으므로 역머지 안내는 서버에 다시 묻지 않는다. 추적 브랜치가 없을 때만 기준 브랜치를 받는다.
-        updateReverseNote(repo, repo.upstream() == null);
+        // 방금 fetch 가 그 원격의 브랜치를 다 받았으면(fetchedAll) 역머지 안내는 기준 브랜치를 다시 받지 않는다.
+        updateReverseNote(repo, true, repo.upstream() != null);
         return compareFetched(repo, localOf(local));
       }
       return compareSvnRemote(repo);
@@ -2671,6 +2675,15 @@ final class SyncPanel extends SimpleToolWindowPanel {
    * 실패해도(서버에서 지워짐 · 아직 받은 적 없음 등) 동기화 비교는 계속하고 안내만 지운다.
    */
   private void updateReverseNote(Repo repo, boolean fetch) throws InterruptedException {
+    updateReverseNote(repo, fetch, false);
+  }
+
+  /**
+   * updateReverseNote 와 같고, fetchedAll 이면 바로 앞에서 그 저장소를 인자 없이 fetch 한 것이다. 인자 없는 fetch 는 branch.<이름>.remote 원격의
+   * remote.<원격>.fetch 대로 받으므로, 그것이 기본(+refs/heads/*:refs/remotes/<원격>/*)일 때만 기준 브랜치도 받은 것으로 보고 다시 받지 않는다.
+   * 한 브랜치만 받게 좁힌 저장소(--single-branch 등)는 기준 브랜치를 따로 받는다.
+   */
+  private void updateReverseNote(Repo repo, boolean fetch, boolean fetchedAll) throws InterruptedException {
     File root = repo.root();
     // 설정은 git 한 번으로 다 읽는다(From · 원격 이름 · 내 이름 · 이메일).
     Map<String, String> cfg = ReverseMerge.configs(root);
@@ -2696,7 +2709,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
         reverseNotes.remove(root);
         return;
       }
-      if (fetch) ReverseMerge.fetchQuietly(root, remote, from);
+      if (fetch && !(fetchedAll && ReverseMerge.fetchesAllHeads(cfg, remote))) ReverseMerge.fetchQuietly(root, remote, from);
       ReverseMerge.Preview preview = ReverseMerge.preview(root, cfg, remote, from, repo.branch(), repo.branch());
       int mine = preview.mineCount();
       // 합치기 커밋은 세지 않는다. develop 을 내 브랜치로 합친 뒤 Push 하지 않은 합치기 커밋은 내용이 이미 develop 에 있어 머지 요청할 것이 아니다.

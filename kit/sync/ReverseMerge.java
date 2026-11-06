@@ -39,7 +39,7 @@ final class ReverseMerge {
   private static final String LOG_DATE = "--date=format:%m-%d %H:%M";
   private static final String AUTHOR_FORMAT = "--format=%x01%an%x1f%ae";
   /** configs 가 한 번에 읽는 설정 키(git config --get-regexp). */
-  private static final String CONFIG_KEYS = "^(user\\.(name|email)|branch\\..*\\.remote|ei\\.reverseMerge\\..*)$";
+  private static final String CONFIG_KEYS = "^(user\\.(name|email)|branch\\..*\\.remote|remote\\..*\\.fetch|ei\\.reverseMerge\\..*)$";
 
   /** 들어올 파일 하나. author · when · subject 는 기준 브랜치에서 이 파일을 마지막으로 바꾼 커밋. */
   record Incoming(String path, String author, String when, String subject, boolean mine) {}
@@ -240,6 +240,14 @@ final class ReverseMerge {
   /** branch 가 쓰는 원격 이름. 설정이 없으면 DEFAULT_REMOTE. */
   static String remoteOf(File root, String branch) throws InterruptedException {
     return remoteOf(configs(root), branch);
+  }
+
+  /**
+   * 인자 없는 git fetch 가 remote 의 모든 브랜치를 받는가: remote.<원격>.fetch 가 기본 모양이다. 한 원격에 fetch 줄이 여럿이면
+   * configs 는 마지막 줄만 남기므로, 마지막 줄이 기본이 아니면 거짓(기준 브랜치를 한 번 더 받는 쪽)이다.
+   */
+  static boolean fetchesAllHeads(Map<String, String> cfg, String remote) {
+    return ("+" + HEADS + "*:" + remoteRef(remote, "*")).equals(cfg.get("remote." + remote + ".fetch"));
   }
 
   /** remoteOf 와 같고 configs 로 읽어 둔 설정을 쓴다. */
