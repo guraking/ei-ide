@@ -9,6 +9,20 @@ import java.util.Set;
 public class SyncCheck {
   /** 2026-11-06 동기화 전수조사에서 고친 순수 판단들. */
   static void checkAudit1106() throws Exception {
+    // 인자 없는 fetch 가 기준 브랜치까지 받는지(remote.<원격>.fetch 기본 모양).
+    eq(ReverseMerge.fetchesAllHeads(java.util.Map.of("remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"), "origin"), true);
+    eq(ReverseMerge.fetchesAllHeads(java.util.Map.of("remote.origin.fetch", "+refs/heads/feature/a:refs/remotes/origin/feature/a"), "origin"), false);
+    eq(ReverseMerge.fetchesAllHeads(java.util.Map.of(), "origin"), false);
+    // 받아 온 뒤 비교의 앞선 · 뒤진 수(rev-list --left-right --count HEAD...@{u}).
+    eq(SyncPanel.parseLeftRight("2\t5\n"), new SyncPanel.Tracking(2, 5));
+    eq(SyncPanel.parseLeftRight("0\t0"), new SyncPanel.Tracking(0, 0));
+    try {
+      SyncPanel.parseLeftRight("fatal: no upstream");
+      throw new AssertionError("parseLeftRight 가 깨진 출력을 받아들였다");
+    }
+    catch (java.io.IOException expected) {
+      // 읽지 못하면 IOException.
+    }
     SyncPanel.Repo r = new SyncPanel.Repo(new File("."), SyncPanel.Vcs.GIT, "main", "origin/main");
     // 대소문자만 다른 경로: 윈도우(대소문자 안 가림)에서는 같은 파일이라 충돌, 리눅스에서는 따로.
     List<SyncPanel.Change> ci = SyncPanel.merge(r, java.util.Map.of("Foo.vue", "M"), java.util.Map.of("foo.vue", "R"), Set.of(), false);
