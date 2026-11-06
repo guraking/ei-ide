@@ -375,6 +375,38 @@ public class SyncCheck {
     sh(mine, "git commit -q --allow-empty -m 올릴것");
     eq(ReverseMerge.lastUnpushed(mine, "origin", "feature/kim"), "올릴것");
     sh(mine, "git reset -q --hard HEAD~1");
+    // 대소문자만 바뀐 이름: From 쪽이 바꾼 것만 잡고(갈라진 곳에 지금 이름이 있음), 내 쪽이 바꾼 것은 두며, 폴더 이름도 잡는다.
+    eq(ReverseMerge.caseRenames(Set.of("A.vue", "b/C.vue", "D.vue"), Set.of("a.vue", "B/C.vue", "D.vue", "e.vue"), Set.of("A.vue", "b/C.vue", "D.vue")),
+       java.util.Map.of("A.vue", "a.vue", "b/C.vue", "B/C.vue"));
+    eq(ReverseMerge.caseRenames(Set.of("a.vue"), Set.of("A.vue"), Set.of("A.vue")), java.util.Map.of());
+    // 다른 개발자가 develop 에서 Big.vue → big.vue, ui/X.vue → UI/X.vue 로 이름의 대소문자만 바꾸고 내용도 고쳤다(내용이 비슷해 git 이 이름 바꾸기로 본다).
+    sh(other, "git checkout -q develop && git pull -q origin develop && mkdir -p ui && echo x > ui/X.vue && seq 1 30 > Big.vue && git add ui Big.vue && git commit -qm ui && git push -q origin develop");
+    ReverseMerge.fetch(mine, "origin", "develop", "feature/kim");
+    eq(ReverseMerge.merge(mine, "origin", "develop", "feature/kim", "feature/kim", true, false), ReverseMerge.Result.MERGED);
+    sh(other, "git mv Big.vue big.vue && echo more >> big.vue && mkdir UI && git mv ui/X.vue UI/X.vue && git commit -qam 대소문자 && git push -q origin develop");
+    ReverseMerge.fetch(mine, "origin", "develop", "feature/kim");
+    String tipBefore = SyncPanel.git(mine, "rev-parse", "HEAD").trim();
+    // 대소문자를 가리는 저장소면 git 이 그대로 합칠 수 있어 묻지 않는다. 가리지 않는 저장소(윈도우)면 아무것도 하지 않고 멈춘다.
+    sh(mine, "git config core.ignorecase true");
+    try {
+      ReverseMerge.merge(mine, "origin", "develop", "feature/kim", "feature/kim", true, false);
+      throw new AssertionError("대소문자만 바뀐 이름이 있으면 묻기 전에 합치지 않아야 한다");
+    }
+    catch (ReverseMerge.CaseRenameException expected) {
+      eq(expected.renames, java.util.Map.of("Big.vue", "big.vue", "ui/X.vue", "UI/X.vue"));
+      eq(SyncPanel.git(mine, "rev-parse", "HEAD").trim(), tipBefore);
+      eq(SyncPanel.git(mine, "status", "--porcelain"), "");
+    }
+    // 이름을 맞춰 커밋하고 합친 뒤 Push 한다. 새 이름만 남고 From 쪽 내용이 들어온다.
+    String rDevelop = SyncPanel.git(mine, "rev-parse", ReverseMerge.remoteRef("origin", "develop")).trim();
+    eq(ReverseMerge.merge(mine, "origin", "develop", rDevelop, "feature/kim", "feature/kim", true, false, true), ReverseMerge.Result.MERGED);
+    Set<String> files = ReverseMerge.lines(SyncPanel.git(mine, "ls-tree", "-r", "--name-only", "HEAD"));
+    eq(files.contains("big.vue") && files.contains("UI/X.vue") && !files.contains("Big.vue") && !files.contains("ui/X.vue"), true);
+    eq(SyncPanel.git(mine, "show", "HEAD:big.vue").contains("more"), true);
+    eq(SyncPanel.git(mine, "log", "-1", "--format=%s", "HEAD^1"), "파일 이름 대소문자를 origin/develop 에 맞춤\n");
+    eq(SyncPanel.git(mine, "rev-parse", "HEAD").trim(), SyncPanel.git(server, "rev-parse", "feature/kim").trim());
+    eq(SyncPanel.git(mine, "status", "--porcelain"), "");
+    sh(mine, "git config core.ignorecase false");
     ReverseMerge.saveConfig(mine, ReverseMerge.CONFIG_FROM, "develop");
     eq(ReverseMerge.config(mine, ReverseMerge.CONFIG_FROM), "develop");
     eq(ReverseMerge.config(mine, ReverseMerge.CONFIG_INTO), null);
