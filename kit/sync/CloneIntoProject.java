@@ -133,6 +133,8 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
 
   @Override
   public boolean processCheckedOutDirectory(@NotNull Project project, @NotNull Path directory) {
+    // 이클립스 Clone 의 「Initial branch」: 모듈로 붙이거나 새 창으로 열기 전에 받을 브랜치로 바꿔 Maven · Gradle 이 그 브랜치 파일을 읽게 한다.
+    CloneBranch.choose(project.isDefault() || project.isDisposed() ? null : project, directory.toFile());
     String base = project.isDefault() || project.isDisposed() ? null : project.getBasePath();
     if (base == null) return false;
     VirtualFile dir = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(directory);
