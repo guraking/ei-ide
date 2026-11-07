@@ -31,6 +31,8 @@
         <defaultToolWindowLayout implementation="local.bootservers.ToolWindowOrder" order="last"/>
         <!-- 모든 메뉴에서 GitHub 「Create Gist…」를 뺀다(당사 소스를 GitHub 에 올리지 않는다) -->
         <actionConfigurationCustomizer implementation="local.bootservers.GistMenuOff"/>
+        <!-- F2: 편집기 안은 설명 보기, 프로젝트 창 등은 이름 바꾸기(이클립스와 같게) -->
+        <actionPromoter implementation="local.bootservers.F2RenamePromoter"/>
         <notificationGroup id="Moa IDE 새 판" key="notification.group.update" displayType="STICKY_BALLOON"/>
         <notificationGroup id="서버 실행" key="notification.group.servers" displayType="BALLOON"/>
         <notificationGroup id="서버 연결" key="notification.group.links" displayType="BALLOON"/>

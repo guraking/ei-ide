@@ -129,6 +129,11 @@ EDITS = [
     ("platform/platform-impl/src/com/intellij/openapi/keymap/impl/DefaultKeymap.kt",
      "else -> KeymapManager.DEFAULT_IDEA_KEYMAP",
      'else -> "Eclipse"'),
+    # 4-1) 이클립스처럼 F2 로 이름 바꾸기. F2 는 원래 설명 보기(QuickJavaDoc)에도 묶여 있어,
+    #      편집기 안은 설명 보기, 프로젝트 창 등은 이름 바꾸기가 먼저 잡히게 boot-servers 의 F2RenamePromoter 가 고른다.
+    ("plugins/keymaps/eclipse-keymap/resources/keymaps/Eclipse.xml",
+     '  <action id="RenameElement">\n    <keyboard-shortcut first-keystroke="shift alt R"/>\n  </action>',
+     '  <action id="RenameElement">\n    <keyboard-shortcut first-keystroke="shift alt R"/>\n    <keyboard-shortcut first-keystroke="F2"/>\n  </action>'),
     # 5) 상위 폴더로 처음 열었는데 그 폴더에 빌드 파일이 없으면, 아래 두 단계 폴더들의 build.gradle · pom.xml 을 각각 연결한다.
     (AUTOLINK_FILE, AUTOLINK_ORIGINAL, AUTOLINK_DEPTH2),
     # 6) 저장하면 자동 빌드(이클립스 Build Automatically). 그래들 위임 빌드에서는 자동 빌드가 돌지 않으므로 새 그래들 프로젝트는 자체 빌드를 기본으로 한다.
