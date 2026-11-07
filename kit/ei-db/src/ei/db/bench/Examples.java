@@ -12478,7 +12478,7 @@ public final class Examples {
                , a.USER_ID
            ORDER BY
                  DEL_CNT DESC"""),
-      new Example("현황 · 집계", "건수 (전체 · 그룹별)", "상태 값마다 건수를 많은 순으로. GROUP BY 를 빼면 전체 건수입니다.",
+      new Example("대시보드 통계", "건수 (전체 · 그룹별)", "상태 값마다 건수를 많은 순으로. GROUP BY 를 빼면 전체 건수입니다.",
           """
           -- STATUS 값마다 건수 (많은 순)
           SELECT
@@ -12501,7 +12501,7 @@ public final class Examples {
                  o.STATUS
            ORDER BY
                  CNT DESC"""),
-      new Example("현황 · 집계", "합계 · 평균 · 최대 · 최소", "금액의 건수 · 합계 · 평균 · 최대 · 최소를 상태마다 한 번에. 합계 · 평균은 NULL 행을 빼고 셉니다.",
+      new Example("대시보드 통계", "합계 · 평균 · 최대 · 최소", "금액의 건수 · 합계 · 평균 · 최대 · 최소를 상태마다 한 번에. 합계 · 평균은 NULL 행을 빼고 셉니다.",
           """
           -- AMOUNT 의 건수 · 합계 · 평균 · 최대 · 최소 (STATUS 마다). 합계 · 평균은 NULL 행을 빼고 셉니다
           SELECT
@@ -12532,7 +12532,7 @@ public final class Examples {
                  o.STATUS
            ORDER BY
                  o.STATUS"""),
-      new Example("현황 · 집계", "기간별 현황", "월마다 건수와 금액 합계. 'MM' 을 'DD' · 'IW' · 'YYYY'(PostgreSQL 은 day · week · year)로 바꾸면 일 · 주 · 연도별입니다.",
+      new Example("대시보드 통계", "기간별 현황", "월마다 건수와 금액 합계. 'MM' 을 'DD' · 'IW' · 'YYYY'(PostgreSQL 은 day · week · year)로 바꾸면 일 · 주 · 연도별입니다.",
           """
           -- 월별 현황: 시작일 ~ 끝일(끝일 하루 전체 포함)
           SELECT
@@ -12559,7 +12559,7 @@ public final class Examples {
                  TO_CHAR(DATE_TRUNC('month', o.ORDER_DT), 'YYYY-MM')
            ORDER BY
                  PERIOD"""),
-      new Example("현황 · 집계", "전 기간 대비 증감", "월마다 건수와 바로 앞 달 대비 증감 · 증감률(%). 앞 달이 0 건이면 증감률은 비웁니다.",
+      new Example("대시보드 통계", "전 기간 대비 증감", "월마다 건수와 바로 앞 달 대비 증감 · 증감률(%). 앞 달이 0 건이면 증감률은 비웁니다.",
           """
           -- 월별 건수와 앞 기간 대비 증감 · 증감률(%). 앞 기간이 0 건이면 증감률은 비웁니다
           WITH counted AS (
@@ -12602,7 +12602,7 @@ public final class Examples {
             FROM counted c
            ORDER BY
                  c.PERIOD"""),
-      new Example("현황 · 집계", "비율 (전체 중 몇 %)", "상태 값마다 건수와 전체 중 비율(%).",
+      new Example("대시보드 통계", "비율 (전체 중 몇 %)", "상태 값마다 건수와 전체 중 비율(%).",
           """
           -- STATUS 값마다 건수와 전체 중 비율(%)
           SELECT
@@ -12627,7 +12627,7 @@ public final class Examples {
                  o.STATUS
            ORDER BY
                  CNT DESC"""),
-      new Example("현황 · 집계", "기간별 누적", "월마다 건수와 처음부터 쌓인 누적 건수.",
+      new Example("대시보드 통계", "기간별 누적", "월마다 건수와 처음부터 쌓인 누적 건수.",
           """
           -- 월별 건수와 누적 건수
           SELECT
@@ -12654,7 +12654,7 @@ public final class Examples {
                  TO_CHAR(DATE_TRUNC('month', o.ORDER_DT), 'YYYY-MM')
            ORDER BY
                  PERIOD"""),
-      new Example("현황 · 집계", "순위 · 상위 N 개", "상태마다 금액 합계로 순위를 매겨 상위 10 개만.",
+      new Example("대시보드 통계", "순위 · 상위 N 개", "상태마다 금액 합계로 순위를 매겨 상위 10 개만.",
           """
           -- STATUS 마다 AMOUNT 합계 순위, 상위 10 개 (같은 값은 같은 순위)
           WITH ranked AS (
@@ -12689,7 +12689,7 @@ public final class Examples {
            WHERE r.RNK <= 10
            ORDER BY
                  r.RNK"""),
-      new Example("현황 · 집계", "상태별 건수 한 줄 (대시보드 카드)", "전체 · 상태 값마다 건수를 한 줄에 칸으로 놓습니다. 대시보드 카드 숫자에 바로 씁니다.",
+      new Example("대시보드 통계", "상태별 건수 한 줄 (대시보드 카드)", "전체 · 상태 값마다 건수를 한 줄에 칸으로 놓습니다. 대시보드 카드 숫자에 바로 씁니다.",
           """
           -- 대시보드 카드: 전체 건수와 STATUS 값마다 건수를 한 줄에
           SELECT
@@ -12708,7 +12708,7 @@ public final class Examples {
                , SUM(CASE WHEN o.STATUS = '완료' THEN 1 ELSE 0 END) AS "완료"
             FROM ORDERS o
            WHERE 1 = 1"""),
-      new Example("현황 · 집계", "합계 줄 붙이기 (ROLLUP)", "상태별 건수 · 합계 아래에 「합계」 줄을 하나 더 붙입니다.",
+      new Example("대시보드 통계", "합계 줄 붙이기 (ROLLUP)", "상태별 건수 · 합계 아래에 「합계」 줄을 하나 더 붙입니다.",
           """
           -- STATUS 별 건수 · 합계 아래에 「합계」 줄
           SELECT
@@ -12733,7 +12733,7 @@ public final class Examples {
            ORDER BY
                  GROUPING(o.STATUS)
                , o.STATUS"""),
-      new Example("현황 · 집계", "0 건인 날짜도 빠짐없이", "기간 안의 모든 날짜를 만들고 건수를 붙입니다. 행이 없는 날은 0 으로 나옵니다(그래프용).",
+      new Example("대시보드 통계", "0 건인 날짜도 빠짐없이", "기간 안의 모든 날짜를 만들고 건수를 붙입니다. 행이 없는 날은 0 으로 나옵니다(그래프용).",
           """
           -- 시작일 ~ 끝일의 모든 날짜와 건수. 행이 없는 날은 0
           WITH days AS (
