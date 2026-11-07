@@ -8,7 +8,7 @@ import com.intellij.ui.SearchTextField;
 import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.components.JBList;
 import com.intellij.ui.components.JBTextArea;
-import com.intellij.openapi.editor.colors.EditorFontType;
+import com.intellij.util.ui.JBFont;
 import com.intellij.util.ui.JBUI;
 import org.jetbrains.annotations.NotNull;
 
@@ -51,7 +51,7 @@ final class ExamplePanel {
       protected void textChanged(@NotNull DocumentEvent e) { filter(); }
     });
     description.setEditable(false);
-    description.setFont(EditorFontType.getGlobalPlainFont());
+    description.setFont(JBFont.label());
     description.setLineWrap(true);
     description.setWrapStyleWord(true);
     description.setOpaque(false);

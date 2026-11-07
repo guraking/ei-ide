@@ -6,8 +6,8 @@ import com.intellij.ui.components.JBList;
 import com.intellij.ui.components.JBTabbedPane;
 import com.intellij.ui.components.JBTextArea;
 import com.intellij.ui.components.JBTextField;
-import com.intellij.openapi.editor.colors.EditorFontType;
 import com.intellij.util.ui.FormBuilder;
+import com.intellij.util.ui.JBFont;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
 import ei.db.DbConfig;
@@ -55,7 +55,7 @@ final class ToolsPanel {
   JComponent component() { return root; }
 
   private JComponent inTab() {
-    pasted.setFont(EditorFontType.getGlobalPlainFont());
+    pasted.setFont(JBFont.label());
     pasted.getEmptyText().setText("엑셀 · 결과 창에서 복사한 값을 붙여 넣으세요. 칸이 둘 이상(탭으로 나뉨)이면 (A, B) IN ((…), (…)) 로 만듭니다.");
     inColumns.getEmptyText().setText("예: CUST_ID   또는 두 칸이면  PART_NO, REV");
     JButton make = blue(new JButton("IN 만들기"));

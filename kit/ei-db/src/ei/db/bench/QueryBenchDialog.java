@@ -1,7 +1,6 @@
 package ei.db.bench;
 
 import com.intellij.ide.util.PropertiesComponent;
-import com.intellij.openapi.editor.colors.EditorFontType;
 import com.intellij.openapi.ide.CopyPasteManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.ComboBox;
@@ -18,6 +17,7 @@ import com.intellij.ui.components.JBTabbedPane;
 import com.intellij.ui.components.JBTextArea;
 import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.FormBuilder;
+import com.intellij.util.ui.JBFont;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
 import ei.db.DbConfig;
@@ -68,7 +68,11 @@ import java.util.Set;
  * 콘솔에서 SQL 을 들고 열면 「쉬운 설명」 탭, 그 밖에는 마지막에 본 탭으로 연다.
  */
 public final class QueryBenchDialog extends DialogWrapper {
-  private static final double FIRST_SIZE = 0.85;
+  private static final double FIRST_SIZE = 0.7;
+  /** 창 크기를 기억하는 키. 창이 저절로 커지던 앞 판이 남긴 큰 크기를 버리려고 이름 끝을 올렸다. */
+  private static final String DIMENSION_KEY = "ei.db.QueryBench.2";
+  /** SQL 칸 안쪽 여백(스케일 전 px). */
+  private static final int SQL_PADDING = 8;
   private static final float BUILDER_SPLIT = 0.6f;
   private static final float EXPLAIN_SPLIT = 0.4f;
   private static final float TOOLS_SPLIT = 0.45f;
@@ -165,7 +169,7 @@ public final class QueryBenchDialog extends DialogWrapper {
   }
 
   @Override
-  protected @Nullable String getDimensionServiceKey() { return "ei.db.QueryBench"; }
+  protected @Nullable String getDimensionServiceKey() { return DIMENSION_KEY; }
 
   @Override
   public Dimension getInitialSize() {
@@ -273,11 +277,12 @@ public final class QueryBenchDialog extends DialogWrapper {
 
   /** SQL 칸(테두리 한 겹) · 알림 줄(비면 숨김) · 미리 보기 결과(실행해 보기 뒤에만)를 한 묶음으로 만든다. */
   private void buildPreview() {
-    sql.setFont(EditorFontType.getGlobalPlainFont());
+    sql.setFont(JBFont.label());
     sql.setTabSize(4);
+    sql.setBorder(JBUI.Borders.empty(SQL_PADDING));
     sql.getEmptyText().setText("만든 SQL 이 여기에 나옵니다. 직접 쓰거나 붙여 넣어 「쉬운 설명」 · 「도구」 에 쓸 수도 있습니다.");
     notes.setEditable(false);
-    notes.setFont(EditorFontType.getGlobalPlainFont());
+    notes.setFont(JBFont.label());
     notes.setLineWrap(true);
     notes.setWrapStyleWord(true);
     notes.setOpaque(false);
