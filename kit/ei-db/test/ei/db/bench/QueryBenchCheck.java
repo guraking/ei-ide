@@ -130,7 +130,7 @@ public class QueryBenchCheck {
 
   static Patterns.Fill fill(DbKind kind) {
     return new Patterns.Fill(kind, QueryBuilder.JoinStyle.OLD, QueryBuilder.Bind.COLON, "orders", "orders_bak", List.of("cust_id"), List.of("amount"),
-        "status", "order_dt", "amount", "order_dt", "parent_id", "status", List.of("R", "진행"), 5, Patterns.Period.MONTH);
+        "status", "amount", "order_dt", "parent_id", "status", List.of("R", "진행"));
   }
 
   static void patterns() {
@@ -142,13 +142,9 @@ public class QueryBenchCheck {
     }
     String dup = Patterns.render(Patterns.Kind.DUPLICATES, fill(DbKind.ORACLE));
     yes(dup.contains("HAVING COUNT(*) > 1") && dup.contains("GROUP BY\n       CUST_ID\n"), dup);
-    yes(Patterns.render(Patterns.Kind.STATUS_ROW, fill(DbKind.ORACLE)).contains("THEN 1 ELSE 0 END) AS \"진행\""), "status row");
-    yes(Patterns.render(Patterns.Kind.DATE_FILL, fill(DbKind.ORACLE)).contains("d.DT = c.DT(+)"), "date fill old");
-    yes(Patterns.render(Patterns.Kind.DATE_FILL, fill(DbKind.POSTGRES)).contains("generate_series"), "date fill pg");
     yes(Patterns.render(Patterns.Kind.HIERARCHY, fill(DbKind.POSTGRES)).startsWith("-- 계층") && Patterns.render(Patterns.Kind.HIERARCHY, fill(DbKind.POSTGRES)).contains("WITH RECURSIVE"), "hier");
-    yes(Patterns.render(Patterns.Kind.BY_PERIOD, fill(DbKind.ORACLE)).contains("TO_CHAR(TRUNC(o.ORDER_DT, 'MM'), 'YYYY-MM')"), "period");
     yes(Patterns.render(Patterns.Kind.UPSERT, fill(DbKind.POSTGRES)).contains("ON CONFLICT (CUST_ID)"), "upsert");
-    Patterns.Fill empty = new Patterns.Fill(DbKind.ORACLE, QueryBuilder.JoinStyle.OLD, QueryBuilder.Bind.COLON, "", "", List.of(), List.of(), "", "", "", "", "", "", List.of(), 0, Patterns.Period.DAY);
+    Patterns.Fill empty = new Patterns.Fill(DbKind.ORACLE, QueryBuilder.JoinStyle.OLD, QueryBuilder.Bind.COLON, "", "", List.of(), List.of(), "", "", "", "", "", List.of());
     yes(Patterns.missing(Patterns.Kind.DUPLICATES, empty).contains(Patterns.Field.KEYS), "missing");
   }
 
@@ -250,8 +246,8 @@ public class QueryBenchCheck {
     eq(SqlParts.sources("UNNEST(x) WITH ORDINALITY AS t(TAG, N)").get(0).alias(), "t");
     yes(SqlLint.unlinked(SqlLint.graph("SELECT p.PART_NO, t.TAG FROM PART p, UNNEST(STRING_TO_ARRAY(p.TAGS, ',')) WITH ORDINALITY AS t(TAG, N)")).isEmpty(), "table function with ordinality");
     eq(SqlParts.sources("UNNEST(x) WITH ORDINALITY AS t(TAG, N)").get(0).alias(), "t");
-    Patterns.Fill e = new Patterns.Fill(DbKind.ORACLE, QueryBuilder.JoinStyle.OLD, QueryBuilder.Bind.COLON, "orders", "", List.of(), List.of(), "", "", "", "", "", "", List.of(), 0, Patterns.Period.DAY);
-    yes(Patterns.missing(Patterns.Kind.STATS, e).contains(Patterns.Field.VALUE), "stats needs value");
+    Patterns.Fill e = new Patterns.Fill(DbKind.ORACLE, QueryBuilder.JoinStyle.OLD, QueryBuilder.Bind.COLON, "orders", "", List.of(), List.of(), "", "", "", "", "", List.of());
+    yes(Patterns.missing(Patterns.Kind.RANK, e).contains(Patterns.Field.VALUE), "rank needs value");
     String hier = Patterns.render(Patterns.Kind.HIERARCHY, fill(DbKind.POSTGRES));
     yes(hier.contains("NOT LIKE ('% > ' ||") && hier.contains("AS VARCHAR(4000))\n         , o.*\n      FROM"), hier);
     eq(QueryBuilder.cdata("SELECT 1\n WHERE a.X >= #{x} -- 시작\n   AND a.Y = 1"),

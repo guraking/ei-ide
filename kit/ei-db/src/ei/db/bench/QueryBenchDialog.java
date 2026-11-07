@@ -91,10 +91,9 @@ public final class QueryBenchDialog extends DialogWrapper {
 
   private static final int BUILDER_TAB = 0;
   private static final int PURPOSE_TAB = 1;
-  private static final int DASHBOARD_TAB = 2;
-  private static final int EXAMPLES_TAB = 3;
-  private static final int EXPLAIN_TAB = 4;
-  private static final int TOOLS_TAB = 5;
+  private static final int EXAMPLES_TAB = 2;
+  private static final int EXPLAIN_TAB = 3;
+  private static final int TOOLS_TAB = 4;
 
   private final Project project;
   private final VirtualFile console;
@@ -130,7 +129,6 @@ public final class QueryBenchDialog extends DialogWrapper {
   private final Action insertAction = action("편집기에 넣기", this::insert);
   private final BuilderPanel builder;
   private final PatternPanel purpose;
-  private final PatternPanel dashboard;
   private final ExamplePanel examples;
   private final ExplainPanel explain;
   private final ToolsPanel tools;
@@ -154,8 +152,7 @@ public final class QueryBenchDialog extends DialogWrapper {
     this.bench = new Bench(project, this::fill, m -> setStatus("읽지 못했습니다: " + m, true));
     for (int i = 0; i < slots.length; i++) slots[i] = new JPanel(new BorderLayout());
     builder = new BuilderPanel(bench);
-    purpose = new PatternPanel(bench, false);
-    dashboard = new PatternPanel(bench, true);
+    purpose = new PatternPanel(bench);
     examples = new ExamplePanel(bench, slots[EXAMPLES_TAB]);
     explain = new ExplainPanel(sql::getText);
     tools = new ToolsPanel(bench, sql::getText);
@@ -244,7 +241,6 @@ public final class QueryBenchDialog extends DialogWrapper {
     tabs.setTabComponentInsets(JBUI.emptyInsets());
     tabs.addTab("단계별 작성기", split(BUILDER_SPLIT, "builderSplit", builder.component(), slots[BUILDER_TAB]));
     tabs.addTab("목적으로 만들기", stack(purpose.component(), slots[PURPOSE_TAB]));
-    tabs.addTab("현황 · 집계", stack(dashboard.component(), slots[DASHBOARD_TAB]));
     tabs.addTab("예제 모음", examples.component());
     tabs.addTab("쉬운 설명", split(EXPLAIN_SPLIT, "explainSplit", slots[EXPLAIN_TAB], explain.component()));
     tabs.addTab("도구", split(TOOLS_SPLIT, "toolsSplit", tools.component(), slots[TOOLS_TAB]));
@@ -367,7 +363,6 @@ public final class QueryBenchDialog extends DialogWrapper {
     showStyle();
     builder.connectionChanged();
     purpose.connectionChanged();
-    dashboard.connectionChanged();
     refreshActive();
   }
 
@@ -396,7 +391,6 @@ public final class QueryBenchDialog extends DialogWrapper {
     switch (tabs.getSelectedIndex()) {
       case BUILDER_TAB -> builder.changed();
       case PURPOSE_TAB -> purpose.refresh();
-      case DASHBOARD_TAB -> dashboard.refresh();
       case EXAMPLES_TAB -> examples.refresh();
       case EXPLAIN_TAB -> explain.refresh();
       default -> { }

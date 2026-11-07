@@ -4,7 +4,6 @@ import com.intellij.openapi.ui.ComboBox;
 import com.intellij.openapi.ui.popup.JBPopupFactory;
 import com.intellij.ui.ColoredListCellRenderer;
 import com.intellij.ui.DocumentAdapter;
-import com.intellij.ui.JBIntSpinner;
 import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBTextField;
@@ -30,13 +29,11 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * 「목적으로 만들기」 · 「현황 · 집계」 탭: 무늬를 고르면 그 무늬에 필요한 칸만 그 일에 맞는 이름으로 보이고, 칸을 채우는 대로 바로 아래 SQL 칸에 문장이 나온다.
+ * 「목적으로 만들기」 탭: 무늬를 고르면 그 무늬에 필요한 칸만 그 일에 맞는 이름으로 보이고, 칸을 채우는 대로 바로 아래 SQL 칸에 문장이 나온다.
  * 칸은 모두 줄 폭을 다 채우는 글 칸이고, 오른쪽 「고르기…」 로 표 · 칼럼 목록에서 찾아 넣는다(여러 칼럼 칸은 쉼표로 이어 붙인다).
  * 표 이름은 치다가 LOAD_DELAY_MS 동안 멈추면 그 표의 칼럼을 읽는다. 못 읽거나 칼럼이 없으면 표 칸 아래에 까닭을 보인다.
  */
 final class PatternPanel {
-  private static final int MAX_TOP_N = 10_000;
-  private static final int DEFAULT_TOP_N = 10;
   private static final int LOAD_DELAY_MS = 500;
 
   private final Bench bench;
@@ -45,8 +42,6 @@ final class PatternPanel {
   private final JBLabel description = new JBLabel();
   private final JBLabel tableStatus = new JBLabel();
   private final Map<Patterns.Field, JBTextField> texts = new EnumMap<>(Patterns.Field.class);
-  private final JBIntSpinner topN = new JBIntSpinner(DEFAULT_TOP_N, 1, MAX_TOP_N);
-  private final ComboBox<Patterns.Period> period = new ComboBox<>(Patterns.Period.values());
   private final Map<Patterns.Field, JComponent[]> rows = new EnumMap<>(Patterns.Field.class);
   private final Map<Patterns.Field, JBLabel> labels = new EnumMap<>(Patterns.Field.class);
   private final List<String> columnNames = new ArrayList<>();
@@ -54,10 +49,10 @@ final class PatternPanel {
   /** 칼럼을 읽어 둔 표 이름(대문자). 같은 표면 다시 읽지 않는다. */
   private String loadedTable = "";
 
-  PatternPanel(Bench bench, boolean dashboard) {
+  PatternPanel(Bench bench) {
     this.bench = bench;
     loadTimer.setRepeats(false);
-    for (Patterns.Kind k : Patterns.Kind.values()) if (k.dashboard == dashboard) kind.addItem(k);
+    for (Patterns.Kind k : Patterns.Kind.values()) kind.addItem(k);
     kind.setRenderer(new ColoredListCellRenderer<>() {
       @Override
       protected void customizeCellRenderer(@NotNull JList<? extends Patterns.Kind> list, Patterns.Kind k, int index, boolean selected, boolean focus) {
@@ -70,23 +65,15 @@ final class PatternPanel {
     description.setAllowAutoWrapping(true);
     tableStatus.setForeground(UIUtil.getContextHelpForeground());
     tableStatus.setVisible(false);
-    period.setSelectedItem(Patterns.Period.MONTH);
 
     FormBuilder fb = FormBuilder.createFormBuilder()
-        .addLabeledComponent(dashboard ? "보고 싶은 현황" : "하고 싶은 것", full(kind))
+        .addLabeledComponent("하고 싶은 것", full(kind))
         .addComponentToRightColumn(description);
     for (Patterns.Field f : Patterns.Field.values()) {
-      JComponent c;
-      if (f == Patterns.Field.TOP_N) {
-        c = topN;
-      } else if (f == Patterns.Field.PERIOD) {
-        c = full(period);
-      } else {
-        JBTextField t = new JBTextField();
-        t.getEmptyText().setText(Patterns.hint(f));
-        texts.put(f, t);
-        c = f == Patterns.Field.STATUS_VALUES ? t : withPicker(f, t);
-      }
+      JBTextField t = new JBTextField();
+      t.getEmptyText().setText(Patterns.hint(f));
+      texts.put(f, t);
+      JComponent c = f == Patterns.Field.STATUS_VALUES ? t : withPicker(f, t);
       JBLabel label = new JBLabel(f.label);
       labels.put(f, label);
       fb.addLabeledComponent(label, c);
@@ -107,8 +94,6 @@ final class PatternPanel {
         }
       });
     }
-    topN.addChangeListener(e -> refresh());
-    period.addActionListener(e -> refresh());
   }
 
   /** 위에 놓을 입력 칸들(아래 SQL 칸은 작업대가 붙인다). */
@@ -181,9 +166,9 @@ final class PatternPanel {
     form.revalidate();
     form.repaint();
     Patterns.Fill f = new Patterns.Fill(bench.kind(), bench.style(), bench.bind(), text(Patterns.Field.TABLE), text(Patterns.Field.TABLE2),
-        split(text(Patterns.Field.KEYS)), split(text(Patterns.Field.COLS)), text(Patterns.Field.GROUP), text(Patterns.Field.DATE),
+        split(text(Patterns.Field.KEYS)), split(text(Patterns.Field.COLS)), text(Patterns.Field.GROUP),
         text(Patterns.Field.VALUE), text(Patterns.Field.ORDER), text(Patterns.Field.PARENT), text(Patterns.Field.STATUS),
-        split(text(Patterns.Field.STATUS_VALUES)), topN.getNumber(), (Patterns.Period) period.getSelectedItem());
+        split(text(Patterns.Field.STATUS_VALUES)));
     List<Patterns.Field> missing = Patterns.missing(k, f);
     if (!missing.isEmpty()) {
       List<String> names = new ArrayList<>();

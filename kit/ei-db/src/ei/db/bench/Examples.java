@@ -6801,6 +6801,311 @@ public final class Examples {
                  l.USER_ID
                , CAST(l.LOGIN_TS AS DATE)
           HAVING COUNT(DISTINCT l.IP) > 1"""),
+      new Example("현황 · 집계", "건수 (전체 · 그룹별)", "상태 값마다 건수를 많은 순으로. GROUP BY 를 빼면 전체 건수입니다.",
+          """
+          -- STATUS 값마다 건수 (많은 순)
+          SELECT
+                 o.STATUS
+               , COUNT(*) AS CNT
+            FROM ORDERS o
+           WHERE 1 = 1
+           GROUP BY
+                 o.STATUS
+           ORDER BY
+                 CNT DESC""",
+          """
+          -- STATUS 값마다 건수 (많은 순)
+          SELECT
+                 o.STATUS
+               , COUNT(*) AS CNT
+            FROM ORDERS o
+           WHERE 1 = 1
+           GROUP BY
+                 o.STATUS
+           ORDER BY
+                 CNT DESC"""),
+      new Example("현황 · 집계", "합계 · 평균 · 최대 · 최소", "금액의 건수 · 합계 · 평균 · 최대 · 최소를 상태마다 한 번에. 합계 · 평균은 NULL 행을 빼고 셉니다.",
+          """
+          -- AMOUNT 의 건수 · 합계 · 평균 · 최대 · 최소 (STATUS 마다). 합계 · 평균은 NULL 행을 빼고 셉니다
+          SELECT
+                 o.STATUS
+               , COUNT(*) AS CNT
+               , SUM(o.AMOUNT) AS SUM_AMOUNT
+               , ROUND(AVG(o.AMOUNT), 2) AS AVG_AMOUNT
+               , MAX(o.AMOUNT) AS MAX_AMOUNT
+               , MIN(o.AMOUNT) AS MIN_AMOUNT
+            FROM ORDERS o
+           WHERE 1 = 1
+           GROUP BY
+                 o.STATUS
+           ORDER BY
+                 o.STATUS""",
+          """
+          -- AMOUNT 의 건수 · 합계 · 평균 · 최대 · 최소 (STATUS 마다). 합계 · 평균은 NULL 행을 빼고 셉니다
+          SELECT
+                 o.STATUS
+               , COUNT(*) AS CNT
+               , SUM(o.AMOUNT) AS SUM_AMOUNT
+               , ROUND(AVG(o.AMOUNT), 2) AS AVG_AMOUNT
+               , MAX(o.AMOUNT) AS MAX_AMOUNT
+               , MIN(o.AMOUNT) AS MIN_AMOUNT
+            FROM ORDERS o
+           WHERE 1 = 1
+           GROUP BY
+                 o.STATUS
+           ORDER BY
+                 o.STATUS"""),
+      new Example("현황 · 집계", "기간별 현황", "월마다 건수와 금액 합계. 'MM' 을 'DD' · 'IW' · 'YYYY'(PostgreSQL 은 day · week · year)로 바꾸면 일 · 주 · 연도별입니다.",
+          """
+          -- 월별 현황: 시작일 ~ 끝일(끝일 하루 전체 포함)
+          SELECT
+                 TO_CHAR(TRUNC(o.ORDER_DT, 'MM'), 'YYYY-MM') AS PERIOD
+               , COUNT(*) AS CNT
+               , SUM(o.AMOUNT) AS SUM_AMOUNT
+            FROM ORDERS o
+           WHERE o.ORDER_DT >= TO_DATE(:fromDt, 'YYYY-MM-DD')
+             AND o.ORDER_DT < TO_DATE(:toDt, 'YYYY-MM-DD') + 1
+           GROUP BY
+                 TO_CHAR(TRUNC(o.ORDER_DT, 'MM'), 'YYYY-MM')
+           ORDER BY
+                 PERIOD""",
+          """
+          -- 월별 현황: 시작일 ~ 끝일(끝일 하루 전체 포함)
+          SELECT
+                 TO_CHAR(DATE_TRUNC('month', o.ORDER_DT), 'YYYY-MM') AS PERIOD
+               , COUNT(*) AS CNT
+               , SUM(o.AMOUNT) AS SUM_AMOUNT
+            FROM ORDERS o
+           WHERE o.ORDER_DT >= CAST(:fromDt AS DATE)
+             AND o.ORDER_DT < CAST(:toDt AS DATE) + 1
+           GROUP BY
+                 TO_CHAR(DATE_TRUNC('month', o.ORDER_DT), 'YYYY-MM')
+           ORDER BY
+                 PERIOD"""),
+      new Example("현황 · 집계", "전 기간 대비 증감", "월마다 건수와 바로 앞 달 대비 증감 · 증감률(%). 앞 달이 0 건이면 증감률은 비웁니다.",
+          """
+          -- 월별 건수와 앞 기간 대비 증감 · 증감률(%). 앞 기간이 0 건이면 증감률은 비웁니다
+          WITH counted AS (
+              SELECT
+                     TO_CHAR(TRUNC(o.ORDER_DT, 'MM'), 'YYYY-MM') AS PERIOD
+                   , COUNT(*) AS CNT
+                FROM ORDERS o
+               WHERE o.ORDER_DT >= TO_DATE(:fromDt, 'YYYY-MM-DD')
+                 AND o.ORDER_DT < TO_DATE(:toDt, 'YYYY-MM-DD') + 1
+               GROUP BY
+                     TO_CHAR(TRUNC(o.ORDER_DT, 'MM'), 'YYYY-MM')
+          )
+          SELECT
+                 c.PERIOD
+               , c.CNT
+               , LAG(c.CNT) OVER (ORDER BY c.PERIOD) AS PREV_CNT
+               , c.CNT - LAG(c.CNT) OVER (ORDER BY c.PERIOD) AS DIFF
+               , ROUND((c.CNT - LAG(c.CNT) OVER (ORDER BY c.PERIOD)) * 100.0 / NULLIF(LAG(c.CNT) OVER (ORDER BY c.PERIOD), 0), 1) AS RATE
+            FROM counted c
+           ORDER BY
+                 c.PERIOD""",
+          """
+          -- 월별 건수와 앞 기간 대비 증감 · 증감률(%). 앞 기간이 0 건이면 증감률은 비웁니다
+          WITH counted AS (
+              SELECT
+                     TO_CHAR(DATE_TRUNC('month', o.ORDER_DT), 'YYYY-MM') AS PERIOD
+                   , COUNT(*) AS CNT
+                FROM ORDERS o
+               WHERE o.ORDER_DT >= CAST(:fromDt AS DATE)
+                 AND o.ORDER_DT < CAST(:toDt AS DATE) + 1
+               GROUP BY
+                     TO_CHAR(DATE_TRUNC('month', o.ORDER_DT), 'YYYY-MM')
+          )
+          SELECT
+                 c.PERIOD
+               , c.CNT
+               , LAG(c.CNT) OVER (ORDER BY c.PERIOD) AS PREV_CNT
+               , c.CNT - LAG(c.CNT) OVER (ORDER BY c.PERIOD) AS DIFF
+               , ROUND((c.CNT - LAG(c.CNT) OVER (ORDER BY c.PERIOD)) * 100.0 / NULLIF(LAG(c.CNT) OVER (ORDER BY c.PERIOD), 0), 1) AS RATE
+            FROM counted c
+           ORDER BY
+                 c.PERIOD"""),
+      new Example("현황 · 집계", "비율 (전체 중 몇 %)", "상태 값마다 건수와 전체 중 비율(%).",
+          """
+          -- STATUS 값마다 건수와 전체 중 비율(%)
+          SELECT
+                 o.STATUS
+               , COUNT(*) AS CNT
+               , ROUND(COUNT(*) * 100.0 / NULLIF(SUM(COUNT(*)) OVER (), 0), 1) AS PCT
+            FROM ORDERS o
+           WHERE 1 = 1
+           GROUP BY
+                 o.STATUS
+           ORDER BY
+                 CNT DESC""",
+          """
+          -- STATUS 값마다 건수와 전체 중 비율(%)
+          SELECT
+                 o.STATUS
+               , COUNT(*) AS CNT
+               , ROUND(COUNT(*) * 100.0 / NULLIF(SUM(COUNT(*)) OVER (), 0), 1) AS PCT
+            FROM ORDERS o
+           WHERE 1 = 1
+           GROUP BY
+                 o.STATUS
+           ORDER BY
+                 CNT DESC"""),
+      new Example("현황 · 집계", "기간별 누적", "월마다 건수와 처음부터 쌓인 누적 건수.",
+          """
+          -- 월별 건수와 누적 건수
+          SELECT
+                 TO_CHAR(TRUNC(o.ORDER_DT, 'MM'), 'YYYY-MM') AS PERIOD
+               , COUNT(*) AS CNT
+               , SUM(COUNT(*)) OVER (ORDER BY TO_CHAR(TRUNC(o.ORDER_DT, 'MM'), 'YYYY-MM')) AS CUM_CNT
+            FROM ORDERS o
+           WHERE o.ORDER_DT >= TO_DATE(:fromDt, 'YYYY-MM-DD')
+             AND o.ORDER_DT < TO_DATE(:toDt, 'YYYY-MM-DD') + 1
+           GROUP BY
+                 TO_CHAR(TRUNC(o.ORDER_DT, 'MM'), 'YYYY-MM')
+           ORDER BY
+                 PERIOD""",
+          """
+          -- 월별 건수와 누적 건수
+          SELECT
+                 TO_CHAR(DATE_TRUNC('month', o.ORDER_DT), 'YYYY-MM') AS PERIOD
+               , COUNT(*) AS CNT
+               , SUM(COUNT(*)) OVER (ORDER BY TO_CHAR(DATE_TRUNC('month', o.ORDER_DT), 'YYYY-MM')) AS CUM_CNT
+            FROM ORDERS o
+           WHERE o.ORDER_DT >= CAST(:fromDt AS DATE)
+             AND o.ORDER_DT < CAST(:toDt AS DATE) + 1
+           GROUP BY
+                 TO_CHAR(DATE_TRUNC('month', o.ORDER_DT), 'YYYY-MM')
+           ORDER BY
+                 PERIOD"""),
+      new Example("현황 · 집계", "순위 · 상위 N 개", "상태마다 금액 합계로 순위를 매겨 상위 10 개만.",
+          """
+          -- STATUS 마다 AMOUNT 합계 순위, 상위 10 개 (같은 값은 같은 순위)
+          WITH ranked AS (
+              SELECT
+                     o.STATUS
+                   , SUM(o.AMOUNT) AS SUM_AMOUNT
+                   , RANK() OVER (ORDER BY SUM(o.AMOUNT) DESC) AS RNK
+                FROM ORDERS o
+               GROUP BY
+                     o.STATUS
+          )
+          SELECT
+                 r.*
+            FROM ranked r
+           WHERE r.RNK <= 10
+           ORDER BY
+                 r.RNK""",
+          """
+          -- STATUS 마다 AMOUNT 합계 순위, 상위 10 개 (같은 값은 같은 순위)
+          WITH ranked AS (
+              SELECT
+                     o.STATUS
+                   , SUM(o.AMOUNT) AS SUM_AMOUNT
+                   , RANK() OVER (ORDER BY SUM(o.AMOUNT) DESC) AS RNK
+                FROM ORDERS o
+               GROUP BY
+                     o.STATUS
+          )
+          SELECT
+                 r.*
+            FROM ranked r
+           WHERE r.RNK <= 10
+           ORDER BY
+                 r.RNK"""),
+      new Example("현황 · 집계", "상태별 건수 한 줄 (대시보드 카드)", "전체 · 상태 값마다 건수를 한 줄에 칸으로 놓습니다. 대시보드 카드 숫자에 바로 씁니다.",
+          """
+          -- 대시보드 카드: 전체 건수와 STATUS 값마다 건수를 한 줄에
+          SELECT
+                 COUNT(*) AS TOTAL
+               , SUM(CASE WHEN o.STATUS = '접수' THEN 1 ELSE 0 END) AS "접수"
+               , SUM(CASE WHEN o.STATUS = '진행' THEN 1 ELSE 0 END) AS "진행"
+               , SUM(CASE WHEN o.STATUS = '완료' THEN 1 ELSE 0 END) AS "완료"
+            FROM ORDERS o
+           WHERE 1 = 1""",
+          """
+          -- 대시보드 카드: 전체 건수와 status 값마다 건수를 한 줄에
+          SELECT
+                 COUNT(*) AS TOTAL
+               , SUM(CASE WHEN o.STATUS = '접수' THEN 1 ELSE 0 END) AS "접수"
+               , SUM(CASE WHEN o.STATUS = '진행' THEN 1 ELSE 0 END) AS "진행"
+               , SUM(CASE WHEN o.STATUS = '완료' THEN 1 ELSE 0 END) AS "완료"
+            FROM ORDERS o
+           WHERE 1 = 1"""),
+      new Example("현황 · 집계", "합계 줄 붙이기 (ROLLUP)", "상태별 건수 · 합계 아래에 「합계」 줄을 하나 더 붙입니다.",
+          """
+          -- STATUS 별 건수 · 합계 아래에 「합계」 줄
+          SELECT
+                 CASE WHEN GROUPING(o.STATUS) = 1 THEN '합계' ELSE CAST(o.STATUS AS VARCHAR(100)) END AS STATUS
+               , COUNT(*) AS CNT
+               , SUM(o.AMOUNT) AS SUM_AMOUNT
+            FROM ORDERS o
+           WHERE 1 = 1
+           GROUP BY ROLLUP(o.STATUS)
+           ORDER BY
+                 GROUPING(o.STATUS)
+               , o.STATUS""",
+          """
+          -- STATUS 별 건수 · 합계 아래에 「합계」 줄
+          SELECT
+                 CASE WHEN GROUPING(o.STATUS) = 1 THEN '합계' ELSE CAST(o.STATUS AS VARCHAR(100)) END AS STATUS
+               , COUNT(*) AS CNT
+               , SUM(o.AMOUNT) AS SUM_AMOUNT
+            FROM ORDERS o
+           WHERE 1 = 1
+           GROUP BY ROLLUP(o.STATUS)
+           ORDER BY
+                 GROUPING(o.STATUS)
+               , o.STATUS"""),
+      new Example("현황 · 집계", "0 건인 날짜도 빠짐없이", "기간 안의 모든 날짜를 만들고 건수를 붙입니다. 행이 없는 날은 0 으로 나옵니다(그래프용).",
+          """
+          -- 시작일 ~ 끝일의 모든 날짜와 건수. 행이 없는 날은 0
+          WITH days AS (
+              SELECT TO_DATE(:fromDt, 'YYYY-MM-DD') + LEVEL - 1 AS DT
+                FROM DUAL
+             CONNECT BY LEVEL <= TO_DATE(:toDt, 'YYYY-MM-DD') - TO_DATE(:fromDt, 'YYYY-MM-DD') + 1
+          )
+          , cnt AS (
+              SELECT
+                     TRUNC(o.ORDER_DT) AS DT
+                   , COUNT(*) AS CNT
+                FROM ORDERS o
+               WHERE o.ORDER_DT >= TO_DATE(:fromDt, 'YYYY-MM-DD')
+                 AND o.ORDER_DT < TO_DATE(:toDt, 'YYYY-MM-DD') + 1
+               GROUP BY
+                     TRUNC(o.ORDER_DT)
+          )
+          SELECT
+                 d.DT
+               , NVL(c.CNT, 0) AS CNT
+            FROM days d
+               , cnt c
+           WHERE d.DT = c.DT(+)
+           ORDER BY
+                 d.DT""",
+          """
+          -- 시작일 ~ 끝일의 모든 날짜와 건수. 행이 없는 날은 0
+          WITH days AS (
+              SELECT CAST(g AS DATE) AS DT
+                FROM generate_series(CAST(:fromDt AS DATE), CAST(:toDt AS DATE), INTERVAL '1 day') g
+          )
+          , cnt AS (
+              SELECT
+                     CAST(o.ORDER_DT AS DATE) AS DT
+                   , COUNT(*) AS CNT
+                FROM ORDERS o
+               WHERE o.ORDER_DT >= CAST(:fromDt AS DATE)
+                 AND o.ORDER_DT < CAST(:toDt AS DATE) + 1
+               GROUP BY
+                     CAST(o.ORDER_DT AS DATE)
+          )
+          SELECT
+                 d.DT
+               , COALESCE(c.CNT, 0) AS CNT
+            FROM days d
+            LEFT OUTER JOIN cnt c
+              ON d.DT = c.DT
+           ORDER BY
+                 d.DT"""),
       new Example("대시보드 통계", "숫자 카드 한 줄 (전체 · 열림 · 이번 달 등록 · 기한 지남)", "대시보드 맨 위 숫자 카드를 쿼리 하나로. 조건을 CASE 로 나눠 한 번만 훑습니다.",
           """
           SELECT
