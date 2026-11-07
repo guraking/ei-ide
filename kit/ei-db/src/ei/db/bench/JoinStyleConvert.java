@@ -21,6 +21,7 @@ public final class JoinStyleConvert {
   private static final Pattern PLUS = Pattern.compile("\\s*\\(\\s*\\+\\s*\\)");
   private static final Pattern OR_IN = Pattern.compile("(?<![\\w$#])(OR|IN)(?![\\w$#])");
   private static final String AND = "\n   AND ";
+  private static final Pattern NATURAL = Pattern.compile("(?<![\\w$#])NATURAL(?![\\w$#])");
 
   /** 옛 방식 → 표준 방식. 두 표를 잇는 조건은 뒤에 나온 표의 ON 으로, 한 표에만 (+) 를 단 조건(b.TYPE(+) = 'A')은 그 표의 ON 으로 옮긴다. */
   public static Result toAnsi(String sql) {
@@ -117,6 +118,32 @@ public final class JoinStyleConvert {
     for (String c : conds) sb.append(AND).append(c);
     sb.append('\n');
     return new Result(tail(sb, sql, where != null ? where.end() : from.end()), notes);
+  }
+
+  /**
+   * 예제 보이기용 옛 방식. 바깥 문장의 JOIN 을 쉼표 · WHERE 로 바꾼 결과, 바꿀 수 없으면 원문(notes 비움)을 돌려준다.
+   * plusAllowed 가 false(PostgreSQL 처럼 (+) 가 없는 DB)면 바깥 조인이 하나라도 있을 때 원문을 둔다.
+   * 여러 문장(;) · NATURAL JOIN 은 뜻이 바뀌므로 원문. 서브쿼리 · WITH 안의 JOIN 은 그대로다.
+   */
+  public static Result toOldOrSame(String sql, boolean plusAllowed) {
+    Result same = new Result(sql, List.of());
+    try {
+      String masked = SqlParts.mask(sql).toUpperCase(Locale.ROOT);
+      if (masked.strip().replaceAll(";$", "").contains(";") || NATURAL.matcher(masked).find()) return same;
+      List<SqlParts.Part> parts = SqlParts.mainBlock(SqlParts.split(sql));
+      SqlParts.Part from = SqlParts.find(parts, "FROM");
+      if (from == null) return same;
+      boolean any = false;
+      for (SqlParts.Source s : SqlParts.sources(from.body())) {
+        if (s.join() == null) continue;
+        if (!plusAllowed && !"INNER".equals(s.join()) && !"CROSS".equals(s.join())) return same;
+        any = true;
+      }
+      return any ? toOld(sql) : same;
+    } catch (RuntimeException e) {
+      // 보이기용이라 읽지 못한 SQL 은 원문을 보인다(바꾸기 도구는 같은 실패를 알림으로 보인다).
+      return same;
+    }
   }
 
   /** 조건에서 (+) 를 단 칼럼의 별칭(대문자). 못 찾으면 null. */

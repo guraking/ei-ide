@@ -192,6 +192,13 @@ public class QueryBenchCheck {
   static void lint() {
     yes(SqlLint.check("SELECT * FROM A a, B b WHERE a.X = 1").get(0).title().contains("b"), "cartesian");
     eq(SqlLint.check("SELECT * FROM A a, B b WHERE a.X = b.X").size(), 0);
+    String inner = "SELECT a.X FROM A a JOIN B b ON b.ID = a.ID";
+    yes(JoinStyleConvert.toOldOrSame(inner, false).sql().contains(", B b"), "pg inner to comma");
+    String left = "SELECT a.X FROM A a LEFT JOIN B b ON b.ID = a.ID";
+    eq(JoinStyleConvert.toOldOrSame(left, false).sql(), left);
+    yes(JoinStyleConvert.toOldOrSame(left, true).sql().contains("(+)"), "oracle left to plus");
+    eq(JoinStyleConvert.toOldOrSame(inner + "; " + inner, true).sql(), inner + "; " + inner);
+    eq(JoinStyleConvert.toOldOrSame("SELECT * FROM A NATURAL JOIN B", true).sql(), "SELECT * FROM A NATURAL JOIN B");
     List<int[]> cols = SqlParts.columnSpans("SELECT o.STATUS, c . NAME, PKG.F(1), 'x.Y' -- a.B\n FROM T o");
     eq(cols.size(), 2);
     eq(cols.get(0)[0], 9);
