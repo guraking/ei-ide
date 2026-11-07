@@ -68,7 +68,15 @@ public final class ResultView {
 
   public static void showError(Project project, DbConfig c, String sql, Exception error) {
     String message = message(error);
-    addTab(project, sameKey(RUN, c.id, sql), tabTitle(project, EiDbBundle.message("result.tab.error")), AllIcons.General.Error, ResultPanel.error(sql, message));
+    JComponent panel = ResultPanel.error(sql, message);
+    JComponent help = ErrorHelp.panel(project, c, sql, error);
+    if (help != null) {
+      JPanel withHelp = new JPanel(new BorderLayout());
+      withHelp.add(help, BorderLayout.NORTH);
+      withHelp.add(panel, BorderLayout.CENTER);
+      panel = withHelp;
+    }
+    addTab(project, sameKey(RUN, c.id, sql), tabTitle(project, EiDbBundle.message("result.tab.error")), AllIcons.General.Error, panel);
     Notify.error(project, EiDbBundle.message("result.run.failed", c.name, message));
     ConsoleRun.finished(project, c, sql, false);
   }

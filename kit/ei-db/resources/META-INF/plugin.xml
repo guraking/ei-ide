@@ -84,6 +84,12 @@
       <keyboard-shortcut keymap="$default" first-keystroke="control shift E"/>
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="ei.db.console.RunAll"/>
     </action>
+    <action id="ei.db.console.QueryBench" class="ei.db.console.QueryBenchAction$InConsole" icon="AllIcons.Actions.Edit">
+      <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="ei.db.console.Explain"/>
+    </action>
+    <action id="ei.db.QueryBench" class="ei.db.console.QueryBenchAction">
+      <add-to-group group-id="ToolsMenu" anchor="last"/>
+    </action>
     <action id="EiDb.MyBatis.Run" class="ei.db.mybatis.RunStatementAction" icon="AllIcons.Actions.Execute">
       <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt ENTER"/>
       <add-to-group group-id="EditorPopupMenu" anchor="first"/>

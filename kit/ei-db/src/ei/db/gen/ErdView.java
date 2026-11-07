@@ -45,6 +45,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 스키마의 표들을 ERD 로 그린다. 편집기 탭용 FileEditorProvider 가 빌드 클래스패스에 없어
@@ -67,6 +68,19 @@ public final class ErdView {
 
   /** tables 가 null 이면 스키마의 모든 표. */
   public static void open(Project project, DbConfig c, String schema, List<String> tables) {
+    open(project, c, schema, tables, null, Set.of(), "ERD · " + schema);
+  }
+
+  /**
+   * 쿼리의 조인 그림: tables 만 그리고, 선은 DB 외래 키 대신 쿼리의 연결 조건(links)으로 긋는다.
+   * unlinked(대문자 표 이름)는 다른 표와 연결 조건이 없는 표라 테두리를 빨갛게 그린다.
+   */
+  public static void openQuery(Project project, DbConfig c, String schema, List<String> tables, List<Meta.ForeignKey> links, Set<String> unlinked) {
+    open(project, c, schema, tables, links, unlinked, "조인 그림");
+  }
+
+  /** links 가 null 이면 DB 외래 키를 읽어 선을 긋는다. */
+  private static void open(Project project, DbConfig c, String schema, List<String> tables, List<Meta.ForeignKey> links, Set<String> unlinked, String title) {
     new Task.Backgroundable(project, EiDbBundle.message("erd.progress", schema), true) {
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
@@ -90,9 +104,12 @@ public final class ErdView {
             indicator.setText2(n);
             indicator.setFraction((double) i / names.size());
             Meta.Table t = all.getOrDefault(n, new Meta.Table(n, "TABLE", ""));
-            cards.add(new ErdCanvas.Card(t, Meta.columns(conn, c, schema, n)));
-            fks.addAll(Meta.importedKeys(conn, c, schema, n));
+            ErdCanvas.Card card = new ErdCanvas.Card(t, Meta.columns(conn, c, schema, n));
+            card.unlinked = unlinked.contains(n.toUpperCase(java.util.Locale.ROOT));
+            cards.add(card);
+            if (links == null) fks.addAll(Meta.importedKeys(conn, c, schema, n));
           }
+          if (links != null) fks.addAll(links);
           if (cards.isEmpty()) {
             Notify.error(project, EiDbBundle.message("erd.no.tables", schema));
             return;
@@ -100,7 +117,7 @@ public final class ErdView {
           int shown = names.size();
           ApplicationManager.getApplication().invokeLater(() -> {
             if (project.isDisposed()) return;
-            show(project, c, schema, cards, fks);
+            show(project, c, schema, cards, fks, title);
             if (total > shown) Notify.info(project, EiDbBundle.message("erd.truncated", total, shown));
           });
         } catch (ProcessCanceledException e) {
@@ -112,7 +129,7 @@ public final class ErdView {
     }.queue();
   }
 
-  private static void show(Project project, DbConfig c, String schema, List<ErdCanvas.Card> cards, List<Meta.ForeignKey> fks) {
+  private static void show(Project project, DbConfig c, String schema, List<ErdCanvas.Card> cards, List<Meta.ForeignKey> fks, String title) {
     ErdCanvas canvas = new ErdCanvas(cards, fks, table -> SqlRunner.run(project, c, "SELECT * FROM " + Names.sql(c.kind, schema, table), List.of()));
 
     SimpleToolWindowPanel panel = new SimpleToolWindowPanel(true, true);
@@ -156,7 +173,7 @@ public final class ErdView {
       tw = twm.registerToolWindow(TOOL_WINDOW_ID, true, ToolWindowAnchor.BOTTOM);
       tw.setStripeTitle(STRIPE_TITLE);
     }
-    Content content = ContentFactory.getInstance().createContent(panel, "ERD · " + schema, false);
+    Content content = ContentFactory.getInstance().createContent(panel, title, false);
     tw.getContentManager().addContent(content);
     tw.getContentManager().setSelectedContent(content);
     tw.activate(null);
