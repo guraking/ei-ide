@@ -2,6 +2,7 @@ package ei.db.bench;
 
 import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.components.JBTextArea;
+import com.intellij.openapi.editor.colors.EditorFontType;
 import com.intellij.util.ui.JBUI;
 
 import javax.swing.JButton;
@@ -20,6 +21,7 @@ final class ExplainPanel {
   ExplainPanel(Supplier<String> sql) {
     this.sql = sql;
     text.setEditable(false);
+    text.setFont(EditorFontType.getGlobalPlainFont());
     text.setLineWrap(true);
     text.setWrapStyleWord(true);
     text.setBorder(JBUI.Borders.empty(8));

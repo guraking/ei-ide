@@ -85,7 +85,7 @@ public class QueryBenchCheck {
     yes(QueryBuilder.problems(s).get(0).contains("CUSTOMER"), QueryBuilder.problems(s));
     s.kind = DbKind.POSTGRES;
     s.style = QueryBuilder.JoinStyle.OLD;
-    eq(s.effectiveStyle(), QueryBuilder.JoinStyle.ANSI);
+    pgOld();
     s.limit = 10;
     s.offset = 20;
     yes(QueryBuilder.render(s).endsWith("LIMIT 10 OFFSET 20"), QueryBuilder.render(s));
@@ -95,6 +95,24 @@ public class QueryBenchCheck {
     eq(QueryBuilder.kindOf("TIMESTAMP(6)"), QueryBuilder.ColKind.DATE);
     eq(QueryBuilder.kindOf("NUMBER"), QueryBuilder.ColKind.NUMBER);
     eq(QueryBuilder.literal(QueryBuilder.ColKind.TEXT, "O'K"), "'O''K'");
+  }
+
+  /** (+) 가 없는 DB 의 옛 방식: 안쪽 조인은 콤마 · WHERE, 바깥 조인은 짝 표 뒤 LEFT OUTER JOIN. 짝이 여러 묶음에 걸치면 표준 JOIN. */
+  static void pgOld() {
+    QueryBuilder.Spec s = new QueryBuilder.Spec();
+    s.kind = DbKind.POSTGRES;
+    s.style = QueryBuilder.JoinStyle.OLD;
+    s.tables.add(new QueryBuilder.Table("orders", "o"));
+    s.tables.add(new QueryBuilder.Table("customer", "c"));
+    s.tables.add(new QueryBuilder.Table("payment", "p"));
+    s.joins.add(new QueryBuilder.Join("o", "cust_id", "c", "cust_id", false, false));
+    s.joins.add(new QueryBuilder.Join("o", "order_id", "p", "order_id", true, false));
+    String sql = QueryBuilder.render(s);
+    yes(sql.toLowerCase().replace("\"", "").contains("  from orders o\n  left outer join payment p\n    on o.order_id = p.order_id\n     , customer c\n where 1 = 1\n   and o.cust_id = c.cust_id"), sql);
+    yes(!sql.contains("(+)"), sql);
+    s.joins.add(new QueryBuilder.Join("c", "cust_id", "p", "cust_id", true, false));
+    sql = QueryBuilder.render(s);
+    yes(sql.toLowerCase().replace("\"", "").contains("  inner join customer c") && sql.toLowerCase().replace("\"", "").contains("  left outer join payment p"), sql);
   }
 
   static void advisor() {

@@ -6,6 +6,7 @@ import com.intellij.ui.components.JBList;
 import com.intellij.ui.components.JBTabbedPane;
 import com.intellij.ui.components.JBTextArea;
 import com.intellij.ui.components.JBTextField;
+import com.intellij.openapi.editor.colors.EditorFontType;
 import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
@@ -42,6 +43,8 @@ final class ToolsPanel {
     this.bench = bench;
     this.sql = sql;
     root.setTabComponentInsets(JBUI.emptyInsets());
+    // 바깥 탭과 같은 바탕이 보이게 안쪽 탭 줄은 바탕을 칠하지 않는다.
+    root.setOpaque(false);
     root.addTab("IN 목록 만들기", inTab());
     root.addTab("DB 바꿔 쓰기", dialectTab());
     root.addTab("연결 모양 바꾸기", joinTab());
@@ -52,6 +55,7 @@ final class ToolsPanel {
   JComponent component() { return root; }
 
   private JComponent inTab() {
+    pasted.setFont(EditorFontType.getGlobalPlainFont());
     pasted.getEmptyText().setText("엑셀 · 결과 창에서 복사한 값을 붙여 넣으세요. 칸이 둘 이상(탭으로 나뉨)이면 (A, B) IN ((…), (…)) 로 만듭니다.");
     inColumns.getEmptyText().setText("예: CUST_ID   또는 두 칸이면  PART_NO, REV");
     JButton make = blue(new JButton("IN 만들기"));

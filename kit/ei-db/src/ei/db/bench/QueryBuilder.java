@@ -5,6 +5,7 @@ import ei.db.gen.Names;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -133,7 +134,8 @@ public final class QueryBuilder {
     public int offset;
 
     /** PostgreSQL · MySQL 은 (+) 가 없다. */
-    public JoinStyle effectiveStyle() { return kind == DbKind.ORACLE ? style : JoinStyle.ANSI; }
+    /** Oracle 밖에서는 옛 방식이어도 (+) 를 못 쓰므로 안쪽 조인만 콤마 · WHERE, 바깥 조인은 LEFT OUTER JOIN 으로 쓴다. */
+    public JoinStyle effectiveStyle() { return style; }
   }
 
   private static final String FIRST = "       ";
@@ -311,7 +313,11 @@ public final class QueryBuilder {
     boolean old = s.effectiveStyle() == JoinStyle.OLD;
     List<String> where = new ArrayList<>();
     List<String> whereNotes = new ArrayList<>();
-    if (old) {
+    List<String> chains = old && s.kind != DbKind.ORACLE ? commaChains(s, where, whereNotes) : null;
+    if (chains != null) {
+      sb.append("  FROM ").append(chains.get(0)).append('\n');
+      for (int i = 1; i < chains.size(); i++) sb.append(NEXT).append(chains.get(i)).append('\n');
+    } else if (old && s.kind == DbKind.ORACLE) {
       List<String> from = new ArrayList<>();
       for (Table t : s.tables) from.add(Names.sql(s.kind, t.name()) + " " + t.alias());
       sb.append("  FROM ").append(from.get(0)).append('\n');
@@ -368,6 +374,53 @@ public final class QueryBuilder {
     }
     String sql = sb.toString().stripTrailing();
     return paging && s.limit > 0 ? page(s.kind, sql, s.offset, s.limit) : sql;
+  }
+
+  /**
+   * (+) 가 없는 DB 의 옛 방식 FROM. 바깥 조인 표는 짝 표 바로 뒤에 LEFT OUTER JOIN 으로 붙이고, 나머지는 콤마로 늘어놓는다.
+   * 콤마보다 JOIN 이 먼저 묶여 ON 은 같은 묶음 안의 표만 부를 수 있으므로, 바깥 조인 표의 짝이 여러 묶음에 걸치면 null(표준 JOIN 으로 쓴다).
+   * 성공하면 안쪽 조인 조건을 where 에 더한다.
+   */
+  private static List<String> commaChains(Spec s, List<String> where, List<String> whereNotes) {
+    List<StringBuilder> chains = new ArrayList<>();
+    Map<String, Integer> chainOf = new HashMap<>();
+    Set<String> outerTables = new HashSet<>();
+    for (int i = 0; i < s.tables.size(); i++) {
+      Table t = s.tables.get(i);
+      String from = Names.sql(s.kind, t.name()) + " " + t.alias();
+      List<Join> mine = i == 0 ? List.of() : joinsOf(s, t.alias());
+      boolean outer = false;
+      for (Join j : mine) outer |= j.outer();
+      if (!outer) {
+        chainOf.put(t.alias(), chains.size());
+        chains.add(new StringBuilder(from));
+        continue;
+      }
+      Integer chain = null;
+      for (Join j : mine) {
+        Integer c = chainOf.get(j.leftAlias());
+        if (c == null || (chain != null && !chain.equals(c))) return null;
+        chain = c;
+      }
+      StringBuilder sb = chains.get(chain).append("\n  LEFT OUTER JOIN ").append(from);
+      for (int k = 0; k < mine.size(); k++) {
+        Join j = mine.get(k);
+        sb.append('\n').append(k == 0 ? "    ON " : AND)
+            .append(j.leftAlias()).append('.').append(Names.sql(s.kind, j.leftColumn())).append(" = ")
+            .append(j.rightAlias()).append('.').append(Names.sql(s.kind, j.rightColumn()));
+        if (j.guessed()) sb.append("  -- 추정 연결: 맞는지 확인하세요");
+      }
+      chainOf.put(t.alias(), chain);
+      outerTables.add(t.alias());
+    }
+    for (Join j : s.joins) {
+      if (outerTables.contains(j.rightAlias())) continue;
+      where.add(j.leftAlias() + "." + Names.sql(s.kind, j.leftColumn()) + " = " + j.rightAlias() + "." + Names.sql(s.kind, j.rightColumn()));
+      whereNotes.add(j.guessed() ? "추정 연결: 맞는지 확인하세요" : "");
+    }
+    List<String> out = new ArrayList<>();
+    for (StringBuilder c : chains) out.add(c.toString());
+    return out;
   }
 
   /** 오른쪽 표가 alias 인 연결들. */

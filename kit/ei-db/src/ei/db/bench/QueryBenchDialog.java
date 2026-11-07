@@ -112,6 +112,8 @@ public final class QueryBenchDialog extends DialogWrapper {
   private final JBLabel resultTitle = new JBLabel();
   private final JPanel resultPanel = new JPanel(new BorderLayout());
   private final OnePixelSplitter sqlAndResult = new OnePixelSplitter(true, RESULT_SPLIT);
+  /** SQL · 결과 칸 둘레 여백(스케일 전 px). */
+  private static final int PREVIEW_GAP = 8;
   private final JPanel preview = new JPanel(new BorderLayout());
   private final JPanel[] slots = new JPanel[TOOLS_TAB + 1];
   private final JBTabbedPane tabs = new JBTabbedPane();
@@ -239,7 +241,11 @@ public final class QueryBenchDialog extends DialogWrapper {
     tabs.addTab("도구", split(TOOLS_SPLIT, "toolsSplit", tools.component(), slots[TOOLS_TAB]));
     tabs.addChangeListener(e -> tabChanged());
 
-    JPanel root = new JPanel(new BorderLayout());
+    // 대화창은 내용의 최소 크기를 창 최소 크기로 삼는다. 줄바꿈 글 칸은 좁을 때 높이가 커져 창이 스스로 늘어나므로 0 으로 둔다.
+    JPanel root = new JPanel(new BorderLayout()) {
+      @Override
+      public Dimension getMinimumSize() { return new Dimension(0, 0); }
+    };
     root.add(top, BorderLayout.NORTH);
     root.add(tabs, BorderLayout.CENTER);
 
@@ -271,6 +277,7 @@ public final class QueryBenchDialog extends DialogWrapper {
     sql.setTabSize(4);
     sql.getEmptyText().setText("만든 SQL 이 여기에 나옵니다. 직접 쓰거나 붙여 넣어 「쉬운 설명」 · 「도구」 에 쓸 수도 있습니다.");
     notes.setEditable(false);
+    notes.setFont(EditorFontType.getGlobalPlainFont());
     notes.setLineWrap(true);
     notes.setWrapStyleWord(true);
     notes.setOpaque(false);
@@ -296,6 +303,7 @@ public final class QueryBenchDialog extends DialogWrapper {
     sqlAndResult.setHonorComponentsMinimumSize(false);
     sqlAndResult.setFirstComponent(sqlPart);
     sqlAndResult.setSecondComponent(resultPanel);
+    preview.setBorder(JBUI.Borders.empty(PREVIEW_GAP));
     preview.add(sqlAndResult, BorderLayout.CENTER);
   }
 
@@ -347,17 +355,15 @@ public final class QueryBenchDialog extends DialogWrapper {
     refreshActive();
   }
 
-  /** 라디오를 지금 DB 에 맞춘다. Oracle 이 아니면 옛 방식을 막고 까닭을 그 밑 줄에 보인다(기억한 선택은 그대로 둔다). */
+  /** 라디오를 지금 DB 에 맞춘다. Oracle 이 아니면 옛 방식에서 바깥 조인을 어떻게 쓰는지 그 밑 줄에 보인다. */
   private void showStyle() {
     boolean oracle = bench.kind() == DbKind.ORACLE;
-    oldStyle.setEnabled(oracle);
     (bench.style() == QueryBuilder.JoinStyle.OLD ? oldStyle : ansiStyle).setSelected(true);
-    styleReason.setText(oracle ? "" : bench.kind() + " 에는 (+) 가 없어 표준 JOIN ON 으로만 만듭니다.");
+    styleReason.setText(oracle ? "" : bench.kind() + " 에는 (+) 가 없어 옛 방식에서도 바깥 조인만 LEFT OUTER JOIN 으로 씁니다.");
     styleReason.setVisible(!oracle);
   }
 
   private void styleChosen() {
-    if (!oldStyle.isEnabled()) return;
     QueryBuilder.JoinStyle s = oldStyle.isSelected() ? QueryBuilder.JoinStyle.OLD : QueryBuilder.JoinStyle.ANSI;
     PropertiesComponent.getInstance().setValue(STYLE_KEY, s.name());
     bench.setStyle(s);
