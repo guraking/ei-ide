@@ -49,7 +49,8 @@ final class Bench {
 
   DbKind kind() { return config == null ? DbKind.ORACLE : config.kind; }
 
-  QueryBuilder.JoinStyle style() { return kind() == DbKind.ORACLE ? style : QueryBuilder.JoinStyle.ANSI; }
+  /** 고른 JOIN 모양. (+) 가 없는 DB 의 옛 방식은 QueryBuilder 가 안쪽 조인만 쉼표로 쓴다. */
+  QueryBuilder.JoinStyle style() { return style; }
 
   QueryBuilder.Bind bind() { return bind; }
 

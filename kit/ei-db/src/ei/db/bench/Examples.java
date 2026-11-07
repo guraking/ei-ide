@@ -582,7 +582,7 @@ public final class Examples {
           SELECT
                  (SELECT COUNT(*) FROM APPROVAL a WHERE a.APPROVER_ID = CAST(:userId AS INTEGER) AND a.STATUS = 'WAIT') AS APPROVAL_CNT
                , (SELECT COUNT(*) FROM ISSUE i WHERE i.OWNER_ID = CAST(:userId AS INTEGER) AND i.STATUS <> 'CLOSE') AS ISSUE_CNT
-               , (SELECT COUNT(*) FROM SCHEDULE s WHERE s.OWNER_ID = CAST(:userId AS INTEGER) AND s.ACT_END IS NULL AND s.PLAN_END < CAST(DATE_TRUNC('week', CURRENT_DATE) AS DATE) + 7) AS SCH_CNT"""),
+               , (SELECT COUNT(*) FROM SCHEDULE s WHERE s.OWNER_ID = CAST(:userId AS INTEGER) AND s.ACT_END IS NULL AND s.PLAN_END < CAST(DATE_TRUNC('WEEK', CURRENT_DATE) AS DATE) + 7) AS SCH_CNT"""),
       new Example("조인", "두 표 잇기 (짝 있는 것만)", "주문마다 고객 이름을 붙입니다. 고객이 없는 주문은 빠집니다.",
           """
           SELECT
@@ -1494,12 +1494,12 @@ public final class Examples {
                  SLOT""",
           """
           SELECT
-                 DATE_TRUNC('hour', o.REG_DT) + FLOOR(EXTRACT(MINUTE FROM o.REG_DT) / 10) * INTERVAL '10 minutes' AS SLOT
+                 DATE_TRUNC('HOUR', o.REG_DT) + FLOOR(EXTRACT(MINUTE FROM o.REG_DT) / 10) * INTERVAL '10 MINUTES' AS SLOT
                , COUNT(*) AS CNT
             FROM ORDERS o
            WHERE o.REG_DT >= CURRENT_DATE
            GROUP BY
-                 DATE_TRUNC('hour', o.REG_DT) + FLOOR(EXTRACT(MINUTE FROM o.REG_DT) / 10) * INTERVAL '10 minutes'
+                 DATE_TRUNC('HOUR', o.REG_DT) + FLOOR(EXTRACT(MINUTE FROM o.REG_DT) / 10) * INTERVAL '10 MINUTES'
            ORDER BY
                  SLOT"""),
       new Example("기간별 통계", "시간대 구간별 (오전 · 오후 · 야간)", "시를 구간으로 나눠 셉니다.",
@@ -1578,7 +1578,7 @@ public final class Examples {
           SELECT
                  CAST(d.DT AS DATE) AS DT
                , COUNT(o.ORDER_ID) AS CNT
-            FROM GENERATE_SERIES(CAST(:fromDt AS DATE), CAST(:toDt AS DATE), INTERVAL '1 day') AS d(DT)
+            FROM GENERATE_SERIES(CAST(:fromDt AS DATE), CAST(:toDt AS DATE), INTERVAL '1 DAY') AS d(DT)
             LEFT JOIN ORDERS o
               ON o.ORDER_DT = CAST(d.DT AS DATE)
            GROUP BY
@@ -1597,11 +1597,11 @@ public final class Examples {
                  WEEK_START""",
           """
           SELECT
-                 CAST(DATE_TRUNC('week', o.ORDER_DT) AS DATE) AS WEEK_START
+                 CAST(DATE_TRUNC('WEEK', o.ORDER_DT) AS DATE) AS WEEK_START
                , COUNT(*) AS CNT
             FROM ORDERS o
            GROUP BY
-                 CAST(DATE_TRUNC('week', o.ORDER_DT) AS DATE)
+                 CAST(DATE_TRUNC('WEEK', o.ORDER_DT) AS DATE)
            ORDER BY
                  WEEK_START"""),
       new Example("기간별 통계", "월별 건수 · 합계", "'2026-11' 꼴 달마다 건수와 금액.",
@@ -1648,10 +1648,10 @@ public final class Examples {
                  TO_CHAR(m.MON, 'YYYY-MM') AS YM
                , COUNT(o.ORDER_ID) AS CNT
                , COALESCE(SUM(o.AMOUNT), 0) AS SUM_AMT
-            FROM GENERATE_SERIES(DATE_TRUNC('year', CURRENT_DATE), DATE_TRUNC('year', CURRENT_DATE) + INTERVAL '11 months', INTERVAL '1 month') AS m(MON)
+            FROM GENERATE_SERIES(DATE_TRUNC('YEAR', CURRENT_DATE), DATE_TRUNC('YEAR', CURRENT_DATE) + INTERVAL '11 MONTHS', INTERVAL '1 MONTH') AS m(MON)
             LEFT JOIN ORDERS o
               ON o.ORDER_DT >= m.MON
-             AND o.ORDER_DT < m.MON + INTERVAL '1 month'
+             AND o.ORDER_DT < m.MON + INTERVAL '1 MONTH'
            GROUP BY
                  m.MON
            ORDER BY
@@ -1788,8 +1788,8 @@ public final class Examples {
                , SUM(CASE WHEN TO_CHAR(o.ORDER_DT, 'MM') = '12' THEN o.AMOUNT ELSE 0 END) AS M12
                , SUM(o.AMOUNT) AS TOTAL
             FROM ORDERS o
-           WHERE o.ORDER_DT >= DATE_TRUNC('year', CURRENT_DATE)
-             AND o.ORDER_DT < DATE_TRUNC('year', CURRENT_DATE) + INTERVAL '1 year'
+           WHERE o.ORDER_DT >= DATE_TRUNC('YEAR', CURRENT_DATE)
+             AND o.ORDER_DT < DATE_TRUNC('YEAR', CURRENT_DATE) + INTERVAL '1 YEAR'
            GROUP BY
                  o.CUST_ID"""),
       new Example("기간별 통계", "전월 대비 증감 · 증감률", "달마다 건수와 바로 앞 달 대비 늘고 준 건수 · 비율(%).",
@@ -1841,11 +1841,11 @@ public final class Examples {
           """
           SELECT
                  TO_CHAR(o.ORDER_DT, 'MM') AS MM
-               , SUM(CASE WHEN o.ORDER_DT >= DATE_TRUNC('year', CURRENT_DATE) THEN o.AMOUNT ELSE 0 END) AS THIS_YEAR
-               , SUM(CASE WHEN o.ORDER_DT < DATE_TRUNC('year', CURRENT_DATE) THEN o.AMOUNT ELSE 0 END) AS LAST_YEAR
+               , SUM(CASE WHEN o.ORDER_DT >= DATE_TRUNC('YEAR', CURRENT_DATE) THEN o.AMOUNT ELSE 0 END) AS THIS_YEAR
+               , SUM(CASE WHEN o.ORDER_DT < DATE_TRUNC('YEAR', CURRENT_DATE) THEN o.AMOUNT ELSE 0 END) AS LAST_YEAR
             FROM ORDERS o
-           WHERE o.ORDER_DT >= DATE_TRUNC('year', CURRENT_DATE) - INTERVAL '1 year'
-             AND o.ORDER_DT < DATE_TRUNC('year', CURRENT_DATE) + INTERVAL '1 year'
+           WHERE o.ORDER_DT >= DATE_TRUNC('YEAR', CURRENT_DATE) - INTERVAL '1 YEAR'
+             AND o.ORDER_DT < DATE_TRUNC('YEAR', CURRENT_DATE) + INTERVAL '1 YEAR'
            GROUP BY
                  TO_CHAR(o.ORDER_DT, 'MM')
            ORDER BY
@@ -1925,10 +1925,10 @@ public final class Examples {
           SELECT
                  SUM(CASE WHEN o.ORDER_DT >= CURRENT_DATE THEN 1 ELSE 0 END) AS TODAY
                , SUM(CASE WHEN o.ORDER_DT >= CURRENT_DATE - 1 AND o.ORDER_DT < CURRENT_DATE THEN 1 ELSE 0 END) AS YESTERDAY
-               , SUM(CASE WHEN o.ORDER_DT >= DATE_TRUNC('week', CURRENT_DATE) THEN 1 ELSE 0 END) AS THIS_WEEK
-               , SUM(CASE WHEN o.ORDER_DT >= DATE_TRUNC('month', CURRENT_DATE) THEN 1 ELSE 0 END) AS THIS_MONTH
+               , SUM(CASE WHEN o.ORDER_DT >= DATE_TRUNC('WEEK', CURRENT_DATE) THEN 1 ELSE 0 END) AS THIS_WEEK
+               , SUM(CASE WHEN o.ORDER_DT >= DATE_TRUNC('MONTH', CURRENT_DATE) THEN 1 ELSE 0 END) AS THIS_MONTH
             FROM ORDERS o
-           WHERE o.ORDER_DT >= LEAST(DATE_TRUNC('month', CURRENT_DATE), DATE_TRUNC('week', CURRENT_DATE), CURRENT_DATE - 1)"""),
+           WHERE o.ORDER_DT >= LEAST(DATE_TRUNC('MONTH', CURRENT_DATE), DATE_TRUNC('WEEK', CURRENT_DATE), CURRENT_DATE - 1)"""),
       new Example("기간별 통계", "기간 중 하루 평균", "기간 안 건수 합을 날짜 수로 나눕니다(주문이 없는 날도 날짜 수에 넣음).",
           """
           SELECT
@@ -1958,7 +1958,7 @@ public final class Examples {
           """
           SELECT
                  COUNT(*) AS WORK_DAYS
-            FROM GENERATE_SERIES(CAST(:fromDt AS DATE), CAST(:toDt AS DATE), INTERVAL '1 day') AS d(DT)
+            FROM GENERATE_SERIES(CAST(:fromDt AS DATE), CAST(:toDt AS DATE), INTERVAL '1 DAY') AS d(DT)
            WHERE EXTRACT(ISODOW FROM d.DT) < 6"""),
       new Example("기간별 통계", "올해 누계 vs 작년 같은 날까지 누계", "1월 1일부터 오늘까지와 작년 1월 1일부터 작년 오늘까지의 합.",
           """
@@ -1968,8 +1968,8 @@ public final class Examples {
             FROM ORDERS o""",
           """
           SELECT
-                 SUM(CASE WHEN o.ORDER_DT >= DATE_TRUNC('year', CURRENT_DATE) AND o.ORDER_DT < CURRENT_DATE + 1 THEN o.AMOUNT END) AS THIS_YTD
-               , SUM(CASE WHEN o.ORDER_DT >= DATE_TRUNC('year', CURRENT_DATE) - INTERVAL '1 year' AND o.ORDER_DT < CURRENT_DATE - INTERVAL '1 year' + INTERVAL '1 day' THEN o.AMOUNT END) AS LAST_YTD
+                 SUM(CASE WHEN o.ORDER_DT >= DATE_TRUNC('YEAR', CURRENT_DATE) AND o.ORDER_DT < CURRENT_DATE + 1 THEN o.AMOUNT END) AS THIS_YTD
+               , SUM(CASE WHEN o.ORDER_DT >= DATE_TRUNC('YEAR', CURRENT_DATE) - INTERVAL '1 YEAR' AND o.ORDER_DT < CURRENT_DATE - INTERVAL '1 YEAR' + INTERVAL '1 DAY' THEN o.AMOUNT END) AS LAST_YTD
             FROM ORDERS o"""),
       new Example("기간별 통계", "주차별 올해 · 작년 비교 (ISO 주)", "주 번호마다 올해와 작년 건수를 나란히.",
           """
@@ -1986,7 +1986,7 @@ public final class Examples {
           SELECT
                  TO_CHAR(o.ORDER_DT, 'IW') AS WK
                , SUM(CASE WHEN TO_CHAR(o.ORDER_DT, 'IYYY') = TO_CHAR(CURRENT_DATE, 'IYYY') THEN 1 ELSE 0 END) AS THIS_YEAR
-               , SUM(CASE WHEN TO_CHAR(o.ORDER_DT, 'IYYY') = TO_CHAR(CURRENT_DATE - INTERVAL '1 year', 'IYYY') THEN 1 ELSE 0 END) AS LAST_YEAR
+               , SUM(CASE WHEN TO_CHAR(o.ORDER_DT, 'IYYY') = TO_CHAR(CURRENT_DATE - INTERVAL '1 YEAR', 'IYYY') THEN 1 ELSE 0 END) AS LAST_YEAR
             FROM ORDERS o
            GROUP BY
                  TO_CHAR(o.ORDER_DT, 'IW')
@@ -2273,7 +2273,7 @@ public final class Examples {
           SELECT
                  d.DT
                , d.CNT
-               , SUM(d.CNT) OVER (ORDER BY d.DT RANGE BETWEEN INTERVAL '6 day' PRECEDING AND CURRENT ROW) AS CNT_7D
+               , SUM(d.CNT) OVER (ORDER BY d.DT RANGE BETWEEN INTERVAL '6 DAY' PRECEDING AND CURRENT ROW) AS CNT_7D
             FROM (
                   SELECT
                          CAST(o.ORDER_DT AS DATE) AS DT
@@ -2284,7 +2284,7 @@ public final class Examples {
                  ) d"""),
       new Example("WITH · 재귀", "단계로 나눠 쓰기 (WITH)", "고객별 합계를 먼저 만들고, 그 결과에서 상위 고객만 고릅니다. 단계마다 따로 실행해 볼 수 있습니다(도구 → WITH 조각 실행).",
           """
-          WITH cust_sum AS (
+          WITH CUST_SUM AS (
           SELECT
                  o.CUST_ID
                , SUM(o.AMOUNT) AS SUM_AMT
@@ -2294,10 +2294,10 @@ public final class Examples {
           )
           SELECT
                  s.*
-            FROM cust_sum s
+            FROM CUST_SUM s
            WHERE s.SUM_AMT >= 100000""",
           """
-          WITH cust_sum AS (
+          WITH CUST_SUM AS (
           SELECT
                  o.CUST_ID
                , SUM(o.AMOUNT) AS SUM_AMT
@@ -2307,7 +2307,7 @@ public final class Examples {
           )
           SELECT
                  s.*
-            FROM cust_sum s
+            FROM CUST_SUM s
            WHERE s.SUM_AMT >= 100000"""),
       new Example("WITH · 재귀", "1 부터 10 까지 숫자 줄", "표 없이 번호 줄을 만듭니다. 빠진 번호 찾기 · 달력에 씁니다.",
           """
@@ -2328,7 +2328,7 @@ public final class Examples {
           """
           SELECT
                  CAST(g.DT AS DATE) AS DT
-            FROM GENERATE_SERIES(DATE_TRUNC('month', CURRENT_DATE), DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month - 1 day', INTERVAL '1 day') AS g(DT)"""),
+            FROM GENERATE_SERIES(DATE_TRUNC('MONTH', CURRENT_DATE), DATE_TRUNC('MONTH', CURRENT_DATE) + INTERVAL '1 month - 1 day', INTERVAL '1 DAY') AS g(DT)"""),
       new Example("WITH · 재귀", "빠진 번호 찾기", "주문 번호 1 부터 가장 큰 번호 사이에서 비어 있는 번호.",
           """
           SELECT
@@ -2355,17 +2355,17 @@ public final class Examples {
                  )"""),
       new Example("WITH · 재귀", "WITH 단계 여러 개 (거르기 → 묶기 → 순위)", "단계마다 이름을 붙여 위에서 아래로 읽히게 씁니다. 앞 단계를 뒤에서 씁니다.",
           """
-          WITH done AS (
+          WITH DONE AS (
               SELECT
                      o.*
                 FROM ORDERS o
                WHERE o.STATUS = '완료'
           )
-          , by_cust AS (
+          , BY_CUST AS (
               SELECT
                      d.CUST_ID
                    , SUM(d.AMOUNT) AS AMT
-                FROM done d
+                FROM DONE d
                GROUP BY
                      d.CUST_ID
           )
@@ -2373,19 +2373,19 @@ public final class Examples {
                  b.CUST_ID
                , b.AMT
                , RANK() OVER (ORDER BY b.AMT DESC) AS RNK
-            FROM by_cust b""",
+            FROM BY_CUST b""",
           """
-          WITH done AS (
+          WITH DONE AS (
               SELECT
                      o.*
                 FROM ORDERS o
                WHERE o.STATUS = '완료'
           )
-          , by_cust AS (
+          , BY_CUST AS (
               SELECT
                      d.CUST_ID
                    , SUM(d.AMOUNT) AS AMT
-                FROM done d
+                FROM DONE d
                GROUP BY
                      d.CUST_ID
           )
@@ -2393,10 +2393,10 @@ public final class Examples {
                  b.CUST_ID
                , b.AMT
                , RANK() OVER (ORDER BY b.AMT DESC) AS RNK
-            FROM by_cust b"""),
+            FROM BY_CUST b"""),
       new Example("WITH · 재귀", "날짜 구간을 하루씩 펼치기 (휴가 · 일정 기간)", "시작일 ~ 끝일 한 줄을 날마다 한 줄로 펼칩니다. 날짜별 투입 인원을 셀 때 씁니다.",
           """
-          WITH days (SCH_ID, DT, END_DT) AS (
+          WITH DAYS (SCH_ID, DT, END_DT) AS (
           SELECT
                  s.SCH_ID
                , s.PLAN_START
@@ -2409,19 +2409,19 @@ public final class Examples {
                  d.SCH_ID
                , d.DT + 1
                , d.END_DT
-            FROM days d
+            FROM DAYS d
            WHERE d.DT < d.END_DT
           )
           SELECT
                  d.DT
                , COUNT(*) AS SCH_CNT
-            FROM days d
+            FROM DAYS d
            GROUP BY
                  d.DT
            ORDER BY
                  d.DT""",
           """
-          WITH RECURSIVE days AS (
+          WITH RECURSIVE DAYS AS (
           SELECT
                  s.SCH_ID
                , s.PLAN_START AS DT
@@ -2434,13 +2434,13 @@ public final class Examples {
                  d.SCH_ID
                , d.DT + 1
                , d.END_DT
-            FROM days d
+            FROM DAYS d
            WHERE d.DT < d.END_DT
           )
           SELECT
                  d.DT
                , COUNT(*) AS SCH_CNT
-            FROM days d
+            FROM DAYS d
            GROUP BY
                  d.DT
            ORDER BY
@@ -2464,7 +2464,7 @@ public final class Examples {
                , i.PART_NO
                , n.N AS LABEL_NO
             FROM ORDER_ITEM i
-               , generate_series(1, 1000) AS n(N)
+               , GENERATE_SERIES(1, 1000) AS n(N)
            WHERE n.N <= i.QTY
            ORDER BY
                  i.ORDER_ID
@@ -2481,7 +2481,7 @@ public final class Examples {
           """
           SELECT
                  TO_CHAR(g, 'YYYY-MM') AS YM
-            FROM generate_series(DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '11 month', DATE_TRUNC('month', CURRENT_DATE), INTERVAL '1 month') g
+            FROM GENERATE_SERIES(DATE_TRUNC('MONTH', CURRENT_DATE) - INTERVAL '11 MONTH', DATE_TRUNC('MONTH', CURRENT_DATE), INTERVAL '1 MONTH') g
            ORDER BY
                  YM"""),
       new Example("계층", "메뉴 나무 펼치기", "맨 위 메뉴부터 아래로 펼치고 단계(LVL)와 경로(PATH)를 붙입니다. PostgreSQL 판은 부모를 잘못 가리켜 고리가 된 데이터에서도 끝없이 돌지 않게 100 단계에서 멈춥니다.",
@@ -2497,7 +2497,7 @@ public final class Examples {
            ORDER SIBLINGS BY
                  m.SORT_NO""",
           """
-          WITH RECURSIVE tree AS (
+          WITH RECURSIVE TREE AS (
           SELECT
                  1 AS LVL
                , m.MENU_ID
@@ -2514,7 +2514,7 @@ public final class Examples {
                , CAST(t.PATH || ' > ' || m.MENU_NAME AS VARCHAR(4000))
                , CAST(t.SORT_KEY || '.' || LPAD(CAST(m.SORT_NO AS VARCHAR), 5, '0') AS VARCHAR(4000))
             FROM MENU m
-            JOIN tree t
+            JOIN TREE t
               ON m.PARENT_ID = t.MENU_ID
            WHERE t.LVL < 100
           )
@@ -2523,7 +2523,7 @@ public final class Examples {
                , REPEAT(' ', (t.LVL - 1) * 2) || t.MENU_NAME AS MENU_NAME
                , t.PATH
                , t.MENU_ID
-            FROM tree t
+            FROM TREE t
            ORDER BY
                  t.SORT_KEY"""),
       new Example("계층", "한 메뉴 아래 전부", "고른 메뉴의 자식 · 손자까지 모두. 위로 올라가려면 조건 방향을 뒤집습니다. PostgreSQL 판의 UNION(ALL 아님)은 고리 데이터에서 같은 줄을 다시 펼치지 않게 합니다.",
@@ -2534,7 +2534,7 @@ public final class Examples {
            START WITH m.MENU_ID = :menuId
           CONNECT BY PRIOR m.MENU_ID = m.PARENT_ID""",
           """
-          WITH RECURSIVE sub AS (
+          WITH RECURSIVE SUB AS (
           SELECT
                  m.*
             FROM MENU m
@@ -2543,12 +2543,12 @@ public final class Examples {
           SELECT
                  m.*
             FROM MENU m
-            JOIN sub s
+            JOIN SUB s
               ON m.PARENT_ID = s.MENU_ID
           )
           SELECT
                  s.*
-            FROM sub s"""),
+            FROM SUB s"""),
       new Example("계층", "경로를 한 칸에 (SYS_CONNECT_BY_PATH)", "'본사 > 개발본부 > 개발1팀' 처럼 맨 위부터의 경로를 붙입니다.",
           """
           SELECT
@@ -2655,7 +2655,7 @@ public final class Examples {
                  ) AS DESC_CNT
             FROM MENU m""",
           """
-          WITH RECURSIVE pair AS (
+          WITH RECURSIVE PAIR AS (
           SELECT
                  m.MENU_ID AS ROOT_ID
                , m.MENU_ID
@@ -2665,14 +2665,14 @@ public final class Examples {
                  p.ROOT_ID
                , c.MENU_ID
             FROM MENU c
-            JOIN pair p
+            JOIN PAIR p
               ON c.PARENT_ID = p.MENU_ID
           )
           SELECT
                  m.MENU_ID
                , m.MENU_NAME
                , COUNT(*) - 1 AS DESC_CNT
-            FROM pair p
+            FROM PAIR p
             JOIN MENU m
               ON m.MENU_ID = p.ROOT_ID
            GROUP BY
@@ -3000,7 +3000,7 @@ public final class Examples {
                , SUM(CASE WHEN TO_CHAR(o.ORDER_DT, 'MM') = '02' THEN o.AMOUNT END) AS M02
                , SUM(CASE WHEN TO_CHAR(o.ORDER_DT, 'MM') = '03' THEN o.AMOUNT END) AS M03
             FROM ORDERS o
-           WHERE o.ORDER_DT >= DATE_TRUNC('year', CURRENT_DATE)
+           WHERE o.ORDER_DT >= DATE_TRUNC('YEAR', CURRENT_DATE)
            GROUP BY
                  o.CUST_ID"""),
       new Example("피벗", "가로 칸을 세로 줄로 (언피벗)", "한 줄에 있는 금액 · 수량 두 칸을 (항목, 값) 두 줄로 펼칩니다.",
@@ -3759,9 +3759,9 @@ public final class Examples {
           SELECT
                  o.*
             FROM ORDERS o
-           WHERE o.ORDER_DT >= DATE_TRUNC('month', CURRENT_DATE)
-             AND o.ORDER_DT < DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month'
-          -- 지난달: >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month' AND < DATE_TRUNC('month', CURRENT_DATE)"""),
+           WHERE o.ORDER_DT >= DATE_TRUNC('MONTH', CURRENT_DATE)
+             AND o.ORDER_DT < DATE_TRUNC('MONTH', CURRENT_DATE) + INTERVAL '1 MONTH'
+          -- 지난달: >= DATE_TRUNC('MONTH', CURRENT_DATE) - INTERVAL '1 MONTH' AND < DATE_TRUNC('MONTH', CURRENT_DATE)"""),
       new Example("날짜", "날짜 범위 (끝일 하루 전체 포함)", "BETWEEN 은 끝일 0시까지만 잡혀 그날 낮의 행이 빠집니다. 끝일 + 1 미만으로 씁니다.",
           """
           SELECT
@@ -3795,8 +3795,8 @@ public final class Examples {
             FROM ORDERS o""",
           """
           SELECT
-                 o.ORDER_DT + INTERVAL '3 day' AS AFTER_3_DAYS
-               , o.ORDER_DT + INTERVAL '2 month' AS AFTER_2_MONTHS
+                 o.ORDER_DT + INTERVAL '3 DAY' AS AFTER_3_DAYS
+               , o.ORDER_DT + INTERVAL '2 MONTH' AS AFTER_2_MONTHS
                , CURRENT_DATE - CAST(o.ORDER_DT AS DATE) AS DAYS_AGO
             FROM ORDERS o"""),
       new Example("날짜", "요일 · 주말 거르기", "요일 이름을 붙이고 토 · 일은 뺍니다.",
@@ -3822,8 +3822,8 @@ public final class Examples {
           """
           SELECT
                  o.ORDER_DT
-               , CAST(DATE_TRUNC('month', o.ORDER_DT) + INTERVAL '1 month - 1 day' AS DATE) AS MONTH_END
-               , CAST(DATE_TRUNC('month', o.ORDER_DT) + INTERVAL '1 month' AS DATE) AS NEXT_MONTH
+               , CAST(DATE_TRUNC('MONTH', o.ORDER_DT) + INTERVAL '1 month - 1 day' AS DATE) AS MONTH_END
+               , CAST(DATE_TRUNC('MONTH', o.ORDER_DT) + INTERVAL '1 MONTH' AS DATE) AS NEXT_MONTH
             FROM ORDERS o"""),
       new Example("날짜", "몇 달 · 몇 년 지났는지", "가입일부터 오늘까지 지난 개월 수와 햇수(만).",
           """
@@ -3851,12 +3851,12 @@ public final class Examples {
           """
           SELECT
                  TO_CHAR(o.ORDER_DT, 'YYYY') || '-Q' || TO_CHAR(o.ORDER_DT, 'Q') AS QTR
-               , CAST(DATE_TRUNC('week', o.ORDER_DT) AS DATE) AS WEEK_START
+               , CAST(DATE_TRUNC('WEEK', o.ORDER_DT) AS DATE) AS WEEK_START
                , COUNT(*) AS CNT
             FROM ORDERS o
            GROUP BY
                  TO_CHAR(o.ORDER_DT, 'YYYY') || '-Q' || TO_CHAR(o.ORDER_DT, 'Q')
-               , CAST(DATE_TRUNC('week', o.ORDER_DT) AS DATE)"""),
+               , CAST(DATE_TRUNC('WEEK', o.ORDER_DT) AS DATE)"""),
       new Example("날짜", "지금 시각 · 시간 더하기", "지금 시각, 2시간 뒤, 30분 전.",
           """
           SELECT
@@ -3867,8 +3867,8 @@ public final class Examples {
           """
           SELECT
                  LOCALTIMESTAMP AS NOW
-               , LOCALTIMESTAMP + INTERVAL '2 hours' AS AFTER_2H
-               , LOCALTIMESTAMP - INTERVAL '30 minutes' AS BEFORE_30M"""),
+               , LOCALTIMESTAMP + INTERVAL '2 HOURS' AS AFTER_2H
+               , LOCALTIMESTAMP - INTERVAL '30 MINUTES' AS BEFORE_30M"""),
       new Example("날짜", "두 시각 차이 (시간 · 분)", "등록 시각부터 지금까지 몇 시간 · 몇 분 지났는지.",
           """
           SELECT
@@ -3903,8 +3903,8 @@ public final class Examples {
             FROM DUAL""",
           """
           SELECT
-                 CAST(DATE_TRUNC('week', CURRENT_DATE) AS DATE) AS MON
-               , CAST(DATE_TRUNC('week', CURRENT_DATE) AS DATE) + 6 AS SUN"""),
+                 CAST(DATE_TRUNC('WEEK', CURRENT_DATE) AS DATE) AS MON
+               , CAST(DATE_TRUNC('WEEK', CURRENT_DATE) AS DATE) + 6 AS SUN"""),
       new Example("날짜", "올해 첫날 · 끝날 · 지난해 같은 날", "1월 1일, 12월 31일, 1년 전 오늘.",
           """
           SELECT
@@ -3914,9 +3914,9 @@ public final class Examples {
             FROM DUAL""",
           """
           SELECT
-                 CAST(DATE_TRUNC('year', CURRENT_DATE) AS DATE) AS FIRST_DAY
-               , CAST(DATE_TRUNC('year', CURRENT_DATE) + INTERVAL '1 year - 1 day' AS DATE) AS LAST_DAY
-               , CAST(CURRENT_DATE - INTERVAL '1 year' AS DATE) AS YEAR_AGO"""),
+                 CAST(DATE_TRUNC('YEAR', CURRENT_DATE) AS DATE) AS FIRST_DAY
+               , CAST(DATE_TRUNC('YEAR', CURRENT_DATE) + INTERVAL '1 year - 1 day' AS DATE) AS LAST_DAY
+               , CAST(CURRENT_DATE - INTERVAL '1 YEAR' AS DATE) AS YEAR_AGO"""),
       new Example("날짜", "유닉스 시각(초) ↔ 날짜", "1970-01-01 부터 센 초를 날짜로, 날짜를 초로.",
           """
           SELECT
@@ -3986,7 +3986,7 @@ public final class Examples {
             FROM (
                   SELECT
                          CAST(g AS DATE) AS DT
-                    FROM generate_series(CURRENT_DATE + 1, CURRENT_DATE + 30, INTERVAL '1 day') g
+                    FROM GENERATE_SERIES(CURRENT_DATE + 1, CURRENT_DATE + 30, INTERVAL '1 DAY') g
                    WHERE EXTRACT(ISODOW FROM g) < 6
                    ORDER BY
                          1
@@ -4559,7 +4559,7 @@ public final class Examples {
           SELECT
                  x.N
                , CASE WHEN x.N = 3 THEN 10000 - FLOOR(10000 / 3.0) * 2 ELSE FLOOR(10000 / 3.0) END AS AMT
-            FROM generate_series(1, 3) AS x(N)"""),
+            FROM GENERATE_SERIES(1, 3) AS x(N)"""),
       new Example("NULL", "비어 있는 것 찾기 (IS NULL)", "= NULL 은 늘 거짓이라 아무것도 안 나옵니다. IS NULL 로 씁니다.",
           """
           SELECT
@@ -4733,7 +4733,7 @@ public final class Examples {
            WHERE ORDER_DT < ADD_MONTHS(TRUNC(SYSDATE), -12)""",
           """
           DELETE FROM ORDERS_BAK
-           WHERE ORDER_DT < CURRENT_DATE - INTERVAL '12 months'"""),
+           WHERE ORDER_DT < CURRENT_DATE - INTERVAL '12 MONTHS'"""),
       new Example("넣기 · 고치기", "있으면 고치고 없으면 넣기 (MERGE)", "백업 표에 같은 주문이 있으면 금액을 고치고, 없으면 넣습니다. PostgreSQL 은 15 판부터 MERGE 가 됩니다(그 전 판은 ON CONFLICT 로, 기준 칼럼에 고유 키가 있어야 합니다).",
           """
           MERGE INTO ORDERS_BAK b
@@ -4872,7 +4872,7 @@ public final class Examples {
                   SELECT x.CTID
                     FROM IF_PART x
                    WHERE x.STATUS = 'DONE'
-                     AND x.REG_DT < NOW() - INTERVAL '365 day'
+                     AND x.REG_DT < NOW() - INTERVAL '365 DAY'
                    LIMIT 10000
                  )"""),
       new Example("넣기 · 고치기", "백업 표로 되돌리기 (지운 줄 다시 넣기)", "고치기 전에 떠 둔 백업 표에서 없어진 줄만 다시 넣습니다.",
@@ -5031,7 +5031,7 @@ public final class Examples {
           """
           CREATE SYNONYM ORDERS_REMOTE FOR APP_OWNER.ORDERS""",
           """
-          SET search_path TO public"""),
+          SET SEARCH_PATH TO PUBLIC"""),
       new Example("표 · 칼럼 정보", "표의 칼럼 목록과 설명", "표 이름을 바꿔 실행하면 칼럼 · 형식 · 설명을 봅니다.",
           """
           SELECT
@@ -5682,9 +5682,9 @@ public final class Examples {
                    COLUMNS (PART_NO VARCHAR2(30) PATH '$.partNo', QTY NUMBER PATH '$.qty')) j""",
           """
           SELECT
-                 j ->> 'partNo' AS PART_NO
-               , CAST(j ->> 'qty' AS NUMERIC) AS QTY
-            FROM JSON_ARRAY_ELEMENTS('[{"partNo":"P001","qty":2},{"partNo":"P002","qty":5}]') AS j"""),
+                 J ->> 'partNo' AS PART_NO
+               , CAST(J ->> 'qty' AS NUMERIC) AS QTY
+            FROM JSON_ARRAY_ELEMENTS('[{"partNo":"P001","qty":2},{"partNo":"P002","qty":5}]') AS J"""),
       new Example("BOM · 부품", "BOM 정전개 (완제품 → 부품)", "완제품 하나에 들어가는 부품을 아래로 펼치고, 단계마다 수량을 곱해 완제품 1개당 필요 수량(TOTAL_QTY)을 냅니다. 곱셈이 필요해 CONNECT BY 대신 재귀 WITH 로 씁니다.",
           """
           WITH t (LVL, CHILD_PART, QTY, TOTAL_QTY, SEQ) AS (
@@ -5862,7 +5862,7 @@ public final class Examples {
            START WITH b.CHILD_PART = :partNo
           CONNECT BY b.CHILD_PART = PRIOR b.PARENT_PART""",
           """
-          WITH RECURSIVE up AS (
+          WITH RECURSIVE UP AS (
           SELECT
                  1 AS UP
                , b.PARENT_PART
@@ -5877,13 +5877,13 @@ public final class Examples {
                , b.CHILD_PART
                , b.QTY
             FROM BOM b
-            JOIN up u
+            JOIN UP u
               ON b.CHILD_PART = u.PARENT_PART
            WHERE u.UP < 100
           )
           SELECT
                  u.*
-            FROM up u
+            FROM UP u
            WHERE u.PARENT_PART IS NOT NULL"""),
       new Example("BOM · 부품", "레벨 번호 붙인 BOM 표 (1, 1.1, 1.1.2)", "BOM 을 펼치면서 화면에 보이는 번호(1.2.1)를 만듭니다. 형제 순서는 SEQ 로 정합니다.",
           """
@@ -6369,7 +6369,7 @@ public final class Examples {
           SELECT
                  p.OWNER_ID
                , COUNT(*) AS PART_CNT
-               , SUM(CASE WHEN p.REG_DT >= CAST(DATE_TRUNC('month', CURRENT_DATE) AS DATE) THEN 1 ELSE 0 END) AS NEW_THIS_MONTH
+               , SUM(CASE WHEN p.REG_DT >= CAST(DATE_TRUNC('MONTH', CURRENT_DATE) AS DATE) THEN 1 ELSE 0 END) AS NEW_THIS_MONTH
             FROM PART p
            GROUP BY
                  p.OWNER_ID
@@ -7756,7 +7756,7 @@ public final class Examples {
            START WITH b.CHILD_PART = :partNo
           CONNECT BY NOCYCLE b.CHILD_PART = PRIOR b.PARENT_PART""",
           """
-          WITH RECURSIVE up AS (
+          WITH RECURSIVE UP AS (
           SELECT
                  b.PARENT_PART
                , 1 AS LVL
@@ -7768,14 +7768,14 @@ public final class Examples {
                  b.PARENT_PART
                , u.LVL + 1
             FROM BOM b
-               , up u
+               , UP u
            WHERE b.CHILD_PART = u.PARENT_PART
              AND b.PARENT_PART IS NOT NULL
              AND u.LVL < 20
           )
           SELECT DISTINCT
                  u.PARENT_PART AS TOP_PART
-            FROM up u
+            FROM UP u
            WHERE NOT EXISTS (SELECT 1 FROM BOM x WHERE x.CHILD_PART = u.PARENT_PART AND x.PARENT_PART IS NOT NULL)"""),
       new Example("BOM · Top 어셈블리", "Top 리비전 복사 (A 판 BOM → B 판)", "Top 의 한 리비전 BOM 을 새 리비전으로 그대로 복사합니다. 이미 B 판이 있으면 넣지 않습니다.",
           """
@@ -8293,8 +8293,8 @@ public final class Examples {
                  s.*
             FROM SCHEDULE s
            WHERE s.ACT_END IS NULL
-             AND s.PLAN_END >= CAST(DATE_TRUNC('week', CURRENT_DATE) AS DATE)
-             AND s.PLAN_END < CAST(DATE_TRUNC('week', CURRENT_DATE) AS DATE) + 14
+             AND s.PLAN_END >= CAST(DATE_TRUNC('WEEK', CURRENT_DATE) AS DATE)
+             AND s.PLAN_END < CAST(DATE_TRUNC('WEEK', CURRENT_DATE) AS DATE) + 14
            ORDER BY
                  s.PLAN_END"""),
       new Example("일정 · 진행", "담당자별 이번 주 일정 (요일 칸)", "담당자마다 이번 주 월~금 무슨 일정이 있는지 칸으로.",
@@ -8312,12 +8312,12 @@ public final class Examples {
           """
           SELECT
                  s.OWNER_ID
-               , STRING_AGG(s.STEP_CD, ',' ORDER BY s.STEP_SEQ) FILTER (WHERE CAST(DATE_TRUNC('week', CURRENT_DATE) AS DATE) BETWEEN s.PLAN_START AND s.PLAN_END) AS MON
-               , STRING_AGG(s.STEP_CD, ',' ORDER BY s.STEP_SEQ) FILTER (WHERE CAST(DATE_TRUNC('week', CURRENT_DATE) AS DATE) + 2 BETWEEN s.PLAN_START AND s.PLAN_END) AS WED
-               , STRING_AGG(s.STEP_CD, ',' ORDER BY s.STEP_SEQ) FILTER (WHERE CAST(DATE_TRUNC('week', CURRENT_DATE) AS DATE) + 4 BETWEEN s.PLAN_START AND s.PLAN_END) AS FRI
+               , STRING_AGG(s.STEP_CD, ',' ORDER BY s.STEP_SEQ) FILTER (WHERE CAST(DATE_TRUNC('WEEK', CURRENT_DATE) AS DATE) BETWEEN s.PLAN_START AND s.PLAN_END) AS MON
+               , STRING_AGG(s.STEP_CD, ',' ORDER BY s.STEP_SEQ) FILTER (WHERE CAST(DATE_TRUNC('WEEK', CURRENT_DATE) AS DATE) + 2 BETWEEN s.PLAN_START AND s.PLAN_END) AS WED
+               , STRING_AGG(s.STEP_CD, ',' ORDER BY s.STEP_SEQ) FILTER (WHERE CAST(DATE_TRUNC('WEEK', CURRENT_DATE) AS DATE) + 4 BETWEEN s.PLAN_START AND s.PLAN_END) AS FRI
             FROM SCHEDULE s
-           WHERE s.PLAN_START <= CAST(DATE_TRUNC('week', CURRENT_DATE) AS DATE) + 4
-             AND s.PLAN_END >= CAST(DATE_TRUNC('week', CURRENT_DATE) AS DATE)
+           WHERE s.PLAN_START <= CAST(DATE_TRUNC('WEEK', CURRENT_DATE) AS DATE) + 4
+             AND s.PLAN_END >= CAST(DATE_TRUNC('WEEK', CURRENT_DATE) AS DATE)
            GROUP BY
                  s.OWNER_ID"""),
       new Example("일정 · 진행", "앞 단계가 안 끝났는데 시작한 단계 (순서 어김)", "같은 부품 일정에서 앞 순번 실적 끝보다 먼저 시작한 단계.",
@@ -8423,7 +8423,7 @@ public final class Examples {
                , d.DT
                , COUNT(*) AS LOAD_CNT
             FROM SCHEDULE s
-               , (SELECT CAST(g AS DATE) AS DT FROM generate_series(CURRENT_DATE, CURRENT_DATE + 29, INTERVAL '1 day') g) d
+               , (SELECT CAST(g AS DATE) AS DT FROM GENERATE_SERIES(CURRENT_DATE, CURRENT_DATE + 29, INTERVAL '1 DAY') g) d
            WHERE d.DT BETWEEN s.PLAN_START AND s.PLAN_END
              AND s.EQUIP_ID IS NOT NULL
            GROUP BY
@@ -8740,7 +8740,7 @@ public final class Examples {
              AND p.LINE_SEQ = a.LINE_SEQ - 1
              AND a.STATUS = 'WAIT'
              AND p.STATUS = 'APPROVED'
-             AND p.ACT_DT < NOW() - INTERVAL '3 day'
+             AND p.ACT_DT < NOW() - INTERVAL '3 DAY'
            ORDER BY
                  WAIT_DAYS DESC"""),
       new Example("결재 · 권한 · 코드", "역할별 메뉴 권한 가로표 (읽기 · 쓰기)", "메뉴를 줄로, 역할을 칸으로 놓고 R · W 를 찍습니다. 권한 점검표.",
@@ -9063,7 +9063,7 @@ public final class Examples {
                , SUM(CASE WHEN t.TXN_DT >= TO_DATE(:ym, 'YYYYMM') AND t.TXN_TYPE = 'OUT' THEN t.QTY ELSE 0 END) AS OUT_QTY
                , SUM(CASE t.TXN_TYPE WHEN 'IN' THEN t.QTY ELSE -t.QTY END) AS END_QTY
             FROM STOCK_TXN t
-           WHERE t.TXN_DT < TO_DATE(:ym, 'YYYYMM') + INTERVAL '1 month'
+           WHERE t.TXN_DT < TO_DATE(:ym, 'YYYYMM') + INTERVAL '1 MONTH'
            GROUP BY
                  t.PART_NO
            ORDER BY
@@ -10047,13 +10047,13 @@ public final class Examples {
            WHERE EXISTS (
                   SELECT 1 FROM ORDERS o
                    WHERE o.CUST_ID = c.CUST_ID
-                     AND o.ORDER_DT >= DATE_TRUNC('quarter', CURRENT_DATE) - INTERVAL '3 month'
-                     AND o.ORDER_DT < DATE_TRUNC('quarter', CURRENT_DATE)
+                     AND o.ORDER_DT >= DATE_TRUNC('QUARTER', CURRENT_DATE) - INTERVAL '3 MONTH'
+                     AND o.ORDER_DT < DATE_TRUNC('QUARTER', CURRENT_DATE)
                  )
              AND NOT EXISTS (
                   SELECT 1 FROM ORDERS o
                    WHERE o.CUST_ID = c.CUST_ID
-                     AND o.ORDER_DT >= DATE_TRUNC('quarter', CURRENT_DATE)
+                     AND o.ORDER_DT >= DATE_TRUNC('QUARTER', CURRENT_DATE)
                  )"""),
       new Example("영업 · 구매 · 회계", "월별 신규 고객 수 (첫 주문 기준)", "고객마다 첫 주문한 달을 구해 달마다 셉니다.",
           """
@@ -10197,7 +10197,7 @@ public final class Examples {
                  x.BUCKET"""),
       new Example("생산 · 품질", "소요량 계산 (MRP: 생산 계획 × BOM − 재고 − 발주 잔량)", "계획 수량으로 BOM 을 끝까지 펼쳐 부품별 총 필요량을 구하고, 지금 재고와 들어올 발주 잔량을 빼 더 사야 할 양을 냅니다.",
           """
-          WITH need (PART_NO, QTY, LVL) AS (
+          WITH NEED (PART_NO, QTY, LVL) AS (
           SELECT
                  b.CHILD_PART
                , b.QTY * p.QTY
@@ -10211,7 +10211,7 @@ public final class Examples {
                  b.CHILD_PART
                , b.QTY * n.QTY
                , n.LVL + 1
-            FROM BOM b, need n
+            FROM BOM b, NEED n
            WHERE b.PARENT_PART = n.PART_NO
              AND b.REV = :rev
              AND n.LVL < 20
@@ -10222,7 +10222,7 @@ public final class Examples {
                , NVL(MAX(st.QTY), 0) AS STOCK
                , NVL(MAX(po.QTY), 0) AS ON_ORDER
                , GREATEST(SUM(n.QTY) - NVL(MAX(st.QTY), 0) - NVL(MAX(po.QTY), 0), 0) AS TO_BUY
-            FROM need n
+            FROM NEED n
                , (SELECT t.PART_NO, SUM(DECODE(t.TXN_TYPE, 'IN', t.QTY, -t.QTY)) AS QTY FROM STOCK_TXN t GROUP BY t.PART_NO) st
                , (SELECT o.PART_NO, SUM(o.QTY) - NVL(SUM(r.QTY), 0) AS QTY FROM PURCHASE_ORDER o, RECEIPT r WHERE o.PO_NO = r.PO_NO(+) AND o.LINE_NO = r.LINE_NO(+) GROUP BY o.PART_NO) po
            WHERE n.PART_NO = st.PART_NO(+)
@@ -10233,7 +10233,7 @@ public final class Examples {
            ORDER BY
                  TO_BUY DESC""",
           """
-          WITH RECURSIVE need AS (
+          WITH RECURSIVE NEED AS (
           SELECT
                  b.CHILD_PART AS PART_NO
                , b.QTY * p.QTY AS QTY
@@ -10247,7 +10247,7 @@ public final class Examples {
                  b.CHILD_PART
                , b.QTY * n.QTY
                , n.LVL + 1
-            FROM BOM b, need n
+            FROM BOM b, NEED n
            WHERE b.PARENT_PART = n.PART_NO
              AND b.REV = :rev
              AND n.LVL < 20
@@ -10258,7 +10258,7 @@ public final class Examples {
                , COALESCE(MAX(st.QTY), 0) AS STOCK
                , COALESCE(MAX(po.QTY), 0) AS ON_ORDER
                , GREATEST(SUM(n.QTY) - COALESCE(MAX(st.QTY), 0) - COALESCE(MAX(po.QTY), 0), 0) AS TO_BUY
-            FROM need n
+            FROM NEED n
             LEFT OUTER JOIN (SELECT t.PART_NO, SUM(CASE t.TXN_TYPE WHEN 'IN' THEN t.QTY ELSE -t.QTY END) AS QTY FROM STOCK_TXN t GROUP BY t.PART_NO) st
               ON n.PART_NO = st.PART_NO
             LEFT OUTER JOIN (SELECT o.PART_NO, SUM(o.QTY) - COALESCE(SUM(r.QTY), 0) AS QTY FROM PURCHASE_ORDER o LEFT OUTER JOIN RECEIPT r ON o.PO_NO = r.PO_NO AND o.LINE_NO = r.LINE_NO GROUP BY o.PART_NO) po
@@ -10755,13 +10755,13 @@ public final class Examples {
           """
           SELECT
                  l.EQUIP_ID
-               , CAST(l.START_TS - INTERVAL '8 hour' AS DATE) AS WORK_DAY
+               , CAST(l.START_TS - INTERVAL '8 HOUR' AS DATE) AS WORK_DAY
                , CASE WHEN EXTRACT(HOUR FROM l.START_TS) BETWEEN 8 AND 19 THEN '주간' ELSE '야간' END AS SHIFT
                , COUNT(*) AS LOG_CNT
             FROM EQUIP_LOG l
            GROUP BY
                  l.EQUIP_ID
-               , CAST(l.START_TS - INTERVAL '8 hour' AS DATE)
+               , CAST(l.START_TS - INTERVAL '8 HOUR' AS DATE)
                , CASE WHEN EXTRACT(HOUR FROM l.START_TS) BETWEEN 8 AND 19 THEN '주간' ELSE '야간' END"""),
       new Example("생산 · 품질", "로트별 양품률 · 나쁜 로트 순", "로트마다 양품 / (양품 + 불량). 낮은 순.",
           """
@@ -10856,9 +10856,9 @@ public final class Examples {
           """
           SELECT
                  r.NG_TYPE
-               , SUM(CASE WHEN r.WORK_DT >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '2 month' AND r.WORK_DT < DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month' THEN r.NG_QTY ELSE 0 END) AS M_2
-               , SUM(CASE WHEN r.WORK_DT >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month' AND r.WORK_DT < DATE_TRUNC('month', CURRENT_DATE) THEN r.NG_QTY ELSE 0 END) AS M_1
-               , SUM(CASE WHEN r.WORK_DT >= DATE_TRUNC('month', CURRENT_DATE) THEN r.NG_QTY ELSE 0 END) AS THIS_M
+               , SUM(CASE WHEN r.WORK_DT >= DATE_TRUNC('MONTH', CURRENT_DATE) - INTERVAL '2 MONTH' AND r.WORK_DT < DATE_TRUNC('MONTH', CURRENT_DATE) - INTERVAL '1 MONTH' THEN r.NG_QTY ELSE 0 END) AS M_2
+               , SUM(CASE WHEN r.WORK_DT >= DATE_TRUNC('MONTH', CURRENT_DATE) - INTERVAL '1 MONTH' AND r.WORK_DT < DATE_TRUNC('MONTH', CURRENT_DATE) THEN r.NG_QTY ELSE 0 END) AS M_1
+               , SUM(CASE WHEN r.WORK_DT >= DATE_TRUNC('MONTH', CURRENT_DATE) THEN r.NG_QTY ELSE 0 END) AS THIS_M
             FROM WORK_RESULT r
            WHERE r.NG_QTY > 0
            GROUP BY
@@ -10987,10 +10987,10 @@ public final class Examples {
           SELECT
                  a.EMP_ID
                , SUM(CASE WHEN TO_CHAR(a.IN_TS, 'HH24MI') > '0900' THEN 1 ELSE 0 END) AS LATE_DAYS
-               , ROUND(CAST(SUM(GREATEST(EXTRACT(EPOCH FROM a.OUT_TS - (DATE_TRUNC('day', a.OUT_TS) + INTERVAL '18 hour')), 0)) / 3600 AS NUMERIC), 1) AS OVERTIME_H
+               , ROUND(CAST(SUM(GREATEST(EXTRACT(EPOCH FROM a.OUT_TS - (DATE_TRUNC('DAY', a.OUT_TS) + INTERVAL '18 HOUR')), 0)) / 3600 AS NUMERIC), 1) AS OVERTIME_H
             FROM ATTEND a
            WHERE a.WORK_DT >= TO_DATE(:ym, 'YYYYMM')
-             AND a.WORK_DT < TO_DATE(:ym, 'YYYYMM') + INTERVAL '1 month'
+             AND a.WORK_DT < TO_DATE(:ym, 'YYYYMM') + INTERVAL '1 MONTH'
            GROUP BY
                  a.EMP_ID"""),
       new Example("인사 · 근태", "휴가 잔여일", "올해 받은 날 − 쓴 날. 안 쓴 사람도 나오게 아우터.",
@@ -11095,7 +11095,7 @@ public final class Examples {
                  e.EMP_ID
                , d.DT
             FROM EMP e
-           CROSS JOIN (SELECT CAST(g AS DATE) AS DT FROM generate_series(DATE_TRUNC('month', CURRENT_DATE), CURRENT_DATE, INTERVAL '1 day') g) d
+           CROSS JOIN (SELECT CAST(g AS DATE) AS DT FROM GENERATE_SERIES(DATE_TRUNC('MONTH', CURRENT_DATE), CURRENT_DATE, INTERVAL '1 DAY') g) d
            WHERE EXTRACT(ISODOW FROM d.DT) < 6
              AND NOT EXISTS (
                   SELECT 1
@@ -11308,7 +11308,7 @@ public final class Examples {
            START WITH e.EMP_ID = :empId
           CONNECT BY e.EMP_ID = PRIOR e.MGR_ID""",
           """
-          WITH RECURSIVE up AS (
+          WITH RECURSIVE UP AS (
           SELECT
                  1 AS UP
                , e.EMP_ID
@@ -11323,7 +11323,7 @@ public final class Examples {
                , e.MGR_ID
                , e.EMP_NAME
             FROM EMP e
-            JOIN up u
+            JOIN UP u
               ON e.EMP_ID = u.MGR_ID
            WHERE u.UP < 100
           )
@@ -11331,7 +11331,7 @@ public final class Examples {
                  u.UP
                , u.EMP_ID
                , u.EMP_NAME
-            FROM up u"""),
+            FROM UP u"""),
       new Example("인사 · 근태", "부서 아래 직원 모두 (하위 부서 포함)", "고른 부서와 그 아래 모든 부서에 속한 직원.",
           """
           SELECT
@@ -11344,7 +11344,7 @@ public final class Examples {
                  CONNECT BY PRIOR d.DEPT_ID = d.PARENT_DEPT_ID
                  )""",
           """
-          WITH RECURSIVE sub AS (
+          WITH RECURSIVE SUB AS (
           SELECT
                  d.DEPT_ID
             FROM DEPT d
@@ -11353,13 +11353,13 @@ public final class Examples {
           SELECT
                  d.DEPT_ID
             FROM DEPT d
-            JOIN sub s
+            JOIN SUB s
               ON d.PARENT_DEPT_ID = s.DEPT_ID
           )
           SELECT
                  e.*
             FROM EMP e
-           WHERE e.DEPT_ID IN (SELECT s.DEPT_ID FROM sub s)"""),
+           WHERE e.DEPT_ID IN (SELECT s.DEPT_ID FROM SUB s)"""),
       new Example("인사 · 근태", "부서별 인원 · 급여 합 (하위 부서까지 합침)", "부서마다 그 아래 부서까지 합친 인원과 급여 합.",
           """
           SELECT
@@ -11387,7 +11387,7 @@ public final class Examples {
                  ) AS SAL_SUM
             FROM DEPT d""",
           """
-          WITH RECURSIVE pair AS (
+          WITH RECURSIVE PAIR AS (
           SELECT
                  d.DEPT_ID AS ROOT_ID
                , d.DEPT_ID
@@ -11397,7 +11397,7 @@ public final class Examples {
                  p.ROOT_ID
                , d.DEPT_ID
             FROM DEPT d
-            JOIN pair p
+            JOIN PAIR p
               ON d.PARENT_DEPT_ID = p.DEPT_ID
           )
           SELECT
@@ -11406,7 +11406,7 @@ public final class Examples {
                , COUNT(e.EMP_ID) AS EMP_CNT
                , SUM(e.SAL) AS SAL_SUM
             FROM DEPT d
-            JOIN pair p
+            JOIN PAIR p
               ON p.ROOT_ID = d.DEPT_ID
             LEFT JOIN EMP e
               ON e.DEPT_ID = p.DEPT_ID
@@ -12036,7 +12036,7 @@ public final class Examples {
                , f.RETRY_CNT
                , f.REG_DT
             FROM IF_PART f
-           WHERE (f.STATUS = 'FAIL' OR (f.STATUS = 'READY' AND f.REG_DT < NOW() - INTERVAL '1 hour'))
+           WHERE (f.STATUS = 'FAIL' OR (f.STATUS = 'READY' AND f.REG_DT < NOW() - INTERVAL '1 HOUR'))
              AND f.RETRY_CNT < 3
            ORDER BY
                  f.REG_DT"""),
@@ -12171,7 +12171,7 @@ public final class Examples {
           WITH d AS (
           SELECT
                  CAST(g AS DATE) AS DT
-            FROM GENERATE_SERIES(TO_DATE(:fromDt, 'YYYY-MM-DD'), TO_DATE(:toDt, 'YYYY-MM-DD'), INTERVAL '1 day') g
+            FROM GENERATE_SERIES(TO_DATE(:fromDt, 'YYYY-MM-DD'), TO_DATE(:toDt, 'YYYY-MM-DD'), INTERVAL '1 DAY') g
           ), b AS (
           SELECT
                  CAST(l.START_TS AS DATE) AS DT
@@ -12349,7 +12349,7 @@ public final class Examples {
                , l.ACTION
                , COUNT(*) AS CNT
             FROM AUDIT_LOG l
-           WHERE l.LOG_TS >= NOW() - INTERVAL '30 day'
+           WHERE l.LOG_TS >= NOW() - INTERVAL '30 DAY'
            GROUP BY
                  l.USER_ID
                , l.TABLE_NAME
@@ -12383,7 +12383,7 @@ public final class Examples {
                  u.USER_ID
                , u.USER_NAME
           HAVING MAX(l.LOGIN_TS) IS NULL
-              OR MAX(l.LOGIN_TS) < NOW() - INTERVAL '90 day'"""),
+              OR MAX(l.LOGIN_TS) < NOW() - INTERVAL '90 DAY'"""),
       new Example("감사 · 로그", "시간대별 로그인 수 · 한 사람 여러 IP", "몇 시에 많이 들어오는지, 하루에 IP 가 여럿인 계정.",
           """
           SELECT
@@ -12549,20 +12549,20 @@ public final class Examples {
           """
           -- 월별 현황: 시작일 ~ 끝일(끝일 하루 전체 포함)
           SELECT
-                 TO_CHAR(DATE_TRUNC('month', o.ORDER_DT), 'YYYY-MM') AS PERIOD
+                 TO_CHAR(DATE_TRUNC('MONTH', o.ORDER_DT), 'YYYY-MM') AS PERIOD
                , COUNT(*) AS CNT
                , SUM(o.AMOUNT) AS SUM_AMOUNT
             FROM ORDERS o
            WHERE o.ORDER_DT >= CAST(:fromDt AS DATE)
              AND o.ORDER_DT < CAST(:toDt AS DATE) + 1
            GROUP BY
-                 TO_CHAR(DATE_TRUNC('month', o.ORDER_DT), 'YYYY-MM')
+                 TO_CHAR(DATE_TRUNC('MONTH', o.ORDER_DT), 'YYYY-MM')
            ORDER BY
                  PERIOD"""),
       new Example("대시보드 통계", "전 기간 대비 증감", "월마다 건수와 바로 앞 달 대비 증감 · 증감률(%). 앞 달이 0 건이면 증감률은 비웁니다.",
           """
           -- 월별 건수와 앞 기간 대비 증감 · 증감률(%). 앞 기간이 0 건이면 증감률은 비웁니다
-          WITH counted AS (
+          WITH COUNTED AS (
               SELECT
                      TO_CHAR(TRUNC(o.ORDER_DT, 'MM'), 'YYYY-MM') AS PERIOD
                    , COUNT(*) AS CNT
@@ -12578,20 +12578,20 @@ public final class Examples {
                , LAG(c.CNT) OVER (ORDER BY c.PERIOD) AS PREV_CNT
                , c.CNT - LAG(c.CNT) OVER (ORDER BY c.PERIOD) AS DIFF
                , ROUND((c.CNT - LAG(c.CNT) OVER (ORDER BY c.PERIOD)) * 100.0 / NULLIF(LAG(c.CNT) OVER (ORDER BY c.PERIOD), 0), 1) AS RATE
-            FROM counted c
+            FROM COUNTED c
            ORDER BY
                  c.PERIOD""",
           """
           -- 월별 건수와 앞 기간 대비 증감 · 증감률(%). 앞 기간이 0 건이면 증감률은 비웁니다
-          WITH counted AS (
+          WITH COUNTED AS (
               SELECT
-                     TO_CHAR(DATE_TRUNC('month', o.ORDER_DT), 'YYYY-MM') AS PERIOD
+                     TO_CHAR(DATE_TRUNC('MONTH', o.ORDER_DT), 'YYYY-MM') AS PERIOD
                    , COUNT(*) AS CNT
                 FROM ORDERS o
                WHERE o.ORDER_DT >= CAST(:fromDt AS DATE)
                  AND o.ORDER_DT < CAST(:toDt AS DATE) + 1
                GROUP BY
-                     TO_CHAR(DATE_TRUNC('month', o.ORDER_DT), 'YYYY-MM')
+                     TO_CHAR(DATE_TRUNC('MONTH', o.ORDER_DT), 'YYYY-MM')
           )
           SELECT
                  c.PERIOD
@@ -12599,7 +12599,7 @@ public final class Examples {
                , LAG(c.CNT) OVER (ORDER BY c.PERIOD) AS PREV_CNT
                , c.CNT - LAG(c.CNT) OVER (ORDER BY c.PERIOD) AS DIFF
                , ROUND((c.CNT - LAG(c.CNT) OVER (ORDER BY c.PERIOD)) * 100.0 / NULLIF(LAG(c.CNT) OVER (ORDER BY c.PERIOD), 0), 1) AS RATE
-            FROM counted c
+            FROM COUNTED c
            ORDER BY
                  c.PERIOD"""),
       new Example("대시보드 통계", "비율 (전체 중 몇 %)", "상태 값마다 건수와 전체 중 비율(%).",
@@ -12644,20 +12644,20 @@ public final class Examples {
           """
           -- 월별 건수와 누적 건수
           SELECT
-                 TO_CHAR(DATE_TRUNC('month', o.ORDER_DT), 'YYYY-MM') AS PERIOD
+                 TO_CHAR(DATE_TRUNC('MONTH', o.ORDER_DT), 'YYYY-MM') AS PERIOD
                , COUNT(*) AS CNT
-               , SUM(COUNT(*)) OVER (ORDER BY TO_CHAR(DATE_TRUNC('month', o.ORDER_DT), 'YYYY-MM')) AS CUM_CNT
+               , SUM(COUNT(*)) OVER (ORDER BY TO_CHAR(DATE_TRUNC('MONTH', o.ORDER_DT), 'YYYY-MM')) AS CUM_CNT
             FROM ORDERS o
            WHERE o.ORDER_DT >= CAST(:fromDt AS DATE)
              AND o.ORDER_DT < CAST(:toDt AS DATE) + 1
            GROUP BY
-                 TO_CHAR(DATE_TRUNC('month', o.ORDER_DT), 'YYYY-MM')
+                 TO_CHAR(DATE_TRUNC('MONTH', o.ORDER_DT), 'YYYY-MM')
            ORDER BY
                  PERIOD"""),
       new Example("대시보드 통계", "순위 · 상위 N 개", "상태마다 금액 합계로 순위를 매겨 상위 10 개만.",
           """
           -- STATUS 마다 AMOUNT 합계 순위, 상위 10 개 (같은 값은 같은 순위)
-          WITH ranked AS (
+          WITH RANKED AS (
               SELECT
                      o.STATUS
                    , SUM(o.AMOUNT) AS SUM_AMOUNT
@@ -12668,13 +12668,13 @@ public final class Examples {
           )
           SELECT
                  r.*
-            FROM ranked r
+            FROM RANKED r
            WHERE r.RNK <= 10
            ORDER BY
                  r.RNK""",
           """
           -- STATUS 마다 AMOUNT 합계 순위, 상위 10 개 (같은 값은 같은 순위)
-          WITH ranked AS (
+          WITH RANKED AS (
               SELECT
                      o.STATUS
                    , SUM(o.AMOUNT) AS SUM_AMOUNT
@@ -12685,7 +12685,7 @@ public final class Examples {
           )
           SELECT
                  r.*
-            FROM ranked r
+            FROM RANKED r
            WHERE r.RNK <= 10
            ORDER BY
                  r.RNK"""),
@@ -12736,12 +12736,12 @@ public final class Examples {
       new Example("대시보드 통계", "0 건인 날짜도 빠짐없이", "기간 안의 모든 날짜를 만들고 건수를 붙입니다. 행이 없는 날은 0 으로 나옵니다(그래프용).",
           """
           -- 시작일 ~ 끝일의 모든 날짜와 건수. 행이 없는 날은 0
-          WITH days AS (
+          WITH DAYS AS (
               SELECT TO_DATE(:fromDt, 'YYYY-MM-DD') + LEVEL - 1 AS DT
                 FROM DUAL
              CONNECT BY LEVEL <= TO_DATE(:toDt, 'YYYY-MM-DD') - TO_DATE(:fromDt, 'YYYY-MM-DD') + 1
           )
-          , cnt AS (
+          , CNT AS (
               SELECT
                      TRUNC(o.ORDER_DT) AS DT
                    , COUNT(*) AS CNT
@@ -12754,18 +12754,18 @@ public final class Examples {
           SELECT
                  d.DT
                , NVL(c.CNT, 0) AS CNT
-            FROM days d
-               , cnt c
+            FROM DAYS d
+               , CNT c
            WHERE d.DT = c.DT(+)
            ORDER BY
                  d.DT""",
           """
           -- 시작일 ~ 끝일의 모든 날짜와 건수. 행이 없는 날은 0
-          WITH days AS (
+          WITH DAYS AS (
               SELECT CAST(g AS DATE) AS DT
-                FROM generate_series(CAST(:fromDt AS DATE), CAST(:toDt AS DATE), INTERVAL '1 day') g
+                FROM GENERATE_SERIES(CAST(:fromDt AS DATE), CAST(:toDt AS DATE), INTERVAL '1 DAY') g
           )
-          , cnt AS (
+          , CNT AS (
               SELECT
                      CAST(o.ORDER_DT AS DATE) AS DT
                    , COUNT(*) AS CNT
@@ -12778,8 +12778,8 @@ public final class Examples {
           SELECT
                  d.DT
                , COALESCE(c.CNT, 0) AS CNT
-            FROM days d
-            LEFT OUTER JOIN cnt c
+            FROM DAYS d
+            LEFT OUTER JOIN CNT c
               ON d.DT = c.DT
            ORDER BY
                  d.DT"""),
@@ -12796,7 +12796,7 @@ public final class Examples {
           SELECT
                  COUNT(*) AS TOTAL
                , SUM(CASE WHEN i.STATUS = 'OPEN' THEN 1 ELSE 0 END) AS OPEN_CNT
-               , SUM(CASE WHEN i.REG_DT >= CAST(DATE_TRUNC('month', CURRENT_DATE) AS DATE) THEN 1 ELSE 0 END) AS THIS_MONTH
+               , SUM(CASE WHEN i.REG_DT >= CAST(DATE_TRUNC('MONTH', CURRENT_DATE) AS DATE) THEN 1 ELSE 0 END) AS THIS_MONTH
                , SUM(CASE WHEN i.STATUS = 'OPEN' AND i.REG_DT < CURRENT_DATE - 30 THEN 1 ELSE 0 END) AS OVER_30D
                , SUM(CASE WHEN i.CLOSE_DT >= CURRENT_DATE THEN 1 ELSE 0 END) AS CLOSED_TODAY
             FROM ISSUE i"""),
@@ -12839,7 +12839,7 @@ public final class Examples {
           """
           WITH w AS (
           SELECT
-                 CAST(DATE_TRUNC('week', CURRENT_DATE) AS DATE) - g * 7 AS WK
+                 CAST(DATE_TRUNC('WEEK', CURRENT_DATE) AS DATE) - g * 7 AS WK
             FROM GENERATE_SERIES(0, 11) g
           )
           SELECT
@@ -13083,7 +13083,7 @@ public final class Examples {
           WITH d AS (
           SELECT
                  CAST(g AS DATE) AS DT
-            FROM GENERATE_SERIES(TO_DATE(:fromDt, 'YYYY-MM-DD'), TO_DATE(:toDt, 'YYYY-MM-DD'), INTERVAL '1 day') g
+            FROM GENERATE_SERIES(TO_DATE(:fromDt, 'YYYY-MM-DD'), TO_DATE(:toDt, 'YYYY-MM-DD'), INTERVAL '1 DAY') g
           )
           SELECT
                  d.DT
@@ -13131,10 +13131,10 @@ public final class Examples {
                , CASE SIGN(x.THIS_M - x.LAST_M) WHEN 1 THEN '▲' WHEN -1 THEN '▼' ELSE '-' END AS ARROW
             FROM (
                   SELECT
-                         SUM(CASE WHEN i.REG_DT >= DATE_TRUNC('month', CURRENT_DATE) THEN 1 ELSE 0 END) AS THIS_M
-                       , SUM(CASE WHEN i.REG_DT < DATE_TRUNC('month', CURRENT_DATE) THEN 1 ELSE 0 END) AS LAST_M
+                         SUM(CASE WHEN i.REG_DT >= DATE_TRUNC('MONTH', CURRENT_DATE) THEN 1 ELSE 0 END) AS THIS_M
+                       , SUM(CASE WHEN i.REG_DT < DATE_TRUNC('MONTH', CURRENT_DATE) THEN 1 ELSE 0 END) AS LAST_M
                     FROM ISSUE i
-                   WHERE i.REG_DT >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month'
+                   WHERE i.REG_DT >= DATE_TRUNC('MONTH', CURRENT_DATE) - INTERVAL '1 MONTH'
                  ) x"""),
       new Example("대시보드 통계", "부서 · 담당자 소계와 총계가 있는 표", "부서별 소계, 맨 아래 총계를 한 번에(ROLLUP). 소계 줄에는 「소계」 글자를.",
           """
@@ -13238,10 +13238,10 @@ public final class Examples {
                  COUNT(*) AS DUE_THIS_MONTH
                , COUNT(s.ACT_END) AS DONE
                , COUNT(*) - COUNT(s.ACT_END) AS REMAIN
-               , CAST(DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month' AS DATE) - 1 - CURRENT_DATE AS DAYS_LEFT
+               , CAST(DATE_TRUNC('MONTH', CURRENT_DATE) + INTERVAL '1 MONTH' AS DATE) - 1 - CURRENT_DATE AS DAYS_LEFT
             FROM SCHEDULE s
-           WHERE s.PLAN_END >= DATE_TRUNC('month', CURRENT_DATE)
-             AND s.PLAN_END < DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month'"""),
+           WHERE s.PLAN_END >= DATE_TRUNC('MONTH', CURRENT_DATE)
+             AND s.PLAN_END < DATE_TRUNC('MONTH', CURRENT_DATE) + INTERVAL '1 MONTH'"""),
       new Example("대시보드 통계", "월별 등록 · 완료 · 누적 미결", "달마다 들어온 것, 끝난 것, 그달 말 기준 남은 것(누적).",
           """
           SELECT
@@ -13314,8 +13314,8 @@ public final class Examples {
                , t.RNK AS THIS_RNK
                , l.RNK AS LAST_RNK
                , l.RNK - t.RNK AS UP
-            FROM (SELECT i.OWNER_ID, COUNT(*) AS CNT, RANK() OVER (ORDER BY COUNT(*) DESC) AS RNK FROM ISSUE i WHERE i.CLOSE_DT >= DATE_TRUNC('month', CURRENT_DATE) GROUP BY i.OWNER_ID) t
-            LEFT OUTER JOIN (SELECT i.OWNER_ID, RANK() OVER (ORDER BY COUNT(*) DESC) AS RNK FROM ISSUE i WHERE i.CLOSE_DT >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month' AND i.CLOSE_DT < DATE_TRUNC('month', CURRENT_DATE) GROUP BY i.OWNER_ID) l
+            FROM (SELECT i.OWNER_ID, COUNT(*) AS CNT, RANK() OVER (ORDER BY COUNT(*) DESC) AS RNK FROM ISSUE i WHERE i.CLOSE_DT >= DATE_TRUNC('MONTH', CURRENT_DATE) GROUP BY i.OWNER_ID) t
+            LEFT OUTER JOIN (SELECT i.OWNER_ID, RANK() OVER (ORDER BY COUNT(*) DESC) AS RNK FROM ISSUE i WHERE i.CLOSE_DT >= DATE_TRUNC('MONTH', CURRENT_DATE) - INTERVAL '1 MONTH' AND i.CLOSE_DT < DATE_TRUNC('MONTH', CURRENT_DATE) GROUP BY i.OWNER_ID) l
               ON t.OWNER_ID = l.OWNER_ID
            ORDER BY
                  t.RNK"""),
@@ -13717,15 +13717,15 @@ public final class Examples {
                  1, 2""",
           """
           SELECT
-                 c.CONRELID::regclass AS CHILD_TABLE
+                 c.CONRELID::REGCLASS AS CHILD_TABLE
                , a.ATTNAME AS CHILD_COLUMN
-               , c.CONFRELID::regclass AS PARENT_TABLE
+               , c.CONFRELID::REGCLASS AS PARENT_TABLE
                , c.CONNAME AS CONSTRAINT_NAME
             FROM PG_CONSTRAINT c, PG_ATTRIBUTE a
            WHERE c.CONTYPE = 'f'
              AND a.ATTRELID = c.CONRELID
              AND a.ATTNUM = ANY (c.CONKEY)
-             AND c.CONFRELID = CAST(LOWER(:tableName) AS regclass)
+             AND c.CONFRELID = CAST(LOWER(:tableName) AS REGCLASS)
            ORDER BY
                  1, 2"""),
       new Example("거슬러 올라가는 통계", "외래 키 따라 위로 전부 (표 관계 계층)", "한 표에서 시작해 부모 표, 그 부모 표 … 끝까지. 통계를 어느 마스터까지 올려 묶을 수 있는지 봅니다.",
@@ -13747,7 +13747,7 @@ public final class Examples {
                , c.CONFRELID AS PARENT
             FROM PG_CONSTRAINT c
            WHERE c.CONTYPE = 'f'
-             AND c.CONRELID = CAST(LOWER(:tableName) AS regclass)
+             AND c.CONRELID = CAST(LOWER(:tableName) AS REGCLASS)
            UNION
           SELECT
                  up.UP + 1
@@ -13760,8 +13760,8 @@ public final class Examples {
           )
           SELECT
                  up.UP
-               , up.CHILD::regclass AS CHILD_TABLE
-               , up.PARENT::regclass AS PARENT_TABLE
+               , up.CHILD::REGCLASS AS CHILD_TABLE
+               , up.PARENT::REGCLASS AS PARENT_TABLE
             FROM up"""),
       new Example("Oracle 함수", "DECODE (값마다 다른 글자)", "DECODE(칼럼, 값1, 결과1, 값2, 결과2, 그 밖) — CASE 의 짧은 꼴. PostgreSQL 은 CASE 로 씁니다.",
           """
@@ -13902,9 +13902,9 @@ public final class Examples {
             FROM DUAL""",
           """
           SELECT
-                 CAST(DATE_TRUNC('week', CURRENT_DATE) AS DATE) + 7 AS NEXT_MONDAY
-               , CAST(DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month' AS DATE) - 1 AS MONTH_END
-               , CAST(DATE_TRUNC('month', CURRENT_DATE) AS DATE) - 1 AS LAST_MONTH_END"""),
+                 CAST(DATE_TRUNC('WEEK', CURRENT_DATE) AS DATE) + 7 AS NEXT_MONDAY
+               , CAST(DATE_TRUNC('MONTH', CURRENT_DATE) + INTERVAL '1 MONTH' AS DATE) - 1 AS MONTH_END
+               , CAST(DATE_TRUNC('MONTH', CURRENT_DATE) AS DATE) - 1 AS LAST_MONTH_END"""),
       new Example("Oracle 함수", "TO_TIMESTAMP · SYSTIMESTAMP · 밀리초", "초 아래까지 다룰 때. FF3 은 밀리초 세 자리.",
           """
           SELECT
@@ -13982,7 +13982,7 @@ public final class Examples {
           SELECT
                  b.PARENT_PART
                , LISTAGG(b.CHILD_PART, ', ' ON OVERFLOW TRUNCATE '…' WITH COUNT) WITHIN GROUP (ORDER BY b.SEQ) AS CHILDREN
-               , RTRIM(XMLAGG(XMLELEMENT(e, b.CHILD_PART || ', ') ORDER BY b.SEQ).EXTRACT('//text()').GETCLOBVAL(), ', ') AS CHILDREN_CLOB
+               , RTRIM(XMLAGG(XMLELEMENT(E, b.CHILD_PART || ', ') ORDER BY b.SEQ).EXTRACT('//text()').GETCLOBVAL(), ', ') AS CHILDREN_CLOB
             FROM BOM b
            GROUP BY
                  b.PARENT_PART""",
@@ -14071,7 +14071,7 @@ public final class Examples {
             FROM DUAL""",
           """
           SELECT
-                 DATE '2026-01-31' + INTERVAL '1 month' AS FEB_END
+                 DATE '2026-01-31' + INTERVAL '1 MONTH' AS FEB_END
                , EXTRACT(YEAR FROM AGE(DATE '2026-11-07', DATE '2025-03-15')) * 12 + EXTRACT(MONTH FROM AGE(DATE '2026-11-07', DATE '2025-03-15')) AS MONTHS"""),
       new Example("Oracle 함수", "TO_CHAR 숫자 꼴 (천 단위 쉼표 · 소수 · 퍼센트)", "FM 은 앞 공백을 없앱니다. 9 는 자리, 0 은 0 으로 채울 자리.",
           """
@@ -14191,10 +14191,10 @@ public final class Examples {
           """
           SELECT
                  CURRENT_DATE AS TODAY
-               , CAST(DATE_TRUNC('month', CURRENT_DATE) AS DATE) AS MONTH_START
-               , CAST(DATE_TRUNC('year', CURRENT_DATE) AS DATE) AS YEAR_START
-               , CAST(DATE_TRUNC('week', CURRENT_DATE) AS DATE) AS WEEK_MON
-               , CAST(DATE_TRUNC('quarter', CURRENT_DATE) AS DATE) AS QUARTER_START"""),
+               , CAST(DATE_TRUNC('MONTH', CURRENT_DATE) AS DATE) AS MONTH_START
+               , CAST(DATE_TRUNC('YEAR', CURRENT_DATE) AS DATE) AS YEAR_START
+               , CAST(DATE_TRUNC('WEEK', CURRENT_DATE) AS DATE) AS WEEK_MON
+               , CAST(DATE_TRUNC('QUARTER', CURRENT_DATE) AS DATE) AS QUARTER_START"""),
       new Example("Oracle 함수", "TO_CHAR 날짜 꼴 모음 (요일 · 분기 · 주 · 오전/오후)", "자주 쓰는 날짜 꼴: 요일 이름, 분기, 연중 몇째 주, 24시 · 12시.",
           """
           SELECT
@@ -14235,8 +14235,8 @@ public final class Examples {
             FROM DUAL""",
           """
           SELECT
-                 NOW() + MAKE_INTERVAL(mins => 90) AS AFTER_90M
-               , CURRENT_DATE + MAKE_INTERVAL(months => 2) AS AFTER_2M"""),
+                 NOW() + MAKE_INTERVAL(MINS => 90) AS AFTER_90M
+               , CURRENT_DATE + MAKE_INTERVAL(MONTHS => 2) AS AFTER_2M"""),
       new Example("Oracle 함수", "CAST · TO_NUMBER · TO_DATE 형 바꾸기", "글자 ↔ 숫자 ↔ 날짜. 꼴이 틀리면 오류가 나므로 먼저 거르세요(「숫자인지 확인」).",
           """
           SELECT
@@ -14517,20 +14517,20 @@ public final class Examples {
           SELECT
                  p.PART_NO
                , ROUND(CAST(1 + RANDOM() * 99 AS NUMERIC)) AS RND
-               , UPPER(SUBSTR(MD5(RANDOM()::text), 1, 5)) AS RND_TEXT
+               , UPPER(SUBSTR(MD5(RANDOM()::TEXT), 1, 5)) AS RND_TEXT
             FROM PART p
            ORDER BY
                  RANDOM()"""),
       new Example("Oracle 함수", "WITH 안에 함수 (WITH FUNCTION, 12c 이상)", "쿼리 안에서만 쓰는 작은 함수를 바로 정의합니다. 함수를 만들 권한이 없을 때 씁니다.",
           """
           WITH
-            FUNCTION fn_grade(p_amt NUMBER) RETURN VARCHAR2 IS
+            FUNCTION FN_GRADE(P_AMT NUMBER) RETURN VARCHAR2 IS
             BEGIN
-              RETURN CASE WHEN p_amt >= 100000 THEN 'A' WHEN p_amt >= 10000 THEN 'B' ELSE 'C' END;
+              RETURN CASE WHEN P_AMT >= 100000 THEN 'A' WHEN P_AMT >= 10000 THEN 'B' ELSE 'C' END;
             END;
           SELECT
                  o.ORDER_ID
-               , fn_grade(o.AMOUNT) AS GRADE
+               , FN_GRADE(o.AMOUNT) AS GRADE
             FROM ORDERS o""",
           """
           SELECT
@@ -14540,28 +14540,28 @@ public final class Examples {
       new Example("Oracle 함수", "PL/SQL 결과 찍기 (DBMS_OUTPUT · RAISE NOTICE)", "블록 안에서 값을 출력 창에 찍어 확인합니다.",
           """
           DECLARE
-            v_cnt NUMBER;
+            V_CNT NUMBER;
           BEGIN
-            SELECT COUNT(*) INTO v_cnt FROM ORDERS;
-            DBMS_OUTPUT.PUT_LINE('주문 수: ' || v_cnt);
+            SELECT COUNT(*) INTO V_CNT FROM ORDERS;
+            DBMS_OUTPUT.PUT_LINE('주문 수: ' || V_CNT);
           END;""",
           """
           DO $$
           DECLARE
-            v_cnt BIGINT;
+            V_CNT BIGINT;
           BEGIN
-            v_cnt := (SELECT COUNT(*) FROM ORDERS);
-            RAISE NOTICE '주문 수: %', v_cnt;
+            V_CNT := (SELECT COUNT(*) FROM ORDERS);
+            RAISE NOTICE '주문 수: %', V_CNT;
           END $$"""),
       new Example("Oracle 함수", "RETURNING INTO (넣은 번호 받기, PL/SQL)", "INSERT 한 줄의 새 번호를 변수로 받습니다.",
           """
           DECLARE
-            v_id NUMBER;
+            V_ID NUMBER;
           BEGIN
             INSERT INTO ORDERS (ORDER_ID, CUST_ID, STATUS, ORDER_DT, AMOUNT)
             VALUES (SEQ_ORDER.NEXTVAL, 1, '접수', TRUNC(SYSDATE), 0)
-            RETURNING ORDER_ID INTO v_id;
-            DBMS_OUTPUT.PUT_LINE(v_id);
+            RETURNING ORDER_ID INTO V_ID;
+            DBMS_OUTPUT.PUT_LINE(V_ID);
           END;""",
           """
           INSERT INTO ORDERS (ORDER_ID, CUST_ID, STATUS, ORDER_DT, AMOUNT)
@@ -14638,8 +14638,8 @@ public final class Examples {
             FROM TABLE(SYS.ODCIVARCHAR2LIST('P001', 'P002', 'P003'))""",
           """
           SELECT
-                 x AS PART_NO
-            FROM UNNEST(ARRAY['P001', 'P002', 'P003']) AS x"""),
+                 X AS PART_NO
+            FROM UNNEST(ARRAY['P001', 'P002', 'P003']) AS X"""),
       new Example("Oracle 함수", "오라클 날짜 빼기 = 일 수 (소수는 시간)", "DATE − DATE 는 일 수입니다. 0.5 는 12시간. × 24 하면 시간, × 1440 하면 분.",
           """
           SELECT
@@ -14752,7 +14752,7 @@ public final class Examples {
           """
           SELECT
                  g AS N
-            FROM generate_series(1, 100) g"""),
+            FROM GENERATE_SERIES(1, 100) g"""),
       new Example("시험 데이터 만들기", "가짜 주문 100건 만들기 (보기만)", "번호 · 아무 날짜 · 아무 금액 · 돌아가는 상태. INSERT … SELECT 앞에 붙이면 넣기가 됩니다.",
           """
           SELECT
@@ -14770,7 +14770,7 @@ public final class Examples {
                , CURRENT_DATE - MOD(g * 7, 90) AS ORDER_DT
                , ROUND(CAST(1000 + RANDOM() * 99000 AS NUMERIC)) AS AMOUNT
                , CASE MOD(g, 3) WHEN 0 THEN '접수' WHEN 1 THEN '진행' ELSE '완료' END AS STATUS
-            FROM generate_series(1, 100) g"""),
+            FROM GENERATE_SERIES(1, 100) g"""),
       new Example("시험 데이터 만들기", "부품 번호 꼴 만들기 (P0001 ~)", "앞 글자 + 0 채운 번호. 채번 꼴을 미리 볼 때.",
           """
           SELECT
@@ -14780,7 +14780,7 @@ public final class Examples {
           """
           SELECT
                  'P' || LPAD(CAST(g AS VARCHAR), 4, '0') AS PART_NO
-            FROM generate_series(1, 20) g"""),
+            FROM GENERATE_SERIES(1, 20) g"""),
       new Example("시험 데이터 만들기", "운영 데이터 일부만 복사해 시험 표 만들기", "구조와 일부 데이터만 떠서 시험용 표를 만듭니다. 개인 정보 칸은 가립니다.",
           """
           CREATE TABLE CUSTOMER_TEST AS
@@ -14907,24 +14907,24 @@ public final class Examples {
           END $$"""),
       new Example("프로시저 · 블록", "값 하나 돌려주는 함수 만들기 (코드 → 이름)", "자주 쓰는 코드 이름 찾기를 함수로. 큰 쿼리에서 줄마다 부르면 느릴 수 있습니다.",
           """
-          CREATE OR REPLACE FUNCTION FN_CODE_NAME(p_group IN VARCHAR2, p_code IN VARCHAR2) RETURN VARCHAR2 IS
-            v_name COMMON_CODE.CODE_NAME%TYPE;
+          CREATE OR REPLACE FUNCTION FN_CODE_NAME(P_GROUP IN VARCHAR2, P_CODE IN VARCHAR2) RETURN VARCHAR2 IS
+            V_NAME COMMON_CODE.CODE_NAME%TYPE;
           BEGIN
-            SELECT c.CODE_NAME INTO v_name
+            SELECT c.CODE_NAME INTO V_NAME
               FROM COMMON_CODE c
-             WHERE c.GROUP_CD = p_group
-               AND c.CODE = p_code;
-            RETURN v_name;
+             WHERE c.GROUP_CD = P_GROUP
+               AND c.CODE = P_CODE;
+            RETURN V_NAME;
           EXCEPTION
             WHEN NO_DATA_FOUND THEN
               RETURN NULL;
           END;""",
           """
-          CREATE OR REPLACE FUNCTION FN_CODE_NAME(p_group VARCHAR, p_code VARCHAR) RETURNS VARCHAR AS $$
+          CREATE OR REPLACE FUNCTION FN_CODE_NAME(P_GROUP VARCHAR, P_CODE VARCHAR) RETURNS VARCHAR AS $$
             SELECT c.CODE_NAME
               FROM COMMON_CODE c
-             WHERE c.GROUP_CD = p_group
-               AND c.CODE = p_code
+             WHERE c.GROUP_CD = P_GROUP
+               AND c.CODE = P_CODE
           $$ LANGUAGE SQL STABLE"""),
       new Example("프로시저 · 블록", "오류가 나도 다음 줄 계속 (줄마다 예외 잡기)", "한 줄이 실패해도 멈추지 않고 실패 표시를 남긴 뒤 다음 줄로 넘어갑니다.",
           """
@@ -15019,8 +15019,8 @@ public final class Examples {
             FROM DUAL""",
           """
           SELECT
-                 '2026-01-01'::date AS D
-               , '123'::numeric AS N
+                 '2026-01-01'::DATE AS D
+               , '123'::NUMERIC AS N
                , TO_CHAR(NOW(), 'YYYY-MM-DD HH24:MI') AS NOW_TEXT"""),
       new Example("PostgreSQL 함수", "INTERVAL 로 날짜 계산", "PostgreSQL 은 날짜 + INTERVAL '3 month'. Oracle 은 ADD_MONTHS · 숫자 더하기.",
           """
@@ -15031,9 +15031,9 @@ public final class Examples {
             FROM DUAL""",
           """
           SELECT
-                 CURRENT_DATE + INTERVAL '3 month' AS AFTER_3M
-               , CURRENT_DATE - INTERVAL '7 day' AS BEFORE_7D
-               , NOW() + INTERVAL '2 hour' AS AFTER_2H"""),
+                 CURRENT_DATE + INTERVAL '3 MONTH' AS AFTER_3M
+               , CURRENT_DATE - INTERVAL '7 DAY' AS BEFORE_7D
+               , NOW() + INTERVAL '2 HOUR' AS AFTER_2H"""),
       new Example("PostgreSQL 함수", "AGE · EXTRACT (나이 · 경과 기간)", "두 날짜 사이를 년 · 월 · 일로. EXTRACT 로 한 부분만 꺼냅니다.",
           """
           SELECT
@@ -15141,7 +15141,7 @@ public final class Examples {
           """
           SELECT
                  CAST(g AS DATE) AS DT
-            FROM generate_series(CURRENT_DATE, CURRENT_DATE + 6, INTERVAL '1 day') g"""),
+            FROM GENERATE_SERIES(CURRENT_DATE, CURRENT_DATE + 6, INTERVAL '1 DAY') g"""),
       new Example("PostgreSQL 함수", "COALESCE · NULLIF · GREATEST (NVL 대신)", "PostgreSQL 에는 NVL · NVL2 · DECODE 가 없습니다. COALESCE · CASE 로 씁니다.",
           """
           SELECT
@@ -15229,13 +15229,13 @@ public final class Examples {
                , ROUND(EXTRACT(EPOCH FROM NOW() - a.XACT_START) / 60) AS OPEN_MIN
             FROM PG_STAT_ACTIVITY a
            WHERE a.STATE = 'idle in transaction'
-             AND a.XACT_START < NOW() - INTERVAL '5 minute'"""),
+             AND a.XACT_START < NOW() - INTERVAL '5 MINUTE'"""),
       new Example("DB 운영", "세션 끊기 (확인 뒤에만)", "위에서 찾은 세션을 끊습니다. 되돌릴 수 없으니 SID · SERIAL# 을 꼭 확인하고 되돌릴 수 없으니 SID · 번호를 꼭 확인하세요.lt;SID되돌릴 수 없으니 SID · 번호를 꼭 확인하세요.gt; 자리에 넣으세요.",
           """
           ALTER SYSTEM KILL SESSION '<SID>,<SERIAL#>' IMMEDIATE""",
           """
           SELECT
-                 pg_terminate_backend(a.PID)
+                 PG_TERMINATE_BACKEND(a.PID)
             FROM PG_STAT_ACTIVITY a
            WHERE a.PID = :pid"""),
       new Example("DB 운영", "안 쓰는 색인 (한 번도 안 읽힘)", "PostgreSQL 은 통계에서 읽힌 횟수 0 인 색인. Oracle 은 ALTER INDEX … MONITORING USAGE 를 켠 뒤 USER_OBJECT_USAGE 로 봅니다(12.2 이상은 DBA_INDEX_USAGE).",
@@ -15253,13 +15253,13 @@ public final class Examples {
                  s.RELNAME AS TABLE_NAME
                , s.INDEXRELNAME AS INDEX_NAME
                , s.IDX_SCAN
-               , pg_size_pretty(pg_relation_size(s.INDEXRELID)) AS SIZE
+               , PG_SIZE_PRETTY(PG_RELATION_SIZE(s.INDEXRELID)) AS SIZE
             FROM PG_STAT_USER_INDEXES s, PG_INDEX i
            WHERE s.INDEXRELID = i.INDEXRELID
              AND s.IDX_SCAN = 0
              AND NOT i.INDISUNIQUE
            ORDER BY
-                 pg_relation_size(s.INDEXRELID) DESC"""),
+                 PG_RELATION_SIZE(s.INDEXRELID) DESC"""),
       new Example("DB 운영", "통계가 오래된 표", "통계를 모은 뒤 많이 바뀐 표는 실행 계획이 틀어집니다.",
           """
           SELECT
@@ -15319,10 +15319,10 @@ public final class Examples {
           """
           SELECT
                  d.DATNAME
-               , pg_size_pretty(pg_database_size(d.DATNAME)) AS SIZE
+               , PG_SIZE_PRETTY(PG_DATABASE_SIZE(d.DATNAME)) AS SIZE
             FROM PG_DATABASE d
            ORDER BY
-                 pg_database_size(d.DATNAME) DESC"""),
+                 PG_DATABASE_SIZE(d.DATNAME) DESC"""),
       new Example("DB 운영", "많이 읽고 많이 쓰는 표 (전체 훑기 많은 표)", "색인 없이 표를 통째로 읽은 횟수가 많은 표. 색인을 볼 후보입니다.",
           """
           SELECT
@@ -15438,7 +15438,7 @@ public final class Examples {
                  )""",
           """
           SELECT
-                 c.CONRELID::regclass AS TABLE_NAME
+                 c.CONRELID::REGCLASS AS TABLE_NAME
                , a.ATTNAME AS COLUMN_NAME
                , c.CONNAME AS CONSTRAINT_NAME
             FROM PG_CONSTRAINT c
@@ -15463,7 +15463,7 @@ public final class Examples {
           """
           SELECT
                  t.TABLE_NAME
-               , (XPATH('/row/c/text()', QUERY_TO_XML('SELECT COUNT(*) AS c FROM ' || QUOTE_IDENT(t.TABLE_NAME), FALSE, TRUE, '')))[1]::text::bigint AS ROW_CNT
+               , (XPATH('/row/c/text()', QUERY_TO_XML('SELECT COUNT(*) AS c FROM ' || QUOTE_IDENT(t.TABLE_NAME), FALSE, TRUE, '')))[1]::TEXT::BIGINT AS ROW_CNT
             FROM INFORMATION_SCHEMA.TABLES t
            WHERE t.TABLE_SCHEMA = CURRENT_SCHEMA()
              AND t.TABLE_TYPE = 'BASE TABLE'

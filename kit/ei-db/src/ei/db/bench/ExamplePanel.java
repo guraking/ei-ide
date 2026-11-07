@@ -10,6 +10,7 @@ import com.intellij.ui.components.JBList;
 import com.intellij.ui.components.JBTextArea;
 import com.intellij.util.ui.JBFont;
 import com.intellij.util.ui.JBUI;
+import ei.db.DbKind;
 import org.jetbrains.annotations.NotNull;
 
 import javax.swing.JComponent;
@@ -23,6 +24,7 @@ import java.util.Locale;
 
 /**
  * 「예제 모음」 탭: 왼쪽 위 찾기 칸 · 목록, 오른쪽 위 설명 · 아래 SQL 칸(작업대가 slot 에 붙인다).
+ * 위에서 옛 방식을 고르면 JOIN 을 쉼표 · WHERE 로 바꿔 보인다(JoinStyleConvert.toOldOrSame).
  * 찾기는 묶음 · 제목 · 설명 · 두 DB 의 SQL 글에서 띄어 쓴 낱말을 모두 담은 예제만 남긴다(대소문자 무시).
  */
 final class ExamplePanel {
@@ -92,6 +94,13 @@ final class ExamplePanel {
       return;
     }
     description.setText(e.title() + "\n" + e.description());
-    bench.show(e.sql(bench.kind()), List.of("보기 표 이름을 실제 표로 바꿔 쓰세요."));
+    List<String> notes = new ArrayList<>(List.of("보기 표 이름을 실제 표로 바꿔 쓰세요."));
+    String sql = e.sql(bench.kind());
+    if (bench.style() == QueryBuilder.JoinStyle.OLD) {
+      JoinStyleConvert.Result old = JoinStyleConvert.toOldOrSame(sql, bench.kind() == DbKind.ORACLE);
+      sql = old.sql();
+      notes.addAll(old.notes());
+    }
+    bench.show(sql, notes);
   }
 }

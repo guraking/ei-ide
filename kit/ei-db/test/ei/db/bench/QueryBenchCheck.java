@@ -192,6 +192,22 @@ public class QueryBenchCheck {
   static void lint() {
     yes(SqlLint.check("SELECT * FROM A a, B b WHERE a.X = 1").get(0).title().contains("b"), "cartesian");
     eq(SqlLint.check("SELECT * FROM A a, B b WHERE a.X = b.X").size(), 0);
+    String inner = "SELECT a.X FROM A a JOIN B b ON b.ID = a.ID";
+    yes(JoinStyleConvert.toOldOrSame(inner, false).sql().contains(", B b"), "pg inner to comma");
+    String left = "SELECT a.X FROM A a LEFT JOIN B b ON b.ID = a.ID";
+    eq(JoinStyleConvert.toOldOrSame(left, false).sql(), left);
+    yes(JoinStyleConvert.toOldOrSame(left, true).sql().contains("(+)"), "oracle left to plus");
+    eq(JoinStyleConvert.toOldOrSame(inner + "; " + inner, true).sql(), inner + "; " + inner);
+    eq(JoinStyleConvert.toOldOrSame("SELECT * FROM A NATURAL JOIN B", true).sql(), "SELECT * FROM A NATURAL JOIN B");
+    String fsql = "SELECT SUM(a.X), to_char(a.D, 'x(1)'), DBMS_RANDOM.VALUE(), COUNT(*) FROM A a WHERE a.X IN (1) AND EXISTS (SELECT 1 FROM B)";
+    List<int[]> fns = SqlParts.functionSpans(fsql);
+    eq(fns.size(), 4);
+    eq(fsql.substring(fns.get(2)[0], fns.get(2)[1]), "DBMS_RANDOM.VALUE");
+    eq(SqlParts.functionSpans("INSERT INTO T (A, B) VALUES (1, NVL(2, 3))").size(), 1);
+    List<int[]> cols = SqlParts.columnSpans("SELECT o.STATUS, c . NAME, PKG.F(1), 'x.Y' -- a.B\n FROM T o");
+    eq(cols.size(), 2);
+    eq(cols.get(0)[0], 7);
+    eq(cols.get(1)[1], 25);
     eq(SqlLint.check("SELECT * FROM A a CROSS JOIN B b").size(), 0);
     yes(SqlLint.check("SELECT a.DEPT, COUNT(*) FROM A a").get(0).title().contains("GROUP BY"), "group");
     yes(SqlLint.check("SELECT a.DEPT, a.NAME, COUNT(*) CNT FROM A a GROUP BY a.DEPT").get(0).detail().contains("a.NAME"), "group missing");
