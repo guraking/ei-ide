@@ -201,7 +201,7 @@ public class QueryBenchCheck {
     eq(JoinStyleConvert.toOldOrSame("SELECT * FROM A NATURAL JOIN B", true).sql(), "SELECT * FROM A NATURAL JOIN B");
     List<int[]> cols = SqlParts.columnSpans("SELECT o.STATUS, c . NAME, PKG.F(1), 'x.Y' -- a.B\n FROM T o");
     eq(cols.size(), 2);
-    eq(cols.get(0)[0], 9);
+    eq(cols.get(0)[0], 7);
     eq(cols.get(1)[1], 25);
     eq(SqlLint.check("SELECT * FROM A a CROSS JOIN B b").size(), 0);
     yes(SqlLint.check("SELECT a.DEPT, COUNT(*) FROM A a").get(0).title().contains("GROUP BY"), "group");

@@ -79,13 +79,13 @@ public final class SqlParts {
   }
 
   /**
-   * 「별칭.칼럼」 의 칼럼 자리 [시작, 끝) 목록. 문자열 · 주석 안과 함수 부르기(PKG.FUNC( )는 뺀다.
+   * 「별칭.칼럼」 자리(별칭부터 칼럼 끝까지) [시작, 끝) 목록. 문자열 · 주석 안과 함수 부르기(PKG.FUNC( )는 뺀다.
    * shortcut: 「스키마.표」 도 칼럼 자리로 잡는다. 표 이름 색을 따로 줄 때 FROM 절을 가려 뺀다.
    */
   public static List<int[]> columnSpans(String sql) {
     List<int[]> out = new ArrayList<>();
     Matcher m = COLUMN_REF.matcher(mask(sql));
-    while (m.find()) out.add(new int[]{m.start(1), m.end(1)});
+    while (m.find()) out.add(new int[]{m.start(), m.end(1)});
     return out;
   }
 
