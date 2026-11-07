@@ -15,10 +15,9 @@ import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBRadioButton;
 import com.intellij.ui.components.JBTabbedPane;
 import com.intellij.ui.EditorTextField;
-import com.intellij.openapi.editor.highlighter.EditorHighlighterFactory;
+import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.testFramework.LightVirtualFile;
 import com.intellij.ui.components.JBTextArea;
-import com.intellij.openapi.editor.EditorFactory;
 import ei.db.FileTypes;
 import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.FormBuilder;
@@ -76,6 +75,7 @@ public final class QueryBenchDialog extends DialogWrapper {
   private static final double FIRST_SIZE = 0.7;
   /** 창 크기를 기억하는 키. 창이 저절로 커지던 앞 판이 남긴 큰 크기를 버리려고 이름 끝을 올렸다. */
   private static final String DIMENSION_KEY = "ei.db.QueryBench.2";
+  private static final String SQL_FILE_NAME = "쿼리 작업대.sql";
   /** SQL 칸 안쪽 여백(스케일 전 px). */
   private static final int SQL_PADDING = 8;
   private static final float BUILDER_SPLIT = 0.6f;
@@ -149,10 +149,9 @@ public final class QueryBenchDialog extends DialogWrapper {
   private QueryBenchDialog(Project project, DbConfig c, String initialSql, VirtualFile console) {
     super(project, null, true, IdeModalityType.MODELESS);
     this.project = project;
-    this.sql = new EditorTextField(EditorFactory.getInstance().createDocument(""), project, FileTypes.byExtension("sql"), false, false);
-    // 문서에 파일이 없으면 TextMate 가 문법을 못 골라 색이 빠진다. .sql 이름의 메모리 파일로 색칠기를 직접 붙인다.
-    this.sql.addSettingsProvider(editor -> editor.setHighlighter(
-        EditorHighlighterFactory.getInstance().createEditorHighlighter(project, new LightVirtualFile("query.sql"))));
+    // 문서를 .sql 메모리 파일에 붙여야 TextMate 가 SQL 문법을 고르고 ColumnColors 가 칼럼 색을 입힌다.
+    LightVirtualFile sqlFile = new LightVirtualFile(SQL_FILE_NAME, FileTypes.byExtension("sql"), "");
+    this.sql = new EditorTextField(FileDocumentManager.getInstance().getDocument(sqlFile), project, sqlFile.getFileType(), false, false);
     this.console = console;
     this.bench = new Bench(project, this::fill, m -> setStatus("읽지 못했습니다: " + m, true));
     for (int i = 0; i < slots.length; i++) slots[i] = new JPanel(new BorderLayout());

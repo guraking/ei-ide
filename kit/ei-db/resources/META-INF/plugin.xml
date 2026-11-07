@@ -17,6 +17,8 @@
     <notificationGroup id="EI Database" displayType="BALLOON" key="notification.group.ei.database"/>
     <!-- 탐색기 -->
     <toolWindow id="EI Database" anchor="right" icon="AllIcons.Nodes.DataTables" factoryClass="ei.db.ui.DbToolWindowFactory"/>
+    <!-- .sql 편집기에서 「별칭.칼럼」 칼럼을 한 색으로 -->
+    <editorFactoryListener implementation="ei.db.console.ColumnColors"/>
     <!-- SQL 콘솔 · 결과 -->
     <editorNotificationProvider implementation="ei.db.console.ConsoleBar$Provider"/>
     <actionPromoter implementation="ei.db.console.ConsoleRun$Promoter"/>

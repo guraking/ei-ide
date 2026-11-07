@@ -40,6 +40,7 @@ public final class SqlParts {
   private static final Pattern ON = Pattern.compile("(?<![\\w$#])ON(?![\\w$#])");
   private static final Pattern AND = Pattern.compile("(?<![\\w$#])(AND|BETWEEN)(?![\\w$#])");
   private static final Pattern NESTED_SELECT = Pattern.compile("\\(\\s*(SELECT|WITH)\\b");
+  private static final Pattern COLUMN_REF = Pattern.compile("(?<![\\w$#.\"])[A-Za-z_][\\w$#]*\\s*\\.\\s*([A-Za-z_][\\w$#]*)(?![\\w$#])(?!\\s*\\()");
   private static final Pattern REF = Pattern.compile("(?<![\\w$#.\"])([A-Za-z_][\\w$#]*|\"[^\"]+\")\\s*\\.\\s*(?=[A-Za-z_\"*])");
   private static final Set<String> NOT_ALIAS = Set.of("ON", "WHERE", "USING", "LEFT", "RIGHT", "INNER", "OUTER", "FULL", "CROSS",
       "JOIN", "NATURAL", "GROUP", "ORDER", "CONNECT", "START", "UNION", "MINUS", "EXCEPT", "INTERSECT", "FETCH", "LIMIT", "OFFSET", "FOR",
@@ -75,6 +76,17 @@ public final class SqlParts {
       }
     }
     return new String(out);
+  }
+
+  /**
+   * 「별칭.칼럼」 의 칼럼 자리 [시작, 끝) 목록. 문자열 · 주석 안과 함수 부르기(PKG.FUNC( )는 뺀다.
+   * shortcut: 「스키마.표」 도 칼럼 자리로 잡는다. 표 이름 색을 따로 줄 때 FROM 절을 가려 뺀다.
+   */
+  public static List<int[]> columnSpans(String sql) {
+    List<int[]> out = new ArrayList<>();
+    Matcher m = COLUMN_REF.matcher(mask(sql));
+    while (m.find()) out.add(new int[]{m.start(1), m.end(1)});
+    return out;
   }
 
   /** 글자마다 괄호 깊이(여는 괄호 자신은 바깥 깊이). masked 를 받는다. */
