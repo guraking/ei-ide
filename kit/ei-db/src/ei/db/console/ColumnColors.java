@@ -2,7 +2,6 @@ package ei.db.console;
 
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.editor.Editor;
-import com.intellij.openapi.editor.DefaultLanguageHighlighterColors;
 import com.intellij.openapi.editor.event.DocumentEvent;
 import com.intellij.openapi.editor.event.DocumentListener;
 import com.intellij.openapi.editor.event.EditorFactoryEvent;
@@ -23,8 +22,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * .sql 편집기(콘솔 · 쿼리 작업대 · 프로젝트 파일)에서 「별칭.칼럼」 의 칼럼을 한 색(필드 색)으로 칠한다.
- * TextMate SQL 문법은 STATUS · NAME 처럼 SQL 낱말과 같은 칼럼 이름을 낱말 색으로 칠해 칼럼마다 색이 갈린다.
+ * .sql 편집기(콘솔 · 쿼리 작업대 · 프로젝트 파일)에서 「별칭.칼럼」 의 칼럼을 색 없이 기본 글자색으로 칠한다.
+ * TextMate SQL 문법은 칼럼 이름에 색을 넣고, STATUS · NAME 처럼 SQL 낱말과 같은 이름은 낱말 색으로 칠한다.
  * 문법 색 위 층(SYNTAX + 1)에 덮어 칠하고, 편집기를 놓을 때 문서 감시도 함께 놓는다.
  */
 public final class ColumnColors implements EditorFactoryListener {
@@ -61,10 +60,7 @@ public final class ColumnColors implements EditorFactoryListener {
       for (RangeHighlighter h : old) markup.removeHighlighter(h);
     }
     List<RangeHighlighter> marks = new ArrayList<>();
-    TextAttributes look = editor.getColorsScheme().getAttributes(DefaultLanguageHighlighterColors.INSTANCE_FIELD);
-    if (look == null || look.getForegroundColor() == null) {
-      look = new TextAttributes(editor.getColorsScheme().getDefaultForeground(), null, null, null, 0);
-    }
+    TextAttributes look = new TextAttributes(editor.getColorsScheme().getDefaultForeground(), null, null, null, 0);
     for (int[] span : SqlParts.columnSpans(editor.getDocument().getText())) {
       marks.add(markup.addRangeHighlighter(span[0], span[1], HighlighterLayer.SYNTAX + 1, look, HighlighterTargetArea.EXACT_RANGE));
     }
