@@ -246,6 +246,10 @@ public class QueryBenchCheck {
     yes(SqlLint.unlinked(SqlLint.graph("SELECT h.H FROM GENERATE_SERIES(0, 23) AS h(H) LEFT JOIN ORDERS o ON EXTRACT(HOUR FROM o.REG_DT) = h.H")).isEmpty(), "table function source");
     yes(SqlLint.unlinked(SqlLint.graph("SELECT c.ID FROM CUSTOMER c LEFT JOIN LATERAL (SELECT 1 FROM ORDERS x WHERE x.CUST_ID = c.CUST_ID) o ON TRUE")).isEmpty(), "lateral source");
     yes(SqlLint.unlinked(SqlLint.graph("SELECT 1 FROM ORDERS o, CUSTOMER c")).equals(List.of("c")), "loose table still found");
+    yes(SqlLint.unlinked(SqlLint.graph("SELECT p.PART_NO, t.TAG FROM PART p, UNNEST(STRING_TO_ARRAY(p.TAGS, ',')) WITH ORDINALITY AS t(TAG, N)")).isEmpty(), "table function with ordinality");
+    eq(SqlParts.sources("UNNEST(x) WITH ORDINALITY AS t(TAG, N)").get(0).alias(), "t");
+    yes(SqlLint.unlinked(SqlLint.graph("SELECT p.PART_NO, t.TAG FROM PART p, UNNEST(STRING_TO_ARRAY(p.TAGS, ',')) WITH ORDINALITY AS t(TAG, N)")).isEmpty(), "table function with ordinality");
+    eq(SqlParts.sources("UNNEST(x) WITH ORDINALITY AS t(TAG, N)").get(0).alias(), "t");
     Patterns.Fill e = new Patterns.Fill(DbKind.ORACLE, QueryBuilder.JoinStyle.OLD, QueryBuilder.Bind.COLON, "orders", "", List.of(), List.of(), "", "", "", "", "", "", List.of(), 0, Patterns.Period.DAY);
     yes(Patterns.missing(Patterns.Kind.STATS, e).contains(Patterns.Field.VALUE), "stats needs value");
     String hier = Patterns.render(Patterns.Kind.HIERARCHY, fill(DbKind.POSTGRES));

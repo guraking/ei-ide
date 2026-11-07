@@ -20,6 +20,8 @@ public final class SqlParts {
 
   /** FROM 의 표 하나. join 은 첫 표 · 쉼표로 나열한 표면 null, 아니면 INNER · LEFT · RIGHT · FULL · CROSS. on 은 ON 뒤 조건(없으면 null). */
   private static final String LATERAL = "LATERAL";
+  /** PostgreSQL 표 함수 뒤 WITH ORDINALITY(순번 칸 덧붙임). 별칭 앞에서 떼어 낸다. */
+  private static final Pattern ORDINALITY = Pattern.compile("^WITH\\s+ORDINALITY\\b\\s*", Pattern.CASE_INSENSITIVE);
 
   public record Source(String name, String alias, String join, String on, boolean subquery, String text) {
     /** 조건에서 이 표를 부르는 이름(별칭, 없으면 표 이름). */
@@ -235,7 +237,10 @@ public final class SqlParts {
     java.util.regex.Matcher space = BLANKS.matcher(item);
     if (paren > 0 && (!space.find() || paren < space.start())) {
       int close = matching(mask(item), paren);
-      if (close > 0) return new Source(item.substring(0, close + 1), alias(item.substring(close + 1).strip().split("\\s+")), join, on, false, piece);
+      if (close > 0) {
+        String rest = ORDINALITY.matcher(item.substring(close + 1).strip()).replaceFirst("");
+        return new Source(item.substring(0, close + 1), alias(rest.split("\\s+")), join, on, false, piece);
+      }
     }
     String[] words = item.split("\\s+");
     String name = words[0];
