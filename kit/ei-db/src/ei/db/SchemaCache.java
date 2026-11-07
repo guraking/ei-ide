@@ -23,6 +23,7 @@ public final class SchemaCache {
 
   private static final Map<String, List<Meta.Table>> TABLES = new ConcurrentHashMap<>();
   private static final Map<String, List<Meta.Column>> COLUMNS = new ConcurrentHashMap<>();
+  private static final Map<String, List<Meta.ForeignKey>> FKS = new ConcurrentHashMap<>();
   private static final Set<String> LOADING = ConcurrentHashMap.newKeySet();
   /** 접속마다 clear 할 때 오르는 번호. 읽기 시작 뒤 번호가 바뀌었으면 그 결과는 새로고침 전 것이라 버린다. */
   private static final Map<String, Integer> GENERATION = new ConcurrentHashMap<>();
@@ -57,11 +58,33 @@ public final class SchemaCache {
     return cols;
   }
 
+  /** 표의 외래 키(그 표가 다른 표를 가리키는 것). 표 이름은 대소문자를 가리지 않는다. 아직 없으면 null(읽기 시작). */
+  public static List<Meta.ForeignKey> importedKeys(Project project, DbConfig c, String table) {
+    String key = c.id + "|" + table.toUpperCase(Locale.ROOT);
+    List<Meta.ForeignKey> fks = FKS.get(key);
+    if (fks == null) load("fk|" + key, () -> {
+      int gen = generation(c.id);
+      Connection conn = DbSessions.get(project).connection(c);
+      putIfCurrent(FKS, key, Meta.importedKeys(conn, c, Meta.schemaOf(c), metaName(c, table)), c.id, gen);
+    });
+    return fks;
+  }
+
+  /** 읽어 둔 표 목록에서 대소문자만 다른 이름을 메타 이름으로 바꾼다. 모르면 그대로. */
+  private static String metaName(DbConfig c, String table) {
+    List<Meta.Table> known = TABLES.get(c.id);
+    if (known != null) {
+      for (Meta.Table t : known) if (t.name().equalsIgnoreCase(table)) return t.name();
+    }
+    return table;
+  }
+
   public static void clear(String configId) {
     synchronized (GENERATION) {
       GENERATION.merge(configId, 1, Integer::sum);
       TABLES.remove(configId);
       COLUMNS.keySet().removeIf(k -> k.startsWith(configId + "|"));
+      FKS.keySet().removeIf(k -> k.startsWith(configId + "|"));
     }
   }
 

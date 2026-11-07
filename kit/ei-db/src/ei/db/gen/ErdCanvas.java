@@ -50,6 +50,8 @@ final class ErdCanvas extends JComponent {
     int y;
     int w;
     int h;
+    /** 조인 그림에서 다른 표와 연결 조건이 없는 표. 테두리를 빨갛게 그린다. */
+    boolean unlinked;
 
     Card(Meta.Table table, List<Meta.Column> columns) {
       this.table = table;
@@ -484,7 +486,7 @@ final class ErdCanvas extends JComponent {
 
   private void paintCard(Graphics2D g, Card c) {
     boolean chosen = c == selected;
-    Color border = chosen ? Ui.SELECTION : JBColor.border();
+    Color border = chosen ? Ui.SELECTION : c.unlinked ? JBColor.RED : JBColor.border();
     g.setColor(UIUtil.getListBackground());
     g.fillRoundRect(c.x, c.y, c.w, c.h, ARC, ARC);
     g.setColor(chosen ? Ui.SELECTION_BG : UIUtil.getPanelBackground());
@@ -497,7 +499,7 @@ final class ErdCanvas extends JComponent {
     g.fillRect(c.x, c.y, c.w, STRIPE);
     g.setClip(oldClip);
     g.setColor(border);
-    g.setStroke(new BasicStroke(chosen ? 2f : 1f));
+    g.setStroke(new BasicStroke(chosen || c.unlinked ? 2f : 1f));
     g.drawRoundRect(c.x, c.y, c.w, c.h, ARC, ARC);
     g.setStroke(new BasicStroke(1f));
     g.setColor(JBColor.border());

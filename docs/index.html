@@ -1518,6 +1518,17 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
     </div>
 
 
+    <h3 id="bench">쿼리 작업대 · Tools → 「Query Workbench…」 · 콘솔 우클릭</h3>
+    <p class="lead">SQL 을 잘 몰라도 고르기만으로 쿼리를 만들고, 남이 쓴 쿼리를 쉬운 말로 풀고, 다른 DB 문법으로 바꿉니다. Oracle · PostgreSQL 모두 됩니다. 콘솔에서 열면 그 접속과 커서가 있는 문장이 들어가 「쉬운 설명」 탭으로 열립니다. 창은 크게 열리고 바꾼 크기 · 칸 너비 · 마지막 탭을 기억합니다.</p>
+    <div class="cards two">
+      <div class="card"><h4>위 줄: 접속 · JOIN 모양 · 값 자리</h4><p>JOIN 모양은 라디오로 「옛 방식 (+)」(FROM 쉼표 · WHERE <code>a.X = b.X(+)</code>) 또는 「표준 JOIN ON」 을 고르고 기억합니다. PostgreSQL 은 (+) 가 없어 표준만 되고 옆에 까닭이 나옵니다. 값 자리는 <code>:이름</code> · <code>#{이름}</code>(MyBatis) · 값 그대로. 「자세히」 를 켜면 별칭 · HAVING · 건너뛸 건수 · DISTINCT 가 보입니다.</p></div>
+      <div class="card"><h4>단계별 작성기</h4><p>왼쪽에서 표를 두 번 눌러 더하면 2 칼럼 → 3 연결 → 4 조건 → 5 묶기 → 6 정렬 · 페이징 을 차례로 채웁니다. 연결은 외래 키를 따라 추천하고, 외래 키가 없으면 이름으로 짐작해 「추정」 이라고 표시합니다. 조건은 칼럼 형식(숫자 · 글자 · 날짜)에 맞는 것만 고를 수 있고, 집계를 고르면 GROUP BY 를 자동으로 맞춥니다. 바꿀 때마다 건수를 세고, 표 · 연결을 바꾼 뒤 건수가 늘면 「연결 조건이 빠졌거나 1:N」 이라고 알립니다.</p></div>
+      <div class="card"><h4>목적으로 만들기 · 현황 · 집계</h4><p>중복 찾기 · 그룹별 최신 1건 · EXISTS / NOT EXISTS · WITH 로 나누기 · 계층 · 누적 합 · 순위 · 두 표 차이 · 세로 → 가로 · 있으면 수정 없으면 넣기(MERGE / ON CONFLICT). 현황은 건수 · 합계 · 평균 · 최대 · 최소 · 기간별 · 전 기간 대비 증감 · 비율 · 누적 · 상위 N · 상태별 한 줄 · 합계 줄(ROLLUP) · 0 건 날짜 채우기. 필요한 칸만 보입니다.</p></div>
+      <div class="card"><h4>예제 · 쉬운 설명</h4><p>페이징 · 튜플 IN <code>(A, B) IN ((…))</code> · 날짜 · 문자열 등 실무 예제를 인터넷 없이 봅니다. 「쉬운 설명」 은 아래 SQL 칸의 문장을 절마다(FROM · WHERE · GROUP BY …) 쉬운 말로 풀고 실행 순서를 알려 줍니다.</p></div>
+      <div class="card"><h4>도구</h4><p>엑셀에서 붙여 넣은 값으로 IN 목록(Oracle 은 1000개마다 OR 로 나눔) · Oracle ↔ PostgreSQL 바꿔 쓰기(NVL · DECODE · ROWNUM ↔ LIMIT …) · (+) ↔ JOIN ON 바꾸기 · 확인한 SELECT 를 UPDATE · DELETE 로(「바뀔 건수 세기」 먼저) · WITH 단계마다 실행.</p></div>
+      <div class="card"><h4>아래 단추 · 콘솔 연동</h4><p>편집기에 넣기 · 복사 · 실행 · 건수 보기 · 조인 그림(ERD 창, 연결 조건이 없는 표는 빨간 테두리). 콘솔에서 실행할 때 조인 빠짐 · <code>= NULL</code> · <code>NOT IN (SELECT …)</code> · 바깥 조인 무효를 먼저 알리고(작업대에서 끄고 켬), DB 오류는 쉬운 설명과 「오류 위치로 가기」 를 붙입니다. 자동완성은 조건 칼럼 뒤에 비교 기호, ORDER BY 뒤에 ASC · DESC, JOIN 뒤에 외래 키로 이어진 표, ON 뒤에 연결 조건을 먼저 냅니다.</p></div>
+    </div>
+
     <h3 id="slow">느린 곳 찾기 · 콘솔 「계획」 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd></h3>
     <p class="lead">쿼리를 실행하지 않고 DB 의 실행 계획을 읽어, 느려질 단계와 그 이유 · 고칠 법을 한국어로 보여 줍니다. SQL 콘솔에서 커서를 문장에 두고 「계획」, 매퍼 XML 에서는 문장 우클릭 「Find Slow Spots」(매개변수 값은 Run MyBatis Query 와 같은 창에서 받음). Oracle · MySQL · PostgreSQL 모두 되고, 분석 내용은 밖(AI · 클라우드)으로 보내지 않습니다.</p>
     <div class="figure wide">

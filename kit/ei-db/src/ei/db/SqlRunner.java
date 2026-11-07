@@ -50,6 +50,10 @@ public final class SqlRunner {
     if ((danger != null || (c.production && write)) && !GuardDialog.confirm(project, c, sql, danger, SqlGuard.table(sql))) {
       return;
     }
+    if (!ei.db.bench.LintGate.confirm(project, sql)) {
+      ConsoleRun.stop(project, c, sql);
+      return;
+    }
     if (!confirmImplicitCommit(project, c, sql)) {
       ConsoleRun.stop(project, c, sql);
       return;

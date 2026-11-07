@@ -127,6 +127,18 @@ public final class ConsoleRun {
     SqlRunner.run(project, q.c, stmt.sql(), stmt.binds());
   }
 
+  /** 콘솔 밖(쿼리 작업대)에서 문장 하나를 실행한다. 값 자리가 있으면 값을 묻고, 취소하면 실행하지 않는다. */
+  public static void runSql(Project project, DbConfig c, String sql) {
+    SqlParams.Bound b = bind(project, sql);
+    if (b != null) SqlRunner.run(project, c, b.sql(), b.binds());
+  }
+
+  /** 문장 하나의 값 자리를 묻는다. 자리가 없으면 창 없이 그대로(binds null), 취소하면 null. */
+  public static SqlParams.Bound bind(Project project, String sql) {
+    List<SqlParams.Bound> bound = BindDialog.ask(project, List.of(sql));
+    return bound == null ? null : bound.get(0);
+  }
+
   /** ResultView 가 결과를 보인 뒤 부른다. 같은 접속에서 그 문장을 기다리는 콘솔의 대기열만 움직인다. */
   static void finished(Project project, DbConfig c, String sql, boolean ok) {
     VirtualFile file = waitingFile(project, c, sql);
