@@ -114,9 +114,6 @@ final class PatternPanel {
   /** 위에 놓을 입력 칸들(아래 SQL 칸은 작업대가 붙인다). */
   JComponent component() { return form; }
 
-  /** 시작 화면에서 무늬 하나를 골라 연다. */
-  void select(Patterns.Kind k) { kind.setSelectedItem(k); }
-
   /** 접속이 바뀌면 칼럼을 다시 읽는다. 친 글은 그대로 둔다. */
   void connectionChanged() {
     loadedTable = "";

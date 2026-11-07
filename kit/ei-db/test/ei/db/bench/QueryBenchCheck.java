@@ -239,5 +239,14 @@ public class QueryBenchCheck {
     DialectConvert.Result up = DialectConvert.toPostgres("UPDATE ORDERS o SET o.STATUS = 'X', o.MEMO = NULL WHERE o.ORDER_ID = 1");
     yes(up.sql().contains("SET STATUS = 'X', MEMO = NULL") && up.sql().contains("WHERE o.ORDER_ID = 1"), up.sql());
     yes(String.join(" ", DialectConvert.toPostgres("SELECT * FROM USER_TAB_COLUMNS").notes()).contains("데이터 사전"), "dictionary note");
+    QueryBuilder.Spec g = new QueryBuilder.Spec();
+    g.tables.add(new QueryBuilder.Table("ORDERS", "o"));
+    g.groups.add(new QueryBuilder.Col("o", "STATUS", "VARCHAR2", "", null, null));
+    String gs = QueryBuilder.render(g);
+    yes(gs.startsWith("SELECT\n       o.STATUS\n     , COUNT(*) AS CNT\n") && gs.contains(" GROUP BY\n       o.STATUS"), gs);
+    g.cols.add(new QueryBuilder.Col("o", "CUST_ID", "NUMBER", "", null, null));
+    g.cols.add(new QueryBuilder.Col("o", "AMOUNT", "NUMBER", "", QueryBuilder.Agg.SUM, null));
+    eq(QueryBuilder.groupBy(g), List.of("o.STATUS", "o.CUST_ID"));
+    yes(!QueryBuilder.render(g).contains("COUNT(*)"), "no auto count when aggregated");
   }
 }

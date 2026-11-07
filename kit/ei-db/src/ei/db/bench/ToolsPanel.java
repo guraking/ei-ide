@@ -51,9 +51,6 @@ final class ToolsPanel {
 
   JComponent component() { return root; }
 
-  /** 시작 화면에서 도구 하나를 바로 연다(0 IN 목록, 1 DB 바꿔 쓰기 …). */
-  void select(int index) { root.setSelectedIndex(index); }
-
   private JComponent inTab() {
     pasted.getEmptyText().setText("엑셀 · 결과 창에서 복사한 값을 붙여 넣으세요. 칸이 둘 이상(탭으로 나뉨)이면 (A, B) IN ((…), (…)) 로 만듭니다.");
     inColumns.getEmptyText().setText("예: CUST_ID   또는 두 칸이면  PART_NO, REV");

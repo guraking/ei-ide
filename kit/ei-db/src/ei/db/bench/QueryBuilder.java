@@ -123,6 +123,8 @@ public final class QueryBuilder {
     public boolean distinct;
     public final List<Table> tables = new ArrayList<>();
     public final List<Col> cols = new ArrayList<>();
+    /** 사용자가 5단계에서 직접 고른 묶을 칼럼(agg 는 null). SELECT 앞에도 놓는다. */
+    public final List<Col> groups = new ArrayList<>();
     public final List<Join> joins = new ArrayList<>();
     public final List<Cond> conds = new ArrayList<>();
     public final List<Having> havings = new ArrayList<>();
@@ -166,15 +168,37 @@ public final class QueryBuilder {
     return a;
   }
 
-  /** 집계가 있으면 집계 아닌 고른 칼럼이 모두 GROUP BY 에 들어간다. 집계가 없으면 빈 목록. */
+  /**
+   * SELECT 에 놓을 칼럼: 직접 고른 묶을 칼럼(고른 칼럼에 없는 것) → 고른 칼럼 순.
+   * 묶을 칼럼을 골랐는데 집계가 하나도 없으면 COUNT(*) AS CNT 를 붙인다(값마다 몇 건).
+   * 묶을 때 표.* 는 GROUP BY 와 맞지 않아 뺀다.
+   */
+  public static List<Col> selected(Spec s) {
+    List<Col> out = new ArrayList<>();
+    for (Col g : s.groups) {
+      boolean there = false;
+      for (Col c : s.cols) there |= c.agg() == null && c.column().equals(g.column()) && java.util.Objects.equals(c.alias(), g.alias());
+      if (!there) out.add(g);
+    }
+    boolean agg = false;
+    for (Col c : s.cols) {
+      if (!s.groups.isEmpty() && c.agg() == null && "*".equals(c.column())) continue;
+      out.add(c);
+      agg |= c.agg() != null;
+    }
+    if (!s.groups.isEmpty() && !agg) out.add(new Col(null, "*", null, "", Agg.COUNT, null));
+    return out;
+  }
+
+  /** 묶을 칼럼을 골랐거나 집계 · HAVING 이 있으면 집계 아닌 SELECT 칼럼이 모두 GROUP BY 에 들어간다(직접 고른 것이 앞). 아니면 빈 목록. */
   public static List<String> groupBy(Spec s) {
-    boolean grouped = false;
-    for (Col c : s.cols) grouped |= c.agg() != null;
-    grouped |= !s.havings.isEmpty();
+    List<Col> sel = selected(s);
+    boolean grouped = !s.groups.isEmpty() || !s.havings.isEmpty();
+    for (Col c : sel) grouped |= c.agg() != null;
     List<String> out = new ArrayList<>();
     if (!grouped) return out;
-    for (Col c : s.cols) {
-      if (c.agg() == null && !"*".equals(c.column())) out.add(c.expr(s.kind));
+    for (Col c : sel) {
+      if (c.agg() == null && !"*".equals(c.column()) && !out.contains(c.expr(s.kind))) out.add(c.expr(s.kind));
     }
     return out;
   }
@@ -256,6 +280,7 @@ public final class QueryBuilder {
     c.distinct = s.distinct;
     c.tables.addAll(s.tables);
     c.cols.addAll(s.cols);
+    c.groups.addAll(s.groups);
     c.joins.addAll(s.joins);
     c.conds.addAll(s.conds);
     c.havings.addAll(s.havings);
@@ -270,7 +295,7 @@ public final class QueryBuilder {
     StringBuilder sb = new StringBuilder(s.distinct ? "SELECT DISTINCT\n" : "SELECT\n");
     List<String> items = new ArrayList<>();
     List<String> notes = new ArrayList<>();
-    for (Col c : s.cols) {
+    for (Col c : selected(s)) {
       String label = c.label(s.kind);
       items.add(label == null ? c.expr(s.kind) : c.expr(s.kind) + " AS " + label);
       notes.add(c.comment() == null ? "" : c.comment());
@@ -471,7 +496,7 @@ public final class QueryBuilder {
     List<String> group = groupBy(s);
     if (!group.isEmpty()) {
       Set<String> allowed = new LinkedHashSet<>(group);
-      for (Col c : s.cols) {
+      for (Col c : selected(s)) {
         if (c.agg() != null) {
           allowed.add(c.expr(s.kind));
           if (c.label(s.kind) != null) allowed.add(c.label(s.kind));

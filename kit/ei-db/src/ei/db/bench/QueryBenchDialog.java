@@ -41,13 +41,11 @@ import javax.swing.ButtonGroup;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
-import javax.swing.SwingConstants;
 import javax.swing.event.DocumentEvent;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
-import java.awt.GridLayout;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.ActionEvent;
@@ -63,11 +61,11 @@ import java.util.Set;
 
 /**
  * 쿼리 작업대. 모달이 아니라 콘솔 · 결과 창을 오가며 쓴다. 처음에는 화면의 FIRST_SIZE 비율로 열고, 사용자가 바꾼 크기는 IntelliJ 가 기억한다.
- * 위: 접속 · 연결 모양 · 값 자리 · 「자세히」. 가운데: 탭(첫 탭은 「무엇을 할까요?」 시작 화면).
+ * 위: 접속 · 연결 모양 · 값 자리 · 「자세히」. 가운데: 탭.
  * SQL 칸(고칠 수 있음) · 알림 줄 · 미리 보기 결과는 한 묶음(preview)이고, 탭을 바꿀 때마다 그 탭의 입력 칸 바로 밑(slot)으로 옮겨 붙인다.
  * 아래 단추 줄: 왼쪽 복사 · 실행 · 실행해 보기(PREVIEW_ROWS 건) · 건수 보기 · 조인 그림 · 되돌리기, 오른쪽 편집기에 넣기(파란 단추) · 닫기.
  * 연결 모양 · 값 자리 · 「자세히」 · 마지막 접속은 기억한다. PostgreSQL · MySQL 은 (+) 가 없어 표준 JOIN ON 으로만 만든다.
- * 콘솔에서 SQL 을 들고 열면 「쉬운 설명」 탭, 그 밖에는 시작 화면으로 연다.
+ * 콘솔에서 SQL 을 들고 열면 「쉬운 설명」 탭, 그 밖에는 마지막에 본 탭으로 연다.
  */
 public final class QueryBenchDialog extends DialogWrapper {
   private static final double FIRST_SIZE = 0.85;
@@ -77,22 +75,19 @@ public final class QueryBenchDialog extends DialogWrapper {
   private static final float RESULT_SPLIT = 0.55f;
   private static final int PREVIEW_ROWS = 20;
   private static final int UNDO_LIMIT = 30;
-  private static final int START_COLUMNS = 3;
   private static final String KEY = "ei.db.bench.";
   private static final String STYLE_KEY = KEY + "joinStyle";
   private static final String BIND_KEY = KEY + "bind";
   private static final String DETAILS_KEY = KEY + "details";
   private static final String CONFIG_KEY = KEY + "config";
+  private static final String TAB_KEY = KEY + "tab";
 
-  private static final int START_TAB = 0;
-  private static final int BUILDER_TAB = 1;
-  private static final int PURPOSE_TAB = 2;
-  private static final int DASHBOARD_TAB = 3;
-  private static final int EXAMPLES_TAB = 4;
-  private static final int EXPLAIN_TAB = 5;
-  private static final int TOOLS_TAB = 6;
-  private static final int TOOL_IN = 0;
-  private static final int TOOL_DIALECT = 1;
+  private static final int BUILDER_TAB = 0;
+  private static final int PURPOSE_TAB = 1;
+  private static final int DASHBOARD_TAB = 2;
+  private static final int EXAMPLES_TAB = 3;
+  private static final int EXPLAIN_TAB = 4;
+  private static final int TOOLS_TAB = 5;
 
   private final Project project;
   private final VirtualFile console;
@@ -234,15 +229,14 @@ public final class QueryBenchDialog extends DialogWrapper {
     top.setBorder(JBUI.Borders.emptyBottom(6));
 
     buildPreview();
-    tabs.addTab("무엇을 할까요?", startPage());
+    // 탭 안쪽 기본 여백이 칸 둘레에 두꺼운 테두리처럼 보여 없앤다. 여백은 addTab 때 감싸는 칸에 붙으므로 탭을 넣기 전에 정한다.
+    tabs.setTabComponentInsets(JBUI.emptyInsets());
     tabs.addTab("단계별 작성기", split(BUILDER_SPLIT, "builderSplit", builder.component(), slots[BUILDER_TAB]));
     tabs.addTab("목적으로 만들기", stack(purpose.component(), slots[PURPOSE_TAB]));
     tabs.addTab("현황 · 집계", stack(dashboard.component(), slots[DASHBOARD_TAB]));
     tabs.addTab("예제 모음", examples.component());
     tabs.addTab("쉬운 설명", split(EXPLAIN_SPLIT, "explainSplit", slots[EXPLAIN_TAB], explain.component()));
     tabs.addTab("도구", split(TOOLS_SPLIT, "toolsSplit", tools.component(), slots[TOOLS_TAB]));
-    // 탭 안쪽 기본 여백이 칸 둘레에 두꺼운 테두리처럼 보여 없앤다(테두리는 SQL 칸 · 목록의 한 겹만).
-    tabs.setTabComponentInsets(JBUI.emptyInsets());
     tabs.addChangeListener(e -> tabChanged());
 
     JPanel root = new JPanel(new BorderLayout());
@@ -305,52 +299,11 @@ public final class QueryBenchDialog extends DialogWrapper {
     preview.add(sqlAndResult, BorderLayout.CENTER);
   }
 
-  /** 「무엇을 할까요?」: 하고 싶은 일을 누르면 맞는 탭 · 무늬 · 도구를 연다. 단추마다 한 줄 안내를 붙인다. */
-  private JComponent startPage() {
-    JPanel grid = new JPanel(new GridLayout(0, START_COLUMNS, JBUI.scale(10), JBUI.scale(10)));
-    grid.add(card("표 하나 보기", "표를 고르고 볼 칼럼 · 조건을 채웁니다.", () -> tabs.setSelectedIndex(BUILDER_TAB)));
-    grid.add(card("두 표 이어 보기", "표를 둘 넣으면 잇는 조건(외래 키)을 먼저 채웁니다.", () -> tabs.setSelectedIndex(BUILDER_TAB)));
-    grid.add(card("건수 · 합계 보기", "전체 · 그룹별 건수와 합계 · 평균.", () -> pattern(DASHBOARD_TAB, Patterns.Kind.STATS)));
-    grid.add(card("기간별 현황", "일 · 주 · 월 · 연도마다 건수 · 합계.", () -> pattern(DASHBOARD_TAB, Patterns.Kind.BY_PERIOD)));
-    grid.add(card("중복 찾기", "같은 값이 2건 이상인 것과 그 건수.", () -> pattern(PURPOSE_TAB, Patterns.Kind.DUPLICATES)));
-    grid.add(card("남이 쓴 쿼리 이해하기", "붙여 넣은 SQL 을 절마다 쉬운 말로 풀고 실수를 짚습니다.", () -> tabs.setSelectedIndex(EXPLAIN_TAB)));
-    grid.add(card("DB 바꿔 쓰기", "Oracle ↔ PostgreSQL 문법으로 바꿉니다.", () -> tool(TOOL_DIALECT)));
-    grid.add(card("값 목록으로 IN 만들기", "엑셀에서 복사한 값으로 IN (…) 을 만듭니다.", () -> tool(TOOL_IN)));
-    grid.add(card("예제 보기", "실무 쿼리 " + Examples.ALL.size() + "개를 찾아 씁니다.", () -> tabs.setSelectedIndex(EXAMPLES_TAB)));
-    JPanel page = new JPanel(new BorderLayout());
-    page.setBorder(JBUI.Borders.empty(16));
-    page.add(grid, BorderLayout.NORTH);
-    // 스크롤 판에 넣으면 칸이 창 폭을 넘겨 오른쪽 열이 잘린다. 단추 9개는 높이가 넉넉해 창 폭에 맞춘다.
-    return page;
-  }
-
-  private static JComponent card(String title, String hint, Runnable go) {
-    JButton b = new JButton(title);
-    b.setHorizontalAlignment(SwingConstants.LEFT);
-    b.addActionListener(e -> go.run());
-    JBLabel help = new JBLabel(hint);
-    help.setForeground(UIUtil.getContextHelpForeground());
-    help.setAllowAutoWrapping(true);
-    JPanel p = new JPanel(new BorderLayout(0, JBUI.scale(4)));
-    p.add(b, BorderLayout.NORTH);
-    p.add(help, BorderLayout.CENTER);
-    return p;
-  }
-
-  private void pattern(int tab, Patterns.Kind k) {
-    tabs.setSelectedIndex(tab);
-    (tab == DASHBOARD_TAB ? dashboard : purpose).select(k);
-  }
-
-  private void tool(int index) {
-    tabs.setSelectedIndex(TOOLS_TAB);
-    tools.select(index);
-  }
-
   /** SQL 묶음을 지금 탭의 자리로 옮기고 그 탭의 SQL 을 다시 만든다. */
   private void tabChanged() {
     int i = tabs.getSelectedIndex();
-    if (i > START_TAB && i < slots.length) {
+    PropertiesComponent.getInstance().setValue(TAB_KEY, i, 0);
+    if (i >= 0 && i < slots.length) {
       slots[i].add(preview, BorderLayout.CENTER);
       slots[i].revalidate();
       slots[i].repaint();
@@ -379,7 +332,8 @@ public final class QueryBenchDialog extends DialogWrapper {
       }
     }
     connectionChanged();
-    tabs.setSelectedIndex(START_TAB);
+    tabs.setSelectedIndex(Math.max(0, Math.min(tabs.getTabCount() - 1, props.getInt(TAB_KEY, 0))));
+    tabChanged();
   }
 
   private void connectionChanged() {

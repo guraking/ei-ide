@@ -147,6 +147,10 @@ final class BuilderPanel {
   private final JBCheckBox countAll = new JBCheckBox("전체 건수 칼럼 넣기 (COUNT(*) AS CNT)");
   private final JBCheckBox distinct = new JBCheckBox("똑같은 줄은 하나만 (DISTINCT)");
   private final JBLabel groupLabel = new JBLabel();
+  /** 5단계에서 직접 고른 묶을 칼럼 「별칭.칼럼」. 표를 빼면 그 표 것은 spec 에서 저절로 빠진다. */
+  private final List<String> groupRefs = new ArrayList<>();
+  private final CollectionListModel<String> groupModel = new CollectionListModel<>();
+  private final JBList<String> groupList = new JBList<>(groupModel);
   private final JBIntSpinner limit = new JBIntSpinner(0, 0, MAX_LIMIT);
   private final JBIntSpinner offset = new JBIntSpinner(0, 0, MAX_LIMIT);
   private final JPanel havingPanel = new JPanel(new BorderLayout());
@@ -345,8 +349,22 @@ final class BuilderPanel {
     removeHaving.addActionListener(e -> { if (havings.removeSelected(havingTable)) changed(); });
     havingPanel.add(buttons(addHaving, removeHaving), BorderLayout.NORTH);
     havingPanel.add(scroll(havingTable), BorderLayout.CENTER);
+    JButton addGroup = new JButton("묶을 칼럼 더하기…", AllIcons.General.Add);
+    addGroup.addActionListener(e -> addGroups(addGroup));
+    JButton removeGroup = new JButton("빼기", AllIcons.General.Remove);
+    removeGroup.addActionListener(e -> {
+      boolean any = false;
+      for (String v : groupList.getSelectedValuesList()) any |= groupRefs.remove(v);
+      if (any) changed();
+    });
+    groupList.getEmptyText().setText("「묶을 칼럼 더하기…」 로 묶을 칼럼을 고르세요");
+    groupList.setVisibleRowCount(VISIBLE_ROWS / 2);
+    JPanel groupTop = new JPanel(new BorderLayout(0, JBUI.scale(4)));
+    groupTop.add(buttons(addGroup, removeGroup), BorderLayout.NORTH);
+    groupTop.add(ScrollPaneFactory.createScrollPane(groupList), BorderLayout.CENTER);
+    groupTop.add(groupLabel, BorderLayout.SOUTH);
     JPanel groupPanel = new JPanel(new BorderLayout(0, JBUI.scale(8)));
-    groupPanel.add(groupLabel, BorderLayout.NORTH);
+    groupPanel.add(groupTop, BorderLayout.NORTH);
     groupPanel.add(havingPanel, BorderLayout.CENTER);
 
     // 6. 정렬 · 페이징
@@ -371,7 +389,7 @@ final class BuilderPanel {
     sections.add(new Section("2. 칼럼 고르기", "결과에 보일 칼럼에 체크하세요. 아무것도 안 고르면 모든 칼럼(*)입니다. 「집계」 에서 건수 · 합계 · 평균을 고르면 묶기는 자동으로 맞춥니다.", colPanel, true));
     sections.add(new Section("3. 표 잇기 (JOIN)", "표가 둘 이상이면 어떤 칼럼으로 이을지 정합니다. 외래 키를 따라 자동으로 넣고, 「추정」 은 이름으로 짐작한 것이라 맞는지 보세요.", joinPanel, false));
     sections.add(new Section("4. 거를 조건 (WHERE)", "「조건 넣기」 → 칼럼 · 조건 · 값을 고릅니다. 값을 비우면 실행할 때 묻고, 넣으면 건수 세기에 씁니다. 여러 값은 쉼표로, 날짜는 " + QueryBuilder.DATE_FORMAT + ".", condPanel, true));
-    sections.add(new Section("5. 묶기 (GROUP BY)", "칼럼 단계에서 집계를 고르면 집계가 아닌 칼럼으로 자동으로 묶습니다. 여기서는 확인만 하면 됩니다.", groupPanel, false));
+    sections.add(new Section("5. 묶기 (GROUP BY)", "「묶을 칼럼 더하기…」 로 값마다 묶을 칼럼(예: 고객, 상태)을 고르면 SELECT 와 GROUP BY 에 들어가고, 집계를 안 골랐으면 건수(CNT)가 붙습니다. 2단계에서 집계를 고른 경우 집계 아닌 칼럼은 저절로 묶입니다(「자동」).", groupPanel, false));
     sections.add(new Section("6. 정렬 · 건수 자르기", "어떤 순서로 볼지, 몇 건만 볼지 정합니다.", orderPanel, false));
     JPanel page = new JPanel(new com.intellij.ui.components.panels.VerticalLayout(JBUI.scale(10)));
     page.setBorder(JBUI.Borders.empty(4, 8, 8, 8));
@@ -606,7 +624,7 @@ final class BuilderPanel {
   /** HAVING 에 쓸 집계의 이름(별칭). */
   private List<String> aggLabels() {
     List<String> out = new ArrayList<>();
-    for (QueryBuilder.Col c : spec().cols) if (c.agg() != null) out.add(c.label(bench.kind()));
+    for (QueryBuilder.Col c : QueryBuilder.selected(spec())) if (c.agg() != null) out.add(c.label(bench.kind()));
     return out;
   }
 
@@ -648,12 +666,17 @@ final class BuilderPanel {
     for (ColRow r : cols.rows) {
       if (r.selected) s.cols.add(new QueryBuilder.Col(r.alias, r.col.name(), r.col.type(), r.col.comment(), r.agg, r.as));
     }
+    for (String ref : groupRefs) {
+      for (ColRow r : cols.rows) {
+        if ((r.alias + "." + r.col.name()).equals(ref)) s.groups.add(new QueryBuilder.Col(r.alias, r.col.name(), r.col.type(), r.col.comment(), null, null));
+      }
+    }
     for (JoinRow r : joins.rows) {
       if (r.use) s.joins.add(new QueryBuilder.Join(r.j.leftAlias(), r.j.leftColumn(), r.j.rightAlias(), r.j.rightColumn(), r.outer, r.j.guessed()));
     }
     for (CondRow r : conds.rows) s.conds.add(new QueryBuilder.Cond(r.alias, r.name, r.kind, r.op, r.value, r.value2));
     for (HavingRow r : havings.rows) {
-      for (QueryBuilder.Col c : s.cols) {
+      for (QueryBuilder.Col c : QueryBuilder.selected(s)) {
         if (c.agg() != null && r.label != null && r.label.equals(c.label(s.kind))) s.havings.add(new QueryBuilder.Having(c, r.op, r.value));
       }
     }
@@ -667,7 +690,15 @@ final class BuilderPanel {
   void changed() {
     QueryBuilder.Spec s = spec();
     List<String> group = QueryBuilder.groupBy(s);
-    groupLabel.setText(group.isEmpty() ? "지금은 묶지 않습니다." : "묶을 칼럼 (자동): " + String.join(", ", group));
+    List<String> manual = new ArrayList<>();
+    for (QueryBuilder.Col c : s.groups) manual.add(c.alias() + "." + c.column());
+    groupRefs.retainAll(manual);
+    groupModel.replaceAll(new ArrayList<>(groupRefs));
+    List<String> auto = new ArrayList<>();
+    for (QueryBuilder.Col c : s.groups) manual.set(manual.indexOf(c.alias() + "." + c.column()), c.expr(s.kind));
+    for (String g : group) if (!manual.contains(g)) auto.add(g);
+    groupLabel.setText(group.isEmpty() ? "지금은 묶지 않습니다." : auto.isEmpty() ? "GROUP BY: " + String.join(", ", group)
+        : "GROUP BY: " + String.join(", ", group) + "   (자동: " + String.join(", ", auto) + " — 2단계에서 집계 없이 고른 칼럼)");
     if (s.tables.isEmpty()) {
       bench.show("", List.of("왼쪽에서 표를 고르면 SQL 이 여기에 만들어집니다."));
       return;
@@ -735,6 +766,30 @@ final class BuilderPanel {
         return d;
       }
     };
+  }
+
+  /** 넣은 표들의 칼럼 목록에서 묶을 칼럼을 여러 개 고른다(글자를 치면 거름). 이미 고른 것은 목록에서 뺀다. */
+  private void addGroups(JComponent anchor) {
+    List<String> choices = new ArrayList<>();
+    for (ColRow r : cols.rows) {
+      String ref = r.alias + "." + r.col.name();
+      if (groupRefs.contains(ref)) continue;
+      choices.add(r.col.comment() == null || r.col.comment().isBlank() ? ref : ref + "  — " + r.col.comment());
+    }
+    if (choices.isEmpty()) {
+      bench.show(QueryBuilder.render(spec()), List.of(cols.rows.isEmpty() ? "왼쪽에서 표를 먼저 더하세요." : "더 고를 칼럼이 없습니다."));
+      return;
+    }
+    com.intellij.openapi.ui.popup.JBPopupFactory.getInstance().createPopupChooserBuilder(choices)
+        .setTitle("묶을 칼럼 (Ctrl · Shift 로 여러 개, 글자를 치면 거름)")
+        .setSelectionMode(javax.swing.ListSelectionModel.MULTIPLE_INTERVAL_SELECTION)
+        .setNamerForFiltering(v -> v)
+        .setItemsChosenCallback(picked -> {
+          for (String v : picked) groupRefs.add(v.split("  — ")[0]);
+          changed();
+        })
+        .createPopup()
+        .showUnderneathOf(anchor);
   }
 
   /** 표가 하나면 모든 칼럼을, 여럿이면 「모든 표 · 표마다」 를 골라 체크한다. */
