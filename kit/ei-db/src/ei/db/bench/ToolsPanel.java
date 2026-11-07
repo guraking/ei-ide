@@ -30,7 +30,21 @@ import java.util.function.Supplier;
 final class ToolsPanel {
   private final Bench bench;
   private final Supplier<String> sql;
-  private final JBTabbedPane root = new JBTabbedPane();
+  /**
+   * 안쪽 탭. 탭 줄은 스크롤 뷰포트 안에 그려지는데 그 뷰포트가 자기 바탕을 칠해 바깥 탭과 달리 띠가 생긴다.
+   * 화면 테마를 다시 깔 때마다 뷰포트를 새로 만들므로 updateUI 에서 바탕 칠하기를 끈다.
+   */
+  private final JBTabbedPane root = new JBTabbedPane() {
+    @Override
+    public void updateUI() {
+      super.updateUI();
+      for (java.awt.Component c : getComponents()) {
+        if (!(c instanceof javax.swing.JViewport v)) continue;
+        v.setOpaque(false);
+        if (v.getView() instanceof JComponent view) view.setOpaque(false);
+      }
+    }
+  };
   private final JBTextArea pasted = new JBTextArea();
   private final JBTextField inColumns = new JBTextField();
   private final JBLabel dmlCount = new JBLabel();

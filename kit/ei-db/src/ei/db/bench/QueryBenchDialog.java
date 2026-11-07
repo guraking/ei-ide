@@ -14,7 +14,10 @@ import com.intellij.ui.components.JBCheckBox;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBRadioButton;
 import com.intellij.ui.components.JBTabbedPane;
+import com.intellij.ui.EditorTextField;
 import com.intellij.ui.components.JBTextArea;
+import com.intellij.openapi.editor.EditorFactory;
+import ei.db.FileTypes;
 import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.JBFont;
@@ -105,7 +108,8 @@ public final class QueryBenchDialog extends DialogWrapper {
   private final JBRadioButton bindValue = new JBRadioButton("값 그대로");
   private final JBCheckBox details = new JBCheckBox("자세히");
   private final JBCheckBox lint = new JBCheckBox("실행할 때마다 쿼리 점검");
-  private final JBTextArea sql = new JBTextArea();
+  /** SQL 칸. 콘솔과 같은 편집기 부품이라 편집기 글꼴 · 글자 다듬기 · SQL 색칠이 그대로 나온다. */
+  private final EditorTextField sql;
   private final JBTextArea notes = new JBTextArea();
   private final JBLabel status = new JBLabel();
   private final JPanel noteLine = new JPanel(new BorderLayout(JBUI.scale(8), 0));
@@ -145,6 +149,7 @@ public final class QueryBenchDialog extends DialogWrapper {
   private QueryBenchDialog(Project project, DbConfig c, String initialSql, VirtualFile console) {
     super(project, null, true, IdeModalityType.MODELESS);
     this.project = project;
+    this.sql = new EditorTextField(EditorFactory.getInstance().createDocument(""), project, FileTypes.byExtension("sql"), false, false);
     this.console = console;
     this.bench = new Bench(project, this::fill, m -> setStatus("읽지 못했습니다: " + m, true));
     for (int i = 0; i < slots.length; i++) slots[i] = new JPanel(new BorderLayout());
@@ -265,9 +270,9 @@ public final class QueryBenchDialog extends DialogWrapper {
       refreshActive();
     });
     lint.addActionListener(e -> LintGate.setEnabled(lint.isSelected()));
-    sql.getDocument().addDocumentListener(new DocumentAdapter() {
+    sql.addDocumentListener(new com.intellij.openapi.editor.event.DocumentListener() {
       @Override
-      protected void textChanged(@NotNull DocumentEvent e) {
+      public void documentChanged(@NotNull com.intellij.openapi.editor.event.DocumentEvent e) {
         if (!filling) setStatus("", false);
       }
     });
@@ -277,10 +282,16 @@ public final class QueryBenchDialog extends DialogWrapper {
 
   /** SQL 칸(테두리 한 겹) · 알림 줄(비면 숨김) · 미리 보기 결과(실행해 보기 뒤에만)를 한 묶음으로 만든다. */
   private void buildPreview() {
-    sql.setFont(JBFont.label());
-    sql.setTabSize(4);
-    sql.setBorder(JBUI.Borders.empty(SQL_PADDING));
-    sql.getEmptyText().setText("만든 SQL 이 여기에 나옵니다. 직접 쓰거나 붙여 넣어 「쉬운 설명」 · 「도구」 에 쓸 수도 있습니다.");
+    sql.setPlaceholder("만든 SQL 이 여기에 나옵니다. 직접 쓰거나 붙여 넣어 「쉬운 설명」 · 「도구」 에 쓸 수도 있습니다.");
+    sql.setShowPlaceholderWhenFocused(true);
+    sql.addSettingsProvider(e -> {
+      e.setVerticalScrollbarVisible(true);
+      e.setHorizontalScrollbarVisible(true);
+      e.getSettings().setLineNumbersShown(false);
+      e.getSettings().setFoldingOutlineShown(false);
+      e.getSettings().setAdditionalLinesCount(0);
+      e.getContentComponent().setBorder(JBUI.Borders.empty(SQL_PADDING));
+    });
     notes.setEditable(false);
     notes.setFont(JBFont.label());
     notes.setLineWrap(true);
@@ -293,7 +304,7 @@ public final class QueryBenchDialog extends DialogWrapper {
     noteLine.setVisible(false);
 
     JPanel sqlPart = new JPanel(new BorderLayout());
-    sqlPart.add(ScrollPaneFactory.createScrollPane(sql), BorderLayout.CENTER);
+    sqlPart.add(sql, BorderLayout.CENTER);
     sqlPart.add(noteLine, BorderLayout.SOUTH);
 
     JBTable table = new JBTable(resultModel);
