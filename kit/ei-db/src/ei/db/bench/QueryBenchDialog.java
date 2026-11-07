@@ -318,7 +318,8 @@ public final class QueryBenchDialog extends DialogWrapper {
     JPanel page = new JPanel(new BorderLayout());
     page.setBorder(JBUI.Borders.empty(16));
     page.add(grid, BorderLayout.NORTH);
-    return ScrollPaneFactory.createScrollPane(page, true);
+    // 스크롤 판에 넣으면 칸이 창 폭을 넘겨 오른쪽 열이 잘린다. 단추 9개는 높이가 넉넉해 창 폭에 맞춘다.
+    return page;
   }
 
   private static JComponent card(String title, String hint, Runnable go) {
