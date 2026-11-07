@@ -1,5 +1,6 @@
 package ei.db.bench;
 
+import com.intellij.ui.JBColor;
 import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBList;
@@ -57,8 +58,10 @@ final class ToolsPanel {
     this.bench = bench;
     this.sql = sql;
     root.setTabComponentInsets(JBUI.emptyInsets());
-    // 바깥 탭과 같은 바탕이 보이게 안쪽 탭 줄은 바탕을 칠하지 않는다.
-    root.setOpaque(false);
+    // 탭 줄 바탕을 아래 칸(JPanel)과 같은 색으로 직접 칠한다. 칠하지 않으면 뒤에 깔린 바깥 탭 내용 바탕이 띠로 비친다.
+    // 테마를 바꾸면 lazy 색이 새 패널 색을 다시 읽는다.
+    root.setOpaque(true);
+    root.setBackground(JBColor.lazy(UIUtil::getPanelBackground));
     root.addTab("IN 목록 만들기", inTab());
     root.addTab("DB 바꿔 쓰기", dialectTab());
     root.addTab("연결 모양 바꾸기", joinTab());
