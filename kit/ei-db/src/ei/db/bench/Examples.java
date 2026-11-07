@@ -190,6 +190,399 @@ public final class Examples {
                , o.STATUS
             FROM ORDERS o
            WHERE (o.STATUS <> '완료' OR o.STATUS IS NULL)"""),
+      new Example("화면 기본 쿼리 (목록 · 상세 · 저장)", "목록 조회 (검색 조건 + 코드 이름 + 등록자 이름)", "화면 목록의 기본 꼴: 선택 검색 조건, 코드 이름, 등록자 이름을 붙이고 최근 순.",
+          """
+          SELECT
+                 i.ISSUE_ID
+               , i.TITLE
+               , i.STATUS
+               , (SELECT c.CODE_NAME FROM COMMON_CODE c WHERE c.GROUP_CD = 'ISSUE_STATUS' AND c.CODE = i.STATUS) AS STATUS_NAME
+               , u.USER_NAME AS OWNER_NAME
+               , i.REG_DT
+            FROM ISSUE i
+               , USERS u
+           WHERE i.OWNER_ID = u.USER_ID(+)
+             AND (:projId IS NULL OR i.PROJ_ID = :projId)
+             AND (:status IS NULL OR i.STATUS = :status)
+             AND (:keyword IS NULL OR i.TITLE LIKE '%' || :keyword || '%')
+           ORDER BY
+                 i.REG_DT DESC
+               , i.ISSUE_ID DESC""",
+          """
+          SELECT
+                 i.ISSUE_ID
+               , i.TITLE
+               , i.STATUS
+               , (SELECT c.CODE_NAME FROM COMMON_CODE c WHERE c.GROUP_CD = 'ISSUE_STATUS' AND c.CODE = i.STATUS) AS STATUS_NAME
+               , u.USER_NAME AS OWNER_NAME
+               , i.REG_DT
+            FROM ISSUE i
+            LEFT OUTER JOIN USERS u
+              ON i.OWNER_ID = u.USER_ID
+           WHERE (CAST(:projId AS INTEGER) IS NULL OR i.PROJ_ID = CAST(:projId AS INTEGER))
+             AND (CAST(:status AS VARCHAR) IS NULL OR i.STATUS = :status)
+             AND (CAST(:keyword AS VARCHAR) IS NULL OR i.TITLE LIKE '%' || :keyword || '%')
+           ORDER BY
+                 i.REG_DT DESC
+               , i.ISSUE_ID DESC"""),
+      new Example("화면 기본 쿼리 (목록 · 상세 · 저장)", "상세 조회 (한 건 + 이름 · 건수 붙이기)", "키 하나로 한 줄. 상위 이름, 담당자 이름, 딸린 건수를 함께 붙입니다.",
+          """
+          SELECT
+                 p.PROJ_ID
+               , p.PROJ_NAME
+               , p.STATUS
+               , d.DEPT_NAME
+               , u.USER_NAME AS OWNER_NAME
+               , (SELECT COUNT(*) FROM ISSUE i WHERE i.PROJ_ID = p.PROJ_ID AND i.STATUS <> 'CLOSE') AS OPEN_ISSUES
+               , (SELECT COUNT(*) FROM SCHEDULE s WHERE s.PROJ_ID = p.PROJ_ID) AS SCH_CNT
+            FROM PROJECT p
+               , DEPT d
+               , USERS u
+           WHERE p.DEPT_ID = d.DEPT_ID(+)
+             AND p.OWNER_ID = u.USER_ID(+)
+             AND p.PROJ_ID = :projId""",
+          """
+          SELECT
+                 p.PROJ_ID
+               , p.PROJ_NAME
+               , p.STATUS
+               , d.DEPT_NAME
+               , u.USER_NAME AS OWNER_NAME
+               , (SELECT COUNT(*) FROM ISSUE i WHERE i.PROJ_ID = p.PROJ_ID AND i.STATUS <> 'CLOSE') AS OPEN_ISSUES
+               , (SELECT COUNT(*) FROM SCHEDULE s WHERE s.PROJ_ID = p.PROJ_ID) AS SCH_CNT
+            FROM PROJECT p
+            LEFT OUTER JOIN DEPT d
+              ON p.DEPT_ID = d.DEPT_ID
+            LEFT OUTER JOIN USERS u
+              ON p.OWNER_ID = u.USER_ID
+           WHERE p.PROJ_ID = CAST(:projId AS INTEGER)"""),
+      new Example("화면 기본 쿼리 (목록 · 상세 · 저장)", "등록 (새 번호 = 지금 가장 큰 번호 + 1)", "시퀀스가 없는 표에서 새 번호를 만들어 넣습니다. 동시에 누르면 같은 번호가 날 수 있어 키 제약이 꼭 있어야 합니다.",
+          """
+          INSERT INTO ISSUE (ISSUE_ID, PROJ_ID, TITLE, STATUS, OWNER_ID, REG_DT)
+          SELECT
+                 NVL(MAX(i.ISSUE_ID), 0) + 1
+               , :projId
+               , :title
+               , 'OPEN'
+               , :ownerId
+               , TRUNC(SYSDATE)
+            FROM ISSUE i""",
+          """
+          INSERT INTO ISSUE (ISSUE_ID, PROJ_ID, TITLE, STATUS, OWNER_ID, REG_DT)
+          SELECT
+                 COALESCE(MAX(i.ISSUE_ID), 0) + 1
+               , CAST(:projId AS INTEGER)
+               , :title
+               , 'OPEN'
+               , CAST(:ownerId AS INTEGER)
+               , CURRENT_DATE
+            FROM ISSUE i"""),
+      new Example("화면 기본 쿼리 (목록 · 상세 · 저장)", "수정 (바뀐 칸만, 빈 값은 그대로 두기)", "화면에서 넘어온 값이 비면 원래 값을 남깁니다. 지우려는 뜻의 빈 값과 구분해야 하면 쓰지 마세요.",
+          """
+          UPDATE ISSUE i
+             SET i.TITLE = NVL(:title, i.TITLE)
+               , i.STATUS = NVL(:status, i.STATUS)
+               , i.OWNER_ID = NVL(:ownerId, i.OWNER_ID)
+           WHERE i.ISSUE_ID = :issueId""",
+          """
+          UPDATE ISSUE i
+             SET TITLE = COALESCE(:title, i.TITLE)
+               , STATUS = COALESCE(:status, i.STATUS)
+               , OWNER_ID = COALESCE(CAST(:ownerId AS INTEGER), i.OWNER_ID)
+           WHERE i.ISSUE_ID = CAST(:issueId AS INTEGER)"""),
+      new Example("화면 기본 쿼리 (목록 · 상세 · 저장)", "삭제 대신 사용 안 함 표시 (논리 삭제)", "줄을 지우지 않고 사용 여부만 N 으로. 목록 조회에는 USE_YN = 'Y' 를 꼭 붙입니다.",
+          """
+          UPDATE USERS u
+             SET u.USE_YN = 'N'
+           WHERE u.USER_ID = :userId""",
+          """
+          UPDATE USERS u
+             SET USE_YN = 'N'
+           WHERE u.USER_ID = CAST(:userId AS INTEGER)"""),
+      new Example("화면 기본 쿼리 (목록 · 상세 · 저장)", "고치기 전 값 이력 남기기 (INSERT … SELECT)", "UPDATE 바로 앞에 지금 값을 이력 표에 떠 둡니다. 둘을 같은 트랜잭션에서 실행하세요.",
+          """
+          INSERT INTO PART_HIST (PART_NO, COL_NAME, OLD_VAL, NEW_VAL, CHG_DT, CHG_USER)
+          SELECT
+                 p.PART_NO
+               , 'UNIT_COST'
+               , TO_CHAR(p.UNIT_COST)
+               , TO_CHAR(:newCost)
+               , SYSTIMESTAMP
+               , :userId
+            FROM PART p
+           WHERE p.PART_NO = :partNo
+             AND DECODE(p.UNIT_COST, :newCost, 0, 1) = 1""",
+          """
+          INSERT INTO PART_HIST (PART_NO, COL_NAME, OLD_VAL, NEW_VAL, CHG_DT, CHG_USER)
+          SELECT
+                 p.PART_NO
+               , 'UNIT_COST'
+               , CAST(p.UNIT_COST AS VARCHAR)
+               , CAST(:newCost AS VARCHAR)
+               , CURRENT_TIMESTAMP
+               , CAST(:userId AS INTEGER)
+            FROM PART p
+           WHERE p.PART_NO = :partNo
+             AND p.UNIT_COST IS DISTINCT FROM CAST(:newCost AS NUMERIC)"""),
+      new Example("화면 기본 쿼리 (목록 · 상세 · 저장)", "콤보 상자 (코드 · 이름, 「전체」 줄 맨 위)", "선택 상자에 넣을 목록. 맨 위에 「전체」 를 붙이고 정렬 번호대로.",
+          """
+          SELECT
+                 x.CODE
+               , x.CODE_NAME
+            FROM (
+                  SELECT
+                         NULL AS CODE
+                       , '전체' AS CODE_NAME
+                       , -1 AS SORT_NO
+                    FROM DUAL
+                   UNION ALL
+                  SELECT
+                         c.CODE
+                       , c.CODE_NAME
+                       , c.SORT_NO
+                    FROM COMMON_CODE c
+                   WHERE c.GROUP_CD = :groupCd
+                     AND c.USE_YN = 'Y'
+                 ) x
+           ORDER BY
+                 x.SORT_NO""",
+          """
+          SELECT
+                 x.CODE
+               , x.CODE_NAME
+            FROM (
+                  SELECT
+                         NULL AS CODE
+                       , '전체' AS CODE_NAME
+                       , -1 AS SORT_NO
+                   UNION ALL
+                  SELECT
+                         c.CODE
+                       , c.CODE_NAME
+                       , c.SORT_NO
+                    FROM COMMON_CODE c
+                   WHERE c.GROUP_CD = :groupCd
+                     AND c.USE_YN = 'Y'
+                 ) x
+           ORDER BY
+                 x.SORT_NO"""),
+      new Example("화면 기본 쿼리 (목록 · 상세 · 저장)", "자동 완성 (친 글자로 시작하는 것 20건)", "검색 칸에 글자를 칠 때 아래에 띄울 목록. 앞에서부터 맞는 것을 먼저.",
+          """
+          SELECT
+                 p.PART_NO
+               , p.PART_NAME
+            FROM PART p
+           WHERE p.PART_NO LIKE :typed || '%'
+              OR p.PART_NAME LIKE '%' || :typed || '%'
+           ORDER BY
+                 CASE WHEN p.PART_NO LIKE :typed || '%' THEN 0 ELSE 1 END
+               , p.PART_NO
+           FETCH FIRST 20 ROWS ONLY""",
+          """
+          SELECT
+                 p.PART_NO
+               , p.PART_NAME
+            FROM PART p
+           WHERE p.PART_NO LIKE :typed || '%'
+              OR p.PART_NAME LIKE '%' || :typed || '%'
+           ORDER BY
+                 CASE WHEN p.PART_NO LIKE :typed || '%' THEN 0 ELSE 1 END
+               , p.PART_NO
+           LIMIT 20"""),
+      new Example("화면 기본 쿼리 (목록 · 상세 · 저장)", "중복 확인 (저장 전 이 번호가 이미 있나)", "저장 단추 앞 검사. 수정일 때는 자기 자신을 빼고 셉니다.",
+          """
+          SELECT
+                 COUNT(*) AS DUP_CNT
+            FROM PART p
+           WHERE p.PART_NO = :partNo
+             AND (:oldPartNo IS NULL OR p.PART_NO <> :oldPartNo)""",
+          """
+          SELECT
+                 COUNT(*) AS DUP_CNT
+            FROM PART p
+           WHERE p.PART_NO = :partNo
+             AND (CAST(:oldPartNo AS VARCHAR) IS NULL OR p.PART_NO <> :oldPartNo)"""),
+      new Example("화면 기본 쿼리 (목록 · 상세 · 저장)", "지우기 전에 딸린 데이터 있나 (삭제 막기)", "자식이 있으면 지우지 못하게 화면에서 막을 때 씁니다.",
+          """
+          SELECT
+                 (SELECT COUNT(*) FROM BOM b WHERE b.CHILD_PART = :partNo OR b.PARENT_PART = :partNo) AS BOM_CNT
+               , (SELECT COUNT(*) FROM ORDER_ITEM i WHERE i.PART_NO = :partNo) AS ORDER_CNT
+               , (SELECT COUNT(*) FROM STOCK_TXN t WHERE t.PART_NO = :partNo) AS STOCK_CNT
+            FROM DUAL""",
+          """
+          SELECT
+                 (SELECT COUNT(*) FROM BOM b WHERE b.CHILD_PART = :partNo OR b.PARENT_PART = :partNo) AS BOM_CNT
+               , (SELECT COUNT(*) FROM ORDER_ITEM i WHERE i.PART_NO = :partNo) AS ORDER_CNT
+               , (SELECT COUNT(*) FROM STOCK_TXN t WHERE t.PART_NO = :partNo) AS STOCK_CNT"""),
+      new Example("화면 기본 쿼리 (목록 · 상세 · 저장)", "엑셀 내려받기 (코드 이름 · 날짜 글자 · 숫자 꼴)", "엑셀에 그대로 붙도록 날짜는 글자로, 금액은 쉼표로, 코드는 이름으로 바꿔 냅니다.",
+          """
+          SELECT
+                 o.ORDER_ID AS "주문번호"
+               , TO_CHAR(o.ORDER_DT, 'YYYY-MM-DD') AS "주문일"
+               , c.CUST_NAME AS "고객"
+               , TO_CHAR(o.AMOUNT, 'FM999,999,999,990') AS "금액"
+               , o.STATUS AS "상태"
+            FROM ORDERS o
+               , CUSTOMER c
+           WHERE o.CUST_ID = c.CUST_ID(+)
+           ORDER BY
+                 o.ORDER_DT DESC""",
+          """
+          SELECT
+                 o.ORDER_ID AS "주문번호"
+               , TO_CHAR(o.ORDER_DT, 'YYYY-MM-DD') AS "주문일"
+               , c.CUST_NAME AS "고객"
+               , TO_CHAR(o.AMOUNT, 'FM999,999,999,990') AS "금액"
+               , o.STATUS AS "상태"
+            FROM ORDERS o
+            LEFT OUTER JOIN CUSTOMER c
+              ON o.CUST_ID = c.CUST_ID
+           ORDER BY
+                 o.ORDER_DT DESC"""),
+      new Example("화면 기본 쿼리 (목록 · 상세 · 저장)", "트리 화면 (부서 트리: 레벨 · 끝 여부 · 정렬)", "왼쪽 트리 화면에 그대로 넣는 꼴. 레벨, 자식 여부, 형제 순서.",
+          """
+          SELECT
+                 LEVEL AS LVL
+               , d.DEPT_ID
+               , d.PARENT_DEPT_ID
+               , d.DEPT_NAME
+               , CONNECT_BY_ISLEAF AS IS_LEAF
+            FROM DEPT d
+           START WITH d.PARENT_DEPT_ID IS NULL
+          CONNECT BY PRIOR d.DEPT_ID = d.PARENT_DEPT_ID
+           ORDER SIBLINGS BY
+                 d.DEPT_NAME""",
+          """
+          WITH RECURSIVE t AS (
+          SELECT
+                 1 AS LVL
+               , d.DEPT_ID
+               , d.PARENT_DEPT_ID
+               , d.DEPT_NAME
+               , CAST(d.DEPT_NAME AS VARCHAR(4000)) AS SORT_KEY
+            FROM DEPT d
+           WHERE d.PARENT_DEPT_ID IS NULL
+           UNION ALL
+          SELECT
+                 t.LVL + 1
+               , d.DEPT_ID
+               , d.PARENT_DEPT_ID
+               , d.DEPT_NAME
+               , CAST(t.SORT_KEY || '/' || d.DEPT_NAME AS VARCHAR(4000))
+            FROM DEPT d
+               , t
+           WHERE d.PARENT_DEPT_ID = t.DEPT_ID
+             AND t.LVL < 20
+          )
+          SELECT
+                 t.LVL
+               , t.DEPT_ID
+               , t.PARENT_DEPT_ID
+               , t.DEPT_NAME
+               , CASE WHEN EXISTS (SELECT 1 FROM DEPT c WHERE c.PARENT_DEPT_ID = t.DEPT_ID) THEN 0 ELSE 1 END AS IS_LEAF
+            FROM t
+           ORDER BY
+                 t.SORT_KEY"""),
+      new Example("화면 기본 쿼리 (목록 · 상세 · 저장)", "마스터 · 디테일 (주문 한 건과 품목 줄, 합계)", "위 마스터 한 줄 아래 디테일 줄. 디테일 쪽에 줄 금액과 합계를 같이 붙입니다.",
+          """
+          SELECT
+                 i.LINE_NO
+               , i.PART_NO
+               , p.PART_NAME
+               , i.QTY
+               , i.PRICE
+               , i.QTY * i.PRICE AS AMT
+               , SUM(i.QTY * i.PRICE) OVER () AS TOTAL_AMT
+            FROM ORDER_ITEM i
+               , PART p
+           WHERE i.PART_NO = p.PART_NO(+)
+             AND i.ORDER_ID = :orderId
+           ORDER BY
+                 i.LINE_NO""",
+          """
+          SELECT
+                 i.LINE_NO
+               , i.PART_NO
+               , p.PART_NAME
+               , i.QTY
+               , i.PRICE
+               , i.QTY * i.PRICE AS AMT
+               , SUM(i.QTY * i.PRICE) OVER () AS TOTAL_AMT
+            FROM ORDER_ITEM i
+            LEFT OUTER JOIN PART p
+              ON i.PART_NO = p.PART_NO
+           WHERE i.ORDER_ID = CAST(:orderId AS INTEGER)
+           ORDER BY
+                 i.LINE_NO"""),
+      new Example("화면 기본 쿼리 (목록 · 상세 · 저장)", "여러 줄 저장 (화면 표 → MERGE, 지운 줄은 DELETE)", "화면 표에서 넘어온 줄로 있으면 고치고 없으면 넣습니다. 화면에서 지운 줄은 따로 DELETE 합니다.",
+          """
+          MERGE INTO ORDER_ITEM t
+          USING (
+                  SELECT
+                         :orderId AS ORDER_ID
+                       , :lineNo AS LINE_NO
+                       , :partNo AS PART_NO
+                       , :qty AS QTY
+                       , :price AS PRICE
+                    FROM DUAL
+                ) s
+             ON (t.ORDER_ID = s.ORDER_ID AND t.LINE_NO = s.LINE_NO)
+           WHEN MATCHED THEN
+                UPDATE
+                   SET t.PART_NO = s.PART_NO
+                     , t.QTY = s.QTY
+                     , t.PRICE = s.PRICE
+           WHEN NOT MATCHED THEN
+                INSERT (ITEM_ID, ORDER_ID, LINE_NO, PART_NO, QTY, PRICE)
+                VALUES (SEQ_ORDER.NEXTVAL, s.ORDER_ID, s.LINE_NO, s.PART_NO, s.QTY, s.PRICE)""",
+          """
+          MERGE INTO ORDER_ITEM t
+          USING (
+                  SELECT
+                         CAST(:orderId AS INTEGER) AS ORDER_ID
+                       , CAST(:lineNo AS INTEGER) AS LINE_NO
+                       , CAST(:partNo AS VARCHAR) AS PART_NO
+                       , CAST(:qty AS INTEGER) AS QTY
+                       , CAST(:price AS NUMERIC) AS PRICE
+                ) s
+             ON (t.ORDER_ID = s.ORDER_ID AND t.LINE_NO = s.LINE_NO)
+           WHEN MATCHED THEN
+                UPDATE
+                   SET PART_NO = s.PART_NO
+                     , QTY = s.QTY
+                     , PRICE = s.PRICE
+           WHEN NOT MATCHED THEN
+                INSERT (ITEM_ID, ORDER_ID, LINE_NO, PART_NO, QTY, PRICE)
+                VALUES (NEXTVAL('seq_order'), s.ORDER_ID, s.LINE_NO, s.PART_NO, s.QTY, s.PRICE)"""),
+      new Example("화면 기본 쿼리 (목록 · 상세 · 저장)", "첨부 · 댓글 수 붙인 목록", "목록 줄마다 딸린 건수를 붙입니다. 묶어서 한 번 잇는 편이 스칼라 서브쿼리보다 큰 목록에서 빠릅니다.",
+          """
+          SELECT
+                 d.DOC_ID
+               , d.DOC_NO
+               , NVL(x.DIST_CNT, 0) AS DIST_CNT
+            FROM DOC d
+               , (SELECT t.DOC_ID, COUNT(*) AS DIST_CNT FROM DOC_DIST t GROUP BY t.DOC_ID) x
+           WHERE d.DOC_ID = x.DOC_ID(+)""",
+          """
+          SELECT
+                 d.DOC_ID
+               , d.DOC_NO
+               , COALESCE(x.DIST_CNT, 0) AS DIST_CNT
+            FROM DOC d
+            LEFT OUTER JOIN (SELECT t.DOC_ID, COUNT(*) AS DIST_CNT FROM DOC_DIST t GROUP BY t.DOC_ID) x
+              ON d.DOC_ID = x.DOC_ID"""),
+      new Example("화면 기본 쿼리 (목록 · 상세 · 저장)", "내 할 일 수 (메인 화면 알림 숫자)", "로그인한 사람의 결재 대기 · 열린 이슈 · 이번 주 일정 수를 한 줄로.",
+          """
+          SELECT
+                 (SELECT COUNT(*) FROM APPROVAL a WHERE a.APPROVER_ID = :userId AND a.STATUS = 'WAIT') AS APPROVAL_CNT
+               , (SELECT COUNT(*) FROM ISSUE i WHERE i.OWNER_ID = :userId AND i.STATUS <> 'CLOSE') AS ISSUE_CNT
+               , (SELECT COUNT(*) FROM SCHEDULE s WHERE s.OWNER_ID = :userId AND s.ACT_END IS NULL AND s.PLAN_END < TRUNC(SYSDATE, 'IW') + 7) AS SCH_CNT
+            FROM DUAL""",
+          """
+          SELECT
+                 (SELECT COUNT(*) FROM APPROVAL a WHERE a.APPROVER_ID = CAST(:userId AS INTEGER) AND a.STATUS = 'WAIT') AS APPROVAL_CNT
+               , (SELECT COUNT(*) FROM ISSUE i WHERE i.OWNER_ID = CAST(:userId AS INTEGER) AND i.STATUS <> 'CLOSE') AS ISSUE_CNT
+               , (SELECT COUNT(*) FROM SCHEDULE s WHERE s.OWNER_ID = CAST(:userId AS INTEGER) AND s.ACT_END IS NULL AND s.PLAN_END < CAST(DATE_TRUNC('week', CURRENT_DATE) AS DATE) + 7) AS SCH_CNT"""),
       new Example("조인", "두 표 잇기 (짝 있는 것만)", "주문마다 고객 이름을 붙입니다. 고객이 없는 주문은 빠집니다.",
           """
           SELECT
@@ -1637,6 +2030,108 @@ public final class Examples {
                  COUNT(*) AS WORK_DAYS
             FROM GENERATE_SERIES(CAST(:fromDt AS DATE), CAST(:toDt AS DATE), INTERVAL '1 day') AS d(DT)
            WHERE EXTRACT(ISODOW FROM d.DT) < 6"""),
+      new Example("기간별 통계", "올해 누계 vs 작년 같은 날까지 누계", "1월 1일부터 오늘까지와 작년 1월 1일부터 작년 오늘까지의 합.",
+          """
+          SELECT
+                 SUM(CASE WHEN o.ORDER_DT >= TRUNC(SYSDATE, 'YYYY') AND o.ORDER_DT < TRUNC(SYSDATE) + 1 THEN o.AMOUNT END) AS THIS_YTD
+               , SUM(CASE WHEN o.ORDER_DT >= ADD_MONTHS(TRUNC(SYSDATE, 'YYYY'), -12) AND o.ORDER_DT < ADD_MONTHS(TRUNC(SYSDATE), -12) + 1 THEN o.AMOUNT END) AS LAST_YTD
+            FROM ORDERS o""",
+          """
+          SELECT
+                 SUM(CASE WHEN o.ORDER_DT >= DATE_TRUNC('year', CURRENT_DATE) AND o.ORDER_DT < CURRENT_DATE + 1 THEN o.AMOUNT END) AS THIS_YTD
+               , SUM(CASE WHEN o.ORDER_DT >= DATE_TRUNC('year', CURRENT_DATE) - INTERVAL '1 year' AND o.ORDER_DT < CURRENT_DATE - INTERVAL '1 year' + INTERVAL '1 day' THEN o.AMOUNT END) AS LAST_YTD
+            FROM ORDERS o"""),
+      new Example("기간별 통계", "주차별 올해 · 작년 비교 (ISO 주)", "주 번호마다 올해와 작년 건수를 나란히.",
+          """
+          SELECT
+                 TO_CHAR(o.ORDER_DT, 'IW') AS WK
+               , SUM(CASE WHEN TO_CHAR(o.ORDER_DT, 'IYYY') = TO_CHAR(SYSDATE, 'IYYY') THEN 1 ELSE 0 END) AS THIS_YEAR
+               , SUM(CASE WHEN TO_CHAR(o.ORDER_DT, 'IYYY') = TO_CHAR(ADD_MONTHS(SYSDATE, -12), 'IYYY') THEN 1 ELSE 0 END) AS LAST_YEAR
+            FROM ORDERS o
+           GROUP BY
+                 TO_CHAR(o.ORDER_DT, 'IW')
+           ORDER BY
+                 WK""",
+          """
+          SELECT
+                 TO_CHAR(o.ORDER_DT, 'IW') AS WK
+               , SUM(CASE WHEN TO_CHAR(o.ORDER_DT, 'IYYY') = TO_CHAR(CURRENT_DATE, 'IYYY') THEN 1 ELSE 0 END) AS THIS_YEAR
+               , SUM(CASE WHEN TO_CHAR(o.ORDER_DT, 'IYYY') = TO_CHAR(CURRENT_DATE - INTERVAL '1 year', 'IYYY') THEN 1 ELSE 0 END) AS LAST_YEAR
+            FROM ORDERS o
+           GROUP BY
+                 TO_CHAR(o.ORDER_DT, 'IW')
+           ORDER BY
+                 WK"""),
+      new Example("기간별 통계", "월별 3개월 이동 평균 매출", "이번 달 포함 앞 3달 평균. 들쭉날쭉한 달 매출을 부드럽게 봅니다.",
+          """
+          SELECT
+                 x.YM
+               , x.AMT
+               , ROUND(AVG(x.AMT) OVER (ORDER BY x.YM ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)) AS MA3
+            FROM (
+                  SELECT
+                         TO_CHAR(s.SO_DT, 'YYYY-MM') AS YM
+                       , SUM(s.QTY * s.PRICE) AS AMT
+                    FROM SALES_ORDER s
+                   GROUP BY
+                         TO_CHAR(s.SO_DT, 'YYYY-MM')
+                 ) x
+           ORDER BY
+                 x.YM""",
+          """
+          SELECT
+                 x.YM
+               , x.AMT
+               , ROUND(AVG(x.AMT) OVER (ORDER BY x.YM ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)) AS MA3
+            FROM (
+                  SELECT
+                         TO_CHAR(s.SO_DT, 'YYYY-MM') AS YM
+                       , SUM(s.QTY * s.PRICE) AS AMT
+                    FROM SALES_ORDER s
+                   GROUP BY
+                         TO_CHAR(s.SO_DT, 'YYYY-MM')
+                 ) x
+           ORDER BY
+                 x.YM"""),
+      new Example("기간별 통계", "상위 20% 고객이 차지하는 매출 비중 (파레토)", "고객을 매출 순으로 다섯 등분해 맨 위 묶음의 매출 비중을 봅니다.",
+          """
+          SELECT
+                 x.BUCKET
+               , COUNT(*) AS CUST_CNT
+               , SUM(x.AMT) AS AMT
+               , ROUND(SUM(x.AMT) * 100 / SUM(SUM(x.AMT)) OVER (), 1) AS PCT
+            FROM (
+                  SELECT
+                         o.CUST_ID
+                       , SUM(o.AMOUNT) AS AMT
+                       , NTILE(5) OVER (ORDER BY SUM(o.AMOUNT) DESC) AS BUCKET
+                    FROM ORDERS o
+                   GROUP BY
+                         o.CUST_ID
+                 ) x
+           GROUP BY
+                 x.BUCKET
+           ORDER BY
+                 x.BUCKET""",
+          """
+          SELECT
+                 x.BUCKET
+               , COUNT(*) AS CUST_CNT
+               , SUM(x.AMT) AS AMT
+               , ROUND(SUM(x.AMT) * 100 / SUM(SUM(x.AMT)) OVER (), 1) AS PCT
+            FROM (
+                  SELECT
+                         o.CUST_ID
+                       , SUM(o.AMOUNT) AS AMT
+                       , NTILE(5) OVER (ORDER BY SUM(o.AMOUNT) DESC) AS BUCKET
+                    FROM ORDERS o
+                   GROUP BY
+                         o.CUST_ID
+                 ) x
+           GROUP BY
+                 x.BUCKET
+           ORDER BY
+                 x.BUCKET"""),
       new Example("분석 함수", "순위 (RANK · DENSE_RANK · ROW_NUMBER)", "같은 금액일 때 RANK 는 1,1,3, DENSE_RANK 는 1,1,2, ROW_NUMBER 는 1,2,3.",
           """
           SELECT
@@ -3362,11 +3857,11 @@ public final class Examples {
                  )""",
           """
           DELETE FROM QUOTE q
-           WHERE q.ctid IN (
+           WHERE q.CTID IN (
                   SELECT x.RID
                     FROM (
                           SELECT
-                                 t.ctid AS RID
+                                 t.CTID AS RID
                                , ROW_NUMBER() OVER (PARTITION BY t.PART_NO, t.VENDOR_ID ORDER BY t.QUOTE_DT DESC) AS RN
                             FROM QUOTE t
                          ) x
@@ -3506,6 +4001,250 @@ public final class Examples {
           SELECT
                  (SELECT COUNT(*) FROM ORDERS) AS NOW_CNT
                , (SELECT COUNT(*) FROM ORDERS_BAK) AS BAK_CNT"""),
+      new Example("페이징 · 개수", "이전 글 · 다음 글 (상세 화면 아래)", "지금 글 번호의 바로 앞 · 뒤 글 번호와 제목. 목록 정렬과 같은 기준(등록일 → 번호)으로 LAG · LEAD 를 씁니다.",
+          """
+          SELECT
+                 x.PREV_ID
+               , x.PREV_TITLE
+               , x.NEXT_ID
+               , x.NEXT_TITLE
+            FROM (
+                  SELECT
+                         i.ISSUE_ID
+                       , LAG(i.ISSUE_ID) OVER (ORDER BY i.REG_DT DESC, i.ISSUE_ID DESC) AS PREV_ID
+                       , LAG(i.TITLE) OVER (ORDER BY i.REG_DT DESC, i.ISSUE_ID DESC) AS PREV_TITLE
+                       , LEAD(i.ISSUE_ID) OVER (ORDER BY i.REG_DT DESC, i.ISSUE_ID DESC) AS NEXT_ID
+                       , LEAD(i.TITLE) OVER (ORDER BY i.REG_DT DESC, i.ISSUE_ID DESC) AS NEXT_TITLE
+                    FROM ISSUE i
+                   WHERE i.PROJ_ID = :projId
+                 ) x
+           WHERE x.ISSUE_ID = :issueId""",
+          """
+          SELECT
+                 x.PREV_ID
+               , x.PREV_TITLE
+               , x.NEXT_ID
+               , x.NEXT_TITLE
+            FROM (
+                  SELECT
+                         i.ISSUE_ID
+                       , LAG(i.ISSUE_ID) OVER (ORDER BY i.REG_DT DESC, i.ISSUE_ID DESC) AS PREV_ID
+                       , LAG(i.TITLE) OVER (ORDER BY i.REG_DT DESC, i.ISSUE_ID DESC) AS PREV_TITLE
+                       , LEAD(i.ISSUE_ID) OVER (ORDER BY i.REG_DT DESC, i.ISSUE_ID DESC) AS NEXT_ID
+                       , LEAD(i.TITLE) OVER (ORDER BY i.REG_DT DESC, i.ISSUE_ID DESC) AS NEXT_TITLE
+                    FROM ISSUE i
+                   WHERE i.PROJ_ID = :projId
+                 ) x
+           WHERE x.ISSUE_ID = :issueId"""),
+      new Example("페이징 · 개수", "이전 글 · 다음 글 (MAX · MIN 으로, 큰 표에서 빠름)", "번호 순서일 때는 분석 함수 없이 바로 앞 · 뒤 번호를 찾는 편이 색인을 잘 탑니다.",
+          """
+          SELECT
+                 (SELECT MAX(i.ISSUE_ID) FROM ISSUE i WHERE i.ISSUE_ID < :issueId) AS PREV_ID
+               , (SELECT MIN(i.ISSUE_ID) FROM ISSUE i WHERE i.ISSUE_ID > :issueId) AS NEXT_ID
+            FROM DUAL""",
+          """
+          SELECT
+                 (SELECT MAX(i.ISSUE_ID) FROM ISSUE i WHERE i.ISSUE_ID < CAST(:issueId AS INTEGER)) AS PREV_ID
+               , (SELECT MIN(i.ISSUE_ID) FROM ISSUE i WHERE i.ISSUE_ID > CAST(:issueId AS INTEGER)) AS NEXT_ID"""),
+      new Example("페이징 · 개수", "페이지 번호 계산 (전체 건수 · 전체 페이지 · 이전 · 다음 페이지 있음)", "화면 아래 페이지 단추용. 한 쪽 건수와 지금 쪽 번호를 넣으면 전체 쪽 수와 이전 · 다음 단추를 켤지 알려 줍니다.",
+          """
+          SELECT
+                 c.TOTAL_CNT
+               , CEIL(c.TOTAL_CNT / :pageSize) AS TOTAL_PAGE
+               , CASE WHEN :pageNo > 1 THEN 'Y' ELSE 'N' END AS HAS_PREV
+               , CASE WHEN :pageNo < CEIL(c.TOTAL_CNT / :pageSize) THEN 'Y' ELSE 'N' END AS HAS_NEXT
+            FROM (SELECT COUNT(*) AS TOTAL_CNT FROM ORDERS o WHERE o.STATUS = :status) c""",
+          """
+          SELECT
+                 c.TOTAL_CNT
+               , CEIL(c.TOTAL_CNT / CAST(:pageSize AS NUMERIC)) AS TOTAL_PAGE
+               , CASE WHEN CAST(:pageNo AS INTEGER) > 1 THEN 'Y' ELSE 'N' END AS HAS_PREV
+               , CASE WHEN CAST(:pageNo AS INTEGER) < CEIL(c.TOTAL_CNT / CAST(:pageSize AS NUMERIC)) THEN 'Y' ELSE 'N' END AS HAS_NEXT
+            FROM (SELECT COUNT(*) AS TOTAL_CNT FROM ORDERS o WHERE o.STATUS = :status) c"""),
+      new Example("페이징 · 개수", "페이지 단추 묶음 (1~10, 11~20 … 지금 묶음의 시작 · 끝)", "단추를 10개씩 보일 때 지금 쪽이 속한 묶음의 첫 쪽 · 끝 쪽과 이전 · 다음 묶음 쪽 번호.",
+          """
+          SELECT
+                 FLOOR((:pageNo - 1) / 10) * 10 + 1 AS BLOCK_START
+               , LEAST(FLOOR((:pageNo - 1) / 10) * 10 + 10, CEIL(c.TOTAL_CNT / :pageSize)) AS BLOCK_END
+               , GREATEST(FLOOR((:pageNo - 1) / 10) * 10, 1) AS PREV_BLOCK_PAGE
+               , LEAST(FLOOR((:pageNo - 1) / 10) * 10 + 11, CEIL(c.TOTAL_CNT / :pageSize)) AS NEXT_BLOCK_PAGE
+            FROM (SELECT COUNT(*) AS TOTAL_CNT FROM ORDERS o) c""",
+          """
+          SELECT
+                 FLOOR((CAST(:pageNo AS INTEGER) - 1) / 10) * 10 + 1 AS BLOCK_START
+               , LEAST(FLOOR((CAST(:pageNo AS INTEGER) - 1) / 10) * 10 + 10, CEIL(c.TOTAL_CNT / CAST(:pageSize AS NUMERIC))) AS BLOCK_END
+               , GREATEST(FLOOR((CAST(:pageNo AS INTEGER) - 1) / 10) * 10, 1) AS PREV_BLOCK_PAGE
+               , LEAST(FLOOR((CAST(:pageNo AS INTEGER) - 1) / 10) * 10 + 11, CEIL(c.TOTAL_CNT / CAST(:pageSize AS NUMERIC))) AS NEXT_BLOCK_PAGE
+            FROM (SELECT COUNT(*) AS TOTAL_CNT FROM ORDERS o) c"""),
+      new Example("페이징 · 개수", "페이지 나누기 (ROWNUM 세 겹, Oracle 11g 이하)", "11g 이하에서 쓰는 꼴. 안쪽에서 정렬 → 가운데서 끝 번호까지 자르고 → 바깥에서 시작 번호부터.",
+          """
+          SELECT
+                 z.*
+            FROM (
+                  SELECT
+                         ROWNUM AS RN
+                       , y.*
+                    FROM (
+                          SELECT
+                                 o.ORDER_ID
+                               , o.ORDER_DT
+                               , o.AMOUNT
+                            FROM ORDERS o
+                           ORDER BY
+                                 o.ORDER_DT DESC
+                               , o.ORDER_ID DESC
+                         ) y
+                   WHERE ROWNUM <= :pageNo * :pageSize
+                 ) z
+           WHERE z.RN > (:pageNo - 1) * :pageSize""",
+          """
+          SELECT
+                 o.ORDER_ID
+               , o.ORDER_DT
+               , o.AMOUNT
+            FROM ORDERS o
+           ORDER BY
+                 o.ORDER_DT DESC
+               , o.ORDER_ID DESC
+           LIMIT CAST(:pageSize AS INTEGER) OFFSET (CAST(:pageNo AS INTEGER) - 1) * CAST(:pageSize AS INTEGER)"""),
+      new Example("페이징 · 개수", "페이지 나누기 + 전체 건수 + 줄 번호 (화면 목록 한 방)", "목록 화면 한 번 조회로 줄 번호(역순 번호 포함) · 전체 건수 · 이번 쪽 줄을 다 받습니다.",
+          """
+          SELECT
+                 z.*
+            FROM (
+                  SELECT
+                         ROW_NUMBER() OVER (ORDER BY o.ORDER_DT DESC, o.ORDER_ID DESC) AS RN
+                       , COUNT(*) OVER () AS TOTAL_CNT
+                       , o.ORDER_ID
+                       , o.ORDER_DT
+                       , o.STATUS
+                       , o.AMOUNT
+                    FROM ORDERS o
+                   WHERE (:status IS NULL OR o.STATUS = :status)
+                 ) z
+           WHERE z.RN BETWEEN (:pageNo - 1) * :pageSize + 1 AND :pageNo * :pageSize""",
+          """
+          SELECT
+                 z.*
+               , z.TOTAL_CNT - z.RN + 1 AS DESC_NO
+            FROM (
+                  SELECT
+                         ROW_NUMBER() OVER (ORDER BY o.ORDER_DT DESC, o.ORDER_ID DESC) AS RN
+                       , COUNT(*) OVER () AS TOTAL_CNT
+                       , o.ORDER_ID
+                       , o.ORDER_DT
+                       , o.STATUS
+                       , o.AMOUNT
+                    FROM ORDERS o
+                   WHERE (CAST(:status AS VARCHAR) IS NULL OR o.STATUS = :status)
+                 ) z
+           WHERE z.RN BETWEEN (CAST(:pageNo AS INTEGER) - 1) * CAST(:pageSize AS INTEGER) + 1 AND CAST(:pageNo AS INTEGER) * CAST(:pageSize AS INTEGER)"""),
+      new Example("페이징 · 개수", "이전 쪽 빨리 (키 기준 거꾸로)", "「다음 쪽 빨리」 의 반대. 지금 쪽 첫 줄보다 앞선 줄을 거꾸로 읽어 10건 가져온 뒤 다시 뒤집습니다.",
+          """
+          SELECT
+                 y.*
+            FROM (
+                  SELECT
+                         o.ORDER_ID
+                       , o.ORDER_DT
+                    FROM ORDERS o
+                   WHERE (o.ORDER_DT > :firstDt OR (o.ORDER_DT = :firstDt AND o.ORDER_ID > :firstId))
+                   ORDER BY
+                         o.ORDER_DT
+                       , o.ORDER_ID
+                   FETCH FIRST 10 ROWS ONLY
+                 ) y
+           ORDER BY
+                 y.ORDER_DT DESC
+               , y.ORDER_ID DESC""",
+          """
+          SELECT
+                 y.*
+            FROM (
+                  SELECT
+                         o.ORDER_ID
+                       , o.ORDER_DT
+                    FROM ORDERS o
+                   WHERE (o.ORDER_DT, o.ORDER_ID) > (CAST(:firstDt AS DATE), CAST(:firstId AS INTEGER))
+                   ORDER BY
+                         o.ORDER_DT
+                       , o.ORDER_ID
+                   LIMIT 10
+                 ) y
+           ORDER BY
+                 y.ORDER_DT DESC
+               , y.ORDER_ID DESC"""),
+      new Example("페이징 · 개수", "목록에서 이 줄이 몇 쪽에 있나", "상세에서 목록으로 돌아갈 때 그 줄이 있는 쪽으로 가려면 순번을 쪽 크기로 나눕니다.",
+          """
+          SELECT
+                 CEIL(x.RN / :pageSize) AS PAGE_NO
+            FROM (
+                  SELECT
+                         o.ORDER_ID
+                       , ROW_NUMBER() OVER (ORDER BY o.ORDER_DT DESC, o.ORDER_ID DESC) AS RN
+                    FROM ORDERS o
+                 ) x
+           WHERE x.ORDER_ID = :orderId""",
+          """
+          SELECT
+                 CEIL(x.RN / CAST(:pageSize AS NUMERIC)) AS PAGE_NO
+            FROM (
+                  SELECT
+                         o.ORDER_ID
+                       , ROW_NUMBER() OVER (ORDER BY o.ORDER_DT DESC, o.ORDER_ID DESC) AS RN
+                    FROM ORDERS o
+                 ) x
+           WHERE x.ORDER_ID = CAST(:orderId AS INTEGER)"""),
+      new Example("페이징 · 개수", "그룹 안에서 페이지 (고객마다 최근 5건만)", "고객마다 최근 주문 5건씩. 그룹별 상위 N 을 페이징처럼 씁니다.",
+          """
+          SELECT
+                 x.*
+            FROM (
+                  SELECT
+                         o.CUST_ID
+                       , o.ORDER_ID
+                       , o.ORDER_DT
+                       , ROW_NUMBER() OVER (PARTITION BY o.CUST_ID ORDER BY o.ORDER_DT DESC) AS RN
+                    FROM ORDERS o
+                 ) x
+           WHERE x.RN <= 5""",
+          """
+          SELECT
+                 x.*
+            FROM (
+                  SELECT
+                         o.CUST_ID
+                       , o.ORDER_ID
+                       , o.ORDER_DT
+                       , ROW_NUMBER() OVER (PARTITION BY o.CUST_ID ORDER BY o.ORDER_DT DESC) AS RN
+                    FROM ORDERS o
+                 ) x
+           WHERE x.RN <= 5"""),
+      new Example("페이징 · 개수", "정렬 칸을 화면에서 고르기 (동적 ORDER BY)", "정렬 칸 이름을 값으로 받아 CASE 로 고릅니다. 숫자 · 날짜 · 글자는 CASE 를 나눠야 형이 섞이지 않습니다.",
+          """
+          SELECT
+                 o.ORDER_ID
+               , o.ORDER_DT
+               , o.AMOUNT
+               , o.STATUS
+            FROM ORDERS o
+           ORDER BY
+                 CASE WHEN :sortCol = 'AMOUNT' THEN o.AMOUNT END DESC
+               , CASE WHEN :sortCol = 'ORDER_DT' THEN o.ORDER_DT END DESC
+               , CASE WHEN :sortCol = 'STATUS' THEN o.STATUS END
+               , o.ORDER_ID DESC""",
+          """
+          SELECT
+                 o.ORDER_ID
+               , o.ORDER_DT
+               , o.AMOUNT
+               , o.STATUS
+            FROM ORDERS o
+           ORDER BY
+                 CASE WHEN CAST(:sortCol AS VARCHAR) = 'AMOUNT' THEN o.AMOUNT END DESC
+               , CASE WHEN CAST(:sortCol AS VARCHAR) = 'ORDER_DT' THEN o.ORDER_DT END DESC
+               , CASE WHEN CAST(:sortCol AS VARCHAR) = 'STATUS' THEN o.STATUS END
+               , o.ORDER_ID DESC"""),
       new Example("날짜", "오늘 들어온 것", "오늘 0시부터 내일 0시 전까지. 칼럼에 함수를 씌우지 않아 색인을 탈 수 있습니다.",
           """
           SELECT
@@ -4636,6 +5375,78 @@ public final class Examples {
           UPDATE ORDERS
              SET STATUS = CASE STATUS WHEN 'A' THEN 'B' WHEN 'B' THEN 'A' END
            WHERE STATUS IN ('A', 'B')"""),
+      new Example("넣기 · 고치기", "TRUNCATE 와 DELETE 차이", "TRUNCATE 는 표를 통째로 비우고 되돌릴 수 없습니다(Oracle). 조건이 있으면 DELETE 를 씁니다.",
+          """
+          TRUNCATE TABLE UPLOAD_TMP""",
+          """
+          TRUNCATE TABLE UPLOAD_TMP"""),
+      new Example("넣기 · 고치기", "큰 표 나눠 고치기 (한 번에 1만 줄씩)", "한 번에 너무 많이 고치면 잠금 · 로그가 커집니다. 조건에 맞는 줄을 정해진 수만큼 나눠 고치고 커밋합니다.",
+          """
+          UPDATE IF_PART f
+             SET f.STATUS = 'ARCHIVED'
+           WHERE f.STATUS = 'DONE'
+             AND f.REG_DT < SYSDATE - 365
+             AND ROWNUM <= 10000""",
+          """
+          UPDATE IF_PART f
+             SET STATUS = 'ARCHIVED'
+           WHERE f.CTID IN (
+                  SELECT x.CTID
+                    FROM IF_PART x
+                   WHERE x.STATUS = 'DONE'
+                     AND x.REG_DT < NOW() - INTERVAL '365 day'
+                   LIMIT 10000
+                 )"""),
+      new Example("넣기 · 고치기", "백업 표로 되돌리기 (지운 줄 다시 넣기)", "고치기 전에 떠 둔 백업 표에서 없어진 줄만 다시 넣습니다.",
+          """
+          INSERT INTO ORDERS (ORDER_ID, CUST_ID, AMOUNT, STATUS, ORDER_DT, PARENT_ID)
+          SELECT
+                 b.ORDER_ID
+               , b.CUST_ID
+               , b.AMOUNT
+               , b.STATUS
+               , b.ORDER_DT
+               , b.PARENT_ID
+            FROM ORDERS_BAK b
+           WHERE NOT EXISTS (SELECT 1 FROM ORDERS o WHERE o.ORDER_ID = b.ORDER_ID)""",
+          """
+          INSERT INTO ORDERS (ORDER_ID, CUST_ID, AMOUNT, STATUS, ORDER_DT, PARENT_ID)
+          SELECT
+                 b.ORDER_ID
+               , b.CUST_ID
+               , b.AMOUNT
+               , b.STATUS
+               , b.ORDER_DT
+               , b.PARENT_ID
+            FROM ORDERS_BAK b
+           WHERE NOT EXISTS (SELECT 1 FROM ORDERS o WHERE o.ORDER_ID = b.ORDER_ID)"""),
+      new Example("넣기 · 고치기", "백업 표 값으로 고친 칼럼 되돌리기", "잘못 고친 칼럼만 백업 표 값으로 되돌립니다.",
+          """
+          UPDATE ORDERS o
+             SET o.STATUS = (SELECT b.STATUS FROM ORDERS_BAK b WHERE b.ORDER_ID = o.ORDER_ID)
+           WHERE EXISTS (SELECT 1 FROM ORDERS_BAK b WHERE b.ORDER_ID = o.ORDER_ID AND DECODE(b.STATUS, o.STATUS, 0, 1) = 1)""",
+          """
+          UPDATE ORDERS o
+             SET STATUS = b.STATUS
+            FROM ORDERS_BAK b
+           WHERE b.ORDER_ID = o.ORDER_ID
+             AND b.STATUS IS DISTINCT FROM o.STATUS"""),
+      new Example("넣기 · 고치기", "순서 칼럼 끼워 넣기 (뒤 번호 하나씩 밀기)", "정렬 번호 3 자리에 새 줄을 넣으려고 3 이상인 줄의 번호를 1 씩 올립니다.",
+          """
+          UPDATE COMMON_CODE c
+             SET c.SORT_NO = c.SORT_NO + 1
+           WHERE c.GROUP_CD = :groupCd
+             AND c.SORT_NO >= :insertAt""",
+          """
+          UPDATE COMMON_CODE c
+             SET SORT_NO = c.SORT_NO + 1
+           WHERE c.GROUP_CD = :groupCd
+             AND c.SORT_NO >= CAST(:insertAt AS INTEGER)"""),
+      new Example("넣기 · 고치기", "부모 지우면 자식도 (외래 키 ON DELETE CASCADE)", "부모 줄을 지울 때 자식 줄이 같이 지워지게 키를 겁니다. 실수로 많이 지워질 수 있어 조심해서 씁니다.",
+          """
+          ALTER TABLE ORDER_ITEM ADD CONSTRAINT FK_ORDER_ITEM_ORDER FOREIGN KEY (ORDER_ID) REFERENCES ORDERS (ORDER_ID) ON DELETE CASCADE""",
+          """
+          ALTER TABLE ORDER_ITEM ADD CONSTRAINT FK_ORDER_ITEM_ORDER FOREIGN KEY (ORDER_ID) REFERENCES ORDERS (ORDER_ID) ON DELETE CASCADE"""),
       new Example("표 만들기 · 바꾸기", "표 만들기 (기본 키 포함)", "칼럼 · 기본 키 · 기본값을 함께 정합니다.",
           """
           CREATE TABLE ORDER_NOTE (
@@ -4681,6 +5492,68 @@ public final class Examples {
           ALTER TABLE ORDER_ITEM ADD CONSTRAINT FK_ORDER_ITEM_ORDER FOREIGN KEY (ORDER_ID) REFERENCES ORDERS (ORDER_ID)""",
           """
           ALTER TABLE ORDER_ITEM ADD CONSTRAINT FK_ORDER_ITEM_ORDER FOREIGN KEY (ORDER_ID) REFERENCES ORDERS (ORDER_ID)"""),
+      new Example("표 만들기 · 바꾸기", "기본 키 · 고유 제약 · 검사 제약 더하기", "있는 표에 키와 값 검사를 겁니다. 이미 어긋난 데이터가 있으면 실패하니 먼저 점검하세요.",
+          """
+          ALTER TABLE PART_VENDOR ADD CONSTRAINT UK_PART_VENDOR UNIQUE (PART_NO, VENDOR_ID)""",
+          """
+          ALTER TABLE PART_VENDOR ADD CONSTRAINT UK_PART_VENDOR UNIQUE (PART_NO, VENDOR_ID)"""),
+      new Example("표 만들기 · 바꾸기", "검사 제약 (값 범위 · 허용 값)", "수량은 0 이상, 상태는 정한 값만 들어가게 합니다.",
+          """
+          ALTER TABLE ORDER_ITEM ADD CONSTRAINT CK_ORDER_ITEM_QTY CHECK (QTY >= 0)""",
+          """
+          ALTER TABLE ORDER_ITEM ADD CONSTRAINT CK_ORDER_ITEM_QTY CHECK (QTY >= 0)"""),
+      new Example("표 만들기 · 바꾸기", "칼럼 이름 바꾸기 · 지우기", "이름을 바꾸면 그 칼럼을 쓰는 쿼리 · 뷰가 모두 깨지니 먼저 찾아보세요(「뷰 · 함수 소스에서 글자 찾기」).",
+          """
+          ALTER TABLE PART RENAME COLUMN TAGS TO TAG_LIST""",
+          """
+          ALTER TABLE PART RENAME COLUMN TAGS TO TAG_LIST"""),
+      new Example("표 만들기 · 바꾸기", "기본값 주기 (넣을 때 비우면 이 값)", "등록일 칼럼에 기본값을 줍니다. 이미 들어간 줄은 바뀌지 않습니다.",
+          """
+          ALTER TABLE PART MODIFY (REG_DT DEFAULT SYSDATE)""",
+          """
+          ALTER TABLE PART ALTER COLUMN REG_DT SET DEFAULT CURRENT_DATE"""),
+      new Example("표 만들기 · 바꾸기", "NOT NULL 걸기 · 풀기", "비면 안 되는 칼럼에 NOT NULL. 빈 줄이 있으면 먼저 채워야 합니다.",
+          """
+          ALTER TABLE PART MODIFY (PART_NAME NOT NULL)""",
+          """
+          ALTER TABLE PART ALTER COLUMN PART_NAME SET NOT NULL"""),
+      new Example("표 만들기 · 바꾸기", "시퀀스 만들기 · 다음 번호 맞추기", "번호용 시퀀스. 이미 데이터가 있으면 가장 큰 번호 다음부터 시작하게 만듭니다.",
+          """
+          CREATE SEQUENCE SEQ_ISSUE START WITH 1000 INCREMENT BY 1 NOCACHE""",
+          """
+          CREATE SEQUENCE SEQ_ISSUE START WITH 1000 INCREMENT BY 1"""),
+      new Example("표 만들기 · 바꾸기", "자동 번호 칼럼 (IDENTITY, 12c 이상)", "시퀀스 없이 넣을 때마다 번호가 붙는 칼럼.",
+          """
+          CREATE TABLE TB_MEMO (
+              MEMO_ID NUMBER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY
+            , MEMO_TEXT VARCHAR2(4000)
+            , REG_DT DATE DEFAULT SYSDATE
+          )""",
+          """
+          CREATE TABLE TB_MEMO (
+              MEMO_ID BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY
+            , MEMO_TEXT VARCHAR(4000)
+            , REG_DT DATE DEFAULT CURRENT_DATE
+          )"""),
+      new Example("표 만들기 · 바꾸기", "임시 표 (세션 · 트랜잭션 동안만)", "중간 결과를 잠깐 담는 표. 커밋하면 비워집니다.",
+          """
+          CREATE GLOBAL TEMPORARY TABLE TMP_PART_LIST (
+              PART_NO VARCHAR2(30)
+          ) ON COMMIT DELETE ROWS""",
+          """
+          CREATE TEMPORARY TABLE TMP_PART_LIST (
+              PART_NO VARCHAR(30)
+          ) ON COMMIT DELETE ROWS"""),
+      new Example("표 만들기 · 바꾸기", "여러 칼럼 색인 · 함수 색인", "자주 같이 거르는 칼럼 묶음, 또는 UPPER(이름) 처럼 함수를 씌워 거를 때의 색인.",
+          """
+          CREATE INDEX IX_ORDERS_CUST_DT ON ORDERS (CUST_ID, ORDER_DT)""",
+          """
+          CREATE INDEX IX_ORDERS_CUST_DT ON ORDERS (CUST_ID, ORDER_DT)"""),
+      new Example("표 만들기 · 바꾸기", "다른 이름으로 부르기 (동의어 · 검색 경로)", "다른 계정의 표를 계정 이름 없이 부르게 합니다.",
+          """
+          CREATE SYNONYM ORDERS_REMOTE FOR APP_OWNER.ORDERS""",
+          """
+          SET search_path TO public"""),
       new Example("표 · 칼럼 정보", "표의 칼럼 목록과 설명", "표 이름을 바꿔 실행하면 칼럼 · 형식 · 설명을 봅니다.",
           """
           SELECT
@@ -4965,17 +5838,17 @@ public final class Examples {
              AND l.SESSION_ID = s.SID""",
           """
           SELECT
-                 a.pid
-               , a.usename
-               , c.relname
-               , l.mode
-               , l.granted
-            FROM pg_locks l
-               , pg_class c
-               , pg_stat_activity a
-           WHERE l.relation = c.oid
-             AND l.pid = a.pid
-             AND c.relkind = 'r'"""),
+                 a.PID
+               , a.USENAME
+               , c.RELNAME
+               , l.MODE
+               , l.GRANTED
+            FROM PG_LOCKS l
+               , PG_CLASS c
+               , PG_STAT_ACTIVITY a
+           WHERE l.RELATION = c.OID
+             AND l.PID = a.PID
+             AND c.RELKIND = 'r'"""),
       new Example("성능", "실행 계획 보기", "색인을 타는지, 전체를 읽는지 봅니다. 콘솔의 「실행 계획」 단추와 같습니다.",
           """
           EXPLAIN PLAN FOR
@@ -5718,6 +6591,1639 @@ public final class Examples {
                    WHERE b.PARENT_PART = a.CHILD_PART
                      AND b.CHILD_PART = a.PARENT_PART
                  )"""),
+      new Example("BOM · 부품", "리비전 건너뛴 것 (A 다음 C)", "리비전 글자가 한 칸씩 오르지 않은 부품. 리비전이 글자 한 자리일 때.",
+          """
+          SELECT
+                 x.PART_NO
+               , x.PREV_REV
+               , x.REV
+            FROM (
+                  SELECT
+                         r.PART_NO
+                       , r.REV
+                       , LAG(r.REV) OVER (PARTITION BY r.PART_NO ORDER BY r.REV) AS PREV_REV
+                    FROM PART_REV r
+                 ) x
+           WHERE x.PREV_REV IS NOT NULL
+             AND ASCII(x.REV) - ASCII(x.PREV_REV) > 1""",
+          """
+          SELECT
+                 x.PART_NO
+               , x.PREV_REV
+               , x.REV
+            FROM (
+                  SELECT
+                         r.PART_NO
+                       , r.REV
+                       , LAG(r.REV) OVER (PARTITION BY r.PART_NO ORDER BY r.REV) AS PREV_REV
+                    FROM PART_REV r
+                 ) x
+           WHERE x.PREV_REV IS NOT NULL
+             AND ASCII(x.REV) - ASCII(x.PREV_REV) > 1"""),
+      new Example("BOM · 부품", "승인 상태인데 승인일이 빈 리비전 (점검)", "상태와 날짜가 서로 맞지 않는 줄.",
+          """
+          SELECT
+                 r.PART_NO
+               , r.REV
+               , r.STATUS
+               , r.APPROVED_DT
+            FROM PART_REV r
+           WHERE (r.STATUS = 'APPROVED' AND r.APPROVED_DT IS NULL)
+              OR (r.STATUS <> 'APPROVED' AND r.APPROVED_DT IS NOT NULL)""",
+          """
+          SELECT
+                 r.PART_NO
+               , r.REV
+               , r.STATUS
+               , r.APPROVED_DT
+            FROM PART_REV r
+           WHERE (r.STATUS = 'APPROVED' AND r.APPROVED_DT IS NULL)
+              OR (r.STATUS <> 'APPROVED' AND r.APPROVED_DT IS NOT NULL)"""),
+      new Example("BOM · 부품", "재질별 부품 수 · 중량 합계 (최신 리비전 기준)", "부품마다 최신 리비전 하나만 골라 재질별로 묶습니다.",
+          """
+          SELECT
+                 x.MATERIAL
+               , COUNT(*) AS PART_CNT
+               , SUM(x.WEIGHT) AS TOTAL_WEIGHT
+            FROM (
+                  SELECT
+                         r.PART_NO
+                       , r.MATERIAL
+                       , r.WEIGHT
+                       , ROW_NUMBER() OVER (PARTITION BY r.PART_NO ORDER BY r.REV DESC) AS RN
+                    FROM PART_REV r
+                 ) x
+           WHERE x.RN = 1
+           GROUP BY
+                 x.MATERIAL
+           ORDER BY
+                 PART_CNT DESC""",
+          """
+          SELECT
+                 x.MATERIAL
+               , COUNT(*) AS PART_CNT
+               , SUM(x.WEIGHT) AS TOTAL_WEIGHT
+            FROM (
+                  SELECT
+                         r.PART_NO
+                       , r.MATERIAL
+                       , r.WEIGHT
+                       , ROW_NUMBER() OVER (PARTITION BY r.PART_NO ORDER BY r.REV DESC) AS RN
+                    FROM PART_REV r
+                 ) x
+           WHERE x.RN = 1
+           GROUP BY
+                 x.MATERIAL
+           ORDER BY
+                 PART_CNT DESC"""),
+      new Example("BOM · 부품", "담당자별 부품 수 · 이번 달 새 부품 수", "설계 담당자마다 맡은 부품과 이번 달 등록 수.",
+          """
+          SELECT
+                 p.OWNER_ID
+               , COUNT(*) AS PART_CNT
+               , SUM(CASE WHEN p.REG_DT >= TRUNC(SYSDATE, 'MM') THEN 1 ELSE 0 END) AS NEW_THIS_MONTH
+            FROM PART p
+           GROUP BY
+                 p.OWNER_ID
+           ORDER BY
+                 PART_CNT DESC""",
+          """
+          SELECT
+                 p.OWNER_ID
+               , COUNT(*) AS PART_CNT
+               , SUM(CASE WHEN p.REG_DT >= CAST(DATE_TRUNC('month', CURRENT_DATE) AS DATE) THEN 1 ELSE 0 END) AS NEW_THIS_MONTH
+            FROM PART p
+           GROUP BY
+                 p.OWNER_ID
+           ORDER BY
+                 PART_CNT DESC"""),
+      new Example("BOM · 부품", "변경이 많은 부품 (이력 건수 순)", "최근 90일 동안 칸 값이 자주 바뀐 부품. 설계가 불안정한 후보입니다.",
+          """
+          SELECT
+                 h.PART_NO
+               , COUNT(*) AS CHG_CNT
+               , COUNT(DISTINCT h.COL_NAME) AS COL_CNT
+               , MAX(h.CHG_DT) AS LAST_CHG
+            FROM PART_HIST h
+           WHERE h.CHG_DT >= SYSDATE - 90
+           GROUP BY
+                 h.PART_NO
+           ORDER BY
+                 CHG_CNT DESC""",
+          """
+          SELECT
+                 h.PART_NO
+               , COUNT(*) AS CHG_CNT
+               , COUNT(DISTINCT h.COL_NAME) AS COL_CNT
+               , MAX(h.CHG_DT) AS LAST_CHG
+            FROM PART_HIST h
+           WHERE h.CHG_DT >= CURRENT_DATE - 90
+           GROUP BY
+                 h.PART_NO
+           ORDER BY
+                 CHG_CNT DESC"""),
+      new Example("BOM · 부품", "도면이 없는 부품 · 부품이 없는 도면", "두 방향으로 짝이 없는 것을 한 번에.",
+          """
+          SELECT
+                 '도면 없음' AS KIND
+               , p.PART_NO AS KEY_NO
+            FROM PART p
+           WHERE NOT EXISTS (SELECT 1 FROM DRAWING d WHERE d.PART_NO = p.PART_NO)
+           UNION ALL
+          SELECT
+                 '부품 없음'
+               , d.DRAWING_NO
+            FROM DRAWING d
+           WHERE NOT EXISTS (SELECT 1 FROM PART p WHERE p.PART_NO = d.PART_NO)""",
+          """
+          SELECT
+                 '도면 없음' AS KIND
+               , p.PART_NO AS KEY_NO
+            FROM PART p
+           WHERE NOT EXISTS (SELECT 1 FROM DRAWING d WHERE d.PART_NO = p.PART_NO)
+           UNION ALL
+          SELECT
+                 '부품 없음'
+               , d.DRAWING_NO
+            FROM DRAWING d
+           WHERE NOT EXISTS (SELECT 1 FROM PART p WHERE p.PART_NO = d.PART_NO)"""),
+      new Example("BOM · Top 어셈블리", "Top 하나 전개 (레벨 · 들여쓰기 · 누적 수량 · 경로)", "Top 어셈블리 하나 아래를 끝까지 펼칩니다. TOT_QTY 는 Top 1개에 드는 수량(위 수량을 곱해 내려감). 리비전을 쓰면 두 WHERE 에 AND b.REV = … 를 넣으세요.",
+          """
+          WITH t (TOP_PART, PARENT_PART, CHILD_PART, QTY, LVL, TOT_QTY, PATH) AS (
+          SELECT
+                 b.PARENT_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , 1
+               , b.QTY
+               , CAST(b.PARENT_PART || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+           WHERE b.PARENT_PART = :topPart
+           UNION ALL
+          SELECT
+                 t.TOP_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , t.TOT_QTY * b.QTY
+               , CAST(t.PATH || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < 20
+          )
+          SELECT
+                 t.LVL
+               , LPAD(' ', (t.LVL - 1) * 2) || t.CHILD_PART AS PART_NO
+               , t.QTY
+               , t.TOT_QTY
+               , t.PATH
+            FROM t
+           ORDER BY
+                 t.PATH""",
+          """
+          WITH RECURSIVE t AS (
+          SELECT
+                 b.PARENT_PART AS TOP_PART
+               , b.PARENT_PART AS PARENT_PART
+               , b.CHILD_PART AS CHILD_PART
+               , b.QTY AS QTY
+               , 1 AS LVL
+               , b.QTY AS TOT_QTY
+               , CAST(b.PARENT_PART || ' > ' || b.CHILD_PART AS VARCHAR(4000)) AS PATH
+            FROM BOM b
+           WHERE b.PARENT_PART = :topPart
+           UNION ALL
+          SELECT
+                 t.TOP_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , t.TOT_QTY * b.QTY
+               , CAST(t.PATH || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < 20
+          )
+          SELECT
+                 t.LVL
+               , LPAD(' ', (t.LVL - 1) * 2) || t.CHILD_PART AS PART_NO
+               , t.QTY
+               , t.TOT_QTY
+               , t.PATH
+            FROM t
+           ORDER BY
+                 t.PATH"""),
+      new Example("BOM · Top 어셈블리", "Top 바로 아래 한 단계만 (단일 레벨 BOM)", "Top 의 바로 아래 자식만. 화면에서 펼침 단추를 누를 때 한 단계씩 읽는 쿼리입니다.",
+          """
+          SELECT
+                 b.SEQ
+               , b.CHILD_PART
+               , p.PART_NAME
+               , b.QTY
+               , (SELECT COUNT(*) FROM BOM c WHERE c.PARENT_PART = b.CHILD_PART) AS CHILD_CNT
+            FROM BOM b
+               , PART p
+           WHERE b.CHILD_PART = p.PART_NO(+)
+             AND b.PARENT_PART = :topPart
+           ORDER BY
+                 b.SEQ""",
+          """
+          SELECT
+                 b.SEQ
+               , b.CHILD_PART
+               , p.PART_NAME
+               , b.QTY
+               , (SELECT COUNT(*) FROM BOM c WHERE c.PARENT_PART = b.CHILD_PART) AS CHILD_CNT
+            FROM BOM b
+            LEFT OUTER JOIN PART p
+              ON b.CHILD_PART = p.PART_NO
+           WHERE b.PARENT_PART = :topPart
+           ORDER BY
+                 b.SEQ"""),
+      new Example("BOM · Top 어셈블리", "Top 아래 N 레벨까지만", "3 레벨까지만 펼칩니다. Oracle 은 CONNECT BY 의 LEVEL 로 자릅니다.",
+          """
+          SELECT
+                 LEVEL AS LVL
+               , LPAD(' ', (LEVEL - 1) * 2) || b.CHILD_PART AS PART_NO
+               , b.QTY
+            FROM BOM b
+           START WITH b.PARENT_PART = :topPart
+          CONNECT BY PRIOR b.CHILD_PART = b.PARENT_PART
+                 AND LEVEL <= :maxLevel
+           ORDER SIBLINGS BY
+                 b.SEQ""",
+          """
+          WITH RECURSIVE t AS (
+          SELECT
+                 b.CHILD_PART AS CHILD_PART
+               , b.QTY AS QTY
+               , 1 AS LVL
+               , CAST(LPAD(CAST(b.SEQ AS VARCHAR), 4, '0') AS VARCHAR(4000)) AS SORT_KEY
+            FROM BOM b
+           WHERE b.PARENT_PART = :topPart
+           UNION ALL
+          SELECT
+                 b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , CAST(t.SORT_KEY || '/' || LPAD(CAST(b.SEQ AS VARCHAR), 4, '0') AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < CAST(:maxLevel AS INTEGER)
+          )
+          SELECT
+                 t.LVL
+               , LPAD(' ', (t.LVL - 1) * 2) || t.CHILD_PART AS PART_NO
+               , t.QTY
+            FROM t
+           ORDER BY
+                 t.SORT_KEY"""),
+      new Example("BOM · Top 어셈블리", "모든 Top 을 한 번에 전개", "Top(누구의 자식도 아닌 모부품)마다 아래를 다 펼칩니다. 맨 앞 칸이 어느 Top 의 줄인지 알려 줍니다.",
+          """
+          WITH t (TOP_PART, PARENT_PART, CHILD_PART, QTY, LVL, TOT_QTY, PATH) AS (
+          SELECT
+                 b.PARENT_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , 1
+               , b.QTY
+               , CAST(b.PARENT_PART || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+           WHERE b.PARENT_PART IS NOT NULL
+             AND NOT EXISTS (SELECT 1 FROM BOM x WHERE x.CHILD_PART = b.PARENT_PART AND x.PARENT_PART IS NOT NULL)
+           UNION ALL
+          SELECT
+                 t.TOP_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , t.TOT_QTY * b.QTY
+               , CAST(t.PATH || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < 20
+          )
+          SELECT
+                 t.TOP_PART
+               , t.LVL
+               , t.CHILD_PART
+               , t.TOT_QTY
+            FROM t
+           ORDER BY
+                 t.TOP_PART
+               , t.PATH""",
+          """
+          WITH RECURSIVE t AS (
+          SELECT
+                 b.PARENT_PART AS TOP_PART
+               , b.PARENT_PART AS PARENT_PART
+               , b.CHILD_PART AS CHILD_PART
+               , b.QTY AS QTY
+               , 1 AS LVL
+               , b.QTY AS TOT_QTY
+               , CAST(b.PARENT_PART || ' > ' || b.CHILD_PART AS VARCHAR(4000)) AS PATH
+            FROM BOM b
+           WHERE b.PARENT_PART IS NOT NULL
+             AND NOT EXISTS (SELECT 1 FROM BOM x WHERE x.CHILD_PART = b.PARENT_PART AND x.PARENT_PART IS NOT NULL)
+           UNION ALL
+          SELECT
+                 t.TOP_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , t.TOT_QTY * b.QTY
+               , CAST(t.PATH || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < 20
+          )
+          SELECT
+                 t.TOP_PART
+               , t.LVL
+               , t.CHILD_PART
+               , t.TOT_QTY
+            FROM t
+           ORDER BY
+                 t.TOP_PART
+               , t.PATH"""),
+      new Example("BOM · Top 어셈블리", "고른 Top 여러 개 전개 (Top 목록 IN)", "화면에서 고른 Top 몇 개만 펼쳐 Top · 부품마다 총 수량을 냅니다.",
+          """
+          WITH t (TOP_PART, PARENT_PART, CHILD_PART, QTY, LVL, TOT_QTY, PATH) AS (
+          SELECT
+                 b.PARENT_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , 1
+               , b.QTY
+               , CAST(b.PARENT_PART || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+           WHERE b.PARENT_PART IN (:top1, :top2, :top3)
+           UNION ALL
+          SELECT
+                 t.TOP_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , t.TOT_QTY * b.QTY
+               , CAST(t.PATH || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < 20
+          )
+          SELECT
+                 t.TOP_PART
+               , t.CHILD_PART
+               , SUM(t.TOT_QTY) AS TOT_QTY
+            FROM t
+           GROUP BY
+                 t.TOP_PART
+               , t.CHILD_PART
+           ORDER BY
+                 t.TOP_PART
+               , t.CHILD_PART""",
+          """
+          WITH RECURSIVE t AS (
+          SELECT
+                 b.PARENT_PART AS TOP_PART
+               , b.PARENT_PART AS PARENT_PART
+               , b.CHILD_PART AS CHILD_PART
+               , b.QTY AS QTY
+               , 1 AS LVL
+               , b.QTY AS TOT_QTY
+               , CAST(b.PARENT_PART || ' > ' || b.CHILD_PART AS VARCHAR(4000)) AS PATH
+            FROM BOM b
+           WHERE b.PARENT_PART IN (:top1, :top2, :top3)
+           UNION ALL
+          SELECT
+                 t.TOP_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , t.TOT_QTY * b.QTY
+               , CAST(t.PATH || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < 20
+          )
+          SELECT
+                 t.TOP_PART
+               , t.CHILD_PART
+               , SUM(t.TOT_QTY) AS TOT_QTY
+            FROM t
+           GROUP BY
+                 t.TOP_PART
+               , t.CHILD_PART
+           ORDER BY
+                 t.TOP_PART
+               , t.CHILD_PART"""),
+      new Example("BOM · Top 어셈블리", "Top 별 요약 (부품 수 · 최대 깊이 · 최하위 부품 수)", "Top 마다 BOM 이 얼마나 큰지 한 줄로. 완제품 목록 화면 옆 숫자에 씁니다.",
+          """
+          WITH t (TOP_PART, PARENT_PART, CHILD_PART, QTY, LVL, TOT_QTY, PATH) AS (
+          SELECT
+                 b.PARENT_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , 1
+               , b.QTY
+               , CAST(b.PARENT_PART || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+           WHERE b.PARENT_PART IS NOT NULL
+             AND NOT EXISTS (SELECT 1 FROM BOM x WHERE x.CHILD_PART = b.PARENT_PART AND x.PARENT_PART IS NOT NULL)
+           UNION ALL
+          SELECT
+                 t.TOP_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , t.TOT_QTY * b.QTY
+               , CAST(t.PATH || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < 20
+          )
+          SELECT
+                 t.TOP_PART
+               , COUNT(DISTINCT t.CHILD_PART) AS PART_CNT
+               , MAX(t.LVL) AS MAX_LEVEL
+               , COUNT(DISTINCT CASE WHEN NOT EXISTS (SELECT 1 FROM BOM c WHERE c.PARENT_PART = t.CHILD_PART) THEN t.CHILD_PART END) AS LEAF_CNT
+            FROM t
+           GROUP BY
+                 t.TOP_PART
+           ORDER BY
+                 t.TOP_PART""",
+          """
+          WITH RECURSIVE t AS (
+          SELECT
+                 b.PARENT_PART AS TOP_PART
+               , b.PARENT_PART AS PARENT_PART
+               , b.CHILD_PART AS CHILD_PART
+               , b.QTY AS QTY
+               , 1 AS LVL
+               , b.QTY AS TOT_QTY
+               , CAST(b.PARENT_PART || ' > ' || b.CHILD_PART AS VARCHAR(4000)) AS PATH
+            FROM BOM b
+           WHERE b.PARENT_PART IS NOT NULL
+             AND NOT EXISTS (SELECT 1 FROM BOM x WHERE x.CHILD_PART = b.PARENT_PART AND x.PARENT_PART IS NOT NULL)
+           UNION ALL
+          SELECT
+                 t.TOP_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , t.TOT_QTY * b.QTY
+               , CAST(t.PATH || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < 20
+          )
+          SELECT
+                 t.TOP_PART
+               , COUNT(DISTINCT t.CHILD_PART) AS PART_CNT
+               , MAX(t.LVL) AS MAX_LEVEL
+               , COUNT(DISTINCT CASE WHEN NOT EXISTS (SELECT 1 FROM BOM c WHERE c.PARENT_PART = t.CHILD_PART) THEN t.CHILD_PART END) AS LEAF_CNT
+            FROM t
+           GROUP BY
+                 t.TOP_PART
+           ORDER BY
+                 t.TOP_PART"""),
+      new Example("BOM · Top 어셈블리", "Top 별 재료비 (최하위 단가 × 누적 수량)", "모든 Top 의 재료비를 한 번에. 단가가 빈 부품 수도 같이 세어 빠진 단가를 알려 줍니다.",
+          """
+          WITH t (TOP_PART, PARENT_PART, CHILD_PART, QTY, LVL, TOT_QTY, PATH) AS (
+          SELECT
+                 b.PARENT_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , 1
+               , b.QTY
+               , CAST(b.PARENT_PART || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+           WHERE b.PARENT_PART IS NOT NULL
+             AND NOT EXISTS (SELECT 1 FROM BOM x WHERE x.CHILD_PART = b.PARENT_PART AND x.PARENT_PART IS NOT NULL)
+           UNION ALL
+          SELECT
+                 t.TOP_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , t.TOT_QTY * b.QTY
+               , CAST(t.PATH || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < 20
+          )
+          SELECT
+                 t.TOP_PART
+               , SUM(t.TOT_QTY * NVL(p.UNIT_COST, 0)) AS MATERIAL_COST
+               , SUM(CASE WHEN p.UNIT_COST IS NULL THEN 1 ELSE 0 END) AS NO_COST_CNT
+            FROM t
+               , PART p
+           WHERE t.CHILD_PART = p.PART_NO(+)
+             AND NOT EXISTS (SELECT 1 FROM BOM c WHERE c.PARENT_PART = t.CHILD_PART)
+           GROUP BY
+                 t.TOP_PART
+           ORDER BY
+                 MATERIAL_COST DESC""",
+          """
+          WITH RECURSIVE t AS (
+          SELECT
+                 b.PARENT_PART AS TOP_PART
+               , b.PARENT_PART AS PARENT_PART
+               , b.CHILD_PART AS CHILD_PART
+               , b.QTY AS QTY
+               , 1 AS LVL
+               , b.QTY AS TOT_QTY
+               , CAST(b.PARENT_PART || ' > ' || b.CHILD_PART AS VARCHAR(4000)) AS PATH
+            FROM BOM b
+           WHERE b.PARENT_PART IS NOT NULL
+             AND NOT EXISTS (SELECT 1 FROM BOM x WHERE x.CHILD_PART = b.PARENT_PART AND x.PARENT_PART IS NOT NULL)
+           UNION ALL
+          SELECT
+                 t.TOP_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , t.TOT_QTY * b.QTY
+               , CAST(t.PATH || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < 20
+          )
+          SELECT
+                 t.TOP_PART
+               , SUM(t.TOT_QTY * COALESCE(p.UNIT_COST, 0)) AS MATERIAL_COST
+               , SUM(CASE WHEN p.UNIT_COST IS NULL THEN 1 ELSE 0 END) AS NO_COST_CNT
+            FROM t
+            LEFT OUTER JOIN PART p
+              ON t.CHILD_PART = p.PART_NO
+           WHERE NOT EXISTS (SELECT 1 FROM BOM c WHERE c.PARENT_PART = t.CHILD_PART)
+           GROUP BY
+                 t.TOP_PART
+           ORDER BY
+                 MATERIAL_COST DESC"""),
+      new Example("BOM · Top 어셈블리", "이 Top 에 이 부품이 들어가나 (Y/N · 총 수량)", "Top 아래 어느 깊이에든 그 부품이 있으면 Y. 여러 경로로 들어가면 경로 수와 합친 수량.",
+          """
+          WITH t (TOP_PART, PARENT_PART, CHILD_PART, QTY, LVL, TOT_QTY, PATH) AS (
+          SELECT
+                 b.PARENT_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , 1
+               , b.QTY
+               , CAST(b.PARENT_PART || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+           WHERE b.PARENT_PART = :topPart
+           UNION ALL
+          SELECT
+                 t.TOP_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , t.TOT_QTY * b.QTY
+               , CAST(t.PATH || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < 20
+          )
+          SELECT
+                 CASE WHEN COUNT(*) > 0 THEN 'Y' ELSE 'N' END AS USED_YN
+               , COUNT(*) AS PATH_CNT
+               , SUM(t.TOT_QTY) AS TOT_QTY
+            FROM t
+           WHERE t.CHILD_PART = :partNo""",
+          """
+          WITH RECURSIVE t AS (
+          SELECT
+                 b.PARENT_PART AS TOP_PART
+               , b.PARENT_PART AS PARENT_PART
+               , b.CHILD_PART AS CHILD_PART
+               , b.QTY AS QTY
+               , 1 AS LVL
+               , b.QTY AS TOT_QTY
+               , CAST(b.PARENT_PART || ' > ' || b.CHILD_PART AS VARCHAR(4000)) AS PATH
+            FROM BOM b
+           WHERE b.PARENT_PART = :topPart
+           UNION ALL
+          SELECT
+                 t.TOP_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , t.TOT_QTY * b.QTY
+               , CAST(t.PATH || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < 20
+          )
+          SELECT
+                 CASE WHEN COUNT(*) > 0 THEN 'Y' ELSE 'N' END AS USED_YN
+               , COUNT(*) AS PATH_CNT
+               , SUM(t.TOT_QTY) AS TOT_QTY
+            FROM t
+           WHERE t.CHILD_PART = :partNo"""),
+      new Example("BOM · Top 어셈블리", "Top 에서 이 부품까지 경로 (어디를 거쳐 들어가나)", "CAR > WHEEL > BOLT 처럼 Top 에서 그 부품까지 거쳐 가는 길을 모두 봅니다.",
+          """
+          WITH t (TOP_PART, PARENT_PART, CHILD_PART, QTY, LVL, TOT_QTY, PATH) AS (
+          SELECT
+                 b.PARENT_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , 1
+               , b.QTY
+               , CAST(b.PARENT_PART || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+           WHERE b.PARENT_PART = :topPart
+           UNION ALL
+          SELECT
+                 t.TOP_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , t.TOT_QTY * b.QTY
+               , CAST(t.PATH || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < 20
+          )
+          SELECT
+                 t.LVL
+               , t.PATH
+               , t.TOT_QTY
+            FROM t
+           WHERE t.CHILD_PART = :partNo
+           ORDER BY
+                 t.PATH""",
+          """
+          WITH RECURSIVE t AS (
+          SELECT
+                 b.PARENT_PART AS TOP_PART
+               , b.PARENT_PART AS PARENT_PART
+               , b.CHILD_PART AS CHILD_PART
+               , b.QTY AS QTY
+               , 1 AS LVL
+               , b.QTY AS TOT_QTY
+               , CAST(b.PARENT_PART || ' > ' || b.CHILD_PART AS VARCHAR(4000)) AS PATH
+            FROM BOM b
+           WHERE b.PARENT_PART = :topPart
+           UNION ALL
+          SELECT
+                 t.TOP_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , t.TOT_QTY * b.QTY
+               , CAST(t.PATH || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < 20
+          )
+          SELECT
+                 t.LVL
+               , t.PATH
+               , t.TOT_QTY
+            FROM t
+           WHERE t.CHILD_PART = :partNo
+           ORDER BY
+                 t.PATH"""),
+      new Example("BOM · Top 어셈블리", "Top 아래 여러 경로로 쓰이는 부품", "같은 부품이 서로 다른 반제품 아래에 들어간 것. 합산 수량을 볼 때 놓치기 쉽습니다.",
+          """
+          WITH t (TOP_PART, PARENT_PART, CHILD_PART, QTY, LVL, TOT_QTY, PATH) AS (
+          SELECT
+                 b.PARENT_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , 1
+               , b.QTY
+               , CAST(b.PARENT_PART || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+           WHERE b.PARENT_PART = :topPart
+           UNION ALL
+          SELECT
+                 t.TOP_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , t.TOT_QTY * b.QTY
+               , CAST(t.PATH || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < 20
+          )
+          SELECT
+                 t.CHILD_PART
+               , COUNT(*) AS PATH_CNT
+               , SUM(t.TOT_QTY) AS TOT_QTY
+            FROM t
+           GROUP BY
+                 t.CHILD_PART
+          HAVING COUNT(*) > 1
+           ORDER BY
+                 PATH_CNT DESC""",
+          """
+          WITH RECURSIVE t AS (
+          SELECT
+                 b.PARENT_PART AS TOP_PART
+               , b.PARENT_PART AS PARENT_PART
+               , b.CHILD_PART AS CHILD_PART
+               , b.QTY AS QTY
+               , 1 AS LVL
+               , b.QTY AS TOT_QTY
+               , CAST(b.PARENT_PART || ' > ' || b.CHILD_PART AS VARCHAR(4000)) AS PATH
+            FROM BOM b
+           WHERE b.PARENT_PART = :topPart
+           UNION ALL
+          SELECT
+                 t.TOP_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , t.TOT_QTY * b.QTY
+               , CAST(t.PATH || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < 20
+          )
+          SELECT
+                 t.CHILD_PART
+               , COUNT(*) AS PATH_CNT
+               , SUM(t.TOT_QTY) AS TOT_QTY
+            FROM t
+           GROUP BY
+                 t.CHILD_PART
+          HAVING COUNT(*) > 1
+           ORDER BY
+                 PATH_CNT DESC"""),
+      new Example("BOM · Top 어셈블리", "부품마다 쓰이는 Top 수 (공용 · 전용)", "Top 수가 1 이면 그 Top 전용 부품, 여러 개면 공용 부품입니다.",
+          """
+          WITH t (TOP_PART, PARENT_PART, CHILD_PART, QTY, LVL, TOT_QTY, PATH) AS (
+          SELECT
+                 b.PARENT_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , 1
+               , b.QTY
+               , CAST(b.PARENT_PART || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+           WHERE b.PARENT_PART IS NOT NULL
+             AND NOT EXISTS (SELECT 1 FROM BOM x WHERE x.CHILD_PART = b.PARENT_PART AND x.PARENT_PART IS NOT NULL)
+           UNION ALL
+          SELECT
+                 t.TOP_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , t.TOT_QTY * b.QTY
+               , CAST(t.PATH || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < 20
+          )
+          SELECT
+                 u.CHILD_PART
+               , COUNT(DISTINCT u.TOP_PART) AS TOP_CNT
+               , MIN(u.TOP_PART) AS FIRST_TOP
+            FROM t u
+           GROUP BY
+                 u.CHILD_PART
+           ORDER BY
+                 TOP_CNT DESC
+               , u.CHILD_PART""",
+          """
+          WITH RECURSIVE t AS (
+          SELECT
+                 b.PARENT_PART AS TOP_PART
+               , b.PARENT_PART AS PARENT_PART
+               , b.CHILD_PART AS CHILD_PART
+               , b.QTY AS QTY
+               , 1 AS LVL
+               , b.QTY AS TOT_QTY
+               , CAST(b.PARENT_PART || ' > ' || b.CHILD_PART AS VARCHAR(4000)) AS PATH
+            FROM BOM b
+           WHERE b.PARENT_PART IS NOT NULL
+             AND NOT EXISTS (SELECT 1 FROM BOM x WHERE x.CHILD_PART = b.PARENT_PART AND x.PARENT_PART IS NOT NULL)
+           UNION ALL
+          SELECT
+                 t.TOP_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , t.TOT_QTY * b.QTY
+               , CAST(t.PATH || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < 20
+          )
+          SELECT
+                 u.CHILD_PART
+               , COUNT(DISTINCT u.TOP_PART) AS TOP_CNT
+               , MIN(u.TOP_PART) AS FIRST_TOP
+            FROM t u
+           GROUP BY
+                 u.CHILD_PART
+           ORDER BY
+                 TOP_CNT DESC
+               , u.CHILD_PART"""),
+      new Example("BOM · Top 어셈블리", "두 Top 비교 (공용 · A 전용 · B 전용 부품)", "차종 · 모델 두 개의 BOM 을 펼쳐 공용 부품과 한쪽에만 있는 부품, 수량 차이를 봅니다.",
+          """
+          WITH t (TOP_PART, PARENT_PART, CHILD_PART, QTY, LVL, TOT_QTY, PATH) AS (
+          SELECT
+                 b.PARENT_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , 1
+               , b.QTY
+               , CAST(b.PARENT_PART || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+           WHERE b.PARENT_PART IN (:topA, :topB)
+           UNION ALL
+          SELECT
+                 t.TOP_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , t.TOT_QTY * b.QTY
+               , CAST(t.PATH || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < 20
+          )
+          SELECT
+                 t.CHILD_PART
+               , SUM(CASE WHEN t.TOP_PART = :topA THEN t.TOT_QTY ELSE 0 END) AS QTY_A
+               , SUM(CASE WHEN t.TOP_PART = :topB THEN t.TOT_QTY ELSE 0 END) AS QTY_B
+               , CASE
+                   WHEN COUNT(DISTINCT t.TOP_PART) = 2 THEN '공용'
+                   WHEN MAX(t.TOP_PART) = :topA THEN 'A 전용'
+                   ELSE 'B 전용'
+                 END AS KIND
+            FROM t
+           GROUP BY
+                 t.CHILD_PART
+           ORDER BY
+                 KIND
+               , t.CHILD_PART""",
+          """
+          WITH RECURSIVE t AS (
+          SELECT
+                 b.PARENT_PART AS TOP_PART
+               , b.PARENT_PART AS PARENT_PART
+               , b.CHILD_PART AS CHILD_PART
+               , b.QTY AS QTY
+               , 1 AS LVL
+               , b.QTY AS TOT_QTY
+               , CAST(b.PARENT_PART || ' > ' || b.CHILD_PART AS VARCHAR(4000)) AS PATH
+            FROM BOM b
+           WHERE b.PARENT_PART IN (:topA, :topB)
+           UNION ALL
+          SELECT
+                 t.TOP_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , t.TOT_QTY * b.QTY
+               , CAST(t.PATH || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < 20
+          )
+          SELECT
+                 t.CHILD_PART
+               , SUM(CASE WHEN t.TOP_PART = :topA THEN t.TOT_QTY ELSE 0 END) AS QTY_A
+               , SUM(CASE WHEN t.TOP_PART = :topB THEN t.TOT_QTY ELSE 0 END) AS QTY_B
+               , CASE
+                   WHEN COUNT(DISTINCT t.TOP_PART) = 2 THEN '공용'
+                   WHEN MAX(t.TOP_PART) = :topA THEN 'A 전용'
+                   ELSE 'B 전용'
+                 END AS KIND
+            FROM t
+           GROUP BY
+                 t.CHILD_PART
+           ORDER BY
+                 KIND
+               , t.CHILD_PART"""),
+      new Example("BOM · Top 어셈블리", "Top 아래 단종 · 사용 중지 부품", "Top 을 펼쳐 상태가 단종(EOL) · 중지인 부품이 있는지 봅니다. 생산 전 점검.",
+          """
+          WITH t (TOP_PART, PARENT_PART, CHILD_PART, QTY, LVL, TOT_QTY, PATH) AS (
+          SELECT
+                 b.PARENT_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , 1
+               , b.QTY
+               , CAST(b.PARENT_PART || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+           WHERE b.PARENT_PART = :topPart
+           UNION ALL
+          SELECT
+                 t.TOP_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , t.TOT_QTY * b.QTY
+               , CAST(t.PATH || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < 20
+          )
+          SELECT
+                 t.LVL
+               , t.CHILD_PART
+               , t.TOT_QTY
+               , p.STATUS
+            FROM t
+               , PART p
+           WHERE t.CHILD_PART = p.PART_NO
+             AND p.STATUS IN ('EOL', 'STOP')
+           ORDER BY
+                 t.PATH""",
+          """
+          WITH RECURSIVE t AS (
+          SELECT
+                 b.PARENT_PART AS TOP_PART
+               , b.PARENT_PART AS PARENT_PART
+               , b.CHILD_PART AS CHILD_PART
+               , b.QTY AS QTY
+               , 1 AS LVL
+               , b.QTY AS TOT_QTY
+               , CAST(b.PARENT_PART || ' > ' || b.CHILD_PART AS VARCHAR(4000)) AS PATH
+            FROM BOM b
+           WHERE b.PARENT_PART = :topPart
+           UNION ALL
+          SELECT
+                 t.TOP_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , t.TOT_QTY * b.QTY
+               , CAST(t.PATH || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < 20
+          )
+          SELECT
+                 t.LVL
+               , t.CHILD_PART
+               , t.TOT_QTY
+               , p.STATUS
+            FROM t
+               , PART p
+           WHERE t.CHILD_PART = p.PART_NO
+             AND p.STATUS IN ('EOL', 'STOP')
+           ORDER BY
+                 t.PATH"""),
+      new Example("BOM · Top 어셈블리", "Top 전개에 대체 부품 붙이기", "펼친 부품마다 등록된 대체 부품을 우선순위대로 옆에 붙입니다. 대체가 없으면 빈 칸.",
+          """
+          WITH t (TOP_PART, PARENT_PART, CHILD_PART, QTY, LVL, TOT_QTY, PATH) AS (
+          SELECT
+                 b.PARENT_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , 1
+               , b.QTY
+               , CAST(b.PARENT_PART || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+           WHERE b.PARENT_PART = :topPart
+           UNION ALL
+          SELECT
+                 t.TOP_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , t.TOT_QTY * b.QTY
+               , CAST(t.PATH || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < 20
+          )
+          SELECT
+                 t.LVL
+               , t.CHILD_PART
+               , t.TOT_QTY
+               , s.SUB_PART_NO
+               , s.PRIORITY
+            FROM t
+               , PART_SUB s
+           WHERE t.CHILD_PART = s.PART_NO(+)
+           ORDER BY
+                 t.PATH
+               , s.PRIORITY""",
+          """
+          WITH RECURSIVE t AS (
+          SELECT
+                 b.PARENT_PART AS TOP_PART
+               , b.PARENT_PART AS PARENT_PART
+               , b.CHILD_PART AS CHILD_PART
+               , b.QTY AS QTY
+               , 1 AS LVL
+               , b.QTY AS TOT_QTY
+               , CAST(b.PARENT_PART || ' > ' || b.CHILD_PART AS VARCHAR(4000)) AS PATH
+            FROM BOM b
+           WHERE b.PARENT_PART = :topPart
+           UNION ALL
+          SELECT
+                 t.TOP_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , t.TOT_QTY * b.QTY
+               , CAST(t.PATH || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < 20
+          )
+          SELECT
+                 t.LVL
+               , t.CHILD_PART
+               , t.TOT_QTY
+               , s.SUB_PART_NO
+               , s.PRIORITY
+            FROM t
+            LEFT OUTER JOIN PART_SUB s
+              ON t.CHILD_PART = s.PART_NO
+           ORDER BY
+                 t.PATH
+               , s.PRIORITY"""),
+      new Example("BOM · Top 어셈블리", "Top 아래 반제품만 (자식이 있는 중간 부품)", "아래에 또 부품이 있는 중간 조립품만. 반대로 NOT EXISTS 면 최하위(구매) 부품만입니다.",
+          """
+          WITH t (TOP_PART, PARENT_PART, CHILD_PART, QTY, LVL, TOT_QTY, PATH) AS (
+          SELECT
+                 b.PARENT_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , 1
+               , b.QTY
+               , CAST(b.PARENT_PART || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+           WHERE b.PARENT_PART = :topPart
+           UNION ALL
+          SELECT
+                 t.TOP_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , t.TOT_QTY * b.QTY
+               , CAST(t.PATH || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < 20
+          )
+          SELECT
+                 t.LVL
+               , t.CHILD_PART
+               , t.TOT_QTY
+            FROM t
+           WHERE EXISTS (SELECT 1 FROM BOM c WHERE c.PARENT_PART = t.CHILD_PART)
+           ORDER BY
+                 t.PATH""",
+          """
+          WITH RECURSIVE t AS (
+          SELECT
+                 b.PARENT_PART AS TOP_PART
+               , b.PARENT_PART AS PARENT_PART
+               , b.CHILD_PART AS CHILD_PART
+               , b.QTY AS QTY
+               , 1 AS LVL
+               , b.QTY AS TOT_QTY
+               , CAST(b.PARENT_PART || ' > ' || b.CHILD_PART AS VARCHAR(4000)) AS PATH
+            FROM BOM b
+           WHERE b.PARENT_PART = :topPart
+           UNION ALL
+          SELECT
+                 t.TOP_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , t.TOT_QTY * b.QTY
+               , CAST(t.PATH || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < 20
+          )
+          SELECT
+                 t.LVL
+               , t.CHILD_PART
+               , t.TOT_QTY
+            FROM t
+           WHERE EXISTS (SELECT 1 FROM BOM c WHERE c.PARENT_PART = t.CHILD_PART)
+           ORDER BY
+                 t.PATH"""),
+      new Example("BOM · Top 어셈블리", "Top BOM 점검 (수량 0 · 빈 수량 · 부품 마스터에 없는 품번)", "펼친 줄 중 수량이 비거나 0 이하, 또는 부품 표에 없는 품번. 출도 · 이관 전 점검.",
+          """
+          WITH t (TOP_PART, PARENT_PART, CHILD_PART, QTY, LVL, TOT_QTY, PATH) AS (
+          SELECT
+                 b.PARENT_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , 1
+               , b.QTY
+               , CAST(b.PARENT_PART || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+           WHERE b.PARENT_PART = :topPart
+           UNION ALL
+          SELECT
+                 t.TOP_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , t.TOT_QTY * b.QTY
+               , CAST(t.PATH || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < 20
+          )
+          SELECT
+                 t.LVL
+               , t.PARENT_PART
+               , t.CHILD_PART
+               , t.QTY
+            FROM t
+           WHERE t.QTY IS NULL
+              OR t.QTY <= 0
+              OR NOT EXISTS (SELECT 1 FROM PART p WHERE p.PART_NO = t.CHILD_PART)
+           ORDER BY
+                 t.PATH""",
+          """
+          WITH RECURSIVE t AS (
+          SELECT
+                 b.PARENT_PART AS TOP_PART
+               , b.PARENT_PART AS PARENT_PART
+               , b.CHILD_PART AS CHILD_PART
+               , b.QTY AS QTY
+               , 1 AS LVL
+               , b.QTY AS TOT_QTY
+               , CAST(b.PARENT_PART || ' > ' || b.CHILD_PART AS VARCHAR(4000)) AS PATH
+            FROM BOM b
+           WHERE b.PARENT_PART = :topPart
+           UNION ALL
+          SELECT
+                 t.TOP_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , t.TOT_QTY * b.QTY
+               , CAST(t.PATH || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < 20
+          )
+          SELECT
+                 t.LVL
+               , t.PARENT_PART
+               , t.CHILD_PART
+               , t.QTY
+            FROM t
+           WHERE t.QTY IS NULL
+              OR t.QTY <= 0
+              OR NOT EXISTS (SELECT 1 FROM PART p WHERE p.PART_NO = t.CHILD_PART)
+           ORDER BY
+                 t.PATH"""),
+      new Example("BOM · Top 어셈블리", "Top 전개 중 고리 찾기 (CONNECT_BY_ISCYCLE)", "A 아래 B, B 아래 A 처럼 돌아오는 BOM. Oracle 은 NOCYCLE + CONNECT_BY_ISCYCLE, PostgreSQL 은 경로에 이미 있는지로 찾습니다.",
+          """
+          SELECT
+                 SYS_CONNECT_BY_PATH(b.CHILD_PART, ' > ') AS PATH
+               , b.PARENT_PART
+               , b.CHILD_PART
+            FROM BOM b
+           WHERE CONNECT_BY_ISCYCLE = 1
+           START WITH b.PARENT_PART = :topPart
+          CONNECT BY NOCYCLE PRIOR b.CHILD_PART = b.PARENT_PART""",
+          """
+          WITH RECURSIVE t AS (
+          SELECT
+                 b.PARENT_PART
+               , b.CHILD_PART
+               , CAST(' > ' || b.PARENT_PART || ' > ' || b.CHILD_PART || ' > ' AS VARCHAR(4000)) AS PATH
+               , FALSE AS IS_CYCLE
+            FROM BOM b
+           WHERE b.PARENT_PART = :topPart
+           UNION ALL
+          SELECT
+                 b.PARENT_PART
+               , b.CHILD_PART
+               , CAST(t.PATH || b.CHILD_PART || ' > ' AS VARCHAR(4000))
+               , t.PATH LIKE '% > ' || b.CHILD_PART || ' > %'
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND NOT t.IS_CYCLE
+          )
+          SELECT
+                 t.PATH
+               , t.PARENT_PART
+               , t.CHILD_PART
+            FROM t
+           WHERE t.IS_CYCLE"""),
+      new Example("BOM · Top 어셈블리", "Top BOM 엑셀 내려받기용 (품명 · 단위 · 단가 · 금액 · 주 협력사)", "BOM 표 화면 · 엑셀에 그대로 쓰는 칸을 다 붙인 전개입니다.",
+          """
+          WITH t (TOP_PART, PARENT_PART, CHILD_PART, QTY, LVL, TOT_QTY, PATH) AS (
+          SELECT
+                 b.PARENT_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , 1
+               , b.QTY
+               , CAST(b.PARENT_PART || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+           WHERE b.PARENT_PART = :topPart
+           UNION ALL
+          SELECT
+                 t.TOP_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , t.TOT_QTY * b.QTY
+               , CAST(t.PATH || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < 20
+          )
+          SELECT
+                 t.LVL
+               , LPAD(' ', (t.LVL - 1) * 2) || t.CHILD_PART AS PART_NO
+               , p.PART_NAME
+               , t.QTY
+               , t.TOT_QTY
+               , p.UNIT_CD
+               , p.UNIT_COST
+               , t.TOT_QTY * p.UNIT_COST AS AMT
+               , (SELECT MIN(v.VENDOR_ID) KEEP (DENSE_RANK FIRST ORDER BY v.SHARE_PCT DESC) FROM PART_VENDOR v WHERE v.PART_NO = t.CHILD_PART) AS MAIN_VENDOR
+            FROM t
+               , PART p
+           WHERE t.CHILD_PART = p.PART_NO(+)
+           ORDER BY
+                 t.PATH""",
+          """
+          WITH RECURSIVE t AS (
+          SELECT
+                 b.PARENT_PART AS TOP_PART
+               , b.PARENT_PART AS PARENT_PART
+               , b.CHILD_PART AS CHILD_PART
+               , b.QTY AS QTY
+               , 1 AS LVL
+               , b.QTY AS TOT_QTY
+               , CAST(b.PARENT_PART || ' > ' || b.CHILD_PART AS VARCHAR(4000)) AS PATH
+            FROM BOM b
+           WHERE b.PARENT_PART = :topPart
+           UNION ALL
+          SELECT
+                 t.TOP_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , t.TOT_QTY * b.QTY
+               , CAST(t.PATH || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < 20
+          )
+          SELECT
+                 t.LVL
+               , LPAD(' ', (t.LVL - 1) * 2) || t.CHILD_PART AS PART_NO
+               , p.PART_NAME
+               , t.QTY
+               , t.TOT_QTY
+               , p.UNIT_CD
+               , p.UNIT_COST
+               , t.TOT_QTY * p.UNIT_COST AS AMT
+               , (SELECT v.VENDOR_ID FROM PART_VENDOR v WHERE v.PART_NO = t.CHILD_PART ORDER BY v.SHARE_PCT DESC LIMIT 1) AS MAIN_VENDOR
+            FROM t
+            LEFT OUTER JOIN PART p
+              ON t.CHILD_PART = p.PART_NO
+           ORDER BY
+                 t.PATH"""),
+      new Example("BOM · Top 어셈블리", "Top N 대 만들 때 모자라는 부품 (소요 − 재고)", "Top 을 몇 대 만들지 넣으면 최하위 부품마다 필요 수량 · 재고 · 모자라는 수량.",
+          """
+          WITH t (TOP_PART, PARENT_PART, CHILD_PART, QTY, LVL, TOT_QTY, PATH) AS (
+          SELECT
+                 b.PARENT_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , 1
+               , b.QTY
+               , CAST(b.PARENT_PART || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+           WHERE b.PARENT_PART = :topPart
+           UNION ALL
+          SELECT
+                 t.TOP_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , t.TOT_QTY * b.QTY
+               , CAST(t.PATH || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < 20
+          )
+          SELECT
+                 t.CHILD_PART
+               , SUM(t.TOT_QTY) * :buildQty AS NEED_QTY
+               , NVL(s.STOCK_QTY, 0) AS STOCK_QTY
+               , SUM(t.TOT_QTY) * :buildQty - NVL(s.STOCK_QTY, 0) AS SHORT_QTY
+            FROM t
+               , (SELECT x.PART_NO, SUM(CASE WHEN x.TXN_TYPE = 'IN' THEN x.QTY ELSE -x.QTY END) AS STOCK_QTY FROM STOCK_TXN x GROUP BY x.PART_NO) s
+           WHERE t.CHILD_PART = s.PART_NO(+)
+             AND NOT EXISTS (SELECT 1 FROM BOM c WHERE c.PARENT_PART = t.CHILD_PART)
+           GROUP BY
+                 t.CHILD_PART
+               , s.STOCK_QTY
+          HAVING SUM(t.TOT_QTY) * :buildQty > NVL(s.STOCK_QTY, 0)""",
+          """
+          WITH RECURSIVE t AS (
+          SELECT
+                 b.PARENT_PART AS TOP_PART
+               , b.PARENT_PART AS PARENT_PART
+               , b.CHILD_PART AS CHILD_PART
+               , b.QTY AS QTY
+               , 1 AS LVL
+               , b.QTY AS TOT_QTY
+               , CAST(b.PARENT_PART || ' > ' || b.CHILD_PART AS VARCHAR(4000)) AS PATH
+            FROM BOM b
+           WHERE b.PARENT_PART = :topPart
+           UNION ALL
+          SELECT
+                 t.TOP_PART
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , t.TOT_QTY * b.QTY
+               , CAST(t.PATH || ' > ' || b.CHILD_PART AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < 20
+          )
+          SELECT
+                 t.CHILD_PART
+               , SUM(t.TOT_QTY) * CAST(:buildQty AS NUMERIC) AS NEED_QTY
+               , COALESCE(s.STOCK_QTY, 0) AS STOCK_QTY
+               , SUM(t.TOT_QTY) * CAST(:buildQty AS NUMERIC) - COALESCE(s.STOCK_QTY, 0) AS SHORT_QTY
+            FROM t
+            LEFT OUTER JOIN (SELECT x.PART_NO, SUM(CASE WHEN x.TXN_TYPE = 'IN' THEN x.QTY ELSE -x.QTY END) AS STOCK_QTY FROM STOCK_TXN x GROUP BY x.PART_NO) s
+              ON t.CHILD_PART = s.PART_NO
+           WHERE NOT EXISTS (SELECT 1 FROM BOM c WHERE c.PARENT_PART = t.CHILD_PART)
+           GROUP BY
+                 t.CHILD_PART
+               , s.STOCK_QTY
+          HAVING SUM(t.TOT_QTY) * CAST(:buildQty AS NUMERIC) > COALESCE(s.STOCK_QTY, 0)"""),
+      new Example("BOM · Top 어셈블리", "역전개 바로 위만 (이 부품을 쓰는 모부품 한 단계)", "이 부품을 직접 자식으로 가진 모부품만. 끝까지 올라가려면 「BOM 역전개」 를 쓰세요.",
+          """
+          SELECT
+                 b.PARENT_PART
+               , p.PART_NAME
+               , b.QTY
+               , b.REV
+            FROM BOM b
+               , PART p
+           WHERE b.PARENT_PART = p.PART_NO(+)
+             AND b.CHILD_PART = :partNo
+             AND b.PARENT_PART IS NOT NULL""",
+          """
+          SELECT
+                 b.PARENT_PART
+               , p.PART_NAME
+               , b.QTY
+               , b.REV
+            FROM BOM b
+            LEFT OUTER JOIN PART p
+              ON b.PARENT_PART = p.PART_NO
+           WHERE b.CHILD_PART = :partNo
+             AND b.PARENT_PART IS NOT NULL"""),
+      new Example("BOM · Top 어셈블리", "역전개해서 Top 만 (이 부품을 쓰는 최종 완제품)", "위로 끝까지 올라가 더 위가 없는 모부품만 남깁니다. 설계 변경 영향 완제품 목록.",
+          """
+          SELECT DISTINCT
+                 b.PARENT_PART AS TOP_PART
+            FROM BOM b
+           WHERE b.PARENT_PART IS NOT NULL
+             AND NOT EXISTS (SELECT 1 FROM BOM x WHERE x.CHILD_PART = b.PARENT_PART AND x.PARENT_PART IS NOT NULL)
+           START WITH b.CHILD_PART = :partNo
+          CONNECT BY NOCYCLE b.CHILD_PART = PRIOR b.PARENT_PART""",
+          """
+          WITH RECURSIVE up AS (
+          SELECT
+                 b.PARENT_PART
+               , 1 AS LVL
+            FROM BOM b
+           WHERE b.CHILD_PART = :partNo
+             AND b.PARENT_PART IS NOT NULL
+           UNION ALL
+          SELECT
+                 b.PARENT_PART
+               , u.LVL + 1
+            FROM BOM b
+               , up u
+           WHERE b.CHILD_PART = u.PARENT_PART
+             AND b.PARENT_PART IS NOT NULL
+             AND u.LVL < 20
+          )
+          SELECT DISTINCT
+                 u.PARENT_PART AS TOP_PART
+            FROM up u
+           WHERE NOT EXISTS (SELECT 1 FROM BOM x WHERE x.CHILD_PART = u.PARENT_PART AND x.PARENT_PART IS NOT NULL)"""),
+      new Example("BOM · Top 어셈블리", "Top 리비전 복사 (A 판 BOM → B 판)", "Top 의 한 리비전 BOM 을 새 리비전으로 그대로 복사합니다. 이미 B 판이 있으면 넣지 않습니다.",
+          """
+          INSERT INTO BOM (PARENT_PART, CHILD_PART, QTY, SEQ, REV, VALID_FROM, VALID_TO)
+          SELECT
+                 b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , b.SEQ
+               , :newRev
+               , TRUNC(SYSDATE)
+               , b.VALID_TO
+            FROM BOM b
+           WHERE b.PARENT_PART = :topPart
+             AND b.REV = :oldRev
+             AND NOT EXISTS (SELECT 1 FROM BOM x WHERE x.PARENT_PART = b.PARENT_PART AND x.REV = :newRev)""",
+          """
+          INSERT INTO BOM (PARENT_PART, CHILD_PART, QTY, SEQ, REV, VALID_FROM, VALID_TO)
+          SELECT
+                 b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+               , b.SEQ
+               , :newRev
+               , CURRENT_DATE
+               , b.VALID_TO
+            FROM BOM b
+           WHERE b.PARENT_PART = :topPart
+             AND b.REV = :oldRev
+             AND NOT EXISTS (SELECT 1 FROM BOM x WHERE x.PARENT_PART = b.PARENT_PART AND x.REV = :newRev)"""),
+      new Example("BOM · Top 어셈블리", "Top 최신 리비전 BOM 만 (모부품마다 가장 큰 REV)", "모부품마다 리비전이 여러 개 있을 때 가장 최근 리비전의 줄만 남겨 한 단계 BOM 을 봅니다.",
+          """
+          SELECT
+                 b.PARENT_PART
+               , b.REV
+               , b.CHILD_PART
+               , b.QTY
+            FROM BOM b
+           WHERE b.PARENT_PART = :topPart
+             AND b.REV = (SELECT MAX(x.REV) FROM BOM x WHERE x.PARENT_PART = b.PARENT_PART)
+           ORDER BY
+                 b.SEQ""",
+          """
+          SELECT
+                 b.PARENT_PART
+               , b.REV
+               , b.CHILD_PART
+               , b.QTY
+            FROM BOM b
+           WHERE b.PARENT_PART = :topPart
+             AND b.REV = (SELECT MAX(x.REV) FROM BOM x WHERE x.PARENT_PART = b.PARENT_PART)
+           ORDER BY
+                 b.SEQ"""),
+      new Example("BOM · Top 어셈블리", "레벨을 칸으로 (1 레벨 · 2 레벨 · 3 레벨 칸)", "들여쓰기 대신 레벨마다 칸을 둡니다. 엑셀에서 레벨별로 거르기 쉬운 꼴.",
+          """
+          SELECT
+                 DECODE(LEVEL, 1, b.CHILD_PART) AS LV1
+               , DECODE(LEVEL, 2, b.CHILD_PART) AS LV2
+               , DECODE(LEVEL, 3, b.CHILD_PART) AS LV3
+               , DECODE(LEVEL, 4, b.CHILD_PART) AS LV4
+               , b.QTY
+            FROM BOM b
+           START WITH b.PARENT_PART = :topPart
+          CONNECT BY PRIOR b.CHILD_PART = b.PARENT_PART
+           ORDER SIBLINGS BY
+                 b.SEQ""",
+          """
+          WITH RECURSIVE t AS (
+          SELECT
+                 b.CHILD_PART AS CHILD_PART
+               , b.QTY AS QTY
+               , 1 AS LVL
+               , CAST(LPAD(CAST(b.SEQ AS VARCHAR), 4, '0') AS VARCHAR(4000)) AS SORT_KEY
+            FROM BOM b
+           WHERE b.PARENT_PART = :topPart
+           UNION ALL
+          SELECT
+                 b.CHILD_PART
+               , b.QTY
+               , t.LVL + 1
+               , CAST(t.SORT_KEY || '/' || LPAD(CAST(b.SEQ AS VARCHAR), 4, '0') AS VARCHAR(4000))
+            FROM BOM b
+               , t
+           WHERE b.PARENT_PART = t.CHILD_PART
+             AND t.LVL < 20
+          )
+          SELECT
+                 CASE WHEN t.LVL = 1 THEN t.CHILD_PART END AS LV1
+               , CASE WHEN t.LVL = 2 THEN t.CHILD_PART END AS LV2
+               , CASE WHEN t.LVL = 3 THEN t.CHILD_PART END AS LV3
+               , CASE WHEN t.LVL = 4 THEN t.CHILD_PART END AS LV4
+               , t.QTY
+            FROM t
+           ORDER BY
+                 t.SORT_KEY"""),
+      new Example("BOM · Top 어셈블리", "Top 목록 (완제품 · 최상위 어셈블리) 과 자식 수", "누구의 자식도 아닌 모부품을 Top 으로 보고 바로 아래 자식 수와 품명을 붙입니다.",
+          """
+          SELECT
+                 b.PARENT_PART AS TOP_PART
+               , p.PART_NAME
+               , COUNT(*) AS CHILD_CNT
+            FROM BOM b
+               , PART p
+           WHERE b.PARENT_PART = p.PART_NO(+)
+             AND b.PARENT_PART IS NOT NULL
+             AND NOT EXISTS (SELECT 1 FROM BOM x WHERE x.CHILD_PART = b.PARENT_PART AND x.PARENT_PART IS NOT NULL)
+           GROUP BY
+                 b.PARENT_PART
+               , p.PART_NAME
+           ORDER BY
+                 b.PARENT_PART""",
+          """
+          SELECT
+                 b.PARENT_PART AS TOP_PART
+               , p.PART_NAME
+               , COUNT(*) AS CHILD_CNT
+            FROM BOM b
+            LEFT OUTER JOIN PART p
+              ON b.PARENT_PART = p.PART_NO
+           WHERE b.PARENT_PART IS NOT NULL
+             AND NOT EXISTS (SELECT 1 FROM BOM x WHERE x.CHILD_PART = b.PARENT_PART AND x.PARENT_PART IS NOT NULL)
+           GROUP BY
+                 b.PARENT_PART
+               , p.PART_NAME
+           ORDER BY
+                 b.PARENT_PART"""),
       new Example("리비전 · 이력", "최신 리비전만 보기", "부품마다 리비전이 여러 줄일 때 가장 높은 것 한 줄만. 승인(REL)된 것만 보려면 안쪽에 조건을 넣습니다.",
           """
           SELECT
@@ -6171,6 +8677,84 @@ public final class Examples {
                     FROM SCHEDULE s
                  ) x
            WHERE x.ACT_START < x.PREV_END"""),
+      new Example("일정 · 진행", "간트 차트용 (계획 · 실적 막대 시작 · 끝 · 지연)", "간트 화면에 그대로 넣는 칸: 계획 막대, 실적 막대, 지연 일수, 오늘 기준 상태.",
+          """
+          SELECT
+                 s.PROJ_ID
+               , s.PART_NO
+               , s.STEP_SEQ
+               , s.STEP_CD
+               , s.PLAN_START
+               , s.PLAN_END
+               , s.ACT_START
+               , NVL(s.ACT_END, CASE WHEN s.ACT_START IS NOT NULL THEN TRUNC(SYSDATE) END) AS ACT_END_BAR
+               , GREATEST(NVL(s.ACT_END, TRUNC(SYSDATE)) - s.PLAN_END, 0) AS DELAY_DAYS
+               , CASE
+                   WHEN s.ACT_END IS NOT NULL THEN '완료'
+                   WHEN s.ACT_START IS NOT NULL THEN '진행'
+                   WHEN s.PLAN_START < TRUNC(SYSDATE) THEN '시작 지연'
+                   ELSE '예정'
+                 END AS STATE
+            FROM SCHEDULE s
+           ORDER BY
+                 s.PROJ_ID
+               , s.PART_NO
+               , s.STEP_SEQ""",
+          """
+          SELECT
+                 s.PROJ_ID
+               , s.PART_NO
+               , s.STEP_SEQ
+               , s.STEP_CD
+               , s.PLAN_START
+               , s.PLAN_END
+               , s.ACT_START
+               , COALESCE(s.ACT_END, CASE WHEN s.ACT_START IS NOT NULL THEN CURRENT_DATE END) AS ACT_END_BAR
+               , GREATEST(COALESCE(s.ACT_END, CURRENT_DATE) - s.PLAN_END, 0) AS DELAY_DAYS
+               , CASE
+                   WHEN s.ACT_END IS NOT NULL THEN '완료'
+                   WHEN s.ACT_START IS NOT NULL THEN '진행'
+                   WHEN s.PLAN_START < CURRENT_DATE THEN '시작 지연'
+                   ELSE '예정'
+                 END AS STATE
+            FROM SCHEDULE s
+           ORDER BY
+                 s.PROJ_ID
+               , s.PART_NO
+               , s.STEP_SEQ"""),
+      new Example("일정 · 진행", "설비 · 담당자 투입 부하 (날짜별 동시 일정 수)", "날짜마다 같은 설비에 겹친 일정 수. 2 이상이면 과부하.",
+          """
+          SELECT
+                 s.EQUIP_ID
+               , d.DT
+               , COUNT(*) AS LOAD_CNT
+            FROM SCHEDULE s
+               , (SELECT TRUNC(SYSDATE) + LEVEL - 1 AS DT FROM DUAL CONNECT BY LEVEL <= 30) d
+           WHERE d.DT BETWEEN s.PLAN_START AND s.PLAN_END
+             AND s.EQUIP_ID IS NOT NULL
+           GROUP BY
+                 s.EQUIP_ID
+               , d.DT
+          HAVING COUNT(*) >= 2
+           ORDER BY
+                 s.EQUIP_ID
+               , d.DT""",
+          """
+          SELECT
+                 s.EQUIP_ID
+               , d.DT
+               , COUNT(*) AS LOAD_CNT
+            FROM SCHEDULE s
+               , (SELECT CAST(g AS DATE) AS DT FROM generate_series(CURRENT_DATE, CURRENT_DATE + 29, INTERVAL '1 day') g) d
+           WHERE d.DT BETWEEN s.PLAN_START AND s.PLAN_END
+             AND s.EQUIP_ID IS NOT NULL
+           GROUP BY
+                 s.EQUIP_ID
+               , d.DT
+          HAVING COUNT(*) >= 2
+           ORDER BY
+                 s.EQUIP_ID
+               , d.DT"""),
       new Example("결재 · 권한 · 코드", "지금 결재할 사람 (대기 중 첫 순번)", "문서마다 아직 대기(WAIT)인 결재선 중 가장 앞 순번. 반려된 문서는 뺍니다.",
           """
           SELECT
@@ -6431,6 +9015,102 @@ public final class Examples {
              AND c.USE_YN = 'Y'
            ORDER BY
                  c.SORT_NO"""),
+      new Example("결재 · 권한 · 코드", "결재 걸린 시간 (단계마다 · 문서 전체)", "결재 줄마다 앞 단계 처리부터 이번 처리까지 걸린 시간과 문서 전체 시간.",
+          """
+          SELECT
+                 a.DOC_ID
+               , a.LINE_SEQ
+               , a.APPROVER_ID
+               , a.ACT_DT
+               , ROUND((CAST(a.ACT_DT AS DATE) - CAST(LAG(a.ACT_DT) OVER (PARTITION BY a.DOC_ID ORDER BY a.LINE_SEQ) AS DATE)) * 24, 1) AS STEP_HOURS
+               , ROUND((CAST(MAX(a.ACT_DT) OVER (PARTITION BY a.DOC_ID) AS DATE) - CAST(MIN(a.ACT_DT) OVER (PARTITION BY a.DOC_ID) AS DATE)) * 24, 1) AS DOC_HOURS
+            FROM APPROVAL a
+           WHERE a.ACT_DT IS NOT NULL""",
+          """
+          SELECT
+                 a.DOC_ID
+               , a.LINE_SEQ
+               , a.APPROVER_ID
+               , a.ACT_DT
+               , ROUND(CAST(EXTRACT(EPOCH FROM (a.ACT_DT - LAG(a.ACT_DT) OVER (PARTITION BY a.DOC_ID ORDER BY a.LINE_SEQ))) / 3600 AS NUMERIC), 1) AS STEP_HOURS
+               , ROUND(CAST(EXTRACT(EPOCH FROM (MAX(a.ACT_DT) OVER (PARTITION BY a.DOC_ID) - MIN(a.ACT_DT) OVER (PARTITION BY a.DOC_ID))) / 3600 AS NUMERIC), 1) AS DOC_HOURS
+            FROM APPROVAL a
+           WHERE a.ACT_DT IS NOT NULL"""),
+      new Example("결재 · 권한 · 코드", "결재 대기가 오래된 사람 (3일 넘게 안 본 것)", "앞 단계가 끝났는데 내 차례에서 3일 넘게 멈춘 결재.",
+          """
+          SELECT
+                 a.APPROVER_ID
+               , a.DOC_ID
+               , TRUNC(SYSDATE) - TRUNC(CAST(p.ACT_DT AS DATE)) AS WAIT_DAYS
+            FROM APPROVAL a
+               , APPROVAL p
+           WHERE a.DOC_ID = p.DOC_ID
+             AND p.LINE_SEQ = a.LINE_SEQ - 1
+             AND a.STATUS = 'WAIT'
+             AND p.STATUS = 'APPROVED'
+             AND p.ACT_DT < SYSDATE - 3
+           ORDER BY
+                 WAIT_DAYS DESC""",
+          """
+          SELECT
+                 a.APPROVER_ID
+               , a.DOC_ID
+               , CURRENT_DATE - CAST(p.ACT_DT AS DATE) AS WAIT_DAYS
+            FROM APPROVAL a
+               , APPROVAL p
+           WHERE a.DOC_ID = p.DOC_ID
+             AND p.LINE_SEQ = a.LINE_SEQ - 1
+             AND a.STATUS = 'WAIT'
+             AND p.STATUS = 'APPROVED'
+             AND p.ACT_DT < NOW() - INTERVAL '3 day'
+           ORDER BY
+                 WAIT_DAYS DESC"""),
+      new Example("결재 · 권한 · 코드", "역할별 메뉴 권한 가로표 (읽기 · 쓰기)", "메뉴를 줄로, 역할을 칸으로 놓고 R · W 를 찍습니다. 권한 점검표.",
+          """
+          SELECT
+                 m.MENU_NAME
+               , MAX(CASE WHEN r.ROLE_ID = 'ADMIN' THEN DECODE(r.CAN_WRITE, 'Y', 'W', 'R') END) AS ADMIN
+               , MAX(CASE WHEN r.ROLE_ID = 'USER' THEN DECODE(r.CAN_WRITE, 'Y', 'W', 'R') END) AS USER_ROLE
+               , MAX(CASE WHEN r.ROLE_ID = 'GUEST' THEN DECODE(r.CAN_WRITE, 'Y', 'W', 'R') END) AS GUEST
+            FROM MENU m
+               , ROLE_MENU r
+           WHERE m.MENU_ID = r.MENU_ID(+)
+           GROUP BY
+                 m.MENU_NAME""",
+          """
+          SELECT
+                 m.MENU_NAME
+               , MAX(CASE WHEN r.ROLE_ID = 'ADMIN' THEN CASE r.CAN_WRITE WHEN 'Y' THEN 'W' ELSE 'R' END END) AS ADMIN
+               , MAX(CASE WHEN r.ROLE_ID = 'USER' THEN CASE r.CAN_WRITE WHEN 'Y' THEN 'W' ELSE 'R' END END) AS USER_ROLE
+               , MAX(CASE WHEN r.ROLE_ID = 'GUEST' THEN CASE r.CAN_WRITE WHEN 'Y' THEN 'W' ELSE 'R' END END) AS GUEST
+            FROM MENU m
+            LEFT OUTER JOIN ROLE_MENU r
+              ON m.MENU_ID = r.MENU_ID
+           GROUP BY
+                 m.MENU_NAME"""),
+      new Example("결재 · 권한 · 코드", "코드 그룹별 코드 수 · 안 쓰는 코드 수", "공통코드 정리용. 그룹마다 전체 · 사용 중 · 사용 안 함.",
+          """
+          SELECT
+                 c.GROUP_CD
+               , COUNT(*) AS TOTAL
+               , SUM(CASE WHEN c.USE_YN = 'Y' THEN 1 ELSE 0 END) AS USE_CNT
+               , SUM(CASE WHEN c.USE_YN = 'N' THEN 1 ELSE 0 END) AS UNUSED_CNT
+            FROM COMMON_CODE c
+           GROUP BY
+                 c.GROUP_CD
+           ORDER BY
+                 c.GROUP_CD""",
+          """
+          SELECT
+                 c.GROUP_CD
+               , COUNT(*) AS TOTAL
+               , SUM(CASE WHEN c.USE_YN = 'Y' THEN 1 ELSE 0 END) AS USE_CNT
+               , SUM(CASE WHEN c.USE_YN = 'N' THEN 1 ELSE 0 END) AS UNUSED_CNT
+            FROM COMMON_CODE c
+           GROUP BY
+                 c.GROUP_CD
+           ORDER BY
+                 c.GROUP_CD"""),
       new Example("채번 · 데이터 손질", "채번: 연월 + 일련번호 (그달 첫 번호 0001)", "R + YYYYMM + 4자리. 그달 가장 큰 번호 + 1, 없으면 1. 동시에 두 사람이 받으면 같은 번호가 나오므로 번호 표를 잠그거나 시퀀스와 함께 씁니다.",
           """
           SELECT
@@ -6896,6 +9576,96 @@ public final class Examples {
                  so.DUE_DT
                , st.WH_CD
                , st.LOC_CD"""),
+      new Example("재고 · 수불", "90일 동안 안 나간 재고 (장기 재고)", "재고는 남았는데 최근 90일 출고가 없는 부품과 그 금액.",
+          """
+          SELECT
+                 t.PART_NO
+               , SUM(CASE WHEN t.TXN_TYPE = 'IN' THEN t.QTY ELSE -t.QTY END) AS STOCK_QTY
+               , MAX(CASE WHEN t.TXN_TYPE = 'OUT' THEN t.TXN_DT END) AS LAST_OUT
+            FROM STOCK_TXN t
+           GROUP BY
+                 t.PART_NO
+          HAVING SUM(CASE WHEN t.TXN_TYPE = 'IN' THEN t.QTY ELSE -t.QTY END) > 0
+             AND (MAX(CASE WHEN t.TXN_TYPE = 'OUT' THEN t.TXN_DT END) IS NULL
+                  OR MAX(CASE WHEN t.TXN_TYPE = 'OUT' THEN t.TXN_DT END) < TRUNC(SYSDATE) - 90)""",
+          """
+          SELECT
+                 t.PART_NO
+               , SUM(CASE WHEN t.TXN_TYPE = 'IN' THEN t.QTY ELSE -t.QTY END) AS STOCK_QTY
+               , MAX(CASE WHEN t.TXN_TYPE = 'OUT' THEN t.TXN_DT END) AS LAST_OUT
+            FROM STOCK_TXN t
+           GROUP BY
+                 t.PART_NO
+          HAVING SUM(CASE WHEN t.TXN_TYPE = 'IN' THEN t.QTY ELSE -t.QTY END) > 0
+             AND (MAX(CASE WHEN t.TXN_TYPE = 'OUT' THEN t.TXN_DT END) IS NULL
+                  OR MAX(CASE WHEN t.TXN_TYPE = 'OUT' THEN t.TXN_DT END) < CURRENT_DATE - 90)"""),
+      new Example("재고 · 수불", "창고별 재고 금액", "창고마다 수량 × 부품 단가를 더합니다.",
+          """
+          SELECT
+                 t.WH_CD
+               , SUM(CASE WHEN t.TXN_TYPE = 'IN' THEN t.QTY ELSE -t.QTY END * NVL(p.UNIT_COST, 0)) AS STOCK_AMT
+            FROM STOCK_TXN t
+               , PART p
+           WHERE t.PART_NO = p.PART_NO
+           GROUP BY
+                 t.WH_CD
+           ORDER BY
+                 STOCK_AMT DESC""",
+          """
+          SELECT
+                 t.WH_CD
+               , SUM(CASE WHEN t.TXN_TYPE = 'IN' THEN t.QTY ELSE -t.QTY END * COALESCE(p.UNIT_COST, 0)) AS STOCK_AMT
+            FROM STOCK_TXN t
+               , PART p
+           WHERE t.PART_NO = p.PART_NO
+           GROUP BY
+                 t.WH_CD
+           ORDER BY
+                 STOCK_AMT DESC"""),
+      new Example("재고 · 수불", "재고 0 인데 발주 잔량도 없는 부품", "곧 모자랄 부품. 재고가 0 이하이고 아직 안 들어온 발주도 없는 것.",
+          """
+          SELECT
+                 p.PART_NO
+            FROM PART p
+           WHERE NVL((SELECT SUM(CASE WHEN t.TXN_TYPE = 'IN' THEN t.QTY ELSE -t.QTY END) FROM STOCK_TXN t WHERE t.PART_NO = p.PART_NO), 0) <= 0
+             AND NOT EXISTS (
+                  SELECT 1
+                    FROM PURCHASE_ORDER o
+                   WHERE o.PART_NO = p.PART_NO
+                     AND o.QTY > NVL((SELECT SUM(r.QTY) FROM RECEIPT r WHERE r.PO_NO = o.PO_NO AND r.LINE_NO = o.LINE_NO), 0)
+                 )""",
+          """
+          SELECT
+                 p.PART_NO
+            FROM PART p
+           WHERE COALESCE((SELECT SUM(CASE WHEN t.TXN_TYPE = 'IN' THEN t.QTY ELSE -t.QTY END) FROM STOCK_TXN t WHERE t.PART_NO = p.PART_NO), 0) <= 0
+             AND NOT EXISTS (
+                  SELECT 1
+                    FROM PURCHASE_ORDER o
+                   WHERE o.PART_NO = p.PART_NO
+                     AND o.QTY > COALESCE((SELECT SUM(r.QTY) FROM RECEIPT r WHERE r.PO_NO = o.PO_NO AND r.LINE_NO = o.LINE_NO), 0)
+                 )"""),
+      new Example("재고 · 수불", "마이너스 재고 (출고가 입고보다 많은 것)", "수불 순서가 꼬였거나 입고 누락. 창고 · 부품마다.",
+          """
+          SELECT
+                 t.WH_CD
+               , t.PART_NO
+               , SUM(CASE WHEN t.TXN_TYPE = 'IN' THEN t.QTY ELSE -t.QTY END) AS STOCK_QTY
+            FROM STOCK_TXN t
+           GROUP BY
+                 t.WH_CD
+               , t.PART_NO
+          HAVING SUM(CASE WHEN t.TXN_TYPE = 'IN' THEN t.QTY ELSE -t.QTY END) < 0""",
+          """
+          SELECT
+                 t.WH_CD
+               , t.PART_NO
+               , SUM(CASE WHEN t.TXN_TYPE = 'IN' THEN t.QTY ELSE -t.QTY END) AS STOCK_QTY
+            FROM STOCK_TXN t
+           GROUP BY
+                 t.WH_CD
+               , t.PART_NO
+          HAVING SUM(CASE WHEN t.TXN_TYPE = 'IN' THEN t.QTY ELSE -t.QTY END) < 0"""),
       new Example("영업 · 구매 · 회계", "수주 → 출하 → 청구 잔량 (미출하 · 미청구)", "수주 줄마다 출하한 수량, 청구한 금액, 남은 것. 출하 · 청구가 여러 번이어도 먼저 묶은 뒤 붙여 곱해지지 않게 합니다.",
           """
           SELECT
@@ -7331,6 +10101,257 @@ public final class Examples {
                          g.ACCT_CD
                        , TO_CHAR(g.ENTRY_DT, 'YYYY-MM')
                  ) x"""),
+      new Example("영업 · 구매 · 회계", "월별 매출 · 매입 · 차이", "수주 금액과 발주 금액을 달마다 나란히 놓습니다. 두 표를 붙인 뒤 묶습니다.",
+          """
+          SELECT
+                 u.YM
+               , SUM(u.SALES) AS SALES
+               , SUM(u.PURCHASE) AS PURCHASE
+               , SUM(u.SALES) - SUM(u.PURCHASE) AS GAP
+            FROM (
+                  SELECT TO_CHAR(s.SO_DT, 'YYYY-MM') AS YM, s.QTY * s.PRICE AS SALES, 0 AS PURCHASE FROM SALES_ORDER s
+                  UNION ALL
+                  SELECT TO_CHAR(p.PO_DT, 'YYYY-MM'), 0, p.QTY * p.PRICE FROM PURCHASE_ORDER p
+                 ) u
+           GROUP BY
+                 u.YM
+           ORDER BY
+                 u.YM""",
+          """
+          SELECT
+                 u.YM
+               , SUM(u.SALES) AS SALES
+               , SUM(u.PURCHASE) AS PURCHASE
+               , SUM(u.SALES) - SUM(u.PURCHASE) AS GAP
+            FROM (
+                  SELECT TO_CHAR(s.SO_DT, 'YYYY-MM') AS YM, s.QTY * s.PRICE AS SALES, 0 AS PURCHASE FROM SALES_ORDER s
+                  UNION ALL
+                  SELECT TO_CHAR(p.PO_DT, 'YYYY-MM'), 0, p.QTY * p.PRICE FROM PURCHASE_ORDER p
+                 ) u
+           GROUP BY
+                 u.YM
+           ORDER BY
+                 u.YM"""),
+      new Example("영업 · 구매 · 회계", "거래처별 매출 순위와 비중 · 누적 비중", "매출 큰 순으로 순위, 전체 중 비중, 누적 비중(상위 몇 곳이 80% 인지).",
+          """
+          SELECT
+                 x.CUST_ID
+               , x.AMT
+               , RANK() OVER (ORDER BY x.AMT DESC) AS RNK
+               , ROUND(x.AMT * 100 / SUM(x.AMT) OVER (), 1) AS PCT
+               , ROUND(SUM(x.AMT) OVER (ORDER BY x.AMT DESC ROWS UNBOUNDED PRECEDING) * 100 / SUM(x.AMT) OVER (), 1) AS CUM_PCT
+            FROM (
+                  SELECT
+                         s.CUST_ID
+                       , SUM(s.QTY * s.PRICE) AS AMT
+                    FROM SALES_ORDER s
+                   GROUP BY
+                         s.CUST_ID
+                 ) x
+           ORDER BY
+                 RNK""",
+          """
+          SELECT
+                 x.CUST_ID
+               , x.AMT
+               , RANK() OVER (ORDER BY x.AMT DESC) AS RNK
+               , ROUND(x.AMT * 100 / SUM(x.AMT) OVER (), 1) AS PCT
+               , ROUND(SUM(x.AMT) OVER (ORDER BY x.AMT DESC ROWS UNBOUNDED PRECEDING) * 100 / SUM(x.AMT) OVER (), 1) AS CUM_PCT
+            FROM (
+                  SELECT
+                         s.CUST_ID
+                       , SUM(s.QTY * s.PRICE) AS AMT
+                    FROM SALES_ORDER s
+                   GROUP BY
+                         s.CUST_ID
+                 ) x
+           ORDER BY
+                 RNK"""),
+      new Example("영업 · 구매 · 회계", "납기 임박 미출하 수주 (7일 안)", "납기가 7일 안인데 아직 다 나가지 않은 수주 줄.",
+          """
+          SELECT
+                 s.SO_NO
+               , s.LINE_NO
+               , s.PART_NO
+               , s.DUE_DT
+               , s.QTY - NVL((SELECT SUM(h.QTY) FROM SHIPMENT h WHERE h.SO_NO = s.SO_NO AND h.LINE_NO = s.LINE_NO), 0) AS REMAIN_QTY
+            FROM SALES_ORDER s
+           WHERE s.DUE_DT BETWEEN TRUNC(SYSDATE) AND TRUNC(SYSDATE) + 7
+             AND s.QTY > NVL((SELECT SUM(h.QTY) FROM SHIPMENT h WHERE h.SO_NO = s.SO_NO AND h.LINE_NO = s.LINE_NO), 0)
+           ORDER BY
+                 s.DUE_DT""",
+          """
+          SELECT
+                 s.SO_NO
+               , s.LINE_NO
+               , s.PART_NO
+               , s.DUE_DT
+               , s.QTY - COALESCE((SELECT SUM(h.QTY) FROM SHIPMENT h WHERE h.SO_NO = s.SO_NO AND h.LINE_NO = s.LINE_NO), 0) AS REMAIN_QTY
+            FROM SALES_ORDER s
+           WHERE s.DUE_DT BETWEEN CURRENT_DATE AND CURRENT_DATE + 7
+             AND s.QTY > COALESCE((SELECT SUM(h.QTY) FROM SHIPMENT h WHERE h.SO_NO = s.SO_NO AND h.LINE_NO = s.LINE_NO), 0)
+           ORDER BY
+                 s.DUE_DT"""),
+      new Example("영업 · 구매 · 회계", "출하했는데 청구 안 된 것", "출하 수량은 있는데 같은 수주 줄의 청구가 없는 것.",
+          """
+          SELECT
+                 h.SO_NO
+               , h.LINE_NO
+               , SUM(h.QTY) AS SHIP_QTY
+               , MAX(h.SHIP_DT) AS LAST_SHIP
+            FROM SHIPMENT h
+           WHERE NOT EXISTS (SELECT 1 FROM INVOICE v WHERE v.SO_NO = h.SO_NO AND v.LINE_NO = h.LINE_NO)
+           GROUP BY
+                 h.SO_NO
+               , h.LINE_NO""",
+          """
+          SELECT
+                 h.SO_NO
+               , h.LINE_NO
+               , SUM(h.QTY) AS SHIP_QTY
+               , MAX(h.SHIP_DT) AS LAST_SHIP
+            FROM SHIPMENT h
+           WHERE NOT EXISTS (SELECT 1 FROM INVOICE v WHERE v.SO_NO = h.SO_NO AND v.LINE_NO = h.LINE_NO)
+           GROUP BY
+                 h.SO_NO
+               , h.LINE_NO"""),
+      new Example("영업 · 구매 · 회계", "통화별 발주 금액과 원화 환산 합계", "발주일 환율로 원화로 바꿔 통화마다 합칩니다. 환율이 없으면 그 줄은 비어 있습니다.",
+          """
+          SELECT
+                 p.CURRENCY
+               , SUM(p.QTY * p.PRICE) AS AMT
+               , SUM(p.QTY * p.PRICE * NVL(r.RATE, CASE WHEN p.CURRENCY = 'KRW' THEN 1 END)) AS AMT_KRW
+            FROM PURCHASE_ORDER p
+               , EXCH_RATE r
+           WHERE p.CURRENCY = r.CURRENCY(+)
+             AND p.PO_DT = r.RATE_DT(+)
+           GROUP BY
+                 p.CURRENCY""",
+          """
+          SELECT
+                 p.CURRENCY
+               , SUM(p.QTY * p.PRICE) AS AMT
+               , SUM(p.QTY * p.PRICE * COALESCE(r.RATE, CASE WHEN p.CURRENCY = 'KRW' THEN 1 END)) AS AMT_KRW
+            FROM PURCHASE_ORDER p
+            LEFT OUTER JOIN EXCH_RATE r
+              ON p.CURRENCY = r.CURRENCY
+             AND p.PO_DT = r.RATE_DT
+           GROUP BY
+                 p.CURRENCY"""),
+      new Example("영업 · 구매 · 회계", "예산 소진율 (부서 · 연 누계)", "올해 예산 합과 전표 실적 합. 80% 넘은 부서를 먼저.",
+          """
+          SELECT
+                 b.DEPT_ID
+               , SUM(b.BUDGET_AMT) AS BUDGET
+               , NVL(MAX(g.SPENT), 0) AS SPENT
+               , ROUND(NVL(MAX(g.SPENT), 0) * 100 / NULLIF(SUM(b.BUDGET_AMT), 0), 1) AS USED_PCT
+            FROM BUDGET b
+               , (SELECT e.DEPT_ID, SUM(e.DR_AMT) AS SPENT FROM GL_ENTRY e WHERE TO_CHAR(e.ENTRY_DT, 'YYYY') = TO_CHAR(SYSDATE, 'YYYY') GROUP BY e.DEPT_ID) g
+           WHERE b.DEPT_ID = g.DEPT_ID(+)
+             AND SUBSTR(b.YM, 1, 4) = TO_CHAR(SYSDATE, 'YYYY')
+           GROUP BY
+                 b.DEPT_ID
+           ORDER BY
+                 USED_PCT DESC NULLS LAST""",
+          """
+          SELECT
+                 b.DEPT_ID
+               , SUM(b.BUDGET_AMT) AS BUDGET
+               , COALESCE(MAX(g.SPENT), 0) AS SPENT
+               , ROUND(COALESCE(MAX(g.SPENT), 0) * 100 / NULLIF(SUM(b.BUDGET_AMT), 0), 1) AS USED_PCT
+            FROM BUDGET b
+            LEFT OUTER JOIN (SELECT e.DEPT_ID, SUM(e.DR_AMT) AS SPENT FROM GL_ENTRY e WHERE TO_CHAR(e.ENTRY_DT, 'YYYY') = TO_CHAR(CURRENT_DATE, 'YYYY') GROUP BY e.DEPT_ID) g
+              ON b.DEPT_ID = g.DEPT_ID
+           WHERE SUBSTR(b.YM, 1, 4) = TO_CHAR(CURRENT_DATE, 'YYYY')
+           GROUP BY
+                 b.DEPT_ID
+           ORDER BY
+                 USED_PCT DESC NULLS LAST"""),
+      new Example("영업 · 구매 · 회계", "전표 번호 빠진 곳 (끊긴 번호)", "전표 번호가 숫자일 때 앞 번호 + 1 이 아닌 곳.",
+          """
+          SELECT
+                 x.PREV_NO
+               , x.VOUCHER_NO
+            FROM (
+                  SELECT DISTINCT
+                         g.VOUCHER_NO
+                       , LAG(g.VOUCHER_NO) OVER (ORDER BY TO_NUMBER(g.VOUCHER_NO)) AS PREV_NO
+                    FROM (SELECT DISTINCT e.VOUCHER_NO FROM GL_ENTRY e WHERE REGEXP_LIKE(e.VOUCHER_NO, '^[0-9]+$')) g
+                 ) x
+           WHERE TO_NUMBER(x.VOUCHER_NO) - TO_NUMBER(x.PREV_NO) > 1""",
+          """
+          SELECT
+                 x.PREV_NO
+               , x.VOUCHER_NO
+            FROM (
+                  SELECT
+                         g.VOUCHER_NO
+                       , LAG(g.VOUCHER_NO) OVER (ORDER BY CAST(g.VOUCHER_NO AS BIGINT)) AS PREV_NO
+                    FROM (SELECT DISTINCT e.VOUCHER_NO FROM GL_ENTRY e WHERE e.VOUCHER_NO ~ '^[0-9]+$') g
+                 ) x
+           WHERE CAST(x.VOUCHER_NO AS BIGINT) - CAST(x.PREV_NO AS BIGINT) > 1"""),
+      new Example("영업 · 구매 · 회계", "고객 코호트 (첫 주문 달 × 몇 달 뒤 재주문 수)", "첫 주문 달로 고객을 묶고, 그 뒤 0 · 1 · 2 · 3 달째에 주문한 고객 수.",
+          """
+          SELECT
+                 f.FIRST_YM
+               , COUNT(DISTINCT f.CUST_ID) AS CUST_CNT
+               , COUNT(DISTINCT CASE WHEN MONTHS_BETWEEN(TRUNC(o.ORDER_DT, 'MM'), TO_DATE(f.FIRST_YM, 'YYYY-MM')) = 1 THEN o.CUST_ID END) AS M1
+               , COUNT(DISTINCT CASE WHEN MONTHS_BETWEEN(TRUNC(o.ORDER_DT, 'MM'), TO_DATE(f.FIRST_YM, 'YYYY-MM')) = 2 THEN o.CUST_ID END) AS M2
+               , COUNT(DISTINCT CASE WHEN MONTHS_BETWEEN(TRUNC(o.ORDER_DT, 'MM'), TO_DATE(f.FIRST_YM, 'YYYY-MM')) = 3 THEN o.CUST_ID END) AS M3
+            FROM (SELECT x.CUST_ID, TO_CHAR(MIN(x.ORDER_DT), 'YYYY-MM') AS FIRST_YM FROM ORDERS x GROUP BY x.CUST_ID) f
+               , ORDERS o
+           WHERE f.CUST_ID = o.CUST_ID
+           GROUP BY
+                 f.FIRST_YM
+           ORDER BY
+                 f.FIRST_YM""",
+          """
+          SELECT
+                 f.FIRST_YM
+               , COUNT(DISTINCT f.CUST_ID) AS CUST_CNT
+               , COUNT(DISTINCT CASE WHEN (EXTRACT(YEAR FROM o.ORDER_DT) * 12 + EXTRACT(MONTH FROM o.ORDER_DT)) - (CAST(LEFT(f.FIRST_YM, 4) AS INTEGER) * 12 + CAST(RIGHT(f.FIRST_YM, 2) AS INTEGER)) = 1 THEN o.CUST_ID END) AS M1
+               , COUNT(DISTINCT CASE WHEN (EXTRACT(YEAR FROM o.ORDER_DT) * 12 + EXTRACT(MONTH FROM o.ORDER_DT)) - (CAST(LEFT(f.FIRST_YM, 4) AS INTEGER) * 12 + CAST(RIGHT(f.FIRST_YM, 2) AS INTEGER)) = 2 THEN o.CUST_ID END) AS M2
+               , COUNT(DISTINCT CASE WHEN (EXTRACT(YEAR FROM o.ORDER_DT) * 12 + EXTRACT(MONTH FROM o.ORDER_DT)) - (CAST(LEFT(f.FIRST_YM, 4) AS INTEGER) * 12 + CAST(RIGHT(f.FIRST_YM, 2) AS INTEGER)) = 3 THEN o.CUST_ID END) AS M3
+            FROM (SELECT x.CUST_ID, TO_CHAR(MIN(x.ORDER_DT), 'YYYY-MM') AS FIRST_YM FROM ORDERS x GROUP BY x.CUST_ID) f
+               , ORDERS o
+           WHERE f.CUST_ID = o.CUST_ID
+           GROUP BY
+                 f.FIRST_YM
+           ORDER BY
+                 f.FIRST_YM"""),
+      new Example("영업 · 구매 · 회계", "지난 분기엔 샀는데 이번 분기엔 안 산 고객 (이탈 후보)", "두 기간을 EXISTS 두 개로 비교합니다.",
+          """
+          SELECT
+                 c.CUST_ID
+               , c.CUST_NAME
+            FROM CUSTOMER c
+           WHERE EXISTS (
+                  SELECT 1 FROM ORDERS o
+                   WHERE o.CUST_ID = c.CUST_ID
+                     AND o.ORDER_DT >= ADD_MONTHS(TRUNC(SYSDATE, 'Q'), -3)
+                     AND o.ORDER_DT < TRUNC(SYSDATE, 'Q')
+                 )
+             AND NOT EXISTS (
+                  SELECT 1 FROM ORDERS o
+                   WHERE o.CUST_ID = c.CUST_ID
+                     AND o.ORDER_DT >= TRUNC(SYSDATE, 'Q')
+                 )""",
+          """
+          SELECT
+                 c.CUST_ID
+               , c.CUST_NAME
+            FROM CUSTOMER c
+           WHERE EXISTS (
+                  SELECT 1 FROM ORDERS o
+                   WHERE o.CUST_ID = c.CUST_ID
+                     AND o.ORDER_DT >= DATE_TRUNC('quarter', CURRENT_DATE) - INTERVAL '3 month'
+                     AND o.ORDER_DT < DATE_TRUNC('quarter', CURRENT_DATE)
+                 )
+             AND NOT EXISTS (
+                  SELECT 1 FROM ORDERS o
+                   WHERE o.CUST_ID = c.CUST_ID
+                     AND o.ORDER_DT >= DATE_TRUNC('quarter', CURRENT_DATE)
+                 )"""),
       new Example("생산 · 품질", "소요량 계산 (MRP: 생산 계획 × BOM − 재고 − 발주 잔량)", "계획 수량으로 BOM 을 끝까지 펼쳐 부품별 총 필요량을 구하고, 지금 재고와 들어올 발주 잔량을 빼 더 사야 할 양을 냅니다.",
           """
           WITH need (PART_NO, QTY, LVL) AS (
@@ -7826,6 +10847,248 @@ public final class Examples {
           HAVING COUNT(*) > 3
            ORDER BY
                  TIMES DESC"""),
+      new Example("생산 · 품질", "시간당 생산량 (UPH, 설비별)", "가동(RUN) 시간 합으로 양품 수를 나눕니다.",
+          """
+          SELECT
+                 r.EQUIP_ID
+               , SUM(r.GOOD_QTY) AS GOOD
+               , ROUND(MAX(t.RUN_HOURS), 1) AS RUN_HOURS
+               , ROUND(SUM(r.GOOD_QTY) / NULLIF(MAX(t.RUN_HOURS), 0), 1) AS UPH
+            FROM WORK_RESULT r
+               , (SELECT l.EQUIP_ID, SUM((CAST(l.END_TS AS DATE) - CAST(l.START_TS AS DATE)) * 24) AS RUN_HOURS FROM EQUIP_LOG l WHERE l.STATUS = 'RUN' GROUP BY l.EQUIP_ID) t
+           WHERE r.EQUIP_ID = t.EQUIP_ID
+           GROUP BY
+                 r.EQUIP_ID""",
+          """
+          SELECT
+                 r.EQUIP_ID
+               , SUM(r.GOOD_QTY) AS GOOD
+               , ROUND(MAX(t.RUN_HOURS), 1) AS RUN_HOURS
+               , ROUND(SUM(r.GOOD_QTY) / NULLIF(MAX(t.RUN_HOURS), 0), 1) AS UPH
+            FROM WORK_RESULT r
+               , (SELECT l.EQUIP_ID, CAST(SUM(EXTRACT(EPOCH FROM (l.END_TS - l.START_TS))) / 3600 AS NUMERIC) AS RUN_HOURS FROM EQUIP_LOG l WHERE l.STATUS = 'RUN' GROUP BY l.EQUIP_ID) t
+           WHERE r.EQUIP_ID = t.EQUIP_ID
+           GROUP BY
+                 r.EQUIP_ID"""),
+      new Example("생산 · 품질", "설비 지금 상태 (마지막 기록 한 줄)", "설비마다 가장 최근 상태와 그 상태가 된 지 몇 분째인지.",
+          """
+          SELECT
+                 x.EQUIP_ID
+               , x.STATUS
+               , x.START_TS
+               , ROUND((SYSDATE - CAST(x.START_TS AS DATE)) * 1440) AS MINUTES
+            FROM (
+                  SELECT
+                         l.*
+                       , ROW_NUMBER() OVER (PARTITION BY l.EQUIP_ID ORDER BY l.START_TS DESC) AS RN
+                    FROM EQUIP_LOG l
+                 ) x
+           WHERE x.RN = 1""",
+          """
+          SELECT
+                 x.EQUIP_ID
+               , x.STATUS
+               , x.START_TS
+               , ROUND(CAST(EXTRACT(EPOCH FROM (NOW() - x.START_TS)) / 60 AS NUMERIC)) AS MINUTES
+            FROM (
+                  SELECT
+                         l.*
+                       , ROW_NUMBER() OVER (PARTITION BY l.EQUIP_ID ORDER BY l.START_TS DESC) AS RN
+                    FROM EQUIP_LOG l
+                 ) x
+           WHERE x.RN = 1"""),
+      new Example("생산 · 품질", "교대별 생산 (주간 08~20시 · 야간)", "시작 시각으로 주간 · 야간을 나눠 설비마다 셉니다. 야간이 날을 넘으면 앞날로 붙입니다.",
+          """
+          SELECT
+                 l.EQUIP_ID
+               , TRUNC(CAST(l.START_TS AS DATE) - 8 / 24) AS WORK_DAY
+               , CASE WHEN TO_NUMBER(TO_CHAR(l.START_TS, 'HH24')) BETWEEN 8 AND 19 THEN '주간' ELSE '야간' END AS SHIFT
+               , COUNT(*) AS LOG_CNT
+            FROM EQUIP_LOG l
+           GROUP BY
+                 l.EQUIP_ID
+               , TRUNC(CAST(l.START_TS AS DATE) - 8 / 24)
+               , CASE WHEN TO_NUMBER(TO_CHAR(l.START_TS, 'HH24')) BETWEEN 8 AND 19 THEN '주간' ELSE '야간' END""",
+          """
+          SELECT
+                 l.EQUIP_ID
+               , CAST(l.START_TS - INTERVAL '8 hour' AS DATE) AS WORK_DAY
+               , CASE WHEN EXTRACT(HOUR FROM l.START_TS) BETWEEN 8 AND 19 THEN '주간' ELSE '야간' END AS SHIFT
+               , COUNT(*) AS LOG_CNT
+            FROM EQUIP_LOG l
+           GROUP BY
+                 l.EQUIP_ID
+               , CAST(l.START_TS - INTERVAL '8 hour' AS DATE)
+               , CASE WHEN EXTRACT(HOUR FROM l.START_TS) BETWEEN 8 AND 19 THEN '주간' ELSE '야간' END"""),
+      new Example("생산 · 품질", "로트별 양품률 · 나쁜 로트 순", "로트마다 양품 / (양품 + 불량). 낮은 순.",
+          """
+          SELECT
+                 r.LOT_NO
+               , SUM(r.GOOD_QTY) AS GOOD
+               , SUM(r.NG_QTY) AS NG
+               , ROUND(SUM(r.GOOD_QTY) * 100 / NULLIF(SUM(r.GOOD_QTY) + SUM(r.NG_QTY), 0), 2) AS YIELD_PCT
+            FROM WORK_RESULT r
+           GROUP BY
+                 r.LOT_NO
+           ORDER BY
+                 YIELD_PCT""",
+          """
+          SELECT
+                 r.LOT_NO
+               , SUM(r.GOOD_QTY) AS GOOD
+               , SUM(r.NG_QTY) AS NG
+               , ROUND(SUM(r.GOOD_QTY) * 100 / NULLIF(SUM(r.GOOD_QTY) + SUM(r.NG_QTY), 0), 2) AS YIELD_PCT
+            FROM WORK_RESULT r
+           GROUP BY
+                 r.LOT_NO
+           ORDER BY
+                 YIELD_PCT"""),
+      new Example("생산 · 품질", "공정 실적 빠짐 (지시는 있는데 실적이 없는 공정)", "작업 지시마다 실적이 하나도 없거나 오늘까지 실적이 없는 것.",
+          """
+          SELECT
+                 w.WO_NO
+               , w.PART_NO
+               , w.WO_DT
+               , w.STATUS
+            FROM WORK_ORDER w
+           WHERE w.WO_DT < TRUNC(SYSDATE)
+             AND NOT EXISTS (SELECT 1 FROM WORK_RESULT r WHERE r.WO_NO = w.WO_NO)""",
+          """
+          SELECT
+                 w.WO_NO
+               , w.PART_NO
+               , w.WO_DT
+               , w.STATUS
+            FROM WORK_ORDER w
+           WHERE w.WO_DT < CURRENT_DATE
+             AND NOT EXISTS (SELECT 1 FROM WORK_RESULT r WHERE r.WO_NO = w.WO_NO)"""),
+      new Example("생산 · 품질", "측정값 연속 3번 관리선 밖 (연속 이탈)", "같은 부품 · 검사 항목에서 규격 밖이 3번 이어진 곳. 앞 두 줄을 LAG 로 봅니다.",
+          """
+          SELECT
+                 x.PART_NO
+               , x.ITEM_CD
+               , x.INSP_DT
+               , x.MEASURED
+            FROM (
+                  SELECT
+                         i.PART_NO
+                       , i.ITEM_CD
+                       , i.INSP_DT
+                       , i.MEASURED
+                       , CASE WHEN i.MEASURED NOT BETWEEN i.LSL AND i.USL THEN 1 ELSE 0 END AS OUT1
+                       , LAG(CASE WHEN i.MEASURED NOT BETWEEN i.LSL AND i.USL THEN 1 ELSE 0 END, 1) OVER (PARTITION BY i.PART_NO, i.ITEM_CD ORDER BY i.INSP_DT, i.INSP_ID) AS OUT2
+                       , LAG(CASE WHEN i.MEASURED NOT BETWEEN i.LSL AND i.USL THEN 1 ELSE 0 END, 2) OVER (PARTITION BY i.PART_NO, i.ITEM_CD ORDER BY i.INSP_DT, i.INSP_ID) AS OUT3
+                    FROM INSPECTION i
+                 ) x
+           WHERE x.OUT1 + x.OUT2 + x.OUT3 = 3""",
+          """
+          SELECT
+                 x.PART_NO
+               , x.ITEM_CD
+               , x.INSP_DT
+               , x.MEASURED
+            FROM (
+                  SELECT
+                         i.PART_NO
+                       , i.ITEM_CD
+                       , i.INSP_DT
+                       , i.MEASURED
+                       , CASE WHEN i.MEASURED NOT BETWEEN i.LSL AND i.USL THEN 1 ELSE 0 END AS OUT1
+                       , LAG(CASE WHEN i.MEASURED NOT BETWEEN i.LSL AND i.USL THEN 1 ELSE 0 END, 1) OVER (PARTITION BY i.PART_NO, i.ITEM_CD ORDER BY i.INSP_DT, i.INSP_ID) AS OUT2
+                       , LAG(CASE WHEN i.MEASURED NOT BETWEEN i.LSL AND i.USL THEN 1 ELSE 0 END, 2) OVER (PARTITION BY i.PART_NO, i.ITEM_CD ORDER BY i.INSP_DT, i.INSP_ID) AS OUT3
+                    FROM INSPECTION i
+                 ) x
+           WHERE x.OUT1 + x.OUT2 + x.OUT3 = 3"""),
+      new Example("생산 · 품질", "불량 유형 월별 가로표", "불량 유형을 줄로, 달을 칸으로. 최근 3달.",
+          """
+          SELECT
+                 r.NG_TYPE
+               , SUM(CASE WHEN r.WORK_DT >= ADD_MONTHS(TRUNC(SYSDATE, 'MM'), -2) AND r.WORK_DT < ADD_MONTHS(TRUNC(SYSDATE, 'MM'), -1) THEN r.NG_QTY ELSE 0 END) AS M_2
+               , SUM(CASE WHEN r.WORK_DT >= ADD_MONTHS(TRUNC(SYSDATE, 'MM'), -1) AND r.WORK_DT < TRUNC(SYSDATE, 'MM') THEN r.NG_QTY ELSE 0 END) AS M_1
+               , SUM(CASE WHEN r.WORK_DT >= TRUNC(SYSDATE, 'MM') THEN r.NG_QTY ELSE 0 END) AS THIS_M
+            FROM WORK_RESULT r
+           WHERE r.NG_QTY > 0
+           GROUP BY
+                 r.NG_TYPE""",
+          """
+          SELECT
+                 r.NG_TYPE
+               , SUM(CASE WHEN r.WORK_DT >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '2 month' AND r.WORK_DT < DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month' THEN r.NG_QTY ELSE 0 END) AS M_2
+               , SUM(CASE WHEN r.WORK_DT >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month' AND r.WORK_DT < DATE_TRUNC('month', CURRENT_DATE) THEN r.NG_QTY ELSE 0 END) AS M_1
+               , SUM(CASE WHEN r.WORK_DT >= DATE_TRUNC('month', CURRENT_DATE) THEN r.NG_QTY ELSE 0 END) AS THIS_M
+            FROM WORK_RESULT r
+           WHERE r.NG_QTY > 0
+           GROUP BY
+                 r.NG_TYPE"""),
+      new Example("생산 · 품질", "협력사별 검사 합격률", "검사 줄 중 규격 안 비율을 협력사마다.",
+          """
+          SELECT
+                 i.VENDOR_ID
+               , COUNT(*) AS INSP_CNT
+               , SUM(CASE WHEN i.MEASURED BETWEEN i.LSL AND i.USL THEN 1 ELSE 0 END) AS PASS_CNT
+               , ROUND(SUM(CASE WHEN i.MEASURED BETWEEN i.LSL AND i.USL THEN 1 ELSE 0 END) * 100 / COUNT(*), 1) AS PASS_PCT
+            FROM INSPECTION i
+           GROUP BY
+                 i.VENDOR_ID
+           ORDER BY
+                 PASS_PCT""",
+          """
+          SELECT
+                 i.VENDOR_ID
+               , COUNT(*) AS INSP_CNT
+               , SUM(CASE WHEN i.MEASURED BETWEEN i.LSL AND i.USL THEN 1 ELSE 0 END) AS PASS_CNT
+               , ROUND(SUM(CASE WHEN i.MEASURED BETWEEN i.LSL AND i.USL THEN 1 ELSE 0 END) * 100 / COUNT(*), 1) AS PASS_PCT
+            FROM INSPECTION i
+           GROUP BY
+                 i.VENDOR_ID
+           ORDER BY
+                 PASS_PCT"""),
+      new Example("생산 · 품질", "CAPA 기한 지남 · 담당자별", "열린 시정 조치 중 기한이 지난 것을 담당자마다 세고 가장 오래 밀린 날수.",
+          """
+          SELECT
+                 c.OWNER_ID
+               , COUNT(*) AS OVERDUE_CNT
+               , MAX(TRUNC(SYSDATE) - c.DUE_DT) AS MAX_DAYS
+            FROM CAPA c
+           WHERE c.CLOSE_DT IS NULL
+             AND c.DUE_DT < TRUNC(SYSDATE)
+           GROUP BY
+                 c.OWNER_ID
+           ORDER BY
+                 OVERDUE_CNT DESC""",
+          """
+          SELECT
+                 c.OWNER_ID
+               , COUNT(*) AS OVERDUE_CNT
+               , MAX(CURRENT_DATE - c.DUE_DT) AS MAX_DAYS
+            FROM CAPA c
+           WHERE c.CLOSE_DT IS NULL
+             AND c.DUE_DT < CURRENT_DATE
+           GROUP BY
+                 c.OWNER_ID
+           ORDER BY
+                 OVERDUE_CNT DESC"""),
+      new Example("생산 · 품질", "CAPA 처리 기간 (유형별 평균 · 최장)", "닫힌 시정 조치의 열림 ~ 닫힘 일수.",
+          """
+          SELECT
+                 c.ISSUE_TYPE
+               , COUNT(*) AS CNT
+               , ROUND(AVG(c.CLOSE_DT - c.OPEN_DT), 1) AS AVG_DAYS
+               , MAX(c.CLOSE_DT - c.OPEN_DT) AS MAX_DAYS
+            FROM CAPA c
+           WHERE c.CLOSE_DT IS NOT NULL
+           GROUP BY
+                 c.ISSUE_TYPE""",
+          """
+          SELECT
+                 c.ISSUE_TYPE
+               , COUNT(*) AS CNT
+               , ROUND(AVG(c.CLOSE_DT - c.OPEN_DT), 1) AS AVG_DAYS
+               , MAX(c.CLOSE_DT - c.OPEN_DT) AS MAX_DAYS
+            FROM CAPA c
+           WHERE c.CLOSE_DT IS NOT NULL
+           GROUP BY
+                 c.ISSUE_TYPE"""),
       new Example("인사 · 근태", "기간별 소속 (그날 어느 부서였나)", "부서 이동 이력에서 기준일에 걸리는 부서와 그때 부서 이름.",
           """
           SELECT
@@ -8069,6 +11332,87 @@ public final class Examples {
                  END
            ORDER BY
                  SAL_BAND"""),
+      new Example("인사 · 근태", "관리자가 없는 직원 · 없는 관리자를 가리키는 직원", "상사 번호가 비었거나 직원 표에 없는 사람을 가리키는 줄(조직도 점검).",
+          """
+          SELECT
+                 e.EMP_ID
+               , e.EMP_NAME
+               , e.MGR_ID
+               , CASE WHEN e.MGR_ID IS NULL THEN '상사 없음' ELSE '없는 상사' END AS PROBLEM
+            FROM EMP e
+           WHERE e.MGR_ID IS NULL
+              OR NOT EXISTS (SELECT 1 FROM EMP m WHERE m.EMP_ID = e.MGR_ID)""",
+          """
+          SELECT
+                 e.EMP_ID
+               , e.EMP_NAME
+               , e.MGR_ID
+               , CASE WHEN e.MGR_ID IS NULL THEN '상사 없음' ELSE '없는 상사' END AS PROBLEM
+            FROM EMP e
+           WHERE e.MGR_ID IS NULL
+              OR NOT EXISTS (SELECT 1 FROM EMP m WHERE m.EMP_ID = e.MGR_ID)"""),
+      new Example("인사 · 근태", "직속 부하 수 · 전체 부하 수", "관리자마다 바로 아래 인원과 아래로 끝까지 센 인원.",
+          """
+          SELECT
+                 m.EMP_ID
+               , m.EMP_NAME
+               , (SELECT COUNT(*) FROM EMP e WHERE e.MGR_ID = m.EMP_ID) AS DIRECT_CNT
+               , (SELECT COUNT(*) - 1 FROM EMP e START WITH e.EMP_ID = m.EMP_ID CONNECT BY PRIOR e.EMP_ID = e.MGR_ID) AS ALL_CNT
+            FROM EMP m
+           WHERE EXISTS (SELECT 1 FROM EMP e WHERE e.MGR_ID = m.EMP_ID)""",
+          """
+          WITH RECURSIVE t AS (
+          SELECT
+                 e.EMP_ID AS TOP_ID
+               , e.EMP_ID
+               , 0 AS LVL
+            FROM EMP e
+           UNION ALL
+          SELECT
+                 t.TOP_ID
+               , e.EMP_ID
+               , t.LVL + 1
+            FROM EMP e
+               , t
+           WHERE e.MGR_ID = t.EMP_ID
+             AND t.LVL < 20
+          )
+          SELECT
+                 m.EMP_ID
+               , m.EMP_NAME
+               , (SELECT COUNT(*) FROM EMP e WHERE e.MGR_ID = m.EMP_ID) AS DIRECT_CNT
+               , (SELECT COUNT(*) FROM t WHERE t.TOP_ID = m.EMP_ID AND t.LVL > 0) AS ALL_CNT
+            FROM EMP m
+           WHERE EXISTS (SELECT 1 FROM EMP e WHERE e.MGR_ID = m.EMP_ID)"""),
+      new Example("인사 · 근태", "연차 사용률 (부여 대비 사용)", "올해 부여 일수와 사용 일수, 사용률.",
+          """
+          SELECT
+                 g.EMP_ID
+               , g.GRANTED_DAYS
+               , NVL(SUM(u.DAYS), 0) AS USED_DAYS
+               , ROUND(NVL(SUM(u.DAYS), 0) * 100 / NULLIF(g.GRANTED_DAYS, 0), 1) AS USED_PCT
+            FROM LEAVE_GRANT g
+               , LEAVE_USE u
+           WHERE g.EMP_ID = u.EMP_ID(+)
+             AND g.YEAR = TO_CHAR(SYSDATE, 'YYYY')
+             AND TO_CHAR(u.USE_DT(+), 'YYYY') = g.YEAR
+           GROUP BY
+                 g.EMP_ID
+               , g.GRANTED_DAYS""",
+          """
+          SELECT
+                 g.EMP_ID
+               , g.GRANTED_DAYS
+               , COALESCE(SUM(u.DAYS), 0) AS USED_DAYS
+               , ROUND(COALESCE(SUM(u.DAYS), 0) * 100 / NULLIF(g.GRANTED_DAYS, 0), 1) AS USED_PCT
+            FROM LEAVE_GRANT g
+            LEFT OUTER JOIN LEAVE_USE u
+              ON g.EMP_ID = u.EMP_ID
+             AND TO_CHAR(u.USE_DT, 'YYYY') = g.YEAR
+           WHERE g.YEAR = TO_CHAR(CURRENT_DATE, 'YYYY')
+           GROUP BY
+                 g.EMP_ID
+               , g.GRANTED_DAYS"""),
       new Example("설계 변경 · 개발 프로젝트", "설계 변경(ECO) 영향 부품과 그 부품을 쓰는 상위 부품", "ECO 에 걸린 부품마다 바로 위 모부품까지 붙여 영향 범위를 봅니다.",
           """
           SELECT
@@ -8572,6 +11916,103 @@ public final class Examples {
             FROM QUOTE q
            GROUP BY
                  q.PART_NO"""),
+      new Example("구매 · 협력사", "협력사별 입고 리드타임 (발주 ~ 입고 평균 일수)", "발주일부터 첫 입고일까지 걸린 날.",
+          """
+          SELECT
+                 p.VENDOR_ID
+               , COUNT(*) AS PO_LINES
+               , ROUND(AVG(r.FIRST_RCV - p.PO_DT), 1) AS AVG_DAYS
+               , MAX(r.FIRST_RCV - p.PO_DT) AS MAX_DAYS
+            FROM PURCHASE_ORDER p
+               , (SELECT x.PO_NO, x.LINE_NO, MIN(x.RCV_DT) AS FIRST_RCV FROM RECEIPT x GROUP BY x.PO_NO, x.LINE_NO) r
+           WHERE p.PO_NO = r.PO_NO
+             AND p.LINE_NO = r.LINE_NO
+           GROUP BY
+                 p.VENDOR_ID""",
+          """
+          SELECT
+                 p.VENDOR_ID
+               , COUNT(*) AS PO_LINES
+               , ROUND(AVG(r.FIRST_RCV - p.PO_DT), 1) AS AVG_DAYS
+               , MAX(r.FIRST_RCV - p.PO_DT) AS MAX_DAYS
+            FROM PURCHASE_ORDER p
+               , (SELECT x.PO_NO, x.LINE_NO, MIN(x.RCV_DT) AS FIRST_RCV FROM RECEIPT x GROUP BY x.PO_NO, x.LINE_NO) r
+           WHERE p.PO_NO = r.PO_NO
+             AND p.LINE_NO = r.LINE_NO
+           GROUP BY
+                 p.VENDOR_ID"""),
+      new Example("구매 · 협력사", "납기 지연 일수 분포 (0 · 1~3 · 4~7 · 8일 넘음)", "입고가 납기보다 며칠 늦었는지 구간으로.",
+          """
+          SELECT
+                 CASE
+                   WHEN r.RCV_DT <= p.DUE_DT THEN '0. 납기 안'
+                   WHEN r.RCV_DT - p.DUE_DT <= 3 THEN '1. 1~3일'
+                   WHEN r.RCV_DT - p.DUE_DT <= 7 THEN '2. 4~7일'
+                   ELSE '3. 8일 넘음'
+                 END AS DELAY_BAND
+               , COUNT(*) AS CNT
+            FROM PURCHASE_ORDER p
+               , RECEIPT r
+           WHERE p.PO_NO = r.PO_NO
+             AND p.LINE_NO = r.LINE_NO
+           GROUP BY
+                 CASE
+                   WHEN r.RCV_DT <= p.DUE_DT THEN '0. 납기 안'
+                   WHEN r.RCV_DT - p.DUE_DT <= 3 THEN '1. 1~3일'
+                   WHEN r.RCV_DT - p.DUE_DT <= 7 THEN '2. 4~7일'
+                   ELSE '3. 8일 넘음'
+                 END
+           ORDER BY
+                 DELAY_BAND""",
+          """
+          SELECT
+                 CASE
+                   WHEN r.RCV_DT <= p.DUE_DT THEN '0. 납기 안'
+                   WHEN r.RCV_DT - p.DUE_DT <= 3 THEN '1. 1~3일'
+                   WHEN r.RCV_DT - p.DUE_DT <= 7 THEN '2. 4~7일'
+                   ELSE '3. 8일 넘음'
+                 END AS DELAY_BAND
+               , COUNT(*) AS CNT
+            FROM PURCHASE_ORDER p
+               , RECEIPT r
+           WHERE p.PO_NO = r.PO_NO
+             AND p.LINE_NO = r.LINE_NO
+           GROUP BY
+                 CASE
+                   WHEN r.RCV_DT <= p.DUE_DT THEN '0. 납기 안'
+                   WHEN r.RCV_DT - p.DUE_DT <= 3 THEN '1. 1~3일'
+                   WHEN r.RCV_DT - p.DUE_DT <= 7 THEN '2. 4~7일'
+                   ELSE '3. 8일 넘음'
+                 END
+           ORDER BY
+                 DELAY_BAND"""),
+      new Example("구매 · 협력사", "견적가와 실제 발주가 차이", "부품 · 협력사마다 마지막 견적가와 마지막 발주 단가.",
+          """
+          SELECT
+                 q.PART_NO
+               , q.VENDOR_ID
+               , q.PRICE AS QUOTE_PRICE
+               , o.PRICE AS PO_PRICE
+               , o.PRICE - q.PRICE AS DIFF
+            FROM (SELECT x.*, ROW_NUMBER() OVER (PARTITION BY x.PART_NO, x.VENDOR_ID ORDER BY x.QUOTE_DT DESC) AS RN FROM QUOTE x) q
+               , (SELECT y.*, ROW_NUMBER() OVER (PARTITION BY y.PART_NO, y.VENDOR_ID ORDER BY y.PO_DT DESC) AS RN FROM PURCHASE_ORDER y) o
+           WHERE q.PART_NO = o.PART_NO
+             AND q.VENDOR_ID = o.VENDOR_ID
+             AND q.RN = 1
+             AND o.RN = 1""",
+          """
+          SELECT
+                 q.PART_NO
+               , q.VENDOR_ID
+               , q.PRICE AS QUOTE_PRICE
+               , o.PRICE AS PO_PRICE
+               , o.PRICE - q.PRICE AS DIFF
+            FROM (SELECT x.*, ROW_NUMBER() OVER (PARTITION BY x.PART_NO, x.VENDOR_ID ORDER BY x.QUOTE_DT DESC) AS RN FROM QUOTE x) q
+               , (SELECT y.*, ROW_NUMBER() OVER (PARTITION BY y.PART_NO, y.VENDOR_ID ORDER BY y.PO_DT DESC) AS RN FROM PURCHASE_ORDER y) o
+           WHERE q.PART_NO = o.PART_NO
+             AND q.VENDOR_ID = o.VENDOR_ID
+             AND q.RN = 1
+             AND o.RN = 1"""),
       new Example("인터페이스 · 배치 · 이관", "인터페이스 실패 · 미처리 건 (재처리 대상)", "실패했거나 한 시간 넘게 대기인 건. 재시도 횟수가 3 미만인 것만 다시 보냅니다.",
           """
           SELECT
@@ -8754,6 +12195,108 @@ public final class Examples {
               ON d.DT = b.DT
            ORDER BY
                  d.DT"""),
+      new Example("인터페이스 · 배치 · 이관", "오늘 안 돈 배치 (매일 도는 작업 중)", "최근 7일 중 하루라도 돈 작업인데 오늘은 기록이 없는 것.",
+          """
+          SELECT DISTINCT
+                 b.JOB_NAME
+            FROM BATCH_LOG b
+           WHERE b.START_TS >= TRUNC(SYSDATE) - 7
+             AND NOT EXISTS (
+                  SELECT 1
+                    FROM BATCH_LOG x
+                   WHERE x.JOB_NAME = b.JOB_NAME
+                     AND x.START_TS >= TRUNC(SYSDATE)
+                 )""",
+          """
+          SELECT DISTINCT
+                 b.JOB_NAME
+            FROM BATCH_LOG b
+           WHERE b.START_TS >= CURRENT_DATE - 7
+             AND NOT EXISTS (
+                  SELECT 1
+                    FROM BATCH_LOG x
+                   WHERE x.JOB_NAME = b.JOB_NAME
+                     AND x.START_TS >= CURRENT_DATE
+                 )"""),
+      new Example("인터페이스 · 배치 · 이관", "평소보다 오래 걸린 배치 (평균의 2배 넘음)", "작업마다 평균 시간과 비교해 2배 넘게 걸린 날.",
+          """
+          SELECT
+                 x.JOB_NAME
+               , x.START_TS
+               , ROUND(x.MINUTES, 1) AS MINUTES
+               , ROUND(x.AVG_MIN, 1) AS AVG_MIN
+            FROM (
+                  SELECT
+                         b.JOB_NAME
+                       , b.START_TS
+                       , (CAST(b.END_TS AS DATE) - CAST(b.START_TS AS DATE)) * 1440 AS MINUTES
+                       , AVG((CAST(b.END_TS AS DATE) - CAST(b.START_TS AS DATE)) * 1440) OVER (PARTITION BY b.JOB_NAME) AS AVG_MIN
+                    FROM BATCH_LOG b
+                   WHERE b.END_TS IS NOT NULL
+                 ) x
+           WHERE x.MINUTES > x.AVG_MIN * 2""",
+          """
+          SELECT
+                 x.JOB_NAME
+               , x.START_TS
+               , ROUND(x.MINUTES, 1) AS MINUTES
+               , ROUND(x.AVG_MIN, 1) AS AVG_MIN
+            FROM (
+                  SELECT
+                         b.JOB_NAME
+                       , b.START_TS
+                       , CAST(EXTRACT(EPOCH FROM (b.END_TS - b.START_TS)) / 60 AS NUMERIC) AS MINUTES
+                       , CAST(AVG(EXTRACT(EPOCH FROM (b.END_TS - b.START_TS)) / 60) OVER (PARTITION BY b.JOB_NAME) AS NUMERIC) AS AVG_MIN
+                    FROM BATCH_LOG b
+                   WHERE b.END_TS IS NOT NULL
+                 ) x
+           WHERE x.MINUTES > x.AVG_MIN * 2"""),
+      new Example("인터페이스 · 배치 · 이관", "인터페이스 일별 성공 · 실패 · 대기", "인터페이스 표의 상태를 날짜마다 칸으로.",
+          """
+          SELECT
+                 TRUNC(f.REG_DT) AS DT
+               , SUM(CASE WHEN f.STATUS = 'DONE' THEN 1 ELSE 0 END) AS DONE_CNT
+               , SUM(CASE WHEN f.STATUS = 'ERROR' THEN 1 ELSE 0 END) AS ERROR_CNT
+               , SUM(CASE WHEN f.STATUS = 'READY' THEN 1 ELSE 0 END) AS READY_CNT
+            FROM IF_PART f
+           GROUP BY
+                 TRUNC(f.REG_DT)
+           ORDER BY
+                 DT DESC""",
+          """
+          SELECT
+                 CAST(f.REG_DT AS DATE) AS DT
+               , SUM(CASE WHEN f.STATUS = 'DONE' THEN 1 ELSE 0 END) AS DONE_CNT
+               , SUM(CASE WHEN f.STATUS = 'ERROR' THEN 1 ELSE 0 END) AS ERROR_CNT
+               , SUM(CASE WHEN f.STATUS = 'READY' THEN 1 ELSE 0 END) AS READY_CNT
+            FROM IF_PART f
+           GROUP BY
+                 CAST(f.REG_DT AS DATE)
+           ORDER BY
+                 DT DESC"""),
+      new Example("인터페이스 · 배치 · 이관", "오류 메시지별 건수 (무엇 때문에 실패하나)", "실패 줄을 오류 글 앞부분으로 묶어 많은 순.",
+          """
+          SELECT
+                 SUBSTR(f.ERR_MSG, 1, 60) AS ERR_HEAD
+               , COUNT(*) AS CNT
+               , MAX(f.REG_DT) AS LAST_DT
+            FROM IF_PART f
+           WHERE f.STATUS = 'ERROR'
+           GROUP BY
+                 SUBSTR(f.ERR_MSG, 1, 60)
+           ORDER BY
+                 CNT DESC""",
+          """
+          SELECT
+                 SUBSTR(f.ERR_MSG, 1, 60) AS ERR_HEAD
+               , COUNT(*) AS CNT
+               , MAX(f.REG_DT) AS LAST_DT
+            FROM IF_PART f
+           WHERE f.STATUS = 'ERROR'
+           GROUP BY
+                 SUBSTR(f.ERR_MSG, 1, 60)
+           ORDER BY
+                 CNT DESC"""),
       new Example("감사 · 로그", "누가 언제 무엇을 바꿨나 (감사 로그)", "표 · 키를 골라 바뀐 칼럼과 전후 값, 바꾼 사람.",
           """
           SELECT
@@ -8862,6 +12405,79 @@ public final class Examples {
                  l.USER_ID
                , CAST(l.LOGIN_TS AS DATE)
           HAVING COUNT(DISTINCT l.IP) > 1"""),
+      new Example("감사 · 로그", "근무 시간 밖에 바뀐 데이터 (밤 · 주말)", "감사 로그 중 평일 08~20시 밖에 일어난 변경.",
+          """
+          SELECT
+                 a.LOG_TS
+               , a.USER_ID
+               , a.TABLE_NAME
+               , a.ACTION
+            FROM AUDIT_LOG a
+           WHERE TO_CHAR(a.LOG_TS, 'DY', 'NLS_DATE_LANGUAGE=AMERICAN') IN ('SAT', 'SUN')
+              OR TO_NUMBER(TO_CHAR(a.LOG_TS, 'HH24')) NOT BETWEEN 8 AND 19""",
+          """
+          SELECT
+                 a.LOG_TS
+               , a.USER_ID
+               , a.TABLE_NAME
+               , a.ACTION
+            FROM AUDIT_LOG a
+           WHERE EXTRACT(ISODOW FROM a.LOG_TS) IN (6, 7)
+              OR EXTRACT(HOUR FROM a.LOG_TS) NOT BETWEEN 8 AND 19"""),
+      new Example("감사 · 로그", "같은 줄을 여러 번 고친 것 (하루 3번 넘게)", "한 줄이 하루에 자꾸 바뀌면 화면 버그나 중복 저장일 수 있습니다.",
+          """
+          SELECT
+                 a.TABLE_NAME
+               , a.PK_VAL
+               , TRUNC(a.LOG_TS) AS DT
+               , COUNT(*) AS CHG_CNT
+            FROM AUDIT_LOG a
+           WHERE a.ACTION = 'UPDATE'
+           GROUP BY
+                 a.TABLE_NAME
+               , a.PK_VAL
+               , TRUNC(a.LOG_TS)
+          HAVING COUNT(*) > 3""",
+          """
+          SELECT
+                 a.TABLE_NAME
+               , a.PK_VAL
+               , CAST(a.LOG_TS AS DATE) AS DT
+               , COUNT(*) AS CHG_CNT
+            FROM AUDIT_LOG a
+           WHERE a.ACTION = 'UPDATE'
+           GROUP BY
+                 a.TABLE_NAME
+               , a.PK_VAL
+               , CAST(a.LOG_TS AS DATE)
+          HAVING COUNT(*) > 3"""),
+      new Example("감사 · 로그", "지운 데이터 이력 (누가 무엇을 지웠나)", "감사 로그에서 DELETE 만, 표 · 사람별로.",
+          """
+          SELECT
+                 a.TABLE_NAME
+               , a.USER_ID
+               , COUNT(*) AS DEL_CNT
+               , MAX(a.LOG_TS) AS LAST_DEL
+            FROM AUDIT_LOG a
+           WHERE a.ACTION = 'DELETE'
+           GROUP BY
+                 a.TABLE_NAME
+               , a.USER_ID
+           ORDER BY
+                 DEL_CNT DESC""",
+          """
+          SELECT
+                 a.TABLE_NAME
+               , a.USER_ID
+               , COUNT(*) AS DEL_CNT
+               , MAX(a.LOG_TS) AS LAST_DEL
+            FROM AUDIT_LOG a
+           WHERE a.ACTION = 'DELETE'
+           GROUP BY
+                 a.TABLE_NAME
+               , a.USER_ID
+           ORDER BY
+                 DEL_CNT DESC"""),
       new Example("현황 · 집계", "건수 (전체 · 그룹별)", "상태 값마다 건수를 많은 순으로. GROUP BY 를 빼면 전체 건수입니다.",
           """
           -- STATUS 값마다 건수 (많은 순)
@@ -9657,6 +13273,151 @@ public final class Examples {
                  x.YM
            ORDER BY
                  x.YM"""),
+      new Example("대시보드 통계", "처리 기한(SLA) 지킨 비율 (등급별)", "등급마다 정한 처리 일수 안에 닫힌 비율. 등급별 기한은 CASE 로 둡니다.",
+          """
+          SELECT
+                 i.SEVERITY
+               , COUNT(*) AS CLOSED_CNT
+               , SUM(CASE WHEN i.CLOSE_DT - i.REG_DT <= CASE i.SEVERITY WHEN 'A' THEN 3 WHEN 'B' THEN 7 ELSE 14 END THEN 1 ELSE 0 END) AS IN_SLA
+               , ROUND(SUM(CASE WHEN i.CLOSE_DT - i.REG_DT <= CASE i.SEVERITY WHEN 'A' THEN 3 WHEN 'B' THEN 7 ELSE 14 END THEN 1 ELSE 0 END) * 100 / COUNT(*), 1) AS SLA_PCT
+            FROM ISSUE i
+           WHERE i.CLOSE_DT IS NOT NULL
+           GROUP BY
+                 i.SEVERITY""",
+          """
+          SELECT
+                 i.SEVERITY
+               , COUNT(*) AS CLOSED_CNT
+               , SUM(CASE WHEN i.CLOSE_DT - i.REG_DT <= CASE i.SEVERITY WHEN 'A' THEN 3 WHEN 'B' THEN 7 ELSE 14 END THEN 1 ELSE 0 END) AS IN_SLA
+               , ROUND(SUM(CASE WHEN i.CLOSE_DT - i.REG_DT <= CASE i.SEVERITY WHEN 'A' THEN 3 WHEN 'B' THEN 7 ELSE 14 END THEN 1 ELSE 0 END) * 100 / COUNT(*), 1) AS SLA_PCT
+            FROM ISSUE i
+           WHERE i.CLOSE_DT IS NOT NULL
+           GROUP BY
+                 i.SEVERITY"""),
+      new Example("대시보드 통계", "담당자 순위 변화 (지난달 순위 → 이번 달 순위)", "이번 달 처리 건수 순위와 지난달 순위를 나란히, 오른 · 내린 칸까지.",
+          """
+          SELECT
+                 t.OWNER_ID
+               , t.CNT AS THIS_CNT
+               , t.RNK AS THIS_RNK
+               , l.RNK AS LAST_RNK
+               , l.RNK - t.RNK AS UP
+            FROM (SELECT i.OWNER_ID, COUNT(*) AS CNT, RANK() OVER (ORDER BY COUNT(*) DESC) AS RNK FROM ISSUE i WHERE i.CLOSE_DT >= TRUNC(SYSDATE, 'MM') GROUP BY i.OWNER_ID) t
+               , (SELECT i.OWNER_ID, RANK() OVER (ORDER BY COUNT(*) DESC) AS RNK FROM ISSUE i WHERE i.CLOSE_DT >= ADD_MONTHS(TRUNC(SYSDATE, 'MM'), -1) AND i.CLOSE_DT < TRUNC(SYSDATE, 'MM') GROUP BY i.OWNER_ID) l
+           WHERE t.OWNER_ID = l.OWNER_ID(+)
+           ORDER BY
+                 t.RNK""",
+          """
+          SELECT
+                 t.OWNER_ID
+               , t.CNT AS THIS_CNT
+               , t.RNK AS THIS_RNK
+               , l.RNK AS LAST_RNK
+               , l.RNK - t.RNK AS UP
+            FROM (SELECT i.OWNER_ID, COUNT(*) AS CNT, RANK() OVER (ORDER BY COUNT(*) DESC) AS RNK FROM ISSUE i WHERE i.CLOSE_DT >= DATE_TRUNC('month', CURRENT_DATE) GROUP BY i.OWNER_ID) t
+            LEFT OUTER JOIN (SELECT i.OWNER_ID, RANK() OVER (ORDER BY COUNT(*) DESC) AS RNK FROM ISSUE i WHERE i.CLOSE_DT >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month' AND i.CLOSE_DT < DATE_TRUNC('month', CURRENT_DATE) GROUP BY i.OWNER_ID) l
+              ON t.OWNER_ID = l.OWNER_ID
+           ORDER BY
+                 t.RNK"""),
+      new Example("대시보드 통계", "히트맵 (요일 × 담당자 처리 건수)", "담당자를 줄로, 요일을 칸으로. 색을 칠해 쏠림을 봅니다.",
+          """
+          SELECT
+                 i.OWNER_ID
+               , SUM(CASE WHEN TO_CHAR(i.CLOSE_DT, 'D') = '2' THEN 1 ELSE 0 END) AS MON
+               , SUM(CASE WHEN TO_CHAR(i.CLOSE_DT, 'D') = '3' THEN 1 ELSE 0 END) AS TUE
+               , SUM(CASE WHEN TO_CHAR(i.CLOSE_DT, 'D') = '4' THEN 1 ELSE 0 END) AS WED
+               , SUM(CASE WHEN TO_CHAR(i.CLOSE_DT, 'D') = '5' THEN 1 ELSE 0 END) AS THU
+               , SUM(CASE WHEN TO_CHAR(i.CLOSE_DT, 'D') = '6' THEN 1 ELSE 0 END) AS FRI
+            FROM ISSUE i
+           WHERE i.CLOSE_DT IS NOT NULL
+           GROUP BY
+                 i.OWNER_ID""",
+          """
+          SELECT
+                 i.OWNER_ID
+               , SUM(CASE WHEN EXTRACT(ISODOW FROM i.CLOSE_DT) = 1 THEN 1 ELSE 0 END) AS MON
+               , SUM(CASE WHEN EXTRACT(ISODOW FROM i.CLOSE_DT) = 2 THEN 1 ELSE 0 END) AS TUE
+               , SUM(CASE WHEN EXTRACT(ISODOW FROM i.CLOSE_DT) = 3 THEN 1 ELSE 0 END) AS WED
+               , SUM(CASE WHEN EXTRACT(ISODOW FROM i.CLOSE_DT) = 4 THEN 1 ELSE 0 END) AS THU
+               , SUM(CASE WHEN EXTRACT(ISODOW FROM i.CLOSE_DT) = 5 THEN 1 ELSE 0 END) AS FRI
+            FROM ISSUE i
+           WHERE i.CLOSE_DT IS NOT NULL
+           GROUP BY
+                 i.OWNER_ID"""),
+      new Example("대시보드 통계", "상태마다 머문 시간 (감사 로그로 상태 이력)", "상태 칸 변경 이력에서 다음 변경까지 걸린 시간을 상태별로 평균 냅니다.",
+          """
+          SELECT
+                 x.NEW_VAL AS STATUS
+               , COUNT(*) AS CNT
+               , ROUND(AVG((CAST(x.NEXT_TS AS DATE) - CAST(x.LOG_TS AS DATE)) * 24), 1) AS AVG_HOURS
+            FROM (
+                  SELECT
+                         a.PK_VAL
+                       , a.NEW_VAL
+                       , a.LOG_TS
+                       , LEAD(a.LOG_TS) OVER (PARTITION BY a.TABLE_NAME, a.PK_VAL ORDER BY a.LOG_TS) AS NEXT_TS
+                    FROM AUDIT_LOG a
+                   WHERE a.TABLE_NAME = 'ISSUE'
+                     AND a.COL_NAME = 'STATUS'
+                 ) x
+           WHERE x.NEXT_TS IS NOT NULL
+           GROUP BY
+                 x.NEW_VAL""",
+          """
+          SELECT
+                 x.NEW_VAL AS STATUS
+               , COUNT(*) AS CNT
+               , ROUND(CAST(AVG(EXTRACT(EPOCH FROM (x.NEXT_TS - x.LOG_TS))) / 3600 AS NUMERIC), 1) AS AVG_HOURS
+            FROM (
+                  SELECT
+                         a.PK_VAL
+                       , a.NEW_VAL
+                       , a.LOG_TS
+                       , LEAD(a.LOG_TS) OVER (PARTITION BY a.TABLE_NAME, a.PK_VAL ORDER BY a.LOG_TS) AS NEXT_TS
+                    FROM AUDIT_LOG a
+                   WHERE a.TABLE_NAME = 'ISSUE'
+                     AND a.COL_NAME = 'STATUS'
+                 ) x
+           WHERE x.NEXT_TS IS NOT NULL
+           GROUP BY
+                 x.NEW_VAL"""),
+      new Example("대시보드 통계", "목표선과 함께 (월 실적 · 목표 · 달성 여부)", "부서 · 달마다 실적과 목표를 붙이고 달성 표시.",
+          """
+          SELECT
+                 t.YM
+               , t.DEPT_ID
+               , t.TARGET_AMT
+               , NVL(SUM(s.QTY * s.PRICE), 0) AS ACTUAL
+               , CASE WHEN NVL(SUM(s.QTY * s.PRICE), 0) >= t.TARGET_AMT THEN '달성' ELSE '미달' END AS RESULT
+            FROM SALES_TARGET t
+               , SALES_ORDER s
+           WHERE t.DEPT_ID = s.DEPT_ID(+)
+             AND t.YM = TO_CHAR(s.SO_DT(+), 'YYYY-MM')
+           GROUP BY
+                 t.YM
+               , t.DEPT_ID
+               , t.TARGET_AMT
+           ORDER BY
+                 t.YM
+               , t.DEPT_ID""",
+          """
+          SELECT
+                 t.YM
+               , t.DEPT_ID
+               , t.TARGET_AMT
+               , COALESCE(SUM(s.QTY * s.PRICE), 0) AS ACTUAL
+               , CASE WHEN COALESCE(SUM(s.QTY * s.PRICE), 0) >= t.TARGET_AMT THEN '달성' ELSE '미달' END AS RESULT
+            FROM SALES_TARGET t
+            LEFT OUTER JOIN SALES_ORDER s
+              ON t.DEPT_ID = s.DEPT_ID
+             AND t.YM = TO_CHAR(s.SO_DT, 'YYYY-MM')
+           GROUP BY
+                 t.YM
+               , t.DEPT_ID
+               , t.TARGET_AMT
+           ORDER BY
+                 t.YM
+               , t.DEPT_ID"""),
       new Example("거슬러 올라가는 통계", "이슈 → 부품 → 프로젝트 → 부서 단계별 소계", "맨 아래 이슈에서 출발해 부품, 프로젝트, 담당 부서로 올라가며 각 단계 소계와 총계를 냅니다.",
           """
           SELECT
@@ -9956,15 +13717,15 @@ public final class Examples {
                  1, 2""",
           """
           SELECT
-                 c.conrelid::regclass AS CHILD_TABLE
-               , a.attname AS CHILD_COLUMN
-               , c.confrelid::regclass AS PARENT_TABLE
-               , c.conname AS CONSTRAINT_NAME
-            FROM pg_constraint c, pg_attribute a
-           WHERE c.contype = 'f'
-             AND a.attrelid = c.conrelid
-             AND a.attnum = ANY (c.conkey)
-             AND c.confrelid = CAST(LOWER(:tableName) AS regclass)
+                 c.CONRELID::regclass AS CHILD_TABLE
+               , a.ATTNAME AS CHILD_COLUMN
+               , c.CONFRELID::regclass AS PARENT_TABLE
+               , c.CONNAME AS CONSTRAINT_NAME
+            FROM PG_CONSTRAINT c, PG_ATTRIBUTE a
+           WHERE c.CONTYPE = 'f'
+             AND a.ATTRELID = c.CONRELID
+             AND a.ATTNUM = ANY (c.CONKEY)
+             AND c.CONFRELID = CAST(LOWER(:tableName) AS regclass)
            ORDER BY
                  1, 2"""),
       new Example("거슬러 올라가는 통계", "외래 키 따라 위로 전부 (표 관계 계층)", "한 표에서 시작해 부모 표, 그 부모 표 … 끝까지. 통계를 어느 마스터까지 올려 묶을 수 있는지 봅니다.",
@@ -9982,19 +13743,19 @@ public final class Examples {
           WITH RECURSIVE up AS (
           SELECT
                  1 AS UP
-               , c.conrelid AS CHILD
-               , c.confrelid AS PARENT
-            FROM pg_constraint c
-           WHERE c.contype = 'f'
-             AND c.conrelid = CAST(LOWER(:tableName) AS regclass)
+               , c.CONRELID AS CHILD
+               , c.CONFRELID AS PARENT
+            FROM PG_CONSTRAINT c
+           WHERE c.CONTYPE = 'f'
+             AND c.CONRELID = CAST(LOWER(:tableName) AS regclass)
            UNION
           SELECT
                  up.UP + 1
-               , c.conrelid
-               , c.confrelid
-            FROM pg_constraint c, up
-           WHERE c.contype = 'f'
-             AND c.conrelid = up.PARENT
+               , c.CONRELID
+               , c.CONFRELID
+            FROM PG_CONSTRAINT c, up
+           WHERE c.CONTYPE = 'f'
+             AND c.CONRELID = up.PARENT
              AND up.UP < 20
           )
           SELECT
@@ -10296,8 +14057,8 @@ public final class Examples {
                  )""",
           """
           DELETE FROM UPLOAD_TMP u
-           WHERE u.ctid NOT IN (
-                   SELECT MIN(x.ctid)
+           WHERE u.CTID NOT IN (
+                   SELECT MIN(x.CTID)
                      FROM UPLOAD_TMP x
                     GROUP BY
                           x.PART_NO
@@ -10339,6 +14100,629 @@ public final class Examples {
             FROM BOM b
            GROUP BY
                  b.PARENT_PART"""),
+      new Example("Oracle 함수", "SUBSTR · INSTR 뒤에서부터 (음수 위치)", "SUBSTR(글, -3) 은 끝 3글자, INSTR(글, '-', -1) 은 마지막 '-' 위치. 파일 확장자 · 마지막 조각 꺼내기.",
+          """
+          SELECT
+                 p.PART_NO
+               , SUBSTR(p.PART_NO, -3) AS LAST3
+               , SUBSTR(p.TAGS, INSTR(p.TAGS, ',', -1) + 1) AS LAST_TAG
+            FROM PART p""",
+          """
+          SELECT
+                 p.PART_NO
+               , RIGHT(p.PART_NO, 3) AS LAST3
+               , SPLIT_PART(p.TAGS, ',', -1) AS LAST_TAG
+            FROM PART p"""),
+      new Example("Oracle 함수", "REGEXP_SUBSTR n 번째 조각 · REGEXP_INSTR", "'A-B-C' 의 n 번째 조각과 숫자가 처음 나오는 위치.",
+          """
+          SELECT
+                 REGEXP_SUBSTR('A-B-C', '[^-]+', 1, 3) AS THIRD
+               , REGEXP_INSTR('ABC123', '[0-9]') AS FIRST_DIGIT_POS
+            FROM DUAL""",
+          """
+          SELECT
+                 SPLIT_PART('A-B-C', '-', 3) AS THIRD
+               , POSITION(SUBSTRING('ABC123' FROM '[0-9]') IN 'ABC123') AS FIRST_DIGIT_POS"""),
+      new Example("Oracle 함수", "TRIM LEADING · LTRIM · RTRIM (앞 0 · 뒤 공백 지우기)", "앞에 붙은 0 을 지우거나 오른쪽 공백 · 점을 지웁니다.",
+          """
+          SELECT
+                 TRIM(LEADING '0' FROM '000123') AS NO_ZERO
+               , LTRIM('  abc') AS LEFT_TRIM
+               , RTRIM('abc...', '.') AS RIGHT_TRIM
+            FROM DUAL""",
+          """
+          SELECT
+                 TRIM(LEADING '0' FROM '000123') AS NO_ZERO
+               , LTRIM('  abc') AS LEFT_TRIM
+               , RTRIM('abc...', '.') AS RIGHT_TRIM"""),
+      new Example("Oracle 함수", "INITCAP · CONCAT · CHR · ASCII", "첫 글자 대문자, 두 글 잇기, 글자 ↔ 번호.",
+          """
+          SELECT
+                 INITCAP('hello world') AS CAP
+               , CONCAT('A', 'B') AS JOINED
+               , CHR(65) AS CH
+               , ASCII('A') AS CODE
+            FROM DUAL""",
+          """
+          SELECT
+                 INITCAP('hello world') AS CAP
+               , CONCAT('A', 'B') AS JOINED
+               , CHR(65) AS CH
+               , ASCII('A') AS CODE"""),
+      new Example("Oracle 함수", "TRUNC · ROUND 숫자 (자리 · 음수 자리)", "ROUND(123456, -3) 은 천 단위 반올림, TRUNC(12.345, 1) 은 소수 한 자리 버림.",
+          """
+          SELECT
+                 ROUND(123456, -3) AS R_THOUSAND
+               , TRUNC(12.345, 1) AS T1
+               , CEIL(12.1) AS UP
+               , FLOOR(12.9) AS DOWN
+            FROM DUAL""",
+          """
+          SELECT
+                 ROUND(123456, -3) AS R_THOUSAND
+               , TRUNC(12.345, 1) AS T1
+               , CEIL(12.1) AS UP
+               , FLOOR(12.9) AS DOWN"""),
+      new Example("Oracle 함수", "MOD · ABS · SIGN · POWER · SQRT", "나머지, 절댓값, 부호(-1 · 0 · 1), 거듭제곱, 제곱근.",
+          """
+          SELECT
+                 MOD(10, 3) AS M
+               , ABS(-5) AS A
+               , SIGN(-3) AS S
+               , POWER(2, 10) AS P
+               , SQRT(16) AS Q
+            FROM DUAL""",
+          """
+          SELECT
+                 MOD(10, 3) AS M
+               , ABS(-5) AS A
+               , SIGN(-3) AS S
+               , POWER(2, 10) AS P
+               , SQRT(16) AS Q"""),
+      new Example("Oracle 함수", "TRUNC · ROUND 날짜 (일 · 월 · 연 · 주 시작)", "TRUNC(날짜, 'MM') 은 그달 1일, 'IW' 는 그 주 월요일, ROUND 는 가까운 쪽으로.",
+          """
+          SELECT
+                 TRUNC(SYSDATE) AS TODAY
+               , TRUNC(SYSDATE, 'MM') AS MONTH_START
+               , TRUNC(SYSDATE, 'YYYY') AS YEAR_START
+               , TRUNC(SYSDATE, 'IW') AS WEEK_MON
+               , TRUNC(SYSDATE, 'Q') AS QUARTER_START
+            FROM DUAL""",
+          """
+          SELECT
+                 CURRENT_DATE AS TODAY
+               , CAST(DATE_TRUNC('month', CURRENT_DATE) AS DATE) AS MONTH_START
+               , CAST(DATE_TRUNC('year', CURRENT_DATE) AS DATE) AS YEAR_START
+               , CAST(DATE_TRUNC('week', CURRENT_DATE) AS DATE) AS WEEK_MON
+               , CAST(DATE_TRUNC('quarter', CURRENT_DATE) AS DATE) AS QUARTER_START"""),
+      new Example("Oracle 함수", "TO_CHAR 날짜 꼴 모음 (요일 · 분기 · 주 · 오전/오후)", "자주 쓰는 날짜 꼴: 요일 이름, 분기, 연중 몇째 주, 24시 · 12시.",
+          """
+          SELECT
+                 TO_CHAR(SYSDATE, 'YYYY-MM-DD HH24:MI:SS') AS FULL_DT
+               , TO_CHAR(SYSDATE, 'YYYY"년" MM"월" DD"일"') AS KOR_DT
+               , TO_CHAR(SYSDATE, 'DY') AS WEEKDAY
+               , TO_CHAR(SYSDATE, 'Q') AS QUARTER
+               , TO_CHAR(SYSDATE, 'IW') AS ISO_WEEK
+               , TO_CHAR(SYSDATE, 'AM HH:MI') AS AMPM
+            FROM DUAL""",
+          """
+          SELECT
+                 TO_CHAR(NOW(), 'YYYY-MM-DD HH24:MI:SS') AS FULL_DT
+               , TO_CHAR(NOW(), 'YYYY"년" MM"월" DD"일"') AS KOR_DT
+               , TO_CHAR(NOW(), 'Dy') AS WEEKDAY
+               , TO_CHAR(NOW(), 'Q') AS QUARTER
+               , TO_CHAR(NOW(), 'IW') AS ISO_WEEK
+               , TO_CHAR(NOW(), 'AM HH:MI') AS AMPM"""),
+      new Example("Oracle 함수", "EXTRACT (연 · 월 · 일 · 시 숫자로)", "날짜에서 숫자 하나만 꺼냅니다. 시 · 분은 TIMESTAMP 에서만 됩니다.",
+          """
+          SELECT
+                 EXTRACT(YEAR FROM SYSDATE) AS Y
+               , EXTRACT(MONTH FROM SYSDATE) AS M
+               , EXTRACT(DAY FROM SYSDATE) AS D
+               , EXTRACT(HOUR FROM SYSTIMESTAMP) AS H
+            FROM DUAL""",
+          """
+          SELECT
+                 EXTRACT(YEAR FROM NOW()) AS Y
+               , EXTRACT(MONTH FROM NOW()) AS M
+               , EXTRACT(DAY FROM NOW()) AS D
+               , EXTRACT(HOUR FROM NOW()) AS H"""),
+      new Example("Oracle 함수", "NUMTODSINTERVAL · NUMTOYMINTERVAL (숫자를 기간으로)", "분 · 시간 · 달 수를 칸 값으로 받아 날짜에 더할 때.",
+          """
+          SELECT
+                 SYSTIMESTAMP + NUMTODSINTERVAL(90, 'MINUTE') AS AFTER_90M
+               , SYSDATE + NUMTOYMINTERVAL(2, 'MONTH') AS AFTER_2M
+            FROM DUAL""",
+          """
+          SELECT
+                 NOW() + MAKE_INTERVAL(mins => 90) AS AFTER_90M
+               , CURRENT_DATE + MAKE_INTERVAL(months => 2) AS AFTER_2M"""),
+      new Example("Oracle 함수", "CAST · TO_NUMBER · TO_DATE 형 바꾸기", "글자 ↔ 숫자 ↔ 날짜. 꼴이 틀리면 오류가 나므로 먼저 거르세요(「숫자인지 확인」).",
+          """
+          SELECT
+                 TO_NUMBER('1,234', '9,999') AS N
+               , TO_DATE('20261107', 'YYYYMMDD') AS D
+               , CAST('123' AS NUMBER) AS C
+               , CAST(SYSDATE AS TIMESTAMP) AS TS
+            FROM DUAL""",
+          """
+          SELECT
+                 TO_NUMBER('1,234', '9,999') AS N
+               , TO_DATE('20261107', 'YYYYMMDD') AS D
+               , CAST('123' AS NUMERIC) AS C
+               , CAST(CURRENT_DATE AS TIMESTAMP) AS TS"""),
+      new Example("Oracle 함수", "SYS_GUID · ORA_HASH · STANDARD_HASH (고유 값 · 해시)", "겹치지 않는 키 만들기, 값 비교용 해시, 나눠 처리할 때 몫 정하기.",
+          """
+          SELECT
+                 SYS_GUID() AS GUID
+               , ORA_HASH('P001', 9) AS BUCKET
+               , STANDARD_HASH('P001', 'SHA256') AS SHA
+            FROM DUAL""",
+          """
+          SELECT
+                 GEN_RANDOM_UUID() AS GUID
+               , MOD(ABS(HASHTEXT('P001')), 10) AS BUCKET
+               , MD5('P001') AS SHA"""),
+      new Example("Oracle 함수", "SYS_CONTEXT · USER (접속 정보)", "지금 계정, 접속 PC, IP, 프로그램 이름. 감사 로그에 남길 때 씁니다.",
+          """
+          SELECT
+                 USER AS DB_USER
+               , SYS_CONTEXT('USERENV', 'OS_USER') AS OS_USER
+               , SYS_CONTEXT('USERENV', 'HOST') AS HOST
+               , SYS_CONTEXT('USERENV', 'IP_ADDRESS') AS IP
+               , SYS_CONTEXT('USERENV', 'MODULE') AS MODULE
+            FROM DUAL""",
+          """
+          SELECT
+                 CURRENT_USER AS DB_USER
+               , INET_CLIENT_ADDR() AS IP
+               , CURRENT_SETTING('application_name') AS MODULE"""),
+      new Example("Oracle 함수", "NULLS FIRST · NULLS LAST", "빈 값을 맨 앞 · 맨 뒤로. Oracle 은 오름차순이면 NULL 이 뒤, 내림차순이면 앞이 기본입니다.",
+          """
+          SELECT
+                 c.CAPA_NO
+               , c.DUE_DT
+            FROM CAPA c
+           ORDER BY
+                 c.DUE_DT DESC NULLS LAST""",
+          """
+          SELECT
+                 c.CAPA_NO
+               , c.DUE_DT
+            FROM CAPA c
+           ORDER BY
+                 c.DUE_DT DESC NULLS LAST"""),
+      new Example("Oracle 함수", "INSERT ALL (한 번에 여러 표 · 여러 줄)", "한 SELECT 결과를 조건에 따라 여러 표에 나눠 넣습니다. PostgreSQL 은 INSERT 를 나눠 씁니다.",
+          """
+          INSERT ALL
+            WHEN STATUS = '완료' THEN INTO ORDERS_BAK (ORDER_ID, CUST_ID, AMOUNT, STATUS, ORDER_DT) VALUES (ORDER_ID, CUST_ID, AMOUNT, STATUS, ORDER_DT)
+          SELECT
+                 o.ORDER_ID
+               , o.CUST_ID
+               , o.AMOUNT
+               , o.STATUS
+               , o.ORDER_DT
+            FROM ORDERS o
+           WHERE NOT EXISTS (SELECT 1 FROM ORDERS_BAK b WHERE b.ORDER_ID = o.ORDER_ID)""",
+          """
+          INSERT INTO ORDERS_BAK (ORDER_ID, CUST_ID, AMOUNT, STATUS, ORDER_DT)
+          SELECT
+                 o.ORDER_ID
+               , o.CUST_ID
+               , o.AMOUNT
+               , o.STATUS
+               , o.ORDER_DT
+            FROM ORDERS o
+           WHERE o.STATUS = '완료'
+             AND NOT EXISTS (SELECT 1 FROM ORDERS_BAK b WHERE b.ORDER_ID = o.ORDER_ID)"""),
+      new Example("Oracle 함수", "MERGE 에 DELETE 절 (고치면서 조건 맞는 줄 지우기)", "MERGE 로 고친 뒤 상태가 STOP 이 된 줄은 지웁니다. PostgreSQL 15 이상은 WHEN MATCHED AND … THEN DELETE.",
+          """
+          MERGE INTO ERP_PART e
+          USING PART p
+             ON (e.PART_NO = p.PART_NO)
+           WHEN MATCHED THEN
+                UPDATE
+                   SET e.PART_NAME = p.PART_NAME
+                DELETE WHERE p.STATUS = 'STOP'""",
+          """
+          MERGE INTO ERP_PART e
+          USING PART p
+             ON (e.PART_NO = p.PART_NO)
+           WHEN MATCHED AND p.STATUS = 'STOP' THEN
+                DELETE
+           WHEN MATCHED THEN
+                UPDATE
+                   SET PART_NAME = p.PART_NAME"""),
+      new Example("Oracle 함수", "RATIO_TO_REPORT (전체 중 비율 짧게)", "SUM OVER () 로 나누는 것과 같습니다. 0~1 값이라 100 을 곱합니다.",
+          """
+          SELECT
+                 o.STATUS
+               , COUNT(*) AS CNT
+               , ROUND(RATIO_TO_REPORT(COUNT(*)) OVER () * 100, 1) AS PCT
+            FROM ORDERS o
+           GROUP BY
+                 o.STATUS""",
+          """
+          SELECT
+                 o.STATUS
+               , COUNT(*) AS CNT
+               , ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 1) AS PCT
+            FROM ORDERS o
+           GROUP BY
+                 o.STATUS"""),
+      new Example("Oracle 함수", "FIRST_VALUE · LAST_VALUE · NTH_VALUE", "그룹 안 첫 값 · 끝 값 · n 번째 값. LAST_VALUE 는 창 범위를 끝까지 넓혀야 맞게 나옵니다.",
+          """
+          SELECT
+                 o.CUST_ID
+               , o.ORDER_ID
+               , FIRST_VALUE(o.AMOUNT) OVER (PARTITION BY o.CUST_ID ORDER BY o.ORDER_DT) AS FIRST_AMT
+               , LAST_VALUE(o.AMOUNT) OVER (PARTITION BY o.CUST_ID ORDER BY o.ORDER_DT ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS LAST_AMT
+               , NTH_VALUE(o.AMOUNT, 2) OVER (PARTITION BY o.CUST_ID ORDER BY o.ORDER_DT ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS SECOND_AMT
+            FROM ORDERS o""",
+          """
+          SELECT
+                 o.CUST_ID
+               , o.ORDER_ID
+               , FIRST_VALUE(o.AMOUNT) OVER (PARTITION BY o.CUST_ID ORDER BY o.ORDER_DT) AS FIRST_AMT
+               , LAST_VALUE(o.AMOUNT) OVER (PARTITION BY o.CUST_ID ORDER BY o.ORDER_DT ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS LAST_AMT
+               , NTH_VALUE(o.AMOUNT, 2) OVER (PARTITION BY o.CUST_ID ORDER BY o.ORDER_DT ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS SECOND_AMT
+            FROM ORDERS o"""),
+      new Example("Oracle 함수", "LISTAGG DISTINCT (겹친 값 빼고 잇기, 19c 이상)", "같은 값이 여러 번 나와도 한 번만 잇습니다. 18c 이하는 안쪽에서 DISTINCT 로 먼저 거릅니다.",
+          """
+          SELECT
+                 i.ORDER_ID
+               , LISTAGG(DISTINCT i.PART_NO, ', ') WITHIN GROUP (ORDER BY i.PART_NO) AS PARTS
+            FROM ORDER_ITEM i
+           GROUP BY
+                 i.ORDER_ID""",
+          """
+          SELECT
+                 i.ORDER_ID
+               , STRING_AGG(DISTINCT i.PART_NO, ', ' ORDER BY i.PART_NO) AS PARTS
+            FROM ORDER_ITEM i
+           GROUP BY
+                 i.ORDER_ID"""),
+      new Example("Oracle 함수", "MEDIAN · STATS_MODE · PERCENTILE_CONT", "중앙값, 가장 많이 나온 값, 90% 지점 값.",
+          """
+          SELECT
+                 MEDIAN(o.AMOUNT) AS MED
+               , STATS_MODE(o.STATUS) AS MODE_STATUS
+               , PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY o.AMOUNT) AS P90
+            FROM ORDERS o""",
+          """
+          SELECT
+                 PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY o.AMOUNT) AS MED
+               , MODE() WITHIN GROUP (ORDER BY o.STATUS) AS MODE_STATUS
+               , PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY o.AMOUNT) AS P90
+            FROM ORDERS o"""),
+      new Example("Oracle 함수", "STDDEV · VARIANCE · CORR (흩어짐 · 상관)", "표준편차, 분산, 두 값의 상관(-1 ~ 1).",
+          """
+          SELECT
+                 ROUND(STDDEV(i.PRICE), 2) AS SD
+               , ROUND(VARIANCE(i.PRICE), 2) AS VAR
+               , ROUND(CORR(i.QTY, i.PRICE), 3) AS QTY_PRICE_CORR
+            FROM ORDER_ITEM i""",
+          """
+          SELECT
+                 ROUND(STDDEV(i.PRICE), 2) AS SD
+               , ROUND(VARIANCE(i.PRICE), 2) AS VAR
+               , ROUND(CAST(CORR(i.QTY, i.PRICE) AS NUMERIC), 3) AS QTY_PRICE_CORR
+            FROM ORDER_ITEM i"""),
+      new Example("Oracle 함수", "APPROX_COUNT_DISTINCT (큰 표 겹치지 않는 수 어림)", "정확한 COUNT(DISTINCT) 보다 훨씬 빠른 어림값. 대시보드 숫자에 씁니다.",
+          """
+          SELECT
+                 APPROX_COUNT_DISTINCT(l.USER_ID) AS APPROX_USERS
+               , COUNT(DISTINCT l.USER_ID) AS EXACT_USERS
+            FROM LOGIN_LOG l""",
+          """
+          SELECT
+                 COUNT(DISTINCT l.USER_ID) AS EXACT_USERS
+            FROM LOGIN_LOG l"""),
+      new Example("Oracle 함수", "XMLTABLE · XMLAGG (XML 꺼내기 · 만들기)", "XML 글에서 값을 칸으로 꺼내거나 줄을 XML 로 묶습니다.",
+          """
+          SELECT
+                 x.PART_NO
+               , x.QTY
+            FROM XMLTABLE('/items/item' PASSING XMLTYPE('<items><item><no>P001</no><qty>2</qty></item></items>')
+                   COLUMNS PART_NO VARCHAR2(30) PATH 'no', QTY NUMBER PATH 'qty') x""",
+          """
+          SELECT
+                 x.PART_NO
+               , x.QTY
+            FROM XMLTABLE('/items/item' PASSING XMLPARSE(DOCUMENT '<items><item><no>P001</no><qty>2</qty></item></items>')
+                   COLUMNS PART_NO VARCHAR(30) PATH 'no', QTY NUMERIC PATH 'qty') x"""),
+      new Example("Oracle 함수", "CONNECT BY 로 글자 나누기 (쉼표 글자 → 줄)", "11g 에서 자주 쓰는 꼴. 쉼표 수 + 1 만큼 줄을 만들어 n 번째 조각을 꺼냅니다.",
+          """
+          SELECT
+                 p.PART_NO
+               , TRIM(REGEXP_SUBSTR(p.TAGS, '[^,]+', 1, n.N)) AS TAG
+            FROM PART p
+               , (SELECT LEVEL AS N FROM DUAL CONNECT BY LEVEL <= 20) n
+           WHERE p.TAGS IS NOT NULL
+             AND n.N <= REGEXP_COUNT(p.TAGS, ',') + 1""",
+          """
+          SELECT
+                 p.PART_NO
+               , TRIM(t.TAG) AS TAG
+            FROM PART p
+           CROSS JOIN LATERAL REGEXP_SPLIT_TO_TABLE(p.TAGS, ',') AS t(TAG)
+           WHERE p.TAGS IS NOT NULL"""),
+      new Example("Oracle 함수", "DUMP · VSIZE · LENGTHB (보이지 않는 글자 · 실제 크기)", "같아 보이는데 비교가 안 맞을 때 글자 코드를 그대로 봅니다.",
+          """
+          SELECT
+                 p.PART_NAME
+               , DUMP(p.PART_NAME, 1016) AS BYTES_HEX
+               , VSIZE(p.PART_NAME) AS BYTE_SIZE
+            FROM PART p
+           WHERE p.PART_NO = :partNo""",
+          """
+          SELECT
+                 p.PART_NAME
+               , ENCODE(CONVERT_TO(p.PART_NAME, 'UTF8'), 'hex') AS BYTES_HEX
+               , OCTET_LENGTH(p.PART_NAME) AS BYTE_SIZE
+            FROM PART p
+           WHERE p.PART_NO = :partNo"""),
+      new Example("Oracle 함수", "BITAND (권한 · 옵션 비트 값 보기)", "숫자 하나에 여러 켜짐/꺼짐을 담은 칸에서 한 자리만 봅니다.",
+          """
+          SELECT
+                 r.ROLE_ID
+               , DECODE(BITAND(8, 4), 4, 'Y', 'N') AS HAS_FLAG_4
+            FROM ROLE_USER r""",
+          """
+          SELECT
+                 r.ROLE_ID
+               , CASE WHEN (8 & 4) = 4 THEN 'Y' ELSE 'N' END AS HAS_FLAG_4
+            FROM ROLE_USER r"""),
+      new Example("Oracle 함수", "FROM_TZ · SYS_EXTRACT_UTC (시간대 바꾸기)", "한국 시각 ↔ 세계 표준시. 해외 법인 · 인터페이스 시각 맞출 때.",
+          """
+          SELECT
+                 FROM_TZ(CAST(SYSDATE AS TIMESTAMP), 'Asia/Seoul') AT TIME ZONE 'UTC' AS UTC_TIME
+               , SYS_EXTRACT_UTC(SYSTIMESTAMP) AS UTC_NOW
+            FROM DUAL""",
+          """
+          SELECT
+                 (CAST(NOW() AS TIMESTAMP) AT TIME ZONE 'Asia/Seoul') AT TIME ZONE 'UTC' AS UTC_TIME
+               , NOW() AT TIME ZONE 'UTC' AS UTC_NOW"""),
+      new Example("Oracle 함수", "ROWNUM 함정 (정렬보다 먼저 붙음)", "ROWNUM 은 ORDER BY 전에 붙어서 바깥에서 자르면 엉뚱한 10건이 나옵니다. 안쪽에서 정렬 후 바깥에서 자릅니다.",
+          """
+          SELECT
+                 x.*
+            FROM (
+                  SELECT
+                         o.ORDER_ID
+                       , o.AMOUNT
+                    FROM ORDERS o
+                   ORDER BY
+                         o.AMOUNT DESC
+                 ) x
+           WHERE ROWNUM <= 10""",
+          """
+          SELECT
+                 o.ORDER_ID
+               , o.AMOUNT
+            FROM ORDERS o
+           ORDER BY
+                 o.AMOUNT DESC
+           LIMIT 10"""),
+      new Example("Oracle 함수", "DBMS_RANDOM (아무 값 · 섞기)", "아무 숫자 · 아무 글자, 그리고 순서 섞기.",
+          """
+          SELECT
+                 p.PART_NO
+               , ROUND(DBMS_RANDOM.VALUE(1, 100)) AS RND
+               , DBMS_RANDOM.STRING('U', 5) AS RND_TEXT
+            FROM PART p
+           ORDER BY
+                 DBMS_RANDOM.VALUE""",
+          """
+          SELECT
+                 p.PART_NO
+               , ROUND(CAST(1 + RANDOM() * 99 AS NUMERIC)) AS RND
+               , UPPER(SUBSTR(MD5(RANDOM()::text), 1, 5)) AS RND_TEXT
+            FROM PART p
+           ORDER BY
+                 RANDOM()"""),
+      new Example("Oracle 함수", "WITH 안에 함수 (WITH FUNCTION, 12c 이상)", "쿼리 안에서만 쓰는 작은 함수를 바로 정의합니다. 함수를 만들 권한이 없을 때 씁니다.",
+          """
+          WITH
+            FUNCTION fn_grade(p_amt NUMBER) RETURN VARCHAR2 IS
+            BEGIN
+              RETURN CASE WHEN p_amt >= 100000 THEN 'A' WHEN p_amt >= 10000 THEN 'B' ELSE 'C' END;
+            END;
+          SELECT
+                 o.ORDER_ID
+               , fn_grade(o.AMOUNT) AS GRADE
+            FROM ORDERS o""",
+          """
+          SELECT
+                 o.ORDER_ID
+               , CASE WHEN o.AMOUNT >= 100000 THEN 'A' WHEN o.AMOUNT >= 10000 THEN 'B' ELSE 'C' END AS GRADE
+            FROM ORDERS o"""),
+      new Example("Oracle 함수", "PL/SQL 결과 찍기 (DBMS_OUTPUT · RAISE NOTICE)", "블록 안에서 값을 출력 창에 찍어 확인합니다.",
+          """
+          DECLARE
+            v_cnt NUMBER;
+          BEGIN
+            SELECT COUNT(*) INTO v_cnt FROM ORDERS;
+            DBMS_OUTPUT.PUT_LINE('주문 수: ' || v_cnt);
+          END;""",
+          """
+          DO $$
+          DECLARE
+            v_cnt BIGINT;
+          BEGIN
+            v_cnt := (SELECT COUNT(*) FROM ORDERS);
+            RAISE NOTICE '주문 수: %', v_cnt;
+          END $$"""),
+      new Example("Oracle 함수", "RETURNING INTO (넣은 번호 받기, PL/SQL)", "INSERT 한 줄의 새 번호를 변수로 받습니다.",
+          """
+          DECLARE
+            v_id NUMBER;
+          BEGIN
+            INSERT INTO ORDERS (ORDER_ID, CUST_ID, STATUS, ORDER_DT, AMOUNT)
+            VALUES (SEQ_ORDER.NEXTVAL, 1, '접수', TRUNC(SYSDATE), 0)
+            RETURNING ORDER_ID INTO v_id;
+            DBMS_OUTPUT.PUT_LINE(v_id);
+          END;""",
+          """
+          INSERT INTO ORDERS (ORDER_ID, CUST_ID, STATUS, ORDER_DT, AMOUNT)
+          VALUES (NEXTVAL('seq_order'), 1, '접수', CURRENT_DATE, 0)
+          RETURNING ORDER_ID"""),
+      new Example("Oracle 함수", "CASE 두 꼴 (값 비교 · 조건 비교)", "CASE 칼럼 WHEN 값 … 은 = 비교만, CASE WHEN 조건 … 은 아무 조건이나 됩니다.",
+          """
+          SELECT
+                 o.ORDER_ID
+               , CASE o.STATUS WHEN '접수' THEN 1 WHEN '진행' THEN 2 ELSE 3 END AS STEP
+               , CASE WHEN o.AMOUNT >= 100000 THEN '큰 주문' WHEN o.AMOUNT IS NULL THEN '금액 없음' ELSE '보통' END AS SIZE_TEXT
+            FROM ORDERS o""",
+          """
+          SELECT
+                 o.ORDER_ID
+               , CASE o.STATUS WHEN '접수' THEN 1 WHEN '진행' THEN 2 ELSE 3 END AS STEP
+               , CASE WHEN o.AMOUNT >= 100000 THEN '큰 주문' WHEN o.AMOUNT IS NULL THEN '금액 없음' ELSE '보통' END AS SIZE_TEXT
+            FROM ORDERS o"""),
+      new Example("Oracle 함수", "LNNVL · NANVL (NULL · 숫자 아님 처리)", "LNNVL(조건) 은 조건이 거짓이거나 NULL 이면 참. NOT 과 달리 NULL 줄도 고릅니다.",
+          """
+          SELECT
+                 o.ORDER_ID
+               , o.STATUS
+            FROM ORDERS o
+           WHERE LNNVL(o.STATUS = '완료')""",
+          """
+          SELECT
+                 o.ORDER_ID
+               , o.STATUS
+            FROM ORDERS o
+           WHERE o.STATUS IS DISTINCT FROM '완료'"""),
+      new Example("Oracle 함수", "PRIOR · LEVEL · CONNECT_BY_ROOT 함께 (부모 이름 붙여 펼치기)", "CONNECT BY 안에서 PRIOR 칼럼으로 부모 줄 값을 꺼냅니다.",
+          """
+          SELECT
+                 LEVEL AS LVL
+               , m.MENU_NAME
+               , PRIOR m.MENU_NAME AS PARENT_NAME
+               , CONNECT_BY_ROOT m.MENU_NAME AS ROOT_NAME
+            FROM MENU m
+           START WITH m.PARENT_ID IS NULL
+          CONNECT BY PRIOR m.MENU_ID = m.PARENT_ID""",
+          """
+          WITH RECURSIVE t AS (
+          SELECT
+                 1 AS LVL
+               , m.MENU_ID
+               , m.MENU_NAME
+               , CAST(NULL AS VARCHAR) AS PARENT_NAME
+               , m.MENU_NAME AS ROOT_NAME
+            FROM MENU m
+           WHERE m.PARENT_ID IS NULL
+           UNION ALL
+          SELECT
+                 t.LVL + 1
+               , m.MENU_ID
+               , m.MENU_NAME
+               , t.MENU_NAME
+               , t.ROOT_NAME
+            FROM MENU m
+               , t
+           WHERE m.PARENT_ID = t.MENU_ID
+             AND t.LVL < 20
+          )
+          SELECT
+                 t.LVL
+               , t.MENU_NAME
+               , t.PARENT_NAME
+               , t.ROOT_NAME
+            FROM t"""),
+      new Example("Oracle 함수", "TABLE(시스템 함수) · 컬렉션 펼치기", "SYS.ODCIVARCHAR2LIST 로 값 목록을 표처럼 씁니다. IN 목록을 하나의 값으로 받을 때.",
+          """
+          SELECT
+                 COLUMN_VALUE AS PART_NO
+            FROM TABLE(SYS.ODCIVARCHAR2LIST('P001', 'P002', 'P003'))""",
+          """
+          SELECT
+                 x AS PART_NO
+            FROM UNNEST(ARRAY['P001', 'P002', 'P003']) AS x"""),
+      new Example("Oracle 함수", "오라클 날짜 빼기 = 일 수 (소수는 시간)", "DATE − DATE 는 일 수입니다. 0.5 는 12시간. × 24 하면 시간, × 1440 하면 분.",
+          """
+          SELECT
+                 b.JOB_NAME
+               , ROUND((CAST(b.END_TS AS DATE) - CAST(b.START_TS AS DATE)) * 1440, 1) AS MINUTES
+            FROM BATCH_LOG b""",
+          """
+          SELECT
+                 b.JOB_NAME
+               , ROUND(CAST(EXTRACT(EPOCH FROM (b.END_TS - b.START_TS)) / 60 AS NUMERIC), 1) AS MINUTES
+            FROM BATCH_LOG b"""),
+      new Example("Oracle 함수", "TO_CHAR 로 0 채운 번호 · FM 으로 공백 빼기", "TO_CHAR(5, 'FM000') 은 '005'. FM 이 없으면 앞에 부호 자리 공백이 붙습니다.",
+          """
+          SELECT
+                 TO_CHAR(5, 'FM000') AS NO3
+               , '[' || TO_CHAR(5, '000') || ']' AS WITH_SPACE
+               , TO_CHAR(SYSDATE, 'FMMM/DD') AS NO_ZERO_DT
+            FROM DUAL""",
+          """
+          SELECT
+                 TO_CHAR(5, 'FM000') AS NO3
+               , '[' || TO_CHAR(5, '000') || ']' AS WITH_SPACE
+               , TO_CHAR(NOW(), 'FMMM/DD') AS NO_ZERO_DT"""),
+      new Example("Oracle 함수", "ROLLUP 에서 GROUPING_ID (어느 소계 줄인지)", "소계 · 총계 줄을 숫자 하나로 구분합니다. 0 은 상세, 1 은 소계, 3 은 총계.",
+          """
+          SELECT
+                 s.DEPT_ID
+               , s.PART_NO
+               , SUM(s.QTY * s.PRICE) AS AMT
+               , GROUPING_ID(s.DEPT_ID, s.PART_NO) AS GID
+            FROM SALES_ORDER s
+           GROUP BY ROLLUP(s.DEPT_ID, s.PART_NO)
+           ORDER BY
+                 s.DEPT_ID
+               , GID
+               , s.PART_NO""",
+          """
+          SELECT
+                 s.DEPT_ID
+               , s.PART_NO
+               , SUM(s.QTY * s.PRICE) AS AMT
+               , GROUPING(s.DEPT_ID, s.PART_NO) AS GID
+            FROM SALES_ORDER s
+           GROUP BY ROLLUP(s.DEPT_ID, s.PART_NO)
+           ORDER BY
+                 s.DEPT_ID
+               , GID
+               , s.PART_NO"""),
+      new Example("Oracle 함수", "MODEL 대신 쓰는 이월 계산 (앞 달 잔액 + 이번 달)", "분석 함수 SUM OVER 로 앞 달까지 쌓은 값에 이번 달을 더해 잔액 줄을 만듭니다.",
+          """
+          SELECT
+                 b.YM
+               , b.DEPT_ID
+               , b.BUDGET_AMT
+               , SUM(b.BUDGET_AMT) OVER (PARTITION BY b.DEPT_ID ORDER BY b.YM ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS CARRIED
+            FROM BUDGET b""",
+          """
+          SELECT
+                 b.YM
+               , b.DEPT_ID
+               , b.BUDGET_AMT
+               , SUM(b.BUDGET_AMT) OVER (PARTITION BY b.DEPT_ID ORDER BY b.YM ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS CARRIED
+            FROM BUDGET b"""),
+      new Example("Oracle 함수", "SAMPLE (표에서 몇 % 만 뽑기)", "큰 표를 다 읽지 않고 일부만 뽑아 봅니다. 결과는 실행마다 다릅니다.",
+          """
+          SELECT
+                 o.*
+            FROM ORDERS SAMPLE (10) o""",
+          """
+          SELECT
+                 o.*
+            FROM ORDERS o TABLESAMPLE BERNOULLI (10)"""),
+      new Example("Oracle 함수", "AS OF TIMESTAMP (지운 · 고친 데이터 되살려 보기)", "언두가 남아 있으면 몇 분 전 모습을 볼 수 있습니다(플래시백). PostgreSQL 에는 없습니다.",
+          """
+          SELECT
+                 o.*
+            FROM ORDERS AS OF TIMESTAMP (SYSTIMESTAMP - INTERVAL '10' MINUTE) o
+           WHERE o.ORDER_ID = :orderId""",
+          """
+          SELECT
+                 o.*
+            FROM ORDERS o
+           WHERE o.ORDER_ID = CAST(:orderId AS INTEGER)"""),
       new Example("트랜잭션 · 처리 순서", "부모 먼저 넣고 자식 넣기", "외래 키가 있으면 부모(주문)를 먼저 넣고, 그 번호로 자식(품목)을 넣은 뒤 COMMIT 합니다. 이 문장은 부모 한 줄입니다.",
           """
           INSERT INTO ORDERS (ORDER_ID, CUST_ID, STATUS, ORDER_DT, AMOUNT)
@@ -10492,13 +14876,13 @@ public final class Examples {
                  p.TABLE_NAME""",
           """
           SELECT
-                 p.table_schema
-               , p.table_name
-               , p.privilege_type
-            FROM information_schema.table_privileges p
-           WHERE p.grantee = CURRENT_USER
+                 p.TABLE_SCHEMA
+               , p.TABLE_NAME
+               , p.PRIVILEGE_TYPE
+            FROM INFORMATION_SCHEMA.TABLE_PRIVILEGES p
+           WHERE p.GRANTEE = CURRENT_USER
            ORDER BY
-                 p.table_name"""),
+                 p.TABLE_NAME"""),
       new Example("프로시저 · 블록", "한 번만 돌리는 블록 (반복하며 고치기)", "여러 줄을 하나씩 처리할 때. Oracle 은 BEGIN … END, PostgreSQL 은 DO 블록입니다.",
           """
           BEGIN
@@ -10809,18 +15193,18 @@ public final class Examples {
                  SESSIONS DESC""",
           """
           SELECT
-                 a.usename AS USERNAME
-               , a.application_name AS PROGRAM
-               , a.client_addr AS MACHINE
-               , a.state AS STATUS
+                 a.USENAME AS USERNAME
+               , a.APPLICATION_NAME AS PROGRAM
+               , a.CLIENT_ADDR AS MACHINE
+               , a.STATE AS STATUS
                , COUNT(*) AS SESSIONS
-            FROM pg_stat_activity a
-           WHERE a.backend_type = 'client backend'
+            FROM PG_STAT_ACTIVITY a
+           WHERE a.BACKEND_TYPE = 'client backend'
            GROUP BY
-                 a.usename
-               , a.application_name
-               , a.client_addr
-               , a.state
+                 a.USENAME
+               , a.APPLICATION_NAME
+               , a.CLIENT_ADDR
+               , a.STATE
            ORDER BY
                  SESSIONS DESC"""),
       new Example("DB 운영", "오래 놀고 있는 트랜잭션 (idle in transaction)", "트랜잭션을 연 채 손 놓은 세션은 락을 쥐고 있습니다. 5분 넘은 것.",
@@ -10838,22 +15222,22 @@ public final class Examples {
              AND TO_DATE(t.START_TIME, 'MM/DD/YY HH24:MI:SS') < SYSDATE - 5 / 1440""",
           """
           SELECT
-                 a.pid
-               , a.usename
-               , a.application_name
-               , a.xact_start
-               , ROUND(EXTRACT(EPOCH FROM NOW() - a.xact_start) / 60) AS OPEN_MIN
-            FROM pg_stat_activity a
-           WHERE a.state = 'idle in transaction'
-             AND a.xact_start < NOW() - INTERVAL '5 minute'"""),
+                 a.PID
+               , a.USENAME
+               , a.APPLICATION_NAME
+               , a.XACT_START
+               , ROUND(EXTRACT(EPOCH FROM NOW() - a.XACT_START) / 60) AS OPEN_MIN
+            FROM PG_STAT_ACTIVITY a
+           WHERE a.STATE = 'idle in transaction'
+             AND a.XACT_START < NOW() - INTERVAL '5 minute'"""),
       new Example("DB 운영", "세션 끊기 (확인 뒤에만)", "위에서 찾은 세션을 끊습니다. 되돌릴 수 없으니 SID · SERIAL# 을 꼭 확인하고 되돌릴 수 없으니 SID · 번호를 꼭 확인하세요.lt;SID되돌릴 수 없으니 SID · 번호를 꼭 확인하세요.gt; 자리에 넣으세요.",
           """
           ALTER SYSTEM KILL SESSION '<SID>,<SERIAL#>' IMMEDIATE""",
           """
           SELECT
-                 pg_terminate_backend(a.pid)
-            FROM pg_stat_activity a
-           WHERE a.pid = :pid"""),
+                 pg_terminate_backend(a.PID)
+            FROM PG_STAT_ACTIVITY a
+           WHERE a.PID = :pid"""),
       new Example("DB 운영", "안 쓰는 색인 (한 번도 안 읽힘)", "PostgreSQL 은 통계에서 읽힌 횟수 0 인 색인. Oracle 은 ALTER INDEX … MONITORING USAGE 를 켠 뒤 USER_OBJECT_USAGE 로 봅니다(12.2 이상은 DBA_INDEX_USAGE).",
           """
           SELECT
@@ -10866,16 +15250,16 @@ public final class Examples {
            WHERE u.USED = 'NO'""",
           """
           SELECT
-                 s.relname AS TABLE_NAME
-               , s.indexrelname AS INDEX_NAME
-               , s.idx_scan
-               , pg_size_pretty(pg_relation_size(s.indexrelid)) AS SIZE
-            FROM pg_stat_user_indexes s, pg_index i
-           WHERE s.indexrelid = i.indexrelid
-             AND s.idx_scan = 0
-             AND NOT i.indisunique
+                 s.RELNAME AS TABLE_NAME
+               , s.INDEXRELNAME AS INDEX_NAME
+               , s.IDX_SCAN
+               , pg_size_pretty(pg_relation_size(s.INDEXRELID)) AS SIZE
+            FROM PG_STAT_USER_INDEXES s, PG_INDEX i
+           WHERE s.INDEXRELID = i.INDEXRELID
+             AND s.IDX_SCAN = 0
+             AND NOT i.INDISUNIQUE
            ORDER BY
-                 pg_relation_size(s.indexrelid) DESC"""),
+                 pg_relation_size(s.INDEXRELID) DESC"""),
       new Example("DB 운영", "통계가 오래된 표", "통계를 모은 뒤 많이 바뀐 표는 실행 계획이 틀어집니다.",
           """
           SELECT
@@ -10890,15 +15274,15 @@ public final class Examples {
                  s.LAST_ANALYZED NULLS FIRST""",
           """
           SELECT
-                 s.relname AS TABLE_NAME
-               , s.n_live_tup
-               , s.n_mod_since_analyze
-               , GREATEST(s.last_analyze, s.last_autoanalyze) AS LAST_ANALYZED
-            FROM pg_stat_user_tables s
-           WHERE s.n_mod_since_analyze > s.n_live_tup * 0.1
-              OR GREATEST(s.last_analyze, s.last_autoanalyze) IS NULL
+                 s.RELNAME AS TABLE_NAME
+               , s.N_LIVE_TUP
+               , s.N_MOD_SINCE_ANALYZE
+               , GREATEST(s.LAST_ANALYZE, s.LAST_AUTOANALYZE) AS LAST_ANALYZED
+            FROM PG_STAT_USER_TABLES s
+           WHERE s.N_MOD_SINCE_ANALYZE > s.N_LIVE_TUP * 0.1
+              OR GREATEST(s.LAST_ANALYZE, s.LAST_AUTOANALYZE) IS NULL
            ORDER BY
-                 s.n_mod_since_analyze DESC"""),
+                 s.N_MOD_SINCE_ANALYZE DESC"""),
       new Example("DB 운영", "깨진 객체 (INVALID 뷰 · 프로시저)", "Oracle 은 표가 바뀌면 그것을 쓰는 뷰 · 패키지가 INVALID 가 됩니다. PostgreSQL 은 이런 상태가 없어 의존 객체 목록을 봅니다.",
           """
           SELECT
@@ -10911,14 +15295,14 @@ public final class Examples {
                  1, 2""",
           """
           SELECT DISTINCT
-                 v.relname AS VIEW_NAME
-               , t.relname AS USES_TABLE
-            FROM pg_depend d, pg_rewrite r, pg_class v, pg_class t
-           WHERE d.objid = r.oid
-             AND r.ev_class = v.oid
-             AND d.refobjid = t.oid
-             AND v.oid <> t.oid
-             AND v.relkind = 'v'
+                 v.RELNAME AS VIEW_NAME
+               , t.RELNAME AS USES_TABLE
+            FROM PG_DEPEND d, PG_REWRITE r, PG_CLASS v, PG_CLASS t
+           WHERE d.OBJID = r.OID
+             AND r.EV_CLASS = v.OID
+             AND d.REFOBJID = t.OID
+             AND v.OID <> t.OID
+             AND v.RELKIND = 'v'
            ORDER BY
                  1, 2"""),
       new Example("DB 운영", "표 공간 · DB 크기", "공간이 얼마나 찼는지. Oracle 은 DBA 권한이 있어야 DBA_ 뷰가 보입니다.",
@@ -10934,11 +15318,11 @@ public final class Examples {
                  f.TABLESPACE_NAME""",
           """
           SELECT
-                 d.datname
-               , pg_size_pretty(pg_database_size(d.datname)) AS SIZE
-            FROM pg_database d
+                 d.DATNAME
+               , pg_size_pretty(pg_database_size(d.DATNAME)) AS SIZE
+            FROM PG_DATABASE d
            ORDER BY
-                 pg_database_size(d.datname) DESC"""),
+                 pg_database_size(d.DATNAME) DESC"""),
       new Example("DB 운영", "많이 읽고 많이 쓰는 표 (전체 훑기 많은 표)", "색인 없이 표를 통째로 읽은 횟수가 많은 표. 색인을 볼 후보입니다.",
           """
           SELECT
@@ -10953,13 +15337,171 @@ public final class Examples {
            FETCH FIRST 20 ROWS ONLY""",
           """
           SELECT
-                 s.relname
-               , s.seq_scan
-               , s.seq_tup_read
-               , s.idx_scan
-               , s.n_tup_ins + s.n_tup_upd + s.n_tup_del AS WRITES
-            FROM pg_stat_user_tables s
+                 s.RELNAME
+               , s.SEQ_SCAN
+               , s.SEQ_TUP_READ
+               , s.IDX_SCAN
+               , s.N_TUP_INS + s.N_TUP_UPD + s.N_TUP_DEL AS WRITES
+            FROM PG_STAT_USER_TABLES s
            ORDER BY
-                 s.seq_tup_read DESC
-           LIMIT 20"""));
+                 s.SEQ_TUP_READ DESC
+           LIMIT 20"""),
+      new Example("DB 운영", "표 · 칼럼 설명 한 번에 보기 (표 정의서)", "표 정의서를 만들 때: 칼럼 순서 · 형 · 길이 · 빈 값 허용 · 설명.",
+          """
+          SELECT
+                 c.TABLE_NAME
+               , c.COLUMN_ID
+               , c.COLUMN_NAME
+               , c.DATA_TYPE || CASE WHEN c.DATA_TYPE LIKE '%CHAR%' THEN '(' || c.CHAR_LENGTH || ')' WHEN c.DATA_PRECISION IS NOT NULL THEN '(' || c.DATA_PRECISION || ',' || c.DATA_SCALE || ')' END AS COL_TYPE
+               , c.NULLABLE
+               , m.COMMENTS
+            FROM USER_TAB_COLUMNS c
+               , USER_COL_COMMENTS m
+           WHERE c.TABLE_NAME = m.TABLE_NAME(+)
+             AND c.COLUMN_NAME = m.COLUMN_NAME(+)
+             AND c.TABLE_NAME = UPPER(:tableName)
+           ORDER BY
+                 c.COLUMN_ID""",
+          """
+          SELECT
+                 c.TABLE_NAME
+               , c.ORDINAL_POSITION
+               , c.COLUMN_NAME
+               , c.DATA_TYPE || CASE WHEN c.CHARACTER_MAXIMUM_LENGTH IS NOT NULL THEN '(' || c.CHARACTER_MAXIMUM_LENGTH || ')' WHEN c.NUMERIC_PRECISION IS NOT NULL THEN '(' || c.NUMERIC_PRECISION || ',' || c.NUMERIC_SCALE || ')' ELSE '' END AS COL_TYPE
+               , c.IS_NULLABLE
+               , COL_DESCRIPTION(CAST(c.TABLE_SCHEMA || '.' || c.TABLE_NAME AS REGCLASS), c.ORDINAL_POSITION) AS COMMENTS
+            FROM INFORMATION_SCHEMA.COLUMNS c
+           WHERE c.TABLE_SCHEMA = CURRENT_SCHEMA()
+             AND c.TABLE_NAME = LOWER(:tableName)
+           ORDER BY
+                 c.ORDINAL_POSITION"""),
+      new Example("DB 운영", "칼럼 이름이 같은데 형이 다른 곳 (표끼리 비교)", "같은 이름 칼럼이 표마다 다른 형 · 길이면 조인에서 형 바뀜이 생깁니다.",
+          """
+          SELECT
+                 c.COLUMN_NAME
+               , COUNT(DISTINCT c.DATA_TYPE || '(' || c.DATA_LENGTH || ')') AS TYPE_CNT
+               , LISTAGG(c.TABLE_NAME || ':' || c.DATA_TYPE || '(' || c.DATA_LENGTH || ')', ', ') WITHIN GROUP (ORDER BY c.TABLE_NAME) AS DETAIL
+            FROM USER_TAB_COLUMNS c
+           GROUP BY
+                 c.COLUMN_NAME
+          HAVING COUNT(DISTINCT c.DATA_TYPE || '(' || c.DATA_LENGTH || ')') > 1""",
+          """
+          SELECT
+                 c.COLUMN_NAME
+               , COUNT(DISTINCT c.DATA_TYPE || '(' || COALESCE(c.CHARACTER_MAXIMUM_LENGTH, c.NUMERIC_PRECISION, 0) || ')') AS TYPE_CNT
+               , STRING_AGG(c.TABLE_NAME || ':' || c.DATA_TYPE, ', ' ORDER BY c.TABLE_NAME) AS DETAIL
+            FROM INFORMATION_SCHEMA.COLUMNS c
+           WHERE c.TABLE_SCHEMA = CURRENT_SCHEMA()
+           GROUP BY
+                 c.COLUMN_NAME
+          HAVING COUNT(DISTINCT c.DATA_TYPE || '(' || COALESCE(c.CHARACTER_MAXIMUM_LENGTH, c.NUMERIC_PRECISION, 0) || ')') > 1"""),
+      new Example("DB 운영", "기본 키가 없는 표", "키가 없으면 중복이 쌓이고 MERGE · 수정이 어렵습니다.",
+          """
+          SELECT
+                 t.TABLE_NAME
+            FROM USER_TABLES t
+           WHERE NOT EXISTS (
+                  SELECT 1
+                    FROM USER_CONSTRAINTS c
+                   WHERE c.TABLE_NAME = t.TABLE_NAME
+                     AND c.CONSTRAINT_TYPE = 'P'
+                 )""",
+          """
+          SELECT
+                 t.TABLE_NAME
+            FROM INFORMATION_SCHEMA.TABLES t
+           WHERE t.TABLE_SCHEMA = CURRENT_SCHEMA()
+             AND t.TABLE_TYPE = 'BASE TABLE'
+             AND NOT EXISTS (
+                  SELECT 1
+                    FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS c
+                   WHERE c.TABLE_SCHEMA = t.TABLE_SCHEMA
+                     AND c.TABLE_NAME = t.TABLE_NAME
+                     AND c.CONSTRAINT_TYPE = 'PRIMARY KEY'
+                 )"""),
+      new Example("DB 운영", "외래 키 칼럼에 색인이 없는 것", "자식 표의 외래 키 칼럼에 색인이 없으면 부모 수정 · 삭제 때 잠금이 커집니다.",
+          """
+          SELECT
+                 c.TABLE_NAME
+               , cc.COLUMN_NAME
+               , c.CONSTRAINT_NAME
+            FROM USER_CONSTRAINTS c
+               , USER_CONS_COLUMNS cc
+           WHERE c.CONSTRAINT_NAME = cc.CONSTRAINT_NAME
+             AND c.CONSTRAINT_TYPE = 'R'
+             AND NOT EXISTS (
+                  SELECT 1
+                    FROM USER_IND_COLUMNS i
+                   WHERE i.TABLE_NAME = cc.TABLE_NAME
+                     AND i.COLUMN_NAME = cc.COLUMN_NAME
+                     AND i.COLUMN_POSITION = 1
+                 )""",
+          """
+          SELECT
+                 c.CONRELID::regclass AS TABLE_NAME
+               , a.ATTNAME AS COLUMN_NAME
+               , c.CONNAME AS CONSTRAINT_NAME
+            FROM PG_CONSTRAINT c
+               , PG_ATTRIBUTE a
+           WHERE c.CONTYPE = 'f'
+             AND a.ATTRELID = c.CONRELID
+             AND a.ATTNUM = c.CONKEY[1]
+             AND NOT EXISTS (
+                  SELECT 1
+                    FROM PG_INDEX i
+                   WHERE i.INDRELID = c.CONRELID
+                     AND i.INDKEY[0] = c.CONKEY[1]
+                 )"""),
+      new Example("DB 운영", "표마다 정확한 건수 (모든 표 한 번에)", "통계 어림이 아니라 실제로 셉니다. 큰 DB 에서는 오래 걸립니다.",
+          """
+          SELECT
+                 t.TABLE_NAME
+               , TO_NUMBER(EXTRACTVALUE(XMLTYPE(DBMS_XMLGEN.GETXML('SELECT COUNT(*) C FROM ' || t.TABLE_NAME)), '/ROWSET/ROW/C')) AS ROW_CNT
+            FROM USER_TABLES t
+           ORDER BY
+                 ROW_CNT DESC""",
+          """
+          SELECT
+                 t.TABLE_NAME
+               , (XPATH('/row/c/text()', QUERY_TO_XML('SELECT COUNT(*) AS c FROM ' || QUOTE_IDENT(t.TABLE_NAME), FALSE, TRUE, '')))[1]::text::bigint AS ROW_CNT
+            FROM INFORMATION_SCHEMA.TABLES t
+           WHERE t.TABLE_SCHEMA = CURRENT_SCHEMA()
+             AND t.TABLE_TYPE = 'BASE TABLE'
+           ORDER BY
+                 ROW_CNT DESC"""),
+      new Example("DB 운영", "최근에 바뀐 객체 (표 · 뷰 · 프로시저)", "누가 무엇을 고쳤는지 모를 때 최근 7일 바뀐 DB 객체.",
+          """
+          SELECT
+                 o.OBJECT_TYPE
+               , o.OBJECT_NAME
+               , o.LAST_DDL_TIME
+            FROM USER_OBJECTS o
+           WHERE o.LAST_DDL_TIME >= SYSDATE - 7
+           ORDER BY
+                 o.LAST_DDL_TIME DESC""",
+          """
+          SELECT
+                 c.RELKIND AS OBJECT_TYPE
+               , c.RELNAME AS OBJECT_NAME
+               , s.LAST_ANALYZE
+            FROM PG_CLASS c
+               , PG_STAT_USER_TABLES s
+           WHERE c.OID = s.RELID
+           ORDER BY
+                 s.LAST_ANALYZE DESC NULLS LAST"""),
+      new Example("DB 운영", "시퀀스 지금 값과 표 최대 번호 비교", "시퀀스가 표의 최대 번호보다 작으면 다음 INSERT 에서 키가 겹칩니다.",
+          """
+          SELECT
+                 s.SEQUENCE_NAME
+               , s.LAST_NUMBER
+               , (SELECT MAX(o.ORDER_ID) FROM ORDERS o) AS MAX_ID
+            FROM USER_SEQUENCES s
+           WHERE s.SEQUENCE_NAME = 'SEQ_ORDER'""",
+          """
+          SELECT
+                 s.SEQUENCENAME AS SEQUENCE_NAME
+               , s.LAST_VALUE
+               , (SELECT MAX(o.ORDER_ID) FROM ORDERS o) AS MAX_ID
+            FROM PG_SEQUENCES s
+           WHERE s.SEQUENCENAME = 'seq_order'"""));
 }
