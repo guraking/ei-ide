@@ -41,6 +41,7 @@ final class ToolsPanel {
   ToolsPanel(Bench bench, Supplier<String> sql) {
     this.bench = bench;
     this.sql = sql;
+    root.setTabComponentInsets(JBUI.emptyInsets());
     root.addTab("IN 목록 만들기", inTab());
     root.addTab("DB 바꿔 쓰기", dialectTab());
     root.addTab("연결 모양 바꾸기", joinTab());

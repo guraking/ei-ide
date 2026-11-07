@@ -241,6 +241,8 @@ public final class QueryBenchDialog extends DialogWrapper {
     tabs.addTab("예제 모음", examples.component());
     tabs.addTab("쉬운 설명", split(EXPLAIN_SPLIT, "explainSplit", slots[EXPLAIN_TAB], explain.component()));
     tabs.addTab("도구", split(TOOLS_SPLIT, "toolsSplit", tools.component(), slots[TOOLS_TAB]));
+    // 탭 안쪽 기본 여백이 칸 둘레에 두꺼운 테두리처럼 보여 없앤다(테두리는 SQL 칸 · 목록의 한 겹만).
+    tabs.setTabComponentInsets(JBUI.emptyInsets());
     tabs.addChangeListener(e -> tabChanged());
 
     JPanel root = new JPanel(new BorderLayout());
