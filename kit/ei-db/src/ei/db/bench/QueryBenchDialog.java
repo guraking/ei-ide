@@ -15,6 +15,8 @@ import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBRadioButton;
 import com.intellij.ui.components.JBTabbedPane;
 import com.intellij.ui.EditorTextField;
+import com.intellij.openapi.editor.highlighter.EditorHighlighterFactory;
+import com.intellij.testFramework.LightVirtualFile;
 import com.intellij.ui.components.JBTextArea;
 import com.intellij.openapi.editor.EditorFactory;
 import ei.db.FileTypes;
@@ -148,6 +150,9 @@ public final class QueryBenchDialog extends DialogWrapper {
     super(project, null, true, IdeModalityType.MODELESS);
     this.project = project;
     this.sql = new EditorTextField(EditorFactory.getInstance().createDocument(""), project, FileTypes.byExtension("sql"), false, false);
+    // 문서에 파일이 없으면 TextMate 가 문법을 못 골라 색이 빠진다. .sql 이름의 메모리 파일로 색칠기를 직접 붙인다.
+    this.sql.addSettingsProvider(editor -> editor.setHighlighter(
+        EditorHighlighterFactory.getInstance().createEditorHighlighter(project, new LightVirtualFile("query.sql"))));
     this.console = console;
     this.bench = new Bench(project, this::fill, m -> setStatus("읽지 못했습니다: " + m, true));
     for (int i = 0; i < slots.length; i++) slots[i] = new JPanel(new BorderLayout());
