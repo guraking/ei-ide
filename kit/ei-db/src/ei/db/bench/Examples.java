@@ -3085,206 +3085,6 @@ public final class Examples {
             FROM t
            ORDER BY
                  t.SORT_KEY"""),
-      new Example("계층", "BOM 정전개 (완제품 → 부품)", "완제품 하나에 들어가는 부품을 아래로 펼치고, 단계마다 수량을 곱해 완제품 1개당 필요 수량(TOTAL_QTY)을 냅니다. 곱셈이 필요해 CONNECT BY 대신 재귀 WITH 로 씁니다.",
-          """
-          WITH t (LVL, CHILD_PART, QTY, TOTAL_QTY, SEQ) AS (
-          SELECT
-                 1
-               , b.CHILD_PART
-               , b.QTY
-               , b.QTY
-               , b.SEQ
-            FROM BOM b
-           WHERE b.PARENT_PART = :topPart
-           UNION ALL
-          SELECT
-                 t.LVL + 1
-               , b.CHILD_PART
-               , b.QTY
-               , t.TOTAL_QTY * b.QTY
-               , b.SEQ
-            FROM BOM b, t
-           WHERE b.PARENT_PART = t.CHILD_PART
-          )
-          SEARCH DEPTH FIRST BY SEQ SET ORD
-          SELECT
-                 t.LVL
-               , LPAD(' ', (t.LVL - 1) * 2) || t.CHILD_PART AS PART_NO
-               , t.QTY
-               , t.TOTAL_QTY
-            FROM t
-           ORDER BY
-                 t.ORD""",
-          """
-          WITH RECURSIVE t AS (
-          SELECT
-                 1 AS LVL
-               , b.CHILD_PART
-               , b.QTY
-               , b.QTY AS TOTAL_QTY
-               , ARRAY[b.SEQ] AS SORT_KEY
-            FROM BOM b
-           WHERE b.PARENT_PART = :topPart
-           UNION ALL
-          SELECT
-                 t.LVL + 1
-               , b.CHILD_PART
-               , b.QTY
-               , t.TOTAL_QTY * b.QTY
-               , t.SORT_KEY || b.SEQ
-            FROM BOM b
-            JOIN t
-              ON b.PARENT_PART = t.CHILD_PART
-           WHERE t.LVL < 100
-          )
-          SELECT
-                 t.LVL
-               , REPEAT(' ', (t.LVL - 1) * 2) || t.CHILD_PART AS PART_NO
-               , t.QTY
-               , t.TOTAL_QTY
-            FROM t
-           ORDER BY
-                 t.SORT_KEY"""),
-      new Example("계층", "BOM 부품별 총 필요 수량 (최하위 합계)", "완제품 1개에 최하위 부품이 모두 몇 개 필요한지 부품마다 합칩니다(여러 곳에 쓰인 볼트를 합산).",
-          """
-          WITH t (PART_NO, TOTAL_QTY) AS (
-          SELECT
-                 b.CHILD_PART
-               , b.QTY
-            FROM BOM b
-           WHERE b.PARENT_PART = :topPart
-           UNION ALL
-          SELECT
-                 b.CHILD_PART
-               , t.TOTAL_QTY * b.QTY
-            FROM BOM b, t
-           WHERE b.PARENT_PART = t.PART_NO
-          )
-          SELECT
-                 t.PART_NO
-               , SUM(t.TOTAL_QTY) AS NEED_QTY
-            FROM t
-           WHERE NOT EXISTS (
-                  SELECT 1
-                    FROM BOM c
-                   WHERE c.PARENT_PART = t.PART_NO
-                 )
-           GROUP BY
-                 t.PART_NO
-           ORDER BY
-                 t.PART_NO""",
-          """
-          WITH RECURSIVE t AS (
-          SELECT
-                 b.CHILD_PART AS PART_NO
-               , b.QTY AS TOTAL_QTY
-            FROM BOM b
-           WHERE b.PARENT_PART = :topPart
-           UNION ALL
-          SELECT
-                 b.CHILD_PART
-               , t.TOTAL_QTY * b.QTY
-            FROM BOM b
-            JOIN t
-              ON b.PARENT_PART = t.PART_NO
-          )
-          SELECT
-                 t.PART_NO
-               , SUM(t.TOTAL_QTY) AS NEED_QTY
-            FROM t
-           WHERE NOT EXISTS (
-                  SELECT 1
-                    FROM BOM c
-                   WHERE c.PARENT_PART = t.PART_NO
-                 )
-           GROUP BY
-                 t.PART_NO
-           ORDER BY
-                 t.PART_NO"""),
-      new Example("계층", "BOM 원가 쌓기 (부품 단가 × 수량)", "최하위 부품 단가에 필요 수량을 곱해 완제품 1개 원가를 냅니다.",
-          """
-          WITH t (PART_NO, TOTAL_QTY) AS (
-          SELECT
-                 b.CHILD_PART
-               , b.QTY
-            FROM BOM b
-           WHERE b.PARENT_PART = :topPart
-           UNION ALL
-          SELECT
-                 b.CHILD_PART
-               , t.TOTAL_QTY * b.QTY
-            FROM BOM b, t
-           WHERE b.PARENT_PART = t.PART_NO
-          )
-          SELECT
-                 SUM(t.TOTAL_QTY * p.UNIT_COST) AS PRODUCT_COST
-            FROM t, PART p
-           WHERE p.PART_NO = t.PART_NO
-             AND NOT EXISTS (
-                  SELECT 1
-                    FROM BOM c
-                   WHERE c.PARENT_PART = t.PART_NO
-                 )""",
-          """
-          WITH RECURSIVE t AS (
-          SELECT
-                 b.CHILD_PART AS PART_NO
-               , b.QTY AS TOTAL_QTY
-            FROM BOM b
-           WHERE b.PARENT_PART = :topPart
-           UNION ALL
-          SELECT
-                 b.CHILD_PART
-               , t.TOTAL_QTY * b.QTY
-            FROM BOM b
-            JOIN t
-              ON b.PARENT_PART = t.PART_NO
-          )
-          SELECT
-                 SUM(t.TOTAL_QTY * p.UNIT_COST) AS PRODUCT_COST
-            FROM t
-            JOIN PART p
-              ON p.PART_NO = t.PART_NO
-           WHERE NOT EXISTS (
-                  SELECT 1
-                    FROM BOM c
-                   WHERE c.PARENT_PART = t.PART_NO
-                 )"""),
-      new Example("계층", "BOM 역전개 (이 부품이 어디에 쓰이나)", "부품 하나에서 위로 올라가 그 부품이 들어가는 모든 상위 품목을 봅니다(설계 변경 영향 범위).",
-          """
-          SELECT
-                 LEVEL AS UP
-               , b.PARENT_PART
-               , b.CHILD_PART
-               , b.QTY
-            FROM BOM b
-           WHERE b.PARENT_PART IS NOT NULL
-           START WITH b.CHILD_PART = :partNo
-          CONNECT BY b.CHILD_PART = PRIOR b.PARENT_PART""",
-          """
-          WITH RECURSIVE up AS (
-          SELECT
-                 1 AS UP
-               , b.PARENT_PART
-               , b.CHILD_PART
-               , b.QTY
-            FROM BOM b
-           WHERE b.CHILD_PART = :partNo
-           UNION ALL
-          SELECT
-                 u.UP + 1
-               , b.PARENT_PART
-               , b.CHILD_PART
-               , b.QTY
-            FROM BOM b
-            JOIN up u
-              ON b.CHILD_PART = u.PARENT_PART
-           WHERE u.UP < 100
-          )
-          SELECT
-                 u.*
-            FROM up u
-           WHERE u.PARENT_PART IS NOT NULL"""),
       new Example("계층", "부서 아래 직원 모두 (하위 부서 포함)", "고른 부서와 그 아래 모든 부서에 속한 직원.",
           """
           SELECT
@@ -6207,6 +6007,206 @@ public final class Examples {
                  j ->> 'partNo' AS PART_NO
                , CAST(j ->> 'qty' AS NUMERIC) AS QTY
             FROM JSON_ARRAY_ELEMENTS('[{"partNo":"P001","qty":2},{"partNo":"P002","qty":5}]') AS j"""),
+      new Example("BOM · 부품", "BOM 정전개 (완제품 → 부품)", "완제품 하나에 들어가는 부품을 아래로 펼치고, 단계마다 수량을 곱해 완제품 1개당 필요 수량(TOTAL_QTY)을 냅니다. 곱셈이 필요해 CONNECT BY 대신 재귀 WITH 로 씁니다.",
+          """
+          WITH t (LVL, CHILD_PART, QTY, TOTAL_QTY, SEQ) AS (
+          SELECT
+                 1
+               , b.CHILD_PART
+               , b.QTY
+               , b.QTY
+               , b.SEQ
+            FROM BOM b
+           WHERE b.PARENT_PART = :topPart
+           UNION ALL
+          SELECT
+                 t.LVL + 1
+               , b.CHILD_PART
+               , b.QTY
+               , t.TOTAL_QTY * b.QTY
+               , b.SEQ
+            FROM BOM b, t
+           WHERE b.PARENT_PART = t.CHILD_PART
+          )
+          SEARCH DEPTH FIRST BY SEQ SET ORD
+          SELECT
+                 t.LVL
+               , LPAD(' ', (t.LVL - 1) * 2) || t.CHILD_PART AS PART_NO
+               , t.QTY
+               , t.TOTAL_QTY
+            FROM t
+           ORDER BY
+                 t.ORD""",
+          """
+          WITH RECURSIVE t AS (
+          SELECT
+                 1 AS LVL
+               , b.CHILD_PART
+               , b.QTY
+               , b.QTY AS TOTAL_QTY
+               , ARRAY[b.SEQ] AS SORT_KEY
+            FROM BOM b
+           WHERE b.PARENT_PART = :topPart
+           UNION ALL
+          SELECT
+                 t.LVL + 1
+               , b.CHILD_PART
+               , b.QTY
+               , t.TOTAL_QTY * b.QTY
+               , t.SORT_KEY || b.SEQ
+            FROM BOM b
+            JOIN t
+              ON b.PARENT_PART = t.CHILD_PART
+           WHERE t.LVL < 100
+          )
+          SELECT
+                 t.LVL
+               , REPEAT(' ', (t.LVL - 1) * 2) || t.CHILD_PART AS PART_NO
+               , t.QTY
+               , t.TOTAL_QTY
+            FROM t
+           ORDER BY
+                 t.SORT_KEY"""),
+      new Example("BOM · 부품", "BOM 부품별 총 필요 수량 (최하위 합계)", "완제품 1개에 최하위 부품이 모두 몇 개 필요한지 부품마다 합칩니다(여러 곳에 쓰인 볼트를 합산).",
+          """
+          WITH t (PART_NO, TOTAL_QTY) AS (
+          SELECT
+                 b.CHILD_PART
+               , b.QTY
+            FROM BOM b
+           WHERE b.PARENT_PART = :topPart
+           UNION ALL
+          SELECT
+                 b.CHILD_PART
+               , t.TOTAL_QTY * b.QTY
+            FROM BOM b, t
+           WHERE b.PARENT_PART = t.PART_NO
+          )
+          SELECT
+                 t.PART_NO
+               , SUM(t.TOTAL_QTY) AS NEED_QTY
+            FROM t
+           WHERE NOT EXISTS (
+                  SELECT 1
+                    FROM BOM c
+                   WHERE c.PARENT_PART = t.PART_NO
+                 )
+           GROUP BY
+                 t.PART_NO
+           ORDER BY
+                 t.PART_NO""",
+          """
+          WITH RECURSIVE t AS (
+          SELECT
+                 b.CHILD_PART AS PART_NO
+               , b.QTY AS TOTAL_QTY
+            FROM BOM b
+           WHERE b.PARENT_PART = :topPart
+           UNION ALL
+          SELECT
+                 b.CHILD_PART
+               , t.TOTAL_QTY * b.QTY
+            FROM BOM b
+            JOIN t
+              ON b.PARENT_PART = t.PART_NO
+          )
+          SELECT
+                 t.PART_NO
+               , SUM(t.TOTAL_QTY) AS NEED_QTY
+            FROM t
+           WHERE NOT EXISTS (
+                  SELECT 1
+                    FROM BOM c
+                   WHERE c.PARENT_PART = t.PART_NO
+                 )
+           GROUP BY
+                 t.PART_NO
+           ORDER BY
+                 t.PART_NO"""),
+      new Example("BOM · 부품", "BOM 원가 쌓기 (부품 단가 × 수량)", "최하위 부품 단가에 필요 수량을 곱해 완제품 1개 원가를 냅니다.",
+          """
+          WITH t (PART_NO, TOTAL_QTY) AS (
+          SELECT
+                 b.CHILD_PART
+               , b.QTY
+            FROM BOM b
+           WHERE b.PARENT_PART = :topPart
+           UNION ALL
+          SELECT
+                 b.CHILD_PART
+               , t.TOTAL_QTY * b.QTY
+            FROM BOM b, t
+           WHERE b.PARENT_PART = t.PART_NO
+          )
+          SELECT
+                 SUM(t.TOTAL_QTY * p.UNIT_COST) AS PRODUCT_COST
+            FROM t, PART p
+           WHERE p.PART_NO = t.PART_NO
+             AND NOT EXISTS (
+                  SELECT 1
+                    FROM BOM c
+                   WHERE c.PARENT_PART = t.PART_NO
+                 )""",
+          """
+          WITH RECURSIVE t AS (
+          SELECT
+                 b.CHILD_PART AS PART_NO
+               , b.QTY AS TOTAL_QTY
+            FROM BOM b
+           WHERE b.PARENT_PART = :topPart
+           UNION ALL
+          SELECT
+                 b.CHILD_PART
+               , t.TOTAL_QTY * b.QTY
+            FROM BOM b
+            JOIN t
+              ON b.PARENT_PART = t.PART_NO
+          )
+          SELECT
+                 SUM(t.TOTAL_QTY * p.UNIT_COST) AS PRODUCT_COST
+            FROM t
+            JOIN PART p
+              ON p.PART_NO = t.PART_NO
+           WHERE NOT EXISTS (
+                  SELECT 1
+                    FROM BOM c
+                   WHERE c.PARENT_PART = t.PART_NO
+                 )"""),
+      new Example("BOM · 부품", "BOM 역전개 (이 부품이 어디에 쓰이나)", "부품 하나에서 위로 올라가 그 부품이 들어가는 모든 상위 품목을 봅니다(설계 변경 영향 범위).",
+          """
+          SELECT
+                 LEVEL AS UP
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+            FROM BOM b
+           WHERE b.PARENT_PART IS NOT NULL
+           START WITH b.CHILD_PART = :partNo
+          CONNECT BY b.CHILD_PART = PRIOR b.PARENT_PART""",
+          """
+          WITH RECURSIVE up AS (
+          SELECT
+                 1 AS UP
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+            FROM BOM b
+           WHERE b.CHILD_PART = :partNo
+           UNION ALL
+          SELECT
+                 u.UP + 1
+               , b.PARENT_PART
+               , b.CHILD_PART
+               , b.QTY
+            FROM BOM b
+            JOIN up u
+              ON b.CHILD_PART = u.PARENT_PART
+           WHERE u.UP < 100
+          )
+          SELECT
+                 u.*
+            FROM up u
+           WHERE u.PARENT_PART IS NOT NULL"""),
       new Example("BOM · 부품", "레벨 번호 붙인 BOM 표 (1, 1.1, 1.1.2)", "BOM 을 펼치면서 화면에 보이는 번호(1.2.1)를 만듭니다. 형제 순서는 SEQ 로 정합니다.",
           """
           WITH t (LVL, PARENT_PART, CHILD_PART, QTY, NO_PATH, SORT_KEY) AS (
