@@ -40,6 +40,11 @@ public final class SqlParts {
   private static final Pattern ON = Pattern.compile("(?<![\\w$#])ON(?![\\w$#])");
   private static final Pattern AND = Pattern.compile("(?<![\\w$#])(AND|BETWEEN)(?![\\w$#])");
   private static final Pattern NESTED_SELECT = Pattern.compile("\\(\\s*(SELECT|WITH)\\b");
+  private static final Pattern FUNCTION_CALL = Pattern.compile("(?:([A-Za-z_]+)\\s+)?(?<![\\w$#.\"])([A-Za-z_][\\w$#]*(?:\\s*\\.\\s*[A-Za-z_][\\w$#]*)*)\\s*\\(");
+  private static final Set<String> NOT_FUNCTION = Set.of("IN", "EXISTS", "VALUES", "AS", "ON", "USING", "OVER", "AND", "OR", "NOT", "WHEN", "THEN",
+      "ELSE", "FROM", "JOIN", "SELECT", "WHERE", "INTO", "TABLE", "ANY", "ALL", "SOME", "LATERAL", "FILTER", "WITHIN", "KEEP", "BY", "IS", "LIKE",
+      "BETWEEN", "UNION", "MINUS", "EXCEPT", "INTERSECT", "RETURN", "RETURNING", "CASE", "END", "SET", "PIVOT", "UNPIVOT", "FOR", "WITH", "PRIOR");
+  private static final Set<String> TABLE_BEFORE = Set.of("INTO", "TABLE", "VIEW", "INDEX", "REFERENCES", "ON");
   private static final Pattern COLUMN_REF = Pattern.compile("(?<![\\w$#.\"])[A-Za-z_][\\w$#]*\\s*\\.\\s*([A-Za-z_][\\w$#]*)(?![\\w$#])(?!\\s*\\()");
   private static final Pattern REF = Pattern.compile("(?<![\\w$#.\"])([A-Za-z_][\\w$#]*|\"[^\"]+\")\\s*\\.\\s*(?=[A-Za-z_\"*])");
   private static final Set<String> NOT_ALIAS = Set.of("ON", "WHERE", "USING", "LEFT", "RIGHT", "INNER", "OUTER", "FULL", "CROSS",
@@ -86,6 +91,22 @@ public final class SqlParts {
     List<int[]> out = new ArrayList<>();
     Matcher m = COLUMN_REF.matcher(mask(sql));
     while (m.find()) out.add(new int[]{m.start(), m.end(1)});
+    return out;
+  }
+
+  /**
+   * 함수 부르기 이름(PKG.FUNC 처럼 점으로 이은 이름 전체) 자리 [시작, 끝) 목록. 문자열 · 주석 안은 뺀다.
+   * IN · EXISTS · VALUES 같은 SQL 낱말과 INTO · TABLE 뒤의 표 이름(칼럼 목록 괄호)은 함수가 아니다.
+   */
+  public static List<int[]> functionSpans(String sql) {
+    List<int[]> out = new ArrayList<>();
+    Matcher m = FUNCTION_CALL.matcher(mask(sql));
+    while (m.find()) {
+      String name = m.group(2).toUpperCase(Locale.ROOT);
+      String before = m.group(1) == null ? "" : m.group(1).toUpperCase(Locale.ROOT);
+      if (NOT_FUNCTION.contains(name) || TABLE_BEFORE.contains(before)) continue;
+      out.add(new int[]{m.start(2), m.end(2)});
+    }
     return out;
   }
 

@@ -199,6 +199,11 @@ public class QueryBenchCheck {
     yes(JoinStyleConvert.toOldOrSame(left, true).sql().contains("(+)"), "oracle left to plus");
     eq(JoinStyleConvert.toOldOrSame(inner + "; " + inner, true).sql(), inner + "; " + inner);
     eq(JoinStyleConvert.toOldOrSame("SELECT * FROM A NATURAL JOIN B", true).sql(), "SELECT * FROM A NATURAL JOIN B");
+    String fsql = "SELECT SUM(a.X), to_char(a.D, 'x(1)'), DBMS_RANDOM.VALUE(), COUNT(*) FROM A a WHERE a.X IN (1) AND EXISTS (SELECT 1 FROM B)";
+    List<int[]> fns = SqlParts.functionSpans(fsql);
+    eq(fns.size(), 4);
+    eq(fsql.substring(fns.get(2)[0], fns.get(2)[1]), "DBMS_RANDOM.VALUE");
+    eq(SqlParts.functionSpans("INSERT INTO T (A, B) VALUES (1, NVL(2, 3))").size(), 1);
     List<int[]> cols = SqlParts.columnSpans("SELECT o.STATUS, c . NAME, PKG.F(1), 'x.Y' -- a.B\n FROM T o");
     eq(cols.size(), 2);
     eq(cols.get(0)[0], 7);
