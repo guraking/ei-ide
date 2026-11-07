@@ -1944,76 +1944,6 @@ public final class Examples {
             FROM ORDERS o
            WHERE o.ORDER_DT >= CAST(:fromDt AS DATE)
              AND o.ORDER_DT < CAST(:toDt AS DATE) + 1"""),
-      new Example("기간별 통계", "월별 신규 고객 수 (첫 주문 기준)", "고객마다 첫 주문한 달을 구해 달마다 셉니다.",
-          """
-          SELECT
-                 f.YM
-               , COUNT(*) AS NEW_CUST
-            FROM (
-                  SELECT
-                         o.CUST_ID
-                       , TO_CHAR(MIN(o.ORDER_DT), 'YYYY-MM') AS YM
-                    FROM ORDERS o
-                   GROUP BY
-                         o.CUST_ID
-                 ) f
-           GROUP BY
-                 f.YM
-           ORDER BY
-                 f.YM""",
-          """
-          SELECT
-                 f.YM
-               , COUNT(*) AS NEW_CUST
-            FROM (
-                  SELECT
-                         o.CUST_ID
-                       , TO_CHAR(MIN(o.ORDER_DT), 'YYYY-MM') AS YM
-                    FROM ORDERS o
-                   GROUP BY
-                         o.CUST_ID
-                 ) f
-           GROUP BY
-                 f.YM
-           ORDER BY
-                 f.YM"""),
-      new Example("기간별 통계", "월별 재구매 고객 (그달 2번 이상)", "한 달에 두 번 이상 주문한 고객 수.",
-          """
-          SELECT
-                 r.YM
-               , COUNT(*) AS REPEAT_CUST
-            FROM (
-                  SELECT
-                         TO_CHAR(o.ORDER_DT, 'YYYY-MM') AS YM
-                       , o.CUST_ID
-                    FROM ORDERS o
-                   GROUP BY
-                         TO_CHAR(o.ORDER_DT, 'YYYY-MM')
-                       , o.CUST_ID
-                  HAVING COUNT(*) >= 2
-                 ) r
-           GROUP BY
-                 r.YM
-           ORDER BY
-                 r.YM""",
-          """
-          SELECT
-                 r.YM
-               , COUNT(*) AS REPEAT_CUST
-            FROM (
-                  SELECT
-                         TO_CHAR(o.ORDER_DT, 'YYYY-MM') AS YM
-                       , o.CUST_ID
-                    FROM ORDERS o
-                   GROUP BY
-                         TO_CHAR(o.ORDER_DT, 'YYYY-MM')
-                       , o.CUST_ID
-                  HAVING COUNT(*) >= 2
-                 ) r
-           GROUP BY
-                 r.YM
-           ORDER BY
-                 r.YM"""),
       new Example("기간별 통계", "기간의 영업일 수 (주말 빼고)", "시작일 ~ 끝일 중 토 · 일을 뺀 날 수. 공휴일 표가 있으면 NOT EXISTS 로 더 뺍니다.",
           """
           SELECT
@@ -2062,76 +1992,6 @@ public final class Examples {
                  TO_CHAR(o.ORDER_DT, 'IW')
            ORDER BY
                  WK"""),
-      new Example("기간별 통계", "월별 3개월 이동 평균 매출", "이번 달 포함 앞 3달 평균. 들쭉날쭉한 달 매출을 부드럽게 봅니다.",
-          """
-          SELECT
-                 x.YM
-               , x.AMT
-               , ROUND(AVG(x.AMT) OVER (ORDER BY x.YM ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)) AS MA3
-            FROM (
-                  SELECT
-                         TO_CHAR(s.SO_DT, 'YYYY-MM') AS YM
-                       , SUM(s.QTY * s.PRICE) AS AMT
-                    FROM SALES_ORDER s
-                   GROUP BY
-                         TO_CHAR(s.SO_DT, 'YYYY-MM')
-                 ) x
-           ORDER BY
-                 x.YM""",
-          """
-          SELECT
-                 x.YM
-               , x.AMT
-               , ROUND(AVG(x.AMT) OVER (ORDER BY x.YM ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)) AS MA3
-            FROM (
-                  SELECT
-                         TO_CHAR(s.SO_DT, 'YYYY-MM') AS YM
-                       , SUM(s.QTY * s.PRICE) AS AMT
-                    FROM SALES_ORDER s
-                   GROUP BY
-                         TO_CHAR(s.SO_DT, 'YYYY-MM')
-                 ) x
-           ORDER BY
-                 x.YM"""),
-      new Example("기간별 통계", "상위 20% 고객이 차지하는 매출 비중 (파레토)", "고객을 매출 순으로 다섯 등분해 맨 위 묶음의 매출 비중을 봅니다.",
-          """
-          SELECT
-                 x.BUCKET
-               , COUNT(*) AS CUST_CNT
-               , SUM(x.AMT) AS AMT
-               , ROUND(SUM(x.AMT) * 100 / SUM(SUM(x.AMT)) OVER (), 1) AS PCT
-            FROM (
-                  SELECT
-                         o.CUST_ID
-                       , SUM(o.AMOUNT) AS AMT
-                       , NTILE(5) OVER (ORDER BY SUM(o.AMOUNT) DESC) AS BUCKET
-                    FROM ORDERS o
-                   GROUP BY
-                         o.CUST_ID
-                 ) x
-           GROUP BY
-                 x.BUCKET
-           ORDER BY
-                 x.BUCKET""",
-          """
-          SELECT
-                 x.BUCKET
-               , COUNT(*) AS CUST_CNT
-               , SUM(x.AMT) AS AMT
-               , ROUND(SUM(x.AMT) * 100 / SUM(SUM(x.AMT)) OVER (), 1) AS PCT
-            FROM (
-                  SELECT
-                         o.CUST_ID
-                       , SUM(o.AMOUNT) AS AMT
-                       , NTILE(5) OVER (ORDER BY SUM(o.AMOUNT) DESC) AS BUCKET
-                    FROM ORDERS o
-                   GROUP BY
-                         o.CUST_ID
-                 ) x
-           GROUP BY
-                 x.BUCKET
-           ORDER BY
-                 x.BUCKET"""),
       new Example("분석 함수", "순위 (RANK · DENSE_RANK · ROW_NUMBER)", "같은 금액일 때 RANK 는 1,1,3, DENSE_RANK 는 1,1,2, ROW_NUMBER 는 1,2,3.",
           """
           SELECT
@@ -2689,82 +2549,6 @@ public final class Examples {
           SELECT
                  s.*
             FROM sub s"""),
-      new Example("계층", "조직도 위에서 아래로 (CONNECT BY 기본)", "대표부터 아래로 펼칩니다. START WITH 는 시작할 줄, CONNECT BY PRIOR 자식칼럼 쪽이 아래로 내려가는 방향입니다.",
-          """
-          SELECT
-                 LEVEL AS LVL
-               , LPAD(' ', (LEVEL - 1) * 4) || e.EMP_NAME AS EMP_NAME
-               , e.EMP_ID
-               , e.MGR_ID
-            FROM EMP e
-           START WITH e.MGR_ID IS NULL
-          CONNECT BY PRIOR e.EMP_ID = e.MGR_ID
-           ORDER SIBLINGS BY
-                 e.EMP_NAME""",
-          """
-          WITH RECURSIVE t AS (
-          SELECT
-                 1 AS LVL
-               , e.EMP_ID
-               , e.MGR_ID
-               , e.EMP_NAME
-               , CAST(e.EMP_NAME AS VARCHAR(4000)) AS SORT_PATH
-            FROM EMP e
-           WHERE e.MGR_ID IS NULL
-           UNION ALL
-          SELECT
-                 t.LVL + 1
-               , e.EMP_ID
-               , e.MGR_ID
-               , e.EMP_NAME
-               , CAST(t.SORT_PATH || '/' || e.EMP_NAME AS VARCHAR(4000))
-            FROM EMP e
-            JOIN t
-              ON e.MGR_ID = t.EMP_ID
-           WHERE t.LVL < 100
-          )
-          SELECT
-                 t.LVL
-               , REPEAT(' ', (t.LVL - 1) * 4) || t.EMP_NAME AS EMP_NAME
-               , t.EMP_ID
-               , t.MGR_ID
-            FROM t
-           ORDER BY
-                 t.SORT_PATH"""),
-      new Example("계층", "아래에서 위로 (내 상사 줄줄이)", "한 사람에서 시작해 대표까지 올라갑니다. PRIOR 를 부모 칼럼 쪽에 붙이면 위로 갑니다.",
-          """
-          SELECT
-                 LEVEL AS UP
-               , e.EMP_ID
-               , e.EMP_NAME
-            FROM EMP e
-           START WITH e.EMP_ID = :empId
-          CONNECT BY e.EMP_ID = PRIOR e.MGR_ID""",
-          """
-          WITH RECURSIVE up AS (
-          SELECT
-                 1 AS UP
-               , e.EMP_ID
-               , e.MGR_ID
-               , e.EMP_NAME
-            FROM EMP e
-           WHERE e.EMP_ID = CAST(:empId AS INTEGER)
-           UNION ALL
-          SELECT
-                 u.UP + 1
-               , e.EMP_ID
-               , e.MGR_ID
-               , e.EMP_NAME
-            FROM EMP e
-            JOIN up u
-              ON e.EMP_ID = u.MGR_ID
-           WHERE u.UP < 100
-          )
-          SELECT
-                 u.UP
-               , u.EMP_ID
-               , u.EMP_NAME
-            FROM up u"""),
       new Example("계층", "경로를 한 칸에 (SYS_CONNECT_BY_PATH)", "'본사 > 개발본부 > 개발1팀' 처럼 맨 위부터의 경로를 붙입니다.",
           """
           SELECT
@@ -3085,87 +2869,6 @@ public final class Examples {
             FROM t
            ORDER BY
                  t.SORT_KEY"""),
-      new Example("계층", "부서 아래 직원 모두 (하위 부서 포함)", "고른 부서와 그 아래 모든 부서에 속한 직원.",
-          """
-          SELECT
-                 e.*
-            FROM EMP e
-           WHERE e.DEPT_ID IN (
-                  SELECT d.DEPT_ID
-                    FROM DEPT d
-                   START WITH d.DEPT_ID = :deptId
-                 CONNECT BY PRIOR d.DEPT_ID = d.PARENT_DEPT_ID
-                 )""",
-          """
-          WITH RECURSIVE sub AS (
-          SELECT
-                 d.DEPT_ID
-            FROM DEPT d
-           WHERE d.DEPT_ID = CAST(:deptId AS INTEGER)
-           UNION
-          SELECT
-                 d.DEPT_ID
-            FROM DEPT d
-            JOIN sub s
-              ON d.PARENT_DEPT_ID = s.DEPT_ID
-          )
-          SELECT
-                 e.*
-            FROM EMP e
-           WHERE e.DEPT_ID IN (SELECT s.DEPT_ID FROM sub s)"""),
-      new Example("계층", "부서별 인원 · 급여 합 (하위 부서까지 합침)", "부서마다 그 아래 부서까지 합친 인원과 급여 합.",
-          """
-          SELECT
-                 d.DEPT_ID
-               , d.DEPT_NAME
-               , (
-                  SELECT COUNT(*)
-                    FROM EMP e
-                   WHERE e.DEPT_ID IN (
-                          SELECT s.DEPT_ID
-                            FROM DEPT s
-                           START WITH s.DEPT_ID = d.DEPT_ID
-                         CONNECT BY PRIOR s.DEPT_ID = s.PARENT_DEPT_ID
-                         )
-                 ) AS EMP_CNT
-               , (
-                  SELECT SUM(e.SAL)
-                    FROM EMP e
-                   WHERE e.DEPT_ID IN (
-                          SELECT s.DEPT_ID
-                            FROM DEPT s
-                           START WITH s.DEPT_ID = d.DEPT_ID
-                         CONNECT BY PRIOR s.DEPT_ID = s.PARENT_DEPT_ID
-                         )
-                 ) AS SAL_SUM
-            FROM DEPT d""",
-          """
-          WITH RECURSIVE pair AS (
-          SELECT
-                 d.DEPT_ID AS ROOT_ID
-               , d.DEPT_ID
-            FROM DEPT d
-           UNION
-          SELECT
-                 p.ROOT_ID
-               , d.DEPT_ID
-            FROM DEPT d
-            JOIN pair p
-              ON d.PARENT_DEPT_ID = p.DEPT_ID
-          )
-          SELECT
-                 d.DEPT_ID
-               , d.DEPT_NAME
-               , COUNT(e.EMP_ID) AS EMP_CNT
-               , SUM(e.SAL) AS SAL_SUM
-            FROM DEPT d
-            JOIN pair p
-              ON p.ROOT_ID = d.DEPT_ID
-            LEFT JOIN EMP e
-              ON e.DEPT_ID = p.DEPT_ID
-           GROUP BY
-                 d.DEPT_ID
-               , d.DEPT_NAME"""),
       new Example("계층", "같은 부모의 형제들", "고른 메뉴와 부모가 같은 다른 메뉴.",
           """
           SELECT
@@ -3371,31 +3074,6 @@ public final class Examples {
             FROM WORK_RESULT r
            GROUP BY
                  r.WO_NO"""),
-      new Example("피벗", "순번을 칸으로 (결재자 1 · 2 · 3 을 한 줄에)", "문서마다 결재 순번 1~3 의 결재자와 상태를 칸으로 놓습니다.",
-          """
-          SELECT
-                 a.DOC_ID
-               , MAX(CASE WHEN a.LINE_SEQ = 1 THEN a.APPROVER_ID END) AS APPR1
-               , MAX(CASE WHEN a.LINE_SEQ = 1 THEN a.STATUS END) AS STAT1
-               , MAX(CASE WHEN a.LINE_SEQ = 2 THEN a.APPROVER_ID END) AS APPR2
-               , MAX(CASE WHEN a.LINE_SEQ = 2 THEN a.STATUS END) AS STAT2
-               , MAX(CASE WHEN a.LINE_SEQ = 3 THEN a.APPROVER_ID END) AS APPR3
-               , MAX(CASE WHEN a.LINE_SEQ = 3 THEN a.STATUS END) AS STAT3
-            FROM APPROVAL a
-           GROUP BY
-                 a.DOC_ID""",
-          """
-          SELECT
-                 a.DOC_ID
-               , MAX(CASE WHEN a.LINE_SEQ = 1 THEN a.APPROVER_ID END) AS APPR1
-               , MAX(CASE WHEN a.LINE_SEQ = 1 THEN a.STATUS END) AS STAT1
-               , MAX(CASE WHEN a.LINE_SEQ = 2 THEN a.APPROVER_ID END) AS APPR2
-               , MAX(CASE WHEN a.LINE_SEQ = 2 THEN a.STATUS END) AS STAT2
-               , MAX(CASE WHEN a.LINE_SEQ = 3 THEN a.APPROVER_ID END) AS APPR3
-               , MAX(CASE WHEN a.LINE_SEQ = 3 THEN a.STATUS END) AS STAT3
-            FROM APPROVAL a
-           GROUP BY
-                 a.DOC_ID"""),
       new Example("피벗", "칸 여러 개를 줄로 (UNION ALL 언피벗)", "어느 DB 에서나 되는 언피벗. 양품 · 불량 칸을 구분 · 수량 두 칸의 줄로 바꿉니다.",
           """
           SELECT
@@ -9111,6 +8789,31 @@ public final class Examples {
                  c.GROUP_CD
            ORDER BY
                  c.GROUP_CD"""),
+      new Example("결재 · 권한 · 코드", "순번을 칸으로 (결재자 1 · 2 · 3 을 한 줄에)", "문서마다 결재 순번 1~3 의 결재자와 상태를 칸으로 놓습니다.",
+          """
+          SELECT
+                 a.DOC_ID
+               , MAX(CASE WHEN a.LINE_SEQ = 1 THEN a.APPROVER_ID END) AS APPR1
+               , MAX(CASE WHEN a.LINE_SEQ = 1 THEN a.STATUS END) AS STAT1
+               , MAX(CASE WHEN a.LINE_SEQ = 2 THEN a.APPROVER_ID END) AS APPR2
+               , MAX(CASE WHEN a.LINE_SEQ = 2 THEN a.STATUS END) AS STAT2
+               , MAX(CASE WHEN a.LINE_SEQ = 3 THEN a.APPROVER_ID END) AS APPR3
+               , MAX(CASE WHEN a.LINE_SEQ = 3 THEN a.STATUS END) AS STAT3
+            FROM APPROVAL a
+           GROUP BY
+                 a.DOC_ID""",
+          """
+          SELECT
+                 a.DOC_ID
+               , MAX(CASE WHEN a.LINE_SEQ = 1 THEN a.APPROVER_ID END) AS APPR1
+               , MAX(CASE WHEN a.LINE_SEQ = 1 THEN a.STATUS END) AS STAT1
+               , MAX(CASE WHEN a.LINE_SEQ = 2 THEN a.APPROVER_ID END) AS APPR2
+               , MAX(CASE WHEN a.LINE_SEQ = 2 THEN a.STATUS END) AS STAT2
+               , MAX(CASE WHEN a.LINE_SEQ = 3 THEN a.APPROVER_ID END) AS APPR3
+               , MAX(CASE WHEN a.LINE_SEQ = 3 THEN a.STATUS END) AS STAT3
+            FROM APPROVAL a
+           GROUP BY
+                 a.DOC_ID"""),
       new Example("채번 · 데이터 손질", "채번: 연월 + 일련번호 (그달 첫 번호 0001)", "R + YYYYMM + 4자리. 그달 가장 큰 번호 + 1, 없으면 1. 동시에 두 사람이 받으면 같은 번호가 나오므로 번호 표를 잠그거나 시퀀스와 함께 씁니다.",
           """
           SELECT
@@ -10352,6 +10055,146 @@ public final class Examples {
                    WHERE o.CUST_ID = c.CUST_ID
                      AND o.ORDER_DT >= DATE_TRUNC('quarter', CURRENT_DATE)
                  )"""),
+      new Example("영업 · 구매 · 회계", "월별 신규 고객 수 (첫 주문 기준)", "고객마다 첫 주문한 달을 구해 달마다 셉니다.",
+          """
+          SELECT
+                 f.YM
+               , COUNT(*) AS NEW_CUST
+            FROM (
+                  SELECT
+                         o.CUST_ID
+                       , TO_CHAR(MIN(o.ORDER_DT), 'YYYY-MM') AS YM
+                    FROM ORDERS o
+                   GROUP BY
+                         o.CUST_ID
+                 ) f
+           GROUP BY
+                 f.YM
+           ORDER BY
+                 f.YM""",
+          """
+          SELECT
+                 f.YM
+               , COUNT(*) AS NEW_CUST
+            FROM (
+                  SELECT
+                         o.CUST_ID
+                       , TO_CHAR(MIN(o.ORDER_DT), 'YYYY-MM') AS YM
+                    FROM ORDERS o
+                   GROUP BY
+                         o.CUST_ID
+                 ) f
+           GROUP BY
+                 f.YM
+           ORDER BY
+                 f.YM"""),
+      new Example("영업 · 구매 · 회계", "월별 재구매 고객 (그달 2번 이상)", "한 달에 두 번 이상 주문한 고객 수.",
+          """
+          SELECT
+                 r.YM
+               , COUNT(*) AS REPEAT_CUST
+            FROM (
+                  SELECT
+                         TO_CHAR(o.ORDER_DT, 'YYYY-MM') AS YM
+                       , o.CUST_ID
+                    FROM ORDERS o
+                   GROUP BY
+                         TO_CHAR(o.ORDER_DT, 'YYYY-MM')
+                       , o.CUST_ID
+                  HAVING COUNT(*) >= 2
+                 ) r
+           GROUP BY
+                 r.YM
+           ORDER BY
+                 r.YM""",
+          """
+          SELECT
+                 r.YM
+               , COUNT(*) AS REPEAT_CUST
+            FROM (
+                  SELECT
+                         TO_CHAR(o.ORDER_DT, 'YYYY-MM') AS YM
+                       , o.CUST_ID
+                    FROM ORDERS o
+                   GROUP BY
+                         TO_CHAR(o.ORDER_DT, 'YYYY-MM')
+                       , o.CUST_ID
+                  HAVING COUNT(*) >= 2
+                 ) r
+           GROUP BY
+                 r.YM
+           ORDER BY
+                 r.YM"""),
+      new Example("영업 · 구매 · 회계", "월별 3개월 이동 평균 매출", "이번 달 포함 앞 3달 평균. 들쭉날쭉한 달 매출을 부드럽게 봅니다.",
+          """
+          SELECT
+                 x.YM
+               , x.AMT
+               , ROUND(AVG(x.AMT) OVER (ORDER BY x.YM ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)) AS MA3
+            FROM (
+                  SELECT
+                         TO_CHAR(s.SO_DT, 'YYYY-MM') AS YM
+                       , SUM(s.QTY * s.PRICE) AS AMT
+                    FROM SALES_ORDER s
+                   GROUP BY
+                         TO_CHAR(s.SO_DT, 'YYYY-MM')
+                 ) x
+           ORDER BY
+                 x.YM""",
+          """
+          SELECT
+                 x.YM
+               , x.AMT
+               , ROUND(AVG(x.AMT) OVER (ORDER BY x.YM ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)) AS MA3
+            FROM (
+                  SELECT
+                         TO_CHAR(s.SO_DT, 'YYYY-MM') AS YM
+                       , SUM(s.QTY * s.PRICE) AS AMT
+                    FROM SALES_ORDER s
+                   GROUP BY
+                         TO_CHAR(s.SO_DT, 'YYYY-MM')
+                 ) x
+           ORDER BY
+                 x.YM"""),
+      new Example("영업 · 구매 · 회계", "상위 20% 고객이 차지하는 매출 비중 (파레토)", "고객을 매출 순으로 다섯 등분해 맨 위 묶음의 매출 비중을 봅니다.",
+          """
+          SELECT
+                 x.BUCKET
+               , COUNT(*) AS CUST_CNT
+               , SUM(x.AMT) AS AMT
+               , ROUND(SUM(x.AMT) * 100 / SUM(SUM(x.AMT)) OVER (), 1) AS PCT
+            FROM (
+                  SELECT
+                         o.CUST_ID
+                       , SUM(o.AMOUNT) AS AMT
+                       , NTILE(5) OVER (ORDER BY SUM(o.AMOUNT) DESC) AS BUCKET
+                    FROM ORDERS o
+                   GROUP BY
+                         o.CUST_ID
+                 ) x
+           GROUP BY
+                 x.BUCKET
+           ORDER BY
+                 x.BUCKET""",
+          """
+          SELECT
+                 x.BUCKET
+               , COUNT(*) AS CUST_CNT
+               , SUM(x.AMT) AS AMT
+               , ROUND(SUM(x.AMT) * 100 / SUM(SUM(x.AMT)) OVER (), 1) AS PCT
+            FROM (
+                  SELECT
+                         o.CUST_ID
+                       , SUM(o.AMOUNT) AS AMT
+                       , NTILE(5) OVER (ORDER BY SUM(o.AMOUNT) DESC) AS BUCKET
+                    FROM ORDERS o
+                   GROUP BY
+                         o.CUST_ID
+                 ) x
+           GROUP BY
+                 x.BUCKET
+           ORDER BY
+                 x.BUCKET"""),
       new Example("생산 · 품질", "소요량 계산 (MRP: 생산 계획 × BOM − 재고 − 발주 잔량)", "계획 수량으로 BOM 을 끝까지 펼쳐 부품별 총 필요량을 구하고, 지금 재고와 들어올 발주 잔량을 빼 더 사야 할 양을 냅니다.",
           """
           WITH need (PART_NO, QTY, LVL) AS (
@@ -11413,6 +11256,163 @@ public final class Examples {
            GROUP BY
                  g.EMP_ID
                , g.GRANTED_DAYS"""),
+      new Example("인사 · 근태", "조직도 위에서 아래로 (CONNECT BY 기본)", "대표부터 아래로 펼칩니다. START WITH 는 시작할 줄, CONNECT BY PRIOR 자식칼럼 쪽이 아래로 내려가는 방향입니다.",
+          """
+          SELECT
+                 LEVEL AS LVL
+               , LPAD(' ', (LEVEL - 1) * 4) || e.EMP_NAME AS EMP_NAME
+               , e.EMP_ID
+               , e.MGR_ID
+            FROM EMP e
+           START WITH e.MGR_ID IS NULL
+          CONNECT BY PRIOR e.EMP_ID = e.MGR_ID
+           ORDER SIBLINGS BY
+                 e.EMP_NAME""",
+          """
+          WITH RECURSIVE t AS (
+          SELECT
+                 1 AS LVL
+               , e.EMP_ID
+               , e.MGR_ID
+               , e.EMP_NAME
+               , CAST(e.EMP_NAME AS VARCHAR(4000)) AS SORT_PATH
+            FROM EMP e
+           WHERE e.MGR_ID IS NULL
+           UNION ALL
+          SELECT
+                 t.LVL + 1
+               , e.EMP_ID
+               , e.MGR_ID
+               , e.EMP_NAME
+               , CAST(t.SORT_PATH || '/' || e.EMP_NAME AS VARCHAR(4000))
+            FROM EMP e
+            JOIN t
+              ON e.MGR_ID = t.EMP_ID
+           WHERE t.LVL < 100
+          )
+          SELECT
+                 t.LVL
+               , REPEAT(' ', (t.LVL - 1) * 4) || t.EMP_NAME AS EMP_NAME
+               , t.EMP_ID
+               , t.MGR_ID
+            FROM t
+           ORDER BY
+                 t.SORT_PATH"""),
+      new Example("인사 · 근태", "아래에서 위로 (내 상사 줄줄이)", "한 사람에서 시작해 대표까지 올라갑니다. PRIOR 를 부모 칼럼 쪽에 붙이면 위로 갑니다.",
+          """
+          SELECT
+                 LEVEL AS UP
+               , e.EMP_ID
+               , e.EMP_NAME
+            FROM EMP e
+           START WITH e.EMP_ID = :empId
+          CONNECT BY e.EMP_ID = PRIOR e.MGR_ID""",
+          """
+          WITH RECURSIVE up AS (
+          SELECT
+                 1 AS UP
+               , e.EMP_ID
+               , e.MGR_ID
+               , e.EMP_NAME
+            FROM EMP e
+           WHERE e.EMP_ID = CAST(:empId AS INTEGER)
+           UNION ALL
+          SELECT
+                 u.UP + 1
+               , e.EMP_ID
+               , e.MGR_ID
+               , e.EMP_NAME
+            FROM EMP e
+            JOIN up u
+              ON e.EMP_ID = u.MGR_ID
+           WHERE u.UP < 100
+          )
+          SELECT
+                 u.UP
+               , u.EMP_ID
+               , u.EMP_NAME
+            FROM up u"""),
+      new Example("인사 · 근태", "부서 아래 직원 모두 (하위 부서 포함)", "고른 부서와 그 아래 모든 부서에 속한 직원.",
+          """
+          SELECT
+                 e.*
+            FROM EMP e
+           WHERE e.DEPT_ID IN (
+                  SELECT d.DEPT_ID
+                    FROM DEPT d
+                   START WITH d.DEPT_ID = :deptId
+                 CONNECT BY PRIOR d.DEPT_ID = d.PARENT_DEPT_ID
+                 )""",
+          """
+          WITH RECURSIVE sub AS (
+          SELECT
+                 d.DEPT_ID
+            FROM DEPT d
+           WHERE d.DEPT_ID = CAST(:deptId AS INTEGER)
+           UNION
+          SELECT
+                 d.DEPT_ID
+            FROM DEPT d
+            JOIN sub s
+              ON d.PARENT_DEPT_ID = s.DEPT_ID
+          )
+          SELECT
+                 e.*
+            FROM EMP e
+           WHERE e.DEPT_ID IN (SELECT s.DEPT_ID FROM sub s)"""),
+      new Example("인사 · 근태", "부서별 인원 · 급여 합 (하위 부서까지 합침)", "부서마다 그 아래 부서까지 합친 인원과 급여 합.",
+          """
+          SELECT
+                 d.DEPT_ID
+               , d.DEPT_NAME
+               , (
+                  SELECT COUNT(*)
+                    FROM EMP e
+                   WHERE e.DEPT_ID IN (
+                          SELECT s.DEPT_ID
+                            FROM DEPT s
+                           START WITH s.DEPT_ID = d.DEPT_ID
+                         CONNECT BY PRIOR s.DEPT_ID = s.PARENT_DEPT_ID
+                         )
+                 ) AS EMP_CNT
+               , (
+                  SELECT SUM(e.SAL)
+                    FROM EMP e
+                   WHERE e.DEPT_ID IN (
+                          SELECT s.DEPT_ID
+                            FROM DEPT s
+                           START WITH s.DEPT_ID = d.DEPT_ID
+                         CONNECT BY PRIOR s.DEPT_ID = s.PARENT_DEPT_ID
+                         )
+                 ) AS SAL_SUM
+            FROM DEPT d""",
+          """
+          WITH RECURSIVE pair AS (
+          SELECT
+                 d.DEPT_ID AS ROOT_ID
+               , d.DEPT_ID
+            FROM DEPT d
+           UNION
+          SELECT
+                 p.ROOT_ID
+               , d.DEPT_ID
+            FROM DEPT d
+            JOIN pair p
+              ON d.PARENT_DEPT_ID = p.DEPT_ID
+          )
+          SELECT
+                 d.DEPT_ID
+               , d.DEPT_NAME
+               , COUNT(e.EMP_ID) AS EMP_CNT
+               , SUM(e.SAL) AS SAL_SUM
+            FROM DEPT d
+            JOIN pair p
+              ON p.ROOT_ID = d.DEPT_ID
+            LEFT JOIN EMP e
+              ON e.DEPT_ID = p.DEPT_ID
+           GROUP BY
+                 d.DEPT_ID
+               , d.DEPT_NAME"""),
       new Example("설계 변경 · 개발 프로젝트", "설계 변경(ECO) 영향 부품과 그 부품을 쓰는 상위 부품", "ECO 에 걸린 부품마다 바로 위 모부품까지 붙여 영향 범위를 봅니다.",
           """
           SELECT
