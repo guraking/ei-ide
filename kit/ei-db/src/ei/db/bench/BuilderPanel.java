@@ -724,8 +724,17 @@ final class BuilderPanel {
 
   /** 표를 VISIBLE_ROWS 줄 높이로 보이는 스크롤 칸(가로는 줄 폭을 다 채운다). */
   private static JComponent scroll(JBTable table) {
-    table.setVisibleRowCount(VISIBLE_ROWS);
-    return ScrollPaneFactory.createScrollPane(table);
+    // JBTable 은 행이 없으면 보이는 높이를 머리줄만큼으로 잡아 빈 표 · 안내 글이 잘린다. 행 수와 상관없이 VISIBLE_ROWS 줄 높이를 둔다(폭은 레이아웃이 정한다).
+    return new JBScrollPane(table) {
+      @Override
+      public java.awt.Dimension getPreferredSize() {
+        java.awt.Dimension d = super.getPreferredSize();
+        java.awt.Insets in = getInsets();
+        int header = table.getTableHeader() == null ? 0 : table.getTableHeader().getPreferredSize().height;
+        d.height = header + table.getRowHeight() * VISIBLE_ROWS + in.top + in.bottom;
+        return d;
+      }
+    };
   }
 
   /** 표가 하나면 모든 칼럼을, 여럿이면 「모든 표 · 표마다」 를 골라 체크한다. */
