@@ -145,7 +145,7 @@ public final class ExplainPlan {
   }
 
   /** SELECT · WITH 로 시작하고 바꾸는 문장이 아닌 것. 「실제 시간 재기」 단추를 켤지도 이것으로 정한다. */
-  static boolean isQuery(String sql) {
+  public static boolean isQuery(String sql) {
     String head = SqlText.code(sql).strip().toUpperCase(Locale.ROOT);
     return (head.startsWith("SELECT") || head.startsWith("WITH")) && !SqlGuard.isWrite(sql);
   }

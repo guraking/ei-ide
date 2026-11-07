@@ -87,6 +87,37 @@ public final class Patterns {
     @Override public String toString() { return label; }
   }
 
+  /** 칸 이름: 무늬마다 그 일에 맞는 이름, 없으면 Field 기본 이름. */
+  public static String label(Kind k, Field f) {
+    String own = switch (k) {
+      case HIERARCHY -> f == Field.KEYS ? "자기 ID 칼럼 (예: MENU_ID)" : f == Field.PARENT ? "부모 ID 칼럼 (예: PARENT_MENU_ID)" : null;
+      case LATEST -> f == Field.KEYS ? "이 값마다 1건 (예: CUST_ID)" : f == Field.ORDER ? "최신을 가를 칼럼 (예: REG_DT)" : null;
+      case DUPLICATE_ROWS -> f == Field.ORDER ? "남길 행을 가를 칼럼 (큰 것 = RN 1)" : null;
+      case EXISTS, NOT_EXISTS -> f == Field.TABLE2 ? "짝을 찾을 표" : f == Field.KEYS ? "두 표에 같은 이름으로 있는 칼럼" : null;
+      case DIFF -> f == Field.TABLE2 ? "비교할 표 (예: 백업 표)" : f == Field.KEYS ? "비교할 칼럼 (두 표에 같은 이름)" : null;
+      case UPSERT -> f == Field.KEYS ? "찾을 칼럼 (PK)" : f == Field.COLS ? "넣을 · 고칠 칼럼" : null;
+      case PIVOT -> f == Field.GROUP ? "줄로 둘 칼럼" : f == Field.STATUS ? "칸으로 펼칠 칼럼" : f == Field.STATUS_VALUES ? "칸이 될 값들 (쉼표로)" : f == Field.VALUE ? "더할 값 칼럼" : null;
+      case RANK -> f == Field.VALUE ? "순위 · 누적할 값 칼럼" : f == Field.ORDER ? "누적 순서 칼럼 (예: 날짜)" : null;
+      case CTE -> f == Field.GROUP ? "묶을 칼럼" : null;
+      case STATS, ROLLUP -> f == Field.GROUP ? "묶을 칼럼 (비우면 전체)" : null;
+      case COUNT_BY -> f == Field.GROUP ? "묶을 칼럼 (비우면 전체 건수)" : null;
+      case BY_PERIOD -> f == Field.VALUE ? "합계 낼 값 칼럼 (비우면 건수만)" : null;
+      case TOP_N -> f == Field.VALUE ? "합계로 순위 낼 칼럼 (비우면 건수)" : null;
+      default -> null;
+    };
+    return own != null ? own : f.label;
+  }
+
+  /** 칸이 비었을 때 회색으로 보일 예시. */
+  public static String hint(Field f) {
+    return switch (f) {
+      case TABLE, TABLE2 -> "예: TB_ORDER  (치거나 「고르기…」)";
+      case KEYS, COLS -> "예: CUST_ID, ORDER_NO  (쉼표로 여러 개)";
+      case STATUS_VALUES -> "예: 접수, 진행, 완료";
+      default -> "칼럼 이름  (치거나 「고르기…」)";
+    };
+  }
+
   /** 채운 값. 칼럼 목록은 쉼표로 나눈 이름, 빈 칸은 빈 글. */
   public record Fill(DbKind kind, QueryBuilder.JoinStyle style, QueryBuilder.Bind bind, String table, String table2, List<String> keys,
                      List<String> cols, String group, String date, String value, String order, String parent, String status,
@@ -109,13 +140,18 @@ public final class Patterns {
     if (k.fields.contains(Field.PARENT) && blank(f.parent())) out.add(Field.PARENT);
     if (k.fields.contains(Field.STATUS) && blank(f.status())) out.add(Field.STATUS);
     if (k.fields.contains(Field.STATUS_VALUES) && f.statusValues().isEmpty()) out.add(Field.STATUS_VALUES);
-    if ((k == Kind.RANK) && blank(f.value())) out.add(Field.VALUE);
+    if ((k == Kind.RANK || k == Kind.STATS) && blank(f.value())) out.add(Field.VALUE);
     if ((k == Kind.CTE || k == Kind.RATIO || k == Kind.TOP_N || k == Kind.ROLLUP || k == Kind.PIVOT) && blank(f.group())) out.add(Field.GROUP);
     return out;
   }
 
-  /** 문장. missing 이 비지 않으면 IllegalArgumentException. */
+  /** 문장. missing 이 비지 않으면 IllegalArgumentException. 값 자리가 MyBatis 면 부등호 줄을 CDATA 로 감싼다. */
   public static String render(Kind k, Fill f) {
+    String sql = body(k, f);
+    return f.bind() == QueryBuilder.Bind.MYBATIS ? QueryBuilder.cdata(sql) : sql;
+  }
+
+  private static String body(Kind k, Fill f) {
     if (!missing(k, f).isEmpty()) throw new IllegalArgumentException("채울 칸이 남았습니다.");
     DbKind db = f.kind();
     String t = name(db, f.table());
@@ -233,9 +269,12 @@ public final class Patterns {
       return head + "SELECT\n       LEVEL AS LVL\n     , SYS_CONNECT_BY_PATH(" + a + "." + id + ", ' > ') AS PATH\n     , " + a + ".*\n  FROM " + t + " " + a + "\n"
           + " START WITH " + a + "." + parent + " IS NULL\n CONNECT BY PRIOR " + a + "." + id + " = " + a + "." + parent + "\n ORDER SIBLINGS BY\n       " + a + "." + id;
     }
-    return head + "WITH RECURSIVE tree AS (\n    SELECT\n           1 AS LVL\n         , CAST(" + a + "." + id + " AS VARCHAR(4000)) AS PATH\n         , " + a + ".*\n"
+    // 고리(자기 자신 · 서로를 부모로 가리키는 행)가 있으면 WITH RECURSIVE 는 끝없이 돈다. 경로에 이미 있는 ID 는 다시 펼치지 않는다.
+    // Oracle CONNECT BY 는 고리에서 ORA-01436 으로 멈추므로 그대로 둔다.
+    return head.replace("\n", "(고리는 한 번만 펼침)\n") + "WITH RECURSIVE tree AS (\n    SELECT\n           1 AS LVL\n         , CAST(" + a + "." + id + " AS VARCHAR(4000)) AS PATH\n         , " + a + ".*\n"
         + "      FROM " + t + " " + a + "\n     WHERE " + a + "." + parent + " IS NULL\n    UNION ALL\n    SELECT\n           p.LVL + 1\n"
-        + "         , p.PATH || ' > ' || " + a + "." + id + "\n         , " + a + ".*\n      FROM " + t + " " + a + "\n     INNER JOIN tree p\n        ON " + a + "." + parent + " = p." + id + "\n)\n"
+        + "         , CAST(p.PATH || ' > ' || " + a + "." + id + " AS VARCHAR(4000))\n         , " + a + ".*\n      FROM " + t + " " + a + "\n     INNER JOIN tree p\n        ON " + a + "." + parent + " = p." + id + "\n"
+        + "     WHERE (' > ' || p.PATH || ' > ') NOT LIKE ('% > ' || " + a + "." + id + " || ' > %')\n)\n"
         + "SELECT\n       tr.*\n  FROM tree tr\n ORDER BY\n       tr.PATH";
   }
 

@@ -179,9 +179,47 @@ public final class QueryBuilder {
     return out;
   }
 
-  /** 화면에 보일 SQL. */
+  /** 화면에 보일 SQL. 값 자리가 MyBatis 면 부등호 줄을 CDATA 로 감싼다(매퍼 XML 에 그대로 붙인다). */
   public static String render(Spec s) {
-    return render(s, s.bind, true);
+    String sql = render(s, s.bind, true);
+    return s.bind == Bind.MYBATIS ? cdata(sql) : sql;
+  }
+
+  private static final String CDATA_OPEN = "<![CDATA[ ";
+  private static final String CDATA_CLOSE = " ]]>";
+
+  /**
+   * 문자열 · 주석 밖에 부등호(< · >)가 있는 줄을 <![CDATA[ … ]]> 로 감싼다. 들여쓰기는 밖에 둔다.
+   * foreach 줄 · 이미 CDATA 인 줄 · -- 주석만 있는 줄은 두고, 줄 끝 -- 주석은 CDATA 밖으로 뺀다.
+   */
+  public static String cdata(String sql) {
+    StringBuilder out = new StringBuilder();
+    String[] lines = sql.split("\n", -1);
+    for (int i = 0; i < lines.length; i++) {
+      if (i > 0) out.append('\n');
+      String line = lines[i];
+      String masked = SqlParts.mask(line);
+      boolean compare = masked.indexOf('<') >= 0 || masked.indexOf('>') >= 0;
+      if (!compare || line.contains("<foreach") || line.contains("<![CDATA[")) {
+        out.append(line);
+        continue;
+      }
+      int body = 0;
+      while (body < line.length() && line.charAt(body) == ' ') body++;
+      int dash = commentStart(line, masked);
+      String code = (dash < 0 ? line.substring(body) : line.substring(body, dash)).stripTrailing();
+      String tail = dash < 0 ? "" : "  " + line.substring(dash);
+      out.append(line, 0, body).append(CDATA_OPEN).append(code).append(CDATA_CLOSE).append(tail);
+    }
+    return out.toString();
+  }
+
+  /** 줄 끝 -- 주석의 자리(없으면 -1). mask 는 주석과 문자열 속을 공백으로 만드므로, -- 부터 줄 끝까지 가린 글이 모두 공백인 곳이 주석이다. */
+  private static int commentStart(String line, String masked) {
+    for (int i = 0; i + 1 < line.length(); i++) {
+      if (line.charAt(i) == '-' && line.charAt(i + 1) == '-' && masked.substring(i).isBlank()) return i;
+    }
+    return -1;
   }
 
   /**

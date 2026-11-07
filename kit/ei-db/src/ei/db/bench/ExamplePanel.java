@@ -1,8 +1,10 @@
 package ei.db.bench;
 
 import com.intellij.ui.ColoredListCellRenderer;
+import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.JBSplitter;
 import com.intellij.ui.ScrollPaneFactory;
+import com.intellij.ui.SearchTextField;
 import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.components.JBList;
 import com.intellij.ui.components.JBTextArea;
@@ -11,18 +13,27 @@ import org.jetbrains.annotations.NotNull;
 
 import javax.swing.JComponent;
 import javax.swing.JList;
+import javax.swing.JPanel;
+import javax.swing.event.DocumentEvent;
+import java.awt.BorderLayout;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
-/** 「예제 모음」 탭: 왼쪽 목록에서 고르면 오른쪽에 설명, 아래 미리 보기에 지금 DB 에 맞는 문장이 나온다. */
+/**
+ * 「예제 모음」 탭: 왼쪽 위 찾기 칸 · 목록, 오른쪽 위 설명 · 아래 SQL 칸(작업대가 slot 에 붙인다).
+ * 찾기는 묶음 · 제목 · 설명 · 두 DB 의 SQL 글에서 띄어 쓴 낱말을 모두 담은 예제만 남긴다(대소문자 무시).
+ */
 final class ExamplePanel {
-  private static final float SPLIT = 0.4f;
+  private static final float SPLIT = 0.35f;
 
   private final Bench bench;
+  private final SearchTextField search = new SearchTextField(false);
   private final JBList<Examples.Example> list = new JBList<>(Examples.ALL);
   private final JBTextArea description = new JBTextArea();
   private final JBSplitter root = new JBSplitter(false, SPLIT);
 
-  ExamplePanel(Bench bench) {
+  ExamplePanel(Bench bench, JComponent slot) {
     this.bench = bench;
     list.setCellRenderer(new ColoredListCellRenderer<>() {
       @Override
@@ -31,27 +42,54 @@ final class ExamplePanel {
         append(e.title());
       }
     });
+    list.getEmptyText().setText("맞는 예제가 없습니다");
     list.addListSelectionListener(e -> { if (!e.getValueIsAdjusting()) refresh(); });
+    search.getTextEditor().getEmptyText().setText("찾기 (예: 중복, 누적, MERGE, 날짜)");
+    search.addDocumentListener(new DocumentAdapter() {
+      @Override
+      protected void textChanged(@NotNull DocumentEvent e) { filter(); }
+    });
     description.setEditable(false);
     description.setLineWrap(true);
     description.setWrapStyleWord(true);
-    description.setBorder(JBUI.Borders.empty(8));
+    description.setOpaque(false);
+    description.setBorder(JBUI.Borders.empty(4, 8, 8, 8));
+    JPanel left = new JPanel(new BorderLayout(0, JBUI.scale(4)));
+    left.add(search, BorderLayout.NORTH);
+    left.add(ScrollPaneFactory.createScrollPane(list), BorderLayout.CENTER);
+    JPanel right = new JPanel(new BorderLayout());
+    right.add(description, BorderLayout.NORTH);
+    right.add(slot, BorderLayout.CENTER);
     root.setSplitterProportionKey("ei.db.bench.examples.split");
     root.setHonorComponentsMinimumSize(false);
-    root.setFirstComponent(ScrollPaneFactory.createScrollPane(list));
-    root.setSecondComponent(ScrollPaneFactory.createScrollPane(description));
+    root.setFirstComponent(left);
+    root.setSecondComponent(right);
   }
 
   JComponent component() { return root; }
 
+  private void filter() {
+    String[] words = search.getText().strip().toLowerCase(Locale.ROOT).split("\\s+");
+    Examples.Example keep = list.getSelectedValue();
+    List<Examples.Example> shown = new ArrayList<>();
+    for (Examples.Example e : Examples.ALL) {
+      String hay = (e.group() + " " + e.title() + " " + e.description() + " " + e.oracle() + " " + e.postgres()).toLowerCase(Locale.ROOT);
+      boolean all = true;
+      for (String w : words) if (!w.isEmpty() && !hay.contains(w)) all = false;
+      if (all) shown.add(e);
+    }
+    list.setListData(shown.toArray(new Examples.Example[0]));
+    if (keep != null && shown.contains(keep)) list.setSelectedValue(keep, true);
+  }
+
   void refresh() {
     Examples.Example e = list.getSelectedValue();
     if (e == null) {
-      description.setText("왼쪽에서 예제를 고르세요. 표 이름(ORDERS · CUSTOMER 등)은 보기입니다. 편집기에 넣은 뒤 바꿔 쓰세요.");
+      description.setText("왼쪽에서 예제를 고르세요(위 찾기 칸에 낱말을 치면 거릅니다). 예제 " + Examples.ALL.size() + "개. 표 이름(ORDERS · CUSTOMER 등)은 보기입니다.");
       bench.show("", List.of());
       return;
     }
-    description.setText(e.title() + "\n\n" + e.description());
+    description.setText(e.title() + "\n" + e.description());
     bench.show(e.sql(bench.kind()), List.of("보기 표 이름을 실제 표로 바꿔 쓰세요."));
   }
 }

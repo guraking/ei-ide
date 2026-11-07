@@ -24,7 +24,7 @@ import java.util.function.Supplier;
 
 /**
  * 「도구」 탭: 붙여 넣은 값으로 IN 목록, DB 바꿔 쓰기, 연결 모양 바꾸기, SELECT → UPDATE · DELETE(바뀔 건수 먼저), WITH 조각 실행.
- * 바꾸는 도구는 아래 SQL 칸의 문장을 읽고 결과를 다시 그 칸에 놓는다. 바꿀 수 없으면 까닭을 알림 줄에 보인다.
+ * 바꾸는 도구는 SQL 칸의 문장을 읽고 결과를 다시 그 칸에 놓는다. 바꿀 수 없으면 까닭을 알림 줄에 보인다.
  */
 final class ToolsPanel {
   private final Bench bench;
@@ -50,6 +50,9 @@ final class ToolsPanel {
 
   JComponent component() { return root; }
 
+  /** 시작 화면에서 도구 하나를 바로 연다(0 IN 목록, 1 DB 바꿔 쓰기 …). */
+  void select(int index) { root.setSelectedIndex(index); }
+
   private JComponent inTab() {
     pasted.getEmptyText().setText("엑셀 · 결과 창에서 복사한 값을 붙여 넣으세요. 칸이 둘 이상(탭으로 나뉨)이면 (A, B) IN ((…), (…)) 로 만듭니다.");
     inColumns.getEmptyText().setText("예: CUST_ID   또는 두 칸이면  PART_NO, REV");
@@ -62,7 +65,7 @@ final class ToolsPanel {
         List<String> notes = new ArrayList<>();
         notes.add(String.format(java.util.Locale.ROOT, "값 %,d개", r.count()) + (r.duplicates() > 0 ? ", 겹친 값 " + r.duplicates() + "개는 뺐습니다" : ""));
         if (bench.kind() == DbKind.ORACLE && r.count() > SqlTools.ORACLE_IN_LIMIT) notes.add("Oracle 은 IN 하나에 " + SqlTools.ORACLE_IN_LIMIT + "개까지라 OR 로 나눴습니다.");
-        bench.show(r.sql(), notes);
+        bench.replace(r.sql(), notes);
       } catch (IllegalArgumentException ex) {
         bench.show("", List.of(ex.getMessage()));
       }
@@ -83,7 +86,7 @@ final class ToolsPanel {
     toPg.addActionListener(e -> showResult(() -> DialectConvert.convert(sql.get(), DbKind.ORACLE, DbKind.POSTGRES)));
     JButton toOra = new JButton("PostgreSQL → Oracle");
     toOra.addActionListener(e -> showResult(() -> DialectConvert.convert(sql.get(), DbKind.POSTGRES, DbKind.ORACLE)));
-    return page("아래 SQL 칸의 문장을 다른 DB 문법으로 바꿉니다(NVL ↔ COALESCE, DECODE → CASE, ROWNUM ↔ LIMIT, (+) → JOIN 등). 바꾼 곳과 손으로 볼 곳은 알림 줄에 나옵니다.",
+    return page("SQL 칸의 문장을 다른 DB 문법으로 바꿉니다(NVL ↔ COALESCE, DECODE → CASE, ROWNUM ↔ LIMIT, (+) → JOIN 등). 바꾼 곳과 손으로 볼 곳은 알림 줄에 나옵니다.",
         buttons(toPg, toOra));
   }
 
@@ -98,7 +101,7 @@ final class ToolsPanel {
       JoinStyleConvert.Result r = JoinStyleConvert.toOld(sql.get());
       return new DialectConvert.Result(r.sql(), r.notes());
     }));
-    return page("아래 SQL 칸의 연결 모양을 바꿉니다. 옛 방식 (+) 은 Oracle 에서만 됩니다. FULL OUTER JOIN · USING 은 옛 방식으로 바꿀 수 없습니다.", buttons(toAnsi, toOld));
+    return page("SQL 칸의 연결 모양을 바꿉니다. 옛 방식 (+) 은 Oracle 에서만 됩니다. FULL OUTER JOIN · USING 은 옛 방식으로 바꿀 수 없습니다.", buttons(toAnsi, toOld));
   }
 
   private JComponent dmlTab() {
@@ -129,14 +132,14 @@ final class ToolsPanel {
       List<String> notes = new ArrayList<>();
       notes.add("대상 표: " + d.table());
       if (!d.note().isEmpty()) notes.add(d.note());
-      bench.show(d.sql(), notes);
+      bench.replace(d.sql(), notes);
     } catch (IllegalArgumentException ex) {
       bench.show(select, List.of(ex.getMessage()));
     }
   }
 
   private JComponent cteTab() {
-    JButton read = new JButton("아래 SQL 에서 단계 읽기");
+    JButton read = new JButton("SQL 에서 단계 읽기");
     read.addActionListener(e -> {
       List<SqlTools.Cte> list = SqlTools.ctes(sql.get());
       cteList.setListData(list.toArray(new SqlTools.Cte[0]));
@@ -161,13 +164,13 @@ final class ToolsPanel {
       int i = cteList.getSelectedIndex();
       if (i < 0) return;
       try {
-        bench.show(SqlTools.upTo(sql.get(), i), List.of("이 단계 결과만 보는 문장입니다."));
+        bench.replace(SqlTools.upTo(sql.get(), i), List.of("이 단계 결과만 보는 문장입니다."));
       } catch (IllegalArgumentException ex) {
         cteStatus.setText("SQL 이 바뀌었습니다. 단계를 다시 읽으세요.");
       }
     });
     cteList.setCellRenderer(com.intellij.ui.SimpleListCellRenderer.create("", SqlTools.Cte::name));
-    cteList.getEmptyText().setText("「아래 SQL 에서 단계 읽기」 를 누르세요");
+    cteList.getEmptyText().setText("「SQL 에서 단계 읽기」 를 누르세요");
     JPanel p = new JPanel(new BorderLayout(0, JBUI.scale(6)));
     p.setBorder(JBUI.Borders.empty(8));
     JPanel top = new JPanel(new BorderLayout());
@@ -183,12 +186,12 @@ final class ToolsPanel {
 
   private void showResult(Convert c) {
     if (sql.get().isBlank()) {
-      bench.show("", List.of("아래 SQL 칸에 바꿀 문장을 넣으세요."));
+      bench.show("", List.of("SQL 칸에 바꿀 문장을 넣으세요."));
       return;
     }
     try {
       DialectConvert.Result r = c.run();
-      bench.show(r.sql(), r.notes().isEmpty() ? List.of("바꿀 곳이 없었습니다.") : r.notes());
+      bench.replace(r.sql(), r.notes().isEmpty() ? List.of("바꿀 곳이 없었습니다.") : r.notes());
     } catch (IllegalArgumentException ex) {
       bench.show(sql.get(), List.of(ex.getMessage()));
     }

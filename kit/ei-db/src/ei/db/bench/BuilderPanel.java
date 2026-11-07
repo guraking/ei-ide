@@ -15,7 +15,7 @@ import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.components.JBCheckBox;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBList;
-import com.intellij.ui.components.JBTabbedPane;
+import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.JBIntSpinner;
 import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.FormBuilder;
@@ -77,7 +77,7 @@ final class BuilderPanel {
 
   private final Rows<ColRow> cols = new Rows<>(List.of(
       new Rows.Column<ColRow>("고름", Boolean.class, r -> r.selected, (r, v) -> r.selected = (Boolean) v),
-      new Rows.Column<ColRow>("표", String.class, r -> r.alias, null),
+      new Rows.Column<ColRow>("표", String.class, r -> r.table + " (" + r.alias + ")", null),
       new Rows.Column<ColRow>("칼럼", String.class, r -> r.col.name(), null),
       new Rows.Column<ColRow>("형식", String.class, r -> r.col.typeLabel(), null),
       new Rows.Column<ColRow>("설명", String.class, r -> r.col.comment(), null),
@@ -154,7 +154,9 @@ final class BuilderPanel {
   private final JBCheckBox autoCount = new JBCheckBox("바꿀 때마다 건수 세기", true);
   private final JBLabel countLabel = new JBLabel();
   private final Timer countTimer = new Timer(COUNT_DEBOUNCE_MS, e -> count());
-  private final JBTabbedPane steps = new JBTabbedPane();
+  private final List<Section> sections = new ArrayList<>();
+  /** 표 하나가 보일 줄 수(이보다 많으면 표 안에서 스크롤). */
+  private static final int VISIBLE_ROWS = 8;
 
   /** 건수 세기 순번. 늦게 온 앞 결과는 버린다. */
   private int countGeneration;
@@ -162,13 +164,14 @@ final class BuilderPanel {
   private int lastShape = -1;
 
   private static final class ColRow {
+    final String table;
     final String alias;
     final Meta.Column col;
     boolean selected;
     QueryBuilder.Agg agg;
     String as = "";
 
-    ColRow(String alias, Meta.Column col) { this.alias = alias; this.col = col; }
+    ColRow(String table, String alias, Meta.Column col) { this.table = table; this.alias = alias; this.col = col; }
   }
 
   private static final class JoinRow {
@@ -281,6 +284,7 @@ final class BuilderPanel {
     JBSplitter tablesSplit = new JBSplitter(true, 0.6f);
     tablesSplit.setHonorComponentsMinimumSize(false);
     tablesSplit.setFirstComponent(ScrollPaneFactory.createScrollPane(tableList));
+    left.setBorder(JBUI.Borders.empty(4, 8, 8, 0));
     JPanel chosenPanel = new JPanel(new BorderLayout(0, JBUI.scale(4)));
     chosenPanel.add(tableButtons, BorderLayout.NORTH);
     chosenPanel.add(ScrollPaneFactory.createScrollPane(chosenList), BorderLayout.CENTER);
@@ -297,8 +301,16 @@ final class BuilderPanel {
     countAll.addActionListener(e -> changed());
     distinct.addActionListener(e -> changed());
     JPanel colPanel = new JPanel(new BorderLayout(0, JBUI.scale(4)));
-    colPanel.add(stack(new JBLabel("결과에 보일 칼럼을 고르세요. 「집계」 를 고르면 건수 · 합계 · 평균 등이 되고, 묶기(GROUP BY)는 자동으로 맞춥니다."), countAll, distinct), BorderLayout.NORTH);
-    colPanel.add(ScrollPaneFactory.createScrollPane(colTable), BorderLayout.CENTER);
+    JButton selectAll = new JButton("모두 고르기");
+    selectAll.addActionListener(e -> selectAll(selectAll));
+    JButton selectNone = new JButton("모두 풀기");
+    selectNone.addActionListener(e -> {
+      for (ColRow r : cols.rows) r.selected = false;
+      cols.fireTableDataChanged();
+      changed();
+    });
+    colPanel.add(stack(buttons(selectAll, selectNone), countAll, distinct), BorderLayout.NORTH);
+    colPanel.add(scroll(colTable), BorderLayout.CENTER);
 
     // 3. 연결
     joinTable.getColumnModel().getColumn(3).setCellEditor(new DefaultCellEditor(new ComboBox<>(new String[]{INNER, OUTER})));
@@ -311,8 +323,8 @@ final class BuilderPanel {
     JButton removeJoin = new JButton("빼기", AllIcons.General.Remove);
     removeJoin.addActionListener(e -> { if (joins.removeSelected(joinTable)) changed(); });
     JPanel joinPanel = new JPanel(new BorderLayout(0, JBUI.scale(4)));
-    joinPanel.add(stack(new JBLabel("표끼리 어떤 칼럼으로 이을지 정합니다. 「추정」 은 외래 키 없이 이름으로 짐작한 것이라 맞는지 확인하세요."), buttons(suggest, addJoin, removeJoin)), BorderLayout.NORTH);
-    joinPanel.add(ScrollPaneFactory.createScrollPane(joinTable), BorderLayout.CENTER);
+    joinPanel.add(buttons(suggest, addJoin, removeJoin), BorderLayout.NORTH);
+    joinPanel.add(scroll(joinTable), BorderLayout.CENTER);
 
     // 4. 조건
     condTable.getEmptyText().setText("「조건 넣기」 로 거를 조건을 더하세요");
@@ -322,9 +334,8 @@ final class BuilderPanel {
     JButton removeCond = new JButton("빼기", AllIcons.General.Remove);
     removeCond.addActionListener(e -> { if (conds.removeSelected(condTable)) changed(); });
     JPanel condPanel = new JPanel(new BorderLayout(0, JBUI.scale(4)));
-    condPanel.add(stack(new JBLabel("칼럼 형식(숫자 · 글자 · 날짜)에 맞는 조건만 고를 수 있습니다. 값을 비우면 :이름 · #{이름} 자리만 만들고, 넣으면 건수 세기에 씁니다. 여러 값은 쉼표로, 날짜는 " + QueryBuilder.DATE_FORMAT + "."),
-        buttons(addCond, removeCond)), BorderLayout.NORTH);
-    condPanel.add(ScrollPaneFactory.createScrollPane(condTable), BorderLayout.CENTER);
+    condPanel.add(buttons(addCond, removeCond), BorderLayout.NORTH);
+    condPanel.add(scroll(condTable), BorderLayout.CENTER);
 
     // 5. 묶기
     Rows.widths(havingTable, KEY + "having", 5, 2, 3);
@@ -333,9 +344,9 @@ final class BuilderPanel {
     JButton removeHaving = new JButton("빼기", AllIcons.General.Remove);
     removeHaving.addActionListener(e -> { if (havings.removeSelected(havingTable)) changed(); });
     havingPanel.add(buttons(addHaving, removeHaving), BorderLayout.NORTH);
-    havingPanel.add(ScrollPaneFactory.createScrollPane(havingTable), BorderLayout.CENTER);
+    havingPanel.add(scroll(havingTable), BorderLayout.CENTER);
     JPanel groupPanel = new JPanel(new BorderLayout(0, JBUI.scale(8)));
-    groupPanel.add(stack(new JBLabel("칼럼 단계에서 집계를 하나라도 고르면, 집계가 아닌 고른 칼럼이 모두 묶을 칼럼(GROUP BY)이 됩니다."), groupLabel), BorderLayout.NORTH);
+    groupPanel.add(groupLabel, BorderLayout.NORTH);
     groupPanel.add(havingPanel, BorderLayout.CENTER);
 
     // 6. 정렬 · 페이징
@@ -353,15 +364,31 @@ final class BuilderPanel {
     offsetRow.add(offset);
     limitRow.add(offsetRow);
     JPanel orderPanel = new JPanel(new BorderLayout(0, JBUI.scale(4)));
-    orderPanel.add(stack(buttons(addOrder, removeOrder)), BorderLayout.NORTH);
-    orderPanel.add(ScrollPaneFactory.createScrollPane(orderTable), BorderLayout.CENTER);
+    orderPanel.add(buttons(addOrder, removeOrder), BorderLayout.NORTH);
+    orderPanel.add(scroll(orderTable), BorderLayout.CENTER);
     orderPanel.add(limitRow, BorderLayout.SOUTH);
 
-    steps.addTab("2. 칼럼", colPanel);
-    steps.addTab("3. 연결 (JOIN)", joinPanel);
-    steps.addTab("4. 조건 (WHERE)", condPanel);
-    steps.addTab("5. 묶기 (GROUP BY)", groupPanel);
-    steps.addTab("6. 정렬 · 페이징", orderPanel);
+    sections.add(new Section("2. 칼럼 고르기", "결과에 보일 칼럼에 체크하세요. 아무것도 안 고르면 모든 칼럼(*)입니다. 「집계」 에서 건수 · 합계 · 평균을 고르면 묶기는 자동으로 맞춥니다.", colPanel, true));
+    sections.add(new Section("3. 표 잇기 (JOIN)", "표가 둘 이상이면 어떤 칼럼으로 이을지 정합니다. 외래 키를 따라 자동으로 넣고, 「추정」 은 이름으로 짐작한 것이라 맞는지 보세요.", joinPanel, false));
+    sections.add(new Section("4. 거를 조건 (WHERE)", "「조건 넣기」 → 칼럼 · 조건 · 값을 고릅니다. 값을 비우면 실행할 때 묻고, 넣으면 건수 세기에 씁니다. 여러 값은 쉼표로, 날짜는 " + QueryBuilder.DATE_FORMAT + ".", condPanel, true));
+    sections.add(new Section("5. 묶기 (GROUP BY)", "칼럼 단계에서 집계를 고르면 집계가 아닌 칼럼으로 자동으로 묶습니다. 여기서는 확인만 하면 됩니다.", groupPanel, false));
+    sections.add(new Section("6. 정렬 · 건수 자르기", "어떤 순서로 볼지, 몇 건만 볼지 정합니다.", orderPanel, false));
+    JPanel page = new JPanel(new com.intellij.ui.components.panels.VerticalLayout(JBUI.scale(10)));
+    page.setBorder(JBUI.Borders.empty(4, 8, 8, 8));
+    for (int i = 0; i < sections.size(); i++) {
+      Section sec = sections.get(i);
+      if (i + 1 < sections.size()) {
+        Section next = sections.get(i + 1);
+        sec.next(() -> {
+          next.open(true);
+          javax.swing.SwingUtilities.invokeLater(() -> page.scrollRectToVisible(next.panel.getBounds()));
+        });
+      }
+      page.add(sec.panel);
+    }
+    JBScrollPane pageScroll = new JBScrollPane(page);
+    pageScroll.setBorder(JBUI.Borders.empty());
+    pageScroll.getVerticalScrollBar().setUnitIncrement(JBUI.scale(16));
 
     JPanel countRow = new JPanel(new BorderLayout(JBUI.scale(8), 0));
     countRow.add(autoCount, BorderLayout.WEST);
@@ -371,8 +398,9 @@ final class BuilderPanel {
     countRow.add(countNow, BorderLayout.EAST);
     autoCount.addActionListener(e -> { if (autoCount.isSelected()) countTimer.restart(); });
 
-    JPanel right = new JPanel(new BorderLayout(0, JBUI.scale(4)));
-    right.add(steps, BorderLayout.CENTER);
+    countRow.setBorder(JBUI.Borders.empty(4, 8));
+    JPanel right = new JPanel(new BorderLayout());
+    right.add(pageScroll, BorderLayout.CENTER);
     right.add(countRow, BorderLayout.SOUTH);
 
     JBSplitter split = new JBSplitter(false, LEFT_SPLIT);
@@ -428,7 +456,7 @@ final class BuilderPanel {
     tableStatus.setText(name + " 칼럼 읽는 중…");
     bench.columns(name, list -> {
       if (!chosen.getItems().contains(t)) return;
-      for (Meta.Column c : list) cols.add(new ColRow(t.alias(), c));
+      for (Meta.Column c : list) cols.add(new ColRow(t.name(), t.alias(), c));
       tableStatus.setText("");
       bench.foreignKeys(name, fks -> suggestJoins(false));
       changed();
@@ -535,7 +563,7 @@ final class BuilderPanel {
     for (ColRow c : cols.rows) if (c.selected) { picked = c; break; }
     r.column(picked != null ? picked.alias + "." + picked.col.name() : refs.get(0));
     conds.add(r);
-    steps.setSelectedIndex(2);
+    sections.get(2).open(true);
     changed();
   }
 
@@ -692,6 +720,81 @@ final class BuilderPanel {
         }
       }, ModalityState.any());
     });
+  }
+
+  /** 표를 VISIBLE_ROWS 줄 높이로 보이는 스크롤 칸(가로는 줄 폭을 다 채운다). */
+  private static JComponent scroll(JBTable table) {
+    table.setVisibleRowCount(VISIBLE_ROWS);
+    return ScrollPaneFactory.createScrollPane(table);
+  }
+
+  /** 표가 하나면 모든 칼럼을, 여럿이면 「모든 표 · 표마다」 를 골라 체크한다. */
+  private void selectAll(JComponent anchor) {
+    List<QueryBuilder.Table> items = chosen.getItems();
+    if (items.size() <= 1) {
+      mark(null);
+      return;
+    }
+    List<String> choices = new ArrayList<>();
+    choices.add("모든 표의 칼럼");
+    for (QueryBuilder.Table t : items) choices.add(t.name() + " (" + t.alias() + ") 칼럼만");
+    com.intellij.openapi.ui.popup.JBPopupFactory.getInstance().createPopupChooserBuilder(choices)
+        .setItemChosenCallback(c -> mark(c.equals(choices.get(0)) ? null : items.get(choices.indexOf(c) - 1).alias()))
+        .createPopup()
+        .showUnderneathOf(anchor);
+  }
+
+  /** alias 표(null 이면 모든 표)의 칼럼을 모두 체크한다. */
+  private void mark(String alias) {
+    for (ColRow r : cols.rows) if (alias == null || r.alias.equals(alias)) r.selected = true;
+    cols.fireTableDataChanged();
+    changed();
+  }
+
+  /** 접고 펼 수 있는 단계 하나: 머리(▸/▾ 제목), 할 일 한 줄, 내용, 「다음 ▸」. */
+  private static final class Section {
+    final JPanel panel = new JPanel(new BorderLayout(0, JBUI.scale(4)));
+    private final JBLabel head = new JBLabel();
+    private final String title;
+    private final JComponent body;
+    private final JPanel content = new JPanel(new BorderLayout(0, JBUI.scale(4)));
+    private final JButton nextButton = new JButton("다음 ▸");
+
+    Section(String title, String help, JComponent body, boolean open) {
+      this.title = title;
+      this.body = body;
+      head.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+      head.addMouseListener(new MouseAdapter() {
+        @Override
+        public void mouseClicked(MouseEvent e) { open(!content.isVisible()); }
+      });
+      JBLabel helpLabel = new JBLabel(help);
+      helpLabel.setForeground(UIUtil.getContextHelpForeground());
+      helpLabel.setAllowAutoWrapping(true);
+      helpLabel.setCopyable(false);
+      nextButton.setVisible(false);
+      JPanel south = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+      south.add(nextButton);
+      content.add(helpLabel, BorderLayout.NORTH);
+      content.add(body, BorderLayout.CENTER);
+      content.add(south, BorderLayout.SOUTH);
+      content.setBorder(JBUI.Borders.emptyLeft(18));
+      panel.add(head, BorderLayout.NORTH);
+      panel.add(content, BorderLayout.CENTER);
+      open(open);
+    }
+
+    void next(Runnable r) {
+      nextButton.setVisible(true);
+      nextButton.addActionListener(e -> r.run());
+    }
+
+    void open(boolean on) {
+      content.setVisible(on);
+      head.setIcon(on ? AllIcons.General.ArrowDown : AllIcons.General.ArrowRight);
+      head.setText(title);
+      panel.revalidate();
+    }
   }
 
   private static JPanel buttons(JComponent... items) {

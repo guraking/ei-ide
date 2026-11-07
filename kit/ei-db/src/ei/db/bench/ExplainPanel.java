@@ -11,7 +11,7 @@ import java.awt.BorderLayout;
 import java.awt.FlowLayout;
 import java.util.function.Supplier;
 
-/** 「쉬운 설명」 탭: 아래 SQL 칸의 문장을 절마다 쉬운 말로 풀고, 실행 전 점검에 걸리는 것을 위에 보인다. */
+/** 「쉬운 설명」 탭: 위 SQL 칸의 문장을 절마다 쉬운 말로 풀고, 실행 전 점검에 걸리는 것을 위에 보인다. */
 final class ExplainPanel {
   private final Supplier<String> sql;
   private final JPanel root = new JPanel(new BorderLayout());
@@ -23,7 +23,7 @@ final class ExplainPanel {
     text.setLineWrap(true);
     text.setWrapStyleWord(true);
     text.setBorder(JBUI.Borders.empty(8));
-    JButton run = new JButton("아래 SQL 설명하기");
+    JButton run = new JButton("SQL 설명하기");
     run.addActionListener(e -> refresh());
     JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(4), 0));
     top.add(run);
@@ -36,7 +36,7 @@ final class ExplainPanel {
   void refresh() {
     String s = sql.get();
     if (s.isBlank()) {
-      text.setText("아래 SQL 칸에 문장을 넣거나 붙여 넣고 「아래 SQL 설명하기」 를 누르세요.");
+      text.setText("위 SQL 칸에 문장을 넣거나 붙여 넣고 「SQL 설명하기」 를 누르세요.");
       return;
     }
     StringBuilder sb = new StringBuilder();

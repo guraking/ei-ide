@@ -25,6 +25,7 @@ public class QueryBenchCheck {
     explain();
     errors();
     context();
+    fixes();
     for (Examples.Example e : Examples.ALL) yes(!e.oracle().isBlank() && !e.postgres().isBlank() && !e.oracle().contains("\t"), e.title());
     System.out.println("QueryBenchCheck 통과");
   }
@@ -220,5 +221,23 @@ public class QueryBenchCheck {
     eq(SqlContext.at("SELECT * FROM ORDERS o WHERE o.STATUS = 'A' AND "), SqlContext.Place.OTHER);
     eq(SqlContext.at("SELECT * FROM ORDERS o ORDER BY o.ID "), SqlContext.Place.ORDER);
     eq(SqlContext.at("SELECT * FROM ORDERS o WHERE EXISTS (SELECT 1 FROM "), SqlContext.Place.TABLE);
+  }
+
+  /** 오류 고친 것: 빈 값 칼럼, 계층 고리, CDATA, TRUNC · ROWNUM 페이지 · SET 별칭 바꾸기. */
+  static void fixes() {
+    Patterns.Fill e = new Patterns.Fill(DbKind.ORACLE, QueryBuilder.JoinStyle.OLD, QueryBuilder.Bind.COLON, "orders", "", List.of(), List.of(), "", "", "", "", "", "", List.of(), 0, Patterns.Period.DAY);
+    yes(Patterns.missing(Patterns.Kind.STATS, e).contains(Patterns.Field.VALUE), "stats needs value");
+    String hier = Patterns.render(Patterns.Kind.HIERARCHY, fill(DbKind.POSTGRES));
+    yes(hier.contains("NOT LIKE ('% > ' ||") && hier.contains("AS VARCHAR(4000))\n         , o.*\n      FROM"), hier);
+    eq(QueryBuilder.cdata("SELECT 1\n WHERE a.X >= #{x} -- 시작\n   AND a.Y = 1"),
+        "SELECT 1\n <![CDATA[ WHERE a.X >= #{x} ]]>  -- 시작\n   AND a.Y = 1");
+    eq(QueryBuilder.cdata(" WHERE a.X = '<b>' AND 1 = 1"), " WHERE a.X = '<b>' AND 1 = 1");
+    DialectConvert.Result t = DialectConvert.toPostgres("SELECT TRUNC(o.ORDER_DT, 'MM'), TRUNC(o.ORDER_DT), TRUNC(o.AMOUNT, 2) FROM ORDERS o");
+    yes(t.sql().contains("DATE_TRUNC('month', o.ORDER_DT)") && t.sql().contains("DATE_TRUNC('day', o.ORDER_DT)") && t.sql().contains("TRUNC(o.AMOUNT, 2)"), t.sql());
+    DialectConvert.Result pg = DialectConvert.toPostgres("SELECT * FROM (SELECT q.*, ROWNUM AS RN FROM (SELECT o.* FROM ORDERS o ORDER BY o.ORDER_ID DESC) q WHERE ROWNUM <= 30) WHERE RN > 20");
+    yes(pg.sql().contains("LIMIT 10 OFFSET 20") && !pg.sql().toUpperCase(java.util.Locale.ROOT).contains("ROWNUM"), pg.sql());
+    DialectConvert.Result up = DialectConvert.toPostgres("UPDATE ORDERS o SET o.STATUS = 'X', o.MEMO = NULL WHERE o.ORDER_ID = 1");
+    yes(up.sql().contains("SET STATUS = 'X', MEMO = NULL") && up.sql().contains("WHERE o.ORDER_ID = 1"), up.sql());
+    yes(String.join(" ", DialectConvert.toPostgres("SELECT * FROM USER_TAB_COLUMNS").notes()).contains("데이터 사전"), "dictionary note");
   }
 }

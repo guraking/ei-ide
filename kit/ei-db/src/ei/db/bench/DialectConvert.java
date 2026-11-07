@@ -4,6 +4,7 @@ import ei.db.DbKind;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.function.Function;
 import java.util.regex.Matcher;
@@ -45,6 +46,7 @@ public final class DialectConvert {
     }
     s = words(s, "TRUNC\\s*\\(\\s*SYSDATE\\s*\\)", "CURRENT_DATE", "TRUNC(SYSDATE) → CURRENT_DATE", notes);
     s = words(s, "SYSDATE|SYSTIMESTAMP", "NOW()", "SYSDATE → NOW()", notes);
+    s = trunc(s, notes);
     s = calls(s, "NVL", a -> a.size() == 2 ? "COALESCE(" + a.get(0) + ", " + a.get(1) + ")" : null, "NVL → COALESCE", notes);
     s = calls(s, "NVL2", a -> a.size() == 3 ? "CASE WHEN " + a.get(0) + " IS NOT NULL THEN " + a.get(1) + " ELSE " + a.get(2) + " END" : null, "NVL2 → CASE", notes);
     int before = notes.size();
@@ -60,8 +62,11 @@ public final class DialectConvert {
     s = regex(s, "([A-Za-z_][\\w$#]*)\\s*\\.\\s*(NEXTVAL|CURRVAL)(?![\\w$#])", m -> m.group(2).equalsIgnoreCase("NEXTVAL") ? "nextval('" + m.group(1).toLowerCase(Locale.ROOT) + "')" : "currval('" + m.group(1).toLowerCase(Locale.ROOT) + "')", "시퀀스.NEXTVAL → nextval('시퀀스')", notes);
     s = words(s, "VARCHAR2", "VARCHAR", "VARCHAR2 → VARCHAR", notes);
     s = words(s, "NUMBER(?=\\s*\\()", "NUMERIC", "NUMBER(n) → NUMERIC(n)", notes);
+    s = pagedRownum(s, notes);
     s = rownum(s, notes);
+    s = updateSetAlias(s, notes);
     String up = SqlParts.mask(s).toUpperCase(Locale.ROOT);
+    if (DICTIONARY.matcher(up).find()) notes.add("직접 확인: Oracle 데이터 사전(USER_ · ALL_ · DBA_ · V$)은 PostgreSQL 에 없습니다. information_schema · pg_catalog 로 바꿔 쓰세요(예제 모음 → 데이터 사전).");
     if (up.contains("CONNECT BY")) notes.add("직접 확인: CONNECT BY 계층 조회는 WITH RECURSIVE 로 바꿔야 합니다(목적으로 만들기 → 계층 참고).");
     if (up.matches("(?s).*\\bMONTHS_BETWEEN\\b.*")) notes.add("직접 확인: MONTHS_BETWEEN 은 PostgreSQL 에 없습니다(AGE · EXTRACT 로).");
     if (up.matches("(?s).*\\bROWNUM\\b.*")) notes.add("직접 확인: 남은 ROWNUM 은 ROW_NUMBER() OVER () 나 LIMIT 으로 바꾸세요.");
@@ -139,6 +144,85 @@ public final class DialectConvert {
     }
     if (count > 0) notes.add("LISTAGG → STRING_AGG " + count + "곳");
     return s;
+  }
+
+  private static final Pattern DICTIONARY = Pattern.compile("(?<![\\w$#.])(USER|ALL|DBA)_(TABLES|TAB_COLUMNS|TAB_COMMENTS|COL_COMMENTS|CONSTRAINTS|CONS_COLUMNS|INDEXES|IND_COLUMNS|OBJECTS|SOURCE|VIEWS|SEQUENCES)(?![\\w$#])|(?<![\\w$#.])V\\$\\w+");
+  /** TRUNC 의 Oracle 날짜 단위 → DATE_TRUNC 단위. */
+  private static final Map<String, String> TRUNC_UNITS = Map.ofEntries(
+      Map.entry("YYYY", "year"), Map.entry("YEAR", "year"), Map.entry("YY", "year"), Map.entry("Y", "year"), Map.entry("SYYYY", "year"),
+      Map.entry("Q", "quarter"), Map.entry("MM", "month"), Map.entry("MON", "month"), Map.entry("MONTH", "month"),
+      Map.entry("IW", "week"), Map.entry("WW", "week"), Map.entry("W", "week"), Map.entry("DD", "day"), Map.entry("DDD", "day"), Map.entry("J", "day"),
+      Map.entry("HH", "hour"), Map.entry("HH24", "hour"), Map.entry("HH12", "hour"), Map.entry("MI", "minute"));
+  /** 인자 하나인 TRUNC 가 날짜를 자르는 것으로 볼 꼴(날짜 함수 · _DT · DATE 가 든 이름). 숫자 TRUNC 는 PostgreSQL 에도 있어 두지 않는다. */
+  private static final Pattern DATE_LIKE = Pattern.compile("(?i).*(NOW\\s*\\(|CURRENT_DATE|CURRENT_TIMESTAMP|TO_DATE\\s*\\(|SYSDATE|DATE|_DT\\b|DTM\\b|TIME).*", Pattern.DOTALL);
+
+  /** TRUNC(날짜[, '단위']) → DATE_TRUNC('단위', 날짜). 숫자 TRUNC 는 그대로, 모르는 단위는 직접 확인으로 알린다. */
+  private static String trunc(String sql, List<String> notes) {
+    int[] count = {0};
+    List<String> unknown = new ArrayList<>();
+    String out = calls(sql, "TRUNC", a -> {
+      if (a.size() == 2) {
+        String fmt = a.get(1).strip();
+        String unit = fmt.length() > 1 && fmt.startsWith("'") && fmt.endsWith("'") ? TRUNC_UNITS.get(fmt.substring(1, fmt.length() - 1).toUpperCase(Locale.ROOT)) : null;
+        if (unit == null) {
+          unknown.add(fmt);
+          return "TRUNC(" + a.get(0) + ", " + a.get(1) + ")";
+        }
+        count[0]++;
+        return "DATE_TRUNC('" + unit + "', " + a.get(0).strip() + ")";
+      }
+      if (a.size() == 1 && DATE_LIKE.matcher(a.get(0)).matches()) {
+        count[0]++;
+        return "DATE_TRUNC('day', " + a.get(0).strip() + ")";
+      }
+      return "TRUNC(" + String.join(", ", a) + ")";
+    }, "", notes);
+    if (count[0] > 0) notes.add("TRUNC(날짜) → DATE_TRUNC " + count[0] + "곳 (결과가 timestamp 라 날짜만 보려면 ::date)");
+    if (!unknown.isEmpty()) notes.add("직접 확인: TRUNC 단위 " + String.join(", ", unknown) + " 는 바꾸지 못했습니다.");
+    return out;
+  }
+
+  /** 작업대 · 흔한 꼴의 ROWNUM 페이징(SELECT * FROM (SELECT q.*, ROWNUM RN FROM (안쪽) q WHERE ROWNUM <= 끝) WHERE RN > 시작) → 안쪽 + LIMIT · OFFSET. */
+  private static final Pattern PAGED = Pattern.compile(
+      "(?is)^\\s*SELECT\\s+\\*\\s+FROM\\s*\\(\\s*SELECT\\s+(\\w+)\\s*\\.\\s*\\*\\s*,\\s*ROWNUM\\s+(?:AS\\s+)?(\\w+)\\s+FROM\\s*\\((.*)\\)\\s*\\1\\s+WHERE\\s+ROWNUM\\s*(<=|<)\\s*(\\d+)\\s*\\)\\s*(?:\\w+\\s+)?WHERE\\s+\\2\\s*(>=|>)\\s*(\\d+)\\s*;?\\s*$");
+
+  private static String pagedRownum(String sql, List<String> notes) {
+    Matcher m = PAGED.matcher(sql);
+    if (!m.matches()) return sql;
+    int end = Integer.parseInt(m.group(5)) - (m.group(4).equals("<") ? 1 : 0);
+    int start = Integer.parseInt(m.group(7)) - (m.group(6).equals(">=") ? 1 : 0);
+    if (end <= start) return sql;
+    notes.add("ROWNUM 페이징 → LIMIT " + (end - start) + " OFFSET " + start);
+    return m.group(3).strip() + "\n LIMIT " + (end - start) + " OFFSET " + start;
+  }
+
+  /** UPDATE 표 별칭 SET 별칭.칼럼 = … → SET 칼럼 = …(PostgreSQL 은 SET 왼쪽에 별칭을 못 쓴다). SET 맨 바깥 쉼표 뒤 왼쪽 이름만 바꾼다. */
+  private static String updateSetAlias(String sql, List<String> notes) {
+    List<SqlParts.Part> parts = SqlParts.split(sql);
+    if (parts.isEmpty() || !parts.get(0).key().equals("UPDATE")) return sql;
+    String[] head = parts.get(0).body().strip().split("\\s+");
+    SqlParts.Part set = SqlParts.find(parts, "SET");
+    if (head.length < 2 || set == null) return sql;
+    String alias = head[head.length - 1];
+    String masked = SqlParts.mask(sql);
+    int[] depth = SqlParts.depth(masked);
+    Pattern p = Pattern.compile("(?i)(^|,)(\\s*)" + Pattern.quote(alias) + "\\s*\\.\\s*");
+    Matcher m = p.matcher(masked);
+    m.region(set.bodyStart(), set.end());
+    m.useAnchoringBounds(true);
+    StringBuilder out = new StringBuilder();
+    int last = 0;
+    int count = 0;
+    while (m.find()) {
+      if (depth[m.start()] != depth[set.bodyStart()]) continue;
+      out.append(sql, last, m.end(2));
+      last = m.end();
+      count++;
+    }
+    if (count == 0) return sql;
+    out.append(sql.substring(last));
+    notes.add("UPDATE SET 왼쪽 별칭(" + alias + ".) 뺌 " + count + "곳");
+    return out.toString();
   }
 
   /** 맨 바깥 WHERE 의 「ROWNUM <= n」 · 「ROWNUM < n」 을 빼고 끝에 LIMIT n. */
@@ -304,7 +388,7 @@ public final class DialectConvert {
       }
       limit = c.start;
     }
-    if (count > 0) notes.add(what + " " + count + "곳");
+    if (count > 0 && !what.isEmpty()) notes.add(what + " " + count + "곳");
     if (skipped > 0) notes.add("직접 확인: " + name + " " + skipped + "곳은 인자 꼴이 달라 그대로 두었습니다.");
     return s;
   }

@@ -35,6 +35,7 @@ final class Bench {
   private final Map<String, List<Meta.Column>> columns = new ConcurrentHashMap<>();
   private final Map<String, List<Meta.ForeignKey>> fks = new ConcurrentHashMap<>();
   private final List<Runnable> listeners = new ArrayList<>();
+  private Runnable beforeReplace = () -> { };
   /** 접속이 바뀔 때마다 오른다. 읽기가 끝났을 때 값이 다르면 그 결과는 버린다. */
   private int generation;
 
@@ -81,6 +82,14 @@ final class Bench {
   }
 
   void show(String sql, List<String> notes) { sink.show(sql, notes); }
+
+  /** 도구가 SQL 칸의 문장을 바꿔 놓을 때 부른다. 바꾸기 전 문장을 「되돌리기」 로 돌아갈 수 있게 남긴다. */
+  void replace(String sql, List<String> notes) {
+    beforeReplace.run();
+    sink.show(sql, notes);
+  }
+
+  void onReplace(Runnable r) { beforeReplace = r; }
 
   /** 기본 스키마의 표 · 뷰. 읽어 둔 것이 있으면 바로, 없으면 읽은 뒤 화면 스레드에서. */
   void tables(Consumer<List<Meta.Table>> done) {
