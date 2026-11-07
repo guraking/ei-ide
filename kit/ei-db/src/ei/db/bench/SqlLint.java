@@ -107,7 +107,7 @@ public final class SqlLint {
     return c.substring(m.start(group), m.end(group)).replace("\"", "");
   }
 
-  /** 첫 표에서 잇는 조건을 따라 닿지 않는 표의 이름(별칭). CROSS JOIN 은 일부러 쓴 것이라 뺀다. 표가 하나면 빈 목록. */
+  /** 첫 표에서 잇는 조건을 따라 닿지 않는 표의 이름(별칭). CROSS JOIN 은 일부러 쓴 것이라, LATERAL 은 잇는 조건이 안쪽에 있어 뺀다. 표가 하나면 빈 목록. */
   public static List<String> unlinked(Graph g) {
     List<String> out = new ArrayList<>();
     if (g.sources().size() < 2) return out;
@@ -124,7 +124,8 @@ public final class SqlLint {
       if (seen.add(a)) todo.addAll(adj.get(a));
     }
     for (SqlParts.Source s : g.sources()) {
-      if (!"CROSS".equals(s.join()) && !seen.contains(norm(s.ref()))) out.add(s.ref());
+      boolean lateral = s.text().regionMatches(true, 0, "LATERAL", 0, "LATERAL".length());
+      if (!"CROSS".equals(s.join()) && !lateral && !seen.contains(norm(s.ref()))) out.add(s.ref());
     }
     return out;
   }

@@ -19,6 +19,8 @@ public final class SqlParts {
   public record Part(String key, int start, int bodyStart, int end, String body) {}
 
   /** FROM 의 표 하나. join 은 첫 표 · 쉼표로 나열한 표면 null, 아니면 INNER · LEFT · RIGHT · FULL · CROSS. on 은 ON 뒤 조건(없으면 null). */
+  private static final String LATERAL = "LATERAL";
+
   public record Source(String name, String alias, String join, String on, boolean subquery, String text) {
     /** 조건에서 이 표를 부르는 이름(별칭, 없으면 표 이름). */
     public String ref() { return alias != null ? alias : simpleName(name); }
@@ -218,10 +220,22 @@ public final class SqlParts {
         break;
       }
     }
+    // LATERAL (…) 은 안쪽에서 바깥 표를 부르므로 잇는 조건이 안에 있다. 낱말을 떼고 괄호 칸으로 읽는다.
+    if (item.regionMatches(true, 0, LATERAL, 0, LATERAL.length()) && item.length() > LATERAL.length()
+        && !Character.isLetterOrDigit(item.charAt(LATERAL.length())) && item.charAt(LATERAL.length()) != '_') {
+      item = item.substring(LATERAL.length()).strip();
+    }
     if (item.startsWith("(")) {
       int close = matching(mask(item), 0);
       String rest = close < 0 ? "" : item.substring(close + 1).strip();
       return new Source(item.substring(0, close < 0 ? item.length() : close + 1), alias(rest.split("\\s+")), join, on, true, piece);
+    }
+    // 표 함수(GENERATE_SERIES(1, 10) AS g(N)): 이름은 닫는 괄호까지, 그 뒤가 별칭.
+    int paren = item.indexOf('(');
+    java.util.regex.Matcher space = BLANKS.matcher(item);
+    if (paren > 0 && (!space.find() || paren < space.start())) {
+      int close = matching(mask(item), paren);
+      if (close > 0) return new Source(item.substring(0, close + 1), alias(item.substring(close + 1).strip().split("\\s+")), join, on, false, piece);
     }
     String[] words = item.split("\\s+");
     String name = words[0];
@@ -234,7 +248,8 @@ public final class SqlParts {
     int k = 0;
     if (k < words.length && words[k].equalsIgnoreCase("AS")) k++;
     if (k >= words.length || words[k].isEmpty()) return null;
-    String a = words[k];
+    String a = words[k].replaceFirst("\\(.*$", "");
+    if (a.isEmpty()) return null;
     return NOT_ALIAS.contains(a.toUpperCase(Locale.ROOT)) ? null : a;
   }
 

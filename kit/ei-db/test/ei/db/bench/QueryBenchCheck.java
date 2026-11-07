@@ -225,6 +225,9 @@ public class QueryBenchCheck {
 
   /** 오류 고친 것: 빈 값 칼럼, 계층 고리, CDATA, TRUNC · ROWNUM 페이지 · SET 별칭 바꾸기. */
   static void fixes() {
+    yes(SqlLint.unlinked(SqlLint.graph("SELECT h.H FROM GENERATE_SERIES(0, 23) AS h(H) LEFT JOIN ORDERS o ON EXTRACT(HOUR FROM o.REG_DT) = h.H")).isEmpty(), "table function source");
+    yes(SqlLint.unlinked(SqlLint.graph("SELECT c.ID FROM CUSTOMER c LEFT JOIN LATERAL (SELECT 1 FROM ORDERS x WHERE x.CUST_ID = c.CUST_ID) o ON TRUE")).isEmpty(), "lateral source");
+    yes(SqlLint.unlinked(SqlLint.graph("SELECT 1 FROM ORDERS o, CUSTOMER c")).equals(List.of("c")), "loose table still found");
     Patterns.Fill e = new Patterns.Fill(DbKind.ORACLE, QueryBuilder.JoinStyle.OLD, QueryBuilder.Bind.COLON, "orders", "", List.of(), List.of(), "", "", "", "", "", "", List.of(), 0, Patterns.Period.DAY);
     yes(Patterns.missing(Patterns.Kind.STATS, e).contains(Patterns.Field.VALUE), "stats needs value");
     String hier = Patterns.render(Patterns.Kind.HIERARCHY, fill(DbKind.POSTGRES));
