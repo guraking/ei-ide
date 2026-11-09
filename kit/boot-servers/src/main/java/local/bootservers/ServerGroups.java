@@ -48,4 +48,15 @@ public final class ServerGroups implements PersistentStateComponent<ServerGroups
     public List<Group> groups() {
         return state.groups;
     }
+
+    /** 줄 키가 바뀌면(실행 설정 이름 바꾸기) 모든 묶음의 그 키를 새 키로 바꾼다. 순서는 그대로 둔다. */
+    public void renameMember(String oldKey, String newKey) {
+        for (Group group : state.groups) {
+            for (int i = 0; i < group.members.size(); i++) {
+                if (group.members.get(i).equals(oldKey)) {
+                    group.members.set(i, newKey);
+                }
+            }
+        }
+    }
 }

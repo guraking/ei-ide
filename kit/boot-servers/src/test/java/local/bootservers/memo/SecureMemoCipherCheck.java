@@ -21,12 +21,34 @@ public final class SecureMemoCipherCheck {
         rejects(pw, tampered, "바뀐 파일");
         rejects(pw, Arrays.copyOf(a, 10), "짧은 파일");
         rejects(pw, "not a memo file at all, long enough".getBytes(), "다른 형식");
+
+        // 연 동안 한 키로 저장: salt 는 파일 것을 그대로 쓰고 iv 만 바뀐다. 비밀번호로 여는 옛 방식과 서로 읽힌다.
+        SecureMemoCipher.Key key = SecureMemoCipher.deriveKey(pw, SecureMemoCipher.saltOf(a));
+        eq(text, SecureMemoCipher.decrypt(key, a), "키로 되풀기");
+        byte[] b = SecureMemoCipher.encrypt(key, text);
+        byte[] c = SecureMemoCipher.encrypt(key, text);
+        check(!Arrays.equals(b, c), "같은 키도 저장마다 다른 바이트(iv)");
+        check(Arrays.equals(SecureMemoCipher.saltOf(a), SecureMemoCipher.saltOf(b)), "키로 저장하면 salt 유지");
+        eq(text, SecureMemoCipher.decrypt(pw, b), "키로 저장한 파일을 비밀번호로 열기");
+        SecureMemoCipher.Key other = SecureMemoCipher.deriveKey(pw, SecureMemoCipher.newSalt());
+        rejectsKey(other, a, "다른 salt 의 키");
+        key.wipe();
+        rejectsKey(key, b, "지운 키");
         System.out.println("SecureMemoCipherCheck 통과");
     }
 
     private static void rejects(char[] pw, byte[] data, String what) throws Exception {
         try {
             SecureMemoCipher.decrypt(pw, data);
+        } catch (SecureMemoCipher.WrongPasswordException expected) {
+            return;
+        }
+        throw new AssertionError(what + ": 열리면 안 됨");
+    }
+
+    private static void rejectsKey(SecureMemoCipher.Key key, byte[] data, String what) throws Exception {
+        try {
+            SecureMemoCipher.decrypt(key, data);
         } catch (SecureMemoCipher.WrongPasswordException expected) {
             return;
         }

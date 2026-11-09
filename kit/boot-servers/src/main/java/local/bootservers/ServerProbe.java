@@ -7,6 +7,11 @@ import javax.management.remote.JMXConnector;
 import javax.management.remote.JMXConnectorFactory;
 import javax.management.remote.JMXServiceURL;
 import java.io.IOException;
+import java.io.InterruptedIOException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
+import java.net.SocketTimeoutException;
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
@@ -17,13 +22,23 @@ import java.util.Set;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import javax.management.MBeanServerConnection;
 import javax.management.ObjectName;
 
 /**
  * 실행 중인 서버 들여다보기: 스프링 부트 액추에이터 health 의 UP · DOWN, JVM 힙 사용량. 모두 attach 로 연 JMX 로 읽는다.
  * 모두 화면 스레드 밖에서 부른다(네트워크 · attach 를 기다린다).
+ * JMX 호출에는 시간 제한이 있다. 디버그 중단점에 모든 스레드가 멈춘 서버는 응답하지 않으므로, 제한을 넘기면 그 연결을 버리고
+ * 멈춘 호출이 끝날 때까지 그 프로세스는 바로 「알 수 없음」으로 돌려준다(다른 서버를 재는 일이 막히지 않게).
  */
 final class ServerProbe {
 
@@ -37,8 +52,22 @@ final class ServerProbe {
     private static final String STATUS_FIELD = "status";
     private static final String UP = "UP";
     private static final String JAVA_EXE = "java";
+    private static final String CALL_THREAD_NAME = "Moa IDE JMX 조회";
+    private static final String STUCK_MESSAGE = "JMX 응답 시간 초과 pid=";
     // attach 로 연 JMX 연결. 같은 프로세스는 다시 붙지 않고, 끝난 프로세스의 연결은 다음 조회 때 닫는다.
     private static final Map<Long, JMXConnector> CONNECTIONS = new ConcurrentHashMap<>();
+    // JMX 호출 하나(MBean 읽기 · 부르기)의 시간 제한
+    private static final long CALL_TIMEOUT_SECONDS = 3;
+    // attach 와 관리 에이전트 시작까지의 시간 제한(처음 붙을 때 에이전트를 띄우느라 호출 하나보다 오래 걸린다)
+    private static final long CONNECT_TIMEOUT_SECONDS = 10;
+    // 시간 제한을 넘긴 호출이 아직 끝나지 않은 프로세스. 그 호출이 끝나면 빠진다.
+    private static final Set<Long> STUCK = ConcurrentHashMap.newKeySet();
+    // JMX 호출을 돌리는 스레드. 인텔리제이 클래스를 쓰지 않으므로(MetricsProbeCheck 가 함께 컴파일) JDK 풀을 쓴다. IDE 를 끌 때 막지 않게 데몬.
+    private static final ExecutorService CALLS = Executors.newCachedThreadPool(task -> {
+        Thread thread = new Thread(task, CALL_THREAD_NAME);
+        thread.setDaemon(true);
+        return thread;
+    });
 
     private ServerProbe() {
     }
@@ -132,17 +161,105 @@ final class ServerProbe {
     static MBeanServerConnection connection(long rootPid) {
         closeDead();
         long pid = javaPid(rootPid);
+        if (STUCK.contains(pid)) {
+            return null;
+        }
         try {
             JMXConnector connector = CONNECTIONS.get(pid);
             if (connector == null) {
-                connector = connect(pid);
-                CONNECTIONS.put(pid, connector);
+                connector = timed(pid, CONNECT_TIMEOUT_SECONDS, () -> register(pid, connect(pid)));
             }
-            return connector.getMBeanServerConnection();
+            return timedConnection(pid, connector.getMBeanServerConnection());
         }
-        catch (IOException | AttachNotSupportedException | RuntimeException | LinkageError e) {
+        catch (Exception | LinkageError e) {
             close(pid);
             return null;
+        }
+    }
+
+    /** 새 연결을 맡긴다. 다른 스레드가 먼저 맡겼으면 새 연결은 닫고 먼저 것을 돌려준다. */
+    private static JMXConnector register(long pid, JMXConnector connector) {
+        JMXConnector earlier = CONNECTIONS.putIfAbsent(pid, connector);
+        if (earlier == null) {
+            return connector;
+        }
+        closeQuietly(connector);
+        return earlier;
+    }
+
+    /** 모든 호출을 CALL_TIMEOUT_SECONDS 안에 끝내는 연결. 넘기면 SocketTimeoutException(IOException). */
+    private static MBeanServerConnection timedConnection(long pid, MBeanServerConnection server) {
+        return (MBeanServerConnection) Proxy.newProxyInstance(MBeanServerConnection.class.getClassLoader(),
+                new Class<?>[] {MBeanServerConnection.class}, (proxy, method, args) -> {
+                    if (method.getDeclaringClass() == Object.class) {
+                        return objectMethod(proxy, method, args);
+                    }
+                    return timed(pid, CALL_TIMEOUT_SECONDS, () -> {
+                        try {
+                            return method.invoke(server, args);
+                        }
+                        catch (InvocationTargetException e) {
+                            throw rethrowable(e.getCause());
+                        }
+                    });
+                });
+    }
+
+    private static Object objectMethod(Object proxy, Method method, Object[] args) {
+        return switch (method.getName()) {
+            case "equals" -> proxy == args[0];
+            case "hashCode" -> System.identityHashCode(proxy);
+            default -> MBeanServerConnection.class.getName() + "@" + Integer.toHexString(System.identityHashCode(proxy));
+        };
+    }
+
+    private static Exception rethrowable(Throwable cause) {
+        if (cause instanceof Error error) {
+            throw error;
+        }
+        return (Exception) cause;
+    }
+
+    /**
+     * call 을 다른 스레드에서 돌리고 seconds 까지 기다린다. 넘기면 그 프로세스를 STUCK 에 넣고 연결을 버린 뒤 SocketTimeoutException.
+     * 멈춘 연결을 닫는 일도 원격 호출이라 막힐 수 있으므로 닫기는 다른 스레드에서 한다.
+     */
+    private static <T> T timed(long pid, long seconds, Callable<T> call) throws Exception {
+        if (STUCK.contains(pid)) {
+            throw new SocketTimeoutException(STUCK_MESSAGE + pid);
+        }
+        AtomicBoolean finished = new AtomicBoolean();
+        Future<T> future = CALLS.submit(() -> {
+            try {
+                return call.call();
+            }
+            finally {
+                finished.set(true);
+                STUCK.remove(pid);
+            }
+        });
+        try {
+            return future.get(seconds, TimeUnit.SECONDS);
+        }
+        catch (TimeoutException e) {
+            STUCK.add(pid);
+            if (finished.get()) {
+                STUCK.remove(pid);
+            }
+            future.cancel(true);
+            JMXConnector dropped = CONNECTIONS.remove(pid);
+            if (dropped != null) {
+                CALLS.execute(() -> closeQuietly(dropped));
+            }
+            throw new SocketTimeoutException(STUCK_MESSAGE + pid);
+        }
+        catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            future.cancel(true);
+            throw new InterruptedIOException(e.getMessage());
+        }
+        catch (ExecutionException e) {
+            throw rethrowable(e.getCause());
         }
     }
 
@@ -192,6 +309,10 @@ final class ServerProbe {
         if (connector == null) {
             return;
         }
+        closeQuietly(connector);
+    }
+
+    private static void closeQuietly(JMXConnector connector) {
         try {
             connector.close();
         }

@@ -160,6 +160,8 @@ final class ServersPanel extends SimpleToolWindowPanel {
     private static final String STATE_DOT = "● ";
     private static final String JOIN = " · ";
     private static final String PORT_PREFIX = ":";
+    // 주소의 「http://호스트:포트」 부분. 브라우저로 열 때 컨텍스트 경로만 남기려고 뗀다.
+    private static final String URL_ORIGIN = "^https?://[^/]+";
     // 상태 꼬리표 바탕(글 색은 테마의 성공 · 경고 · 오류 글 색)
     private static final Color RUNNING_BG = JBColor.namedColor("EIServers.runningBackground", new JBColor(0xDDF3E2, 0x213E2C));
     private static final Color STARTING_BG = JBColor.namedColor("EIServers.startingBackground", new JBColor(0xFBEFD9, 0x463927));
@@ -213,6 +215,9 @@ final class ServersPanel extends SimpleToolWindowPanel {
     private final JBTextField vmOptions = new JBTextField();
     private final JBTextField port = new JBTextField();
     private Boot detailBoot;
+    // 폼에 마지막으로 채운 줄과 그때 채운 값(이름 · 프로필 · 포트 · VM 옵션). 같은 줄을 다시 보일 때 사용자가 고치던 칸을 덮지 않는다.
+    private Boot formBoot;
+    private List<String> formValues = List.of();
     // WAS 설정 요약
     private final JPanel wasSummary = new JPanel(new BorderLayout());
     private WasSettings.Server detailServer;
@@ -310,6 +315,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
         side.add(allView.component(), "all");
         OnePixelSplitter splitter = new OnePixelSplitter(false, TREE_PROPORTION);
         splitter.setSplitterProportionKey(TREE_SPLIT_KEY);
+        splitter.setHonorComponentsMinimumSize(false);
         // 막대가 숨어 있으면 GridBag 이 자리를 잡지 않아 트리가 위로 붙는다.
         JPanel gaugeRow = new JPanel(new GridBagLayout());
         gaugeRow.add(gauge, new GridBagConstraints(0, 0, 1, 1, 1, 0, GridBagConstraints.WEST, GridBagConstraints.HORIZONTAL,
@@ -736,7 +742,14 @@ final class ServersPanel extends SimpleToolWindowPanel {
                 Messages.showInfoMessage(project, BootServersBundle.message("servers.browser.no.port"), BootServersBundle.message("servers.action.open.browser"));
                 return;
             }
-            BrowserUtil.browse("http://localhost:" + run.port);
+            // 포트는 이 줄의 실행 기록을 쓰고, 컨텍스트 경로(server.servlet.context-path)는 설정 파일에서 읽는다.
+            int port = run.port;
+            Module module = ((ApplicationConfiguration) b.settings().getConfiguration()).getConfigurationModule().getModule();
+            ReadAction.nonBlocking(() -> ServerBase.resolve(project, module))
+                    .expireWith(parent)
+                    .finishOnUiThread(ModalityState.defaultModalityState(),
+                            base -> BrowserUtil.browse(HttpText.baseUrl(port, base.replaceFirst(URL_ORIGIN, ""))))
+                    .submit(AppExecutorUtil.getAppExecutorService());
             return;
         }
         WasSettings.Server s = (WasSettings.Server) target;
@@ -773,13 +786,23 @@ final class ServersPanel extends SimpleToolWindowPanel {
 
     private void editSettings(Object target) {
         if (target instanceof Boot b) {
-            RunnerAndConfigurationSettings settings = b.settings() == null ? ServerLauncher.ensureSettings(b.module()) : b.settings();
-            if (settings != null && RunDialog.editConfiguration(project, settings, BootServersBundle.message("servers.run.config.title", settings.getName()))) {
-                rebuildRows();
+            if (b.settings() != null) {
+                editBoot(b.settings());
+            }
+            else {
+                ServerLauncher.ensureSettings(b.module(), this::editBoot);
             }
         }
         else {
             editWas((WasSettings.Server) target);
+        }
+    }
+
+    private void editBoot(RunnerAndConfigurationSettings settings) {
+        if (RunDialog.editConfiguration(project, settings, BootServersBundle.message("servers.run.config.title", settings.getName()))) {
+            // 대화상자에서 바꾼 값으로 폼을 다시 채운다.
+            formBoot = null;
+            rebuildRows();
         }
     }
 
@@ -1274,11 +1297,17 @@ final class ServersPanel extends SimpleToolWindowPanel {
         if (detailBoot != null) {
             title.setText(detailBoot.name());
             title.setIcon(bootIcon(detailBoot));
-            bootName.setText(detailBoot.name());
-            String vm = vmOf(detailBoot);
-            profile.setSelectedItem(getProperty(vm, PROFILE_KEY));
-            port.setText(getProperty(vm, PORT_KEY));
-            vmOptions.setText(vm);
+            // 줄을 다시 만들어도(색인 끝 · 실행 설정 바뀜) 같은 줄이고 사용자가 칸을 고치던 중이면 저장된 값으로 덮지 않는다.
+            boolean editing = formBoot != null && same(formBoot, detailBoot) && !formValues.equals(currentFormValues());
+            if (!editing) {
+                bootName.setText(detailBoot.name());
+                String vm = vmOf(detailBoot);
+                profile.setSelectedItem(getProperty(vm, PROFILE_KEY));
+                port.setText(getProperty(vm, PORT_KEY));
+                vmOptions.setText(vm);
+                formBoot = detailBoot;
+                formValues = currentFormValues();
+            }
             cards.show(detail, "boot");
         }
         else if (detailServer != null) {
@@ -1293,6 +1322,11 @@ final class ServersPanel extends SimpleToolWindowPanel {
         sideCards.show(side, allMode ? "all" : detailBoot == null && detailServer == null ? "none" : "server");
         updateStatus();
         refreshMonitorViews();
+    }
+
+    /** 폼 칸의 지금 값: 이름 · 프로필 · 포트 · VM 옵션. */
+    private List<String> currentFormValues() {
+        return List.of(bootName.getText(), String.valueOf(profile.getEditor().getItem()), port.getText(), vmOptions.getText());
     }
 
     // ---- 대시보드 · 연결 지도 · 모아 보기 ----
@@ -1501,25 +1535,37 @@ final class ServersPanel extends SimpleToolWindowPanel {
                 return;
             }
         }
-        RunnerAndConfigurationSettings settings = detailBoot.settings() == null ? ServerLauncher.ensureSettings(detailBoot.module()) : detailBoot.settings();
-        if (settings == null) {
-            return;
-        }
         Object selectedProfile = profile.getEditor().getItem();
         String vm = vmOptions.getText();
         vm = setProperty(vm, PROFILE_KEY, selectedProfile == null ? "" : selectedProfile.toString());
         vm = setProperty(vm, PORT_KEY, portText);
+        Boot boot = detailBoot;
+        String newVm = vm;
+        if (boot.settings() != null) {
+            applyBoot(boot.module(), boot.settings(), name, newVm);
+        }
+        else {
+            // 자리 줄: 메인 클래스를 화면 스레드 밖에서 찾아 실행 설정을 만든 뒤 적는다.
+            ServerLauncher.ensureSettings(boot.module(), settings -> applyBoot(boot.module(), settings, name, newVm));
+        }
+    }
+
+    /** 폼에서 읽어 검증한 이름 · VM 옵션을 실행 설정에 적고 그 줄을 다시 고른다. 화면 스레드에서 쓰기 의도 잠금 안에서 부른다. */
+    private void applyBoot(Module module, RunnerAndConfigurationSettings settings, String name, String vm) {
         ((ApplicationConfiguration) settings.getConfiguration()).setVMParameters(vm);
         RunManager runManager = RunManager.getInstance(project);
         if (!name.equals(settings.getName())) {
             String oldName = settings.getName();
             settings.setName(runManager.suggestUniqueName(name, settings.getType()));
-            // 이름이 바뀌면 실행 관리자의 색인 키도 바뀌므로 다시 등록해 맞춘다.
+            // 이름이 바뀌면 실행 관리자의 색인 키도 바뀌므로 다시 등록해 맞춘다. 실행 기록 · 서버 묶음의 줄 키도 새 이름으로 옮긴다.
             runManager.addConfiguration(settings);
             ServerRegistry.getInstance(project).rename(oldName, settings.getName());
+            ServerGroups.getInstance(project).renameMember(BOOT_KEY_PREFIX + oldName, BOOT_KEY_PREFIX + settings.getName());
         }
         runManager.setSelectedConfiguration(settings);
-        Boot applied = new Boot(detailBoot.module(), settings);
+        Boot applied = new Boot(module, settings);
+        // 적용한 값(고유하게 바뀐 이름 · 프로필 · 포트를 넣은 VM 옵션)으로 폼을 다시 채운다.
+        formBoot = null;
         rebuildRows();
         tree.clearSelection();
         select(applied);

@@ -12,11 +12,13 @@ import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.editor.colors.EditorColorsManager;
 import com.intellij.openapi.editor.colors.EditorFontType;
+import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.DumbAwareToggleAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.ui.SimpleToolWindowPanel;
+import com.intellij.openapi.util.ThrowableComputable;
 import com.intellij.ui.BrowserHyperlinkListener;
 import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.JBColor;
@@ -52,7 +54,8 @@ import java.util.Arrays;
 
 /**
  * 「보안 메모」 창 내용. 잠긴 면(비밀번호 입력 · 처음이면 새 비밀번호 정하기)과 메모 면 둘을 오간다.
- * 메모는 설정 폴더 파일 하나이고 {@link SecureMemoCipher} 로 암호화한다. 비밀번호는 풀려 있는 동안만 메모리에 두고 잠그면 지운다.
+ * 메모는 설정 폴더 파일 하나이고 {@link SecureMemoCipher} 로 암호화한다. 비밀번호는 키를 만든 뒤 바로 지우고,
+ * 키는 풀려 있는 동안만 메모리에 두고 잠그면 지운다. 느린 키 만들기는 열 때 · 비밀번호를 정할 때 한 번만 모달 진행 창에서 하고, 저장은 그 키를 쓴다.
  * 저장은 임시 파일에 쓴 뒤 원본과 바꿔치기한다(쓰다 끊겨도 원본이 남음). 「잠그기」와 창이 닫힐 때(IDE 종료 포함)는 바뀐 내용을 먼저 저장한다.
  * shortcut: 프로젝트 창마다 따로 열리므로 두 창에서 동시에 고치면 나중에 저장한 쪽이 이긴다. 여러 창에서 쓰게 되면 하나만 풀리게 막는다.
  */
@@ -98,7 +101,8 @@ final class SecureMemoPanel extends JPanel implements Disposable {
     private final JEditorPane preview = new JEditorPane();
     // 미리보기 켜짐. 도구 막대의 미리보기 단추가 이 값을 보인다.
     private boolean previewOn;
-    private char[] password;
+    // 풀려 있는 동안의 키. 잠겨 있으면 null.
+    private SecureMemoCipher.Key key;
     private String saved;
 
     SecureMemoPanel(Project project) {
@@ -223,8 +227,8 @@ final class SecureMemoPanel extends JPanel implements Disposable {
         cards.show(this, LOCKED);
     }
 
-    private void showOpen(char[] password, String text) {
-        this.password = password;
+    private void showOpen(SecureMemoCipher.Key key, String text) {
+        this.key = key;
         this.saved = text;
         area.setText(text);
         updateSaveState();
@@ -236,21 +240,53 @@ final class SecureMemoPanel extends JPanel implements Disposable {
 
     private void unlock() {
         char[] entered = passwordField.getPassword();
+        SecureMemoCipher.Key opened = null;
         try {
-            showOpen(entered, SecureMemoCipher.decrypt(entered, Files.readAllBytes(file)));
+            byte[] data = Files.readAllBytes(file);
+            byte[] salt = SecureMemoCipher.saltOf(data);
+            opened = deriveKey(entered, salt);
+            showOpen(opened, SecureMemoCipher.decrypt(opened, data));
         } catch (SecureMemoCipher.WrongPasswordException e) {
-            Arrays.fill(entered, '\0');
+            wipe(opened);
             showLocked(e.getMessage());
         } catch (IOException | GeneralSecurityException e) {
-            Arrays.fill(entered, '\0');
+            wipe(opened);
             showLocked(BootServersBundle.message("memo.open.failed", e.getMessage()));
+        } finally {
+            Arrays.fill(entered, '\0');
+        }
+    }
+
+    /** 비밀번호와 salt 에서 키를 만든다. 반복이 많아 느리므로 모달 진행 창 안에서 돌린다. 비밀번호 배열은 부른 쪽이 지운다. */
+    private SecureMemoCipher.Key deriveKey(char[] password, byte[] salt) throws GeneralSecurityException {
+        return ProgressManager.getInstance().runProcessWithProgressSynchronously(
+                (ThrowableComputable<SecureMemoCipher.Key, GeneralSecurityException>) () -> SecureMemoCipher.deriveKey(password, salt),
+                BootServersBundle.message("memo.progress.key"), false, project);
+    }
+
+    /** 새 비밀번호로 새 salt 의 키를 만들고 비밀번호 배열을 지운다. 실패하면 알리고 null. */
+    private SecureMemoCipher.Key newKey(char[] password) {
+        try {
+            return deriveKey(password, SecureMemoCipher.newSalt());
+        } catch (GeneralSecurityException e) {
+            Messages.showErrorDialog(project, BootServersBundle.message("common.save.failed", e.getMessage()), title());
+            return null;
+        } finally {
+            Arrays.fill(password, '\0');
+        }
+    }
+
+    private static void wipe(SecureMemoCipher.Key key) {
+        if (key != null) {
+            key.wipe();
         }
     }
 
     private void startNew() {
         char[] next = NewPasswordDialog.ask(project, BootServersBundle.message("memo.new.password.title"));
-        if (next != null) {
-            showOpen(next, "");
+        SecureMemoCipher.Key fresh = next == null ? null : newKey(next);
+        if (fresh != null) {
+            showOpen(fresh, "");
             save();
         }
     }
@@ -274,14 +310,18 @@ final class SecureMemoPanel extends JPanel implements Disposable {
         if (next == null) {
             return;
         }
-        char[] old = password;
-        password = next;
+        SecureMemoCipher.Key fresh = newKey(next);
+        if (fresh == null) {
+            return;
+        }
+        SecureMemoCipher.Key old = key;
+        key = fresh;
         if (write(area.getText())) {
-            Arrays.fill(old, '\0');
+            old.wipe();
             Messages.showInfoMessage(project, BootServersBundle.message("memo.changed"), title());
         } else {
-            Arrays.fill(next, '\0');
-            password = old;
+            fresh.wipe();
+            key = old;
         }
     }
 
@@ -299,7 +339,7 @@ final class SecureMemoPanel extends JPanel implements Disposable {
     private boolean write(String text) {
         Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
         try {
-            Files.write(tmp, SecureMemoCipher.encrypt(password, text));
+            Files.write(tmp, SecureMemoCipher.encrypt(key, text));
             Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
         } catch (IOException | GeneralSecurityException e) {
             Messages.showErrorDialog(project, BootServersBundle.message("common.save.failed", e.getMessage()), title());
@@ -317,7 +357,7 @@ final class SecureMemoPanel extends JPanel implements Disposable {
     private void keepUnsaved(String text) {
         Path copy = file.resolveSibling(file.getFileName() + UNSAVED_SUFFIX);
         try {
-            Files.write(copy, SecureMemoCipher.encrypt(password, text));
+            Files.write(copy, SecureMemoCipher.encrypt(key, text));
             Messages.showErrorDialog(project, BootServersBundle.message("memo.unsaved.kept", copy), title());
         } catch (IOException | GeneralSecurityException e) {
             Messages.showErrorDialog(project, BootServersBundle.message("memo.unsaved.lost", e.getMessage()), title());
@@ -325,12 +365,12 @@ final class SecureMemoPanel extends JPanel implements Disposable {
     }
 
     private boolean isOpen() {
-        return password != null;
+        return key != null;
     }
 
     private void clear() {
-        Arrays.fill(password, '\0');
-        password = null;
+        key.wipe();
+        key = null;
         saved = null;
         area.setText("");
         preview.setText("");

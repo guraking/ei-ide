@@ -22,13 +22,16 @@ import local.bootservers.ui.LineChart;
 import javax.swing.BoxLayout;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
+import javax.swing.Scrollable;
 import javax.swing.SwingConstants;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Color;
+import java.awt.Dimension;
 import java.awt.GridLayout;
+import java.awt.Rectangle;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.List;
@@ -46,6 +49,8 @@ final class DashboardView {
     private static final double PERCENT = 100;
     private static final double MILLIS_PER_SECOND = 1000;
     private static final int CHART_HEIGHT = 80;
+    // 휠 한 칸에 내려가는 거리(배율 전)
+    private static final int SCROLL_UNIT = 16;
     private static final int STAT_COLUMNS = 7;
     private static final float VALUE_FONT_BIGGER = 3f;
     private static final String CARD_EMPTY = "empty";
@@ -165,9 +170,41 @@ final class DashboardView {
             column.add(c);
             column.add(javax.swing.Box.createVerticalStrut(gap));
         }
-        JPanel top = new JPanel(new BorderLayout());
+        JPanel top = new WidthTrackingPanel();
         top.add(column, BorderLayout.NORTH);
         return top;
+    }
+
+    /** 스크롤 창 안에서 너비는 보이는 폭을 따르고(가로 스크롤 없음) 세로만 스크롤한다. */
+    private static final class WidthTrackingPanel extends JPanel implements Scrollable {
+        WidthTrackingPanel() {
+            super(new BorderLayout());
+        }
+
+        @Override
+        public Dimension getPreferredScrollableViewportSize() {
+            return getPreferredSize();
+        }
+
+        @Override
+        public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction) {
+            return JBUI.scale(SCROLL_UNIT);
+        }
+
+        @Override
+        public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction) {
+            return orientation == SwingConstants.VERTICAL ? visible.height : visible.width;
+        }
+
+        @Override
+        public boolean getScrollableTracksViewportWidth() {
+            return true;
+        }
+
+        @Override
+        public boolean getScrollableTracksViewportHeight() {
+            return false;
+        }
     }
 
     private static JComponent chartBox(String title, LineChart chart) {

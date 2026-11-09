@@ -38,6 +38,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 /**
  * 스프링 부트 모듈의 애플리케이션 실행 설정 하나를 서버 하나로 보고 시작 · 중지 · 재시작한다.
@@ -163,14 +164,36 @@ final class ServerLauncher {
         ProgramRunnerUtil.executeConfiguration(settings, executor);
     }
 
-    /** 모듈 이름의 실행 설정. 없으면 메인 클래스로 새로 만든다. 만들 수 없으면 사유를 알리고 null. */
-    static RunnerAndConfigurationSettings ensureSettings(Module module) {
+    /**
+     * 모듈 이름의 실행 설정을 then 에 넘긴다. 없으면 메인 클래스를 화면 스레드 밖에서 찾아, 화면 스레드에서 새로 만들어 넘긴다.
+     * 만들 수 없으면 사유를 알리고 then 을 부르지 않는다. 화면 스레드에서 부르고, then 은 화면 스레드의 쓰기 의도 잠금 안에서 불린다.
+     */
+    static void ensureSettings(Module module, Consumer<RunnerAndConfigurationSettings> then) {
         RunnerAndConfigurationSettings settings = findSettings(module);
         if (settings != null) {
-            return settings;
+            then.accept(settings);
+            return;
         }
-        PsiClass mainClass = findMainClass(module);
-        return mainClass == null ? null : createSettings(module, mainClass);
+        PsiClass annotation = bootAnnotation(module.getProject());
+        if (annotation == null) {
+            return;
+        }
+        ReadAction.nonBlocking(() -> mainClasses(module, annotation))
+                .inSmartMode(module.getProject())
+                .expireWhen(module::isDisposed)
+                .finishOnUiThread(ModalityState.defaultModalityState(), found -> WriteIntentReadAction.run(() -> {
+                    // 찾는 사이에 모듈 이름의 실행 설정이 생겼으면 그것을 쓴다.
+                    RunnerAndConfigurationSettings existing = findSettings(module);
+                    if (existing != null) {
+                        then.accept(existing);
+                        return;
+                    }
+                    PsiClass mainClass = pickMainClass(module, found);
+                    if (mainClass != null) {
+                        then.accept(createSettings(module, mainClass));
+                    }
+                }))
+                .submit(AppExecutorUtil.getAppExecutorService());
     }
 
     /** 이 모듈의 살아 있는 실행 설정을 모두 중지한다. */
@@ -202,17 +225,6 @@ final class ServerLauncher {
             return;
         }
         ExecutionUtil.restart(descriptors.get(0));
-    }
-
-    /**
-     * 우클릭한 모듈 폴더 아래(본 소스만, 시험 소스 제외)에서 @SpringBootApplication 클래스를 찾는다.
-     * Gradle 프로젝트는 폴더 모듈(supp)과 소스 묶음 모듈(supp.main · supp.test)이 나뉘고 의존성은 supp.main 에만 붙으므로,
-     * 우클릭한 모듈 하나가 아니라 그 폴더 아래 전체를 본다.
-     * 정확히 하나일 때만 돌려주고, 없거나 여럿이면 사유를 알리고 null 을 돌려준다.
-     */
-    private static PsiClass findMainClass(Module module) {
-        PsiClass annotation = bootAnnotation(module.getProject());
-        return annotation == null ? null : pickMainClass(module, mainClasses(module, annotation));
     }
 
     /** @SpringBootApplication 주석 클래스. 색인 중이거나 스프링 부트 의존성이 없으면 사유를 알리고 null. 화면 스레드에서 부른다. */

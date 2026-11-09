@@ -1,0 +1,10 @@
+{
+  "name": "ei-web-servers",
+  "private": true,
+  "dependencies": {
+    "@vtsls/language-server": "0.3.0",
+    "@vue/language-server": "3.3.14",
+    "@vue/typescript-plugin": "3.3.14",
+    "typescript": "5.9.3"
+  }
+}

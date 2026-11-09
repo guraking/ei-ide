@@ -7,6 +7,7 @@ import com.intellij.psi.PsiAnnotation;
 import com.intellij.psi.PsiArrayType;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiClassType;
+import com.intellij.psi.PsiEnumConstant;
 import com.intellij.psi.PsiField;
 import com.intellij.psi.PsiModifier;
 import com.intellij.psi.PsiParameter;
@@ -73,10 +74,17 @@ final class OpenApiCollector {
         SIMPLE_TYPES.put("boolean", bool);
         SIMPLE_TYPES.put("java.lang.Boolean", bool);
         SIMPLE_TYPES.put("java.time.LocalDate", Schema.of(OpenApiSpec.TYPE_STRING, FORMAT_DATE));
-        for (String name : new String[]{"java.time.LocalDateTime", "java.util.Date", "java.time.ZonedDateTime",
-                "java.time.OffsetDateTime", "java.time.Instant"}) {
+        for (String name : new String[]{"java.time.LocalDateTime", "java.util.Date"}) {
             SIMPLE_TYPES.put(name, dateTime);
         }
+        // 시간대가 있어야 읽히는 형식은 시험 값에 「Z」 를 붙인다.
+        Schema offsetDateTime = Schema.of(OpenApiSpec.TYPE_STRING, ApiText.FORMAT_DATE_TIME_OFFSET);
+        for (String name : new String[]{"java.time.ZonedDateTime", "java.time.OffsetDateTime", "java.time.Instant"}) {
+            SIMPLE_TYPES.put(name, offsetDateTime);
+        }
+        SIMPLE_TYPES.put("java.time.LocalTime", Schema.of(OpenApiSpec.TYPE_STRING, ApiText.FORMAT_TIME));
+        SIMPLE_TYPES.put("java.time.YearMonth", Schema.of(OpenApiSpec.TYPE_STRING, ApiText.FORMAT_YEAR_MONTH));
+        SIMPLE_TYPES.put("java.time.Year", Schema.of(OpenApiSpec.TYPE_STRING, ApiText.FORMAT_YEAR));
     }
 
     private OpenApiCollector() {
@@ -148,7 +156,7 @@ final class OpenApiCollector {
             return null;
         }
         if (c.isEnum()) {
-            return Schema.of(OpenApiSpec.TYPE_STRING);
+            return enumSchema(c);
         }
         String name = c.getQualifiedName();
         if (name == null) {
@@ -159,6 +167,21 @@ final class OpenApiCollector {
             return Schema.of(OpenApiSpec.TYPE_STRING);
         }
         return known;
+    }
+
+    /** 열거형: 상수 이름들을 format 에 싣는다(ApiText.FORMAT_ENUM_PREFIX). 상수가 없으면 글. */
+    private static Schema enumSchema(PsiClass c) {
+        StringBuilder constants = new StringBuilder();
+        for (PsiField field : c.getFields()) {
+            if (field instanceof PsiEnumConstant) {
+                if (constants.length() > 0) {
+                    constants.append(ApiText.ENUM_SEPARATOR);
+                }
+                constants.append(field.getName());
+            }
+        }
+        return constants.length() == 0 ? Schema.of(OpenApiSpec.TYPE_STRING)
+                : Schema.of(OpenApiSpec.TYPE_STRING, ApiText.FORMAT_ENUM_PREFIX + constants);
     }
 
     /** 주석 없는 객체 매개변수로 받을 사용자 클래스. 프레임워크 · JDK 형식 · 배열이면 null. */

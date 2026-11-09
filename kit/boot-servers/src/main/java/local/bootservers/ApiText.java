@@ -11,6 +11,12 @@ import com.google.gson.JsonPrimitive;
 import local.bootservers.OpenApiSpec.Schema;
 
 import java.net.URLEncoder;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CoderResult;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.HashSet;
@@ -47,8 +53,34 @@ final class ApiText {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().serializeNulls().create();
     private static final String FORMAT_DATE = "date";
     private static final String FORMAT_DATE_TIME = "date-time";
-    /** {이름} · {이름:정규식}. */
-    private static final Pattern PATH_VARIABLE = Pattern.compile("\\{([^}:]+)(?::[^}]*)?}");
+    /** LocalTime(시각만). 시험 값은 MIDNIGHT 의 시각 부분. */
+    static final String FORMAT_TIME = "time";
+    /** YearMonth. 시험 값은 오늘의 yyyy-MM. */
+    static final String FORMAT_YEAR_MONTH = "year-month";
+    /** Year. 시험 값은 오늘의 yyyy. */
+    static final String FORMAT_YEAR = "year";
+    /** Instant · OffsetDateTime · ZonedDateTime(시간대 필요). 시험 값은 오늘 자정 UTC(「Z」). */
+    static final String FORMAT_DATE_TIME_OFFSET = "date-time-offset";
+    /**
+     * 열거형은 format 에 「enum:상수1,상수2」 로 상수 이름을 싣는다. 시험 값은 첫 상수.
+     * shortcut: Schema 에 enum 칸이 없어 format 에 싣는다, Schema 를 OpenAPI 글로 내보내게 되면 enum 칸을 따로 둔다.
+     */
+    static final String FORMAT_ENUM_PREFIX = "enum:";
+    static final String ENUM_SEPARATOR = ",";
+    private static final String UTC_MARK = "Z";
+    private static final int YEAR_MONTH_LENGTH = "yyyy-MM".length();
+    private static final int YEAR_LENGTH = "yyyy".length();
+    /** 경로 변수 이름과 정규식을 가르는 글자({이름:정규식}). */
+    private static final char VARIABLE_REGEX_MARK = ':';
+    /** 스프링 설정 자리표시({@code ${키}}) 앞 글자. 이 뒤의 { } 는 경로 변수가 아니다. */
+    private static final char PLACEHOLDER_MARK = '$';
+    /** 응답 헤더 · HTML meta 의 charset 값. */
+    private static final Pattern CHARSET = Pattern.compile("(?i)charset\\s*=\\s*[\"']?([\\w.:-]+)");
+    /** HTML 앞부분에서 meta charset 을 찾는 바이트 수(HTML 표준은 앞 1024 바이트 안에 두라고 한다). */
+    private static final int META_SCAN_BYTES = 1024;
+    private static final Pattern META_CHARSET = Pattern.compile("(?i)<meta[^>]*charset\\s*=\\s*[\"']?([\\w.:-]+)");
+    /** 헤더 · meta 에 charset 이 없고 UTF-8 로도 읽히지 않을 때 쓰는 글자 모음(한글 윈도우 · EUC-KR 의 상위 집합). */
+    static final Charset FALLBACK_CHARSET = Charset.forName("MS949");
 
     private ApiText() {
     }
@@ -108,13 +140,19 @@ final class ApiText {
                 return new JsonPrimitive(true);
             }
             default -> {
-                if (FORMAT_DATE.equals(schema.format())) {
-                    return new JsonPrimitive(today);
+                String format = schema.format() == null ? "" : schema.format();
+                if (format.startsWith(FORMAT_ENUM_PREFIX) && format.length() > FORMAT_ENUM_PREFIX.length()) {
+                    return new JsonPrimitive(format.substring(FORMAT_ENUM_PREFIX.length()).split(ENUM_SEPARATOR)[0]);
                 }
-                if (FORMAT_DATE_TIME.equals(schema.format())) {
-                    return new JsonPrimitive(today + MIDNIGHT);
-                }
-                return new JsonPrimitive(sampleText(name));
+                return new JsonPrimitive(switch (format) {
+                    case FORMAT_DATE -> today;
+                    case FORMAT_DATE_TIME -> today + MIDNIGHT;
+                    case FORMAT_DATE_TIME_OFFSET -> today + MIDNIGHT + UTC_MARK;
+                    case FORMAT_TIME -> MIDNIGHT.substring(1);
+                    case FORMAT_YEAR_MONTH -> today.substring(0, YEAR_MONTH_LENGTH);
+                    case FORMAT_YEAR -> today.substring(0, YEAR_LENGTH);
+                    default -> sampleText(name);
+                });
             }
         }
     }
@@ -135,16 +173,91 @@ final class ApiText {
         return SAMPLE_TEXT;
     }
 
-    /** 경로 틀의 {변수} 를 values 의 값(주소용으로 인코딩)으로 바꾼다. 값이 없는 변수는 시험 숫자. */
+    /**
+     * 경로 틀의 {변수} · {변수:정규식} 을 values 의 값(주소용으로 인코딩)으로 바꾼다. 값이 없는 변수는 시험 숫자.
+     * 정규식 안의 { } 는 짝을 세어 넘기고, {@code ${키}} 자리표시와 짝이 없는 { 는 그대로 둔다.
+     */
     static String fillPath(String path, Map<String, String> values) {
-        Matcher m = PATH_VARIABLE.matcher(path == null ? "" : path);
+        String p = path == null ? "" : path;
         StringBuilder out = new StringBuilder();
-        while (m.find()) {
-            String value = values.getOrDefault(m.group(1), String.valueOf(SAMPLE_NUMBER));
-            m.appendReplacement(out, Matcher.quoteReplacement(URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20")));
+        int i = 0;
+        while (i < p.length()) {
+            char c = p.charAt(i);
+            int end = c == '{' ? closingBrace(p, i) : -1;
+            if (end < 0) {
+                out.append(c);
+                i++;
+                continue;
+            }
+            if (i > 0 && p.charAt(i - 1) == PLACEHOLDER_MARK) {
+                out.append(p, i, end + 1);
+            } else {
+                String inner = p.substring(i + 1, end);
+                int mark = inner.indexOf(VARIABLE_REGEX_MARK);
+                String name = (mark < 0 ? inner : inner.substring(0, mark)).strip();
+                String value = values.getOrDefault(name, String.valueOf(SAMPLE_NUMBER));
+                out.append(URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20"));
+            }
+            i = end + 1;
         }
-        m.appendTail(out);
         return out.toString();
+    }
+
+    /** open 자리의 { 와 짝인 } 자리. 안쪽 { } 짝을 센다. 짝이 없으면 -1. */
+    private static int closingBrace(String text, int open) {
+        int depth = 0;
+        for (int i = open; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '{') {
+                depth++;
+            } else if (c == '}') {
+                depth--;
+                if (depth == 0) {
+                    return i;
+                }
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * 응답 본문 바이트를 글로. Content-Type 의 charset → HTML meta charset → 엄격한 UTF-8 → MS949 순.
+     * cut 이면 끝이 잘린 것이므로 UTF-8 판단에서 마지막 덜 받은 글자는 틀린 것으로 보지 않는다.
+     */
+    static String decode(byte[] bytes, String contentType, boolean cut) {
+        Charset declared = charsetOf(CHARSET, contentType);
+        if (declared == null) {
+            int scan = Math.min(bytes.length, META_SCAN_BYTES);
+            declared = charsetOf(META_CHARSET, new String(bytes, 0, scan, StandardCharsets.ISO_8859_1));
+        }
+        if (declared != null) {
+            return new String(bytes, declared);
+        }
+        CharsetDecoder utf8 = StandardCharsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT);
+        CharBuffer out = CharBuffer.allocate(bytes.length);
+        CoderResult result = utf8.decode(ByteBuffer.wrap(bytes), out, !cut);
+        if (!result.isError() && (cut || utf8.flush(out).isUnderflow())) {
+            return out.flip().toString();
+        }
+        return new String(bytes, FALLBACK_CHARSET);
+    }
+
+    /** text 에서 pattern 의 charset 이름을 찾아 이 JVM 이 아는 Charset 으로. 없거나 모르는 이름이면 null. */
+    private static Charset charsetOf(Pattern pattern, String text) {
+        if (text == null) {
+            return null;
+        }
+        Matcher m = pattern.matcher(text);
+        if (!m.find()) {
+            return null;
+        }
+        try {
+            return Charset.forName(m.group(1));
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     /** 기본 주소 + 경로. 경로 앞 / 를 하나로 맞춘다. */

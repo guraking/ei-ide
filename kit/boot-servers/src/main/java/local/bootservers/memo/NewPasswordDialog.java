@@ -15,7 +15,6 @@ import java.util.Arrays;
 final class NewPasswordDialog extends DialogWrapper {
 
     private static final int MIN_LENGTH = 4;
-    private static final int FIELD_COLUMNS = 24;
 
     private final JBPasswordField first = new JBPasswordField();
     private final JBPasswordField second = new JBPasswordField();
@@ -23,8 +22,6 @@ final class NewPasswordDialog extends DialogWrapper {
     private NewPasswordDialog(@Nullable Project project, String title) {
         super(project, true);
         setTitle(title);
-        first.setColumns(FIELD_COLUMNS);
-        second.setColumns(FIELD_COLUMNS);
         init();
     }
 

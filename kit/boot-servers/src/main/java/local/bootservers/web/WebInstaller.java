@@ -14,9 +14,16 @@ import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.util.io.HttpRequests;
 import local.bootservers.BootServersBundle;
+import com.intellij.credentialStore.Credentials;
+import com.intellij.util.net.JdkProxyProvider;
+import com.intellij.util.net.ProxyAuthentication;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.Proxy;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -30,11 +37,12 @@ final class WebInstaller {
     private static final String TEMP_SUFFIX = ".tmp";
     /** 새 Node 를 넣는 동안 옛 Node 를 옮겨 두는 폴더 꼬리. 다 넣은 뒤 지우고, 실패하면 되돌린다. */
     private static final String OLD_SUFFIX = ".old";
+    private static final String PROXY_MASK = "<프록시>";
 
     private WebInstaller() {
     }
 
-    /** nodejs.org 의 최신 LTS 윈도우 zip 을 받아 SHA256 을 맞춰 보고 <base>/node 에 푼다. */
+    /** nodejs.org 에서 versions.properties 에 고정한 판의 윈도우 zip 을 받아 SHA256 을 맞춰 보고 <base>/node 에 푼다. */
     static void installNode(Project project) {
         new Task.Backgroundable(project, BootServersBundle.message("web.install.node.progress"), true) {
             @Override
@@ -68,10 +76,7 @@ final class WebInstaller {
             throw new IOException(BootServersBundle.message("web.install.node.arch"));
         }
         indicator.setText(BootServersBundle.message("web.install.node.check"));
-        String version = NodeDist.latestLts(HttpRequests.request(NodeDist.INDEX_URL).readString(indicator), arch);
-        if (version == null) {
-            throw new IOException(BootServersBundle.message("web.install.node.no.lts", arch));
-        }
+        String version = WebTools.nodeVersion();
         String zipName = NodeDist.zipName(version, arch);
         String expected = NodeDist.expectedSha256(
                 HttpRequests.request(NodeDist.shasumsUrl(version)).readString(indicator), zipName);
@@ -130,7 +135,7 @@ final class WebInstaller {
         FileUtil.delete(old.toFile());
     }
 
-    /** node 로 npm install 을 돌려 <base>/servers 에 언어 서버를 받는다. */
+    /** 판을 고정한 package.json · package-lock.json 을 넣고 node 로 npm ci 를 돌려 <base>/servers 에 언어 서버를 받는다. IDE 프록시 설정을 npm 에 넘긴다. */
     static void installServers(Project project, Path node) {
         new Task.Backgroundable(project, BootServersBundle.message("web.install.servers.progress"), true) {
             @Override
@@ -138,12 +143,18 @@ final class WebInstaller {
                 Path base = WebLspSupport.baseDir();
                 List<String> command = WebTools.installCommand(WebTools.npmCommand(node, SystemInfo.isWindows), base);
                 ProcessOutput output;
+                String proxy = npmProxy();
                 try {
-                    Files.createDirectories(WebTools.serversDir(base));
+                    WebTools.writePinnedPackages(WebTools.serversDir(base));
                     GeneralCommandLine cmd = new GeneralCommandLine(command)
                             .withCharset(StandardCharsets.UTF_8)
                             .withWorkDirectory(WebTools.serversDir(base).toFile());
-                    indicator.setText("npm install " + String.join(" ", WebTools.SERVER_PACKAGES));
+                    if (proxy != null) {
+                        for (String name : WebTools.PROXY_ENV_NAMES) {
+                            cmd.withEnvironment(name, proxy);
+                        }
+                    }
+                    indicator.setText("npm ci");
                     output = new CapturingProcessHandler(cmd).runProcessWithProgressIndicator(indicator);
                 } catch (IOException | ExecutionException e) {
                     fail(project, BootServersBundle.message("web.install.servers.failed"), e.getMessage());
@@ -154,7 +165,7 @@ final class WebInstaller {
                 }
                 if (output.getExitCode() != 0 || !WebTools.serversInstalled(base)) {
                     fail(project, BootServersBundle.message("web.install.servers.failed.code", output.getExitCode()),
-                            tail(output.getStdout() + "\n" + output.getStderr()));
+                            hideProxy(tail(output.getStdout() + "\n" + output.getStderr()), proxy));
                 }
             }
 
@@ -172,6 +183,28 @@ final class WebInstaller {
                 WebLspSupport.clearNotice(project);
             }
         }.queue();
+    }
+
+    /**
+     * IDE 설정의 프록시(PAC · 자동 감지 포함)가 npm 저장소에 쓰는 HTTP 프록시 주소. 아는 인증 정보가 있으면 주소에 넣는다.
+     * 프록시를 쓰지 않으면 null. 이 주소는 비밀번호를 담을 수 있으므로 로그 · 알림에 남기지 않는다.
+     */
+    private static @Nullable String npmProxy() {
+        List<Proxy> proxies = JdkProxyProvider.getInstance().getProxySelector().select(URI.create(WebTools.NPM_REGISTRY));
+        for (Proxy proxy : proxies) {
+            if (proxy.type() == Proxy.Type.HTTP && proxy.address() instanceof InetSocketAddress address) {
+                Credentials credentials = ProxyAuthentication.getInstance().getKnownAuthentication(address.getHostString(), address.getPort());
+                return WebTools.proxyUrl(address.getHostString(), address.getPort(),
+                        credentials == null ? null : credentials.getUserName(),
+                        credentials == null ? null : credentials.getPasswordAsString());
+            }
+        }
+        return null;
+    }
+
+    /** npm 출력에 프록시 주소(인증 정보 포함)가 나오면 가린다. */
+    private static String hideProxy(String text, @Nullable String proxy) {
+        return proxy == null ? text : text.replace(proxy, PROXY_MASK);
     }
 
     private static String tail(String text) {

@@ -29,6 +29,7 @@ public final class WebCheck {
             vue(tmp);
             bridge();
             dist(tmp);
+            pinned(tmp);
         } finally {
             deleteTree(tmp);
         }
@@ -76,8 +77,29 @@ public final class WebCheck {
         eq(List.of(unixNode.toString(), unixCli.toRealPath().toString()), WebTools.npmCommand(unixNode, false), "유닉스 npm-cli.js");
 
         List<String> install = WebTools.installCommand(List.of("node", "cli.js"), base);
-        eq(List.of("node", "cli.js", "install", "--prefix", base.resolve("servers").toString(), "--no-fund", "--no-audit",
-                "@vtsls/language-server", "@vue/language-server", "@vue/typescript-plugin", "typescript@5"), install, "설치 명령");
+        eq(List.of("node", "cli.js", "ci", "--prefix", base.resolve("servers").toString(), "--no-fund", "--no-audit"), install, "설치 명령");
+    }
+
+    /** jar 자원(resources/web)이 classpath 에 있어야 한다. */
+    private static void pinned(Path tmp) throws IOException {
+        yes(WebTools.nodeVersion().matches("v\\d+\\.\\d+\\.\\d+"), "Node 판 고정");
+        Path servers = tmp.resolve("pinned/servers");
+        WebTools.writePinnedPackages(servers);
+        JsonObject pkg = JsonParser.parseString(Files.readString(servers.resolve("package.json"))).getAsJsonObject();
+        JsonObject lock = JsonParser.parseString(Files.readString(servers.resolve("package-lock.json"))).getAsJsonObject();
+        JsonObject deps = pkg.getAsJsonObject("dependencies");
+        for (String name : new String[]{"@vtsls/language-server", "@vue/language-server", "@vue/typescript-plugin", "typescript"}) {
+            String version = deps.get(name).getAsString();
+            yes(version.matches("\\d+\\.\\d+\\.\\d+"), "정확한 판 " + name);
+            eq(version, lock.getAsJsonObject("packages").getAsJsonObject("node_modules/" + name).get("version").getAsString(), "잠금 판 " + name);
+        }
+        yes(deps.get("typescript").getAsString().startsWith("5."), "typescript 5");
+        eq(deps, lock.getAsJsonObject("packages").getAsJsonObject("").getAsJsonObject("dependencies"), "package.json 과 잠금 파일이 같음");
+
+        eq("http://p.local:3128", WebTools.proxyUrl("p.local", 3128, null, null), "프록시");
+        eq("http://u%40x:p%3A%20w@p.local:8080", WebTools.proxyUrl("p.local", 8080, "u@x", "p: w"), "인증 프록시");
+        eq("http://u@p.local:8080", WebTools.proxyUrl("p.local", 8080, "u", ""), "비밀번호 없음");
+        eq("http://[::1]:8080", WebTools.proxyUrl("::1", 8080, "", "x"), "IPv6");
     }
 
     private static void servers(Path tmp) throws IOException {
