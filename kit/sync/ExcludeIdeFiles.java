@@ -10,6 +10,9 @@ import com.intellij.openapi.vcs.VcsRoot;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -21,6 +24,8 @@ import java.util.List;
  * 이클립스 줄(ECLIPSE_LINES)을 넣지 않고, 예전에 넣었으면 뺀다. 추적 여부는 git ls-files 로 보므로 작업 스레드에서 돈다.
  * 빼는 것은 우리 표시 줄(MARKER) 바로 아래에 이어진 우리 줄뿐이다. 사용자가 직접 적은 줄은 지우지 않는다.
  * 매핑이 바뀔 때마다 도는 갱신은 한 번에 하나씩 돈다(LOCK). 같은 exclude 를 둘이 동시에 읽고 쓰지 않는다.
+ * 한 번 맞춘 저장소는 IDE 를 끌 때까지 다시 보지 않는다(done). 매핑이 바뀔 때마다 저장소마다 git 을 띄우지 않기 위해서다.
+ * 열쇠에 .git 폴더 만든 시각을 넣어, 지우고 같은 자리에 다시 받은 저장소는 다시 맞춘다.
  */
 public final class ExcludeIdeFiles implements VcsListener {
 
@@ -33,6 +38,8 @@ public final class ExcludeIdeFiles implements VcsListener {
     private static final Object LOCK = new Object();
 
     private final Project project;
+    // 이번 실행에서 맞춘 저장소: .git 경로 + 만든 시각. LOCK 안에서만 읽고 쓴다.
+    private final Set<String> done = new HashSet<>();
 
     public ExcludeIdeFiles(Project project) {
         this.project = project;
@@ -55,10 +62,15 @@ public final class ExcludeIdeFiles implements VcsListener {
                 continue;
             }
             Path exclude = root.getPath().toNioPath().resolve(".git").resolve("info").resolve("exclude");
-            if (!Files.isDirectory(exclude.getParent().getParent())) {
+            Path gitDir = exclude.getParent().getParent();
+            if (!Files.isDirectory(gitDir)) {
                 continue;
             }
             try {
+                String key = gitDir + "|" + Files.readAttributes(gitDir, BasicFileAttributes.class).creationTime();
+                if (done.contains(key)) {
+                    continue;
+                }
                 boolean eclipseTracked = !SyncPanel.git(root.getPath().toNioPath().toFile(), TRACKED_ECLIPSE).isBlank();
                 List<String> have = Files.exists(exclude) ? Files.readAllLines(exclude, StandardCharsets.UTF_8) : List.of();
                 List<String> out = eclipseTracked ? withoutOurEclipseLines(have) : new ArrayList<>(have);
@@ -72,11 +84,12 @@ public final class ExcludeIdeFiles implements VcsListener {
                     out.add(MARKER);
                     out.addAll(add);
                 }
-                if (out.equals(have)) {
-                    continue;
+                if (!out.equals(have)) {
+                    Files.createDirectories(exclude.getParent());
+                    Files.write(exclude, out, StandardCharsets.UTF_8);
                 }
-                Files.createDirectories(exclude.getParent());
-                Files.write(exclude, out, StandardCharsets.UTF_8);
+                // 실패하면 표시하지 않아 다음 매핑 변경 때 다시 해 본다.
+                done.add(key);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return;

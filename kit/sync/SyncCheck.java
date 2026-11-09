@@ -132,6 +132,7 @@ public class SyncCheck {
     checkNestedRepo();
     checkAudit1106();
     checkCloneBranch();
+    checkMavenUnignore();
 
     // Push 단추 숫자 · 받을 저장소: git status -b 브랜치 줄의 ahead · behind.
     eq(SyncPanel.parseTracking("## main...origin/main [ahead 2, behind 13]\n M a.txt\n"), new SyncPanel.Tracking(2, 13));
@@ -605,6 +606,15 @@ public class SyncCheck {
     eq(SyncPanel.isNestedRepo(new File(outer, "plain/")), false);
     // git 은 중첩 저장소를 「?? inner/」 로 보고하므로 compare 가 이 줄을 거른다.
     eq(SyncPanel.git(outer, "status", "--porcelain=v1", "-unormal").contains("?? inner/"), true);
+  }
+
+  /** 열 때 Maven 무시 풀기: 우리가 무시한 pom 만, 우리 기록이 없는 저장소는 전부, 다른 저장소는 그대로. */
+  private static void checkMavenUnignore() {
+    List<String> ignored = List.of("C:/git/a/pom.xml", "C:/git/a/sample/pom.xml", "C:/git/b/pom.xml", "C:/git/c/pom.xml", "C:/git/ab/pom.xml");
+    eq(MavenRepos.toUnignore(ignored, List.of("C:/git/a/pom.xml"), List.of("C:/git/a")), List.of("C:/git/a/pom.xml"));
+    eq(MavenRepos.toUnignore(ignored, List.of("C:/git/a/pom.xml"), List.of("C:/git/b")), List.of("C:/git/b/pom.xml"));
+    eq(MavenRepos.toUnignore(ignored, List.of(), List.of("C:/git/a")), List.of("C:/git/a/pom.xml", "C:/git/a/sample/pom.xml"));
+    eq(MavenRepos.toUnignore(ignored, List.of(), List.of("C:/git/x")), List.of());
   }
 
   /** 받을 브랜치: 서버 브랜치 읽기 · 내 브랜치 위로 · 찾기 · 추적 걸고 꺼내기. */

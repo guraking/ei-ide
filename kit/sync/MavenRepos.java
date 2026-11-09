@@ -1,5 +1,6 @@
 package kinggura.sync;
 
+import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.project.Project;
@@ -30,31 +31,42 @@ final class MavenRepos {
   // IDE 를 켠 직후 Maven 목록이 읽히기를 기다리는 간격과 횟수(합쳐 5분).
   private static final int RETRY_SECONDS = 3;
   private static final int RETRY_LIMIT = 100;
+  // 닫을 때 우리가 Maven 무시 목록에 넣은 pom 경로(프로젝트 설정). 열 때 이것만 푼다(open).
+  private static final String IGNORED_KEY = "kinggura.sync.mavenIgnored";
 
   private MavenRepos() {
   }
 
   /**
-   * 이 폴더들 안의 pom 을 Maven 무시 목록에 넣거나(closed) 뺀다. 바뀐 것이 있으면 Maven 을 다시 읽는다(Reload All Maven Projects 와 같음).
+   * 이 폴더들 안의 pom 을 Maven 무시 목록에 넣거나(closed) 뺀다(open). 바뀐 것이 있으면 Maven 을 다시 읽는다(Reload All Maven Projects 와 같음).
    * IDE 를 켠 직후처럼 Maven 목록이 아직 안 읽혔으면 RETRY_SECONDS 마다 다시 해 본다(최대 RETRY_LIMIT 번). Maven 프로젝트가 아니면 하지 않는다.
    */
   static void setClosed(Project project, Collection<String> roots, boolean closed) {
-    setClosed(project, List.copyOf(roots), closed, 0);
+    setClosed(project, List.copyOf(roots), closed, !closed, 0);
   }
 
-  private static void setClosed(Project project, List<String> roots, boolean closed, int attempt) {
+  /** 폴더가 없어져 지운 닫은 저장소의 Maven 무시를 푼다(CloseRepoAction.forgetClosed). 열기와 같되 「다시 읽는 중」 알림은 띄우지 않는다. */
+  static void forget(Project project, Collection<String> roots) {
+    setClosed(project, List.copyOf(roots), false, false, 0);
+  }
+
+  private static void setClosed(Project project, List<String> roots, boolean closed, boolean notify, int attempt) {
     if (project.isDisposed()) return;
     MavenProjectsManager manager = MavenProjectsManager.getInstance(project);
     boolean loading = !manager.isInitialized() || (manager.isMavenizedProject() && manager.getProjects().isEmpty());
     if (loading) {
       if (attempt < RETRY_LIMIT) {
         AppExecutorUtil.getAppScheduledExecutorService().schedule(
-          () -> ApplicationManager.getApplication().invokeLater(() -> setClosed(project, roots, closed, attempt + 1), project.getDisposed()),
+          () -> ApplicationManager.getApplication().invokeLater(() -> setClosed(project, roots, closed, notify, attempt + 1), project.getDisposed()),
           RETRY_SECONDS, TimeUnit.SECONDS);
       }
       return;
     }
     if (!manager.isMavenizedProject()) return;
+    if (!closed) {
+      open(project, manager, roots, notify);
+      return;
+    }
     List<MavenProject> change = new ArrayList<>();
     for (MavenProject maven : manager.getProjects()) {
       if (manager.getIgnoredState(maven) == closed) continue;
@@ -66,10 +78,69 @@ final class MavenRepos {
       }
     }
     if (change.isEmpty()) return;
-    manager.setIgnoredState(change, closed);
+    List<String> ours = ignoredByUs(project);
+    for (MavenProject maven : change) {
+      if (!ours.contains(maven.getPath())) ours.add(maven.getPath());
+    }
+    PropertiesComponent.getInstance(project).setList(IGNORED_KEY, ours);
+    manager.setIgnoredState(change, true);
+    manager.forceUpdateAllProjectsOrFindAllAvailablePomFiles();
+  }
+
+  /**
+   * 이 폴더들 안의 pom 무시를 푼다. 닫을 때 우리가 무시한 pom(IGNORED_KEY)만 풀고, 사용자가 Maven 창에서 직접 무시한 pom 은 그대로 둔다.
+   * 우리 기록이 하나도 없는 폴더(기록을 남기기 전 판에서 닫음)는 그 안의 무시를 모두 푼다.
+   * Maven 목록이 아니라 무시 경로 목록을 보므로, 폴더를 지워 Maven 목록에서 빠진 pom 도 풀린다(같은 자리에 다시 받은 경우).
+   */
+  private static void open(Project project, MavenProjectsManager manager, List<String> roots, boolean notify) {
+    List<String> ours = ignoredByUs(project);
+    List<String> unignore = toUnignore(manager.getIgnoredFilesPaths(), ours, roots);
+    if (ours.removeIf(path -> anyAncestor(roots, path))) PropertiesComponent.getInstance(project).setList(IGNORED_KEY, ours);
+    if (unignore.isEmpty()) return;
+    manager.removeIgnoredFilesPaths(unignore);
     manager.forceUpdateAllProjectsOrFindAllAvailablePomFiles();
     // 다시 읽는 동안 Maven 이 그 모듈을 지웠다 새로 만들어 트리에서 줄이 잠깐 빈다.
-    if (!closed) SyncPanel.balloon(project, false, SyncBundle.message("open.repo.maven.title"), SyncBundle.message("open.repo.maven"));
+    if (notify) SyncPanel.balloon(project, false, SyncBundle.message("open.repo.maven.title"), SyncBundle.message("open.repo.maven"));
+  }
+
+  /** 무시 경로(ignored) 중 열 폴더(roots) 안이고, 우리가 무시한 것(ours)이거나 그 폴더에 우리 기록이 없는 것. */
+  static List<String> toUnignore(List<String> ignored, List<String> ours, List<String> roots) {
+    List<String> result = new ArrayList<>();
+    for (String path : ignored) {
+      for (String root : roots) {
+        if (FileUtil.isAncestor(root, path, false) && (containsPath(ours, path) || !anyUnder(ours, root))) {
+          result.add(path);
+          break;
+        }
+      }
+    }
+    return result;
+  }
+
+  private static List<String> ignoredByUs(Project project) {
+    List<String> saved = PropertiesComponent.getInstance(project).getList(IGNORED_KEY);
+    return saved == null ? new ArrayList<>() : new ArrayList<>(saved);
+  }
+
+  private static boolean containsPath(List<String> paths, String path) {
+    for (String p : paths) {
+      if (FileUtil.pathsEqual(p, path)) return true;
+    }
+    return false;
+  }
+
+  private static boolean anyUnder(List<String> paths, String root) {
+    for (String p : paths) {
+      if (FileUtil.isAncestor(root, p, false)) return true;
+    }
+    return false;
+  }
+
+  private static boolean anyAncestor(List<String> roots, String path) {
+    for (String root : roots) {
+      if (FileUtil.isAncestor(root, path, false)) return true;
+    }
+    return false;
   }
 
   /**

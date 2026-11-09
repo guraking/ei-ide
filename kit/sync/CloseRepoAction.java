@@ -403,6 +403,21 @@ public class CloseRepoAction extends DumbAwareAction {
     sync(project, roots, List.of(), true);
   }
 
+  /**
+   * 폴더가 없어져 프로젝트에서 지운 닫은 저장소(CloneIntoProject.dropStaleClosed)의 닫은 기록(CLOSED_KEY)과 Maven 무시를 뺀다. EDT.
+   * 남으면 같은 자리에 다시 받은 저장소가 켤 때 다시 닫히고(reclose), 그 pom 을 Maven 이 계속 무시한다.
+   * 워크스페이스 창은 모듈 리스너의 sync 가 같은 정리를 하지만, 일반 창에서는 sync 가 돌지 않아 여기서 한다.
+   */
+  static void forgetClosed(Project project, List<String> roots) {
+    PropertiesComponent properties = PropertiesComponent.getInstance(project);
+    List<String> saved = properties.getList(CLOSED_KEY);
+    if (saved != null) {
+      List<String> ours = new ArrayList<>(saved);
+      if (ours.removeIf(root -> containsPath(roots, root))) properties.setList(CLOSED_KEY, ours);
+    }
+    if (mavenEnabled()) MavenRepos.forget(project, roots);
+  }
+
   /** 닫아 둔 저장소 폴더(CLOSED_KEY)를 콘텐츠 루트로 가진 올라온 모듈을 내린다. 없으면 아무것도 하지 않는다. EDT. */
   private static void reclose(Project project) {
     List<String> ours = PropertiesComponent.getInstance(project).getList(CLOSED_KEY);
@@ -449,10 +464,6 @@ public class CloseRepoAction extends DumbAwareAction {
   }
 
   /**
-   * 모듈이 빠지거나 더해질 때 sync 를 부른다(우리 단추 · IntelliJ Load/Unload Modules · Remove Module · Maven 다시 읽기 모두).
-   * 빠지기 직전에 콘텐츠 루트를 모아 두고, 한 번에 여러 모듈이 바뀌어도 EDT 에서 한 번만 돈다.
-   */
-  /**
    * 닫기 · 열기 묶음(KingGura.CloseRepoGroup)을 프로젝트 트리 우클릭 메뉴 맨 위에 넣는다.
    * 주 메뉴 손질(KingGuraMainMenuCustomizer)이 Maven Sync Project 를 first 로 넣으므로 그보다 늦게(order="last") 돌아 그 위에 선다.
    */
@@ -469,6 +480,10 @@ public class CloseRepoAction extends DumbAwareAction {
     }
   }
 
+  /**
+   * 모듈이 빠지거나 더해질 때 sync 를 부른다(우리 단추 · IntelliJ Load/Unload Modules · Remove Module · Maven 다시 읽기 모두).
+   * 빠지기 직전에 콘텐츠 루트를 모아 두고, 한 번에 여러 모듈이 바뀌어도 EDT 에서 한 번만 돈다.
+   */
   public static final class ModuleSync implements ModuleListener {
     private final Set<String> removed = ConcurrentHashMap.newKeySet();
     private final AtomicBoolean scheduled = new AtomicBoolean();
