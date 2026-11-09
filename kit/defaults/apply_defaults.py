@@ -7,7 +7,6 @@
   2) 에디터 탭 줄 오른쪽에 「세로로 분할」 단추를 둔다(VS Code 의 분할 단추 자리).
   3) 커밋 후 커밋 메시지를 비우는 것을 기본으로 한다.
   4~9) 이클립스 단축키 · 하위 빌드 파일 자동 연결(두 단계 아래까지) · 저장 시 자동 빌드 · 저장 시 import 정리와 바뀐 줄 서식 · 플러그인 본체 포함.
-  10) AI 에이전트 연결 · 플러그인 개발용 실행 도구 플러그인 제외.
   11) SVN 플러그인 번들 추가.
   15) 설치 화면 「설치 옵션」 칸을 모두 체크한 채로 띄운다.
   16) properties 파일의 「투명한 native-to-ascii 변환」을 기본으로 켠다.
@@ -96,13 +95,24 @@ AUTOLINK_DEPTH2 = (
     "        return\n"
     "      }\n"
     "    }\n    if (LOG.isDebugEnabled) {")
+# 9 · 11) 빌드 설정. 번들 제외 목록은 customize.py slim 이 만든다.
+PROPS_FILE = "build/src/org/jetbrains/intellij/build/IdeaCommunityProperties.kt"
+SVN_BUNDLE_ORIGINAL = '      "intellij.dev",\n    ))\n'
+# 예전 판의 10) 은 AI 에이전트 연결 · 플러그인 개발용 실행 도구를 주석과 함께 목록 끝에 넣었다(지금은 slim 목록에 있음).
+# 그 두 줄과 11) 을 지금 slim 결과로 되돌린다. slim 목록에 이미 두 줄이 있으면 덧붙인 것만 지운다(앞의 후보가 먼저).
+PROPS_SLIM_TAIL = '      "intellij.platform.acp.plugin",\n' + SVN_BUNDLE_ORIGINAL
+PROPS_OLD_EDIT = (
+    '      "intellij.platform.acp.plugin",  // KingGura: AI 에이전트 연결은 쓰지 않는다\n'
+    '      "intellij.dev",  // KingGura: 플러그인 개발용 실행 도구는 쓰지 않는다\n'
+    '    )).add("intellij.vcs.svn")  // KingGura: SVN 저장소도 쓴다\n')
 OLD_EDITS = {AUTOLINK_FILE: [(AUTOLINK_DEPTH1, AUTOLINK_ORIGINAL)], FONT_FILE: [
     ('    if (SystemInfo.isJetBrainsJvm) {\n      return "JetBrainsMonoHangul";  // EI IDE: boot-servers 플러그인이 등록하는 한글 글꼴\n    }\n',
      FONT_ORIGINAL),
     ('    if (SystemInfo.isJetBrainsJvm) {\n      return "JBMono Pretendard";  // EI IDE: boot-servers 플러그인이 등록하는 한글 글꼴\n    }\n',
      FONT_ORIGINAL),
     ('    if (SystemInfo.isJetBrainsJvm) {\n      return "EI Mono";  // EI IDE: boot-servers 플러그인이 등록하는 한글 글꼴\n    }\n',
-     FONT_ORIGINAL)]}
+     FONT_ORIGINAL)], PROPS_FILE: [
+    ('      "intellij.dev",\n' + PROPS_OLD_EDIT, SVN_BUNDLE_ORIGINAL), (PROPS_OLD_EDIT, PROPS_SLIM_TAIL)]}
 STALE_LINES = {DEFAULT_LAF_FILE: re.compile(r'^ *<default-laf [^\n]*/>\n', re.M)}
 
 EDITS = [
@@ -177,17 +187,10 @@ EDITS = [
      "    if (!Files.isDirectory(dir)) return emptyList()\n"
      "    return Files.list(dir).use { paths -> paths.filter { Files.isDirectory(it) }.sorted().toList() }\n"
      "  }\n"),
-    # 10) 가볍게: AI 에이전트 연결(Agent Client Protocol) · 플러그인 개발용 실행 도구(DevKit Runtime)를 번들에서 뺀다.
-    #     남기는 플러그인(Java · Maven · Gradle · Git · GitHub · GitLab · Markdown · YAML · Properties · Lombok · JUnit · Groovy · 터미널)은 이 둘에 의존하지 않는다.
-    ("build/src/org/jetbrains/intellij/build/IdeaCommunityProperties.kt",
-     '      "intellij.java.i18n",\n',
-     '      "intellij.java.i18n",\n'
-     '      "intellij.platform.acp.plugin",  // KingGura: AI 에이전트 연결은 쓰지 않는다\n'
-     '      "intellij.dev",  // KingGura: 플러그인 개발용 실행 도구는 쓰지 않는다\n'),
     # 11) SVN(Subversion) 플러그인을 번들에 넣는다. 커뮤니티 소스에 있지만 기본 번들 목록에는 없다(plugins/svn4idea, 모듈 intellij.vcs.svn).
-    ("build/src/org/jetbrains/intellij/build/IdeaCommunityProperties.kt",
-     '      "intellij.dev",  // KingGura: 플러그인 개발용 실행 도구는 쓰지 않는다\n    ))\n',
-     '      "intellij.dev",  // KingGura: 플러그인 개발용 실행 도구는 쓰지 않는다\n    )).add("intellij.vcs.svn")  // KingGura: SVN 저장소도 쓴다\n'),
+    #     원문은 customize.py slim 이 만든 번들 제외 목록의 끝(마지막 항목 intellij.dev).
+    (PROPS_FILE, SVN_BUNDLE_ORIGINAL,
+     '      "intellij.dev",\n    )).add("intellij.vcs.svn")  // KingGura: SVN 저장소도 쓴다\n'),
     # 12) 편집기 기본 글꼴을 Moa Mono(JetBrains Mono + Pretendard 한글)로 한다. 글꼴 파일은 boot-servers 플러그인이 켤 때 등록한다(BundledFonts).
     (FONT_FILE, FONT_ORIGINAL,
      '    if (SystemInfo.isJetBrainsJvm) {\n      return "Moa Mono";  // Moa IDE: boot-servers 플러그인이 등록하는 한글 글꼴\n    }\n'),

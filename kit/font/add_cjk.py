@@ -100,6 +100,9 @@ def merge(target_path, ttc):
             existing.add(name)
             made[src] = name
         cmap_add[code] = made[src]
+    if not cmap_add:
+        # 이미 더한 글꼴(다시 실행)은 더할 글자가 없으므로 쓰지 않는다. 마지막 글자 자리는 0.
+        return os.path.basename(target_path), 0, 0, len(order), skipped, 0
     target.setGlyphOrder(order)
     for table in target['cmap'].tables:
         if not table.isUnicode():

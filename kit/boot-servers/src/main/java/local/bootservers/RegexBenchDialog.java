@@ -40,13 +40,19 @@ import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.Timer;
+import javax.swing.event.ChangeEvent;
 import javax.swing.event.DocumentEvent;
+import javax.swing.event.ListSelectionEvent;
+import javax.swing.event.TableColumnModelEvent;
+import javax.swing.event.TableColumnModelListener;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableColumnModel;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.DefaultHighlighter;
 import javax.swing.text.Highlighter;
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.GridLayout;
@@ -60,6 +66,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.StringJoiner;
 
 /**
  * 정규식 작업대. 맨 위 「만들기」 탭(자주 쓰는 것 · 질문 따라가기 · 예시로 만들기 · 직접 만들기)에서 패턴을 만들고,
@@ -86,8 +93,12 @@ final class RegexBenchDialog extends DialogWrapper {
     private static final int MAKE_HEIGHT = 280;
     // 만들기 탭이 글 전체 패턴을 줄 때 켜는 플래그: 시험 글의 줄마다 따로 맞춘다
     private static final String LINE_FLAGS = "gm";
-    // 그룹 표 칸 수
+    // 그룹 표 칸 수와 처음 칸 폭 비율(일치 · 그룹 · 이름 · 값 · 위치). 칸은 창 폭을 따라 늘고, 사용자가 끈 폭은 WIDTHS_KEY 에 기억한다.
     private static final int COLUMN_COUNT = 5;
+    private static final int[] COLUMN_WEIGHTS = {1, 1, 2, 5, 2};
+    private static final int WEIGHT_UNIT = 40;
+    private static final String WIDTHS_KEY = "KingGura.RegexBench.groupWidths";
+    private static final String WIDTHS_SEPARATOR = ",";
     private static final Color SUCCESS = JBColor.namedColor("Label.successForeground", new JBColor(0x208A3C, 0x5FB865));
     private static final Color WARNING = JBColor.namedColor("Label.warningForeground", new JBColor(0xA36200, 0xE0A040));
 
@@ -219,6 +230,7 @@ final class RegexBenchDialog extends DialogWrapper {
         samplePanel.add(new JBScrollPane(sampleArea), BorderLayout.CENTER);
 
         groupTable.getEmptyText().setText(BootServersBundle.message("regex.groups.empty"));
+        rememberWidths();
         groupTable.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
                 showSelectedRow();
@@ -283,10 +295,73 @@ final class RegexBenchDialog extends DialogWrapper {
             }
             form.addLabeledComponent(new JBLabel(e.getKey()), grid, true);
         }
-        JBScrollPane scroll = new JBScrollPane(form.getPanel());
+        // 높이만 정하고 폭은 창을 따른다
+        JBScrollPane scroll = new JBScrollPane(form.getPanel()) {
+            @Override
+            public Dimension getPreferredSize() {
+                return new Dimension(super.getPreferredSize().width, JBUI.scale(MAKE_HEIGHT));
+            }
+        };
         scroll.setBorder(JBUI.Borders.empty());
-        scroll.setPreferredSize(JBUI.size(DIALOG_WIDTH, MAKE_HEIGHT));
         return scroll;
+    }
+
+    /** 그룹 표 칸 폭: 기억한 폭(없거나 깨졌으면 COLUMN_WEIGHTS)을 비율로 놓고, 사용자가 칸 경계를 끌면 그 폭을 기억한다. */
+    private void rememberWidths() {
+        PropertiesComponent props = PropertiesComponent.getInstance();
+        int[] widths = new int[COLUMN_COUNT];
+        for (int i = 0; i < COLUMN_COUNT; i++) {
+            widths[i] = JBUI.scale(COLUMN_WEIGHTS[i] * WEIGHT_UNIT);
+        }
+        String saved = props.getValue(WIDTHS_KEY);
+        if (saved != null) {
+            String[] parts = saved.split(WIDTHS_SEPARATOR);
+            if (parts.length == COLUMN_COUNT) {
+                try {
+                    int[] restored = new int[COLUMN_COUNT];
+                    for (int i = 0; i < COLUMN_COUNT; i++) {
+                        restored[i] = Math.max(1, Integer.parseInt(parts[i]));
+                    }
+                    widths = restored;
+                } catch (NumberFormatException e) {
+                    LOG.warn("그룹 표 칸 폭 기억이 깨져 처음 비율로 엽니다: " + saved, e);
+                }
+            }
+        }
+        TableColumnModel columns = groupTable.getColumnModel();
+        for (int i = 0; i < COLUMN_COUNT; i++) {
+            // 자동 맞춤이라 이 값은 칸끼리의 비율로 쓰인다
+            columns.getColumn(i).setPreferredWidth(widths[i]);
+        }
+        columns.addColumnModelListener(new TableColumnModelListener() {
+            @Override
+            public void columnMarginChanged(ChangeEvent e) {
+                if (groupTable.getTableHeader() == null || groupTable.getTableHeader().getResizingColumn() == null) {
+                    return;
+                }
+                StringJoiner joined = new StringJoiner(WIDTHS_SEPARATOR);
+                for (int i = 0; i < columns.getColumnCount(); i++) {
+                    joined.add(String.valueOf(columns.getColumn(i).getWidth()));
+                }
+                props.setValue(WIDTHS_KEY, joined.toString());
+            }
+
+            @Override
+            public void columnAdded(TableColumnModelEvent e) {
+            }
+
+            @Override
+            public void columnRemoved(TableColumnModelEvent e) {
+            }
+
+            @Override
+            public void columnMoved(TableColumnModelEvent e) {
+            }
+
+            @Override
+            public void columnSelectionChanged(ListSelectionEvent e) {
+            }
+        });
     }
 
     /** 플래그 · 그룹 표 · 바꾸기는 「자세히 보기」 일 때만. 선택은 다음에 열 때도 이어진다. */

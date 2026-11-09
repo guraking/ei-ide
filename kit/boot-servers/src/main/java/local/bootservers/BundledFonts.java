@@ -44,11 +44,14 @@ public final class BundledFonts implements AppLifecycleListener {
 
     @Override
     public void appFrameCreated(@NotNull List<String> commandLineArgs) {
-        register(REGULAR);
-        for (String file : OTHER_FILES) {
-            register(file);
+        // 본체의 글꼴 목록 서비스(FontFamilyServiceImpl)가 먼저 등록했으면 다시 등록하지 않는다(파일마다 임시 파일로 풀림).
+        if (!isFamilyAvailable()) {
+            register(REGULAR);
+            for (String file : OTHER_FILES) {
+                register(file);
+            }
         }
-        if (!FAMILY.equals(new Font(FAMILY, Font.PLAIN, 1).getFamily())) return;
+        if (!isFamilyAvailable()) return;
         renameEditorFont(AppEditorFontOptions.getInstance());
         AppConsoleFontOptions console = AppConsoleFontOptions.getInstance();
         if (!console.isUseEditorFont()) renameEditorFont(console);
@@ -106,6 +109,11 @@ public final class BundledFonts implements AppLifecycleListener {
         if (ui.getOverrideLafFonts() && FAMILY.equals(ui.getFontFace())) {
             ApplicationManager.getApplication().invokeLater(() -> LafManager.getInstance().updateUI());
         }
+    }
+
+    /** FAMILY 가 JVM 에 등록되어 있는가. 없는 이름의 Font 는 Dialog 가족으로 대신된다. */
+    private static boolean isFamilyAvailable() {
+        return FAMILY.equals(new Font(FAMILY, Font.PLAIN, 1).getFamily());
     }
 
     /** jar 의 /fonts/file 을 등록한다. 실패하면 기록만 남긴다. */

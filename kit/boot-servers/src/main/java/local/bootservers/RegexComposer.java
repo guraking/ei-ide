@@ -5,6 +5,7 @@ import com.intellij.openapi.ui.popup.JBPopupFactory;
 import com.intellij.ui.CollectionListModel;
 import com.intellij.ui.ColoredListCellRenderer;
 import com.intellij.ui.DocumentAdapter;
+import com.intellij.ui.OnePixelSplitter;
 import com.intellij.ui.JBIntSpinner;
 import com.intellij.ui.SimpleListCellRenderer;
 import com.intellij.ui.SimpleTextAttributes;
@@ -48,9 +49,10 @@ import java.util.StringJoiner;
  */
 final class RegexComposer {
 
-    private static final int DETAIL_WIDTH = 720;
-    private static final int LIST_HEIGHT = 200;
-    private static final int LIST_WIDTH = 260;
+    // 조각 목록이 처음 보일 줄 수. 폭은 분할선 비율을 따른다.
+    private static final int LIST_ROWS = 8;
+    private static final String SPLIT_KEY = "KingGura.RegexBench.composeSplit";
+    private static final float SPLIT_DEFAULT = 0.25f;
     private static final int CHILD_INDENT = 18;
     private static final int MAX_REPEAT = 999;
     private static final int DEFAULT_MIN_LENGTH = 8;
@@ -170,13 +172,7 @@ final class RegexComposer {
     }
 
     private @Nullable RegexBench.PartProblem problem() {
-        for (RegexBench.Part part : records()) {
-            RegexBench.PartProblem problem = RegexBench.problem(part);
-            if (problem != null) {
-                return problem;
-            }
-        }
-        return null;
+        return RegexBench.problem(records());
     }
 
     private List<RegexBench.Part> records() {
@@ -233,6 +229,7 @@ final class RegexComposer {
         needsRow.add(minLengthTail);
 
         rowList.setCellRenderer(new RowRenderer());
+        rowList.setVisibleRowCount(LIST_ROWS);
         rowList.getEmptyText().setText(BootServersBundle.message("regex.compose.list.empty"));
         rowList.addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
@@ -249,7 +246,6 @@ final class RegexComposer {
                 .setMoveUpAction(button -> move(-1))
                 .setMoveDownAction(button -> move(1))
                 .createPanel();
-        list.setPreferredSize(JBUI.size(LIST_WIDTH, LIST_HEIGHT));
 
         ButtonGroup bunchGroup = new ButtonGroup();
         bunchGroup.add(sequenceRadio);
@@ -303,11 +299,12 @@ final class RegexComposer {
                 .addLabeledComponent(aroundLabel, aroundRow)
                 .getPanel();
         detail.setBorder(JBUI.Borders.emptyLeft(UIUtil.DEFAULT_HGAP));
-        detail.setPreferredSize(JBUI.size(DETAIL_WIDTH, LIST_HEIGHT));
 
-        JPanel master = new JPanel(new BorderLayout());
-        master.add(list, BorderLayout.WEST);
-        master.add(detail, BorderLayout.CENTER);
+        // 목록 · 설정 사이는 끌 수 있는 분할선이고 비율을 기억한다. 안쪽 글의 최소 폭이 비율을 이기지 않게 한다.
+        OnePixelSplitter master = new OnePixelSplitter(false, SPLIT_KEY, SPLIT_DEFAULT);
+        master.setHonorComponentsMinimumSize(false);
+        master.setFirstComponent(list);
+        master.setSecondComponent(detail);
 
         problemLabel.setAllowAutoWrapping(true);
         return FormBuilder.createFormBuilder()

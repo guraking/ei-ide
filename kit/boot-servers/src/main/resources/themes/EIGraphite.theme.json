@@ -18,6 +18,7 @@
     "layer-2-border": "#4A4A4A",
     "selection-bg-active": "#333333",
     "selection-bg-active-muted": "#2A2A2A",
+    "selection-bg-inactive": "#2A2A2A",
     "toolbar-selected-bg": "#333333",
     "toolbar-selected-bg-hovered": "#3A3A3A",
     "tab-selected-bg-active": "#202020",

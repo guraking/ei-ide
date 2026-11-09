@@ -6,13 +6,17 @@ import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.actionSystem.DataContext;
 import com.intellij.openapi.actionSystem.IdeActions;
+import com.intellij.openapi.actionSystem.PlatformDataKeys;
+import com.intellij.openapi.wm.ToolWindow;
+import com.intellij.openapi.wm.ToolWindowId;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 
 /**
  * 이클립스 단축키에서 F2 는 「이름 바꾸기」(RenameElement)와 「설명 보기」(QuickJavaDoc) 둘에 묶인다(kit/defaults 가 Eclipse.xml 에 더함).
- * 이클립스처럼 편집기 안에서는 설명 보기, 프로젝트 창 같은 나머지 곳에서는 이름 바꾸기를 먼저 고른다.
+ * 이클립스처럼 편집기 안에서는 설명 보기, 프로젝트 창(Project · Packages 등 그 창의 보기)에서는 이름 바꾸기를 먼저 고른다.
+ * 그 밖의 곳(표 · 다른 트리 · 디버거 값 등)은 손대지 않아 F2 가 칸 고치기(Table-startEditing · Tree-startEditing · 값 바꾸기)로 남는다.
  * 둘 중 하나만 들어온 목록(다른 단축키)은 손대지 않는다.
  */
 final class F2RenamePromoter implements ActionPromoter {
@@ -32,6 +36,13 @@ final class F2RenamePromoter implements ActionPromoter {
         if (rename == null || doc == null) {
             return List.of();
         }
-        return List.of(CommonDataKeys.EDITOR.getData(context) != null ? doc : rename);
+        if (CommonDataKeys.EDITOR.getData(context) != null) {
+            return List.of(doc);
+        }
+        ToolWindow toolWindow = PlatformDataKeys.TOOL_WINDOW.getData(context);
+        if (toolWindow != null && ToolWindowId.PROJECT_VIEW.equals(toolWindow.getId())) {
+            return List.of(rename);
+        }
+        return List.of();
     }
 }
