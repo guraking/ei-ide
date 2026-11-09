@@ -57,6 +57,11 @@ public class SyncCheck {
     eq(ReverseMerge.ourStash("stash@{0}\tOn feature/kim: 남의것\nstash@{1}\tOn feature/kim: " + ReverseMerge.STASH_MESSAGE + "\n"), "stash@{1}");
     eq(ReverseMerge.ourStash("stash@{0}\tOn main: 남의것\n"), null);
     eq(ReverseMerge.ourStash(""), null);
+    // 합치기를 막는 추적 안 한 파일: 대소문자를 가리지 않는 저장소면 대소문자만 다른 이름도 막는다.
+    eq(ReverseMerge.inTheWay(new java.util.LinkedHashSet<>(List.of("new.txt", "Mine.VUE", "other.txt")), Set.of("new.txt", "mine.vue", "x.txt"), true), List.of("new.txt", "Mine.VUE"));
+    eq(ReverseMerge.inTheWay(new java.util.LinkedHashSet<>(List.of("new.txt", "Mine.VUE")), Set.of("new.txt", "mine.vue"), false), List.of("new.txt"));
+    eq(ReverseMerge.inTheWay(Set.of(), Set.of("a"), true), List.of());
+    eq(ReverseMerge.pathList(List.of("a.txt", "b/c.txt")), "a.txt\nb/c.txt");
     // 기억된 합치기가 지금 브랜치와 관련 있을 때만 쓴다.
     eq(ReverseMerge.rememberedFor("develop", "featureB", "featureB"), true);
     eq(ReverseMerge.rememberedFor("featureB", "develop", "featureB"), true);

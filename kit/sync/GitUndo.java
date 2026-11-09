@@ -41,7 +41,8 @@ final class GitUndo {
   // 앞 위치가 없는 첫 줄(브랜치 만들기 · clone · 첫 커밋).
   private static final List<String> NO_UNDO_PREFIXES = List.of("branch: ", "clone: ", "commit (initial): ");
   // 진행 중인 합치기 · cherry-pick · revert · 리베이스를 나타내는 .git 안 파일 · 폴더.
-  private static final List<String> IN_PROGRESS = List.of("MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply");
+  /** 끝나지 않은 합치기 · cherry-pick · revert · rebase · git am 이 .git 안에 남기는 파일 · 폴더. Merge Branches 도 쓴다. */
+  static final List<String> IN_PROGRESS = List.of("MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply");
   private static final int SHORT_HASH = 8;
   // 브랜치 reflog 를 위에서 몇 줄까지 읽는지. 커밋을 옮기지 않은 줄(stash 등)을 건너뛰고 앞 위치를 찾을 만큼.
   private static final int REFLOG_SCAN = 20;

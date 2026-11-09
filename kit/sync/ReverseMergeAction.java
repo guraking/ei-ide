@@ -4,6 +4,7 @@ import com.intellij.diff.DiffContentFactory;
 import com.intellij.diff.DiffManager;
 import com.intellij.diff.requests.SimpleDiffRequest;
 import com.intellij.icons.AllIcons;
+import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
@@ -25,10 +26,12 @@ import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vcs.AbstractVcsHelper;
 import com.intellij.openapi.vcs.FilePath;
 import com.intellij.openapi.vfs.LocalFileSystem;
+import com.intellij.openapi.wm.WindowManager;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.ui.ComboboxSpeedSearch;
 import com.intellij.ui.InplaceButton;
 import com.intellij.ui.JBColor;
+import com.intellij.ui.ScreenUtil;
 import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.SimpleListCellRenderer;
 import com.intellij.ui.components.JBCheckBox;
@@ -53,13 +56,15 @@ import javax.swing.event.PopupMenuEvent;
 import javax.swing.event.PopupMenuListener;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.TableColumnModel;
 import java.awt.*;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -83,13 +88,16 @@ public final class ReverseMergeAction extends DumbAwareAction {
   private static final JBColor COMMITS_BG = new JBColor(0xE3EDFB, 0x25324A);
   private static final JBColor FILES_BG = new JBColor(0xEBECF0, 0x3C3F41);
   private static final JBColor FILES_FG = new JBColor(0x5A5D63, 0xB0B3B8);
-  private static final int TABLE_W = 1000;
-  private static final int TABLE_H = 420;
+  /** 처음 열 때 창 크기: 화면 너비 · 높이에 대한 비율. 사용자가 바꾼 크기는 기억한다(DIMENSION_KEY). */
+  private static final double FIRST_W = 0.6;
+  private static final double FIRST_H = 0.65;
+  private static final String DIMENSION_KEY = "kinggura.sync.MergeBranches";
+  /** 표 칸(파일 · 작성자 · 때 · 커밋 제목)의 처음 너비 비율(천분율). 표 너비가 바뀔 때마다 이 비율로 나누고, 머리글을 끌어 바꾼 비율은 COL_RATIO_KEY 로 기억한다. */
+  private static final int[] COL_RATIO = {480, 120, 100, 300};
+  private static final int RATIO_SCALE = 1000;
+  private static final String COL_RATIO_KEY = "kinggura.sync.mergeBranches.col.ratio.";
   /** 대소문자만 바뀐 이름을 묻는 창에 보이는 줄 수. 나머지는 개수로 알린다. */
   private static final int CASE_LIST_MAX = 10;
-  private static final int PATH_COL_W = 480;
-  // From · Into 상자의 최소 너비. 두 상자는 창 너비를 반씩 나눠 꽉 채우고, 창을 늘리면 같이 늘어난다(「fe-기능이름/날짜/아이디」 같은 긴 이름).
-  private static final int COMBO_W = 300;
   // 찾기 칸 모서리 둥글기(px). 새 UI 콤보 상자 · 펼친 목록의 모서리와 비슷하게 맞춘다.
   private static final int SEARCH_ARC = 8;
   // 칸 사이 간격 · 단계 제목 아래 내용의 왼쪽 들여쓰기
@@ -214,8 +222,6 @@ public final class ReverseMergeAction extends DumbAwareAction {
     private boolean ready;
     // 미리 본 From 커밋. Merge 는 이 커밋을 합친다(그사이 자동 fetch 가 받아 온 커밋은 넣지 않는다). EDT 에서만 쓴다.
     private String fromTip;
-    // 이 창에서 이미 받아 온 브랜치. 같은 브랜치를 다시 고르면 fetch 하지 않는다(worker 스레드에서만 쓴다).
-    private final Set<String> fetched = new HashSet<>();
 
     PreviewDialog(Project project, GitRepository repo, File root, String remote, String current, List<String> names, String from, String into) {
       super(project, true);
@@ -241,8 +247,9 @@ public final class ReverseMergeAction extends DumbAwareAction {
       // 찾기 칸은 IntelliJ 기본으로 Enter · Esc · 포커스 이동에만 닫힌다. 펼친 목록에서 브랜치를 고르면 목록과 함께 닫는다.
       hideSearchWithList(fromBox, roundSearch(fromBox));
       hideSearchWithList(intoBox, roundSearch(intoBox));
-      fromBox.setMinimumAndPreferredWidth(JBUI.scale(COMBO_W));
-      intoBox.setMinimumAndPreferredWidth(JBUI.scale(COMBO_W));
+      // 두 상자는 글 길이와 상관없이 창 너비를 반씩 나눈다(GridBag weightx). 기본 너비가 가장 긴 이름을 따라가면 한쪽만 넓어지고 창 최소 너비도 커진다.
+      fromBox.setPrototypeDisplayValue("");
+      intoBox.setPrototypeDisplayValue("");
       push.setSelected(true);
       setTitle(SyncBundle.message("rmerge.title"));
       setOKButtonText(SyncBundle.message("rmerge.button.merge"));
@@ -255,7 +262,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
     }
 
     /**
-     * 서버 브랜치 목록을 뒤에서 받아 받아 둔 목록에 없던 것을 두 상자에 더한다. 서버에 닿지 못하면 받아 둔 목록만 남는다(미리 보기의 fetch 가 그 오류를 보인다).
+     * 서버 브랜치 목록을 뒤에서 받아 받아 둔 목록에 없던 것을 두 상자에 더하고, 서버에 없는 이름(지워진 브랜치 · 대소문자만 다른 옛 이름)은 뺀다.
+     * 고른 이름이 빠지면 대소문자만 다르면 서버 이름을, 지워졌으면 빈칸을 고른다. 서버에 닿지 못하면 받아 둔 목록만 남는다(미리 보기의 fetch 가 그 오류를 보인다).
      * 미리 보기 worker 밖에서 짧은 시간 제한으로 돌려, 서버가 멈춰도 비교가 그 뒤에 줄 서지 않게 한다. 창을 닫으면 끊는다.
      */
     private void addServerBranches() {
@@ -271,20 +279,25 @@ public final class ReverseMergeAction extends DumbAwareAction {
           Thread.currentThread().interrupt();
           return;
         }
+        // 빈 목록(빈 저장소 · 읽지 못한 출력)이면 받아 둔 목록을 지우지 않는다.
+        if (names.isEmpty()) return;
         SwingUtilities.invokeLater(() -> {
           if (isDisposed()) return;
           for (ComboBox<String> box : List.of(fromBox, intoBox)) {
             DefaultComboBoxModel<String> items = (DefaultComboBoxModel<String>) box.getModel();
             // 받아 둔 이름 중 대소문자만 서버와 다른 것은 서버 이름으로 바꾼다. 그 이름으로는 서버에서 받을 수 없다.
+            // 서버에서 지워진 브랜치도 뺀다. 받아 둔 원격 추적 참조는 서버에서 지워져도 남아, 고르면 fetch 가 「couldn't find remote ref」로 실패한다.
             String selected = (String) box.getSelectedItem();
+            boolean selectedGone = selected != null && !names.contains(selected);
             String fixedSelected = ReverseMerge.serverSpelling(names, selected);
             for (int k = items.getSize() - 1; k >= 0; k--) {
-              if (ReverseMerge.serverSpelling(names, items.getElementAt(k)) != null) items.removeElementAt(k);
+              if (!names.contains(items.getElementAt(k))) items.removeElementAt(k);
             }
             for (String name : names) {
               if (items.getIndexOf(name) < 0) items.addElement(name);
             }
-            if (fixedSelected != null) box.setSelectedItem(fixedSelected);
+            // 고른 것을 빼면 콤보가 옆 이름을 대신 고르므로, 서버 이름 또는 빈칸으로 다시 맞춘다.
+            if (selectedGone) box.setSelectedItem(fixedSelected);
           }
         });
       });
@@ -424,7 +437,21 @@ public final class ReverseMergeAction extends DumbAwareAction {
       previewHead.add(gauge.line(), BorderLayout.SOUTH);
 
       table.setShowGrid(false);
-      table.getColumnModel().getColumn(0).setPreferredWidth(JBUI.scale(PATH_COL_W));
+      table.getTableHeader().setReorderingAllowed(false);
+      // 머리글 경계를 끌고 놓으면 그때 칸 비율을 기억한다. 표 너비는 아래 scroll 이 바뀔 때마다 그 비율로 나눈다.
+      TableColumnModel columns = table.getColumnModel();
+      int[] ratios = new int[COL_RATIO.length];
+      for (int col = 0; col < ratios.length; col++) ratios[col] = PropertiesComponent.getInstance().getInt(COL_RATIO_KEY + col, COL_RATIO[col]);
+      table.getTableHeader().addMouseListener(new MouseAdapter() {
+        @Override public void mouseReleased(MouseEvent e) {
+          int total = table.getWidth();
+          if (total <= 0) return;
+          for (int col = 0; col < ratios.length; col++) {
+            ratios[col] = Math.max(1, columns.getColumn(col).getWidth() * RATIO_SCALE / total);
+            PropertiesComponent.getInstance().setValue(COL_RATIO_KEY + col, ratios[col], COL_RATIO[col]);
+          }
+        }
+      });
       table.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
         @Override
         public Component getTableCellRendererComponent(JTable t, Object value, boolean selected, boolean focus, int row, int column) {
@@ -447,8 +474,18 @@ public final class ReverseMergeAction extends DumbAwareAction {
         }
       });
       JScrollPane scroll = ScrollPaneFactory.createScrollPane(table);
+      // JTable 은 늘어난 너비를 칸마다 똑같이 나눠 비율이 무너지므로, 보이는 너비가 바뀔 때마다 칸 너비를 비율대로 다시 준다.
+      scroll.getViewport().addComponentListener(new ComponentAdapter() {
+        @Override public void componentResized(ComponentEvent e) {
+          int total = scroll.getViewport().getWidth();
+          int sum = 0;
+          for (int r : ratios) sum += r;
+          if (total <= 0 || sum <= 0) return;
+          for (int col = 0; col < ratios.length; col++) columns.getColumn(col).setPreferredWidth(total * ratios[col] / sum);
+          table.doLayout();
+        }
+      });
       scroll.setBorder(JBUI.Borders.customLine(JBColor.border(), 1, 0, 1, 0));
-      scroll.setPreferredSize(JBUI.size(TABLE_W, TABLE_H));
 
       // 단계 3: 합친 뒤 Push 여부. 커밋 안 한 변경이 합칠 파일과 겹치면 합칠 때 Stash 할지 묻는다(runMerge).
       push.setBorder(JBUI.Borders.emptyLeft(STEP_INDENT));
@@ -475,6 +512,17 @@ public final class ReverseMergeAction extends DumbAwareAction {
       return panel;
     }
 
+    @Override
+    protected @Nullable String getDimensionServiceKey() { return DIMENSION_KEY; }
+
+    @Override
+    public Dimension getInitialSize() {
+      // IDE 창이 있는 모니터 기준(노트북 + 큰 모니터를 함께 쓸 때 다른 화면 크기로 열리지 않게).
+      Window ide = WindowManager.getInstance().suggestParentWindow(project);
+      Rectangle screen = ide != null ? ScreenUtil.getScreenRectangle(ide) : new Rectangle(Toolkit.getDefaultToolkit().getScreenSize());
+      return new Dimension((int) (screen.width * FIRST_W), (int) (screen.height * FIRST_H));
+    }
+
     private String from() { return (String) fromBox.getSelectedItem(); }
     private String into() { return (String) intoBox.getSelectedItem(); }
 
@@ -497,7 +545,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
     }
 
     /**
-     * 미리 보기를 비우고 Merge 를 끈다. fetch 가 참이면(Compare 단추) 두 브랜치를 받아 와 미리 보기를 다시 계산하고, 거짓이면 Compare 를 누르라고 안내만 한다.
+     * 미리 보기를 비우고 Merge 를 끈다. fetch 가 참이면(Compare 단추) 두 브랜치를 서버에서 새로 받아 와 미리 보기를 다시 계산하고, 거짓이면 Compare 를 누르라고 안내만 한다.
      * 같은 브랜치를 고르면 계산하지 않는다.
      */
     private void reload(boolean fetch) {
@@ -537,14 +585,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
         int intoLocalOnly = 0;
         String localOnlyTop = "";
         try {
-          List<String> missing = new ArrayList<>();
-          for (String b : List.of(from, into)) {
-            if (!fetched.contains(b)) missing.add(b);
-          }
-          if (!missing.isEmpty()) {
-            ReverseMerge.fetch(root, remote, missing.toArray(String[]::new));
-            fetched.addAll(missing);
-          }
+          // 창을 열어 둔 사이 남이 올린 커밋도 보이게 Compare 를 누를 때마다 받는다.
+          ReverseMerge.fetch(root, remote, from, into);
           preview = ReverseMerge.preview(root, remote, from, into, current);
           localOnly = ReverseMerge.unpushed(root, remote, from);
           if (localOnly > 0) localOnlyTop = ReverseMerge.lastUnpushed(root, remote, from);
