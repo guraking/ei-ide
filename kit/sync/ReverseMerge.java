@@ -32,6 +32,7 @@ final class ReverseMerge {
   /** 내 이름으로 커밋한 파일을 「내 파일」로 보는 기간(일). */
   static final int MINE_DAYS = 30;
   private static final String HEADS = "refs/heads/";
+  private static final String FETCH_KEY_SUFFIX = ".fetch";
   private static final com.intellij.openapi.diagnostic.Logger LOG = com.intellij.openapi.diagnostic.Logger.getInstance(ReverseMerge.class);
   private static final char LOG_START = '\u0001';
   private static final char LOG_SEP = '\u001f';
@@ -228,7 +229,12 @@ final class ReverseMerge {
     Map<String, String> result = new HashMap<>();
     for (String line : output.split("\n")) {
       int space = line.indexOf(' ');
-      if (space > 0 && space < line.trim().length()) result.put(line.substring(0, space), line.substring(space + 1).trim());
+      if (space <= 0 || space >= line.trim().length()) continue;
+      String key = line.substring(0, space);
+      String value = line.substring(space + 1).trim();
+      // remote.<원격>.fetch 는 줄이 여럿일 수 있다(예: Feature/* 를 더 받는 줄). 줄바꿈으로 이어 모두 남긴다(fetches).
+      if (key.endsWith(FETCH_KEY_SUFFIX) && result.containsKey(key)) value = result.get(key) + "\n" + value;
+      result.put(key, value);
     }
     return result;
   }
@@ -243,11 +249,36 @@ final class ReverseMerge {
   }
 
   /**
-   * 인자 없는 git fetch 가 remote 의 모든 브랜치를 받는가: remote.<원격>.fetch 가 기본 모양이다. 한 원격에 fetch 줄이 여럿이면
-   * configs 는 마지막 줄만 남기므로, 마지막 줄이 기본이 아니면 거짓(기준 브랜치를 한 번 더 받는 쪽)이다.
+   * 인자 없는 git fetch 가 branch 를 받아 remoteRef(remote, branch) 에 두는가. remote.<원격>.fetch 줄(여럿이면 줄바꿈으로 이은 것) 가운데
+   * 하나라도 refs/heads/<branch> 를 그 자리로 옮기면 참이다. + 가 없거나 별표 위치가 다른 줄도 git 규칙대로 본다. 줄이 없으면 거짓.
    */
-  static boolean fetchesAllHeads(Map<String, String> cfg, String remote) {
-    return ("+" + HEADS + "*:" + remoteRef(remote, "*")).equals(cfg.get("remote." + remote + ".fetch"));
+  static boolean fetches(Map<String, String> cfg, String remote, String branch) {
+    String lines = cfg.get("remote." + remote + FETCH_KEY_SUFFIX);
+    if (lines == null) return false;
+    boolean fetched = false;
+    for (String line : lines.split("\n")) {
+      // 앞 + 는 강제 갱신 표시. ^ 로 시작하는 줄은 빼는 규칙이라 줄 순서와 상관없이 맞으면 받지 않는다.
+      String spec = line.startsWith("+") ? line.substring(1) : line;
+      if (spec.startsWith("^")) {
+        if (globPart(spec.substring(1), HEADS + branch) != null) return false;
+        continue;
+      }
+      int colon = spec.indexOf(':');
+      if (colon < 0) continue;
+      String part = globPart(spec.substring(0, colon), HEADS + branch);
+      if (part != null && spec.substring(colon + 1).replace("*", part).equals(remoteRef(remote, branch))) fetched = true;
+    }
+    return fetched;
+  }
+
+  /** git refspec 의 별표 하나짜리 모양 pattern 이 ref 에 맞으면 별표 자리 글자(별표가 없으면 빈 글), 아니면 null. */
+  private static String globPart(String pattern, String ref) {
+    int star = pattern.indexOf('*');
+    if (star < 0) return pattern.equals(ref) ? "" : null;
+    String prefix = pattern.substring(0, star);
+    String suffix = pattern.substring(star + 1);
+    if (ref.length() < prefix.length() + suffix.length() || !ref.startsWith(prefix) || !ref.endsWith(suffix)) return null;
+    return ref.substring(prefix.length(), ref.length() - suffix.length());
   }
 
   /**
