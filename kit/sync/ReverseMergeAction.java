@@ -84,7 +84,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
   private static final JBColor MINE_BG = new JBColor(0xFFF3E0, 0x4A3416);
   /** 단계 번호 동그라미 · 「커밋」 칩의 파랑(Git Log 현재 브랜치와 같은 색). */
   private static final Color STEP_COLOR = ProjectHistoryPanel.HEAD_COLOR;
-  private static final JBColor STEP_TEXT = new JBColor(0xFFFFFF, 0x1E1F22);
+  /** 창 맨 위 저장소 이름 글자색. 동기화 창 Resolve Conflicts 단추와 같은 빨강. */
+  private static final Color REPO_COLOR = SyncPanel.RESOLVE_BG;
   private static final JBColor COMMITS_BG = new JBColor(0xE3EDFB, 0x25324A);
   private static final JBColor FILES_BG = new JBColor(0xEBECF0, 0x3C3F41);
   private static final JBColor FILES_FG = new JBColor(0x5A5D63, 0xB0B3B8);
@@ -370,10 +371,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
     }
 
     // 저장소 이름 글자 크기: 기본 글자보다 키우는 단계.
-    private static final int REPO_FONT_STEP = 4;
-    /** 저장소 이름 띠의 위아래 · 좌우 안쪽 여백. */
-    private static final int REPO_BADGE_PAD_V = 4;
-    private static final int REPO_BADGE_PAD_H = 12;
+    private static final int REPO_FONT_STEP = 2;
 
     private static JBLabel dim(String text) {
       return new JBLabel(text, UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER);
@@ -381,14 +379,12 @@ public final class ReverseMergeAction extends DumbAwareAction {
 
     @Override
     protected @Nullable JComponent createCenterPanel() {
-      // 맨 위: 어느 저장소를 합치는지. 합치기 전에 꼭 확인할 값이라 Git Log 현재 브랜치와 같은 파랑 · 두 단계 큰 굵은 글씨로 눈에 띄게 하고, 경로는 옆에 작게.
-      JPanel where = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0));
+      // 맨 위: 어느 저장소를 합치는지. 합치기 전에 꼭 확인할 값이라 이름만 빨강(Resolve Conflicts 단추 색) · 조금 큰 굵은 글씨로, 경로는 옆에 작게.
+      // 단계 제목과 같은 HorizontalLayout 이라 왼쪽 줄이 맞는다.
+      JPanel where = new JPanel(new HorizontalLayout(JBUI.scale(GAP)));
+      where.add(new JBLabel(SyncBundle.message("rmerge.repo")));
       JBLabel name = new JBLabel(root.getName()).withFont(JBFont.label().biggerOn(REPO_FONT_STEP).asBold());
-      // 파란 바탕 · 흰 글자 띠로 둘러 창을 열자마자 저장소가 보이게 한다(단계 번호 동그라미와 같은 색).
-      name.setForeground(STEP_TEXT);
-      name.setBackground(STEP_COLOR);
-      name.setOpaque(true);
-      name.setBorder(JBUI.Borders.empty(REPO_BADGE_PAD_V, REPO_BADGE_PAD_H));
+      name.setForeground(REPO_COLOR);
       where.add(name);
       where.add(dim(root.getPath()));
 

@@ -448,7 +448,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
 
   // 아래 단추 줄의 바탕색(흰 글자). 같은 일은 같은 색: 받기는 IntelliJ 기본 단추 파랑, 올리기 초록, 충돌 붉은색, 브랜치 합치기 보라.
   private static final JBColor PUSH_BG = new JBColor(0x2F8F5B, 0x3A8F5E);
-  private static final JBColor RESOLVE_BG = new JBColor(0xD9534F, 0xC75450);
+  static final JBColor RESOLVE_BG = new JBColor(0xD9534F, 0xC75450);
   private static final JBColor MERGE_BG = new JBColor(0x7A52C7, 0x8B6BD1);
 
   SyncPanel(Project project, Disposable parent) {
