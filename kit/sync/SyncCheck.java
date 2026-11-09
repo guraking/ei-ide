@@ -306,6 +306,13 @@ public class SyncCheck {
     eq(ReverseMerge.pick(List.of("main", "develop"), null, ReverseMerge.FROM_CANDIDATES), "develop");
     eq(ReverseMerge.pick(List.of("main", "develop"), "main", ReverseMerge.FROM_CANDIDATES), "main");
     eq(ReverseMerge.pick(List.of("main"), "gone", List.of("x")), null);
+    eq(ReverseMerge.intoCandidates(java.util.Map.of("branch.feature/kim.merge", "refs/heads/Feature/kim"), "feature/kim"), List.of("Feature/kim", "feature/kim"));
+    eq(ReverseMerge.intoCandidates(java.util.Map.of("branch.feature/kim.merge", "refs/heads/feature/kim"), "feature/kim"), List.of("feature/kim"));
+    eq(ReverseMerge.intoCandidates(java.util.Map.of(), "feature/kim"), List.of("feature/kim"));
+    eq(ReverseMerge.serverSpelling(List.of("develop", "feature/kim"), "Feature/kim"), "feature/kim");
+    eq(ReverseMerge.serverSpelling(List.of("develop", "feature/kim"), "feature/kim"), null);
+    eq(ReverseMerge.serverSpelling(List.of("develop"), "feature/kim"), null);
+    eq(ReverseMerge.serverSpelling(List.of("develop"), null), null);
     var log = ReverseMerge.parseLog("\u0001이개발\u001f10-23 17:42\u001f두 번째\nA.java\n\n\u0001박개발\u001f10-22 09:10\u001f첫 번째\nA.java\nB.java\n");
     eq(log.get("A.java")[0], "이개발");
     eq(log.get("B.java")[2], "첫 번째");
