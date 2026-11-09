@@ -98,8 +98,6 @@ final class ReverseMerge {
   private static final String CASE_MESSAGE = "파일 이름 대소문자를 %s 에 맞춤";
   /** 대소문자만 다른 이름으로 옮길 때 거쳐 가는 임시 이름의 꼬리. 같은 폴더에 이 이름의 파일이 있으면 옮기기가 실패하고 아무것도 바꾸지 않는다. */
   private static final String CASE_TMP_SUFFIX = ".moa-case-tmp";
-  /** 끝나지 않은 합치기 · cherry-pick · revert 가 남긴 표시. 하나라도 있으면 새로 합치지 않는다. 리베이스 중에는 HEAD 가 브랜치가 아니라 창이 열리지 않는다. */
-  private static final List<String> IN_PROGRESS_HEADS = List.of("MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD");
   /** 합치기를 막는 추적 안 한 파일을 안내에 보이는 줄 수. 나머지는 개수로 알린다. */
   private static final int PATH_LIST_MAX = 10;
 
@@ -470,11 +468,14 @@ final class ReverseMerge {
     boolean folded = ignoreCase(root);
     Map<String, String> renames = folded ? caseRenames(tree(root, base), tree(root, fromTip), tree(root, forkPoint(root, base, fromTip))) : Map.of();
     if (!renames.isEmpty() && !matchCase) throw new CaseRenameException(renames);
-    Set<String> touched = touched(root, start, base, fromTip);
+    Map<String, Boolean> touched = touched(root, start, base, fromTip);
     // 추적 안 한 파일은 Stash 에 들어가지 않고 git 이 덮어쓰지도 않는다. 옮기기 · 합치기 도중에 영어 오류로 멈추지 않게 미리 이름을 알린다.
-    List<String> inWay = inTheWay(lines(git(root, "ls-files", "--others", "--exclude-standard")), touched, folded);
+    // 지우기만 하는 경로는 그 자리에 추적 안 한 파일이 있어도 git 이 멈추지 않으므로 뺀다.
+    Set<String> written = new HashSet<>();
+    for (Map.Entry<String, Boolean> t : touched.entrySet()) if (t.getValue()) written.add(t.getKey());
+    List<String> inWay = inTheWay(lines(git(root, "ls-files", "--others", "--exclude-standard")), written, folded);
     if (!inWay.isEmpty()) throw new IOException(SyncBundle.message("rmerge.untracked", pathList(inWay)));
-    if (blocksMerge(root, touched)) {
+    if (blocksMerge(root, touched.keySet())) {
       if (!stash) throw new DirtyException();
       git(root, GIT_LONG_TIMEOUT_SEC, "stash", "push", "-m", STASH_MESSAGE);
       stashed = true;
@@ -531,13 +532,14 @@ final class ReverseMerge {
   /**
    * 합치기가 바꾸는 파일: start(옮겨 갈 브랜치 또는 HEAD)로 옮기기, base(따라잡은 서버 브랜치, 따라잡지 않으면 start)로 따라잡기, base 에서 fromTip 합치기.
    * 이름 바꾸기는 옛 경로 · 새 경로를 모두 바뀐 파일로 본다(--no-renames). 세 diff 는 동시에 돌린다.
+   * 값은 그 경로에 파일을 쓰는가(세 diff 가운데 하나라도 지우기가 아님)다.
    */
-  static Set<String> touched(File root, String start, String base, String fromTip) throws IOException, InterruptedException {
-    Set<String> touched = new LinkedHashSet<>();
-    for (String out : gitAll(root, List.of(new String[]{"diff", "--name-only", "--no-renames", "HEAD", start},
-                                           new String[]{"diff", "--name-only", "--no-renames", start, base},
-                                           new String[]{"diff", "--name-only", "--no-renames", base + "..." + fromTip}))) {
-      touched.addAll(lines(out));
+  static Map<String, Boolean> touched(File root, String start, String base, String fromTip) throws IOException, InterruptedException {
+    Map<String, Boolean> touched = new LinkedHashMap<>();
+    for (String out : gitAll(root, List.of(new String[]{"diff", "--name-status", "--no-renames", "HEAD", start},
+                                           new String[]{"diff", "--name-status", "--no-renames", start, base},
+                                           new String[]{"diff", "--name-status", "--no-renames", base + "..." + fromTip}))) {
+      for (Map.Entry<String, String> e : SyncPanel.parseNameStatus(out).entrySet()) touched.merge(e.getKey(), !"D".equals(e.getValue()), Boolean::logicalOr);
     }
     return touched;
   }
@@ -578,10 +580,11 @@ final class ReverseMerge {
     return text.toString().trim();
   }
 
-  /** 끝나지 않은 합치기 · cherry-pick · revert 가 있으면 IOException. 그 위에서 합치면 Stash 가 그 상태를 지우거나 그 합치기를 대신 마무리하게 된다. */
+  /** 끝나지 않은 합치기 · cherry-pick · revert · rebase · git am 이 있으면 IOException. 그 위에서 합치면 Stash 가 그 상태를 지우거나 그 일을 대신 마무리하게 된다. */
   private static void refuseInProgress(File root) throws IOException, InterruptedException {
-    for (String head : IN_PROGRESS_HEADS) {
-      if (hasRef(root, head)) throw new IOException(SyncBundle.message("rmerge.in.progress", head));
+    File gitDir = new File(git(root, "rev-parse", "--absolute-git-dir").trim());
+    for (String name : GitUndo.IN_PROGRESS) {
+      if (new File(gitDir, name).exists()) throw new IOException(SyncBundle.message("rmerge.in.progress", name));
     }
   }
 

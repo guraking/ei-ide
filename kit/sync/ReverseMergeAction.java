@@ -26,10 +26,12 @@ import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vcs.AbstractVcsHelper;
 import com.intellij.openapi.vcs.FilePath;
 import com.intellij.openapi.vfs.LocalFileSystem;
+import com.intellij.openapi.wm.WindowManager;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.ui.ComboboxSpeedSearch;
 import com.intellij.ui.InplaceButton;
 import com.intellij.ui.JBColor;
+import com.intellij.ui.ScreenUtil;
 import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.SimpleListCellRenderer;
 import com.intellij.ui.components.JBCheckBox;
@@ -56,6 +58,8 @@ import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableColumnModel;
 import java.awt.*;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
@@ -88,9 +92,10 @@ public final class ReverseMergeAction extends DumbAwareAction {
   private static final double FIRST_W = 0.6;
   private static final double FIRST_H = 0.65;
   private static final String DIMENSION_KEY = "kinggura.sync.MergeBranches";
-  /** 표 칸(파일 · 작성자 · 때 · 커밋 제목)의 처음 너비 비율. 표는 창 너비를 이 비율로 나누고, 머리글을 끌어 바꾼 너비는 COL_WIDTH_KEY 로 기억한다. */
-  private static final int[] COL_RATIO = {48, 12, 10, 30};
-  private static final String COL_WIDTH_KEY = "kinggura.sync.mergeBranches.col.width.";
+  /** 표 칸(파일 · 작성자 · 때 · 커밋 제목)의 처음 너비 비율(천분율). 표 너비가 바뀔 때마다 이 비율로 나누고, 머리글을 끌어 바꾼 비율은 COL_RATIO_KEY 로 기억한다. */
+  private static final int[] COL_RATIO = {480, 120, 100, 300};
+  private static final int RATIO_SCALE = 1000;
+  private static final String COL_RATIO_KEY = "kinggura.sync.mergeBranches.col.ratio.";
   /** 대소문자만 바뀐 이름을 묻는 창에 보이는 줄 수. 나머지는 개수로 알린다. */
   private static final int CASE_LIST_MAX = 10;
   // 찾기 칸 모서리 둥글기(px). 새 UI 콤보 상자 · 펼친 목록의 모서리와 비슷하게 맞춘다.
@@ -242,9 +247,9 @@ public final class ReverseMergeAction extends DumbAwareAction {
       // 찾기 칸은 IntelliJ 기본으로 Enter · Esc · 포커스 이동에만 닫힌다. 펼친 목록에서 브랜치를 고르면 목록과 함께 닫는다.
       hideSearchWithList(fromBox, roundSearch(fromBox));
       hideSearchWithList(intoBox, roundSearch(intoBox));
-      // 두 상자는 글 길이와 상관없이 창 너비를 반씩 나눈다(GridBag weightx). 기본 너비가 긴 이름을 따라가면 한쪽만 넓어진다.
-      fromBox.setMinimumAndPreferredWidth(0);
-      intoBox.setMinimumAndPreferredWidth(0);
+      // 두 상자는 글 길이와 상관없이 창 너비를 반씩 나눈다(GridBag weightx). 기본 너비가 가장 긴 이름을 따라가면 한쪽만 넓어지고 창 최소 너비도 커진다.
+      fromBox.setPrototypeDisplayValue("");
+      intoBox.setPrototypeDisplayValue("");
       push.setSelected(true);
       setTitle(SyncBundle.message("rmerge.title"));
       setOKButtonText(SyncBundle.message("rmerge.button.merge"));
@@ -274,6 +279,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
           Thread.currentThread().interrupt();
           return;
         }
+        // 빈 목록(빈 저장소 · 읽지 못한 출력)이면 받아 둔 목록을 지우지 않는다.
+        if (names.isEmpty()) return;
         SwingUtilities.invokeLater(() -> {
           if (isDisposed()) return;
           for (ComboBox<String> box : List.of(fromBox, intoBox)) {
@@ -431,15 +438,17 @@ public final class ReverseMergeAction extends DumbAwareAction {
 
       table.setShowGrid(false);
       table.getTableHeader().setReorderingAllowed(false);
-      // 칸 너비는 비율로 시작하고(표가 창 너비에 맞춰 나눔), 머리글 경계를 끌고 놓으면 그 너비를 기억해 다음에 열 때 비율로 쓴다.
+      // 머리글 경계를 끌고 놓으면 그때 칸 비율을 기억한다. 표 너비는 아래 scroll 이 바뀔 때마다 그 비율로 나눈다.
       TableColumnModel columns = table.getColumnModel();
-      for (int col = 0; col < COL_RATIO.length; col++) {
-        columns.getColumn(col).setPreferredWidth(PropertiesComponent.getInstance().getInt(COL_WIDTH_KEY + col, JBUI.scale(COL_RATIO[col] * 10)));
-      }
+      int[] ratios = new int[COL_RATIO.length];
+      for (int col = 0; col < ratios.length; col++) ratios[col] = PropertiesComponent.getInstance().getInt(COL_RATIO_KEY + col, COL_RATIO[col]);
       table.getTableHeader().addMouseListener(new MouseAdapter() {
         @Override public void mouseReleased(MouseEvent e) {
-          for (int col = 0; col < COL_RATIO.length; col++) {
-            PropertiesComponent.getInstance().setValue(COL_WIDTH_KEY + col, columns.getColumn(col).getWidth(), 0);
+          int total = table.getWidth();
+          if (total <= 0) return;
+          for (int col = 0; col < ratios.length; col++) {
+            ratios[col] = Math.max(1, columns.getColumn(col).getWidth() * RATIO_SCALE / total);
+            PropertiesComponent.getInstance().setValue(COL_RATIO_KEY + col, ratios[col], COL_RATIO[col]);
           }
         }
       });
@@ -465,6 +474,17 @@ public final class ReverseMergeAction extends DumbAwareAction {
         }
       });
       JScrollPane scroll = ScrollPaneFactory.createScrollPane(table);
+      // JTable 은 늘어난 너비를 칸마다 똑같이 나눠 비율이 무너지므로, 보이는 너비가 바뀔 때마다 칸 너비를 비율대로 다시 준다.
+      scroll.getViewport().addComponentListener(new ComponentAdapter() {
+        @Override public void componentResized(ComponentEvent e) {
+          int total = scroll.getViewport().getWidth();
+          int sum = 0;
+          for (int r : ratios) sum += r;
+          if (total <= 0 || sum <= 0) return;
+          for (int col = 0; col < ratios.length; col++) columns.getColumn(col).setPreferredWidth(total * ratios[col] / sum);
+          table.doLayout();
+        }
+      });
       scroll.setBorder(JBUI.Borders.customLine(JBColor.border(), 1, 0, 1, 0));
 
       // 단계 3: 합친 뒤 Push 여부. 커밋 안 한 변경이 합칠 파일과 겹치면 합칠 때 Stash 할지 묻는다(runMerge).
@@ -497,7 +517,9 @@ public final class ReverseMergeAction extends DumbAwareAction {
 
     @Override
     public Dimension getInitialSize() {
-      Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+      // IDE 창이 있는 모니터 기준(노트북 + 큰 모니터를 함께 쓸 때 다른 화면 크기로 열리지 않게).
+      Window ide = WindowManager.getInstance().suggestParentWindow(project);
+      Rectangle screen = ide != null ? ScreenUtil.getScreenRectangle(ide) : new Rectangle(Toolkit.getDefaultToolkit().getScreenSize());
       return new Dimension((int) (screen.width * FIRST_W), (int) (screen.height * FIRST_H));
     }
 
