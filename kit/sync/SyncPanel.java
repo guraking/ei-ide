@@ -2709,7 +2709,11 @@ final class SyncPanel extends SimpleToolWindowPanel {
         reverseNotes.remove(root);
         return;
       }
-      if (fetch && !(fetchedAll && ReverseMerge.fetchesAllHeads(cfg, remote))) ReverseMerge.fetchQuietly(root, remote, from);
+      if (fetch && !(fetchedAll && ReverseMerge.fetches(cfg, remote, from))) {
+        // 받기 설정이 기준 브랜치를 받지 않아 서버에 한 번 더 묻는다. 조회가 느릴 때 idea.log 에서 까닭(설정 줄)을 볼 수 있게 남긴다.
+        if (fetchedAll) LOG.info("역머지 기준 " + from + " 을(를) 따로 받음 [" + root.getName() + "] remote." + remote + ".fetch=" + cfg.get("remote." + remote + ".fetch"));
+        ReverseMerge.fetchQuietly(root, remote, from);
+      }
       ReverseMerge.Preview preview = ReverseMerge.preview(root, cfg, remote, from, repo.branch(), repo.branch());
       int mine = preview.mineCount();
       // 합치기 커밋은 세지 않는다. develop 을 내 브랜치로 합친 뒤 Push 하지 않은 합치기 커밋은 내용이 이미 develop 에 있어 머지 요청할 것이 아니다.
