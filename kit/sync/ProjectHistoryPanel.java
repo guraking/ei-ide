@@ -97,6 +97,10 @@ final class ProjectHistoryPanel extends JPanel {
   private static final long CAT_TIMEOUT_SEC = 120;
   // rev-parse --abbrev-ref 가 브랜치 대신 돌려주는 값(떨어진 HEAD). 이때는 짧은 해시를 보인다.
   private static final String DETACHED = "HEAD";
+  // svn 이 아이디 · 비밀번호를 묻지 않고 바로 실패하게 한다(묻는 입력을 기다리며 시간 제한까지 멈추지 않게).
+  private static final String SVN_NO_PROMPT = "--non-interactive";
+  // svnPrefixes 에서 리비전 번호 대신 「다음 묶음을 거를 경로」를 담는 키. 리비전은 숫자뿐이라 겹치지 않는다.
+  private static final String SVN_OLDER = "older";
   // 상태 글자: 추가는 커밋 직전 내용이, 삭제는 커밋 내용이 없다.
   private static final String ADDED = "A";
   private static final String DELETED = "D";
@@ -183,11 +187,12 @@ final class ProjectHistoryPanel extends JPanel {
   }
 
   /**
-   * 읽어 온 기록. branch 는 Git 현재 브랜치(떨어진 HEAD 면 짧은 해시) · SVN 저장소 경로. svnRoot · svnPrefix 는 SVN 비교 창용. more 는 다음 묶음이 남았을 수 있음.
+   * 읽어 온 기록. branch 는 Git 현재 브랜치(떨어진 HEAD 면 짧은 해시) · SVN 저장소 경로. svnRoot · svnPrefixes(리비전 → 그때 폴더의 저장소 경로)는 SVN 비교 창용.
+   * more 는 다음 묶음이 남았을 수 있음.
    * start 는 첫 묶음 때의 HEAD 해시(Git, 다음 묶음도 여기서 센다), remotes 는 원격 이름(원격 브랜치 알약 색을 고른다). SVN 은 null · 빈 목록.
    * me 는 이 저장소의 나, sides 는 다른 사람 합치기 커밋의 부모별 바뀐 파일, clashes 는 내 소스를 건드린 커밋(History.clashes). SVN 은 NONE · 빈 맵.
    */
-  private record Loaded(Target target, String branch, String svnRoot, String svnPrefix, String start, List<String> remotes,
+  private record Loaded(Target target, String branch, String svnRoot, Map<String, String> svnPrefixes, String start, List<String> remotes,
                         List<History.Entry> entries, List<History.Row> rows, boolean more,
                         History.Me me, Map<String, List<List<History.FileChange>>> sides, Map<String, List<History.Clash>> clashes) {}
 
@@ -461,7 +466,8 @@ final class ProjectHistoryPanel extends JPanel {
       VirtualFile[] roots = ModuleRootManager.getInstance(module).getContentRoots();
       if (roots.length == 0) continue;
       File dir = new File(roots[0].getPath());
-      byDir.putIfAbsent(dir, target(module.getName(), dir));
+      // Git · SVN 저장소 밖 모듈(그냥 폴더)은 기록이 없어 넣지 않는다.
+      if (SyncPanel.underVcs(dir)) byDir.putIfAbsent(dir, target(module.getName(), dir));
     }
     // 저장소를 모두 닫은 워크스페이스처럼 프로젝트 폴더가 Git · SVN 저장소가 아니면 넣지 않는다(기록을 읽지 못한다). 목록은 「모듈 없음」.
     if (byDir.isEmpty() && project.getBasePath() != null && SyncPanel.underVcs(new File(project.getBasePath()))) {
@@ -579,7 +585,7 @@ final class ProjectHistoryPanel extends JPanel {
         if (loaded != before || request != loadSeq) return;  // 읽는 동안 다른 프로젝트를 골랐거나 새로 읽기 시작했다.
         if (done == null) {
           // 실패한 묶음은 다시 내릴 때 또 시도하지 않도록 끝으로 본다.
-          loaded = new Loaded(before.target(), before.branch(), before.svnRoot(), before.svnPrefix(), before.start(), before.remotes(),
+          loaded = new Loaded(before.target(), before.branch(), before.svnRoot(), before.svnPrefixes(), before.start(), before.remotes(),
                               before.entries(), before.rows(), false, before.me(), before.sides(), before.clashes());
           loading(false);
           status.setText(Objects.toString(failure, SyncBundle.message("history.count", before.entries().size())));
@@ -618,7 +624,7 @@ final class ProjectHistoryPanel extends JPanel {
     List<History.Entry> page;
     String branch;
     String svnRoot = null;
-    String svnPrefix = null;
+    Map<String, String> svnPrefixes = before == null ? new HashMap<>() : new HashMap<>(before.svnPrefixes());
     String start = null;
     List<String> remotes = List.of();
     History.Me me = History.Me.NONE;
@@ -628,8 +634,9 @@ final class ProjectHistoryPanel extends JPanel {
         me = History.parseMe(gitOrEmpty(dir, "config", "--get-regexp", "^user\\.(name|email)$")).withAliases(meAliases());
         branch = gitOrEmpty(dir, "rev-parse", "--abbrev-ref", "HEAD");
         if (DETACHED.equals(branch)) branch = gitOrEmpty(dir, "rev-parse", "--short", "HEAD");
-        String head = gitOrEmpty(dir, "rev-parse", "HEAD");
-        start = head.isEmpty() ? DETACHED : head;
+        start = gitOrEmpty(dir, "rev-parse", "HEAD");
+        // HEAD 를 못 읽었는데 저장소이긴 하면(rev-parse --git-dir 성공) 아직 커밋이 없는 새 저장소다. 저장소가 아니면 그 오류를 그대로 보인다.
+        if (start.isEmpty()) SyncPanel.git(dir, "rev-parse", "--git-dir");
         List<String> names = new ArrayList<>();
         for (String name : gitOrEmpty(dir, "remote").split("\n")) {
           if (!name.isBlank()) names.add(name.trim());
@@ -642,21 +649,21 @@ final class ProjectHistoryPanel extends JPanel {
         remotes = before.remotes();
         me = before.me();
       }
-      page = History.parseGitLog(SyncPanel.git(dir, History.gitLogArgs(start, LOG_LIMIT, entries.size())));
+      page = start.isEmpty() ? List.of()
+                             : History.parseGitLog(SyncPanel.git(dir, History.gitLogArgs(start, LOG_LIMIT, entries.size(), !dir.equals(repoRoot(dir)))));
     }
     else {
       if (before == null) {
-        String[] info = History.parseSvnInfo(SyncPanel.run(dir, "svn", "info", "--xml"));
+        String[] info = History.parseSvnInfo(SyncPanel.run(dir, "svn", "info", "--xml", SVN_NO_PROMPT));
         svnRoot = info[0];
-        svnPrefix = info[1];
+        branch = info[1];
+        svnPrefixes.put(SVN_OLDER, info[1]);
       }
       else {
         svnRoot = before.svnRoot();
-        svnPrefix = before.svnPrefix();
+        branch = before.branch();
       }
-      branch = svnPrefix;
-      page = entries.isEmpty() ? History.parseSvnLog(SyncPanel.run(dir, "svn", "log", "--xml", "-v", "-l", String.valueOf(LOG_LIMIT)), svnPrefix)
-                               : nextSvnPage(dir, entries, svnPrefix);
+      page = nextSvnPage(dir, entries, svnPrefixes);
     }
     Set<String> seen = new HashSet<>();
     for (History.Entry entry : entries) seen.add(entry.id());
@@ -668,13 +675,19 @@ final class ProjectHistoryPanel extends JPanel {
     }
     // 합치기 커밋이 있을 때만 git 을 한 번 더 부른다(부모마다 따로 비교, History.clashes).
     if (!merges.isEmpty() && me.known()) sides.putAll(History.parseSides(SyncPanel.git(dir, History.sideArgs(merges))));
-    return new Loaded(target, branch, svnRoot, svnPrefix, start, remotes, entries, History.layout(entries), page.size() == LOG_LIMIT,
+    return new Loaded(target, branch, svnRoot, svnPrefixes, start, remotes, entries, History.layout(entries), page.size() == LOG_LIMIT,
                       me, sides, History.clashes(entries, me, sides));
   }
 
-  /** entries(비어 있지 않음) 의 마지막 리비전 앞의 다음 묶음. 마지막이 1 이하면 빈 목록. 리비전이 숫자가 아니면 IOException. */
-  private static List<History.Entry> nextSvnPage(File dir, List<History.Entry> entries, String svnPrefix)
+  /**
+   * entries 의 마지막 리비전 앞의 다음 묶음(entries 가 비면 첫 묶음). 마지막이 1 이하면 빈 목록. 리비전이 숫자가 아니면 IOException.
+   * prefixes 의 SVN_OLDER 경로로 거르고, 읽은 리비전의 경로와 더 오래된 리비전을 거를 경로(브랜치 복사를 거슬러 올라감)를 prefixes 에 더한다.
+   */
+  private static List<History.Entry> nextSvnPage(File dir, List<History.Entry> entries, Map<String, String> prefixes)
     throws IOException, InterruptedException {
+    if (entries.isEmpty()) {
+      return svnPage(SyncPanel.run(dir, "svn", "log", "--xml", "-v", SVN_NO_PROMPT, "-l", String.valueOf(LOG_LIMIT)), prefixes);
+    }
     int lastIndex = entries.size() - 1;
     History.Entry last = entries.get(lastIndex);
     long revision;
@@ -686,13 +699,19 @@ final class ProjectHistoryPanel extends JPanel {
     }
     if (revision <= 1) return List.of();
     String range = (revision - 1) + ":1";
-    List<History.Entry> page = History.parseSvnLog(
-      SyncPanel.run(dir, "svn", "log", "--xml", "-v", "-l", String.valueOf(LOG_LIMIT), "-r", range), svnPrefix);
+    List<History.Entry> page = svnPage(SyncPanel.run(dir, "svn", "log", "--xml", "-v", SVN_NO_PROMPT, "-l", String.valueOf(LOG_LIMIT), "-r", range),
+                                       prefixes);
     if (!page.isEmpty()) {
       entries.set(lastIndex, new History.Entry(last.id(), List.of(page.get(0).id()), last.author(), last.email(), last.time(), last.refs(),
                                                last.message(), last.files()));
     }
     return page;
+  }
+
+  private static List<History.Entry> svnPage(String xml, Map<String, String> prefixes) throws IOException {
+    History.SvnLog log = History.parseSvnLog(xml, prefixes.get(SVN_OLDER), prefixes);
+    prefixes.put(SVN_OLDER, log.older());
+    return log.entries();
   }
 
   /** 없어도 되는 값(브랜치 이름)을 읽는다. 실패 · 빈 값이면 null. */
@@ -977,7 +996,9 @@ final class ProjectHistoryPanel extends JPanel {
     catch (NumberFormatException e) {
       throw new IOException("svn 리비전을 읽지 못했습니다: " + entry.id());
     }
-    return SyncPanel.runBytes(dir, CAT_TIMEOUT_SEC, "svn", "cat", source.svnRoot() + source.svnPrefix() + "/" + path + "@" + rev);
+    // 브랜치를 만들기 전 리비전은 그때의 경로(복사 원본)에서 읽는다.
+    String prefix = source.svnPrefixes().getOrDefault(entry.id(), source.branch());
+    return SyncPanel.runBytes(dir, CAT_TIMEOUT_SEC, "svn", "cat", SVN_NO_PROMPT, source.svnRoot() + prefix + "/" + path + "@" + rev);
   }
 
   /** 화면 글 묶음에 적힌 시간 모양. 오전 · 오후 글자는 history.locale 을 따른다. */

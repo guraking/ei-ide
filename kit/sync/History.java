@@ -135,8 +135,19 @@ final class History {
    * --raw --no-abbrev 로 파일 내용 해시를 함께 받아(clashes) 따로 git 을 부르지 않고 내 소스를 건드린 커밋을 찾는다.
    */
   static String[] gitLogArgs(String start, int limit, int skip) {
-    return new String[]{"log", start, "--date-order", "--parents", "--full-history", "--diff-merges=first-parent", "-n", String.valueOf(limit),
-                        "--skip", String.valueOf(skip), "--relative", "--raw", "--no-abbrev", GIT_FORMAT, "--", "."};
+    return gitLogArgs(start, limit, skip, false);
+  }
+
+  /**
+   * gitLogArgs 와 같고, subfolder(작업 폴더가 저장소 맨 위가 아님)면 --simplify-merges 를 더한다. --full-history 는 합치기 커밋을 늘 남기므로
+   * 하위 폴더 기록에 그 폴더를 건드리지 않은 합치기까지 모두 섞인다. 저장소 맨 위는 모든 커밋이 폴더 안이라 빠질 합치기가 없고, 기록 전체를 먼저 훑는 비용만 들어 쓰지 않는다.
+   */
+  static String[] gitLogArgs(String start, int limit, int skip, boolean subfolder) {
+    List<String> args = new ArrayList<>(List.of("log", start, "--date-order", "--parents", "--full-history"));
+    if (subfolder) args.add("--simplify-merges");
+    args.addAll(List.of("--diff-merges=first-parent", "-n", String.valueOf(limit), "--skip", String.valueOf(skip), "--relative", "--raw",
+                        "--no-abbrev", GIT_FORMAT, "--", "."));
+    return args.toArray(String[]::new);
   }
 
   /**
@@ -219,18 +230,41 @@ final class History {
    * 부모는 목록의 다음 리비전(SVN 은 한 줄 기록). 작성자 · 날짜가 없는 리비전(권한 없음)은 빈 작성자 · Instant.EPOCH 로 둔다.
    */
   static List<Entry> parseSvnLog(String xml, String prefix) throws IOException {
-    String base = prefix.endsWith("/") ? prefix : prefix + "/";
+    return parseSvnLog(xml, prefix, new HashMap<>()).entries();
+  }
+
+  /** svn log 한 묶음. prefixes 는 리비전 → 그때 이 폴더의 저장소 경로, older 는 이 묶음보다 오래된 리비전을 거를 경로(다음 묶음에 넘긴다). */
+  record SvnLog(List<Entry> entries, Map<String, String> prefixes, String older) {}
+
+  /**
+   * parseSvnLog 와 같고, 리비전마다 그때 이 폴더의 저장소 경로를 prefixes 에 더해 돌려준다.
+   * svn log 는 브랜치를 만든 복사를 거슬러 원본(trunk) 기록까지 보여 주므로, 이 폴더나 그 상위 폴더를 복사로 만든 리비전보다
+   * 오래된 리비전은 복사 원본 경로(copyfrom-path + 나머지)로 거른다. 그런 경로가 여럿이면 가장 깊은 것을 따른다.
+   */
+  static SvnLog parseSvnLog(String xml, String prefix, Map<String, String> prefixes) throws IOException {
+    String current = prefix;
     NodeList entries = parse(xml, "svn log").getElementsByTagName("logentry");
     List<Entry> result = new ArrayList<>();
     for (int i = 0; i < entries.getLength(); i++) {
       Element entry = (Element)entries.item(i);
+      String base = current.endsWith("/") ? current : current + "/";
+      prefixes.put(entry.getAttribute("revision"), current);
       List<FileChange> files = new ArrayList<>();
+      String copiedFrom = null;
+      String copiedAt = "";
       NodeList paths = entry.getElementsByTagName("path");
       for (int j = 0; j < paths.getLength(); j++) {
         Element p = (Element)paths.item(j);
         String path = p.getTextContent();
         if (path.startsWith(base)) files.add(new FileChange(p.getAttribute("action"), path.substring(base.length())));
+        String from = p.getAttribute("copyfrom-path");
+        boolean covers = base.startsWith(path.endsWith("/") ? path : path + "/");
+        if (!from.isEmpty() && covers && path.length() > copiedAt.length()) {
+          copiedAt = path;
+          copiedFrom = from + current.substring(path.length());
+        }
       }
+      if (copiedFrom != null) current = copiedFrom;
       String date = text(entry, "date");
       Instant time;
       try {
@@ -242,7 +276,7 @@ final class History {
       List<String> parents = i + 1 < entries.getLength() ? List.of(((Element)entries.item(i + 1)).getAttribute("revision")) : List.of();
       result.add(new Entry(entry.getAttribute("revision"), parents, text(entry, "author"), "", time, List.of(), text(entry, "msg").strip(), files));
     }
-    return result;
+    return new SvnLog(result, prefixes, current);
   }
 
   /**
