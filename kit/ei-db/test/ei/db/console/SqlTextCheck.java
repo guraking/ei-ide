@@ -143,6 +143,21 @@ public class SqlTextCheck {
     eq(SqlText.display(0), "0");
     eq(SqlText.text(new BigDecimal("1234567.89")), "1234567.89");
     eq(SqlText.literal(128000), "128000");
+    // 이름 표기: 접는 대소문자와 다르거나 예약어 · 보통 꼴이 아니면 따옴표.
+    eq(SqlText.ident(ei.db.DbKind.POSTGRES, "user_name"), "user_name");
+    eq(SqlText.ident(ei.db.DbKind.POSTGRES, "UserName"), "\"UserName\"");
+    eq(SqlText.ident(ei.db.DbKind.POSTGRES, "order"), "\"order\"");
+    eq(SqlText.ident(ei.db.DbKind.ORACLE, "EMP_NO"), "EMP_NO");
+    eq(SqlText.ident(ei.db.DbKind.ORACLE, "emp_no"), "\"emp_no\"");
+    eq(SqlText.ident(ei.db.DbKind.ORACLE, "USER"), "\"USER\"");
+    eq(SqlText.ident(ei.db.DbKind.ORACLE, "A B"), "\"A B\"");
+    eq(SqlText.ident(ei.db.DbKind.MYSQL, "order"), "`order`");
+    eq(SqlText.ident(ei.db.DbKind.MYSQL, "Name"), "Name");
+    eq(SqlText.ident(null, "order"), "order");
+    eq(SqlText.updates("t", List.of("id", "UserName"), List.of(), List.of(Arrays.asList(1, "x")), Set.of("ID"), ei.db.DbKind.POSTGRES),
+        "UPDATE t\n   SET \"UserName\" = 'x'\n WHERE 1 = 1\n   AND id = 1;\n");
+    eq(SqlText.inserts("T", List.of("order"), List.of(), List.of(Arrays.asList(1)), ei.db.DbKind.POSTGRES),
+        "INSERT INTO T (\n       \"order\"\n) VALUES (\n       1  -- order\n);\n");
     System.out.println("SqlTextCheck 통과");
   }
 }

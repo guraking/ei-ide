@@ -38,8 +38,11 @@ final class MapperIndex {
   /** 표를 다시 만드는 일은 한 번에 하나만 한다(여러 데몬 스레드가 같은 변경을 두고 동시에 다시 읽지 않게). */
   private static final Object REBUILD = new Object();
 
-  /** 매퍼 XML 하나. ids 는 문장 id → 여는 태그 위치(문서 순서). 매퍼가 아니면 namespace 가 null. */
-  record Entry(VirtualFile file, long stamp, String namespace, Map<String, Integer> ids) {}
+  /**
+   * 매퍼 XML 하나. ids 는 문장 id → 첫 여는 태그 위치(문서 순서), starts 는 모든 문장의 여는 태그 위치 → id
+   * (databaseId 로 나뉜 같은 id 문장도 각각). 매퍼가 아니면 namespace 가 null.
+   */
+  record Entry(VirtualFile file, long stamp, String namespace, Map<String, Integer> ids, Map<Integer, String> starts) {}
 
   /** namespace → 매퍼 XML 들. version 은 만들 때의 {@link #version} 값. files 는 파일별 결과(매퍼 아닌 XML 포함). */
   private record Table(long version, Map<String, List<Entry>> byNamespace, Map<VirtualFile, Entry> files) {}
@@ -123,10 +126,14 @@ final class MapperIndex {
   }
 
   private static Entry read(VirtualFile f, long stamp, CharSequence text) {
-    if (!StringUtil.contains(text, "<mapper")) return new Entry(f, stamp, null, Map.of());
+    if (!StringUtil.contains(text, "<mapper")) return new Entry(f, stamp, null, Map.of(), Map.of());
     MapperDoc doc = MapperDoc.parse(text);
     Map<String, Integer> ids = new LinkedHashMap<>();
-    for (MapperDoc.Node s : doc.statements) ids.putIfAbsent(s.attr("id"), s.start);
-    return new Entry(f, stamp, doc.namespace, ids);
+    Map<Integer, String> starts = new HashMap<>();
+    for (MapperDoc.Node s : doc.statements) {
+      ids.putIfAbsent(s.attr("id"), s.start);
+      starts.put(s.start, s.attr("id"));
+    }
+    return new Entry(f, stamp, doc.namespace, ids, starts);
   }
 }

@@ -30,7 +30,6 @@ import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
-import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.GridLayout;
 import java.io.IOException;
@@ -54,8 +53,9 @@ public final class DtoDialog extends DialogWrapper {
   private static final int COL_FIELD = 1;
   private static final int COL_TYPE = 2;
   private static final int COL_COMMENT = 3;
-  private static final int TABLE_WIDTH = 620;
-  private static final int PREVIEW_WIDTH = 900;
+  /** 대화창 첫 폭과 왼쪽 칸 비율(칸 폭은 분할선으로 바꾼다). */
+  private static final int WIDTH = 1520;
+  private static final float SPLIT = 620f / WIDTH;
   private static final int HEIGHT = 820;
 
   private final Project project;
@@ -117,7 +117,7 @@ public final class DtoDialog extends DialogWrapper {
       String col = result.columns().get(i);
       String dbType = i < result.columnTypes().size() ? result.columnTypes().get(i) : "";
       String comment = result.comments() == null ? "" : result.comments().getOrDefault(col, "");
-      model.addRow(new Object[] {col, fieldName(col), TypeMap.javaType(dbType, TypeMap.anyFraction(result.rows(), i)), comment});
+      model.addRow(new Object[] {col, fieldName(col), TypeMap.forResult(dbType, result.precision(i), result.scale(i), QueryResult.UNKNOWN, result.rows(), i), comment});
     }
     setTitle(EiDbBundle.message("dto.title", table == null ? EiDbBundle.message("dto.title.result") : table.toLowerCase(Locale.ROOT), result.columns().size()));
     setOKButtonText(EiDbBundle.message("common.generate"));
@@ -185,7 +185,7 @@ public final class DtoDialog extends DialogWrapper {
     JPanel left = new JPanel(new BorderLayout(0, JBUI.scale(12)));
     left.add(tableScroll, BorderLayout.CENTER);
     left.add(options, BorderLayout.SOUTH);
-    left.setPreferredSize(new Dimension(JBUI.scale(TABLE_WIDTH), JBUI.scale(HEIGHT)));
+    left.setBorder(JBUI.Borders.emptyRight(10));
 
     JPanel head = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
     fileLabel.setFont(Ui.mono());
@@ -194,11 +194,8 @@ public final class DtoDialog extends DialogWrapper {
     JPanel right = new JPanel(new BorderLayout(0, JBUI.scale(6)));
     right.add(head, BorderLayout.NORTH);
     right.add(tabs, BorderLayout.CENTER);
-    right.setPreferredSize(new Dimension(JBUI.scale(PREVIEW_WIDTH), JBUI.scale(HEIGHT)));
-
-    JPanel body = new JPanel(new BorderLayout(JBUI.scale(20), 0));
-    body.add(left, BorderLayout.WEST);
-    body.add(right, BorderLayout.CENTER);
+    right.setBorder(JBUI.Borders.emptyLeft(10));
+    JComponent body = Ui.split("dto", SPLIT, left, right, WIDTH, HEIGHT);
 
     JPanel root = new JPanel(new BorderLayout(0, JBUI.scale(12)));
     root.add(top, BorderLayout.NORTH);

@@ -283,9 +283,15 @@ public final class DialectConvert {
     return sql.substring(0, sel.end()).stripTrailing() + "\n  FROM DUAL" + (sel.end() < sql.length() ? "\n " + sql.substring(sel.end()).strip() : "");
   }
 
-  private static final Pattern CAST = Pattern.compile("(?i)([A-Za-z_][\\w$#.]*|'[^']*'|\\))\\s*::\\s*([A-Za-z]+(?:\\s*\\(\\s*\\d+(?:\\s*,\\s*\\d+)?\\s*\\))?)");
+  /** 형 이름 뒤 (n) 또는 (n, m). */
+  private static final String TYPE_ARGS = "(?:\\s*\\(\\s*\\d+(?:\\s*,\\s*\\d+)?\\s*\\))?";
+  /** 여러 낱말 형(double precision · character varying · timestamp/time with(out) time zone)을 한 낱말 형보다 먼저 본다. */
+  private static final Pattern CAST = Pattern.compile("(?i)([A-Za-z_][\\w$#.]*|'[^']*'|\\))\\s*::\\s*("
+      + "double\\s+precision|character\\s+varying" + TYPE_ARGS
+      + "|(?:timestamp|time)" + TYPE_ARGS + "\\s+with(?:out)?\\s+time\\s+zone"
+      + "|[A-Za-z]\\w*" + TYPE_ARGS + ")(?![\\w$#])");
 
-  /** x::type → CAST(x AS 오라클형). 괄호 식 뒤의 :: 는 괄호까지 감싼다. */
+  /** x::type → CAST(x AS 오라클형). 괄호 식 뒤의 :: 는 괄호까지 감싼다. 바인드(:id::int)는 콜론까지 감싼다. */
   private static String casts(String sql, List<String> notes) {
     int count = 0;
     String s = sql;
@@ -298,7 +304,7 @@ public final class DialectConvert {
         start = openOf(masked, m.start(1));
         if (start < 0) break;
         while (start > 0 && (Character.isLetterOrDigit(masked.charAt(start - 1)) || masked.charAt(start - 1) == '_')) start--;
-      }
+      } else if (start > 0 && masked.charAt(start - 1) == ':' && (start < 2 || masked.charAt(start - 2) != ':')) start--;
       String expr = s.substring(start, m.end(1));
       s = s.substring(0, start) + "CAST(" + expr + " AS " + oracleType(s.substring(m.start(2), m.end(2))) + ")" + s.substring(m.end());
       count++;
@@ -317,12 +323,16 @@ public final class DialectConvert {
   }
 
   private static String oracleType(String pg) {
-    String t = pg.strip().toUpperCase(Locale.ROOT);
-    if (t.startsWith("VARCHAR") || t.startsWith("CHARACTER VARYING")) return t.contains("(") ? t.replace("VARCHAR", "VARCHAR2") : "VARCHAR2(4000)";
+    String t = pg.strip().toUpperCase(Locale.ROOT).replaceAll("\\s+", " ");
+    if (t.startsWith("VARCHAR") || t.startsWith("CHARACTER VARYING")) return t.contains("(") ? t.replaceFirst("CHARACTER VARYING|VARCHAR", "VARCHAR2") : "VARCHAR2(4000)";
     if (t.equals("TEXT")) return "VARCHAR2(4000)";
-    if (t.equals("INT") || t.equals("INTEGER") || t.equals("BIGINT") || t.equals("SMALLINT") || t.startsWith("NUMERIC") || t.startsWith("DECIMAL")) {
+    if (t.equals("INT") || t.equals("INTEGER") || t.equals("BIGINT") || t.equals("SMALLINT") || t.equals("INT2") || t.equals("INT4") || t.equals("INT8")
+        || t.startsWith("NUMERIC") || t.startsWith("DECIMAL")) {
       return t.startsWith("NUMERIC") || t.startsWith("DECIMAL") ? t.replaceFirst("NUMERIC|DECIMAL", "NUMBER") : "NUMBER";
     }
+    if (t.equals("DOUBLE PRECISION") || t.equals("FLOAT8")) return "BINARY_DOUBLE";
+    if (t.equals("REAL") || t.equals("FLOAT4")) return "BINARY_FLOAT";
+    if (t.equals("TIMESTAMPTZ") || t.startsWith("TIMESTAMP") && t.endsWith(" WITH TIME ZONE")) return "TIMESTAMP WITH TIME ZONE";
     if (t.startsWith("TIMESTAMP")) return "TIMESTAMP";
     return t;
   }

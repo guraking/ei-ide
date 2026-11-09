@@ -47,6 +47,8 @@ public class ValidationGenCheck {
        "@Digits(integer = 8, fraction = 0)");
     // Oracle 정밀도 없는 NUMBER: 크기 0, scale -127
     eq(texts(ValidationGen.annotations(col("SEQ", "NUMBER", 0, -127, true, false), "Long", none)), "@NotNull");
+    // PG 정밀도 없는 numeric: 크기 131089, scale 0 → BigDecimal, @Digits 없음
+    eq(texts(ValidationGen.annotations(col("AMT", "numeric", 131089, 0, false, false), "BigDecimal", none)), "@NotNull");
     // 날짜는 길이 · 자릿수 없음, NOT NULL 만
     eq(texts(ValidationGen.annotations(col("REG_DT", "DATE", 7, 0, false, false), "LocalDateTime", none)), "@NotNull");
     // DATE 칼럼을 String 으로 받으면 @Size 를 걸지 않는다

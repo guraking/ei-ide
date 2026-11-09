@@ -4,6 +4,7 @@ import com.intellij.openapi.Disposable;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Disposer;
+import com.intellij.util.concurrency.AppExecutorUtil;
 
 import java.sql.Blob;
 import java.sql.Clob;
@@ -22,6 +23,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import java.util.regex.Pattern;
 
@@ -58,6 +60,9 @@ public final class DbSessions implements Disposable {
   private static final int VALID_TIMEOUT_SEC = 3;
   /** 이름으로만 판별하는 Oracle 값 클래스(드라이버를 직접 참조하지 않는다). */
   private static final String ORACLE_SQL = "oracle.sql.";
+  /** 접속을 맺을 때 기다리는 초. 서버가 응답하지 않을 때 무한정 막히지 않게 한다. */
+  private static final int CONNECT_TIMEOUT_SEC = 10;
+  private static final int MILLIS_PER_SEC = 1000;
 
   private final Project project;
   private final Map<String, Connection> open = new ConcurrentHashMap<>();
@@ -167,8 +172,12 @@ public final class DbSessions implements Disposable {
 
   /** 그 접속에서 실행 중인 문장에 Statement.cancel() 을 보낸다. 실행 중이 아니면 아무것도 하지 않는다. 보냈으면 참. */
   public boolean cancel(String id) throws SQLException {
-    Statement st = running.get(id);
-    if (st == null) return false;
+    return cancel(id, running.get(id));
+  }
+
+  /** st 가 아직 그 접속에서 실행 중일 때만 cancel 한다. 같은 접속에서 뒤에 시작한 다른 콘솔의 문장은 멈추지 않는다. 보냈으면 참. */
+  public boolean cancel(String id, Statement st) throws SQLException {
+    if (st == null || running.get(id) != st) return false;
     cancelled.add(st);
     st.cancel();
     return true;
@@ -192,7 +201,8 @@ public final class DbSessions implements Disposable {
     synchronized (lock(c.id)) {
       Connection conn = open.get(c.id);
       if (conn != null) {
-        if (conn.isValid(VALID_TIMEOUT_SEC)) return conn;
+        // 다른 콘솔이 실행 중인 접속에 isValid 를 보내면 PostgreSQL 은 소켓 시간 제한으로 그 실행을 끊고 Oracle 은 막힌다.
+        if (running.containsKey(c.id) || conn.isValid(VALID_TIMEOUT_SEC)) return conn;
         int lost = pending(c.id);
         if (lost > 0 && !conn.isClosed()) {
           throw new SQLException(EiDbBundle.message("sessions.not.responding", c.name, VALID_TIMEOUT_SEC, lost));
@@ -220,6 +230,8 @@ public final class DbSessions implements Disposable {
           case MYSQL -> conn.setCatalog(schema);
           case POSTGRES -> conn.setSchema(schema);
         }
+      } else if (c.kind == DbKind.POSTGRES) {
+        Meta.rememberSchema(c.id, conn.getSchema());
       }
     } catch (SQLException | RuntimeException e) {
       closeWithoutCommit(conn);
@@ -259,6 +271,7 @@ public final class DbSessions implements Disposable {
 
   /**
    * 접속 속성. PostgreSQL: 읽기 전용 접속은 readOnlyMode=always 로 서버가 변경을 막게 하고,
+   * stringtype=unspecified 로 글 바인드를 서버가 칼럼 형(bool · uuid · json · enum · 시각)에 맞춰 읽게 하고,
    * autosave=always 로 문장마다 저장점을 두어 자동 커밋이 꺼진 상태의 오류가 트랜잭션 전체를 망치지 않게 한다(성공하면 저장점 해제).
    */
   private static Properties props(DbConfig c, String password) {
@@ -266,8 +279,13 @@ public final class DbSessions implements Disposable {
     props.setProperty("user", c.user);
     props.setProperty("password", password == null ? "" : password);
     switch (c.kind) {
-      case ORACLE -> props.setProperty("remarksReporting", "true");
+      case ORACLE -> {
+        props.setProperty("remarksReporting", "true");
+        props.setProperty("oracle.net.CONNECT_TIMEOUT", String.valueOf(CONNECT_TIMEOUT_SEC * MILLIS_PER_SEC));
+      }
       case POSTGRES -> {
+        props.setProperty("connectTimeout", String.valueOf(CONNECT_TIMEOUT_SEC));
+        props.setProperty("stringtype", "unspecified");
         if (c.readOnly) props.setProperty("readOnlyMode", "always");
         props.setProperty("autosave", "always");
         props.setProperty("cleanupSavepoints", "true");
@@ -295,65 +313,84 @@ public final class DbSessions implements Disposable {
   /**
    * run 과 같되, 문장을 등록한 뒤 실행 직전에 stop 을 본다. 참이면 실행하지 않고 CancelledException.
    * 접속을 여는 중에 들어온 취소(cancel 할 문장이 아직 없음)를 놓치지 않으려는 것이다.
+   * registered 에는 등록한 문장을 넣는다. 부르는 쪽은 cancel(id, 그 문장) 으로 자기 실행만 멈춘다.
    */
-  public QueryResult run(DbConfig c, String sql, List<Object> binds, BooleanSupplier stop) throws SQLException {
-    return run(c, sql, binds, maxRows, stop);
+  public QueryResult run(DbConfig c, String sql, List<Object> binds, BooleanSupplier stop, AtomicReference<Statement> registered) throws SQLException {
+    return run(c, sql, binds, maxRows, stop, registered);
   }
 
   /** limit 건까지 읽는다(ALL_ROWS 면 끝까지). 「더 보기」가 건수를 늘려 다시 부른다. */
   public QueryResult run(DbConfig c, String sql, List<Object> binds, int limit) throws SQLException {
-    return run(c, sql, binds, limit, () -> false);
+    return run(c, sql, binds, limit, () -> false, new AtomicReference<>());
   }
 
-  private QueryResult run(DbConfig c, String sql, List<Object> binds, int limit, BooleanSupplier stop) throws SQLException {
+  /**
+   * 바인드가 없으면 Statement 로 보낸다: PreparedStatement 는 ? 를 자리 표시로 보아 PostgreSQL jsonb 의 ? · ?| · ?& 연산자가 실패한다.
+   * 문장은 running 에서 뺀 뒤 닫는다(끝 무렵의 중지가 닫힌 문장에 cancel 을 보내지 않게).
+   */
+  private QueryResult run(DbConfig c, String sql, List<Object> binds, int limit, BooleanSupplier stop, AtomicReference<Statement> registered) throws SQLException {
     Connection conn = connection(c);
     String text = sql.strip();
     text = normalizeSql(text);
     long start = System.currentTimeMillis();
-    PreparedStatement ps = conn.prepareStatement(text);
+    boolean plain = binds == null || binds.isEmpty();
+    Statement ps = plain ? conn.createStatement() : conn.prepareStatement(text);
     running.put(c.id, ps);
+    registered.set(ps);
     fire();
     try (ps) {
-      if (stop.getAsBoolean()) {
-        cancelled.add(ps);
-        throw new SQLException(EiDbBundle.message("sessions.cancelled.before"));
-      }
-      // limit + 1 건을 받아 보고 넘치면 잘렸다고 알린다.
-      if (limit != ALL_ROWS) ps.setMaxRows(limit + 1);
-      for (int i = 0; binds != null && i < binds.size(); i++) ps.setObject(i + 1, binds.get(i));
-      boolean isQuery = ps.execute();
-      warnCompileErrors(c, ps, text);
-      countChange(c, conn, text);
-      if (!isQuery) {
-        int count = ps.getUpdateCount();
-        return new QueryResult(text, List.of(), List.of(), List.of(), count, System.currentTimeMillis() - start, false, Map.of(), bindList(binds));
-      }
-      try (ResultSet rs = ps.getResultSet()) {
-        ResultSetMetaData md = rs.getMetaData();
-        List<String> cols = new ArrayList<>();
-        List<String> types = new ArrayList<>();
-        for (int i = 1; i <= md.getColumnCount(); i++) {
-          cols.add(md.getColumnLabel(i));
-          types.add(md.getColumnTypeName(i));
+      try {
+        if (stop.getAsBoolean()) {
+          cancelled.add(ps);
+          throw new SQLException(EiDbBundle.message("sessions.cancelled.before"));
         }
-        List<List<Object>> rows = new ArrayList<>();
-        boolean truncated = false;
-        while (rs.next()) {
-          if (limit != ALL_ROWS && rows.size() == limit) { truncated = true; break; }
-          List<Object> row = new ArrayList<>(cols.size());
-          for (int i = 1; i <= cols.size(); i++) row.add(readValue(rs, i));
-          rows.add(row);
+        // limit + 1 건을 받아 보고 넘치면 잘렸다고 알린다.
+        if (limit != ALL_ROWS) ps.setMaxRows(limit + 1);
+        boolean isQuery;
+        if (plain) {
+          isQuery = ps.execute(text);
+        } else {
+          PreparedStatement prepared = (PreparedStatement) ps;
+          for (int i = 0; i < binds.size(); i++) prepared.setObject(i + 1, binds.get(i));
+          isQuery = prepared.execute();
         }
-        long millis = System.currentTimeMillis() - start;
-        return new QueryResult(text, cols, types, rows, -1, millis, truncated, Comments.forQuery(conn, c, text, cols), bindList(binds));
+        warnCompileErrors(c, ps, text);
+        countChange(c, conn, text);
+        if (!isQuery) {
+          int count = ps.getUpdateCount();
+          return new QueryResult(text, List.of(), List.of(), List.of(), count, System.currentTimeMillis() - start, false, Map.of(), bindList(binds));
+        }
+        try (ResultSet rs = ps.getResultSet()) {
+          ResultSetMetaData md = rs.getMetaData();
+          List<String> cols = new ArrayList<>();
+          List<String> types = new ArrayList<>();
+          List<Integer> precisions = new ArrayList<>();
+          List<Integer> scales = new ArrayList<>();
+          for (int i = 1; i <= md.getColumnCount(); i++) {
+            cols.add(md.getColumnLabel(i));
+            types.add(md.getColumnTypeName(i));
+            precisions.add(md.getPrecision(i));
+            scales.add(md.getScale(i));
+          }
+          List<List<Object>> rows = new ArrayList<>();
+          boolean truncated = false;
+          while (rs.next()) {
+            if (limit != ALL_ROWS && rows.size() == limit) { truncated = true; break; }
+            List<Object> row = new ArrayList<>(cols.size());
+            for (int i = 1; i <= cols.size(); i++) row.add(readValue(rs, i));
+            rows.add(row);
+          }
+          long millis = System.currentTimeMillis() - start;
+          return new QueryResult(text, cols, types, rows, -1, millis, truncated, Comments.forQuery(conn, c, text, cols), bindList(binds), precisions, scales);
+        }
+      } catch (SQLException e) {
+        if (cancelled.contains(ps)) throw new CancelledException(e);
+        throw e;
+      } finally {
+        running.remove(c.id, ps);
+        cancelled.remove(ps);
+        fire();
       }
-    } catch (SQLException e) {
-      if (cancelled.contains(ps)) throw new CancelledException(e);
-      throw e;
-    } finally {
-      running.remove(c.id, ps);
-      cancelled.remove(ps);
-      fire();
     }
   }
 
@@ -421,14 +458,20 @@ public final class DbSessions implements Disposable {
 
   /** 미반영 변경은 롤백된다. 부르는 쪽이 먼저 확인받는다. */
   public void close(String id) {
+    Connection conn = detach(id);
+    if (conn != null) closeWithoutCommit(conn);
+    fire();
+  }
+
+  /** 접속을 목록에서 빼고(미반영 건수 · 주석 캐시도) 돌려준다. 닫지는 않는다. */
+  private Connection detach(String id) {
     Connection conn;
     synchronized (lock(id)) {
       conn = open.remove(id);
       pending.remove(id);
     }
     Comments.clear(id);
-    if (conn != null) closeWithoutCommit(conn);
-    fire();
+    return conn;
   }
 
   /** 자동 커밋이 꺼져 있으면 롤백 후 닫는다. 롤백 · 닫기가 실패하면 close() 가 커밋할 수 있으니(Oracle) 접속을 끊어 서버가 롤백하게 한다. */
@@ -445,8 +488,17 @@ public final class DbSessions implements Disposable {
     }
   }
 
+  /** 롤백 · 닫기는 망을 거쳐 막힐 수 있어(망이 끊긴 경우) 화면 스레드가 아닌 풀 스레드에서 한다. 접속은 먼저 목록에서 뺀다. */
   @Override
   public void dispose() {
-    for (String id : new ArrayList<>(open.keySet())) close(id);
+    List<Connection> closing = new ArrayList<>();
+    for (String id : new ArrayList<>(open.keySet())) {
+      Connection conn = detach(id);
+      if (conn != null) closing.add(conn);
+    }
+    if (closing.isEmpty()) return;
+    AppExecutorUtil.getAppExecutorService().execute(() -> {
+      for (Connection conn : closing) closeWithoutCommit(conn);
+    });
   }
 }

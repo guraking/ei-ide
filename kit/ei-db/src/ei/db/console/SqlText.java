@@ -49,6 +49,28 @@ final class SqlText {
       IDENT + "( (?!(WHERE|ORDER|FOR|FETCH|OFFSET|LIMIT)\\b)(AS )?" + IDENT + ")?"
       + "( (WHERE|ORDER BY|FOR UPDATE|FETCH|OFFSET|LIMIT)\\b.*)?");
 
+  /** 따옴표 없이 쓸 수 있는 이름 꼴(대소문자는 따로 본다). */
+  private static final Pattern PLAIN_IDENT = Pattern.compile("[A-Za-z_][A-Za-z0-9_$#]*");
+  /** 칼럼 이름으로 자주 쓰이는 예약어 · 키워드. 같은 이름이면 따옴표로 감싼다(감싸도 같은 이름이라 넉넉해도 된다). */
+  private static final Set<String> RESERVED_NAMES = Set.of(
+      "ORDER", "USER", "GROUP", "SELECT", "FROM", "WHERE", "TABLE", "DESC", "ASC", "LEVEL", "SIZE", "COMMENT", "DATE",
+      "NUMBER", "KEY", "VALUE", "TYPE", "START", "END", "UID", "ROWID", "ROWNUM", "OPTION", "INDEX", "CHECK", "DEFAULT");
+
+  /**
+   * 메타 · 결과에서 읽은 이름 그대로를 SQL 에 쓸 표기. kind 가 접는 대소문자(Oracle 대문자 · PostgreSQL 소문자)와 다르거나,
+   * 보통 이름 꼴이 아니거나, 예약어면 따옴표("…", MySQL 은 `…`)로 감싸 대소문자를 지킨다. kind 가 null 이면 그대로.
+   */
+  static String ident(DbKind kind, String name) {
+    if (kind == null || name == null) return name;
+    boolean plain = PLAIN_IDENT.matcher(name).matches() && !RESERVED_NAMES.contains(name.toUpperCase(Locale.ROOT));
+    return switch (kind) {
+      case ORACLE -> plain && name.equals(name.toUpperCase(Locale.ROOT)) ? name : '"' + name.replace("\"", "\"\"") + '"';
+      case POSTGRES -> plain && name.equals(name.toLowerCase(Locale.ROOT)) && !name.contains("#")
+          ? name : '"' + name.replace("\"", "\"\"") + '"';
+      case MYSQL -> plain && !name.contains("#") ? name : '`' + name.replace("`", "``") + '`';
+    };
+  }
+
   /** ANSI 표기(TIMESTAMP · DATE 글자)라 Oracle · MySQL · PostgreSQL 에서 같이 쓴다. \ 는 그대로 둔다. */
   static String literal(Object v) {
     return literal(v, null);
@@ -91,6 +113,7 @@ final class SqlText {
 
   /**
    * 행마다 INSERT 문 하나. 칼럼 · 값을 한 줄에 하나씩 두고 값 뒤에 칼럼 이름 주석(같은 열)을 단다. 문장 사이는 빈 줄.
+   * 칼럼 이름은 ident(kind, …) 표기.
    * LOB · 이진 칼럼(isLobColumn)은 빼고 맨 위에 LOB_EXCLUDED 주석을 단다. 남는 칼럼이 없으면 IllegalArgumentException.
    */
   static String inserts(String table, List<String> columns, List<String> types, List<List<Object>> rows, DbKind kind) {
@@ -103,7 +126,7 @@ final class SqlText {
     List<String> out = new ArrayList<>();
     for (List<Object> row : rows) {
       StringBuilder sb = new StringBuilder("INSERT INTO ").append(table).append(" (\n");
-      for (int k = 0; k < kept.size(); k++) sb.append(k == 0 ? FIRST : NEXT).append(columns.get(kept.get(k))).append('\n');
+      for (int k = 0; k < kept.size(); k++) sb.append(k == 0 ? FIRST : NEXT).append(ident(kind, columns.get(kept.get(k)))).append('\n');
       sb.append(") VALUES (\n");
       List<String> values = new ArrayList<>();
       int width = 0;
@@ -122,7 +145,7 @@ final class SqlText {
   }
 
   /**
-   * 행마다 UPDATE 문 하나. SET 은 PK 가 아닌 칼럼(LOB · 이진 칼럼 제외), WHERE 는 PK 칼럼(null 이면 IS NULL).
+   * 행마다 UPDATE 문 하나. SET 은 PK 가 아닌 칼럼(LOB · 이진 칼럼 제외), WHERE 는 PK 칼럼(null 이면 IS NULL). 칼럼 이름은 ident(kind, …) 표기.
    * pkUpper(대문자 칼럼 이름)가 비었을 때(PK 를 못 읽음)만 첫 칼럼으로 조건을 걸고 위에 확인하라는 주석을 단다.
    * PK 칼럼 일부가 결과에 없거나 PK 칼럼이 LOB · 이진 형식이면 IllegalArgumentException(한국어 문구).
    */
@@ -154,7 +177,7 @@ final class SqlText {
       List<Boolean> keys = new ArrayList<>();
       for (int i = 0; i < columns.size(); i++) {
         if (lob[i]) continue;
-        names.add(columns.get(i));
+        names.add(ident(kind, columns.get(i)));
         values.add(row.get(i));
         keys.add(key[i]);
       }

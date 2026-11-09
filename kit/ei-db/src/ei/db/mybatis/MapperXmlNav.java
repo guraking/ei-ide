@@ -44,7 +44,7 @@ public final class MapperXmlNav implements GotoDeclarationHandler {
     XmlTag tag = attr.getParent();
     PsiElement target = null;
     if (TYPE_ATTRS.contains(name)) {
-      target = DtoFields.find(project, value);
+      target = DtoFields.find(project, value, file.getVirtualFile());
     } else if (NAMESPACE_ATTR.equals(name) && MAPPER_TAG.equals(tag.getName())) {
       target = mapperClass(project, value);
     } else if (ID_ATTR.equals(name) && MapperDoc.STATEMENT_TAGS.contains(tag.getName())) {

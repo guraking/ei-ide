@@ -27,8 +27,9 @@ public final class JsonDto {
   private static final String BOOLEAN = "Boolean";
   private static final String JSON_PROPERTY = "com.fasterxml.jackson.annotation.JsonProperty";
   private static final String LIST_IMPORT = "java.util.List";
-  /** 중첩 클래스 이름으로 쓰면 필드 형식과 헷갈리는 이름. 이 이름이 나오면 숫자를 붙인다. */
-  private static final Set<String> TYPE_NAMES = Set.of(TypeMap.STRING, TypeMap.LONG, TypeMap.DECIMAL, TypeMap.OBJECT, BOOLEAN, LIST);
+  /** 중첩 클래스 이름으로 쓰면 필드 형식이나 붙이는 주석(@Getter · @Setter · @JsonProperty)의 import 를 가리는 이름. 이 이름이 나오면 숫자를 붙인다. */
+  private static final Set<String> TYPE_NAMES = Set.of(TypeMap.STRING, TypeMap.LONG, TypeMap.DECIMAL, TypeMap.OBJECT, BOOLEAN, LIST,
+      "Getter", "Setter", "JsonProperty");
 
   /** JSON 이 틀렸을 때. position 은 1부터 센 글자 위치(최상위 꼴이 맞지 않는 경우처럼 위치가 없으면 0). */
   public static final class JsonException extends Exception {

@@ -23,7 +23,6 @@ import org.jetbrains.annotations.NotNull;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import java.awt.BorderLayout;
-import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.io.IOException;
 import java.util.List;
@@ -37,8 +36,9 @@ public final class EnumDialog extends DialogWrapper {
   private static final String DEFAULT_CLASS = "CodeType";
   private static final String CODE_PACKAGE = ".code";
   private static final int MIN_COLUMNS = 2;
-  private static final int FORM_WIDTH = 420;
-  private static final int PREVIEW_WIDTH = 760;
+  /** 대화창 첫 폭과 왼쪽 칸 비율(칸 폭은 분할선으로 바꾼다). */
+  private static final int WIDTH = 1180;
+  private static final float SPLIT = 420f / WIDTH;
   private static final int HEIGHT = 640;
 
   private final Project project;
@@ -124,14 +124,10 @@ public final class EnumDialog extends DialogWrapper {
         .addLabeledComponent(EiDbBundle.message("common.location"), locationField, true)
         .addComponentFillVertically(new JPanel(), 0)
         .getPanel();
-    form.setPreferredSize(new Dimension(JBUI.scale(FORM_WIDTH), JBUI.scale(HEIGHT)));
+    form.setBorder(JBUI.Borders.emptyRight(10));
     JComponent right = preview.component();
-    right.setPreferredSize(new Dimension(JBUI.scale(PREVIEW_WIDTH), JBUI.scale(HEIGHT)));
-
-    JPanel root = new JPanel(new BorderLayout(JBUI.scale(20), 0));
-    root.add(form, BorderLayout.WEST);
-    root.add(right, BorderLayout.CENTER);
-    return root;
+    right.setBorder(JBUI.Borders.merge(right.getBorder(), JBUI.Borders.emptyLeft(10), false));
+    return Ui.split("enum", SPLIT, form, right, WIDTH, HEIGHT);
   }
 
   @Override

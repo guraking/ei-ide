@@ -107,7 +107,6 @@ public final class GuardDialog extends DialogWrapper {
       row.add(typed, BorderLayout.CENTER);
       add(panel, row, 8);
     }
-    panel.setPreferredSize(JBUI.size(520, panel.getPreferredSize().height));
     return panel;
   }
 

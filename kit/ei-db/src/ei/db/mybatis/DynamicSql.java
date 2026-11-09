@@ -1,5 +1,6 @@
 package ei.db.mybatis;
 
+import ei.db.DbKind;
 import ei.db.mybatis.MapperDoc.Node;
 
 import java.lang.reflect.Array;
@@ -12,17 +13,34 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 /**
  * 문장 하나의 동적 SQL 을 매개변수 값으로 풀어 실제 실행될 SQL 을 만든다.
- * 다루는 태그: if, choose/when/otherwise, where, set, trim, foreach, include(같은 파일), bind. selectKey 는 뺀다.
- * #{name, jdbcType=…} → ? + 바인드 값, ${name} → 값의 글자 그대로.
+ * 다루는 태그: if, choose/when/otherwise, where, set, trim, foreach, include, bind. selectKey 는 뺀다.
+ * include 는 같은 파일 것을 먼저, 없으면 「네임스페이스.id」 의 네임스페이스 매퍼(mappers 가 주는 문서)에서 찾는다.
+ * include 안의 &lt;property name value&gt; 는 그 조각 안에서 같은 이름의 값이 된다(${name} 에 쓰임).
+ * #{name, jdbcType=…} → ? + 바인드 값, ${name} → 값의 글자 그대로. _parameter 는 매개변수 전체, _databaseId 는 받은 값.
  */
 public final class DynamicSql {
   private static final List<String> WHERE_OVERRIDES =
       List.of("AND ", "OR ", "AND\n", "OR\n", "AND\r", "OR\r", "AND\t", "OR\t");
   /** include 가 자기를 다시 부르는 잘못된 매퍼에서 멈추기 위한 깊이. */
   private static final int MAX_INCLUDE_DEPTH = 16;
+  private static final String INCLUDE = "include";
+  private static final String PROPERTY = "property";
+  /** MyBatis 가 스스로 넣는 이름. */
+  private static final String PARAMETER = "_parameter";
+  private static final String DATABASE_ID = "_databaseId";
+  /** MyBatis VendorDatabaseIdProvider 의 흔한 설정(property 이름 → value)에 맞춘 _databaseId 값. */
+  public static final String ORACLE_ID = "oracle";
+  public static final String POSTGRESQL_ID = "postgresql";
+  public static final String MYSQL_ID = "mysql";
+  /** 다른 매퍼를 찾지 않을 때의 mappers. */
+  public static final Function<String, MapperDoc> NO_MAPPERS = ns -> null;
+
+  /** include 대상: sql 조각과 그 조각이 든 문서(조각 안 include 는 그 문서 기준으로 찾는다). */
+  record Fragment(MapperDoc doc, Node node) {}
 
   public static final class Result {
     /** ? 가 든 SQL(줄 앞뒤 공백 정리, 빈 줄 제거). */
@@ -32,6 +50,10 @@ public final class DynamicSql {
     public int ifIncluded;
     public int foreachItems;
     public boolean hasForeach;
+    /** 찾지 못한 include refid(차례대로, 중복 없음). */
+    public final Set<String> missingIncludes = new LinkedHashSet<>();
+    /** 읽지 못한 test · bind 식 수(거짓 · null 로 셈). */
+    public int badExpressions;
 
     /** ? 자리에 값을 넣은 미리보기 · 복사용 SQL. */
     public String inlined() { return SqlValues.inline(sql, binds); }
@@ -41,19 +63,38 @@ public final class DynamicSql {
       List<String> parts = new ArrayList<>();
       if (ifTotal > 0) parts.add("<if> " + ifTotal + "개 중 " + ifIncluded + "개 포함");
       if (hasForeach) parts.add("foreach " + foreachItems + "개");
+      if (!missingIncludes.isEmpty()) parts.add("찾지 못한 include: " + String.join(", ", missingIncludes));
+      if (badExpressions > 0) parts.add("읽지 못한 식 " + badExpressions + "개(거짓으로 셈)");
       return String.join(" · ", parts);
     }
+
+    /** 찾지 못한 include · 읽지 못한 식이 있으면 true. */
+    public boolean hasWarnings() { return !missingIncludes.isEmpty() || badExpressions > 0; }
   }
 
-  private final MapperDoc doc;
+  /** 지금 풀고 있는 노드가 든 문서. 다른 매퍼의 조각을 푸는 동안만 바뀐다. */
+  private MapperDoc doc;
+  private final Function<String, MapperDoc> mappers;
   private final Result result = new Result();
 
-  private DynamicSql(MapperDoc doc) { this.doc = doc; }
+  private DynamicSql(MapperDoc doc, Function<String, MapperDoc> mappers) {
+    this.doc = doc;
+    this.mappers = mappers;
+  }
 
   public static Result resolve(MapperDoc doc, Node statement, Map<String, Object> params) {
-    DynamicSql d = new DynamicSql(doc);
+    return resolve(doc, statement, params, null, NO_MAPPERS);
+  }
+
+  /** databaseId 는 _databaseId 값(모르면 null), mappers 는 네임스페이스 → 그 매퍼 문서(없으면 null). */
+  public static Result resolve(MapperDoc doc, Node statement, Map<String, Object> params, String databaseId,
+                               Function<String, MapperDoc> mappers) {
+    DynamicSql d = new DynamicSql(doc, mappers);
     StringBuilder out = new StringBuilder();
-    d.children(statement, new HashMap<>(params), out, 0);
+    Map<String, Object> scope = new HashMap<>(params);
+    scope.put(PARAMETER, new HashMap<>(params));
+    scope.put(DATABASE_ID, databaseId);
+    d.children(statement, scope, out, 0);
     d.result.sql = tidy(out.toString());
     return d.result;
   }
@@ -63,28 +104,66 @@ public final class DynamicSql {
    * 둘러싼 foreach 의 item · index 이름과 bind 이름은 뺀다.
    */
   public static List<String> paramNames(MapperDoc doc, Node statement) {
+    return paramNames(doc, statement, NO_MAPPERS);
+  }
+
+  /** include property 이름은 그 조각 안에서 매개변수로 치지 않는다. */
+  public static List<String> paramNames(MapperDoc doc, Node statement, Function<String, MapperDoc> mappers) {
     Set<String> out = new LinkedHashSet<>();
-    collectNames(doc, statement, new HashSet<>(), out, 0);
+    collectNames(doc, statement, new HashSet<>(), out, 0, mappers);
     return new ArrayList<>(out);
   }
 
   /** foreach collection 으로 쓰이는 이름(대화창에서 쉼표로 나눈 목록으로 받는다). */
   public static Set<String> listNames(MapperDoc doc, Node statement) {
+    return listNames(doc, statement, NO_MAPPERS);
+  }
+
+  public static Set<String> listNames(MapperDoc doc, Node statement, Function<String, MapperDoc> mappers) {
     Set<String> out = new HashSet<>();
-    collectLists(doc, statement, out, 0);
+    collectLists(doc, statement, out, 0, mappers);
     return out;
   }
 
-  private static void collectLists(MapperDoc doc, Node n, Set<String> out, int depth) {
+  /**
+   * refid 의 sql 조각. 같은 문서 것이 먼저, 없고 refid 가 「네임스페이스.id」 꼴이면 mappers 가 준 그 네임스페이스 문서의 것.
+   * 찾지 못하면 null.
+   */
+  static Fragment fragment(MapperDoc doc, String refid, Function<String, MapperDoc> mappers) {
+    Node own = doc.fragment(refid);
+    if (own != null) return new Fragment(doc, own);
+    int dot = refid == null ? -1 : refid.lastIndexOf('.');
+    if (dot <= 0) return null;
+    MapperDoc other = mappers.apply(refid.substring(0, dot));
+    Node node = other == null ? null : other.fragments.get(refid.substring(dot + 1));
+    return node == null ? null : new Fragment(other, node);
+  }
+
+  /** include 안 &lt;property&gt; 의 이름 → 값. */
+  private static Map<String, String> includeProperties(Node include) {
+    Map<String, String> out = new HashMap<>();
+    for (Node c : include.children) {
+      if (PROPERTY.equals(c.name) && c.attr("name") != null) out.put(c.attr("name").trim(), c.attr("value") == null ? "" : c.attr("value"));
+    }
+    return out;
+  }
+
+  private static void collectLists(MapperDoc doc, Node n, Set<String> out, int depth, Function<String, MapperDoc> mappers) {
     for (Node c : n.children) {
       if (c.name == null) continue;
       if ("foreach".equals(c.name) && c.attr("collection") != null) out.add(c.attr("collection").trim());
-      Node target = "include".equals(c.name) ? doc.fragment(c.attr("refid")) : c;
-      if (target != null && depth < MAX_INCLUDE_DEPTH) collectLists(doc, target, out, depth + 1);
+      if (depth >= MAX_INCLUDE_DEPTH) continue;
+      if (INCLUDE.equals(c.name)) {
+        Fragment f = fragment(doc, c.attr("refid"), mappers);
+        if (f != null) collectLists(f.doc(), f.node(), out, depth + 1, mappers);
+      } else {
+        collectLists(doc, c, out, depth + 1, mappers);
+      }
     }
   }
 
-  private static void collectNames(MapperDoc doc, Node n, Set<String> local, Set<String> out, int depth) {
+  private static void collectNames(MapperDoc doc, Node n, Set<String> local, Set<String> out, int depth,
+                                   Function<String, MapperDoc> mappers) {
     for (Node c : n.children) {
       if (c.name == null) {
         for (String name : placeholderNames(c.text)) addName(name, local, out);
@@ -100,18 +179,22 @@ public final class DynamicSql {
           Set<String> inner = new HashSet<>(local);
           if (c.attr("item") != null) inner.add(c.attr("item"));
           if (c.attr("index") != null) inner.add(c.attr("index"));
-          collectNames(doc, c, inner, out, depth);
+          collectNames(doc, c, inner, out, depth, mappers);
         }
         case "bind" -> {
           for (String name : Ognl.names(c.attr("value") == null ? "" : c.attr("value"))) addName(name, local, out);
           if (c.attr("name") != null) local.add(c.attr("name"));
         }
-        case "include" -> {
-          Node f = doc.fragment(c.attr("refid"));
-          if (f != null && depth < MAX_INCLUDE_DEPTH) collectNames(doc, f, local, out, depth + 1);
+        case INCLUDE -> {
+          Fragment f = depth < MAX_INCLUDE_DEPTH ? fragment(doc, c.attr("refid"), mappers) : null;
+          if (f != null) {
+            Set<String> inner = new HashSet<>(local);
+            inner.addAll(includeProperties(c).keySet());
+            collectNames(f.doc(), f.node(), inner, out, depth + 1, mappers);
+          }
         }
         case "selectKey" -> { }
-        default -> collectNames(doc, c, local, out, depth);
+        default -> collectNames(doc, c, local, out, depth, mappers);
       }
     }
   }
@@ -159,14 +242,14 @@ public final class DynamicSql {
     switch (n.name) {
       case "if" -> {
         result.ifTotal++;
-        if (Ognl.test(attr(n, "test"), k -> lookup(scope, k))) {
+        if (test(attr(n, "test"), scope)) {
           result.ifIncluded++;
           children(n, scope, out, depth);
         }
       }
       case "choose" -> {
         for (Node c : n.children) {
-          if ("when".equals(c.name) && Ognl.test(attr(c, "test"), k -> lookup(scope, k))) {
+          if ("when".equals(c.name) && test(attr(c, "test"), scope)) {
             children(c, scope, out, depth);
             return;
           }
@@ -181,14 +264,58 @@ public final class DynamicSql {
                           split(n.attr("prefixOverrides")), split(n.attr("suffixOverrides")));
       case "foreach" -> foreach(n, scope, out, depth);
       case "bind" -> {
-        if (n.attr("name") != null) scope.put(n.attr("name"), Ognl.eval(attr(n, "value"), k -> lookup(scope, k)));
+        if (n.attr("name") != null) scope.put(n.attr("name"), evaluate(attr(n, "value"), scope));
       }
-      case "include" -> {
-        Node f = doc.fragment(n.attr("refid"));
-        if (f != null && depth < MAX_INCLUDE_DEPTH) children(f, scope, out, depth + 1);
-      }
+      case INCLUDE -> include(n, scope, out, depth);
       case "selectKey" -> { }
       default -> children(n, scope, out, depth);
+    }
+  }
+
+  /** 접속 종류의 _databaseId. kind 가 null 이면 null. */
+  public static String databaseId(DbKind kind) {
+    if (kind == null) return null;
+    return switch (kind) {
+      case ORACLE -> ORACLE_ID;
+      case POSTGRES -> POSTGRESQL_ID;
+      case MYSQL -> MYSQL_ID;
+    };
+  }
+
+  /** 찾지 못한 조각은 result.missingIncludes 에 담는다. property 가 있으면 그 값을 더한 복사본 범위에서 푼다. */
+  private void include(Node n, Map<String, Object> scope, StringBuilder out, int depth) {
+    if (depth >= MAX_INCLUDE_DEPTH) return;
+    Fragment f = fragment(doc, n.attr("refid"), mappers);
+    if (f == null) {
+      result.missingIncludes.add(attr(n, "refid"));
+      return;
+    }
+    Map<String, String> props = includeProperties(n);
+    Map<String, Object> inner = scope;
+    if (!props.isEmpty()) {
+      inner = new HashMap<>(scope);
+      inner.putAll(props);
+    }
+    MapperDoc outer = doc;
+    doc = f.doc();
+    try {
+      children(f.node(), inner, out, depth + 1);
+    } finally {
+      doc = outer;
+    }
+  }
+
+  /** 읽지 못한 식은 세고 거짓으로 본다. */
+  private boolean test(String expr, Map<String, Object> scope) {
+    return Ognl.truthy(evaluate(expr, scope));
+  }
+
+  private Object evaluate(String expr, Map<String, Object> scope) {
+    try {
+      return Ognl.evaluate(expr, k -> lookup(scope, k));
+    } catch (IllegalArgumentException e) {
+      result.badExpressions++;
+      return null;
     }
   }
 

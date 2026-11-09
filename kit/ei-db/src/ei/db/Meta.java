@@ -5,9 +5,12 @@ import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * DatabaseMetaData 로 표 · 칼럼 · 외래키를 읽는다. 주석은 REMARKS(Oracle 은 접속 때 remarksReporting=true 로 켠다).
@@ -28,8 +31,43 @@ public final class Meta {
 
   public record ForeignKey(String name, String fkTable, String fkColumn, String pkTable, String pkColumn) {}
 
+  /** PostgreSQL 에서 기본 스키마를 비웠고 아직 접속해 보지 않았을 때 쓰는 스키마. */
+  private static final String PG_DEFAULT_SCHEMA = "public";
+  private static final String[] ORACLE_TABLE_TYPES = {"TABLE"};
+  private static final String[] ORACLE_VIEW_TYPES = {"VIEW"};
+  /** PostgreSQL 드라이버의 TABLE_TYPE 값. 분할 표 · 외부 표는 표로, 구체화 뷰는 뷰로 묶는다. */
+  private static final String[] PG_TABLE_TYPES = {"TABLE", "PARTITIONED TABLE", "FOREIGN TABLE"};
+  private static final String[] PG_VIEW_TYPES = {"VIEW", "MATERIALIZED VIEW"};
+  /** 접속 id → 접속 뒤 읽은 PostgreSQL 현재 스키마(search_path 의 첫 실재 스키마). 기본 스키마를 비운 접속만. */
+  private static final Map<String, String> CURRENT_SCHEMA = new ConcurrentHashMap<>();
+
+  /** DbSessions 가 기본 스키마를 비운 PostgreSQL 접속을 연 뒤 부른다. null(search_path 에 실재 스키마 없음)이면 기억을 지운다. */
+  public static void rememberSchema(String id, String schema) {
+    if (schema == null || schema.isBlank()) CURRENT_SCHEMA.remove(id); else CURRENT_SCHEMA.put(id, schema);
+  }
+
+  /** 표로 보일 TABLE_TYPE. */
+  public static String[] tableTypes(DbConfig c) {
+    return c.kind == DbKind.POSTGRES ? PG_TABLE_TYPES.clone() : ORACLE_TABLE_TYPES.clone();
+  }
+
+  /** 뷰로 보일 TABLE_TYPE. */
+  public static String[] viewTypes(DbConfig c) {
+    return c.kind == DbKind.POSTGRES ? PG_VIEW_TYPES.clone() : ORACLE_VIEW_TYPES.clone();
+  }
+
+  /** 표 · 뷰를 함께 읽을 TABLE_TYPE. */
+  public static String[] tableAndViewTypes(DbConfig c) {
+    String[] tables = tableTypes(c);
+    String[] views = viewTypes(c);
+    String[] out = Arrays.copyOf(tables, tables.length + views.length);
+    System.arraycopy(views, 0, out, tables.length, views.length);
+    return out;
+  }
+
+  /** PostgreSQL 에서 비웠으면 접속 뒤 읽은 현재 스키마, 아직 모르면 public. */
   public static String schemaOf(DbConfig c) {
-    if (c.kind == DbKind.POSTGRES && (c.schema == null || c.schema.isBlank())) return "public";
+    if (c.kind == DbKind.POSTGRES && (c.schema == null || c.schema.isBlank())) return CURRENT_SCHEMA.getOrDefault(c.id, PG_DEFAULT_SCHEMA);
     if (c.kind == DbKind.MYSQL && (c.schema == null || c.schema.isBlank())) return c.service;
     return c.effectiveSchema();
   }
@@ -69,8 +107,13 @@ public final class Meta {
     Set<String> fks = new HashSet<>();
     for (ForeignKey fk : importedKeys(conn, c, schema, table)) fks.add(fk.fkColumn());
     List<Column> out = new ArrayList<>();
-    try (ResultSet rs = md.getColumns(catalog(c, schema), schemaArg(c, schema), table, "%")) {
+    // getColumns 는 이름을 LIKE 패턴으로 보아 _ · % 가 든 표 이름이면 다른 표의 칼럼도 돌려준다. 이름이 정확히 같은 줄만 쓴다.
+    String schemaName = schemaArg(c, schema);
+    String catalogName = catalog(c, schema);
+    try (ResultSet rs = md.getColumns(catalogName, schemaName, table, "%")) {
       while (rs.next()) {
+        if (schemaName != null && !schemaName.isEmpty() && !schemaName.equals(rs.getString("TABLE_SCHEM"))) continue;
+        if (!table.equals(rs.getString("TABLE_NAME"))) continue;
         String name = rs.getString("COLUMN_NAME");
         out.add(new Column(name, rs.getString("TYPE_NAME"), rs.getInt("COLUMN_SIZE"), rs.getInt("DECIMAL_DIGITS"),
                            pks.contains(name), fks.contains(name), rs.getInt("NULLABLE") != DatabaseMetaData.columnNoNulls,

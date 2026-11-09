@@ -8,9 +8,13 @@ import java.util.regex.Pattern;
 public final class SqlGuard {
   private SqlGuard() {}
 
-  /** 프로시저 실행(CALL · EXEC · BEGIN · DECLARE)은 안에서 무엇을 바꿀지 모르므로 변경으로 본다. REPLACE 는 MySQL 의 REPLACE INTO. */
+  /**
+   * 프로시저 실행(CALL · EXEC · BEGIN · DECLARE · PostgreSQL DO · JDBC 이스케이프 {call …} · {? = call …})은 안에서 무엇을 바꿀지 모르므로 변경으로 본다.
+   * REPLACE 는 MySQL 의 REPLACE INTO. COPY 는 TO(내보내기)도 함께 변경으로 본다. LOCK 은 트랜잭션 끝까지 잠금을 쥔다.
+   */
   private static final Pattern WRITE = Pattern.compile(
-      "^(INSERT|UPDATE|DELETE|MERGE|REPLACE|CREATE|ALTER|DROP|TRUNCATE|RENAME|GRANT|REVOKE|COMMENT|BEGIN|DECLARE|CALL|EXEC|EXECUTE)\\b");
+      "^(?:(?:INSERT|UPDATE|DELETE|MERGE|REPLACE|CREATE|ALTER|DROP|TRUNCATE|RENAME|GRANT|REVOKE|COMMENT|BEGIN|DECLARE|CALL|EXEC|EXECUTE"
+      + "|DO|COPY|REFRESH|VACUUM|CLUSTER|REINDEX|LOCK|FLASHBACK|PURGE|ANALYZE|AUDIT|NOAUDIT)\\b|\\{)");
   /** Oracle · MySQL 에서 실행 전에 앞 변경을 커밋하는 문장. ALTER SESSION 과 MySQL 의 CREATE/DROP TEMPORARY TABLE 은 커밋하지 않는다. */
   private static final Pattern DDL = Pattern.compile(
       "^(CREATE(?!\\s+TEMPORARY\\b)|ALTER(?!\\s+SESSION\\b)|DROP(?!\\s+TEMPORARY\\b)|TRUNCATE|RENAME|GRANT|REVOKE|COMMENT)\\b");
@@ -20,7 +24,12 @@ public final class SqlGuard {
   private static final Pattern EXPLAIN_ANALYZE = Pattern.compile("^EXPLAIN\\b.*?\\bANALYZE\\b", Pattern.DOTALL);
   private static final Pattern UPDATE = Pattern.compile("^UPDATE\\s+([\\w.$#\"]+)");
   private static final Pattern DELETE = Pattern.compile("^DELETE\\s+(?:FROM\\s+)?([\\w.$#\"]+)");
-  private static final Pattern DROP = Pattern.compile("^(DROP|TRUNCATE)\\s+(?:TABLE\\s+)?([\\w.$#\"]+)");
+  /** DROP 뒤 객체 종류(한 · 두 낱말)와 IF EXISTS 는 건너뛰고 이름을 잡는다. 두 낱말 종류를 한 낱말보다 먼저 맞춘다. */
+  private static final Pattern DROP = Pattern.compile(
+      "^(DROP|TRUNCATE)\\s+"
+      + "(?:(?:MATERIALIZED\\s+VIEW|PACKAGE\\s+BODY|TYPE\\s+BODY|PUBLIC\\s+SYNONYM|PUBLIC\\s+DATABASE\\s+LINK|DATABASE\\s+LINK|FOREIGN\\s+TABLE"
+      + "|TABLE|INDEX|VIEW|SEQUENCE|SYNONYM|PACKAGE|PROCEDURE|FUNCTION|TRIGGER|TYPE|USER|SCHEMA|DATABASE|ROLE|TABLESPACE)\\s+)?"
+      + "(?:CONCURRENTLY\\s+)?(?:IF\\s+EXISTS\\s+)?([\\w.$#\"]+)");
   private static final Pattern WHERE = Pattern.compile("\\bWHERE\\b");
   /** 끝의 ; 가 문장의 일부인 PL/SQL 단위(END 이름; 까지 그대로 보낸다). */
   private static final Pattern PLSQL = Pattern.compile(

@@ -144,6 +144,9 @@ public class QueryBenchCheck {
     yes(dup.contains("HAVING COUNT(*) > 1") && dup.contains("GROUP BY\n       CUST_ID\n"), dup);
     yes(Patterns.render(Patterns.Kind.HIERARCHY, fill(DbKind.POSTGRES)).startsWith("-- 계층") && Patterns.render(Patterns.Kind.HIERARCHY, fill(DbKind.POSTGRES)).contains("WITH RECURSIVE"), "hier");
     yes(Patterns.render(Patterns.Kind.UPSERT, fill(DbKind.POSTGRES)).contains("ON CONFLICT (CUST_ID)"), "upsert");
+    Patterns.Fill part = new Patterns.Fill(DbKind.POSTGRES, QueryBuilder.JoinStyle.OLD, QueryBuilder.Bind.COLON, "part", null, List.of("part_id"), List.of(), null, null, null, "parent_id", null, List.of());
+    String partTree = Patterns.render(Patterns.Kind.HIERARCHY, part);
+    yes(partTree.contains("FROM PART p\n     INNER JOIN tree p2\n        ON p.PARENT_ID = p2.PART_ID") && !partTree.contains("tree p\n"), "hier alias p: " + partTree);
     Patterns.Fill empty = new Patterns.Fill(DbKind.ORACLE, QueryBuilder.JoinStyle.OLD, QueryBuilder.Bind.COLON, "", "", List.of(), List.of(), "", "", "", "", "", List.of());
     yes(Patterns.missing(Patterns.Kind.DUPLICATES, empty).contains(Patterns.Field.KEYS), "missing");
   }
@@ -187,6 +190,11 @@ public class QueryBenchCheck {
     eq(DialectConvert.toPostgres("SELECT LISTAGG(x, ',') WITHIN GROUP (ORDER BY y) FROM t").sql(), "SELECT STRING_AGG(CAST(x AS VARCHAR), ',' ORDER BY y) FROM t");
     eq(DialectConvert.toOracle("SELECT STRING_AGG(x, ',' ORDER BY y) FROM t").sql(), "SELECT LISTAGG(x, ',') WITHIN GROUP (ORDER BY y) FROM t");
     eq(DialectConvert.toOracle("SELECT 1").sql(), "SELECT 1\n  FROM DUAL");
+    eq(DialectConvert.toOracle("SELECT x::double precision, y::float8 FROM t").sql(), "SELECT CAST(x AS BINARY_DOUBLE), CAST(y AS BINARY_DOUBLE) FROM t");
+    eq(DialectConvert.toOracle("SELECT a::timestamp with time zone, b::timestamptz, c::timestamp without time zone FROM t").sql(),
+       "SELECT CAST(a AS TIMESTAMP WITH TIME ZONE), CAST(b AS TIMESTAMP WITH TIME ZONE), CAST(c AS TIMESTAMP) FROM t");
+    eq(DialectConvert.toOracle("SELECT * FROM t WHERE id = :id::int").sql(), "SELECT * FROM t WHERE id = CAST(:id AS NUMBER)");
+    eq(DialectConvert.toOracle("SELECT n::character varying(20), m::int8 FROM t").sql(), "SELECT CAST(n AS VARCHAR2(20)), CAST(m AS NUMBER) FROM t");
   }
 
   static void lint() {

@@ -36,6 +36,9 @@ public final class MapperGen {
   private static final String LEAD_NEXT = "         , ";
   /** MERGE 의 UPDATE SET · INSERT 목록은 WHEN 절 아래로 6칸 더 들인다. */
   private static final String MERGE_INDENT = "      ";
+  /** PG 목록 검색에서 문자열 값을 CAST 로 감쌀 칼럼(자바 형식으로 판정). */
+  private static final Set<String> PG_CAST_TYPES = Set.of(TypeMap.LONG, TypeMap.INTEGER, TypeMap.DECIMAL, TypeMap.DATE_TIME,
+      TypeMap.OFFSET_DATE_TIME, TypeMap.TIME, TypeMap.BOOLEAN, TypeMap.UUID);
 
   private final String table;
   private final String alias;
@@ -167,7 +170,7 @@ public final class MapperGen {
   public List<DtoGen.Field> fields() {
     List<DtoGen.Field> out = new ArrayList<>();
     for (Meta.Column c : cols) {
-      out.add(new DtoGen.Field(c.name(), Names.camel(c.name()), TypeMap.forColumn(c.type(), c.scale()), c.comment()));
+      out.add(new DtoGen.Field(c.name(), Names.camel(c.name()), TypeMap.forColumn(c.type(), c.size(), c.scale()), c.comment()));
     }
     return out;
   }
@@ -241,12 +244,12 @@ public final class MapperGen {
       String col = alias + "." + name(c.name());
       String f = Names.camel(c.name());
       if (isDate(c.type())) {
-        ifBlock(b, indent, f + RANGE_FROM + " != null", "AND " + col + " " + cmp(">=") + " #{" + f + RANGE_FROM + "}");
-        ifBlock(b, indent, f + RANGE_TO + " != null", "AND " + col + " " + cmp("<=") + " #{" + f + RANGE_TO + "}");
+        ifBlock(b, indent, given(c, f + RANGE_FROM), "AND " + col + " " + cmp(">=") + " " + bind(c, f + RANGE_FROM));
+        ifBlock(b, indent, given(c, f + RANGE_TO), "AND " + col + " " + cmp("<=") + " " + bind(c, f + RANGE_TO));
       } else if (isChar(c.type())) {
         ifBlock(b, indent, f + " != null and " + f + " != ''", "AND " + col + " LIKE " + like(f));
       } else {
-        ifBlock(b, indent, f + " != null", "AND " + col + " = #{" + f + "}");
+        ifBlock(b, indent, given(c, f), "AND " + col + " = " + bind(c, f));
       }
     }
     if (!o.where11()) b.append("    </where>\n");
@@ -397,6 +400,36 @@ public final class MapperGen {
 
   private String cmp(String op) {
     return o.cdata() ? "<![CDATA[ " + op + " ]]>" : Xml.text(op);
+  }
+
+  /**
+   * 목록 검색 값 자리. 목록은 parameterType="map" 이라 컨트롤러의 @RequestParam Map 에서 모든 값이 문자열로 오는데,
+   * PG 는 bigint = varchar · timestamp &gt;= varchar 를 받지 않으므로 문자가 아닌 칼럼은 CAST(#{f} AS 칼럼 형식) 으로 감싼다.
+   * Oracle · MySQL 은 묵시 변환을 하므로 그대로 둔다.
+   */
+  private String bind(Meta.Column c, String f) {
+    String p = "#{" + f + "}";
+    return pgCast(c) ? "CAST(" + p + " AS " + pgCastType(c.type()) + ")" : p;
+  }
+
+  /** 목록 검색 &lt;if test&gt;. CAST 로 감싸는 칼럼은 빈 검색 칸('')도 건너뛴다(CAST('' AS bigint) 는 오류). */
+  private String given(Meta.Column c, String f) {
+    return pgCast(c) ? f + " != null and " + f + " != ''" : f + " != null";
+  }
+
+  private boolean pgCast(Meta.Column c) {
+    return o.kind() == DbKind.POSTGRES && PG_CAST_TYPES.contains(TypeMap.forColumn(c.type(), c.size(), c.scale()));
+  }
+
+  /** serial 계열은 CAST 대상 형식이 아니라 같은 크기의 정수 형식으로 바꾼다. */
+  static String pgCastType(String type) {
+    String t = type.toLowerCase(Locale.ROOT);
+    return switch (t) {
+      case "serial", "serial4" -> "integer";
+      case "bigserial", "serial8" -> "bigint";
+      case "smallserial", "serial2" -> "smallint";
+      default -> t;
+    };
   }
 
   private String like(String f) {

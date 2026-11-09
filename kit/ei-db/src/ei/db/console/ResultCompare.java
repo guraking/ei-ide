@@ -8,6 +8,7 @@ import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowContextMenuActionBase;
 import com.intellij.ui.CheckBoxList;
 import com.intellij.ui.JBColor;
+import com.intellij.ui.OnePixelSplitter;
 import com.intellij.ui.components.JBCheckBox;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBScrollPane;
@@ -24,6 +25,8 @@ import javax.swing.BoxLayout;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.JTable;
+import javax.swing.JViewport;
+import java.awt.Toolkit;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableColumn;
@@ -37,14 +40,17 @@ import java.util.List;
 /** 「결과」 창의 두 조회 탭을 비교하는 창. 탭 우클릭 「다른 결과와 비교…」로 연다. 불러온 행만 비교한다. */
 final class ResultCompare extends DialogWrapper {
 
-  /** 창 크기 · 기준 칼럼 목록 너비(px, 배율 전). */
+  /** 창 크기(px, 배율 전). */
   private static final int WIDTH = 960;
   private static final int HEIGHT = 520;
-  private static final int KEY_LIST_WIDTH = 180;
-  /** 칸 너비를 잴 때 보는 앞쪽 행 수 · 칸 여백 · 칸 최대 너비(px, 배율 전). */
+  /** 왼쪽 기준 칼럼 목록이 차지하는 몫. 사용자가 끈 값은 KEY_SPLIT_KEY 로 기억한다. */
+  private static final float KEY_SPLIT = 0.2f;
+  private static final String KEY_SPLIT_KEY = "ei.db.console.resultCompare.keySplit";
+  /** 칸 너비를 잴 때 보는 앞쪽 행 수 · 칸 여백(px, 배율 전). */
   private static final int FIT_ROWS = 50;
   private static final int CELL_PADDING = 16;
-  private static final int MAX_COLUMN_WIDTH = 400;
+  /** 처음 칸 너비가 넘지 않을 화면 폭의 몫(긴 글 칸 하나가 화면을 다 차지하지 않게). */
+  private static final double MAX_COLUMN_SCREEN_SHARE = 0.4;
   private static final String ARROW = " → ";
   private static final String NULL_TEXT = "null";
 
@@ -110,7 +116,13 @@ final class ResultCompare extends DialogWrapper {
   private final JBLabel counts = new JBLabel();
   private final JBLabel keyNote = new JBLabel();
   private final DiffModel model = new DiffModel();
-  private final JBTable table = new JBTable(model);
+  private final JBTable table = new JBTable(model) {
+    // 칸들이 창보다 좁으면 창 폭을 채우고(칸이 함께 늘어남), 넓으면 가로 스크롤.
+    @Override
+    public boolean getScrollableTracksViewportWidth() {
+      return getParent() instanceof JViewport v && getPreferredSize().width < v.getWidth();
+    }
+  };
 
   private ResultCompare(Project project, ResultPanel left, String leftLabel, ResultPanel right, String rightLabel) {
     super(project, false);
@@ -186,17 +198,20 @@ final class ResultCompare extends DialogWrapper {
     keys.add(new JBScrollPane(keyList), BorderLayout.CENTER);
     keyNote.setForeground(UIUtil.getContextHelpForeground());
     keys.add(keyNote, BorderLayout.SOUTH);
-    keys.setPreferredSize(new Dimension(JBUI.scale(KEY_LIST_WIDTH), 0));
     keys.setBorder(JBUI.Borders.emptyRight(8));
 
-    table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+    table.setAutoResizeMode(JTable.AUTO_RESIZE_SUBSEQUENT_COLUMNS);
     table.getTableHeader().setReorderingAllowed(false);
     table.setDefaultRenderer(Object.class, new DiffRenderer());
 
     JPanel panel = new JPanel(new BorderLayout());
     panel.add(top, BorderLayout.NORTH);
-    panel.add(keys, BorderLayout.WEST);
-    panel.add(new JBScrollPane(table), BorderLayout.CENTER);
+    OnePixelSplitter split = new OnePixelSplitter(false, KEY_SPLIT);
+    split.setSplitterProportionKey(KEY_SPLIT_KEY);
+    split.setHonorComponentsMinimumSize(false);
+    split.setFirstComponent(keys);
+    split.setSecondComponent(new JBScrollPane(table));
+    panel.add(split, BorderLayout.CENTER);
     panel.setPreferredSize(new Dimension(JBUI.scale(WIDTH), JBUI.scale(HEIGHT)));
     return panel;
   }
@@ -221,8 +236,9 @@ final class ResultCompare extends DialogWrapper {
     fitColumns();
   }
 
-  /** 머리글과 앞쪽 FIT_ROWS 행이 들어가는 너비(최대 MAX_COLUMN_WIDTH). 넘는 글은 칸 풍선 도움말로 본다. */
+  /** 머리글과 앞쪽 FIT_ROWS 행이 들어가는 너비(최대 화면 폭의 MAX_COLUMN_SCREEN_SHARE). 넘는 글은 칸 풍선 도움말로 본다. */
   private void fitColumns() {
+    int maxWidth = (int) (Toolkit.getDefaultToolkit().getScreenSize().width * MAX_COLUMN_SCREEN_SHARE);
     for (int col = 0; col < table.getColumnCount(); col++) {
       TableColumn column = table.getColumnModel().getColumn(col);
       int width = table.getTableHeader().getDefaultRenderer()
@@ -231,7 +247,7 @@ final class ResultCompare extends DialogWrapper {
       for (int row = 0; row < rows; row++) {
         width = Math.max(width, table.prepareRenderer(table.getCellRenderer(row, col), row, col).getPreferredSize().width);
       }
-      column.setPreferredWidth(Math.min(width + JBUI.scale(CELL_PADDING), JBUI.scale(MAX_COLUMN_WIDTH)));
+      column.setPreferredWidth(Math.min(width + JBUI.scale(CELL_PADDING), maxWidth));
     }
   }
 

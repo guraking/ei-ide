@@ -3,6 +3,7 @@ package ei.db.mybatis;
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiAnnotation;
 import com.intellij.psi.PsiAnnotationMemberValue;
 import com.intellij.psi.PsiClass;
@@ -38,13 +39,14 @@ final class StatementParams {
   /** target 은 Ctrl+클릭으로 갈 곳(bind · foreach 이름은 null), type 은 목록에 보일 형식(모르면 null). */
   record Param(String name, @Nullable PsiElement target, @Nullable String type, Icon icon) {}
 
-  static List<Param> of(Project project, MapperDoc doc, MapperDoc.Node statement) {
+  /** from 은 매퍼 XML 파일(같은 이름 클래스가 여럿일 때 같은 모듈 것을 고른다, 모르면 null). Map 을 이어받은 parameterType 은 필드를 내지 않는다. */
+  static List<Param> of(Project project, MapperDoc doc, MapperDoc.Node statement, @Nullable VirtualFile from) {
     List<Param> out = new ArrayList<>();
     if (!DumbService.isDumb(project)) {
       String type = MapperParams.checkedType(statement);
-      PsiClass dto = type == null ? null : DtoFields.find(project, type);
+      PsiClass dto = type == null ? null : DtoFields.find(project, type, from);
       if (dto != null) {
-        addProperties(dto, out);
+        if (!DtoFields.isMap(dto)) addProperties(dto, out);
       } else if (type == null) {
         PsiMethod m = LayerCode.mapperMethod(project, doc.namespace, statement.attr("id"));
         if (m != null) addMethodParams(m, out);
@@ -87,7 +89,7 @@ final class StatementParams {
   }
 
   /** @Param("이름") 의 이름. 없거나 글자 상수가 아니면 null. */
-  private static @Nullable String paramName(PsiParameter p) {
+  static @Nullable String paramName(PsiParameter p) {
     PsiAnnotation a = p.getAnnotation(PARAM_ANNOTATION);
     if (a == null) return null;
     PsiAnnotationMemberValue v = a.findAttributeValue("value");

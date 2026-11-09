@@ -36,7 +36,6 @@ import java.util.Map;
 final class BindDialog extends DialogWrapper {
   private static final java.util.regex.Pattern DATE_LIKE = java.util.regex.Pattern.compile("\\d{4}-\\d{2}-\\d{2}([ T]\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?)?");
   private static final String VALUE_KEY = "ei.db.console.bind.";
-  private static final int VALUE_COLUMNS = 28;
   private static final int MAX_VISIBLE_ROWS = 12;
   private static final int ROW_HEIGHT = 30;
 
@@ -84,7 +83,7 @@ final class BindDialog extends DialogWrapper {
     g.gridy = 0;
     addRow(grid, g, header(EiDbBundle.message("common.col.name")), header(EiDbBundle.message("bind.col.value")), header(EiDbBundle.message("common.col.type")));
     for (SqlParams.Param p : params) {
-      JBTextField value = new JBTextField(props.getValue(VALUE_KEY + p.name(), ""), VALUE_COLUMNS);
+      JBTextField value = new JBTextField(props.getValue(VALUE_KEY + p.name(), ""));
       JBLabel type = new JBLabel();
       type.setForeground(UIUtil.getContextHelpForeground());
       updateType(type, p, value.getText());

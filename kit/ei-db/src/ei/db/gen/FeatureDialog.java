@@ -67,11 +67,10 @@ public final class FeatureDialog extends DialogWrapper {
   private static final String SERVICE_PACKAGE = "service";
   private static final String IMPL_PACKAGE = "impl";
   private static final String CONTROLLER_PACKAGE = "controller";
-  private static final int LEFT_WIDTH = 620;
-  private static final int PREVIEW_WIDTH = 900;
+  /** 대화창 첫 폭과 왼쪽 칸 비율(칸 폭은 분할선으로 바꾼다). */
+  private static final int WIDTH = 1520;
+  private static final float SPLIT = 620f / WIDTH;
   private static final int HEIGHT = 820;
-  /** 칼럼 표가 위 칸들에 밀려 사라지지 않도록 잡아 두는 높이. 넘치면 왼쪽 전체가 스크롤된다. */
-  private static final int COLUMN_TABLE_HEIGHT = 260;
   private static final int SCROLL_UNIT = 16;
   private static final int REFRESH_DELAY_MS = 300;
   private static final int COL_SEARCH = 0;
@@ -239,25 +238,22 @@ public final class FeatureDialog extends DialogWrapper {
     leftBody.add(left, BorderLayout.CENTER);
     JBScrollPane leftScroll = new JBScrollPane(leftBody, JBScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JBScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
     leftScroll.setBorder(JBUI.Borders.empty());
-    leftScroll.setPreferredSize(new Dimension(JBUI.scale(LEFT_WIDTH), JBUI.scale(HEIGHT)));
 
     JPanel head = new JPanel(new FlowLayout(FlowLayout.RIGHT, JBUI.scale(8), 0));
     fileLabel.setFont(Ui.mono());
     fileLabel.setForeground(Ui.muted());
     head.add(fileLabel);
     head.add(badge);
-    head.add(existingChoice);
     existingChoice.setVisible(false);
+    JPanel headBox = new JPanel(new BorderLayout(0, JBUI.scale(6)));
+    headBox.add(head, BorderLayout.NORTH);
+    headBox.add(existingChoice, BorderLayout.SOUTH);
     JPanel right = new JPanel(new BorderLayout(0, JBUI.scale(6)));
-    right.add(head, BorderLayout.NORTH);
+    right.add(headBox, BorderLayout.NORTH);
     right.add(tabs, BorderLayout.CENTER);
-    right.setPreferredSize(new Dimension(JBUI.scale(PREVIEW_WIDTH), JBUI.scale(HEIGHT)));
     right.setBorder(JBUI.Borders.emptyLeft(12));
 
-    JPanel root = new JPanel(new BorderLayout());
-    root.add(leftScroll, BorderLayout.WEST);
-    root.add(right, BorderLayout.CENTER);
-    return root;
+    return Ui.split("feature", SPLIT, leftScroll, right, WIDTH, HEIGHT);
   }
 
   @Override
@@ -336,8 +332,6 @@ public final class FeatureDialog extends DialogWrapper {
     });
     JBScrollPane sp = new JBScrollPane(t);
     sp.setBorder(JBUI.Borders.empty());
-    sp.setPreferredSize(new Dimension(JBUI.scale(LEFT_WIDTH), JBUI.scale(COLUMN_TABLE_HEIGHT)));
-    sp.setMinimumSize(sp.getPreferredSize());
     return sp;
   }
 

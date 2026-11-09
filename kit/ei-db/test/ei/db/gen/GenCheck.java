@@ -43,6 +43,9 @@ public class GenCheck {
     eq(Names.pascal("ORDER_ITEM"), "OrderItem");
     eq(Names.alias("ORDER_ITEM"), "oi");
     eq(Names.alias("ORDER_REQUEST"), "t");
+    eq(Names.alias("ACCOUNT_NOTE_DETAIL"), "t");
+    eq(Names.alias("SALES_EMPLOY_TEAM"), "t");
+    eq(Names.alias("ORDER_UNIT_TYPE"), "t");
     eq(Names.sql(DbKind.POSTGRES, "product"), "PRODUCT");
     eq(Names.sql(DbKind.POSTGRES, "Product"), "\"Product\"");
     eq(Names.sql(DbKind.POSTGRES, "PRODUCT"), "\"PRODUCT\"");
@@ -61,11 +64,38 @@ public class GenCheck {
     eq(TypeMap.javaType("TEXT", false), "String");
     eq(TypeMap.javaType("DATE", false), "LocalDateTime");
     eq(TypeMap.javaType("TIMESTAMP(6)", false), "LocalDateTime");
-    eq(TypeMap.javaType("BLOB", false), "Object");
+    eq(TypeMap.javaType("BLOB", false), "byte[]");
+    eq(TypeMap.javaType("bytea", false), "byte[]");
+    eq(TypeMap.javaType("RAW", false), "byte[]");
+    eq(TypeMap.javaType("LONG RAW", false), "byte[]");
+    eq(TypeMap.javaType("serial", false), "Integer");
+    eq(TypeMap.javaType("bigserial", false), "Long");
+    eq(TypeMap.javaType("smallserial", false), "Integer");
+    eq(TypeMap.javaType("bool", false), "Boolean");
+    eq(TypeMap.javaType("BOOLEAN", false), "Boolean");
+    eq(TypeMap.javaType("uuid", false), "UUID");
+    eq(TypeMap.javaType("time", false), "LocalTime");
+    eq(TypeMap.javaType("timestamptz", false), "OffsetDateTime");
+    eq(TypeMap.javaType("TIMESTAMP(6) WITH TIME ZONE", false), "OffsetDateTime");
+    eq(TypeMap.javaType("TIMESTAMP(6) WITH LOCAL TIME ZONE", false), "LocalDateTime");
+    eq(TypeMap.javaType("timestamp", false), "LocalDateTime");
+    eq(TypeMap.IMPORTS.get("UUID"), "java.util.UUID");
+    eq(TypeMap.forColumn("numeric", 131089, 0), "BigDecimal");
+    eq(TypeMap.forColumn("numeric", 10, 0), "Long");
     eq(TypeMap.forColumn("NUMBER", -127), "BigDecimal");
     List<List<Object>> rows = List.of(List.of(new BigDecimal("3.00")), List.of(new BigDecimal("2.50")));
     eq(TypeMap.anyFraction(rows, 0), true);
     eq(TypeMap.anyFraction(List.of(List.of(new BigDecimal("3.00"))), 0), false);
+    // 실행 결과: 정밀도 · scale 을 알면 표본보다 앞선다
+    int unknown = Integer.MIN_VALUE;
+    List<List<Object>> whole = List.of(List.of(new BigDecimal("12")));
+    eq(TypeMap.forResult("NUMBER", 10, 2, unknown, whole, 0), "BigDecimal");
+    eq(TypeMap.forResult("NUMBER", 10, 2, unknown, List.of(), 0), "BigDecimal");
+    eq(TypeMap.forResult("NUMBER", 10, 0, unknown, rows, 0), "Long");
+    eq(TypeMap.forResult("NUMBER", 0, -127, unknown, whole, 0), "BigDecimal");
+    eq(TypeMap.forResult("numeric", 0, 0, unknown, whole, 0), "Long");
+    eq(TypeMap.forResult("numeric", 0, 0, unknown, rows, 0), "BigDecimal");
+    eq(TypeMap.forResult("NUMBER", unknown, unknown, unknown, rows, 0), "BigDecimal");
 
     MapperGen.Options style = new MapperGen.Options(true, true, true, true, true, DbKind.ORACLE);
     MapperGen g = new MapperGen("PRODUCT", COLS, "com.example.mapper.ProductMapper", "com.example.dto.ProductDto", style);
@@ -135,6 +165,22 @@ public class GenCheck {
     MapperGen pgMerge = new MapperGen("ITEM", COLS, "a.M", "a.D", new MapperGen.Options(true, true, true, false, true, DbKind.POSTGRES));
     ok(pgMerge.xmlFile(MapperGen.allKinds()).contains("    ON CONFLICT (\"PRODUCT_ID\") DO UPDATE SET\n           \"SUPPLIER_ID\" = EXCLUDED.\"SUPPLIER_ID\"\n"), "PostgreSQL MERGE");
     ok(!noPk.possible(MapperGen.Kind.MERGE) && !pkOnly.possible(MapperGen.Kind.MERGE), "PK 없거나 PK 만 있으면 MERGE 없음");
+
+    // PG 목록 검색: 값이 문자열로 오므로 문자 아닌 칼럼은 CAST
+    MapperGen pgCast = new MapperGen("orders", List.of(
+        new Meta.Column("id", "bigserial", 19, 0, true, false, false, ""),
+        new Meta.Column("name", "varchar", 50, 0, false, false, true, ""),
+        new Meta.Column("paid", "bool", 1, 0, false, false, true, ""),
+        new Meta.Column("created_at", "timestamptz", 35, 6, false, false, true, "")), "a.M", "a.D",
+        new MapperGen.Options(true, true, true, false, true, DbKind.POSTGRES));
+    String pgCastXml = pgCast.xmlFile(MapperGen.allKinds());
+    ok(pgCastXml.contains("AND o.ID = CAST(#{id} AS bigint)"), "PG 숫자 CAST: " + pgCastXml);
+    ok(pgCastXml.contains("<if test=\"id != null and id != ''\">") && pgCastXml.contains("<if test=\"createdAtFrom != null and createdAtFrom != ''\">"), "PG CAST 칼럼은 빈 값 건너뜀");
+    ok(xml.contains("<if test=\"productId != null\">"), "Oracle 은 빈 값 검사 없음");
+    ok(pgCastXml.contains("AND o.PAID = CAST(#{paid} AS bool)"), "PG bool CAST");
+    ok(pgCastXml.contains("AND o.CREATED_AT <![CDATA[ >= ]]> CAST(#{createdAtFrom} AS timestamptz)"), "PG 날짜 범위 CAST");
+    ok(pgCastXml.contains("o.NAME LIKE '%' || #{name} || '%'"), "PG 문자는 CAST 없음");
+    ok(xml.contains("AND p.PRODUCT_ID = #{productId}"), "Oracle 은 CAST 없음");
 
     String itf = g.interfaceFile(MapperGen.allKinds());
     ok(itf.contains("List<ProductDto> selectProductList(Map<String, Object> param);"), "목록 메서드");

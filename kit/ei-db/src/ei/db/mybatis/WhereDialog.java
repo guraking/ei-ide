@@ -8,6 +8,7 @@ import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.components.JBTextField;
 import com.intellij.ui.table.JBTable;
+import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.JBUI;
 import org.jetbrains.annotations.Nullable;
 import ei.db.EiDbBundle;
@@ -17,7 +18,6 @@ import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
-import java.awt.FlowLayout;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -32,14 +32,11 @@ final class WhereDialog extends DialogWrapper {
   private static final int COLUMN = 3;
   private static final int OP = 4;
   private static final String[] HEADERS = {EiDbBundle.message("where.col.use"), EiDbBundle.message("common.col.field"), EiDbBundle.message("common.col.type"), EiDbBundle.message("common.col.column"), EiDbBundle.message("where.col.compare")};
-  private static final int ALIAS_COLUMNS = 10;
   private static final int TABLE_WIDTH = 640;
   private static final int TABLE_HEIGHT = 320;
-  private static final int USE_WIDTH = 50;
-  private static final int OP_WIDTH = 80;
 
   private final List<Field> fields;
-  private final JBTextField alias = new JBTextField(ALIAS_COLUMNS);
+  private final JBTextField alias = new JBTextField();
   private final DefaultTableModel model;
   private final JBTable table;
 
@@ -58,8 +55,6 @@ final class WhereDialog extends DialogWrapper {
     }
     table = new JBTable(model);
     table.getColumnModel().getColumn(OP).setCellEditor(new DefaultCellEditor(new ComboBox<>(WhereGen.OPS.toArray(new String[0]))));
-    table.getColumnModel().getColumn(USE).setMaxWidth(JBUI.scale(USE_WIDTH));
-    table.getColumnModel().getColumn(OP).setMaxWidth(JBUI.scale(OP_WIDTH));
     alias.setText(guessedAlias);
     setTitle(EiDbBundle.message("action.EiDb.MyBatis.DynamicWhere.command") + " — " + dtoName);
     setOKButtonText(EiDbBundle.message("common.insert"));
@@ -68,9 +63,9 @@ final class WhereDialog extends DialogWrapper {
 
   @Override
   protected @Nullable JComponent createCenterPanel() {
-    JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-    top.add(new JBLabel(EiDbBundle.message("where.alias.label")));
-    top.add(alias);
+    JPanel top = FormBuilder.createFormBuilder()
+        .addLabeledComponent(new JBLabel(EiDbBundle.message("where.alias.label")), alias)
+        .getPanel();
     JBScrollPane scroll = new JBScrollPane(table);
     scroll.setPreferredSize(JBUI.size(TABLE_WIDTH, TABLE_HEIGHT));
     JPanel panel = new JPanel(new BorderLayout(0, JBUI.scale(8)));

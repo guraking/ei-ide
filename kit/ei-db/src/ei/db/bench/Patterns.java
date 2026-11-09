@@ -174,10 +174,11 @@ public final class Patterns {
     }
     // 고리(자기 자신 · 서로를 부모로 가리키는 행)가 있으면 WITH RECURSIVE 는 끝없이 돈다. 경로에 이미 있는 ID 는 다시 펼치지 않는다.
     // Oracle CONNECT BY 는 고리에서 ORA-01436 으로 멈추므로 그대로 둔다.
+    String p = other(a, "p");
     return head.replace("\n", "(고리는 한 번만 펼침)\n") + "WITH RECURSIVE tree AS (\n    SELECT\n           1 AS LVL\n         , CAST(" + a + "." + id + " AS VARCHAR(4000)) AS PATH\n         , " + a + ".*\n"
-        + "      FROM " + t + " " + a + "\n     WHERE " + a + "." + parent + " IS NULL\n    UNION ALL\n    SELECT\n           p.LVL + 1\n"
-        + "         , CAST(p.PATH || ' > ' || " + a + "." + id + " AS VARCHAR(4000))\n         , " + a + ".*\n      FROM " + t + " " + a + "\n     INNER JOIN tree p\n        ON " + a + "." + parent + " = p." + id + "\n"
-        + "     WHERE (' > ' || p.PATH || ' > ') NOT LIKE ('% > ' || " + a + "." + id + " || ' > %')\n)\n"
+        + "      FROM " + t + " " + a + "\n     WHERE " + a + "." + parent + " IS NULL\n    UNION ALL\n    SELECT\n           " + p + ".LVL + 1\n"
+        + "         , CAST(" + p + ".PATH || ' > ' || " + a + "." + id + " AS VARCHAR(4000))\n         , " + a + ".*\n      FROM " + t + " " + a + "\n     INNER JOIN tree " + p + "\n        ON " + a + "." + parent + " = " + p + "." + id + "\n"
+        + "     WHERE (' > ' || " + p + ".PATH || ' > ') NOT LIKE ('% > ' || " + a + "." + id + " || ' > %')\n)\n"
         + "SELECT\n       tr.*\n  FROM tree tr\n ORDER BY\n       tr.PATH";
   }
 

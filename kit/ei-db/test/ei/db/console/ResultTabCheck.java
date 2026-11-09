@@ -14,6 +14,18 @@ public class ResultTabCheck {
     eq(ResultView.sameKey(ResultView.RUN, "c1", "select * from emp").equals(k), false);
     eq(ResultView.sameKey(ResultView.RUN, "c1", "SELECT * FROM EMP -- a").equals(k), false);
     eq(ResultView.sameKey(ResultView.RUN, "c1", null), ResultView.sameKey(ResultView.RUN, "c1", ""));
+    // 함수 안의 FROM 은 표 이름이 아니다.
+    eq(ResultView.firstTable("SELECT EXTRACT(YEAR FROM d) y, TRIM(LEADING '0' FROM c) FROM APP.EMP e"), "EMP");
+    eq(ResultView.firstTable("SELECT substring(x FROM 2) FROM \"Dept\""), "Dept");
+    eq(ResultView.firstTable("SELECT (SELECT 1 FROM dual) a FROM t -- FROM x"), "t");
+    eq(ResultView.firstTable("SELECT 1"), null);
+    // 인라인 뷰(쪽 나누기 감싸기)는 안쪽 FROM 의 표.
+    eq(ResultView.firstTable("SELECT * FROM (SELECT ROWNUM rn, a.* FROM (SELECT EXTRACT(YEAR FROM d) y FROM APP.EMP e ORDER BY 1) a) WHERE rn <= 10"), "EMP");
+    eq(ResultView.firstTable("SELECT * FROM(SELECT a FROM t)"), "t");
+    eq(ResultView.firstTable("SELECT fromage FROM t"), "t");
+    // 쓴 그대로의 따옴표는 tableRef 에 남는다.
+    eq(ResultView.tableRef("SELECT * FROM app.\"order\" o"), "\"order\"");
+    eq(ResultView.firstTable("SELECT * FROM app.\"order\" o"), "order");
     System.out.println("ResultTabCheck 통과");
   }
 }

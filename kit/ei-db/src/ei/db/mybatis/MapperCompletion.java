@@ -43,7 +43,7 @@ public final class MapperCompletion extends CompletionContributor {
     if (start >= 0) {
       CompletionResultSet rs = result.withPrefixMatcher(text.subSequence(start, offset).toString());
       Set<String> seen = new HashSet<>();
-      for (StatementParams.Param p : StatementParams.of(project, doc, s)) {
+      for (StatementParams.Param p : StatementParams.of(project, doc, s, file.getVirtualFile())) {
         if (seen.add(p.name())) rs.addElement(LookupElementBuilder.create(p.name()).withIcon(p.icon()).withTypeText(p.type()));
       }
       rs.stopHere();
@@ -52,7 +52,7 @@ public final class MapperCompletion extends CompletionContributor {
 
     start = ResultColumns.aliasPrefixStart(text, offset);
     if (start < 0 || !SELECT.equals(s.name) || s.attr("resultMap") != null || DumbService.isDumb(project)) return;
-    PsiClass dto = DtoFields.find(project, s.attr("resultType"));
+    PsiClass dto = DtoFields.find(project, s.attr("resultType"), file.getVirtualFile());
     if (dto == null) return;
     Set<String> used = new HashSet<>();
     List<String> columns = ResultColumns.of(doc.plainText(s));

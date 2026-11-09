@@ -1,5 +1,6 @@
 package ei.db.mybatis;
 
+import java.util.List;
 import java.util.Objects;
 
 /** 페이징 쿼리 만들기 순수 논리 자체 점검: java -cp out:test-out ei.db.mybatis.PagingGenCheck */
@@ -113,6 +114,32 @@ public class PagingGenCheck {
     eq(PagingGen.pageMethod("com.x.UserDto", "selectUserListPage", "(UserDto userDto)"),
         "java.util.List<com.x.UserDto> selectUserListPage(UserDto userDto);");
     eq(PagingGen.countMethod("selectUserListCount", "(UserDto userDto)"), "int selectUserListCount(UserDto userDto);");
+    // PostgreSQL: LIMIT · OFFSET, 같은 startRow · endRow
+    PagingGen.Result pg = PagingGen.generate("<mapper namespace=\"a\">\n  <select id='q' resultType=\"int\">\n    SELECT 1\n  </select>\n</mapper>",
+        MapperDoc.parse("<mapper namespace=\"a\">\n  <select id='q' resultType=\"int\">\n    SELECT 1\n  </select>\n</mapper>"),
+        MapperDoc.parse("<mapper namespace=\"a\">\n  <select id='q' resultType=\"int\">\n    SELECT 1\n  </select>\n</mapper>").statement("q"), true);
+    eq(pg.text().substring(0, pg.text().indexOf("<select id=\"qCount\"")), "\n"
+        + "  <select id='qPage' resultType=\"int\">\n"
+        + "    SELECT\n"
+        + "           a.*\n"
+        + "      FROM (\n"
+        + "            SELECT 1\n"
+        + "           ) a\n"
+        + "     LIMIT #{endRow} - #{startRow} OFFSET #{startRow}\n"
+        + "  </select>\n  ");
+    eq(pg.text().contains("ROWNUM"), false);
+
+    // 페이징 메서드 매개변수
+    String at = "@org.apache.ibatis.annotations.Param";
+    String rows = at + "(\"startRow\") int startRow, " + at + "(\"endRow\") int endRow";
+    eq(PagingGen.pageParams(List.of()), "(" + rows + ")");
+    eq(PagingGen.pageParams(List.of(new PagingGen.Param("UserDto dto", "dto", false, false))), null);
+    eq(PagingGen.pageParams(List.of(new PagingGen.Param("String id", "id", false, true))),
+        "(" + at + "(\"id\") String id, " + rows + ")");
+    eq(PagingGen.pageParams(List.of(new PagingGen.Param("@Param(\"a\") String a", "a", true, true),
+                                    new PagingGen.Param("UserDto u", "u", false, false))),
+        "(@Param(\"a\") String a, " + at + "(\"u\") UserDto u, " + rows + ")");
+    eq(PagingGen.pageParams(List.of(new PagingGen.Param("@Param(\"startRow\") int s", "startRow", true, true))), null);
     eq(PagingGen.reindent("\n    a\n\n      b\n  ", "  "), "  a\n\n    b\n");
     System.out.println("PagingGenCheck 통과");
   }
