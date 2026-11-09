@@ -92,6 +92,21 @@ public class HistoryCheck {
     eq(koPrefix, "/trunk/한글 폴더/a+b");
     String koLog = "<log><logentry revision=\"3\"><paths><path action=\"M\">/trunk/한글 폴더/a+b/src/X.java</path></paths><msg>m</msg></logentry></log>";
     eq(History.parseSvnLog(koLog, koPrefix).get(0).files(), List.of(new History.FileChange("M", "src/X.java")));
+    // 브랜치 작업본: 브랜치를 만든 복사(r4)보다 오래된 리비전은 복사 원본(/trunk/app)으로 거르고, 다음 묶음도 그 경로로 잇는다.
+    String branchLog = "<log><logentry revision=\"5\"><paths><path action=\"M\">/branches/feat/app/A.java</path></paths><msg>b</msg></logentry>"
+                       + "<logentry revision=\"4\"><paths><path action=\"A\" copyfrom-path=\"/trunk\" copyfrom-rev=\"3\">/branches/feat</path></paths>"
+                       + "<msg>branch</msg></logentry>"
+                       + "<logentry revision=\"3\"><paths><path action=\"M\">/trunk/app/A.java</path>"
+                       + "<path action=\"A\" copyfrom-path=\"/trunk/app/Old.java\" copyfrom-rev=\"2\">/trunk/app/New.java</path></paths><msg>t</msg></logentry></log>";
+    java.util.Map<String, String> prefixes = new java.util.HashMap<>();
+    History.SvnLog branched = History.parseSvnLog(branchLog, "/branches/feat/app", prefixes);
+    eq(branched.entries().get(0).files(), List.of(new History.FileChange("M", "A.java")));
+    eq(branched.entries().get(1).files(), List.of());
+    eq(branched.entries().get(2).files(), List.of(new History.FileChange("M", "A.java"), new History.FileChange("A", "New.java")));
+    eq(prefixes.get("5"), "/branches/feat/app");
+    eq(prefixes.get("4"), "/branches/feat/app");
+    eq(prefixes.get("3"), "/trunk/app");
+    eq(branched.older(), "/trunk/app");  // 폴더 안 파일의 복사(New.java)는 경로를 바꾸지 않는다
 
     checkRealGit();
     checkClashes();
@@ -134,6 +149,14 @@ public class HistoryCheck {
     git(repo, "commit", "-q", "-m", "이름 바꿈");
     List<History.Entry> renamed = History.parseGitLog(git(app, History.gitLogArgs("HEAD", 1, 0)));
     eq(names(renamed.get(0).files()), List.of(new History.FileChange("R", "renamed.java", "main.java")));
+    // 폴더 밖만 바꾼 합치기: 하위 폴더 기록(subfolder)에서는 빠지고, 저장소 맨 위처럼 읽으면 남는다.
+    git(repo, "checkout", "-q", "-b", "outside");
+    commit(repo, "other2.txt", "밖 곁가지");
+    git(repo, "checkout", "-q", "main");
+    commit(repo, "other3.txt", "밖 본줄기");
+    git(repo, "merge", "-q", "--no-ff", "-m", "Merge branch 'outside'", "outside");
+    eq(History.parseGitLog(git(app, History.gitLogArgs("HEAD", 1, 0, true))).get(0).subject(), "이름 바꿈");
+    eq(History.parseGitLog(git(app, History.gitLogArgs("HEAD", 1, 0, false))).get(0).subject(), "Merge branch 'outside'");
     List<History.Row> rows = History.layout(log);
     // 0 합치기(본줄기 · 곁가지) / 1 본줄기 / 2 곁가지 / 3 첫 커밋. 곁가지는 1 칸, 나머지는 0 칸.
     eq(History.links(log, rows, 0), List.of(new History.Link(History.LinkKind.MERGED_FROM, log.get(2))));
