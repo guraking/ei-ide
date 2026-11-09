@@ -1,6 +1,7 @@
 package kinggura.sync;
 
 import com.intellij.ide.RecentProjectsManager;
+import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.ide.projectView.TreeStructureProvider;
 import com.intellij.ide.projectView.ViewSettings;
 import com.intellij.ide.util.treeView.AbstractTreeNode;
@@ -99,6 +100,8 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
   private static final String KIND_OUTPUT = "(?s).*\\bkind=\"output\".*";
   // .classpath 에 적지 않아도 소스 · 웹 폴더로 보는 이클립스 기본 폴더(Dynamic Web Project · MyEclipse).
   private static final List<String> ECLIPSE_SOURCE_DIRS = List.of("src", "WebContent", "WebRoot");
+  // 자동으로 제외한 폴더 URL 목록(프로젝트 설정). 여기 있는 폴더는 켤 때 다시 제외하지 않는다(excludeDirs).
+  private static final String AUTO_EXCLUDED_KEY = "kinggura.sync.autoExcluded";
 
   @Override
   public void runActivity(@NotNull Project project) {
@@ -159,7 +162,7 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
           .newModule(Path.of(base, Project.DIRECTORY_STORE_FOLDER, "modules", name + ".iml"), ModuleTypeManager.getInstance().getDefaultModuleType().getId())));
         ModuleRootModificationUtil.addContentRoot(created.get(), dir);
         ModuleRootModificationUtil.setSdkInherited(created.get());
-        excludeDirs(created.get(), outputDirs(directory));
+        excludeDirs(created.get(), outputDirs(directory), true);
         mapped.set(true);
         addVcsMapping(project, directory);
         removeWorkspaceModule(project);
@@ -209,6 +212,8 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
     if (stale.isEmpty()) return;
     LOG.info("폴더가 없어진 닫은 저장소를 지웁니다: " + stale);
     WriteAction.run(() -> modules.removeUnloadedModules(stale));
+    // 닫은 기록도 뺀다. 남으면 같은 자리에 다시 받은 저장소를 켤 때 다시 닫는다(CloseRepoAction.reclose).
+    CloseRepoAction.forgetClosed(project, staleRoots);
     // 닫을 때 넣은 「등록 안 된 루트 무시」도 뺀다. 남으면 같은 자리에 IDE 밖에서 다시 받은 저장소를 IntelliJ 가 찾지 않아 동기화 창 · Git Log 에 안 보인다.
     VcsConfiguration.getInstance(project).removeFromIgnoredUnregisteredRoots(staleRoots);
   }
@@ -296,25 +301,35 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
     }
     if (found.isEmpty()) return;
     ApplicationManager.getApplication().invokeLater(() -> {
-      for (Map.Entry<Module, List<Path>> entry : found.entrySet()) excludeDirs(entry.getKey(), entry.getValue());
+      for (Map.Entry<Module, List<Path>> entry : found.entrySet()) excludeDirs(entry.getKey(), entry.getValue(), false);
     }, project.getDisposed());
   }
 
   /**
    * 아직 제외가 아닌 폴더를 그 폴더를 품은 콘텐츠 루트의 제외 폴더로 더한다. EDT 에서 부른다.
    * 소스 폴더이거나 소스 폴더를 품은 폴더는 건너뛴다(이클립스 출력 폴더를 소스 폴더와 같게 둔 프로젝트). 더할 것이 없으면 모듈을 고치지 않는다.
+   * 한 번 제외한(또는 이미 제외였던) 폴더는 AUTO_EXCLUDED_KEY 에 적고, 켤 때(fresh=false)는 적힌 폴더를 다시 제외하지 않는다.
+   * 사용자가 「Cancel Exclusion」으로 푼 것을 지키기 위해서다. 방금 받은 저장소(fresh=true)는 적힌 것이어도 제외한다(지우고 다시 받은 경우).
    */
-  static void excludeDirs(Module module, List<Path> dirs) {
+  static void excludeDirs(Module module, List<Path> dirs, boolean fresh) {
     if (module.isDisposed()) return;
     ModuleRootManager rootManager = ModuleRootManager.getInstance(module);
     List<String> have = List.of(rootManager.getExcludeRootUrls());
     List<String> sources = List.of(rootManager.getSourceRootUrls());
+    PropertiesComponent properties = PropertiesComponent.getInstance(module.getProject());
+    List<String> done = new ArrayList<>();
+    List<String> saved = properties.getList(AUTO_EXCLUDED_KEY);
+    if (saved != null) done.addAll(saved);
+    int doneBefore = done.size();
     List<String> add = new ArrayList<>();
     for (Path dir : dirs) {
       String url = VfsUtilCore.pathToUrl(FileUtil.toSystemIndependentName(dir.toString()));
-      if (have.contains(url) || add.contains(url) || coversAny(url, sources)) continue;
+      boolean recorded = done.contains(url);
+      if (!recorded) done.add(url);
+      if (have.contains(url) || add.contains(url) || coversAny(url, sources) || (recorded && !fresh)) continue;
       add.add(url);
     }
+    if (done.size() != doneBefore) properties.setList(AUTO_EXCLUDED_KEY, done);
     if (add.isEmpty()) return;
     ModuleRootModificationUtil.updateModel(module, model -> {
       for (ContentEntry entry : model.getContentEntries()) {
