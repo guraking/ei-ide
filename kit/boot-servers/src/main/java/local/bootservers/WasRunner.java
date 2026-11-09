@@ -128,8 +128,10 @@ public final class WasRunner {
     private final Map<String, Boolean> debugMode = new ConcurrentHashMap<>();
     // 이번 IDE 실행 동안 쓰는 JEUS 비밀번호(서버 id → 비밀번호). 기억하지 않기로 한 비밀번호도 중지 · 배포에 쓰려고 둔다.
     private final Map<String, String> jeusPasswords = new ConcurrentHashMap<>();
-    // 실행 폴더를 꾸미는 중인 서버 id. 그사이 다시 누른 시작을 막는다.
+    // 시작 전 빌드 · 포트 점검 · 실행 폴더 꾸미기 중인 서버 id. 프로세스가 생기거나 실패 · 취소될 때까지 두어, 그사이 다시 누른 시작을 막는다.
     private final Set<String> launching = ConcurrentHashMap.newKeySet();
+    // 재시작을 걸어 두고 종료를 기다리는 서버 id. 여러 번 눌러도 다시 띄우기는 한 번만 한다.
+    private final Set<String> restarting = ConcurrentHashMap.newKeySet();
 
     public WasRunner(Project project) {
         this.project = project;
@@ -182,7 +184,7 @@ public final class WasRunner {
         return baseDir(server);
     }
 
-    /** 포트 점검 · 실행 폴더 꾸미기 중이라 프로세스가 아직 없는지. 서버 묶음이 시작을 기다릴 때 쓴다. */
+    /** 시작 전 빌드 · 포트 점검 · 실행 폴더 꾸미기 중이라 프로세스가 아직 없는지. 서버 묶음이 시작을 기다릴 때 쓴다. */
     boolean isLaunching(WasSettings.Server server) {
         return launching.contains(server.id);
     }
@@ -212,7 +214,7 @@ public final class WasRunner {
      * @return 빌드나 띄우기를 시작했으면 true. 이미 실행 중이거나 알림만 띄우고 그만뒀으면 false.
      */
     boolean start(WasSettings.Server server, boolean debug) {
-        if (isLive(server)) {
+        if (isLive(server) || launching.contains(server.id)) {
             return false;
         }
         if (!server.kind().supported) {
@@ -227,7 +229,7 @@ public final class WasRunner {
             return false;
         }
         List<Module> modules = deployedModules(server, true);
-        if (modules == null) {
+        if (modules == null || !launching.add(server.id)) {
             return false;
         }
         if (modules.isEmpty()) {
@@ -237,12 +239,13 @@ public final class WasRunner {
         ProjectTaskManager.getInstance(project).build(modules.toArray(Module[]::new)).onSuccess(result ->
                 ApplicationManager.getApplication().invokeLater(() -> {
                     if (result.isAborted() || result.hasErrors()) {
+                        launching.remove(server.id);
                         Messages.showErrorDialog(project, BootServersBundle.message("was.build.failed", server.name), TITLE);
                     }
                     else {
                         launch(server, debug);
                     }
-                }));
+                })).onError(e -> launching.remove(server.id));
         return true;
     }
 
@@ -274,9 +277,13 @@ public final class WasRunner {
         return apps;
     }
 
-    /** 화면 스레드에서 부른다. 포트 점검 · 실행 폴더 꾸미기 · 프로세스 만들기는 작업 스레드에서 하고, 실행 창 띄우기만 화면 스레드에서 한다. */
+    /**
+     * 화면 스레드에서 부른다. 포트 점검 · 실행 폴더 꾸미기 · 프로세스 만들기는 작업 스레드에서 하고, 실행 창 띄우기만 화면 스레드에서 한다.
+     * start 가 launching 에 넣어 둔 서버 id 는 여기서 끝날 때(프로세스를 만들었거나 실패) 뺀다.
+     */
     private void launch(WasSettings.Server server, boolean debug) {
-        if (!launching.add(server.id)) {
+        if (isLive(server)) {
+            launching.remove(server.id);
             return;
         }
         AppExecutorUtil.getAppExecutorService().execute(() -> {
@@ -534,7 +541,7 @@ public final class WasRunner {
     /**
      * JEUS 명령 틀(비어 있으면 fallback)을 채워 명령줄로 만든다. JAVA_HOME 은 건드리지 않는다 —
      * JEUS 스크립트는 설치 때 정한 JDK(bin/jeus.properties)를 쓰고, 지원 JDK 판이 프로젝트 JDK 와 다를 수 있다.
-     * 틀에 {passwordFile} 이 있으면 사용자만 읽는 비밀번호 파일을 만든다(이미 있으면 그대로 쓴다).
+     * 틀에 {passwordFile} 이 있으면 사용자만 읽는 비밀번호 파일을 만든다(이미 있으면 지금 비밀번호로 다시 쓴다).
      *
      * @throws IOException 비밀번호 파일을 만들지 못한 경우
      */
@@ -551,8 +558,8 @@ public final class WasRunner {
         values.put("host", "localhost");
         values.put("port", String.valueOf(server.shutdownPort));
         if (chosen.contains(JeusBase.PASSWORD_FILE_TOKEN)) {
-            Path file = passwordFile(server);
-            values.put("passwordFile", (Files.exists(file) ? file : JeusBase.writePasswordFile(file, password)).toString());
+            // 지난 실행이 비정상으로 끝나 남은 파일에 옛 비밀번호가 있을 수 있으므로 늘 지금 비밀번호로 다시 쓴다.
+            values.put("passwordFile", JeusBase.writePasswordFile(passwordFile(server), password).toString());
         }
         List<String> argv = JeusBase.command(chosen, values, SystemInfo.isWindows);
         return withOutputEncoding(new GeneralCommandLine(argv).withWorkDirectory(server.home).withCharset(StandardCharsets.UTF_8),
@@ -726,7 +733,7 @@ public final class WasRunner {
         }
     }
 
-    /** 실행 중이면 끝난 뒤 같은 방식(실행 · 디버그)으로 다시 띄운다. 꺼져 있으면 그냥 띄운다. */
+    /** 실행 중이면 끝난 뒤 같은 방식(실행 · 디버그)으로 다시 띄운다. 꺼져 있으면 그냥 띄운다. 이미 재시작을 기다리는 중이면 아무것도 하지 않는다. */
     void restart(WasSettings.Server server) {
         boolean debug = debugMode.getOrDefault(server.id, false);
         ProcessHandler handler = running.get(server.id);
@@ -734,12 +741,21 @@ public final class WasRunner {
             start(server, debug);
             return;
         }
+        if (!restarting.add(server.id)) {
+            return;
+        }
         handler.addProcessListener(new ProcessListener() {
             @Override
             public void processTerminated(@NotNull ProcessEvent event) {
+                restarting.remove(server.id);
                 ApplicationManager.getApplication().invokeLater(() -> start(server, debug));
             }
         });
+        // 붙이기 전에 이미 끝났으면 위 알림이 오지 않으므로 여기서 다시 띄운다.
+        if (handler.isProcessTerminated() && restarting.remove(server.id)) {
+            start(server, debug);
+            return;
+        }
         stop(server);
     }
 

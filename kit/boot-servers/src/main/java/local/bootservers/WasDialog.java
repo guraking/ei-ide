@@ -41,8 +41,6 @@ final class WasDialog extends DialogWrapper {
 
     private static final int CHECK_COLUMN_WIDTH = 50;
     private static final int DEPLOY_VISIBLE_ROWS = 6;
-    private static final int DIALOG_WIDTH = 720;
-    private static final int DIALOG_HEIGHT = 760;
 
     private final WasSettings.Server server;
 
@@ -68,16 +66,18 @@ final class WasDialog extends DialogWrapper {
     private final Project project;
     private final List<Row> rows = new ArrayList<>();
 
-    /** 표 한 줄: 올릴지 · 폴더 모듈 이름 · 컨텍스트 경로. */
+    /** 표 한 줄: 올릴지 · 폴더 모듈 이름 · 컨텍스트 경로 · 지금 프로젝트에 그 모듈이 없는지(Maven · Gradle 을 아직 안 불러온 경우 등). */
     private static final class Row {
         boolean on;
         final String module;
         String contextPath;
+        final boolean missing;
 
-        Row(boolean on, String module, String contextPath) {
+        Row(boolean on, String module, String contextPath, boolean missing) {
             this.on = on;
             this.module = module;
             this.contextPath = contextPath;
+            this.missing = missing;
         }
     }
 
@@ -131,7 +131,13 @@ final class WasDialog extends DialogWrapper {
         modules.sort(String::compareTo);
         for (String m : modules) {
             WasSettings.Deployment d = server.deployments.stream().filter(x -> x.module.equals(m)).findFirst().orElse(null);
-            rows.add(new Row(d != null, m, d != null ? d.contextPath : "/" + m));
+            rows.add(new Row(d != null, m, d != null ? d.contextPath : "/" + m, false));
+        }
+        // 프로젝트에 없는 모듈의 배포도 줄로 남겨, 저장할 때 말없이 지워지지 않게 한다. 끄면 그때 뺀다.
+        for (WasSettings.Deployment d : server.deployments) {
+            if (!modules.contains(d.module)) {
+                rows.add(new Row(true, d.module, d.contextPath, true));
+            }
         }
         updateFound();
         init();
@@ -247,8 +253,12 @@ final class WasDialog extends DialogWrapper {
                 .addComponentToRightColumn(jeusHint)
                 .addLabeledComponentFillVertically(BootServersBundle.message("was.dialog.deployments"), ScrollPaneFactory.createScrollPane(table))
                 .getPanel();
-        panel.setPreferredSize(JBUI.size(DIALOG_WIDTH, DIALOG_HEIGHT));
         return panel;
+    }
+
+    @Override
+    protected @Nullable String getDimensionServiceKey() {
+        return "KingGura.WasDialog";
     }
 
     @Override
@@ -367,7 +377,7 @@ final class WasDialog extends DialogWrapper {
             Row r = rows.get(row);
             return switch (column) {
                 case 0 -> r.on;
-                case 1 -> r.module;
+                case 1 -> r.missing ? BootServersBundle.message("was.dialog.module.missing", r.module) : r.module;
                 default -> r.contextPath;
             };
         }

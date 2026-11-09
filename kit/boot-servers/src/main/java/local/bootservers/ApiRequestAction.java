@@ -16,6 +16,7 @@ import com.intellij.openapi.ui.Messages;
 import com.intellij.psi.PsiAnnotation;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiJavaFile;
+import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiMethod;
 import com.intellij.psi.PsiParameter;
 import com.intellij.psi.util.PsiTreeUtil;
@@ -154,7 +155,10 @@ public final class ApiRequestAction extends AnAction {
         }
         String httpMethod = OpenApiSpec.methods(endpoint.httpMethod()).get(0).toUpperCase(Locale.ROOT);
         String bodyText = body == null ? "" : ApiText.toJson(ApiText.sampleJson(BODY_NAME, body, components, today));
-        return new ApiRequestEditor.Request(httpMethod + " " + endpoint.owner().replace('.', '#'), httpMethod,
+        // 같은 이름의 클래스가 다른 패키지에 있어도 탭이 겹치지 않게 정규 이름 · 주소로 탭을 가린다.
+        PsiClass owner = method.getContainingClass();
+        String key = httpMethod + " " + (owner == null ? endpoint.owner() : owner.getQualifiedName() + "#" + method.getName()) + " " + endpoint.url();
+        return new ApiRequestEditor.Request(httpMethod + " " + endpoint.owner().replace('.', '#'), key, httpMethod,
                 ApiText.join(base, ApiText.fillPath(endpoint.url(), pathValues)), query, headers, bodyText);
     }
 

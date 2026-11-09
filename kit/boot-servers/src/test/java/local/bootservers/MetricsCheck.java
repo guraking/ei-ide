@@ -10,6 +10,8 @@ public final class MetricsCheck {
         parse();
         exposure();
         history();
+        restartAfterUnknown();
+        unknownBaseline();
         System.out.println("MetricsCheck 통과");
     }
 
@@ -58,8 +60,39 @@ public final class MetricsCheck {
         check(slow.size() == 2 && slow.get(0).uri().equals("/b") && slow.get(1).uri().equals("/c"), "느린 순");
     }
 
+    /** 읽기 실패(NaN) 기록 뒤에 누적 값이 줄어도 다시 켜진 것으로 본다. */
+    private static void restartAfterUnknown() {
+        Metrics.History h = new Metrics.History();
+        h.add(sample(0, 100, 10, 0));
+        h.add(sample(5_000, 200, 20, 0));
+        h.add(sample(10_000, Double.NaN, Double.NaN, Double.NaN));
+        h.add(sample(15_000, 3, 1, 0));
+        check(h.all().size() == 1, "NaN 뒤 다시 켜지면 비움 " + h.all().size());
+        h.add(sample(20_000, 9, 2, 0));
+        check(h.perMinute(Metrics.Sample::requests) >= 0, "음수 분당 " + h.perMinute(Metrics.Sample::requests));
+    }
+
+    /** attach 실패(-1) 기록은 분당 값의 기준으로 쓰지 않는다. */
+    private static void unknownBaseline() {
+        Metrics.History h = new Metrics.History();
+        h.add(sample(0, 0, 0, 0, -1));
+        h.add(sample(30_000, 0, 0, 0, 4));
+        h.add(sample(60_000, 0, 0, 0, 10));
+        check(near(h.perMinute(Metrics.Sample::gcCount), 12), "GC 분당 " + h.perMinute(Metrics.Sample::gcCount));
+        h.add(sample(65_000, 0, 0, 0, -1));
+        check(Double.isNaN(h.perMinute(Metrics.Sample::gcCount)), "지금 값 모름");
+        Metrics.History unknown = new Metrics.History();
+        unknown.add(sample(0, 0, 0, 0, -1));
+        unknown.add(sample(5_000, 0, 0, 0, 3));
+        check(Double.isNaN(unknown.perMinute(Metrics.Sample::gcCount)), "기준 없음");
+    }
+
     private static Metrics.Sample sample(long time, double requests, double totalSeconds, double errors) {
-        return new Metrics.Sample(time, 0.1, 8, 1, 2, 3, 4, 5, requests, totalSeconds, 0.2, errors, 0, 1, 10, 0);
+        return sample(time, requests, totalSeconds, errors, 5);
+    }
+
+    private static Metrics.Sample sample(long time, double requests, double totalSeconds, double errors, long gcCount) {
+        return new Metrics.Sample(time, 0.1, 8, 1, 2, 3, 4, gcCount, requests, totalSeconds, 0.2, errors, 0, 1, 10, 0);
     }
 
     private static boolean near(double a, double b) {

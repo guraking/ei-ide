@@ -51,9 +51,15 @@ public final class LineChart extends JComponent {
         return JBUI.CurrentTheme.Link.Foreground.ENABLED;
     }
 
+    /** 너비는 바깥 배치가 정한다(창 폭을 따라 늘고 준다). 높이만 정한다. */
     @Override
     public Dimension getPreferredSize() {
-        return new Dimension(JBUI.scale(height * 3), JBUI.scale(height));
+        return new Dimension(0, JBUI.scale(height));
+    }
+
+    @Override
+    public Dimension getMinimumSize() {
+        return getPreferredSize();
     }
 
     @Override

@@ -9,13 +9,18 @@ import com.google.gson.JsonParser;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 
 /**
@@ -44,11 +49,18 @@ final class WebTools {
             VUE_EXTENSION, "vue");
 
     /**
-     * npm 으로 받는 패키지. typescript 7 부터는 Go 로 옮겨 가 tsserver.js 와 JS API 가 없어
-     * Vue 서버(require('typescript'))와 tsdk 로 쓸 수 없으므로 5 판으로 고정한다.
+     * 판을 고정한 파일이 든 jar 안 폴더(resources/web). package.json · package-lock.json 은 언어 서버 판(npm ci 로 설치),
+     * versions.properties 는 Node 판. 설치본 대본 kit/web/apply_web.py 도 같은 파일을 읽는다.
+     * typescript 는 7 부터 Go 로 옮겨 가 tsserver.js 와 JS API 가 없어 Vue 서버(require('typescript'))와 tsdk 로 쓸 수 없으므로 5 판에 둔다.
      */
-    static final List<String> SERVER_PACKAGES = List.of(
-            "@vtsls/language-server", "@vue/language-server", VUE_PLUGIN, "typescript@5");
+    static final String PINNED_RESOURCE_DIR = "/web/";
+    static final String PACKAGE_LOCK_JSON = "package-lock.json";
+    static final String VERSIONS_PROPERTIES = "versions.properties";
+    static final String NODE_VERSION_KEY = "node.version";
+    /** npm 이 패키지를 받는 곳. IDE 프록시 설정을 이 주소 기준으로 고른다. */
+    static final String NPM_REGISTRY = "https://registry.npmjs.org/";
+    /** npm 에 프록시를 넘기는 환경 변수. */
+    static final List<String> PROXY_ENV_NAMES = List.of("HTTPS_PROXY", "HTTP_PROXY", "npm_config_proxy", "npm_config_https_proxy");
 
     private static final String MODULES = "node_modules";
     private static final String VTSLS_JS = MODULES + "/@vtsls/language-server/bin/vtsls.js";
@@ -141,16 +153,57 @@ final class WebTools {
         return List.of(windows ? "npm.cmd" : "npm");
     }
 
-    /** 언어 서버 설치 명령: npm install --prefix <base>/servers ... */
+    /** 언어 서버 설치 명령: npm ci --prefix <base>/servers. 그 폴더에 writePinnedPackages 로 넣은 잠금 파일대로 받는다. */
     static List<String> installCommand(List<String> npm, Path base) {
         List<String> cmd = new ArrayList<>(npm);
-        cmd.add("install");
+        cmd.add("ci");
         cmd.add("--prefix");
         cmd.add(base.resolve(SERVERS_DIR).toString());
         cmd.add("--no-fund");
         cmd.add("--no-audit");
-        cmd.addAll(SERVER_PACKAGES);
         return cmd;
+    }
+
+    /** jar 안의 package.json · package-lock.json 을 servers 폴더에 쓴다(있으면 덮는다). jar 에 없으면 IOException. */
+    static void writePinnedPackages(Path servers) throws IOException {
+        Files.createDirectories(servers);
+        for (String name : new String[]{PACKAGE_JSON, PACKAGE_LOCK_JSON}) {
+            try (InputStream in = WebTools.class.getResourceAsStream(PINNED_RESOURCE_DIR + name)) {
+                if (in == null) {
+                    throw new IOException("jar 에 " + PINNED_RESOURCE_DIR + name + " 가 없습니다");
+                }
+                Files.copy(in, servers.resolve(name), StandardCopyOption.REPLACE_EXISTING);
+            }
+        }
+    }
+
+    /** versions.properties 의 Node 판(v24.1.0 꼴). 파일 · 값이 없으면 IOException. */
+    static String nodeVersion() throws IOException {
+        Properties versions = new Properties();
+        try (InputStream in = WebTools.class.getResourceAsStream(PINNED_RESOURCE_DIR + VERSIONS_PROPERTIES)) {
+            if (in == null) {
+                throw new IOException("jar 에 " + PINNED_RESOURCE_DIR + VERSIONS_PROPERTIES + " 가 없습니다");
+            }
+            versions.load(new InputStreamReader(in, StandardCharsets.UTF_8));
+        }
+        String version = versions.getProperty(NODE_VERSION_KEY, "").strip();
+        if (version.isEmpty()) {
+            throw new IOException(VERSIONS_PROPERTIES + " 에 " + NODE_VERSION_KEY + " 가 없습니다");
+        }
+        return version;
+    }
+
+    /** npm 에 넘길 프록시 주소 http://[아이디:비밀번호@]호스트:포트. 아이디 · 비밀번호는 주소용으로 인코딩한다. 아이디가 비면 붙이지 않는다. */
+    static String proxyUrl(String host, int port, String user, String password) {
+        String auth = "";
+        if (user != null && !user.isEmpty()) {
+            auth = encodeUserInfo(user) + (password == null || password.isEmpty() ? "" : ":" + encodeUserInfo(password)) + "@";
+        }
+        return "http://" + auth + (host.contains(":") && !host.startsWith("[") ? "[" + host + "]" : host) + ":" + port;
+    }
+
+    private static String encodeUserInfo(String text) {
+        return URLEncoder.encode(text, StandardCharsets.UTF_8).replace("+", "%20");
     }
 
     static Path serversDir(Path base) {

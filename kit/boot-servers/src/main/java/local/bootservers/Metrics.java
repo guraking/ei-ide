@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.Deque;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -126,15 +127,27 @@ final class Metrics {
         private final Deque<Sample> samples = new ArrayDeque<>();
 
         void add(Sample s) {
-            Sample last = samples.peekLast();
             // 누적 값이 줄면 서버가 다시 켜진 것이다. 이전 기록과 이으면 분당 값이 음수가 되므로 버린다.
-            if (last != null && s.requests() >= 0 && last.requests() > s.requests()) {
+            // 비교는 값을 읽은 마지막 기록과 한다(사이에 읽기 실패(NaN)가 끼어도 다시 켜진 것을 놓치지 않게).
+            if (s.requests() >= 0 && lastKnownRequests() > s.requests()) {
                 samples.clear();
             }
             samples.addLast(s);
             while (samples.size() > 1 && s.time() - samples.peekFirst().time() > HISTORY_MILLIS) {
                 samples.removeFirst();
             }
+        }
+
+        /** 요청 누적 값을 읽은 마지막 기록의 값. 없으면 NaN. */
+        private double lastKnownRequests() {
+            Iterator<Sample> it = samples.descendingIterator();
+            while (it.hasNext()) {
+                double requests = it.next().requests();
+                if (requests >= 0) {
+                    return requests;
+                }
+            }
+            return Double.NaN;
         }
 
         Sample latest() {
@@ -160,15 +173,30 @@ final class Metrics {
             return result;
         }
 
-        /** 최근 1분의 분당 증가량. 모르면 NaN. */
+        /**
+         * 최근 1분의 분당 증가량. 모르면 NaN.
+         * 값을 못 읽은 기록(-1 · NaN)은 기준으로 쓰지 않고 1분 전 기록 뒤의 첫 읽은 기록을 기준으로 한다.
+         */
         double perMinute(ToDoubleFunction<Sample> counter) {
             Sample then = minuteAgo();
             Sample now = latest();
-            if (then == null || now.time() == then.time()) {
+            if (then == null || !(counter.applyAsDouble(now) >= 0)) {
                 return Double.NaN;
             }
-            double delta = counter.applyAsDouble(now) - counter.applyAsDouble(then);
-            return delta * MILLIS_PER_MINUTE / (now.time() - then.time());
+            Sample base = null;
+            boolean inWindow = false;
+            for (Sample s : samples) {
+                inWindow = inWindow || s == then;
+                if (inWindow && counter.applyAsDouble(s) >= 0) {
+                    base = s;
+                    break;
+                }
+            }
+            if (base == null || now.time() == base.time()) {
+                return Double.NaN;
+            }
+            double delta = counter.applyAsDouble(now) - counter.applyAsDouble(base);
+            return delta * MILLIS_PER_MINUTE / (now.time() - base.time());
         }
 
         /** 최근 1분 요청의 평균 응답(ms). 요청이 없었으면 NaN. */

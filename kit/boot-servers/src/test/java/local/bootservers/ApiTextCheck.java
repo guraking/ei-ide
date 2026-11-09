@@ -4,6 +4,9 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import local.bootservers.OpenApiSpec.Schema;
 
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,6 +22,7 @@ public final class ApiTextCheck {
         urls();
         auth();
         pretty();
+        decode();
         System.out.println("ApiTextCheck 통과");
     }
 
@@ -36,6 +40,13 @@ public final class ApiTextCheck {
         eq(TODAY + "T00:00:00", ApiText.sample("regDt", Schema.of(OpenApiSpec.TYPE_STRING, "date-time"), null, TODAY), "시각");
         eq("1", ApiText.sample("ids", Schema.array(Schema.of(OpenApiSpec.TYPE_INTEGER)), null, TODAY), "배열은 항목 하나");
         eq("테스트", ApiText.sample("x", null, null, TODAY), "모양 없음");
+        eq("RED", ApiText.sample("color", Schema.of(OpenApiSpec.TYPE_STRING, ApiText.FORMAT_ENUM_PREFIX + "RED,BLUE"), null, TODAY), "열거형 첫 상수");
+        eq("00:00:00", ApiText.sample("startTm", Schema.of(OpenApiSpec.TYPE_STRING, ApiText.FORMAT_TIME), null, TODAY), "LocalTime");
+        eq("2026-10", ApiText.sample("ym", Schema.of(OpenApiSpec.TYPE_STRING, ApiText.FORMAT_YEAR_MONTH), null, TODAY), "YearMonth");
+        eq("2026", ApiText.sample("yr", Schema.of(OpenApiSpec.TYPE_STRING, ApiText.FORMAT_YEAR), null, TODAY), "Year");
+        eq(TODAY + "T00:00:00Z", ApiText.sample("at", Schema.of(OpenApiSpec.TYPE_STRING, ApiText.FORMAT_DATE_TIME_OFFSET), null, TODAY), "Instant");
+        java.time.Instant.parse(ApiText.sample("at", Schema.of(OpenApiSpec.TYPE_STRING, ApiText.FORMAT_DATE_TIME_OFFSET), null, TODAY));
+        java.time.ZonedDateTime.parse(TODAY + "T00:00:00Z");
     }
 
     private static void body() {
@@ -63,6 +74,9 @@ public final class ApiTextCheck {
     private static void urls() {
         eq("/api/cad/1/item/a%20b", ApiText.fillPath("/api/cad/{cadId}/item/{no:\\d+}", Map.of("no", "a b")), "경로 변수");
         eq("/list", ApiText.fillPath("/list", Map.of()), "변수 없음");
+        eq("/x/7/${api.v}", ApiText.fillPath("/x/{id:\\d{3}}/${api.v}", Map.of("id", "7")), "정규식 안 { } · 자리표시");
+        eq("/x/1/y", ApiText.fillPath("/x/{id:[a-z]{2,}}/y", Map.of()), "정규식 반복 횟수");
+        eq("/x/{open", ApiText.fillPath("/x/{open", Map.of()), "짝 없는 {");
         eq("http://localhost:9090/api/x", ApiText.join("http://localhost:9090", "/api/x"), "잇기");
         eq("http://localhost:9090/", ApiText.join("http://localhost:9090", ""), "빈 경로");
         eq(21, ApiText.hostEnd("http://localhost:8090/basic/list?a=1"), "서버 끝");
@@ -100,6 +114,21 @@ public final class ApiTextCheck {
         eq("<html>", ApiText.prettyJson("<html>"), "HTML 그대로");
         eq("{broken", ApiText.prettyJson("{broken"), "깨진 JSON 그대로");
         eq("list", ApiText.prettyJson("list"), "글 그대로");
+    }
+
+    private static void decode() {
+        String korean = "<p>한글 확인</p>";
+        byte[] euc = korean.getBytes(Charset.forName("EUC-KR"));
+        byte[] utf8 = korean.getBytes(StandardCharsets.UTF_8);
+        eq(korean, ApiText.decode(euc, "text/html;charset=EUC-KR", false), "헤더 charset");
+        eq(korean, ApiText.decode(euc, "text/html", false), "charset 없음 · UTF-8 아님 → MS949");
+        eq(korean, ApiText.decode(utf8, "application/json", false), "charset 없음 · UTF-8");
+        eq(korean, ApiText.decode(utf8, null, false), "Content-Type 없음");
+        String meta = "<html><head><meta http-equiv=\"Content-Type\" content=\"text/html; charset=euc-kr\"></head>한글</html>";
+        eq(meta, ApiText.decode(meta.getBytes(Charset.forName("EUC-KR")), "text/html", false), "meta charset");
+        eq("<meta charset=\"utf-8\">é", ApiText.decode("<meta charset=\"utf-8\">é".getBytes(StandardCharsets.UTF_8), "", false), "meta utf-8");
+        eq("a가", ApiText.decode(Arrays.copyOf("a가나".getBytes(StandardCharsets.UTF_8), 5), "", true), "잘린 UTF-8 끝 글자");
+        eq(korean, ApiText.decode(euc, "text/html; charset=nope-x", false), "모르는 charset 은 건너뜀");
     }
 
     private static void eq(Object expected, Object actual, String what) {

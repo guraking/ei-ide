@@ -90,6 +90,10 @@ import javax.swing.AbstractAction;
 import javax.swing.JList;
 import javax.swing.KeyStroke;
 import javax.swing.Timer;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ListSelectionEvent;
+import javax.swing.event.TableColumnModelEvent;
+import javax.swing.event.TableColumnModelListener;
 import javax.swing.event.TableModelListener;
 import java.awt.Color;
 import java.awt.Font;
@@ -98,6 +102,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.awt.font.TextAttribute;
 import java.beans.PropertyChangeListener;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.ConnectException;
 import java.net.CookieManager;
@@ -108,6 +113,7 @@ import java.net.http.HttpConnectTimeoutException;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalTime;
@@ -120,6 +126,8 @@ import java.util.Map;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.Flow;
 import java.util.concurrent.TimeUnit;
 import java.util.function.IntPredicate;
 import java.util.regex.Pattern;
@@ -132,8 +140,15 @@ import java.util.regex.Pattern;
  */
 final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
 
-    /** 화면을 열 때 채울 값. title 은 탭 이름(같은 이름의 탭이 열려 있으면 그 탭으로 간다). */
-    record Request(String title, String method, String url, List<Row> query, List<Row> headers, String body) {
+    /**
+     * 화면을 열 때 채울 값. title 은 탭 이름(짧은 이름), key 는 같은 요청인지 가르는 이름(패키지까지 붙은 클래스 · 메서드).
+     * key 가 같은 탭이 열려 있으면 그 탭에 새 값을 넣어 다시 채운다.
+     */
+    record Request(String title, String key, String method, String url, List<Row> query, List<Row> headers, String body) {
+        /** key 를 따로 주지 않으면 탭 이름을 key 로 쓴다. */
+        Request(String title, String method, String url, List<Row> query, List<Row> headers, String body) {
+            this(title, title, method, url, query, headers, body);
+        }
     }
 
     /** 표 한 줄의 시험 값. source 는 값이 온 곳(VO 이름 · @RequestParam 기본값 · 자동). */
@@ -152,6 +167,8 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(60);
     /** 화면에 넣을 응답 본문 최대 글자 수. 넘으면 앞부분만 보인다. */
     private static final int MAX_SHOWN_CHARS = 2_000_000;
+    /** 응답 본문을 받는 최대 바이트 수. 넘으면 나머지는 받지 않고 끊었다고 알린다. */
+    private static final int MAX_RECEIVED_BYTES = 16 * 1024 * 1024;
     private static final int HTTP_ERROR_STATUS = 400;
     private static final float REQUEST_RESPONSE_SPLIT = 0.5f;
     /** 요청 영역에서 탭(왼쪽)이 차지하는 비율. 오른쪽은 보낼 요청 미리보기. */
@@ -165,6 +182,13 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
     private static final int TABLE_ROW_HEIGHT = 30;
     /** 체크 칸 너비. 표 끝 「줄 추가」 글을 이름 칸 첫 글자에 맞추는 데도 쓴다. */
     private static final int CHECK_COLUMN_WIDTH = 32;
+    /** 너비 비율을 기억하는 칸(이름 · 값 · 어디서, SHARE_COLUMNS)의 기본 비율. */
+    private static final double[] DEFAULT_SHARES = {0.35, 0.42, 0.23};
+    /** 비율을 선호 너비로 넣을 때 곱하는 수. 표는 선호 너비를 비율로만 쓰므로 실제 픽셀이 아니다. */
+    private static final int SHARE_SCALE = 1000;
+    private static final String SHARE_SEPARATOR = ",";
+    private static final String QUERY_COLUMNS_KEY = "ei.api.columns.query";
+    private static final String HEADER_COLUMNS_KEY = "ei.api.columns.headers";
     /** 표 칸 좌우 안쪽 여백. */
     private static final int CELL_PADDING = 8;
     private static final int VIEW_BODY = 0;
@@ -201,6 +225,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
     private static final int NAME_COLUMN = 1;
     private static final int VALUE_COLUMN = 2;
     private static final int SOURCE_COLUMN = 3;
+    private static final int[] SHARE_COLUMNS = {NAME_COLUMN, VALUE_COLUMN, SOURCE_COLUMN};
     private static final String REMOVE_ROWS = "ei.api.removeRows";
     /** 헤더 표의 인증 줄에 보일 값 길이. 넘으면 「…」 로 줄인다. */
     private static final int AUTH_SHOWN_CHARS = 24;
@@ -259,14 +284,20 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
     private int cookieCount;
     /** 저장소에서 읽은(또는 마지막으로 쓴) 값. 바뀐 것만 다시 쓴다. 읽기 전에는 null. */
     private volatile Map<String, String> savedSecrets;
-    private CompletableFuture<HttpResponse<String>> pending;
+    private CompletableFuture<HttpResponse<Received>> pending;
 
-    /** 같은 이름의 요청 탭이 열려 있으면 그 탭으로, 아니면 새 탭을 연다. */
+    /** 같은 요청(key)의 탭이 열려 있으면 그 탭에 새 값을 넣어 다시 채우고, 아니면 새 탭을 연다. */
     static void open(Project project, Request request) {
         FileEditorManager manager = FileEditorManager.getInstance(project);
         for (VirtualFile open : manager.getOpenFiles()) {
-            if (open.getUserData(REQUEST) != null && open.getName().equals(request.title())) {
-                manager.openFile(open, true);
+            Request shown = open.getUserData(REQUEST);
+            if (shown != null && shown.key().equals(request.key())) {
+                open.putUserData(REQUEST, request);
+                for (FileEditor editor : manager.openFile(open, true)) {
+                    if (editor instanceof ApiRequestEditor api) {
+                        api.fill();
+                    }
+                }
                 return;
             }
         }
@@ -337,8 +368,8 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
 
         // 요청 탭. 쿼리 · 헤더 탭은 탭 줄 오른쪽에 「줄 추가」 링크를 둔다.
         requestTabs = JBTabsFactory.createTabs(project, this);
-        queryTab = requestTab(BootServersBundle.message("api.tab.query"), rowsPanel(queryModel, row -> false), addRowLink(queryModel));
-        headersTab = requestTab(BootServersBundle.message("api.tab.headers"), rowsPanel(headerModel, this::isAuthRow), addRowLink(headerModel));
+        queryTab = requestTab(BootServersBundle.message("api.tab.query"), rowsPanel(queryModel, row -> false, QUERY_COLUMNS_KEY), addRowLink(queryModel));
+        headersTab = requestTab(BootServersBundle.message("api.tab.headers"), rowsPanel(headerModel, this::isAuthRow, HEADER_COLUMNS_KEY), addRowLink(headerModel));
         bodyTab = requestTab(BootServersBundle.message("api.tab.body"), bodyField, null);
         authTab = requestTab(BootServersBundle.message("api.tab.auth"), authPanel(), null);
         requestTabs.select(queryTab, false);
@@ -623,13 +654,11 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
      * 체크 · 이름 · 값 · 어디서 표. 체크를 끈 줄은 보내지 않고 흐리게 줄을 그어 보인다. 이름 · 값은 코드 글꼴, 값은 숫자 · 글을 색으로 가른다.
      * locked 줄은 흐린 글자. Delete 키로 고른 줄(locked 제외)을 뺀다. 줄 더하기는 표 끝 줄과 탭 줄 오른쪽 링크.
      */
-    private static JComponent rowsPanel(DefaultTableModel model, IntPredicate locked) {
+    private static JComponent rowsPanel(DefaultTableModel model, IntPredicate locked, String columnsKey) {
         JBTable table = new JBTable(model);
         table.setRowHeight(JBUI.scale(TABLE_ROW_HEIGHT));
         table.getColumnModel().getColumn(ENABLED_COLUMN).setMaxWidth(JBUI.scale(CHECK_COLUMN_WIDTH));
-        table.getColumnModel().getColumn(NAME_COLUMN).setPreferredWidth(JBUI.scale(180));
-        table.getColumnModel().getColumn(VALUE_COLUMN).setPreferredWidth(JBUI.scale(220));
-        table.getColumnModel().getColumn(SOURCE_COLUMN).setPreferredWidth(JBUI.scale(120));
+        rememberColumnShares(table, columnsKey);
         Font mono = monoFont();
         // 값은 한글이 많아 화면 글꼴로 둔다(코드 글꼴은 한글 칸 너비가 벌어져 보인다).
         Font text = JBFont.label();
@@ -704,6 +733,81 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         scroll.getViewport().setBackground(table.getBackground());
         scroll.setBorder(JBUI.Borders.empty());
         return scroll;
+    }
+
+    /**
+     * 이름 · 값 · 어디서 칸의 너비 비율. 사용자가 끌어 바꾼 비율을 IDE 설정(key)에 남기고 다음에 연 표에 쓴다.
+     * 비율은 선호 너비로 넣으므로 표 폭이 바뀌면 칸도 같은 비율로 늘고 준다.
+     */
+    private static void rememberColumnShares(JBTable table, String key) {
+        PropertiesComponent settings = PropertiesComponent.getInstance();
+        double[] shares = parseShares(settings.getValue(key));
+        for (int i = 0; i < SHARE_COLUMNS.length; i++) {
+            table.getColumnModel().getColumn(SHARE_COLUMNS[i]).setPreferredWidth((int) Math.round(shares[i] * SHARE_SCALE));
+        }
+        table.getColumnModel().addColumnModelListener(new TableColumnModelListener() {
+            @Override
+            public void columnMarginChanged(ChangeEvent e) {
+                // 표 폭이 바뀔 때도 불리므로 머리글을 끄는 중일 때만 남긴다.
+                if (table.getTableHeader().getResizingColumn() == null) {
+                    return;
+                }
+                int total = 0;
+                for (int column : SHARE_COLUMNS) {
+                    total += table.getColumnModel().getColumn(column).getWidth();
+                }
+                if (total <= 0) {
+                    return;
+                }
+                StringBuilder value = new StringBuilder();
+                for (int column : SHARE_COLUMNS) {
+                    if (value.length() > 0) {
+                        value.append(SHARE_SEPARATOR);
+                    }
+                    value.append(String.format(Locale.ROOT, "%.4f", (double) table.getColumnModel().getColumn(column).getWidth() / total));
+                }
+                settings.setValue(key, value.toString());
+            }
+
+            @Override
+            public void columnAdded(TableColumnModelEvent e) {
+            }
+
+            @Override
+            public void columnRemoved(TableColumnModelEvent e) {
+            }
+
+            @Override
+            public void columnMoved(TableColumnModelEvent e) {
+            }
+
+            @Override
+            public void columnSelectionChanged(ListSelectionEvent e) {
+            }
+        });
+    }
+
+    /** 남긴 비율 글(「0.35,0.45,0.20」). 없거나 깨졌으면 기본 비율. */
+    private static double[] parseShares(@Nullable String value) {
+        if (value == null) {
+            return DEFAULT_SHARES;
+        }
+        String[] parts = value.split(SHARE_SEPARATOR);
+        if (parts.length != DEFAULT_SHARES.length) {
+            return DEFAULT_SHARES;
+        }
+        double[] shares = new double[parts.length];
+        try {
+            for (int i = 0; i < parts.length; i++) {
+                shares[i] = Double.parseDouble(parts[i]);
+                if (!(shares[i] > 0 && shares[i] < 1)) {
+                    return DEFAULT_SHARES;
+                }
+            }
+        } catch (NumberFormatException e) {
+            return DEFAULT_SHARES;
+        }
+        return shares;
     }
 
     /** 보내기 단추 글: 「보내기」 뒤에 단축키(Ctrl+Enter). 글 크기를 하나로 두어 단추 안 세로 가운데가 어긋나지 않게 한다. */
@@ -924,11 +1028,18 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
             }
             ApplicationManager.getApplication().invokeLater(() -> {
                 savedSecrets = secrets;
-                tokenField.setText(secrets.get(ApiText.AUTH_BEARER));
-                passwordField.setText(secrets.get(ApiText.AUTH_BASIC));
-                cookieField.setText(secrets.get(ApiText.AUTH_COOKIE));
+                // 읽는 동안 사용자가 적은 값은 덮지 않는다.
+                fillIfEmpty(tokenField, secrets.get(ApiText.AUTH_BEARER));
+                fillIfEmpty(passwordField, secrets.get(ApiText.AUTH_BASIC));
+                fillIfEmpty(cookieField, secrets.get(ApiText.AUTH_COOKIE));
             }, ModalityState.defaultModalityState(), project.getDisposed());
         });
+    }
+
+    private static void fillIfEmpty(JTextComponent field, String value) {
+        if (field.getDocument().getLength() == 0) {
+            field.setText(value);
+        }
     }
 
     /** 방식 · 아이디를 설정에, 바뀐 비밀 값만 백그라운드에서 저장소에 쓴다. 빈 값이면 지운다. 읽기 전이면 비밀 값은 쓰지 않는다. */
@@ -1017,46 +1128,99 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         viewsToolbar.getComponent().setVisible(false);
         showCard(RESPONSE_SENDING_CARD);
         elapsedTimer.start();
-        CompletableFuture<HttpResponse<String>> future = client(project).sendAsync(request, HttpResponse.BodyHandlers.ofString());
+        CompletableFuture<HttpResponse<Received>> future = client(project).sendAsync(request, info -> new CappedBytes(MAX_RECEIVED_BYTES));
         pending = future;
         sendButton.setText(BootServersBundle.message("api.cancel"));
         future.whenComplete((response, error) -> {
             long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
-            ApplicationManager.getApplication().invokeLater(() -> finish(future, response, error, elapsedMs),
+            // 글자 풀기 · 줄맞춤 · 자르기 · 크기 계산은 화면 스레드 밖에서 하고 결과만 넘긴다.
+            Shown shown = null;
+            Throwable failure = error;
+            if (failure == null) {
+                try {
+                    shown = shown(response, elapsedMs);
+                } catch (RuntimeException e) {
+                    failure = e;
+                }
+            }
+            Shown result = shown;
+            Throwable problem = failure;
+            ApplicationManager.getApplication().invokeLater(() -> finish(future, result, problem, elapsedMs),
                     ModalityState.defaultModalityState(), project.getDisposed());
         });
     }
 
-    private void finish(CompletableFuture<HttpResponse<String>> future, HttpResponse<String> response, Throwable error, long elapsedMs) {
-        if (future != pending) {
-            return;
+    /** 받은 응답 본문 바이트와 MAX_RECEIVED_BYTES 에서 끊었는지. */
+    private record Received(byte[] bytes, boolean cut) {
+    }
+
+    /** 화면에 넣을 응답. body 가 null 이면 본문이 비었다. */
+    private record Shown(int code, String headerText, int headerCount, List<String> cookies, String meta,
+                         @Nullable String body, String bodyType) {
+    }
+
+    /** 응답 본문을 limit 바이트까지만 모은다. 넘으면 나머지는 받지 않고 연결을 끊는다. */
+    private static final class CappedBytes implements HttpResponse.BodySubscriber<Received> {
+        private final int limit;
+        private final ByteArrayOutputStream out = new ByteArrayOutputStream();
+        private final CompletableFuture<Received> result = new CompletableFuture<>();
+        private Flow.Subscription subscription;
+
+        CappedBytes(int limit) {
+            this.limit = limit;
         }
-        pending = null;
-        elapsedTimer.stop();
-        gauge.setVisible(false);
-        metaLabel.setIcon(null);
-        sendButton.setText(sendLabel());
-        footLabel.setText(BootServersBundle.message("api.foot.last", LocalTime.now().format(SENT_TIME), elapsedMs));
-        if (error != null) {
-            metaLabel.setText(BootServersBundle.message("api.meta.time", elapsedMs));
-            showError(BootServersBundle.message("api.error.title"), responseErrorMessage(error));
-            return;
+
+        @Override
+        public CompletionStage<Received> getBody() {
+            return result;
         }
-        String body = response.body() == null ? "" : response.body();
-        int code = response.statusCode();
-        boolean failed = code >= HTTP_ERROR_STATUS;
-        String reason = REASONS.get(code);
-        statusPill.show(reason == null ? String.valueOf(code) : code + " " + reason,
-                failed ? STATUS_ERROR : STATUS_OK, failed ? STATUS_ERROR_BG : STATUS_OK_BG);
+
+        @Override
+        public void onSubscribe(Flow.Subscription subscription) {
+            this.subscription = subscription;
+            subscription.request(Long.MAX_VALUE);
+        }
+
+        @Override
+        public void onNext(List<ByteBuffer> items) {
+            if (result.isDone()) {
+                return;
+            }
+            for (ByteBuffer item : items) {
+                int take = Math.min(item.remaining(), limit - out.size());
+                byte[] chunk = new byte[take];
+                item.get(chunk);
+                out.write(chunk, 0, take);
+                if (item.hasRemaining()) {
+                    result.complete(new Received(out.toByteArray(), true));
+                    subscription.cancel();
+                    return;
+                }
+            }
+        }
+
+        @Override
+        public void onError(Throwable throwable) {
+            result.completeExceptionally(throwable);
+        }
+
+        @Override
+        public void onComplete() {
+            result.complete(new Received(out.toByteArray(), false));
+        }
+    }
+
+    /** 백그라운드에서 부른다. 응답을 화면에 넣을 글로 만든다(IntelliJ 화면 부품은 건드리지 않는다). */
+    private static Shown shown(HttpResponse<Received> response, long elapsedMs) {
         StringBuilder headerText = new StringBuilder();
         List<String> cookies = new ArrayList<>();
         String contentType = "";
-        headerCount = 0;
+        int headers = 0;
         for (Map.Entry<String, List<String>> header : response.headers().map().entrySet()) {
             if (header.getKey().startsWith(PSEUDO_HEADER_PREFIX)) {
                 continue;
             }
-            headerCount++;
+            headers++;
             String value = String.join(", ", header.getValue());
             headerText.append(header.getKey()).append(": ").append(value).append('\n');
             if (CONTENT_TYPE.equalsIgnoreCase(header.getKey())) {
@@ -1066,18 +1230,12 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
                 cookies.addAll(header.getValue());
             }
         }
-        responseHeaders.setText(headerText.toString());
-        responseCookies.setText(String.join("\n", cookies));
-        cookieCount = cookies.size();
-        String size = StringUtil.formatFileSize(body.getBytes(StandardCharsets.UTF_8).length);
+        Received received = response.body() == null ? new Received(new byte[0], false) : response.body();
+        String body = ApiText.decode(received.bytes(), contentType, received.cut());
+        String size = StringUtil.formatFileSize(received.bytes().length);
         String mediaType = contentType.split(";")[0].strip();
-        metaLabel.setText(mediaType.isEmpty() ? BootServersBundle.message("api.meta", elapsedMs, size)
-                : BootServersBundle.message("api.meta.type", elapsedMs, size, mediaType));
-        if (body.isBlank()) {
-            showError(BootServersBundle.message("api.body.blank"),
-                    BootServersBundle.message(failed ? "api.body.blank.error" : "api.body.blank.ok"));
-            return;
-        }
+        String meta = mediaType.isEmpty() ? BootServersBundle.message("api.meta", elapsedMs, size)
+                : BootServersBundle.message("api.meta.type", elapsedMs, size, mediaType);
         String shownType = PLAIN_TEXT;
         for (String type : RESPONSE_TYPES) {
             if (contentType.contains(type)) {
@@ -1085,12 +1243,51 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
                 break;
             }
         }
-        String shown = RESPONSE_TYPES[0].equals(shownType) ? ApiText.prettyJson(body) : body;
-        if (shown.length() > MAX_SHOWN_CHARS) {
-            shown = shown.substring(0, MAX_SHOWN_CHARS) + "\n" + BootServersBundle.message("api.truncated", MAX_SHOWN_CHARS);
+        String shown = null;
+        if (!body.isBlank()) {
+            // 잘린 JSON 은 깨진 JSON 이라 줄맞춤 없이 그대로 보인다.
+            shown = RESPONSE_TYPES[0].equals(shownType) && !received.cut() ? ApiText.prettyJson(body) : body;
+            if (shown.length() > MAX_SHOWN_CHARS) {
+                shown = shown.substring(0, MAX_SHOWN_CHARS) + "\n" + BootServersBundle.message("api.truncated", MAX_SHOWN_CHARS);
+            } else if (received.cut()) {
+                shown = shown + "\n" + BootServersBundle.message("api.received.cut", StringUtil.formatFileSize(MAX_RECEIVED_BYTES));
+            }
         }
-        responseBody.setFileType(byExtension(shownType));
-        responseBody.setText(shown);
+        return new Shown(response.statusCode(), headerText.toString(), headers, cookies, meta, shown, shownType);
+    }
+
+    private void finish(CompletableFuture<HttpResponse<Received>> future, @Nullable Shown response, Throwable error, long elapsedMs) {
+        if (future != pending) {
+            return;
+        }
+        pending = null;
+        elapsedTimer.stop();
+        gauge.setVisible(false);
+        metaLabel.setIcon(null);
+        sendButton.setText(sendLabel());
+        footLabel.setText(BootServersBundle.message("api.foot.last", LocalTime.now().format(SENT_TIME), elapsedMs));
+        if (error != null || response == null) {
+            metaLabel.setText(BootServersBundle.message("api.meta.time", elapsedMs));
+            showError(BootServersBundle.message("api.error.title"), responseErrorMessage(error));
+            return;
+        }
+        int code = response.code();
+        boolean failed = code >= HTTP_ERROR_STATUS;
+        String reason = REASONS.get(code);
+        statusPill.show(reason == null ? String.valueOf(code) : code + " " + reason,
+                failed ? STATUS_ERROR : STATUS_OK, failed ? STATUS_ERROR_BG : STATUS_OK_BG);
+        headerCount = response.headerCount();
+        responseHeaders.setText(response.headerText());
+        responseCookies.setText(String.join("\n", response.cookies()));
+        cookieCount = response.cookies().size();
+        metaLabel.setText(response.meta());
+        if (response.body() == null) {
+            showError(BootServersBundle.message("api.body.blank"),
+                    BootServersBundle.message(failed ? "api.body.blank.error" : "api.body.blank.ok"));
+            return;
+        }
+        responseBody.setFileType(byExtension(response.bodyType()));
+        responseBody.setText(response.body());
         viewsToolbar.getComponent().setVisible(true);
         viewsToolbar.updateActionsAsync();
         showCard(RESPONSE_SHOWN_CARD);

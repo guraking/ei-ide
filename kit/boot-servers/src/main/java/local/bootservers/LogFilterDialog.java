@@ -51,6 +51,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -67,7 +68,8 @@ final class LogFilterDialog extends DialogWrapper {
     /** 한 줄에 보이는 최대 글자 수. 넘으면 줄임표. */
     private static final int MAX_SHOWN_CHARS = 1000;
     private static final String TAB_SHOWN = "    ";
-    private static final int QUERY_COLUMNS = 24;
+    // 정규식 검색이 콘솔 글 전체를 훑는 데 쓸 수 있는 시간. 넘으면 되돌이 폭주로 보고 거르기를 그만둔다.
+    private static final long REGEX_TIMEOUT_SECONDS = 3;
     private static final int DIALOG_WIDTH = 900;
     private static final int DIALOG_HEIGHT = 500;
     private static final int ROW_HEIGHT = 22;
@@ -132,7 +134,6 @@ final class LogFilterDialog extends DialogWrapper {
             levelBoxes.put(level, box);
             top.add(box);
         }
-        queryField.setColumns(QUERY_COLUMNS);
         queryField.getEmptyText().setText(BootServersBundle.message("log.filter.query.hint"));
         queryField.addExtension(new ExtendableTextComponent.Extension() {
             @Override
@@ -152,14 +153,19 @@ final class LogFilterDialog extends DialogWrapper {
             }
         });
         regexBox.addActionListener(e -> refresh());
-        top.add(queryField);
-        top.add(regexBox);
         followBox.addActionListener(e -> updateHint());
-        top.add(followBox);
+        // 검색 칸은 레벨 단추 · 정규식 · 따라가기 사이 남는 폭을 다 채운다.
+        JPanel options = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(UIUtil.DEFAULT_HGAP), 0));
+        options.add(regexBox);
+        options.add(followBox);
+        JPanel queryRow = new JPanel(new BorderLayout(JBUI.scale(UIUtil.DEFAULT_HGAP), 0));
+        queryRow.add(top, BorderLayout.WEST);
+        queryRow.add(queryField, BorderLayout.CENTER);
+        queryRow.add(options, BorderLayout.EAST);
 
         JPanel north = new JPanel();
         north.setLayout(new BoxLayout(north, BoxLayout.Y_AXIS));
-        north.add(top);
+        north.add(queryRow);
         JPanel statusRow = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(UIUtil.DEFAULT_HGAP), JBUI.scale(UIUtil.DEFAULT_VGAP)));
         statusHint.setForeground(NamedColorUtil.getInactiveTextColor());
         statusRow.add(status);
@@ -258,16 +264,65 @@ final class LogFilterDialog extends DialogWrapper {
         Pattern found = null;
         String error = null;
         try {
+            if (regex && !query.isEmpty()) {
+                checkRegexFinishes(text, from, Pattern.compile(query, MATCH_FLAGS));
+            }
             result = LogFilter.filterFrom(text, from, levels, query, regex);
             head.addAll(result.lines());
             found = query.isEmpty() ? null : Pattern.compile(regex ? query : Pattern.quote(query), MATCH_FLAGS);
         } catch (PatternSyntaxException ex) {
             error = BootServersBundle.message("log.filter.regex.invalid", ex.getDescription());
+        } catch (RegexTimeout ex) {
+            error = BootServersBundle.message("log.filter.regex.timeout", REGEX_TIMEOUT_SECONDS);
         }
         LogFilter.Resume next = result == null ? null : result.resume();
         String message = error;
         Pattern match = found;
         ApplicationManager.getApplication().invokeLater(() -> applyResult(head, next, message, match, stamp), ModalityState.any());
+    }
+
+    /**
+     * from 부터 줄마다 정규식을 한 번 찾아 REGEX_TIMEOUT_SECONDS 안에 끝나는지 본다. 거르기와 같은 줄에 같은 식을 쓰므로,
+     * 이것이 끝나면 뒤이은 거르기도 끝난다. 넘으면 RegexTimeout 을 던진다.
+     */
+    private static void checkRegexFinishes(CharSequence text, LogFilter.Resume from, Pattern pattern) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(REGEX_TIMEOUT_SECONDS);
+        for (String line : text.subSequence(from.offset(), text.length()).toString().split("\n", -1)) {
+            pattern.matcher(new TimedText(line, deadline)).find();
+        }
+    }
+
+    /** 정규식 검사가 마감 시각을 넘김. 스택은 쓰지 않는다. */
+    private static final class RegexTimeout extends RuntimeException {
+        RegexTimeout() {
+            super(null, null, false, false);
+        }
+    }
+
+    /** 글자를 읽을 때마다 마감 시각을 넘었는지 보고, 넘었으면 RegexTimeout 을 던진다. */
+    private record TimedText(String text, long deadline) implements CharSequence {
+        @Override
+        public int length() {
+            return text.length();
+        }
+
+        @Override
+        public char charAt(int index) {
+            if (System.nanoTime() > deadline) {
+                throw new RegexTimeout();
+            }
+            return text.charAt(index);
+        }
+
+        @Override
+        public CharSequence subSequence(int start, int end) {
+            return new TimedText(text.substring(start, end), deadline);
+        }
+
+        @Override
+        public @NotNull String toString() {
+            return text;
+        }
     }
 
     /** @param match 보이는 줄에서 찾은 글자를 칠할 무늬. 검색어가 없으면 null. */

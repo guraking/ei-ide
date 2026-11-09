@@ -32,6 +32,8 @@ import javax.swing.JPanel;
 import javax.swing.event.DocumentEvent;
 import java.awt.BorderLayout;
 import java.awt.Component;
+import java.awt.Font;
+import java.awt.FontMetrics;
 import java.awt.Point;
 import java.awt.event.ActionEvent;
 import java.awt.event.MouseAdapter;
@@ -45,8 +47,6 @@ import java.util.List;
  */
 final class UrlMappingDialog extends DialogWrapper {
 
-    /** HTTP 방식 칸 너비(글자 수). 「DELETE」 와 여러 방식을 이은 것의 앞부분이 들어갈 만큼. */
-    private static final int METHOD_COLUMN_CHARS = 8;
     private static final String COLUMN_GAP = "  ";
     private static final int DIALOG_WIDTH = 900;
     private static final int DIALOG_HEIGHT = 500;
@@ -81,7 +81,7 @@ final class UrlMappingDialog extends DialogWrapper {
         ScrollingUtil.redirectExpandSelection(list, queryField);
 
         list.setFont(EditorColorsManager.getInstance().getGlobalScheme().getFont(EditorFontType.PLAIN));
-        list.setCellRenderer(new EndpointRenderer());
+        list.setCellRenderer(new EndpointRenderer(methodColumnWidth()));
         list.getEmptyText().setText(all.isEmpty() ? BootServersBundle.message("url.empty.none") : BootServersBundle.message("url.empty.no.match"));
         list.addMouseListener(new MouseAdapter() {
             @Override
@@ -203,13 +203,31 @@ final class UrlMappingDialog extends DialogWrapper {
         return UrlMappingAction.ANY_METHOD.equals(e.httpMethod()) ? BootServersBundle.message("url.method.any") : e.httpMethod();
     }
 
+    /** 방식 칸 너비(픽셀): 전체 매핑 가운데 가장 긴 방식 글(GET|POST|PUT 등) + 칸 사이. 거르는 동안 URL 칸이 움직이지 않게 전체로 잰다. */
+    private int methodColumnWidth() {
+        FontMetrics bold = list.getFontMetrics(list.getFont().deriveFont(Font.BOLD));
+        int widest = 0;
+        for (UrlMappingAction.Endpoint e : all) {
+            widest = Math.max(widest, bold.stringWidth(shownMethod(e)));
+        }
+        return widest + bold.stringWidth(COLUMN_GAP);
+    }
+
+    /** 방식 · URL · 클래스.메서드. URL 은 methodWidth 자리에서 시작해 줄마다 같은 자리에 선다. */
     private static final class EndpointRenderer extends ColoredListCellRenderer<UrlMappingAction.Endpoint> {
+        private final int methodWidth;
+
+        EndpointRenderer(int methodWidth) {
+            this.methodWidth = methodWidth;
+        }
+
         @Override
         protected void customizeCellRenderer(@NotNull JList<? extends UrlMappingAction.Endpoint> list,
                                              UrlMappingAction.Endpoint value, int index, boolean selected, boolean hasFocus) {
             setFont(list.getFont());
-            append(String.format("%-" + METHOD_COLUMN_CHARS + "s", shownMethod(value)), SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES);
-            append(COLUMN_GAP + value.url(), SimpleTextAttributes.REGULAR_ATTRIBUTES);
+            append(shownMethod(value), SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES);
+            appendTextPadding(methodWidth);
+            append(value.url(), SimpleTextAttributes.REGULAR_ATTRIBUTES);
             append(COLUMN_GAP + value.owner(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
         }
     }

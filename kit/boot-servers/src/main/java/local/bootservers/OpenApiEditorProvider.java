@@ -119,6 +119,8 @@ public final class OpenApiEditorProvider implements FileEditorProvider, DumbAwar
             ReadAction.nonBlocking(() -> convert(ServerBase.resolve(project, ModuleUtilCore.findModuleForFile(file, project)), text))
                     .inSmartMode(project)
                     .expireWith(lifetime)
+                    // 앞서 시작한 변환이 늦게 끝나 옛 사양을 그리지 않게, 이 미리보기의 변환은 마지막 것만 남긴다.
+                    .coalesceBy(this)
                     .finishOnUiThread(ModalityState.defaultModalityState(), shown -> {
                         if (shown != null) {
                             view.show(shown.base(), shown.json(), null);

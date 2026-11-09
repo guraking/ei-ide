@@ -19,6 +19,7 @@ import org.jetbrains.annotations.NotNull;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -37,10 +38,21 @@ public final class UpdateCheck implements AppLifecycleListener {
     /** 이 주소로 시작하는 설치 파일만 받아 실행한다. 릴리스 응답이 다른 곳의 exe 를 가리키면 브라우저로만 연다. */
     private static final String DOWNLOAD_PREFIX = "https://github.com/guraking/ei-ide/releases/download/";
     private static final Pattern PAGE = Pattern.compile("\"html_url\"\\s*:\\s*\"([^\"]+/releases/tag/[^\"]+)\"");
+    /** 끝날 때 설치 파일을 띄우는 작업을 이미 맡겼으면 true. 여러 번 받아도 한 번만 맡긴다. */
+    private static final AtomicBoolean LAUNCH_REGISTERED = new AtomicBoolean();
+    /** 끝날 때 띄울 설치 파일(마지막으로 받은 것). */
+    private static volatile File pendingInstaller;
+    /** 지금 끝나는 것이 다시 시작(플러그인 설치 등)이면 true. 다시 시작할 때는 설치 파일을 띄우지 않는다. */
+    private static volatile boolean restarting;
 
     @Override
     public void appStarted() {
         ApplicationManager.getApplication().executeOnPooledThread(this::check);
+    }
+
+    @Override
+    public void appWillBeClosed(boolean isRestart) {
+        restarting = isRestart;
     }
 
     private void check() {
@@ -109,8 +121,17 @@ public final class UpdateCheck implements AppLifecycleListener {
         int answer = Messages.showYesNoDialog(
                 BootServersBundle.message("update.install.confirm", version),
                 BootServersBundle.message("update.title"), BootServersBundle.message("update.install.now"), BootServersBundle.message("update.install.later"), Messages.getInformationIcon());
-        // 설치 파일은 IDE 가 쓰는 파일을 덮으므로 JVM 이 끝날 때 띄운다. 끄기를 취소하면 다음에 끌 때 뜬다.
-        ShutDownTracker.getInstance().registerShutdownTask(() -> launch(installer));
+        // 설치 파일은 IDE 가 쓰는 파일을 덮으므로 JVM 이 끝날 때 띄운다. 「나중에」 · 끄기 취소면 다음에 끌 때 뜬다.
+        // 다시 시작(플러그인 설치 등)으로 끝날 때는 띄우지 않는다. 다시 켠 뒤 새 판 알림에서 다시 고른다.
+        pendingInstaller = installer;
+        if (LAUNCH_REGISTERED.compareAndSet(false, true)) {
+            ShutDownTracker.getInstance().registerShutdownTask(() -> {
+                File pending = pendingInstaller;
+                if (!restarting && pending != null) {
+                    launch(pending);
+                }
+            });
+        }
         if (answer == Messages.YES) {
             ApplicationManager.getApplication().exit();
         }

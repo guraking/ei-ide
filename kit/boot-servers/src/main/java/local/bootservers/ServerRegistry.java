@@ -90,6 +90,14 @@ public final class ServerRegistry {
                 }
             }
 
+            // 실행 창의 정지 단추 · Ctrl+F2 · 재실행처럼 IDE 가 끝낸 실행도 사용자가 중지한 것으로 본다(스스로 끝난 실행은 여기 오지 않는다).
+            @Override
+            public void processWillTerminate(@NotNull ProcessEvent event, boolean willBeDestroyed) {
+                if (willBeDestroyed) {
+                    run.stoppedByUser = true;
+                }
+            }
+
             @Override
             public void processTerminated(@NotNull ProcessEvent event) {
                 run.exitCode = event.getExitCode();

@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -71,7 +72,7 @@ final class ServerMonitor {
     private final Consumer<String> showMap;
     private final ScheduledFuture<?> future;
     private int round;
-    private volatile boolean busy;
+    private final AtomicBoolean busy = new AtomicBoolean();
     // 연결 확인은 refreshLinks 로 부탁받았을 때 한 번만 한다(바깥 DB · Redis 에 쓸데없이 붙지 않게).
     // requested 는 다음 차례가 가져갈 부탁, inFlight 는 그 차례가 도는 중.
     private volatile boolean linksRequested;
@@ -163,28 +164,38 @@ final class ServerMonitor {
 
     /** 스케줄러 스레드. 앞 차례가 아직 돌고 있으면 건너뛴다. */
     private void tick() {
-        if (busy || project.isDisposed()) {
+        if (project.isDisposed() || !busy.compareAndSet(false, true)) {
             return;
         }
-        busy = true;
         ApplicationManager.getApplication().invokeLater(() -> {
-            List<Watched> list = snapshot.get();
-            String slowName = slowTarget.get();
-            String override = profileOverride;
-            boolean checkLinks = linksRequested;
-            linksRequested = false;
-            linksInFlight = checkLinks;
-            boolean checkSlow = round % SLOW_ROUNDS == 0;
-            round++;
-            AppExecutorUtil.getAppExecutorService().execute(() -> {
-                try {
-                    measure(list, slowName, override, checkLinks, checkSlow);
-                }
-                finally {
+            boolean handedOff = false;
+            try {
+                List<Watched> list = snapshot.get();
+                String slowName = slowTarget.get();
+                String override = profileOverride;
+                boolean checkLinks = linksRequested;
+                linksRequested = false;
+                linksInFlight = checkLinks;
+                boolean checkSlow = round % SLOW_ROUNDS == 0;
+                round++;
+                AppExecutorUtil.getAppExecutorService().execute(() -> {
+                    try {
+                        measure(list, slowName, override, checkLinks, checkSlow);
+                    }
+                    finally {
+                        linksInFlight = false;
+                        busy.set(false);
+                    }
+                });
+                handedOff = true;
+            }
+            finally {
+                // 재기를 넘기기 전에 실패하면 여기서 풀어 다음 차례가 돌 수 있게 한다.
+                if (!handedOff) {
                     linksInFlight = false;
-                    busy = false;
+                    busy.set(false);
                 }
-            });
+            }
         }, ModalityState.any(), project.getDisposed());
     }
 

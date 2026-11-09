@@ -27,7 +27,9 @@ import javax.swing.SwingConstants;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -48,6 +50,9 @@ final class SwaggerView implements Disposable {
     private static final Map<String, String> FILES = Map.of(
             "swagger-ui-bundle.js", "application/javascript",
             "swagger-ui.css", "text/css");
+    private static final String HTTPS = "https";
+    private static final int HTTP_PORT = 80;
+    private static final int HTTPS_PORT = 443;
     private static final int HTTP_OK = 200;
     private static final int HTTP_NOT_FOUND = 404;
     private static final Logger LOG = Logger.getInstance(SwaggerView.class);
@@ -123,7 +128,7 @@ final class SwaggerView implements Disposable {
             throw new IllegalArgumentException("서버 주소가 아닙니다: " + base);
         }
         this.specJson = specJson;
-        this.origin = uri.getScheme() + "://" + uri.getAuthority();
+        this.origin = origin(uri);
         if (browser == null) {
             return;
         }
@@ -133,18 +138,35 @@ final class SwaggerView implements Disposable {
         browser.loadURL(url);
     }
 
+    /**
+     * scheme://host[:port]. 브라우저와 같게 scheme · host 는 소문자로, 기본 포트(http 80 · https 443)는 뺀다.
+     * 브라우저가 넘기는 요청 주소에는 기본 포트가 없으므로 양쪽을 이것으로 맞춰 견준다.
+     */
+    private static String origin(URI uri) {
+        String scheme = uri.getScheme().toLowerCase(Locale.ROOT);
+        int port = uri.getPort();
+        boolean defaultPort = port == (HTTPS.equals(scheme) ? HTTPS_PORT : HTTP_PORT);
+        return scheme + "://" + uri.getHost().toLowerCase(Locale.ROOT) + (port < 0 || defaultPort ? "" : ":" + port);
+    }
+
     /** 가로챌 요청이면 PREFIX 뒤 파일 이름, 아니면 null. */
     private String ownName(String url) {
-        String own = origin == null ? null : origin + PREFIX;
-        if (own == null || url == null || !url.startsWith(own)) {
+        String own = origin;
+        if (own == null || url == null) {
             return null;
         }
-        String name = url.substring(own.length());
-        int cut = name.indexOf('?');
-        if (cut < 0) {
-            cut = name.indexOf('#');
+        URI uri;
+        try {
+            uri = new URI(url);
+        } catch (URISyntaxException e) {
+            return null;
         }
-        return cut < 0 ? name : name.substring(0, cut);
+        String path = uri.getRawPath();
+        if (uri.getScheme() == null || uri.getHost() == null || path == null || !path.startsWith(PREFIX)
+                || !own.equals(origin(uri))) {
+            return null;
+        }
+        return path.substring(PREFIX.length());
     }
 
     private CefResourceHandler answer(String name) {
