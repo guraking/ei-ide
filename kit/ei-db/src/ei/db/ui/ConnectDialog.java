@@ -39,7 +39,9 @@ import javax.swing.JPanel;
 import javax.swing.event.DocumentEvent;
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.awt.Toolkit;
 import java.awt.event.ActionListener;
 import java.nio.file.Path;
 import java.util.EnumMap;
@@ -52,8 +54,8 @@ public final class ConnectDialog extends DialogWrapper {
   private static final int MIN_PORT = 1;
   private static final int MAX_PORT = 65535;
   private static final int PORT_COLUMNS = 6;
-  /** 입력 칸이 접속 주소 한 줄을 다 보일 만큼의 폼 너비(px, 배율 전). */
-  private static final int FORM_WIDTH = 600;
+  /** 처음 열 때 폼 너비: 화면 너비에 대한 비율. 접속 주소 한 줄이 보일 만큼. 창은 끌어 넓힐 수 있다. */
+  private static final double FORM_SCREEN_RATIO = 0.35;
   /** 연결 시험 오류는 첫 줄만 이만큼 보이고 전체는 풍선 도움말로 둔다. */
   private static final int ERROR_PREVIEW = 80;
   private static final Color OK_COLOR = JBColor.namedColor("EiDatabase.connected", new JBColor(0x3E9B47, 0x5FB865));
@@ -204,7 +206,8 @@ public final class ConnectDialog extends DialogWrapper {
         .addLabeledComponent(EiDbBundle.message("connect.url"), url)
         .addLabeledComponent(EiDbBundle.message("connect.safety"), safety)
         .getPanel();
-    form.setPreferredSize(JBUI.size(FORM_WIDTH, -1).withHeight(form.getPreferredSize().height));
+    int width = (int) (Toolkit.getDefaultToolkit().getScreenSize().width * FORM_SCREEN_RATIO);
+    form.setPreferredSize(new Dimension(Math.max(width, form.getPreferredSize().width), form.getPreferredSize().height));
     return form;
   }
 
@@ -415,12 +418,14 @@ public final class ConnectDialog extends DialogWrapper {
         && Messages.showYesNoDialog(getContentPane(), EiDbBundle.message("connect.pending.confirm", pending), EiDbBundle.message("connect.title.edit"), Messages.getWarningIcon()) != Messages.YES) {
       return;
     }
-    DbSettings.getInstance().put(c);
     boolean keep = savePassword.isSelected();
     boolean typed = passwordTouched;
     String typedValue = new String(password.getPassword());
+    // 저장소는 화면 스레드에서 열지 않되 접속 목록에 올리기 전에 끝낸다. 창을 닫자마자 연결해도 새 비밀번호를 읽게.
+    ProgressManager.getInstance().runProcessWithProgressSynchronously(
+        () -> storePassword(c, keep, typed, typedValue), EiDbBundle.message("connect.password.saving"), false, project);
+    DbSettings.getInstance().put(c);
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
-      storePassword(c, keep, typed, typedValue);
       if (reopen) sessions.close(c.id);
       sessions.setAutoCommitOverride(c.id, null); // 저장한 접속 설정의 자동 커밋이 콘솔에서 바꾼 값보다 앞선다.
     });

@@ -8,6 +8,13 @@ public class SqlFormatterCheck {
     eq(SqlFormatter.changeCase("select a.name, 'Kim' from t a -- note\nwhere a.id = #{userId} and \"Mixed\" = 1", true),
        "SELECT A.NAME, 'Kim' FROM T A -- note\nWHERE A.ID = #{userId} AND \"Mixed\" = 1");
     eq(SqlFormatter.changeCase("SELECT X FROM T WHERE N = 'It''s'", false), "select x from t where n = 'It''s'");
+    // q'[…]' · E'…' · $tag$…$tag$ 는 한 덩어리: 글자를 바꾸지 않고, 앞에 공백을 넣지 않고, 안의 ; 로 나누지 않는다.
+    eq(SqlFormatter.changeCase("select q'[it's]' from dual where x='a'", true), "SELECT q'[it's]' FROM DUAL WHERE X='a'");
+    eq(SqlFormatter.changeCase("select E'it\\'s ok' from t", true), "SELECT E'it\\'s ok' FROM T");
+    eq(SqlFormatter.changeCase("select $b$ Mixed $b$ from t", false), "select $b$ Mixed $b$ from t");
+    eq(SqlFormatter.changeCase("SELECT * FROM V$SESSION WHERE A = ${x}", false), "select * from v$session where a = ${x}");
+    eq(SqlFormatter.format("select q'[a;b]' x from dual"), "SELECT\n       q'[a;b]' x\n  FROM dual");
+    eq(SqlFormatter.format("select E'a\\';b' x from t"), "SELECT\n       E'a\\';b' x\n  FROM t");
 
     // 줄 끝 주석은 그 칼럼 줄에 남고 한 열에 맞춘다. 뒤 쉼표로 쓴 문장도 앞 쉼표로 바뀐다.
     String generated = "SELECT t.OFLN_BID_NO,  -- 오프라인입찰번호\n       t.ANC_NM,       -- 공고명\n       t.ITEM_DSCD     -- 품목구분코드\n  FROM APP.BID t\n WHERE 1 = 1";

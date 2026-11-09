@@ -19,7 +19,6 @@ import ei.db.Notify;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import java.awt.BorderLayout;
-import java.awt.Dimension;
 import java.awt.GridLayout;
 import java.io.IOException;
 import java.util.List;
@@ -34,8 +33,9 @@ final class JsonDtoDialog extends DialogWrapper {
   private static final Pattern IDENT = Pattern.compile("[A-Za-z_$][\\w$]*");
   private static final Pattern PACKAGE = Pattern.compile("([A-Za-z_$][\\w$]*(\\.[A-Za-z_$][\\w$]*)*)?");
   private static final String DEFAULT_CLASS = "ResponseDto";
-  private static final int INPUT_WIDTH = 520;
-  private static final int PREVIEW_WIDTH = 720;
+  /** 대화창 첫 폭과 왼쪽 칸 비율(칸 폭은 분할선으로 바꾼다). */
+  private static final int WIDTH = 1240;
+  private static final float SPLIT = 520f / WIDTH;
   private static final int HEIGHT = 640;
 
   private final Project project;
@@ -90,14 +90,11 @@ final class JsonDtoDialog extends DialogWrapper {
     left.add(new JBLabel(EiDbBundle.message("jsondto.paste.label")), BorderLayout.NORTH);
     left.add(new JBScrollPane(jsonArea), BorderLayout.CENTER);
     left.add(lombok, BorderLayout.SOUTH);
-    left.setPreferredSize(new Dimension(JBUI.scale(INPUT_WIDTH), JBUI.scale(HEIGHT)));
+    left.setBorder(JBUI.Borders.emptyRight(10));
 
     JComponent right = preview.component();
-    right.setPreferredSize(new Dimension(JBUI.scale(PREVIEW_WIDTH), JBUI.scale(HEIGHT)));
-
-    JPanel body = new JPanel(new BorderLayout(JBUI.scale(20), 0));
-    body.add(left, BorderLayout.WEST);
-    body.add(right, BorderLayout.CENTER);
+    right.setBorder(JBUI.Borders.merge(right.getBorder(), JBUI.Borders.emptyLeft(10), false));
+    JComponent body = Ui.split("jsondto", SPLIT, left, right, WIDTH, HEIGHT);
 
     JPanel root = new JPanel(new BorderLayout(0, JBUI.scale(12)));
     root.add(top, BorderLayout.NORTH);

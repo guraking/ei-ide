@@ -25,6 +25,8 @@ final class XlsxWriter {
   private static final int EXCEL_DIGITS = 15;
   /** styles.xml 의 cellXfs 순서: 0 기본, 1 굵게. */
   private static final int STYLE_BOLD = 1;
+  /** 엑셀 칸 하나에 들어가는 글자 수 한도. 넘는 글은 잘라 쓴다(넘기면 엑셀이 파일을 고치겠다고 묻는다). */
+  static final int EXCEL_CELL_MAX = 32_767;
   private static final String MAIN_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
   private static final String REL_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
   private static final String HEAD = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n";
@@ -105,10 +107,17 @@ final class XlsxWriter {
       if (number != null) {
         w.write("<c r=\"" + ref + "\"" + s + "><v>" + number + "</v></c>");
       } else {
-        w.write("<c r=\"" + ref + "\"" + s + " t=\"inlineStr\"><is><t xml:space=\"preserve\">" + escape(SqlText.text(v)) + "</t></is></c>");
+        w.write("<c r=\"" + ref + "\"" + s + " t=\"inlineStr\"><is><t xml:space=\"preserve\">" + escape(cellText(SqlText.text(v))) + "</t></is></c>");
       }
     }
     w.write("</row>");
+  }
+
+  /** EXCEL_CELL_MAX 글자까지. 자르는 곳이 짝 글자(서로게이트) 가운데면 한 글자 덜 둔다. */
+  static String cellText(String s) {
+    if (s.length() <= EXCEL_CELL_MAX) return s;
+    int end = Character.isHighSurrogate(s.charAt(EXCEL_CELL_MAX - 1)) ? EXCEL_CELL_MAX - 1 : EXCEL_CELL_MAX;
+    return s.substring(0, end);
   }
 
   /** 숫자 칸에 쓸 글. 숫자가 아니거나 NaN · 무한 · 15자리를 넘는 숫자면 null(글자 칸으로). */

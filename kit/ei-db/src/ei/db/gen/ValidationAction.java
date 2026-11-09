@@ -105,10 +105,14 @@ public final class ValidationAction extends AnAction {
     Picker picker = new Picker(project, conns, ValidationGen.guessTable(cls.getName()));
     if (!picker.showAndGet()) return;
     DbConfig c = picker.config();
-    // Oracle 은 따옴표 없이 만든 이름을 대문자로 저장하므로 소문자로 적어도 찾게 한다.
-    boolean upper = c.kind == DbKind.ORACLE;
-    readColumns(project, cls, pkg, c, upper ? picker.schema().toUpperCase(Locale.ROOT) : picker.schema(),
-                upper ? picker.table().toUpperCase(Locale.ROOT) : picker.table());
+    readColumns(project, cls, pkg, c, fold(c.kind, picker.schema()), fold(c.kind, picker.table()));
+  }
+
+  /** 따옴표 없이 만든 이름은 Oracle 은 대문자, PostgreSQL 은 소문자로 저장되므로 그 꼴로 바꿔 찾는다. 그 밖의 DB 는 그대로. */
+  private static String fold(DbKind kind, String name) {
+    if (kind == DbKind.ORACLE) return name.toUpperCase(Locale.ROOT);
+    if (kind == DbKind.POSTGRES) return name.toLowerCase(Locale.ROOT);
+    return name;
   }
 
   /** 커서를 감싼 클래스(익명 · 인터페이스 · enum · 주석형 제외). 읽기 접근 안에서 부른다. */

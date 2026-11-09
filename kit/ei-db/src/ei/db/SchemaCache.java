@@ -19,7 +19,6 @@ public final class SchemaCache {
   private SchemaCache() {}
 
   private static final Logger LOG = Logger.getInstance(SchemaCache.class);
-  private static final String[] TABLE_TYPES = {"TABLE", "VIEW"};
 
   private static final Map<String, List<Meta.Table>> TABLES = new ConcurrentHashMap<>();
   private static final Map<String, List<Meta.Column>> COLUMNS = new ConcurrentHashMap<>();
@@ -34,7 +33,7 @@ public final class SchemaCache {
     if (t == null) load(c.id, () -> {
       int gen = generation(c.id);
       Connection conn = DbSessions.get(project).connection(c);
-      putIfCurrent(TABLES, c.id, Meta.tables(conn, c, Meta.schemaOf(c), TABLE_TYPES), c.id, gen);
+      putIfCurrent(TABLES, c.id, Meta.tables(conn, c, Meta.schemaOf(c), Meta.tableAndViewTypes(c)), c.id, gen);
     });
     return t;
   }

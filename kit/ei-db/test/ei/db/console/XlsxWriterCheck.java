@@ -29,6 +29,10 @@ public class XlsxWriterCheck {
     eq(XlsxWriter.numberText(new BigDecimal("1234567890123456789")), null);
     eq(XlsxWriter.numberText(Double.NaN), null);
     eq(XlsxWriter.numberText("1"), null);
+    // 엑셀 칸 한도를 넘는 글은 한도까지 자른다(짝 글자는 쪼개지 않는다).
+    eq(XlsxWriter.cellText("가".repeat(XlsxWriter.EXCEL_CELL_MAX + 5)).length(), XlsxWriter.EXCEL_CELL_MAX);
+    eq(XlsxWriter.cellText("a".repeat(XlsxWriter.EXCEL_CELL_MAX - 1) + "\uD83D\uDE00").length(), XlsxWriter.EXCEL_CELL_MAX - 1);
+    eq(XlsxWriter.cellText("짧음"), "짧음");
 
     Path file = args.length > 0 ? Path.of(args[0]) : Files.createTempFile("xlsx-check", ".xlsx");
     List<List<Object>> rows = List.of(

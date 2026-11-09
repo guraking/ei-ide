@@ -11,8 +11,9 @@ import java.util.regex.Pattern;
 public final class Names {
   private Names() {}
 
-  /** 두 글자 별칭이 SQL 예약어와 겹치면 별칭으로 못 쓴다. */
-  private static final Set<String> RESERVED = Set.of("as", "at", "by", "do", "go", "if", "in", "is", "of", "on", "or", "to");
+  /** 머리글자 별칭이 SQL 예약어 · 키워드(Oracle UID 포함)와 겹치면 별칭으로 못 쓴다. */
+  private static final Set<String> RESERVED = Set.of("as", "at", "by", "do", "go", "if", "in", "is", "of", "on", "or", "to",
+      "add", "all", "and", "any", "asc", "end", "for", "new", "not", "old", "out", "row", "set", "uid", "use");
   private static final String FALLBACK_ALIAS = "t";
   /** 자바 예약어(class · int 등)인 필드 이름 뒤에 붙인다. JsonDto 의 필드 이름과 같은 규칙. */
   private static final String KEYWORD_SUFFIX = "_";

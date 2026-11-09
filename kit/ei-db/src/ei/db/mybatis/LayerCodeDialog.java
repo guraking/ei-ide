@@ -25,6 +25,7 @@ import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.components.JBTabbedPane;
 import com.intellij.ui.components.JBTextField;
+import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.JBUI;
 import ei.db.EiDbBundle;
 import ei.db.Notify;
@@ -40,6 +41,8 @@ import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.event.DocumentEvent;
 import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.Toolkit;
 import java.awt.FlowLayout;
 import java.awt.event.ActionListener;
 import java.util.ArrayList;
@@ -55,12 +58,12 @@ import java.util.function.Supplier;
  */
 final class LayerCodeDialog extends DialogWrapper {
   private static final String JAVA_EXT = "java";
-  private static final int CODE_WIDTH = 1200;
   private static final int CODE_HEIGHT = 180;
   private static final int JOIN_HEIGHT = 300;
-  private static final int URL_COLUMNS = 50;
-  private static final int LIST_NAME_COLUMNS = 40;
-  private static final int SCROLL_HEIGHT = 700;
+  /** 처음 열 때 화면 폭 · 높이에 대한 창 크기 비율. 코드 칸은 창 폭을 따라 늘고, 사용자가 바꾼 크기는 IntelliJ 가 기억한다. */
+  private static final double FIRST_WIDTH_RATIO = 0.7;
+  private static final double FIRST_HEIGHT_RATIO = 0.75;
+  private static final String DIMENSION_KEY = "ei.db.mybatis.LayerCodeDialog";
   private static final JBColor ERROR = JBColor.RED;
 
   /** 창이 쓰는 값. 클래스들은 찾지 못하면 null. */
@@ -114,7 +117,7 @@ final class LayerCodeDialog extends DialogWrapper {
   private final Project project;
   private final Info info;
   private final FileType javaType = FileTypeManager.getInstance().getFileTypeByExtension(JAVA_EXT);
-  private final JBTextField url = new JBTextField(URL_COLUMNS);
+  private final JBTextField url = new JBTextField();
   private final ComboBox<String> http = new ComboBox<>(ServiceCode.HTTP_METHODS.toArray(new String[0]));
   private final Section controllerCode;
   private final Section interfaceCode;
@@ -122,7 +125,7 @@ final class LayerCodeDialog extends DialogWrapper {
   private final Section mapperCode;
   private final ComboBox<ChildRef> childBox = new ComboBox<>();
   private final ComboBox<String> keyBox = new ComboBox<>();
-  private final JBTextField listName = new JBTextField(LIST_NAME_COLUMNS);
+  private final JBTextField listName = new JBTextField();
   private final JBLabel joinError = new JBLabel();
   private final Section joinCode;
   private final Section fieldCode;
@@ -137,7 +140,8 @@ final class LayerCodeDialog extends DialogWrapper {
 
     Section(int height, @Nullable PsiClass target, Supplier<Set<String>> imports) {
       this.editor = new EditorTextField(EditorFactory.getInstance().createDocument(""), project, javaType, false, false);
-      this.editor.setPreferredSize(JBUI.size(CODE_WIDTH, height));
+      // 폭은 정하지 않는다(0): 칸 목록이 창 폭을 다 채우고 긴 줄은 편집기 가로 막대로 본다.
+      this.editor.setPreferredSize(new Dimension(0, JBUI.scale(height)));
       this.editor.addSettingsProvider(e -> {
         e.setVerticalScrollbarVisible(true);
         e.setHorizontalScrollbarVisible(true);
@@ -221,6 +225,15 @@ final class LayerCodeDialog extends DialogWrapper {
   }
 
   @Override
+  protected @Nullable String getDimensionServiceKey() { return DIMENSION_KEY; }
+
+  @Override
+  public Dimension getInitialSize() {
+    Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+    return new Dimension((int) (screen.width * FIRST_WIDTH_RATIO), (int) (screen.height * FIRST_HEIGHT_RATIO));
+  }
+
+  @Override
   protected Action @NotNull [] createActions() {
     return new Action[] {getOKAction()};
   }
@@ -234,12 +247,11 @@ final class LayerCodeDialog extends DialogWrapper {
   }
 
   private JComponent layersTab() {
-    JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(6), 0));
-    top.add(new JBLabel("URL"));
-    top.add(url);
-    top.add(new JBLabel(EiDbBundle.message("layercode.http.method")));
-    top.add(http);
-    if (info.sig().guessed()) top.add(new JBLabel(EiDbBundle.message("layercode.guessed")));
+    FormBuilder form = FormBuilder.createFormBuilder()
+        .addLabeledComponent(new JBLabel("URL"), url)
+        .addLabeledComponent(new JBLabel(EiDbBundle.message("layercode.http.method")), http);
+    if (info.sig().guessed()) form.addComponentToRightColumn(new JBLabel(EiDbBundle.message("layercode.guessed")));
+    JPanel top = form.getPanel();
     url.getDocument().addDocumentListener(new DocumentAdapter() {
       @Override
       protected void textChanged(@NotNull DocumentEvent e) { refreshController(); }
@@ -254,24 +266,13 @@ final class LayerCodeDialog extends DialogWrapper {
     JPanel p = new JPanel(new BorderLayout(0, JBUI.scale(6)));
     p.add(top, BorderLayout.NORTH);
     JBScrollPane scroll = new JBScrollPane(list);
-    scroll.setPreferredSize(JBUI.size(CODE_WIDTH + 40, SCROLL_HEIGHT));
     p.add(scroll, BorderLayout.CENTER);
     return p;
   }
 
   private JComponent joinTab() {
-    JPanel row1 = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(6), 0));
-    row1.add(new JBLabel(EiDbBundle.message("layercode.parent.child", info.id())));
-    row1.add(childBox);
-    row1.add(new ActionLink(EiDbBundle.message("layercode.other.mapper"), (ActionListener) e -> pickOther()));
-    JPanel row2 = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(6), 0));
     keyBox.setEditable(true);
-    row2.add(new JBLabel(EiDbBundle.message("layercode.join.key")));
-    row2.add(keyBox);
-    row2.add(new JBLabel(EiDbBundle.message("layercode.child.list.name")));
-    row2.add(listName);
     joinError.setForeground(ERROR);
-    row2.add(joinError);
     if (keyBox.getEditor().getEditorComponent() instanceof JTextField tf) {
       tf.getDocument().addDocumentListener(new DocumentAdapter() {
         @Override
@@ -283,10 +284,13 @@ final class LayerCodeDialog extends DialogWrapper {
       @Override
       protected void textChanged(@NotNull DocumentEvent e) { refreshJoin(); }
     });
-    JPanel top = new JPanel();
-    top.setLayout(new BoxLayout(top, BoxLayout.Y_AXIS));
-    top.add(row1);
-    top.add(row2);
+    JPanel top = FormBuilder.createFormBuilder()
+        .addLabeledComponent(new JBLabel(EiDbBundle.message("layercode.parent.child", info.id())), childBox)
+        .addComponentToRightColumn(new ActionLink(EiDbBundle.message("layercode.other.mapper"), (ActionListener) e -> pickOther()))
+        .addLabeledComponent(new JBLabel(EiDbBundle.message("layercode.join.key")), keyBox)
+        .addLabeledComponent(new JBLabel(EiDbBundle.message("layercode.child.list.name")), listName)
+        .addComponentToRightColumn(joinError)
+        .getPanel();
     JPanel list = new JPanel();
     list.setLayout(new BoxLayout(list, BoxLayout.Y_AXIS));
     list.add(joinCode.panel(EiDbBundle.message("layercode.panel.join"), true));

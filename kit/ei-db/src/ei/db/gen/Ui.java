@@ -3,14 +3,17 @@ package ei.db.gen;
 import com.intellij.openapi.editor.colors.EditorColorsManager;
 import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.JBColor;
+import com.intellij.ui.OnePixelSplitter;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
 import ei.db.console.Badge;
 import org.jetbrains.annotations.NotNull;
 
+import javax.swing.JComponent;
 import javax.swing.event.DocumentEvent;
 import javax.swing.text.JTextComponent;
 import java.awt.Color;
+import java.awt.Dimension;
 import java.awt.Font;
 
 /** 생성기 화면들이 함께 쓰는 색 · 글꼴. 색은 테마 색을 쓰고 PK · FK 꼬리표 · ERD 강조 · 성공 표시는 테마 키와 밝은 · 어두운 기본값을 둔다. */
@@ -54,5 +57,22 @@ final class Ui {
         r.run();
       }
     });
+  }
+
+  /** 생성기 대화창의 칸 나눔 비율을 기억하는 키 머리. */
+  private static final String SPLIT_KEY = "ei.db.gen.split.";
+
+  /**
+   * 좌우 칸을 끌 수 있는 분할선으로 나눈다. 칸 폭은 비율로만 정하고(끌어 바꾼 비율은 key 로 기억), 안쪽 최소 폭이 비율을 이기지 않게 한다.
+   * width · height 는 대화창 첫 크기일 뿐 칸 폭을 묶지 않는다.
+   */
+  static JComponent split(String key, float proportion, JComponent left, JComponent right, int width, int height) {
+    OnePixelSplitter s = new OnePixelSplitter(false, proportion);
+    s.setSplitterProportionKey(SPLIT_KEY + key);
+    s.setHonorComponentsMinimumSize(false);
+    s.setFirstComponent(left);
+    s.setSecondComponent(right);
+    s.setPreferredSize(new Dimension(JBUI.scale(width), JBUI.scale(height)));
+    return s;
   }
 }

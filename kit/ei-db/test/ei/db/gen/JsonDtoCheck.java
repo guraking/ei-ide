@@ -65,6 +65,9 @@ public class JsonDtoCheck {
     String big = JsonDto.dto("{\"a\": 9223372036854775807, \"b\": 9223372036854775808}", "p", "Big", true);
     if (!big.contains("private Long a;") || !big.contains("private BigDecimal b;")) throw new AssertionError("Long 넘는 정수는 BigDecimal: " + big);
     String lombok = JsonDto.dto(json, "com.example.dto", "ResponseDto", true);
+    // 키 이름이 주석 이름(Getter · Setter · JsonProperty)이 되면 중첩 클래스 이름에 숫자를 붙여 import 를 가리지 않는다
+    String hide = JsonDto.dto("{\"getter\": {\"a\": 1}, \"setter\": {\"b\": 1}, \"json_property\": {\"c\": 1}}", "p", "Hide", true);
+    ok(!hide.contains("class Getter ") && !hide.contains("class Setter ") && !hide.contains("class JsonProperty "), "주석 이름 중첩 클래스: " + hide);
     if (args.length > 0) System.out.println(lombok);
     eq(lombok, """
         package com.example.dto;

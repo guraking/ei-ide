@@ -112,8 +112,6 @@ import java.util.function.Consumer;
 final class DbExplorer extends SimpleToolWindowPanel {
 
   private static final String PLACE = "EiDatabaseExplorer";
-  private static final String[] TABLE_TYPES = {"TABLE"};
-  private static final String[] VIEW_TYPES = {"VIEW"};
   /** 아직 안 읽은 마디의 자리 자식. 읽는 동안은 검색 줄 아래 진행 막대가 알리므로 글은 비운다. */
   private static final Message LOADING = new Message("", false);
   private static final Color CONNECTED = JBColor.namedColor("EiDatabase.connected", new JBColor(0x3E9B47, 0x5FB865));
@@ -384,8 +382,8 @@ final class DbExplorer extends SimpleToolWindowPanel {
       DbSessions sessions = DbSessions.get(project);
       background(node, s.c(), () -> {
         Connection conn = sessions.connection(s.c());
-        List<Meta.Table> tables = Meta.tables(conn, s.c(), s.name(), TABLE_TYPES);
-        List<Meta.Table> views = Meta.tables(conn, s.c(), s.name(), VIEW_TYPES);
+        List<Meta.Table> tables = Meta.tables(conn, s.c(), s.name(), Meta.tableTypes(s.c()));
+        List<Meta.Table> views = Meta.tables(conn, s.c(), s.name(), Meta.viewTypes(s.c()));
         return () -> fillSchema(node, s, tables, views);
       });
     } else if (o instanceof ProgramGroup pg) {

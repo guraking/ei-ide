@@ -21,7 +21,7 @@ public final class ParamNav implements GotoDeclarationHandler {
     if (s == null) return null;
     MapperParams.Ref ref = MapperParams.refAt(file.getViewProvider().getContents(), s, offset);
     if (ref == null) return null;
-    for (StatementParams.Param p : StatementParams.of(source.getProject(), doc, s)) {
+    for (StatementParams.Param p : StatementParams.of(source.getProject(), doc, s, file.getVirtualFile())) {
       if (p.target() != null && p.name().equals(ref.name())) return new PsiElement[] {p.target()};
     }
     return null;

@@ -100,7 +100,7 @@ final class Bench {
     }
     DbConfig c = config;
     if (c == null) return;
-    load(() -> Meta.tables(DbSessions.get(project).connection(c), c, Meta.schemaOf(c), new String[]{"TABLE", "VIEW"}), list -> {
+    load(() -> Meta.tables(DbSessions.get(project).connection(c), c, Meta.schemaOf(c), Meta.tableAndViewTypes(c)), list -> {
       tables = list;
       done.accept(list);
     });

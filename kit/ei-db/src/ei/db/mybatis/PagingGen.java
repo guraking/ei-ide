@@ -6,7 +6,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * select 문장 하나에서 Oracle ROWNUM 페이징 문장(&lt;id&gt;Page)과 건수 문장(&lt;id&gt;Count)을 만든다.
+ * select 문장 하나에서 페이징 문장(&lt;id&gt;Page: Oracle 은 ROWNUM, PostgreSQL 은 LIMIT · OFFSET)과 건수 문장(&lt;id&gt;Count)을 만든다.
+ * 두 DB 모두 startRow 다음 행부터 endRow 행까지(startRow 초과, endRow 이하)를 돌려준다.
  * IntelliJ 에 기대지 않는다(자체 점검에서 바로 부른다). 본문은 동적 태그까지 글자 그대로 옮기고 들여쓰기만 맞춘다.
  */
 public final class PagingGen {
@@ -16,6 +17,13 @@ public final class PagingGen {
   public static final String COUNT_SUFFIX = "Count";
   public static final String START_ROW = "startRow";
   public static final String END_ROW = "endRow";
+
+  /** 페이징 메서드에 붙일 매퍼 @Param 어노테이션(줄인 이름은 shortenClassReferences 가 들여온다). */
+  private static final String PARAM_ANNOTATION = "@org.apache.ibatis.annotations.Param";
+  private static final String ROW_TYPE = "int";
+
+  /** 원래 메서드 매개변수 하나. text 는 그 글 그대로, name 은 XML 에서 부를 이름(@Param 값 또는 매개변수 이름), simple 은 기본형 · 문자열 따위. */
+  public record Param(String text, String name, boolean annotated, boolean simple) {}
 
   /** 문서에 넣을 자리와 글, 새 문장 id 들. */
   public record Result(int offset, String text, String pageId, String countId) {}
@@ -39,6 +47,11 @@ public final class PagingGen {
    * IllegalArgumentException(화면에 보일 문구).
    */
   public static Result generate(String text, MapperDoc doc, MapperDoc.Node statement) {
+    return generate(text, doc, statement, false);
+  }
+
+  /** postgres 가 참이면 페이징 문장을 LIMIT · OFFSET 으로 만든다(PostgreSQL 에는 ROWNUM 이 없다). */
+  public static Result generate(String text, MapperDoc doc, MapperDoc.Node statement, boolean postgres) {
     if (!SELECT.equals(statement.name)) throw new IllegalArgumentException("select 문장에서만 만들 수 있습니다.");
     String id = statement.attr("id");
     if (id == null || id.isBlank()) throw new IllegalArgumentException("문장에 id 가 없습니다.");
@@ -60,20 +73,30 @@ public final class PagingGen {
     String pageOpen = idm.replaceFirst("$1$2" + Matcher.quoteReplacement(pageId) + "$2");
 
     StringBuilder out = new StringBuilder("\n");
-    out.append(ind).append(pageOpen).append('\n')
-        .append(b).append("SELECT\n")
-        .append(b).append("       *\n")
-        .append(b).append("  FROM (\n")
-        .append(b).append("        SELECT\n")
-        .append(b).append("               ROWNUM AS RNUM\n")
-        .append(b).append("             , a.*\n")
-        .append(b).append("          FROM (\n")
-        .append(reindent(body, b + PAGE_BODY_INDENT))
-        .append(b).append("               ) a\n")
-        .append(b).append("         WHERE ROWNUM <![CDATA[<=]]> #{").append(END_ROW).append("}\n")
-        .append(b).append("       )\n")
-        .append(b).append(" WHERE RNUM <![CDATA[>]]> #{").append(START_ROW).append("}\n")
-        .append(ind).append("</select>\n");
+    out.append(ind).append(pageOpen).append('\n');
+    if (postgres) {
+      out.append(b).append("SELECT\n")
+          .append(b).append("       a.*\n")
+          .append(b).append("  FROM (\n")
+          .append(reindent(body, b + COUNT_BODY_INDENT))
+          .append(b).append("       ) a\n")
+          .append(b).append(" LIMIT #{").append(END_ROW).append("} - #{").append(START_ROW).append("}")
+          .append(" OFFSET #{").append(START_ROW).append("}\n");
+    } else {
+      out.append(b).append("SELECT\n")
+          .append(b).append("       *\n")
+          .append(b).append("  FROM (\n")
+          .append(b).append("        SELECT\n")
+          .append(b).append("               ROWNUM AS RNUM\n")
+          .append(b).append("             , a.*\n")
+          .append(b).append("          FROM (\n")
+          .append(reindent(body, b + PAGE_BODY_INDENT))
+          .append(b).append("               ) a\n")
+          .append(b).append("         WHERE ROWNUM <![CDATA[<=]]> #{").append(END_ROW).append("}\n")
+          .append(b).append("       )\n")
+          .append(b).append(" WHERE RNUM <![CDATA[>]]> #{").append(START_ROW).append("}\n");
+    }
+    out.append(ind).append("</select>\n");
 
     String pt = statement.attr(PARAMETER_TYPE);
     out.append(ind).append("<select id=\"").append(countId).append('"');
@@ -91,6 +114,26 @@ public final class PagingGen {
   /** 매퍼 인터페이스에 더할 메서드 글. elementType 은 원래 반환의 원소 형식, params 는 괄호를 포함한 매개변수 목록 글. */
   public static String pageMethod(String elementType, String pageId, String params) {
     return "java.util.List<" + elementType + "> " + pageId + params + ";";
+  }
+
+  /**
+   * 페이징 메서드의 매개변수 목록 글(괄호 포함): 원래 매개변수(@Param 없는 것은 그 이름으로 붙임) 뒤에 @Param startRow · endRow.
+   * @Param 없는 DTO · Map 하나뿐이거나 이미 startRow · endRow 이름이 있으면 null(원래 목록을 그대로 쓰고 그 안의 값을 쓴다).
+   */
+  public static String pageParams(List<Param> params) {
+    for (Param p : params) {
+      if (START_ROW.equals(p.name()) || END_ROW.equals(p.name())) return null;
+    }
+    if (params.size() == 1 && !params.get(0).annotated() && !params.get(0).simple()) return null;
+    List<String> out = new ArrayList<>();
+    for (Param p : params) out.add(p.annotated() ? p.text() : paramAnnotation(p.name()) + " " + p.text());
+    out.add(paramAnnotation(START_ROW) + " " + ROW_TYPE + " " + START_ROW);
+    out.add(paramAnnotation(END_ROW) + " " + ROW_TYPE + " " + END_ROW);
+    return "(" + String.join(", ", out) + ")";
+  }
+
+  private static String paramAnnotation(String name) {
+    return PARAM_ANNOTATION + "(\"" + name + "\")";
   }
 
   public static String countMethod(String countId, String params) {

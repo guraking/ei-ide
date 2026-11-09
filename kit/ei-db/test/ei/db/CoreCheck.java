@@ -63,6 +63,24 @@ public class CoreCheck {
     eq(SqlGuard.danger("UPDATE t SET a = (SELECT b FROM u WHERE u.id = 1)"), "WHERE 없는 UPDATE");
     eq(SqlGuard.danger("DELETE FROM t WHERE id IN (SELECT id FROM u)"), null);
     eq(SqlGuard.danger("update t set a = 'x--' where id = 1"), null);
+    // 변경 판정: PostgreSQL · Oracle 의 그 밖의 변경 문장, JDBC 이스케이프 호출
+    for (String w : new String[]{"DO $$ BEGIN NULL; END $$", "copy t from '/tmp/a.csv'", "COPY t TO STDOUT", "refresh materialized view mv",
+        "vacuum t", "cluster t using ix", "reindex table t", "lock table t in exclusive mode", "flashback table t to before drop",
+        "purge recyclebin", "analyze table t compute statistics", "audit select on t", "noaudit select on t", "{call p(?)}", " {? = call f(?)}"}) {
+      eq(SqlGuard.isWrite(w), true);
+    }
+    eq(SqlGuard.isWrite("select * from docs where body ? 'k'"), false);
+    eq(SqlGuard.isWrite("select domain from t"), false);
+    // DROP 대상 이름: 객체 종류 · IF EXISTS 를 건너뛴다
+    eq(SqlGuard.table("DROP INDEX ix_a"), "IX_A");
+    eq(SqlGuard.table("drop table if exists app.t"), "T");
+    eq(SqlGuard.table("DROP MATERIALIZED VIEW mv_sales"), "MV_SALES");
+    eq(SqlGuard.table("DROP PACKAGE BODY pk_order"), "PK_ORDER");
+    eq(SqlGuard.table("DROP USER scott CASCADE"), "SCOTT");
+    eq(SqlGuard.table("DROP INDEX CONCURRENTLY IF EXISTS ix_b"), "IX_B");
+    eq(SqlGuard.table("drop t_order"), "T_ORDER");
+    eq(SqlGuard.table("truncate table app.orders"), "ORDERS");
+    eq(SqlGuard.danger("DROP TABLE IF EXISTS t"), "DROP 문");
     // 드라이버 판
     eq(Drivers.compareVersions("23.10.0.0", "23.9.0.0") > 0, true);
     eq(Drivers.compareVersions("8.0.33", "8.0.33") == 0, true);

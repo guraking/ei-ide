@@ -83,6 +83,8 @@ public final class MyBatisRunDialog extends DialogWrapper {
   private final PsiClass dto;
   private final List<String> dtoFields;
   private final Set<String> textParams;
+  /** 다른 매퍼의 include 조각을 찾을 네임스페이스 → 매퍼 문서(창을 열기 전에 읽어 둔 것). */
+  private final Map<String, MapperDoc> mappers;
   /** 참이면 「느린 곳 찾기」 창: 확인 단추가 실행 대신 실행 계획 분석(ExplainPlan.analyze)을 한다. */
   private final boolean findSlow;
   private DynamicSql.Result result;
@@ -131,9 +133,10 @@ public final class MyBatisRunDialog extends DialogWrapper {
     this.project = project;
     this.doc = doc;
     this.statement = statement;
-    this.listNames = DynamicSql.listNames(doc, statement);
+    this.mappers = types.mappers();
+    this.listNames = DynamicSql.listNames(doc, statement, mappers::get);
     PropertiesComponent props = PropertiesComponent.getInstance(project);
-    for (String name : DynamicSql.paramNames(doc, statement)) {
+    for (String name : DynamicSql.paramNames(doc, statement, mappers::get)) {
       Row row = new Row();
       String text = prefill != null ? prefill.getOrDefault(name, "") : props.getValue(valueKey(name), "");
       row.value.setText(text);
@@ -152,6 +155,8 @@ public final class MyBatisRunDialog extends DialogWrapper {
     getOKAction().putValue(Action.SMALL_ICON, findSlow ? AllIcons.Actions.Preview : AllIcons.Actions.Execute);
     setCancelButtonText(EiDbBundle.message("common.cancel"));
     init();
+    // _databaseId 가 접속 종류를 따르므로 접속을 바꾸면 미리보기를 다시 푼다.
+    connection.addActionListener(e -> refresh());
     refresh();
   }
 
@@ -274,10 +279,13 @@ public final class MyBatisRunDialog extends DialogWrapper {
     for (Map.Entry<String, Row> e : rows.entrySet()) {
       e.getValue().type.setText(listNames.contains(e.getKey()) ? "List · foreach" : SqlValues.typeLabel(values.get(e.getKey())));
     }
-    result = DynamicSql.resolve(doc, statement, values);
+    DbConfig c = selected();
+    result = DynamicSql.resolve(doc, statement, values, c == null ? null : DynamicSql.databaseId(c.kind), mappers::get);
     preview.setText(result.inlined());
     preview.setCaretPosition(0);
     summary.setText(result.summary());
+    summary.setIcon(result.hasWarnings() ? AllIcons.General.Warning : null);
+    summary.setForeground(result.hasWarnings() ? WARNING : UIUtil.getContextHelpForeground());
     showWarnings();
   }
 

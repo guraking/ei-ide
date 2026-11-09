@@ -59,6 +59,10 @@ public final class SqlFormatter {
   private static final Set<String> SPACE_BEFORE_PAREN = Set.of(
       "IN", "VALUES", "EXISTS", "AS", "ON", "AND", "OR", "NOT", "FROM", "JOIN", "WHERE", "SELECT", "USING", "INTO", "OVER", "THEN", "ELSE", "WHEN");
 
+  /** Oracle q'…' 의 여는 괄호와 그 짝. 그 밖의 글자는 같은 글자로 닫는다. */
+  private static final String Q_OPEN = "([{<";
+  private static final String Q_CLOSE = ")]}>";
+
   private enum Kind { WORD, STRING, NUMBER, SYMBOL, OPEN, CLOSE, COMMA, SEMI, LINE_COMMENT, TRAIL_COMMENT, BLOCK_COMMENT, DOT }
 
   private record Tok(Kind kind, String text) {
@@ -122,6 +126,8 @@ public final class SqlFormatter {
       int e = s.indexOf('}', i);
       return e < 0 ? n : e + 1;
     }
+    int special = specialStringEnd(s, i);
+    if (special > i) return special;
     if (c == '\'' || c == '"' || c == '`') {
       int e = s.indexOf(c, i + 1);
       return e < 0 ? n : e + 1; // '' 이스케이프는 두 덩어리로 나뉘어도 결과가 같다.
@@ -386,6 +392,47 @@ public final class SqlFormatter {
     return String.join("\n", lines).replaceAll("^\n+", "").replaceAll("\n+$", "");
   }
 
+  /**
+   * i 에서 시작하는 특수 글자열(Oracle q'[…]' · PostgreSQL E'…' · $tag$…$tag$)의 끝 다음 위치. 아니면 i. 닫히지 않으면 글 끝.
+   * 셋 다 낱말 첫머리에서만 인정한다(v$session · name' 같은 것은 아니다). E'…' 안의 \ 는 다음 글자를 감싼다.
+   */
+  private static int specialStringEnd(String s, int i) {
+    int n = s.length();
+    char c = s.charAt(i);
+    boolean wordStart = i == 0 || !(Character.isLetterOrDigit(s.charAt(i - 1)) || s.charAt(i - 1) == '_' || s.charAt(i - 1) == '$');
+    if (!wordStart || i + 1 >= n) return i;
+    if ((c == 'q' || c == 'Q') && s.charAt(i + 1) == '\'' && i + 2 < n) {
+      char open = s.charAt(i + 2);
+      int k = Q_OPEN.indexOf(open);
+      char close = k >= 0 ? Q_CLOSE.charAt(k) : open;
+      int e = s.indexOf(close + "'", i + 3);
+      return e < 0 ? n : e + 2;
+    }
+    if ((c == 'e' || c == 'E') && s.charAt(i + 1) == '\'') {
+      int e = i + 2;
+      while (e < n) {
+        char x = s.charAt(e);
+        if (x == '\\') { e += 2; continue; }
+        if (x == '\'') {
+          if (e + 1 < n && s.charAt(e + 1) == '\'') { e += 2; continue; }
+          return e + 1;
+        }
+        e++;
+      }
+      return n;
+    }
+    if (c == '$' && !Character.isDigit(s.charAt(i + 1))) {
+      int j = i + 1;
+      while (j < n && (Character.isLetterOrDigit(s.charAt(j)) || s.charAt(j) == '_')) j++;
+      if (j < n && s.charAt(j) == '$') {
+        String tag = s.substring(i, j + 1);
+        int e = s.indexOf(tag, j + 1);
+        return e < 0 ? n : e + tag.length();
+      }
+    }
+    return i;
+  }
+
   /** 낱말 나누기. 문자열 · 따옴표 이름 · 주석은 한 덩어리로 그대로 둔다. MyBatis #{…} · ${…} 도 한 낱말. */
   private static List<Tok> lex(String s) {
     List<Tok> out = new ArrayList<>();
@@ -409,6 +456,12 @@ public final class SqlFormatter {
         e = e < 0 ? n : e + 2;
         out.add(new Tok(Kind.BLOCK_COMMENT, s.substring(i, e)));
         i = e;
+        continue;
+      }
+      int special = specialStringEnd(s, i);
+      if (special > i) {
+        out.add(new Tok(Kind.STRING, s.substring(i, special)));
+        i = special;
         continue;
       }
       if (c == '\'' || c == '"' || c == '`') {

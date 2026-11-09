@@ -14,10 +14,12 @@ import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.List;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 /**
@@ -62,11 +64,12 @@ public final class SqlRunner {
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
         AtomicBoolean failed = new AtomicBoolean();
+        AtomicReference<Statement> mine = new AtomicReference<>();
         ScheduledFuture<?> watch = AppExecutorUtil.getAppScheduledExecutorService().scheduleWithFixedDelay(
-            () -> cancelIfAsked(project, c, indicator, failed), CANCEL_POLL_MS, CANCEL_POLL_MS, TimeUnit.MILLISECONDS);
+            () -> cancelIfAsked(project, c, mine, indicator, failed), CANCEL_POLL_MS, CANCEL_POLL_MS, TimeUnit.MILLISECONDS);
         long start = System.currentTimeMillis();
         try {
-          QueryResult result = DbSessions.get(project).run(c, sql, binds, indicator::isCanceled);
+          QueryResult result = DbSessions.get(project).run(c, sql, binds, indicator::isCanceled, mine);
           ApplicationManager.getApplication().invokeLater(() -> {
             ResultView.show(project, c, result);
             if (onSuccess != null && !project.isDisposed()) onSuccess.accept(result);
@@ -96,9 +99,16 @@ public final class SqlRunner {
   /**
    * 취소가 눌린 뒤에는 작업이 끝날 때까지 간격마다 다시 보낸다. 실행 직전에 보낸 취소를 드라이버가 무시해도 실행 중에 다시 닿게 하려는 것이다.
    * 실행 시작 전의 취소는 DbSessions.run 의 stop 이 막는다. 보내기에 실패하면 알림이 쌓이지 않게 그만 보낸다.
+   * 이 실행이 등록한 문장(mine)만 멈춘다. 같은 접속에서 다른 콘솔이 돌리는 문장은 건드리지 않는다.
    */
-  private static void cancelIfAsked(Project project, DbConfig c, ProgressIndicator indicator, AtomicBoolean failed) {
-    if (indicator.isCanceled() && !failed.get() && !cancel(project, c)) failed.set(true);
+  private static void cancelIfAsked(Project project, DbConfig c, AtomicReference<Statement> mine, ProgressIndicator indicator, AtomicBoolean failed) {
+    if (!indicator.isCanceled() || failed.get()) return;
+    try {
+      DbSessions.get(project).cancel(c.id, mine.get());
+    } catch (SQLException e) {
+      failed.set(true);
+      Notify.error(project, EiDbBundle.message("runner.cancel.failed", c.name, e.getMessage()));
+    }
   }
 
   /** 그 접속에서 실행 중인 문장을 멈춘다(콘솔 「중지」 · 진행 막대 취소). 화면 스레드가 아닌 곳에서 부른다. 실패는 알리고 거짓. */

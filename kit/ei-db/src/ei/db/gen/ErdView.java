@@ -59,7 +59,6 @@ public final class ErdView {
   private static final String STRIPE_TITLE = "ERD";
   private static final String TOOLBAR_PLACE = "EiDbErd";
   private static final int MAX_TABLES = 60;
-  private static final String[] TABLE_TYPES = {"TABLE"};
   /** 배율을 백분율 글로 바꿀 때 곱하는 수 · 실제 크기 배율. */
   private static final int PERCENT = 100;
   private static final double ACTUAL_ZOOM = 1.0;
@@ -88,7 +87,7 @@ public final class ErdView {
           Connection conn = DbSessions.get(project).connection(c);
           Map<String, Meta.Table> all = new HashMap<>();
           List<String> names = new ArrayList<>();
-          for (Meta.Table t : Meta.tables(conn, c, schema, TABLE_TYPES)) {
+          for (Meta.Table t : Meta.tables(conn, c, schema, Meta.tableTypes(c))) {
             all.put(t.name(), t);
             if (tables == null) names.add(t.name());
           }

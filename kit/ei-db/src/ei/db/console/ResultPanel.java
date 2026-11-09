@@ -42,6 +42,11 @@ import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.JTable;
+import javax.swing.JSpinner;
+import javax.swing.JViewport;
+import com.intellij.ui.JBIntSpinner;
+import java.awt.Toolkit;
+import java.text.ParseException;
 import java.util.Locale;
 import java.util.Set;
 import java.util.HashSet;
@@ -94,14 +99,13 @@ import java.awt.Color;
 /** 결과 탭 하나의 내용: 조회면 도구줄 + 표, 변경이면 한 줄 요약, 오류면 붉은 글. */
 final class ResultPanel extends SimpleToolWindowPanel {
 
-  /** 칸 너비를 잴 때 보는 앞쪽 행 수와 칸 최대 너비. */
+  /** 칸 너비를 잴 때 보는 앞쪽 행 수와, 처음 칸 너비가 넘지 않을 화면 폭의 몫(긴 글 칸 하나가 화면을 다 차지하지 않게). */
   private static final int FIT_ROWS = 50;
-  private static final int MAX_COLUMN_WIDTH = 400;
+  private static final double MAX_COLUMN_SCREEN_SHARE = 0.4;
   /** 엑셀이 UTF-8 로 읽게 하는 표식. */
   private static final String BOM = "﻿";
 
-  /** 검색칸 너비 · 반영 미리보기 크기(px, 배율 전). */
-  private static final int SEARCH_WIDTH = 180;
+  /** 반영 미리보기 크기(px, 배율 전). */
   private static final int PREVIEW_WIDTH = 640;
   private static final int PREVIEW_HEIGHT = 360;
   /** 도구줄 왼쪽 여백 · 묶음 사이 간격(px, 배율 전). */
@@ -133,6 +137,9 @@ final class ResultPanel extends SimpleToolWindowPanel {
   private final Map<Integer, Map<Integer, Object>> edits = new TreeMap<>();
   /** 결과 칼럼마다 PK 여부. null 이면 아직 표 정의를 읽지 않았다. */
   private boolean[] pkColumns;
+  /** 반영 문장에 쓸 표 · 칼럼(결과 칼럼 번호 순) 표기: 표 정의의 이름 그대로를 SqlText.ident 로. pkColumns 와 함께 채운다. */
+  private String editTable;
+  private String[] editColumns;
   /** 고치기를 막는 이유. null 이면 막지 않거나 아직 모른다. */
   private String editBlocked;
   private boolean loadingEdit;
@@ -208,6 +215,12 @@ final class ResultPanel extends SimpleToolWindowPanel {
     boolean twoLineHeader = !result.comments().isEmpty();
     Model model = new Model(result);
     grid = new JBTable(model) {
+      // 칸들이 창보다 좁으면 창 폭을 채우고(칸이 함께 늘어남), 넓으면 가로 스크롤.
+      @Override
+      public boolean getScrollableTracksViewportWidth() {
+        return getParent() instanceof JViewport v && getPreferredSize().width < v.getWidth();
+      }
+
       @Override
       protected JTableHeader createDefaultTableHeader() {
         return new JBTableHeader() {
@@ -230,7 +243,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
         return c;
       }
     };
-    grid.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+    grid.setAutoResizeMode(JTable.AUTO_RESIZE_SUBSEQUENT_COLUMNS);
     grid.setRowHeight(JBUI.scale(ROW_HEIGHT));
     grid.setStriped(true);
     grid.setShowGrid(false);
@@ -279,18 +292,15 @@ final class ResultPanel extends SimpleToolWindowPanel {
     // 다시 읽기는 문장을 처음부터 다시 실행하므로 변경이 섞인 문장(INSERT … RETURNING 등)에는 두지 않는다.
     if (result.truncated() && SqlText.isRereadable(result.sql())) {
       bar.add(button(EiDbBundle.message("result.more", DbSessions.MAX_ROWS), null, () -> readMore(c, result.rows().size() + DbSessions.MAX_ROWS)));
-      JBTextField wanted = new JBTextField(String.valueOf(result.rows().size() + DbSessions.MAX_ROWS), 6);
+      JBIntSpinner wanted = new JBIntSpinner(Math.min(result.rows().size() + DbSessions.MAX_ROWS, DbSessions.MAX_ROW_LIMIT), 1, DbSessions.MAX_ROW_LIMIT);
       wanted.setToolTipText(EiDbBundle.message("result.wanted.tooltip"));
-      wanted.setMaximumSize(wanted.getPreferredSize());
-      Runnable byInput = () -> readWanted(c, wanted.getText());
-      wanted.addActionListener(e -> byInput.run());
+      Runnable byInput = () -> readWanted(c, wanted);
+      ((JSpinner.DefaultEditor) wanted.getEditor()).getTextField().addActionListener(e -> byInput.run());
       bar.add(Box.createHorizontalStrut(JBUI.scale(BAR_INSET)));
       bar.add(wanted);
       bar.add(new JBLabel(EiDbBundle.message("result.rows.unit")));
       bar.add(button(EiDbBundle.message("result.fetch"), null, byInput));
     }
-    bar.add(Box.createHorizontalStrut(JBUI.scale(BAR_INSET)));
-    bar.add(searchField());
     BarAction apply = new BarAction(EiDbBundle.message("result.apply"), EiDbBundle.message("result.apply.tooltip"), AllIcons.Actions.Commit, this::applyEdits) {
       @Override
       public void update(@NotNull AnActionEvent e) {
@@ -313,8 +323,10 @@ final class ResultPanel extends SimpleToolWindowPanel {
     addLink(links, "UPDATE", EiDbBundle.message("result.update.tooltip"), () -> copyUpdates(c));
     addLink(links, "DTO", EiDbBundle.message("dto.command"), () -> DtoDialog.show(project, c, result));
     addLink(links, "enum", EiDbBundle.message("result.enum.tooltip"), () -> EnumDialog.show(project, c, result));
-    JPanel head = new JPanel(new BorderLayout());
+    // 찾기 칸은 머리줄 왼쪽 묶음과 오른쪽 링크 사이를 다 채운다.
+    JPanel head = new JPanel(new BorderLayout(JBUI.scale(BAR_INSET), 0));
     head.add(bar, BorderLayout.WEST);
+    head.add(searchField(), BorderLayout.CENTER);
     head.add(links, BorderLayout.EAST);
 
     setToolbar(head);
@@ -339,9 +351,6 @@ final class ResultPanel extends SimpleToolWindowPanel {
     searchBox = new SearchTextField(false);
     searchBox.getTextEditor().getEmptyText().setText(EiDbBundle.message("result.search.hint"));
     searchBox.setToolTipText(EiDbBundle.message("result.search.tooltip"));
-    Dimension size = new Dimension(JBUI.scale(SEARCH_WIDTH), searchBox.getPreferredSize().height);
-    searchBox.setPreferredSize(size);
-    searchBox.setMaximumSize(size);
     searchBox.addDocumentListener(new DocumentAdapter() {
       @Override protected void textChanged(@NotNull DocumentEvent e) { filter(searchBox.getText()); }
     });
@@ -381,6 +390,12 @@ final class ResultPanel extends SimpleToolWindowPanel {
    * 이미 실행된 조회 문장이라 위험 문장 확인은 다시 하지 않는다.
    */
   private void readMore(DbConfig c, int limit) {
+    if (grid.isEditing()) grid.getCellEditor().stopCellEditing();
+    // 다시 읽으면 이 패널을 새 결과로 바꾸므로 반영하지 않은 고친 값은 사라진다.
+    if (!edits.isEmpty() && Messages.showYesNoDialog(project, EiDbBundle.message("result.more.discard", edits.size()),
+        EiDbBundle.message("result.more.discard.title"), Messages.getWarningIcon()) != Messages.YES) {
+      return;
+    }
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       try {
         QueryResult more = DbSessions.get(project).run(c, result.sql(), result.binds(), limit);
@@ -391,14 +406,16 @@ final class ResultPanel extends SimpleToolWindowPanel {
     });
   }
 
-  /** 직접 쓴 건수(쉼표 · 「건」 허용)로 다시 읽는다. 1 ~ MAX_ROW_LIMIT 가 아니면 알리고 읽지 않는다. */
-  private void readWanted(DbConfig c, String text) {
-    int n = DbSessions.parseRowCount(text);
-    if (n == 0) {
+  /** 건수 칸에 쓴 수로 다시 읽는다. 1 ~ MAX_ROW_LIMIT 의 수가 아니면 알리고 읽지 않는다. */
+  private void readWanted(DbConfig c, JBIntSpinner wanted) {
+    try {
+      wanted.commitEdit();
+    } catch (ParseException e) {
+      String text = ((JSpinner.DefaultEditor) wanted.getEditor()).getTextField().getText();
       Notify.error(project, EiDbBundle.message("result.wanted.invalid", DbSessions.MAX_ROW_LIMIT, text));
       return;
     }
-    readMore(c, n);
+    readMore(c, wanted.getNumber());
   }
 
   /** 이 패널이 든 결과 탭의 내용을 바꾼다. 그 사이 탭을 닫았으면 아무것도 하지 않는다. */
@@ -423,6 +440,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
   }
 
   private static void fitColumns(JBTable table) {
+    int maxWidth = (int) (Toolkit.getDefaultToolkit().getScreenSize().width * MAX_COLUMN_SCREEN_SHARE);
     for (int col = 0; col < table.getColumnCount(); col++) {
       TableColumn column = table.getColumnModel().getColumn(col);
       Component header = table.getTableHeader().getDefaultRenderer()
@@ -432,7 +450,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
       for (int row = 0; row < rows; row++) {
         width = Math.max(width, table.prepareRenderer(table.getCellRenderer(row, col), row, col).getPreferredSize().width);
       }
-      column.setPreferredWidth(Math.min(width + JBUI.scale(16), JBUI.scale(MAX_COLUMN_WIDTH)));
+      column.setPreferredWidth(Math.min(width + JBUI.scale(16), maxWidth));
     }
   }
 
@@ -606,7 +624,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
     List<String> comments = commentRow();
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       try {
-        XlsxWriter.write(path, result.columns(), comments, rows);
+        XlsxExport.write(path, result.columns(), comments, rows);
         Notify.info(project, EiDbBundle.message("result.excel.saved", path));
       } catch (IOException e) {
         Notify.error(project, EiDbBundle.message("result.excel.failed", e.getMessage()));
@@ -641,7 +659,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
   }
 
   private void copyInserts() {
-    String target = table;
+    String target = table == null ? null : writtenTable();
     if (target == null) {
       target = Messages.showInputDialog(project, EiDbBundle.message("result.insert.table"), EiDbBundle.message("result.insert.title"), null);
       if (target == null || target.isBlank()) return;
@@ -660,9 +678,15 @@ final class ResultPanel extends SimpleToolWindowPanel {
     Notify.info(project, EiDbBundle.message("result.insert.copied", rows.size()) + lobNotice(sql));
   }
 
+  /** 복사 문장에 쓸 표 이름: 원래 문장에 쓴 그대로(따옴표 포함). 찾지 못하면 따옴표를 뗀 table. */
+  private String writtenTable() {
+    String ref = ResultView.tableRef(result.sql());
+    return ref != null ? ref : table;
+  }
+
   /** 고른 행(없으면 전체)을 UPDATE 문으로 복사. PK 는 접속해서 표 정의로 찾으므로 뒤에서 읽은 뒤 복사한다. */
   private void copyUpdates(DbConfig c) {
-    String target = table;
+    String target = table == null ? null : writtenTable();
     if (target == null) {
       target = Messages.showInputDialog(project, EiDbBundle.message("result.update.table"), EiDbBundle.message("result.update.title"), null);
       if (target == null || target.isBlank()) return;
@@ -675,7 +699,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       Set<String> pks = new HashSet<>();
       try {
-        for (Meta.Column col : tableColumns(c, name)) {
+        for (Meta.Column col : tableColumns(c, name).columns()) {
           if (col.pk()) pks.add(col.name().toUpperCase(Locale.ROOT));
         }
       } catch (Exception e) {
@@ -703,15 +727,18 @@ final class ResultPanel extends SimpleToolWindowPanel {
    * 표 정의 칼럼(스키마 · 따옴표를 뗀 이름으로, 접속 스키마에서). Oracle 은 대문자, PostgreSQL 은 소문자로 저장되므로
    * 쓴 그대로 · 대문자 · 소문자 순서로 찾는다. 못 찾으면 빈 목록. 화면 스레드에서 부르지 않는다.
    */
-  private List<Meta.Column> tableColumns(DbConfig c, String name) throws Exception {
+  private TableDef tableColumns(DbConfig c, String name) throws Exception {
     String bare = name.substring(name.lastIndexOf('.') + 1).replace("\"", "");
     Connection conn = DbSessions.get(project).connection(c);
     for (String candidate : new String[]{bare, bare.toUpperCase(Locale.ROOT), bare.toLowerCase(Locale.ROOT)}) {
       List<Meta.Column> columns = Meta.columns(conn, c, Meta.schemaOf(c), candidate);
-      if (!columns.isEmpty()) return columns;
+      if (!columns.isEmpty()) return new TableDef(candidate, columns);
     }
-    return List.of();
+    return new TableDef(bare, List.of());
   }
+
+  /** 찾은 표 이름(저장된 대소문자 그대로)과 그 칼럼. 못 찾으면 칼럼이 빈 목록. */
+  private record TableDef(String name, List<Meta.Column> columns) {}
 
   /**
    * 칸 두 번 누름: 고치기 시작. 처음엔 표 정의를 뒤에서 읽어 PK 를 찾고, 고칠 수 없으면 이유를 알린다.
@@ -747,11 +774,14 @@ final class ResultPanel extends SimpleToolWindowPanel {
     loadingEdit = true;
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       try {
-        List<Meta.Column> defs = tableColumns(config, table);
+        TableDef def = tableColumns(config, table);
         ApplicationManager.getApplication().invokeLater(() -> {
           loadingEdit = false;
           boolean[] keys = new boolean[result.columns().size()];
-          editBlocked = editBlockReason(defs, keys);
+          String[] names = new String[keys.length];
+          editBlocked = editBlockReason(def.columns(), keys, names);
+          editTable = SqlText.ident(config.kind, def.name());
+          editColumns = names;
           pkColumns = keys;
           beginEdit(viewRow, viewColumn);
         }, project.getDisposed());
@@ -763,16 +793,23 @@ final class ResultPanel extends SimpleToolWindowPanel {
     });
   }
 
-  /** 결과 칼럼이 모두 이 표의 칼럼이고 PK 칼럼이 모두 결과에 있어야 고칠 수 있다. keys 에 결과 칼럼마다 PK 여부를 채운다. */
-  private String editBlockReason(List<Meta.Column> defs, boolean[] keys) {
+  /**
+   * 결과 칼럼이 모두 이 표의 칼럼이고 PK 칼럼이 모두 결과에 있어야 고칠 수 있다. keys 에 결과 칼럼마다 PK 여부를,
+   * names 에 그 칼럼의 SQL 표기(표 정의 이름 그대로를 SqlText.ident 로)를 채운다.
+   */
+  private String editBlockReason(List<Meta.Column> defs, boolean[] keys, String[] names) {
     if (defs.isEmpty()) return EiDbBundle.message("result.edit.table.missing", table);
-    Map<String, Boolean> pkByName = new HashMap<>();
-    for (Meta.Column d : defs) pkByName.put(d.name().toUpperCase(Locale.ROOT), d.pk());
-    if (!pkByName.containsValue(true)) return EiDbBundle.message("result.edit.no.pk", table);
+    Map<String, Meta.Column> byName = new HashMap<>();
+    for (Meta.Column d : defs) byName.put(d.name().toUpperCase(Locale.ROOT), d);
+    boolean anyPk = false;
+    for (Meta.Column d : defs) anyPk |= d.pk();
+    if (!anyPk) return EiDbBundle.message("result.edit.no.pk", table);
     for (int i = 0; i < keys.length; i++) {
-      Boolean pk = pkByName.get(result.columns().get(i).toUpperCase(Locale.ROOT));
-      if (pk == null) return EiDbBundle.message("result.edit.column.missing", result.columns().get(i), table);
+      Meta.Column d = byName.get(result.columns().get(i).toUpperCase(Locale.ROOT));
+      if (d == null) return EiDbBundle.message("result.edit.column.missing", result.columns().get(i), table);
+      boolean pk = d.pk();
       keys[i] = pk;
+      names[i] = SqlText.ident(config.kind, d.name());
       if (pk && SqlText.isUneditableType(typeOf(i))) return EiDbBundle.message("result.edit.pk.binary", result.columns().get(i));
     }
     Set<String> shown = new HashSet<>();
@@ -875,18 +912,18 @@ final class ResultPanel extends SimpleToolWindowPanel {
     List<String> names = new ArrayList<>();
     List<Object> values = new ArrayList<>();
     for (Map.Entry<Integer, Object> v : changed.entrySet()) {
-      names.add(result.columns().get(v.getKey()));
+      names.add(editColumns[v.getKey()]);
       values.add(v.getValue());
     }
     int setCount = names.size();
     for (int i = 0; i < pkColumns.length; i++) {
       if (!pkColumns[i]) continue;
-      names.add(result.columns().get(i));
+      names.add(editColumns[i]);
       values.add(result.rows().get(row).get(i));
     }
     boolean[] key = new boolean[names.size()];
     Arrays.fill(key, setCount, key.length, true);
-    return SqlText.updateWithBinds(table, names, values, key);
+    return SqlText.updateWithBinds(editTable, names, values, key);
   }
 
   private boolean confirmApply(List<SqlText.Update> statements) {

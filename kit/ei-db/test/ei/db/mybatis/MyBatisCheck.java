@@ -146,6 +146,67 @@ public class MyBatisCheck {
     eq(Ognl.test("missing", o::get), false);
     eq(Ognl.names("productIds != null and productIds.size() > 0 and user.name != ''"),
        List.of("productIds", "productIds", "user.name"));
+    // 인자 있는 메서드 · 속성 · 정적 호출
+    Map<String, Object> g = new HashMap<>();
+    g.put("flag", "Y");
+    g.put("name", " kim ");
+    g.put("ids", List.of(1L, 2L));
+    g.put("arr", new String[] {"a"});
+    g.put("status", 0L);
+    g.put("blank", "  ");
+    eq(Ognl.test("flag.equals('Y') and flag.equalsIgnoreCase('y')", g::get), true);
+    eq(Ognl.test("name.trim().startsWith('ki') and name.endsWith('m ') and name.contains('im')", g::get), true);
+    eq(Ognl.test("ids.contains(2) and !ids.contains(3)", g::get), true);
+    eq(Ognl.test("ids != null and ids.size > 0 and !ids.empty and arr.length == 1 and flag.length == 1", g::get), true);
+    eq(Ognl.test("ids.isEmpty()", g::get), false);
+    eq(Ognl.test("@org.apache.commons.lang3.StringUtils@isNotEmpty(flag) and @x.StringUtils@isBlank(blank)", g::get), true);
+    eq(Ognl.test("@StringUtils@isEmpty(missing) and !@StringUtils@isNotBlank(blank)", g::get), true);
+    eq(Ognl.test("@x.ObjectUtils@isEmpty(ids)", g::get), false);
+    eq(Ognl.names("@x.StringUtils@isNotEmpty(flag) and ids.size > 0 and name.equals(other)"), List.of("flag", "ids", "name", "other"));
+    // 숫자와 빈 문자열: 빈 문자열은 0
+    eq(Ognl.test("status != null and status != ''", g::get), false);
+    eq(Ognl.test("status == ''", g::get), true);
+    eq(Ognl.test("'' == status", g::get), true);
+    eq(Ognl.test("flag != ''", g::get), true);
+    // 읽지 못하는 식은 예외(DynamicSql 이 세어 알린다)
+    for (String bad : List.of("a >", "a ?? b", "flag.foo(1)", "@x.U@hello(flag)", "flag.equals()")) {
+      boolean thrown = false;
+      try {
+        Ognl.evaluate(bad, g::get);
+      } catch (IllegalArgumentException ex) {
+        thrown = true;
+      }
+      eq(bad + " " + thrown, bad + " true");
+    }
+
+    // 다른 매퍼의 include · include property · 찾지 못한 include · 읽지 못한 식 · _databaseId · _parameter
+    String common = "<mapper namespace=\"com.x.Common\"><sql id=\"where\">WHERE A.DEL = 'N' <include refid=\"more\"/></sql>"
+        + "<sql id=\"more\">AND A.K = #{k}</sql></mapper>";
+    String main = "<mapper namespace=\"com.x.Main\">"
+        + "<sql id=\"cols\">${al}.COL, ${al}.ID</sql>"
+        + "<select id=\"s\">SELECT <include refid=\"cols\"><property name=\"al\" value=\"x\"/></include> FROM T x"
+        + " <include refid=\"com.x.Common.where\"/> <include refid=\"com.x.Nowhere.w\"/>"
+        + " <if test=\"_databaseId == 'postgresql'\">LIMIT 1</if><if test=\"_databaseId == 'oracle'\">AND ROWNUM = 1</if>"
+        + " <if test=\"_parameter.k != null\">/*k*/</if> <if test=\"k.foo(1)\">BAD</if></select></mapper>";
+    MapperDoc md = MapperDoc.parse(main);
+    MapperDoc cd = MapperDoc.parse(common);
+    java.util.function.Function<String, MapperDoc> mappers = ns -> "com.x.Common".equals(ns) ? cd : null;
+    MapperDoc.Node ms = md.statement("s");
+    eq(DynamicSql.paramNames(md, ms, mappers), List.of("k"));
+    eq(DynamicSql.paramNames(md, ms), List.of("k"));
+    Map<String, Object> kv = new HashMap<>();
+    kv.put("k", 5L);
+    DynamicSql.Result inc = DynamicSql.resolve(md, ms, kv, DynamicSql.databaseId(ei.db.DbKind.POSTGRES), mappers);
+    eq(inc.inlined().replaceAll("\\s+", " ").trim(),
+       "SELECT x.COL, x.ID FROM T x WHERE A.DEL = 'N' AND A.K = 5 LIMIT 1 /*k*/");
+    eq(inc.missingIncludes, new java.util.LinkedHashSet<>(List.of("com.x.Nowhere.w")));
+    eq(inc.badExpressions, 1);
+    eq(inc.hasWarnings(), true);
+    eq(inc.summary(), "<if> 4개 중 2개 포함 · 찾지 못한 include: com.x.Nowhere.w · 읽지 못한 식 1개(거짓으로 셈)");
+    inc = DynamicSql.resolve(md, ms, kv, DynamicSql.databaseId(ei.db.DbKind.ORACLE), DynamicSql.NO_MAPPERS);
+    eq(inc.inlined().replaceAll("\\s+", " ").trim(), "SELECT x.COL, x.ID FROM T x AND ROWNUM = 1 /*k*/");
+    eq(inc.missingIncludes, new java.util.LinkedHashSet<>(List.of("com.x.Common.where", "com.x.Nowhere.w")));
+    eq(r.hasWarnings(), false);
 
     // 값 변환
     eq(SqlValues.parse("2026-10-10", false), Date.valueOf("2026-10-10"));

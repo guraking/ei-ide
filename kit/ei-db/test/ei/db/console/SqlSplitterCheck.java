@@ -75,6 +75,36 @@ public class SqlSplitterCheck {
     // CREATE TABLE 은 블록이 아니다. V$SESSION 의 $ 는 따옴표가 아니다.
     eq(texts("CREATE TABLE t (a NUMBER);\nSELECT * FROM v$session;"), List.of("CREATE TABLE t (a NUMBER);", "SELECT * FROM v$session;"));
     eq(texts("  \n-- 주석만\n;\n"), List.of());
+    // 본문 겹이 없는 CREATE 블록 · 따옴표 본문 · 호출 명세 · 트랜잭션 BEGIN 은 ; 에서 끝난다.
+    for (String one : List.of(
+        "CREATE OR REPLACE TRIGGER trg BEFORE INSERT ON t FOR EACH ROW EXECUTE FUNCTION f();",
+        "CREATE FUNCTION f(a int) RETURNS int AS 'select a; select 2' LANGUAGE sql;",
+        "CREATE FUNCTION f(a int) RETURNS int LANGUAGE sql RETURN a + 1;",
+        "CREATE FUNCTION f(a int) RETURNS int LANGUAGE sql RETURN CASE WHEN a > 0 THEN 1 END + 1;",
+        "CREATE PROCEDURE p() LANGUAGE sql BEGIN ATOMIC INSERT INTO t VALUES (1); INSERT INTO t VALUES (2); END;",
+        "CREATE OR REPLACE FUNCTION f RETURN NUMBER AS LANGUAGE JAVA NAME 'X.f() return int';",
+        "CREATE TRIGGER trg BEFORE INSERT ON t FOR EACH ROW SET NEW.a = 1;",
+        "BEGIN TRANSACTION;", "BEGIN WORK;", "BEGIN ISOLATION LEVEL SERIALIZABLE;", "BEGIN READ ONLY;")) {
+      eq(texts(one + "\nSELECT 1;\nSELECT 2;"), List.of(one, "SELECT 1;", "SELECT 2;"));
+    }
+    String compoundVar = "CREATE TRIGGER t3 FOR INSERT ON t COMPOUND TRIGGER\n  v NUMBER;\n  BEFORE STATEMENT IS\n  BEGIN\n    v := 1;\n  END BEFORE STATEMENT;\nEND t3;";
+    eq(texts(compoundVar + "\n/\nSELECT 8 FROM dual;"), List.of(compoundVar, "SELECT 8 FROM dual;"));
+    // 빈 줄 앞이 덜 끝났거나(, · AND · UNION ALL) 빈 줄 뒤가 본문(WITH 뒤 SELECT · VALUES · SET · WHEN)이면 이어진다.
+    for (String one : List.of(
+        "SELECT a\n  FROM t\n\nUNION ALL\n\nSELECT b FROM u",
+        "WITH x AS (SELECT 1 a FROM dual)\n\nSELECT * FROM x",
+        "INSERT INTO t (a)\n\nVALUES (1)",
+        "INSERT INTO t (a)\n\nSELECT 1 FROM dual",
+        "MERGE INTO t USING s ON (t.id = s.id)\n\nWHEN MATCHED THEN UPDATE SET t.a = s.a",
+        "UPDATE t\n\nSET a = 1",
+        "SELECT a,\n\n       b\n  FROM t",
+        "SELECT a\n  FROM t\n WHERE x = 1 AND\n\n y = 2")) {
+      eq(texts(one + "\n\nSELECT 9 FROM dual"), List.of(one, "SELECT 9 FROM dual"));
+    }
+    eq(texts("SELECT 1 FROM dual\n\nSELECT 2 FROM dual"), List.of("SELECT 1 FROM dual", "SELECT 2 FROM dual"));
+    eq(texts("UPDATE t SET a = 1\n\nSET SERVEROUTPUT ON"), List.of("UPDATE t SET a = 1", "SET SERVEROUTPUT ON"));
+    eq(texts("WITH x AS (SELECT 1 a FROM dual) SELECT * FROM x\n\nSELECT 2 FROM dual"),
+        List.of("WITH x AS (SELECT 1 a FROM dual) SELECT * FROM x", "SELECT 2 FROM dual"));
 
     // 커서 위치로 고르기.
     String text = "-- 최근\nSELECT a\n  FROM t;\n\nUPDATE t SET a = 1 WHERE b = 2;\n";

@@ -135,8 +135,17 @@ public final class LogActions {
     else if (dialog.getExitCode() == QueryPickDialog.RUN_EXIT) sendOrRun(project, editor, chosen, true);
   }
 
-  /** 콘솔을 골라 로그 값을 채운 SQL 을 붙이고, run 이면 그 접속으로 실행까지 한다. */
+  /**
+   * 콘솔을 골라 로그 값을 채운 SQL 을 붙이고, run 이면 그 접속으로 실행까지 한다.
+   * SQL 의 ? 수(문자열 · 주석 안 제외)와 로그 값 수가 다르면(Parameters 줄을 못 찾은 경우 포함) 알리고, 실행은 하지 않는다.
+   */
   private static void sendOrRun(Project project, Editor editor, MyBatisLog.Entry entry, boolean run) {
+    int marks = MyBatisLog.anchors(entry.sql, "?").size();
+    if (marks != entry.values.size()) {
+      Notify.warning(project, EiDbBundle.message(entry.hasParameters ? "logactions.count.mismatch" : "logactions.no.parameters",
+                                                 marks, entry.values.size()));
+      if (run) return;
+    }
     chooseConsole(project, editor, t -> {
       t.append(project, SqlValues.inline(entry.sql, entry.values, t.config().kind));
       if (run) SqlRunner.run(project, t.config(), entry.sql, new ArrayList<>(entry.values));

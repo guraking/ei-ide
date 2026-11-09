@@ -31,13 +31,13 @@ import org.jetbrains.annotations.Nullable;
 import javax.swing.Icon;
 import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
  * 매퍼 인터페이스 ↔ 매퍼 XML 이동. 짝은 namespace = 인터페이스 정규 이름, 문장 id = 메서드 이름.
- * 같은 namespace 의 XML 이 여럿이면 처음 찾은 것으로 간다.
+ * 같은 namespace 의 XML 이 여럿이면 처음 찾은 것으로 간다. databaseId 로 나뉜 같은 id 문장이 여럿이면 자바 → XML 은 첫 문장으로,
+ * XML → 자바 아이콘과 이동은 문장마다 단다.
  */
 final class MapperNav {
   private MapperNav() {}
@@ -73,11 +73,7 @@ final class MapperNav {
     if (DumbService.isDumb(project)) return null;
     MapperIndex.Entry e = MapperIndex.entry(project, element.getContainingFile().getViewProvider().getVirtualFile());
     if (e == null || e.namespace() == null) return null;
-    int tagStart = element.getPrevSibling().getTextRange().getStartOffset();
-    String id = null;
-    for (Map.Entry<String, Integer> s : e.ids().entrySet()) {
-      if (s.getValue() == tagStart) id = s.getKey();
-    }
+    String id = e.starts().get(element.getPrevSibling().getTextRange().getStartOffset());
     if (id == null) return null;
     PsiClass c = JavaPsiFacade.getInstance(project).findClass(e.namespace(), GlobalSearchScope.allScope(project));
     if (c == null) return null;

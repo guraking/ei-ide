@@ -62,7 +62,7 @@ final class Targets {
   }
 
   /**
-   * 테스트 · 생성 소스(generated)가 아닌 소스 루트를 모듈별로 모아, 자바 루트가 있는 첫 모듈에서 자바 · 리소스 루트를 함께 고른다.
+   * 테스트 · 생성 소스(generated, 콘텐츠 루트 안 경로로 판정)가 아닌 소스 루트를 모듈별로 모아, 자바 루트가 있는 첫 모듈에서 자바 · 리소스 루트를 함께 고른다.
    * 이름이 resources 인 루트는 리소스, 나머지는 자바로 본다. 그 모듈에 리소스 루트가 없으면 자바 루트 옆 resources 로 둔다.
    * shortcut: 루트 종류(JavaSourceRootType)가 빌드 클래스패스에 없어 이름 · 경로로 가른다. 이름이 다른 리소스 루트는 자바로 잡힌다.
    */
@@ -72,7 +72,10 @@ final class Targets {
     Map<Module, VirtualFile> javaOf = new LinkedHashMap<>();
     Map<Module, VirtualFile> resOf = new LinkedHashMap<>();
     for (VirtualFile root : ProjectRootManager.getInstance(project).getContentSourceRoots()) {
-      String path = root.getPath();
+      // 프로젝트가 D:/test/shop 처럼 test 폴더 아래 있어도 모든 루트를 건너뛰지 않게, 콘텐츠 루트 안 경로로만 가른다.
+      VirtualFile content = index.getContentRootForFile(root);
+      String inner = content == null ? null : VfsUtilCore.getRelativePath(root, content);
+      String path = "/" + (inner != null ? inner : root.getPath()) + "/";
       if (path.contains(TEST_SEGMENT) || path.contains(GENERATED)) continue;
       Module module = index.getModuleForFile(root);
       (RESOURCES_DIR.equals(root.getName()) ? resOf : javaOf).putIfAbsent(module, root);

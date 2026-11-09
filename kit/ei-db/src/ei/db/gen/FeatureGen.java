@@ -274,7 +274,7 @@ public final class FeatureGen {
   }
 
   private static String javaType(Meta.Column c) {
-    return TypeMap.forColumn(c.type(), c.scale());
+    return TypeMap.forColumn(c.type(), c.size(), c.scale());
   }
 
   /** 복합 PK 는 /{a}/{b}. */

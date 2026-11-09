@@ -2,6 +2,8 @@ package ei.db.console;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Deque;
 import java.util.List;
 import java.util.Locale;
@@ -10,12 +12,16 @@ import java.util.Set;
 /**
  * 콘솔 글을 문장으로 나눈다. 순수 자바(플랫폼 의존 없음).
  * 경계: 따옴표 · 주석 밖의 ; (문장에 포함), 괄호 밖의 빈 줄, / 만 있는 줄(문장에서 뺀다).
- * 빈 줄 뒤가 혼자서는 문장이 될 수 없는 절(CONTINUE_WORDS)이나 , · ) 로 시작하면 빈 줄에서 끊지 않는다.
+ * 빈 줄 뒤가 혼자서는 문장이 될 수 없는 절(CONTINUE_WORDS)이나 , · ) 로 시작하거나, 빈 줄 앞 마지막 글이 뒤를 기다리는 것(OPEN_ENDS)이면
+ * 빈 줄에서 끊지 않는다. WITH · INSERT · UPDATE 는 본문(SELECT · VALUES · SET 등)이 아직 안 나왔으면 그 본문 앞 빈 줄에서도 끊지 않는다.
  * PL/SQL 블록(BEGIN · DECLARE · CREATE [OR REPLACE] PROCEDURE/FUNCTION/PACKAGE [BODY]/TRIGGER/TYPE BODY)은 빈 줄로 나누지 않고
  * 여는 쪽(BEGIN · CASE · DECLARE · 하위 프로그램 머리의 IS/AS)과 END 의 짝이 모두 맞은 뒤의 ; 에서만 끝난다.
  * 하위 프로그램(지역 함수 · 패키지 · 타입 메서드)의 IS/AS 가 연 겹은 그 BEGIN 이 이어받아 END 하나로 닫힌다.
  * END IF · END LOOP · END WHILE · END REPEAT 는 겹을 닫지 않고, END CASE 는 CASE 만 닫는다.
  * CREATE 블록은 짝이 맞은 END 뒤 이름이 없거나 객체 이름과 같을 때만 끝난다(그 밖에는 / 줄에서). PostgreSQL 의 $$ 본문은 하나의 글자열로 본다.
+ * 본문 겹(BEGIN · DECLARE · IS/AS)을 하나도 열지 않은 CREATE 블록(PostgreSQL EXECUTE FUNCTION 트리거 · RETURN 식 함수, MySQL 한 문장 트리거)과
+ * IS/AS 바로 뒤가 글자열 · LANGUAGE · EXTERNAL 인 것(PostgreSQL 따옴표 본문, Oracle 호출 명세)은 첫 ; 에서 끝난다. 복합 트리거는 예외.
+ * BEGIN 뒤가 TRANSACTION · WORK · ISOLATION 등이면 트랜잭션 시작 문장이다.
  * 문장 앞의 공백 · 주석은 문장에 넣지 않는다.
  */
 public final class SqlSplitter {
@@ -31,7 +37,18 @@ public final class SqlSplitter {
   /** 앞 문장에 이어지는 절의 첫 낱말. 빈 줄 뒤에 와도 문장을 끊지 않는다. */
   private static final Set<String> CONTINUE_WORDS = Set.of(
       "FROM", "WHERE", "AND", "OR", "ORDER", "GROUP", "HAVING", "OFFSET", "FETCH", "UNION", "MINUS", "INTERSECT", "EXCEPT",
-      "JOIN", "INNER", "LEFT", "RIGHT", "FULL", "CROSS", "OUTER", "ON", "CONNECT", "LIMIT", "FOR");
+      "JOIN", "INNER", "LEFT", "RIGHT", "FULL", "CROSS", "OUTER", "ON", "CONNECT", "LIMIT", "FOR", "WHEN", "THEN", "ELSE", "USING");
+  /** 빈 줄 앞 마지막 글이 이것이면 문장이 덜 끝났다. */
+  private static final Set<String> OPEN_ENDS = Set.of(
+      ",", "AND", "OR", "UNION", "ALL", "MINUS", "INTERSECT", "EXCEPT", "SELECT", "FROM", "WHERE", "BY", "JOIN");
+  /** WITH 뒤 본문 문장의 첫 낱말. */
+  private static final Set<String> MAIN_WORDS = Set.of("SELECT", "INSERT", "UPDATE", "DELETE", "MERGE");
+  /** INSERT 의 본문 첫 낱말. */
+  private static final Set<String> INSERT_BODY = Set.of("VALUES", "SELECT", "WITH");
+  /** BEGIN 바로 뒤에 오면 블록이 아니라 트랜잭션 시작이다. */
+  private static final Set<String> TX_WORDS = Set.of("TRANSACTION", "TRAN", "WORK", "ISOLATION", "READ", "DEFERRABLE");
+  /** 하위 프로그램 머리의 IS/AS 바로 뒤에 오면 PL/SQL 본문이 아닌 호출 명세다. */
+  private static final Set<String> CALL_SPEC = Set.of("LANGUAGE", "EXTERNAL");
 
   public static List<Stmt> split(String text) {
     List<Stmt> out = new ArrayList<>();
@@ -53,7 +70,7 @@ public final class SqlSplitter {
       if (ch == '\n') {
         int lineStart = text.lastIndexOf('\n', i - 1) + 1;
         String line = text.substring(lineStart, i).strip();
-        if (line.equals("/") || (line.isEmpty() && !seg.block && seg.depth == 0 && !continues(text, i + 1))) {
+        if (line.equals("/") || (line.isEmpty() && !seg.block && seg.depth == 0 && !continues(seg, text, i + 1))) {
           seg.flush(text, out, lineStart);
           seg = new Seg();
         }
@@ -123,8 +140,9 @@ public final class SqlSplitter {
     return before;
   }
 
-  /** from 부터 공백 · 주석을 건너뛴 첫 글이 이어지는 절(CONTINUE_WORDS) · , · ) 이면 참. */
-  private static boolean continues(String text, int from) {
+  /** 빈 줄에서 문장을 이어 갈지: seg 의 마지막 글, from 부터 공백 · 주석을 건너뛴 첫 글로 정한다. */
+  private static boolean continues(Seg seg, String text, int from) {
+    if (seg.last != null && OPEN_ENDS.contains(seg.last)) return true;
     int n = text.length();
     int i = from;
     while (i < n) {
@@ -141,7 +159,15 @@ public final class SqlSplitter {
     if (text.charAt(i) == ',' || text.charAt(i) == ')') return true;
     int j = i;
     while (j < n && isIdent(text.charAt(j))) j++;
-    return CONTINUE_WORDS.contains(text.substring(i, j).toUpperCase(Locale.ROOT));
+    String next = text.substring(i, j).toUpperCase(Locale.ROOT);
+    if (CONTINUE_WORDS.contains(next)) return true;
+    String first = seg.words.isEmpty() ? "" : seg.words.get(0);
+    return switch (first) {
+      case "WITH" -> MAIN_WORDS.contains(next) && Collections.disjoint(seg.top, MAIN_WORDS);
+      case "INSERT" -> INSERT_BODY.contains(next) && !seg.top.contains("VALUES") && !seg.top.contains("SELECT");
+      case "UPDATE" -> next.equals("SET") && !seg.top.contains("SET");
+      default -> false;
+    };
   }
 
   private static int indexOrEnd(String text, String what, int from) {
@@ -195,6 +221,16 @@ public final class SqlSplitter {
     boolean block;
     boolean decided;
     boolean dollar;
+    /** 본문 겹(BEGIN · DECLARE · IS/AS)을 한 번이라도 열었다. */
+    boolean opened;
+    /** 하위 프로그램 머리의 IS/AS 바로 뒤. */
+    boolean afterAs;
+    /** IS/AS 뒤가 글자열 · LANGUAGE · EXTERNAL 이라 PL/SQL 본문이 없다. */
+    boolean callSpec;
+    /** 마지막 글(대문자 낱말 또는 기호 한 글자). */
+    String last;
+    /** 괄호 밖 낱말들. */
+    final Set<String> top = new HashSet<>();
     /** 닫히지 않은 ( 의 수. 괄호 안의 빈 줄은 문장 경계가 아니다. */
     int depth;
     /** 블록 판정용 앞 낱말들. ; 는 ";" 로 들어간다. */
@@ -218,8 +254,14 @@ public final class SqlSplitter {
 
     void word(String w, boolean dotNext) {
       words.add(w);
+      last = w;
+      if (depth == 0) top.add(w);
       if (!decided && decide()) return;
       if (!block) return;
+      if (afterAs) {
+        afterAs = false;
+        if (CALL_SPEC.contains(w)) callSpec = true;
+      }
       if (pendingEnd && afterEnd(w)) return;
       closed = false;
       if (expectName) {
@@ -232,16 +274,22 @@ public final class SqlSplitter {
         case "BEGIN" -> {
           if (DECL.equals(open.peek())) open.pop();
           open.push("BEGIN");
+          opened = true;
           header = false;
         }
         case "DECLARE" -> {
           // BEGIN 안의 DECLARE 는 MySQL 지역 선언이라 겹을 열지 않는다. Oracle 의 안쪽 DECLARE … BEGIN 은 이어지는 BEGIN 이 겹을 연다.
           if (!"BEGIN".equals(open.peek())) open.push(DECL);
+          opened = true;
           header = false;
         }
         case "CASE" -> open.push("CASE");
         case "IS", "AS" -> {
-          if (header) open.push(DECL);
+          if (header) {
+            open.push(DECL);
+            opened = true;
+            afterAs = true;
+          }
           header = false;
         }
         case "FUNCTION", "PROCEDURE" -> header = true;
@@ -254,7 +302,10 @@ public final class SqlSplitter {
     void other(char ch) {
       if (ch == '(') depth++;
       if (ch == ')' && depth > 0) depth--;
+      last = String.valueOf(ch);
       if (!block) return;
+      if (afterAs && ch == '\'') callSpec = true;
+      afterAs = false;
       if (pendingEnd) afterEnd(null);
       if (ch != '.') expectName = false;
       if (ch == ';') header = false;
@@ -294,10 +345,13 @@ public final class SqlSplitter {
       return true;
     }
 
-    /** BEGIN 하나뿐(트랜잭션 시작)이면 블록이 아니다. */
+    /** BEGIN 하나뿐이거나 BEGIN TRANSACTION 등(트랜잭션 시작)이면 블록이 아니다. */
     boolean endsAtSemicolon() {
-      if (!block || (words.size() == 1 && words.get(0).equals("BEGIN"))) return true;
-      if (dollar) return true;
+      if (!block) return true;
+      boolean tx = words.get(0).equals("BEGIN") && (words.size() == 1 || TX_WORDS.contains(words.get(1))) && !words.contains(";");
+      if (tx) return true;
+      if (dollar || callSpec) return true;
+      if (!opened && open.isEmpty() && !words.contains("COMPOUND")) return true;
       return closed && (name == null || endLabel == null || endLabel.equals(name));
     }
 

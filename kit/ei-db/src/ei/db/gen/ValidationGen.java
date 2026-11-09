@@ -55,7 +55,7 @@ public final class ValidationGen {
    */
   public static List<Ann> annotations(Meta.Column col, String javaType, Set<String> existing) {
     String type = Names.simple(javaType);
-    String colJava = TypeMap.forColumn(col.type(), col.scale());
+    String colJava = TypeMap.forColumn(col.type(), col.size(), col.scale());
     boolean string = STRING.equals(type);
     List<Ann> out = new ArrayList<>();
     if (!col.nullable()) out.add(new Ann(string ? NOT_BLANK : NOT_NULL, ""));
@@ -63,7 +63,7 @@ public final class ValidationGen {
       out.add(new Ann(SIZE, "max = " + col.size()));
     }
     boolean numericColumn = TypeMap.LONG.equals(colJava) || TypeMap.INTEGER.equals(colJava) || TypeMap.DECIMAL.equals(colJava);
-    if (NUMBERS.contains(type) && col.size() > 0 && numericColumn) {
+    if (NUMBERS.contains(type) && col.size() > 0 && col.size() < TypeMap.UNBOUNDED_PRECISION && numericColumn) {
       int fraction = Math.max(col.scale(), 0);
       int integer = Math.max(col.size() - fraction, 0);
       out.add(new Ann(DIGITS, "integer = " + integer + ", fraction = " + fraction));

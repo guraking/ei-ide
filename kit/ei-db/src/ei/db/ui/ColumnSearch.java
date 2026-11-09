@@ -27,6 +27,7 @@ import javax.swing.table.DefaultTableCellRenderer;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Dimension;
+import java.awt.Toolkit;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.sql.Connection;
@@ -47,8 +48,10 @@ final class ColumnSearch extends DialogWrapper {
   record Hit(String table, String column, String type, String comment, String tableComment) {}
 
   private static final String[] HEADERS = {EiDbBundle.message("common.col.table"), EiDbBundle.message("common.col.column"), EiDbBundle.message("common.col.type"), EiDbBundle.message("common.col.comment")};
-  private static final int WIDTH = 760;
-  private static final int HEIGHT = 420;
+  /** 처음 열 때 창 크기: 화면에 대한 비율. 그 뒤로는 사용자가 바꾼 크기를 기억한다. */
+  private static final double FIRST_WIDTH_RATIO = 0.4;
+  private static final double FIRST_HEIGHT_RATIO = 0.4;
+  private static final String DIMENSION_KEY = "ei.db.ColumnSearch";
 
   private final Project project;
   private final DbConfig c;
@@ -80,6 +83,15 @@ final class ColumnSearch extends DialogWrapper {
   }
 
   @Override
+  protected @Nullable String getDimensionServiceKey() { return DIMENSION_KEY; }
+
+  @Override
+  public Dimension getInitialSize() {
+    Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+    return new Dimension((int) (screen.width * FIRST_WIDTH_RATIO), (int) (screen.height * FIRST_HEIGHT_RATIO));
+  }
+
+  @Override
   protected @Nullable JComponent createCenterPanel() {
     field.getTextEditor().getEmptyText().setText(EiDbBundle.message("columnsearch.hint"));
     field.getTextEditor().registerKeyboardAction(e -> search(), KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), JComponent.WHEN_FOCUSED);
@@ -101,7 +113,6 @@ final class ColumnSearch extends DialogWrapper {
     north.add(gauge.line(), BorderLayout.SOUTH);
     panel.add(north, BorderLayout.NORTH);
     JBScrollPane scroll = new JBScrollPane(table);
-    scroll.setPreferredSize(new Dimension(JBUI.scale(WIDTH), JBUI.scale(HEIGHT)));
     panel.add(scroll, BorderLayout.CENTER);
     status.setText(EiDbBundle.message("columnsearch.status.help"));
     JPanel south = new JPanel(new BorderLayout());

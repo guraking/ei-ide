@@ -34,7 +34,6 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
 import java.awt.Component;
-import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.io.IOException;
 import java.nio.file.InvalidPathException;
@@ -54,8 +53,9 @@ public final class MapperDialog extends DialogWrapper {
 
   private static final Pattern FQN = Pattern.compile("[A-Za-z_$][\\w$]*(\\.[A-Za-z_$][\\w$]*)*");
   private static final String DTO_PACKAGE = "dto";
-  private static final int LEFT_WIDTH = 620;
-  private static final int PREVIEW_WIDTH = 900;
+  /** 대화창 첫 폭과 왼쪽 칸 비율(칸 폭은 분할선으로 바꾼다). */
+  private static final int WIDTH = 1520;
+  private static final float SPLIT = 620f / WIDTH;
   private static final int HEIGHT = 820;
   /** 입력이 멈춘 뒤 이만큼 지나서 미리보기를 다시 만든다(글자마다 디스크를 읽지 않게). */
   private static final int REFRESH_DELAY_MS = 300;
@@ -167,7 +167,6 @@ public final class MapperDialog extends DialogWrapper {
         .addLabeledComponentFillVertically(EiDbBundle.message("mapper.columns.label", table, cols.size()), columnTable())
         .getPanel();
     left.setBorder(JBUI.Borders.emptyRight(12));
-    left.setPreferredSize(new Dimension(JBUI.scale(LEFT_WIDTH), JBUI.scale(HEIGHT)));
 
     JPanel head = new JPanel(new FlowLayout(FlowLayout.RIGHT, JBUI.scale(8), 0));
     fileLabel.setFont(Ui.mono());
@@ -177,13 +176,9 @@ public final class MapperDialog extends DialogWrapper {
     JPanel right = new JPanel(new BorderLayout(0, JBUI.scale(6)));
     right.add(head, BorderLayout.NORTH);
     right.add(tabs, BorderLayout.CENTER);
-    right.setPreferredSize(new Dimension(JBUI.scale(PREVIEW_WIDTH), JBUI.scale(HEIGHT)));
     right.setBorder(JBUI.Borders.emptyLeft(12));
 
-    JPanel root = new JPanel(new BorderLayout());
-    root.add(left, BorderLayout.WEST);
-    root.add(right, BorderLayout.CENTER);
-    return root;
+    return Ui.split("mapper", SPLIT, left, right, WIDTH, HEIGHT);
   }
 
   @Override

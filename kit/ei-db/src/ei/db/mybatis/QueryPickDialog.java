@@ -27,6 +27,7 @@ import ei.db.FileTypes;
 import ei.db.Notify;
 import ei.db.console.SqlFormatter;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import javax.swing.Action;
 import javax.swing.JComponent;
@@ -36,6 +37,8 @@ import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
 import javax.swing.event.DocumentEvent;
 import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyAdapter;
@@ -52,9 +55,11 @@ import java.util.List;
 final class QueryPickDialog extends DialogWrapper {
   static final int RUN_EXIT = NEXT_USER_EXIT_CODE;
 
-  private static final int LIST_WIDTH = 380;
-  private static final int PREVIEW_WIDTH = 640;
-  private static final int HEIGHT = 480;
+  /** 처음 열 때 화면 폭 · 높이에 대한 창 크기 비율. 사용자가 바꾼 크기 · 나눈 비율은 IntelliJ 가 기억한다. */
+  private static final double FIRST_WIDTH_RATIO = 0.55;
+  private static final double FIRST_HEIGHT_RATIO = 0.5;
+  private static final String DIMENSION_KEY = "ei.db.mybatis.QueryPickDialog";
+  private static final String SPLIT_KEY = "ei.db.mybatis.QueryPickDialog.split";
   private static final float SPLIT = 0.37f;
   /** 칸막이 양쪽 안쪽 여백(px, 배율 전). */
   private static final int SPLIT_PADDING = 8;
@@ -143,12 +148,12 @@ final class QueryPickDialog extends DialogWrapper {
     JPanel left = new JPanel(new BorderLayout(0, JBUI.scale(4)));
     left.add(filter, BorderLayout.NORTH);
     left.add(new JBScrollPane(list), BorderLayout.CENTER);
-    left.setPreferredSize(JBUI.size(LIST_WIDTH, HEIGHT));
-    right.setPreferredSize(JBUI.size(PREVIEW_WIDTH, HEIGHT));
     // 얇은 한 줄 칸막이를 쓰고, 양쪽 내용이 선에 붙지 않게 안쪽 여백을 둔다.
     left.setBorder(JBUI.Borders.emptyRight(SPLIT_PADDING));
     right.setBorder(JBUI.Borders.emptyLeft(SPLIT_PADDING));
     OnePixelSplitter split = new OnePixelSplitter(false, SPLIT);
+    split.setSplitterProportionKey(SPLIT_KEY);
+    split.setHonorComponentsMinimumSize(false);
     split.setFirstComponent(left);
     split.setSecondComponent(right);
     JBLabel hint = new JBLabel(EiDbBundle.message("querypick.hint"));
@@ -163,6 +168,15 @@ final class QueryPickDialog extends DialogWrapper {
       }
     }.registerCustomShortcutSet(new CustomShortcutSet(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, InputEvent.CTRL_DOWN_MASK)), panel);
     return panel;
+  }
+
+  @Override
+  protected @Nullable String getDimensionServiceKey() { return DIMENSION_KEY; }
+
+  @Override
+  public Dimension getInitialSize() {
+    Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+    return new Dimension((int) (screen.width * FIRST_WIDTH_RATIO), (int) (screen.height * FIRST_HEIGHT_RATIO));
   }
 
   @Override
