@@ -126,6 +126,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
       private List<String> names;
       private String savedFrom;
       private String savedInto;
+      private List<String> intoCandidates;
 
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
@@ -135,6 +136,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
           remote = ReverseMerge.remoteOf(cfg, current);
           savedFrom = cfg.get(ReverseMerge.CONFIG_FROM);
           savedInto = cfg.get(ReverseMerge.CONFIG_INTO);
+          intoCandidates = ReverseMerge.intoCandidates(cfg, current);
           // 다른 브랜치에서 한 합치기의 기억(featureA → develop)은 쓰지 않는다. 그대로 열면 남의 브랜치를 develop 에 올리게 된다.
           if (!ReverseMerge.rememberedFor(savedFrom, savedInto, current)) {
             savedFrom = null;
@@ -143,7 +145,11 @@ public final class ReverseMergeAction extends DumbAwareAction {
           // 받아 둔 브랜치 목록으로 바로 열고 서버 목록은 창이 뜬 뒤 합친다(VPN 에서 ls-remote 는 몇 초 걸린다).
           // 아직 기준 브랜치를 받은 적이 없으면(처음 쓰는 저장소) 서버에 물어야 From 을 채울 수 있다.
           names = ReverseMerge.knownBranches(root, remote);
-          if (ReverseMerge.pick(names, savedFrom, ReverseMerge.FROM_CANDIDATES) == null) names = ReverseMerge.serverBranches(root, remote);
+          // Into 도 마찬가지다. 받아 둔 이름은 윈도우에서 대소문자가 서버와 다를 수 있어(Feature/ ↔ feature/) 정확히 같은 이름이 없으면 서버에 묻는다.
+          if (ReverseMerge.pick(names, savedFrom, ReverseMerge.FROM_CANDIDATES) == null
+              || ReverseMerge.pick(names, savedInto, intoCandidates) == null) {
+            names = ReverseMerge.serverBranches(root, remote);
+          }
           return null;
         });
         try {
@@ -166,8 +172,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
           return;
         }
         String from = ReverseMerge.pick(names, savedFrom, ReverseMerge.FROM_CANDIDATES);
-        // 개인 브랜치는 저장해 둔 것, 없으면 지금 브랜치(서버에 같은 이름이 있을 때).
-        String into = ReverseMerge.pick(names, savedInto, List.of(current));
+        // 개인 브랜치는 저장해 둔 것, 없으면 지금 브랜치가 따라가는 서버 브랜치, 그다음 지금 브랜치(서버에 같은 이름이 있을 때).
+        String into = ReverseMerge.pick(names, savedInto, intoCandidates);
         new PreviewDialog(project, repo, root, remote, current, names, from, into).show();
       }
 
@@ -226,7 +232,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
       SimpleListCellRenderer<String> remoteName = new SimpleListCellRenderer<>() {
         @Override
         public void customize(@NotNull JList<? extends String> list, String name, int index, boolean selected, boolean hasFocus) {
-          setText(remote + "/" + name);
+          setText(name == null ? "" : remote + "/" + name);
         }
       };
       fromBox.setRenderer(remoteName);
@@ -269,9 +275,16 @@ public final class ReverseMergeAction extends DumbAwareAction {
           if (isDisposed()) return;
           for (ComboBox<String> box : List.of(fromBox, intoBox)) {
             DefaultComboBoxModel<String> items = (DefaultComboBoxModel<String>) box.getModel();
+            // 받아 둔 이름 중 대소문자만 서버와 다른 것은 서버 이름으로 바꾼다. 그 이름으로는 서버에서 받을 수 없다.
+            String selected = (String) box.getSelectedItem();
+            String fixedSelected = ReverseMerge.serverSpelling(names, selected);
+            for (int k = items.getSize() - 1; k >= 0; k--) {
+              if (ReverseMerge.serverSpelling(names, items.getElementAt(k)) != null) items.removeElementAt(k);
+            }
             for (String name : names) {
               if (items.getIndexOf(name) < 0) items.addElement(name);
             }
+            if (fixedSelected != null) box.setSelectedItem(fixedSelected);
           }
         });
       });
@@ -289,6 +302,13 @@ public final class ReverseMergeAction extends DumbAwareAction {
      */
     private static ComboboxSpeedSearch roundSearch(ComboBox<String> box) {
       ComboboxSpeedSearch search = new ComboboxSpeedSearch(box, null) {
+        // 브랜치 이름 어디든 친 글이 들어 있으면 맞다(대소문자 무시). 기본 맞추기는 「/ . -」 를 낱말 경계로 보아 전체 이름을 치면 못 찾는다.
+        @Override
+        protected boolean isMatchingElement(Object element, String pattern) {
+          String text = getElementText(element);
+          return text != null && pattern != null && StringUtil.containsIgnoreCase(text, pattern);
+        }
+
         @Override
         protected @NotNull SearchPopup createPopup(String s) {
           SearchPopup popup = new SearchPopup(s) {
@@ -493,7 +513,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
       gauge.setVisible(false);
       String from = from();
       String into = into();
-      push.setText(SyncBundle.message("rmerge.push", remote + "/" + into));
+      push.setText(into == null ? SyncBundle.message("rmerge.push.none") : SyncBundle.message("rmerge.push", remote + "/" + into));
       if (from == null || into == null) {
         status(SyncBundle.message("rmerge.pick"));
         return;

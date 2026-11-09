@@ -250,6 +250,25 @@ final class ReverseMerge {
     return ("+" + HEADS + "*:" + remoteRef(remote, "*")).equals(cfg.get("remote." + remote + ".fetch"));
   }
 
+  /**
+   * Into 기본값 후보: branch 가 따라가는 서버 브랜치 이름(branch.<이름>.merge), 그다음 branch 이름 그대로.
+   * 서버 이름은 git 설정 그대로라 대소문자가 서버와 같다. 받아 둔 refs/remotes 이름은 윈도우에서 폴더 대소문자를 따라 달라질 수 있다.
+   */
+  static List<String> intoCandidates(Map<String, String> cfg, String branch) {
+    List<String> out = new ArrayList<>();
+    String merge = cfg.get("branch." + branch + ".merge");
+    if (merge != null && merge.startsWith(HEADS)) out.add(merge.substring(HEADS.length()));
+    if (!out.contains(branch)) out.add(branch);
+    return out;
+  }
+
+  /** 서버 목록에 대소문자까지 같은 이름이 없고 대소문자만 다른 이름이 있으면 그 서버 이름, 아니면 null. */
+  static String serverSpelling(List<String> server, String name) {
+    if (name == null || server.contains(name)) return null;
+    for (String s : server) if (s.equalsIgnoreCase(name)) return s;
+    return null;
+  }
+
   /** remoteOf 와 같고 configs 로 읽어 둔 설정을 쓴다. */
   static String remoteOf(Map<String, String> cfg, String branch) {
     String remote = branch == null ? null : cfg.get("branch." + branch + ".remote");
