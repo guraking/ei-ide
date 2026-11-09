@@ -98,6 +98,10 @@ final class ReverseMerge {
   private static final String CASE_MESSAGE = "파일 이름 대소문자를 %s 에 맞춤";
   /** 대소문자만 다른 이름으로 옮길 때 거쳐 가는 임시 이름의 꼬리. 같은 폴더에 이 이름의 파일이 있으면 옮기기가 실패하고 아무것도 바꾸지 않는다. */
   private static final String CASE_TMP_SUFFIX = ".moa-case-tmp";
+  /** 끝나지 않은 합치기 · cherry-pick · revert 가 남긴 표시. 하나라도 있으면 새로 합치지 않는다. 리베이스 중에는 HEAD 가 브랜치가 아니라 창이 열리지 않는다. */
+  private static final List<String> IN_PROGRESS_HEADS = List.of("MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD");
+  /** 합치기를 막는 추적 안 한 파일을 안내에 보이는 줄 수. 나머지는 개수로 알린다. */
+  private static final int PATH_LIST_MAX = 10;
 
   private ReverseMerge() {}
 
@@ -442,6 +446,7 @@ final class ReverseMerge {
     // 같은 저장소에서 받기 · 다른 Merge · Undo 가 도는 중이면 checkout · stash 가 엇갈리지 않게 시작하지 않는다.
     String work = SyncPanel.beginWork(root);
     try {
+      refuseInProgress(root);
       return mergeAlone(root, remote, from, fromTip, into, current, push, stash, matchCase);
     }
     finally {
@@ -462,9 +467,14 @@ final class ReverseMerge {
     // 합치기가 시작하는 곳: 옮겨 갈 브랜치(없으면 서버 것으로 만든다) 또는 지금 HEAD. 서버 것이 앞서 있으면 따라잡은 뒤 거기서 합친다.
     String start = !switched ? "HEAD" : hasRef(root, HEADS + into) ? HEADS + into : intoRemote;
     String base = Integer.parseInt(git(root, "rev-list", "--count", start + ".." + intoRemote).trim()) > 0 ? intoRemote : start;
-    Map<String, String> renames = ignoreCase(root) ? caseRenames(tree(root, base), tree(root, fromTip), tree(root, forkPoint(root, base, fromTip))) : Map.of();
+    boolean folded = ignoreCase(root);
+    Map<String, String> renames = folded ? caseRenames(tree(root, base), tree(root, fromTip), tree(root, forkPoint(root, base, fromTip))) : Map.of();
     if (!renames.isEmpty() && !matchCase) throw new CaseRenameException(renames);
-    if (blocksMerge(root, start, base, fromTip)) {
+    Set<String> touched = touched(root, start, base, fromTip);
+    // 추적 안 한 파일은 Stash 에 들어가지 않고 git 이 덮어쓰지도 않는다. 옮기기 · 합치기 도중에 영어 오류로 멈추지 않게 미리 이름을 알린다.
+    List<String> inWay = inTheWay(lines(git(root, "ls-files", "--others", "--exclude-standard")), touched, folded);
+    if (!inWay.isEmpty()) throw new IOException(SyncBundle.message("rmerge.untracked", pathList(inWay)));
+    if (blocksMerge(root, touched)) {
       if (!stash) throw new DirtyException();
       git(root, GIT_LONG_TIMEOUT_SEC, "stash", "push", "-m", STASH_MESSAGE);
       stashed = true;
@@ -519,19 +529,60 @@ final class ReverseMerge {
   }
 
   /**
-   * 커밋 안 한 변경이 합치기를 막는가. 올려 둔(staged) 변경이 있으면 git merge 가 거부하므로 참이다.
-   * 아니면 고친 파일이 합치기가 바꾸는 파일과 겹칠 때만 참이다: start(옮겨 갈 브랜치 또는 HEAD)로 옮기기, base(따라잡은 서버 브랜치, 따라잡지 않으면 start)로 따라잡기, base 에서 fromTip 합치기.
-   * 이름 바꾸기는 옛 경로 · 새 경로를 모두 바뀐 파일로 본다(--no-renames).
+   * 합치기가 바꾸는 파일: start(옮겨 갈 브랜치 또는 HEAD)로 옮기기, base(따라잡은 서버 브랜치, 따라잡지 않으면 start)로 따라잡기, base 에서 fromTip 합치기.
+   * 이름 바꾸기는 옛 경로 · 새 경로를 모두 바뀐 파일로 본다(--no-renames). 세 diff 는 동시에 돌린다.
    */
-  static boolean blocksMerge(File root, String start, String base, String fromTip) throws IOException, InterruptedException {
+  static Set<String> touched(File root, String start, String base, String fromTip) throws IOException, InterruptedException {
+    Set<String> touched = new LinkedHashSet<>();
+    for (String out : gitAll(root, List.of(new String[]{"diff", "--name-only", "--no-renames", "HEAD", start},
+                                           new String[]{"diff", "--name-only", "--no-renames", start, base},
+                                           new String[]{"diff", "--name-only", "--no-renames", base + "..." + fromTip}))) {
+      touched.addAll(lines(out));
+    }
+    return touched;
+  }
+
+  /**
+   * 커밋 안 한 변경이 합치기를 막는가. 올려 둔(staged) 변경이 있으면 git merge 가 거부하므로 참이다.
+   * 아니면 고친 파일이 합치기가 바꾸는 파일(touched)과 겹칠 때만 참이다.
+   */
+  static boolean blocksMerge(File root, Set<String> touched) throws IOException, InterruptedException {
     if (!lines(git(root, "diff", "--cached", "--name-only")).isEmpty()) return true;
     Set<String> mine = lines(git(root, "diff", "--name-only"));
-    if (mine.isEmpty()) return false;
-    Set<String> touched = lines(git(root, "diff", "--name-only", "--no-renames", "HEAD", start));
-    touched.addAll(lines(git(root, "diff", "--name-only", "--no-renames", start, base)));
-    touched.addAll(lines(git(root, "diff", "--name-only", "--no-renames", base + "..." + fromTip)));
     mine.retainAll(touched);
     return !mine.isEmpty();
+  }
+
+  /**
+   * 추적 안 한 파일(untracked) 가운데 합치기가 만들거나 바꾸는 경로(touched)와 같은 것. git 은 이런 파일을 덮어쓰지 않고 옮기기 · 합치기를 멈춘다.
+   * ignoreCase 면(core.ignorecase) 대소문자만 다른 이름도 같은 파일로 본다. 결과는 untracked 순서.
+   */
+  static List<String> inTheWay(Set<String> untracked, Set<String> touched, boolean ignoreCase) {
+    Set<String> keys = new HashSet<>();
+    for (String path : touched) keys.add(ignoreCase ? path.toLowerCase(Locale.ROOT) : path);
+    List<String> hits = new ArrayList<>();
+    for (String path : untracked) if (keys.contains(ignoreCase ? path.toLowerCase(Locale.ROOT) : path)) hits.add(path);
+    return hits;
+  }
+
+  /** 경로 목록을 한 줄에 하나씩, PATH_LIST_MAX 줄까지 보이고 나머지는 개수로 알린다. */
+  static String pathList(List<String> paths) {
+    StringBuilder text = new StringBuilder();
+    for (int k = 0; k < paths.size(); k++) {
+      if (k == PATH_LIST_MAX) {
+        text.append(SyncBundle.message("rmerge.case.more", paths.size() - k));
+        break;
+      }
+      text.append(paths.get(k)).append('\n');
+    }
+    return text.toString().trim();
+  }
+
+  /** 끝나지 않은 합치기 · cherry-pick · revert 가 있으면 IOException. 그 위에서 합치면 Stash 가 그 상태를 지우거나 그 합치기를 대신 마무리하게 된다. */
+  private static void refuseInProgress(File root) throws IOException, InterruptedException {
+    for (String head : IN_PROGRESS_HEADS) {
+      if (hasRef(root, head)) throw new IOException(SyncBundle.message("rmerge.in.progress", head));
+    }
   }
 
   /** 합치기 상태(MERGE_HEAD)가 남아 있으면 merge --abort 로 지운다. 지우지 못하면 그 실패를 cause 에 덧붙인다. */
@@ -724,7 +775,7 @@ final class ReverseMerge {
     }
     boolean switched = !into.equals(current);
     try {
-      push(root, remote, into, push, switched);
+      if (push) pushAfterFinish(root, remote, into, switched);
       if (switched) git(root, GIT_LONG_TIMEOUT_SEC, "checkout", current);
     }
     catch (IOException e) {
@@ -732,6 +783,29 @@ final class ReverseMerge {
     }
     if (stashed) unstash(root);
     return true;
+  }
+
+  /**
+   * 충돌을 풀어 마무리한 합치기를 올린다. 그사이 남이 into 에 먼저 올려 거절되면(behindServer) 합치기 커밋은 두고(사용자가 푼 충돌을 잃지 않게)
+   * 서버 into 를 다시 받아 그 위에 합친 뒤 한 번 더 올린다. 그 합치기가 충돌 · 오류로 멈추면 취소해 마무리한 커밋만 남기고, into 에서 Pull · Push 하라는 안내를 붙인다.
+   */
+  private static void pushAfterFinish(File root, String remote, String into, boolean switched) throws IOException, InterruptedException {
+    try {
+      push(root, remote, into, true, switched);
+      return;
+    }
+    catch (IOException rejected) {
+      if (!behindServer(rejected.getMessage())) throw rejected;
+    }
+    fetch(root, remote, into);
+    try {
+      git(root, GIT_LONG_TIMEOUT_SEC, "merge", "--no-edit", remoteRef(remote, into));
+    }
+    catch (IOException e) {
+      abortMerge(root, e);
+      throw new IOException(SyncBundle.message("rmerge.push.rejected.finish", remote + "/" + into, into) + "\n" + e.getMessage(), e);
+    }
+    push(root, remote, into, true, switched);
   }
 
   /**
