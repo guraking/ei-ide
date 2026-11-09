@@ -10,7 +10,7 @@
   - `kit/ei-db` 데이터베이스(접속 · 콘솔 · 결과 · MyBatis · 생성 · ERD), 점검 `kit/ei-db/test/**/*Check.java`
   - `kit/boot-servers` 서버 창(스프링 부트 · WAS), 점검 `src/test/java`
   - `kit/sync` 동기화 창(Git · SVN), 점검 `SyncCheck.java`
-  - `kit/ko/apply_ko.py` 한국어 팩을 메뉴 · 단추만 영어로 깎아 `bundled-plugins/localization-ko` 에 넣음(우리 번역은 `kit/ko/override/<jar 안 경로>`), 점검 `apply_ko_check.py`
+  - `kit/ko/apply_ko.py` 한국어 팩에 우리 번역 `kit/ko/override/<jar 안 경로>` 를 덮어 `bundled-plugins/localization-ko` 에 넣음(모양이 팩과 다르면 멈춤), 점검 `apply_ko_check.py`. 번역 기준은 `kit/ko/용어집.md`. 메뉴 · 단추도 한국어(2026-11-09부터, 우리 플러그인 `_ko` 도 같음)
   - `kit/mingit/apply_mingit.py` 설치본에 넣을 MinGit 을 받아 `bundled-plugins/kinggura-sync/git` 에 푼다(판 · SHA-256 고정, 저장소에는 안 올림). PC 에 Git 이 없을 때만 쓰인다
   - `kit/web/apply_web.py` 설치본에 넣을 Node.js 와 웹 언어 서버(vtsls · Vue · typescript 5)를 받아 `bundled-plugins/boot-servers/web` 에 넣는다(판 · SHA-256 고정, 저장소에는 안 올림). 인터넷이 막힌 PC 에서도 .js · .ts · .vue 언어 서버가 뜬다
   - `kit/git-auth` IntelliJ Git 이 https 원격에 인증을 환경값으로 넘기는 손질(`apply_git_auth.py`), 점검 `EiGitAuthCheck.java`

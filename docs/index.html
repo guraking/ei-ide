@@ -382,7 +382,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
 ├─ <span class="hl">moaide-262.10968.N.exe</span>        <span class="c">설치 파일</span>
 ├─ <span class="hl">플러그인설치.bat</span>               <span class="c">3번 단계</span>
 ├─ plugins\
-│  ├─ localization-ko\              <span class="c">한국어 팩 원본 (빌드 때 kit\ko\apply_ko.py 가 깎아 본체에 넣음)</span>
+│  ├─ localization-ko\              <span class="c">한국어 팩 원본 (빌드 때 kit\ko\apply_ko.py 가 우리 번역을 덮어 본체에 넣음)</span>
 │  ├─ claude-code-jetbrains-plugin\ <span class="c">Claude Code</span>
 │  └─ one-dark-theme\               <span class="c">VS Code 색감 테마 + 편집기 색</span>
 ├─ jdk\                             <span class="c">Temurin JDK 17 · 21 · 27 zip → %USERPROFILE%\.jdks 에 풀고, IDE 를 켜면 SDK 목록에 자동 등록</span>
@@ -398,7 +398,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
     <h2><span class="no">02</span>처음 켰을 때 달라진 것</h2>
     <p class="lead">설정을 손대지 않아도 처음부터 이렇게 켜집니다.</p>
     <div class="cards">
-      <div class="card"><h4>메뉴는 영어, 안내는 한국어</h4><p>한국어를 고르면 메뉴 · 단추 · 탭 이름은 영어, 오류 · 알림 · 대화 상자 글은 한국어로 나옵니다. 이 설명서도 메뉴 이름을 영어로 적었습니다.</p><span class="was">전부 한국어 또는 전부 영어</span></div>
+      <div class="card"><h4>메뉴까지 쉬운 한국어</h4><p>한국어를 고르면 메뉴 · 단추 · 알림 · 대화 상자 글이 모두 한국어로 나옵니다. 번역체(「~에 대한」 「~을(를)」)를 걷어 낸 우리 번역이 공식 팩 위에 덮입니다(기준: kit\ko\용어집.md, 아직 자주 보는 묶음부터). 이 설명서는 메뉴 이름을 영어로 적었습니다.</p><span class="was">메뉴는 영어, 안내만 한국어(어색한 팩 번역)</span></div>
       <div class="card"><h4>이클립스 단축키 · 메뉴</h4><p>File · Edit · Source · Refactor · Navigate · Search · Project · Run · Git · Window · Help</p><span class="was">Windows 단축키, View · Code · Build · Tools</span></div>
       <div class="card"><h4>저장하면 자동 빌드</h4><p>자바 import 정리, 바뀐 줄만 서식. Gradle 빌드 · 실행도 IDE 가 직접.</p><span class="was">끔, Gradle 에 위임</span></div>
       <div class="card"><h4>한글 폭이 맞는 글꼴</h4><p>Moa Mono 내장(JetBrains Mono + Pretendard 한글 + Noto Sans CJK 한자 · 일본어). 편집기와 메뉴 · 창 글자를 모두 이 글꼴로 씁니다.</p><span class="was">JetBrains Mono, 한글 폭 어긋남</span></div>
@@ -2081,7 +2081,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       <tr><td>Rainbow Brackets Lite</td><td>짝 괄호를 깊이마다 다른 색으로 보여 줍니다(무료 공개판).</td></tr>
       <tr><td>POJO to JSON</td><td>클래스 이름 우클릭 → 「Copy JSON」 으로 필드 구조를 JSON 으로 복사합니다. API 테스트의 요청 본문 만들 때 씁니다.</td></tr>
       <tr><td>Grep Console</td><td>콘솔 줄을 글자 · 정규식으로 색칠하고 거릅니다. 우리 「Filter Log」와 함께 씁니다.</td></tr>
-      <tr><td>한국어 언어 팩 (본체)</td><td>설정 → Language and Region → Korean. 메뉴 · 단추는 영어, 오류 · 알림 · 대화 상자 글은 한국어.</td></tr>
+      <tr><td>한국어 언어 팩 (본체)</td><td>설정 → Language and Region → Korean. 메뉴 · 단추 · 알림 모두 한국어, 자주 보는 글은 우리 번역(kit\ko\용어집.md 기준).</td></tr>
       <tr><td>Claude Code (bat)</td><td>터미널의 <code>claude</code> 와 연결합니다. 우리 AI 우클릭 메뉴도 이것을 씁니다.</td></tr>
       <tr><td>One Dark 테마 (bat)</td><td>설정 → Appearance 의 Theme, Editor → Color Scheme 에서 One Dark.</td></tr>
     </table>
@@ -2173,7 +2173,7 @@ build-windows.bat
       <tr><td><code>kit\menu\apply_menu.py</code> · <code>kit\defaults\apply_defaults.py</code></td><td>이클립스식 메뉴와 <a href="#defaults">02</a> 의 기본값을 넣습니다.</td></tr>
       <tr><td><code>kit\git-auth\apply_git_auth.py</code></td><td>IntelliJ Git 이 https 원격에 <a href="#sync">Git 로그인</a> 값을 넘기게 손질합니다.</td></tr>
       <tr><td><code>kit\textmate\apply_textmate.py</code></td><td>여러 줄 주석(<code>&lt;!-- --&gt;</code> 등)이 닫힌 뒤 색이 어긋나던 TextMate 색칠을 고칩니다.</td></tr>
-      <tr><td><code>kit\ko\apply_ko.py</code></td><td>한국어 팩을 메뉴 · 단추만 영어로 남기게 깎아 본체에 넣습니다.</td></tr>
+      <tr><td><code>kit\ko\apply_ko.py</code></td><td>한국어 팩에 우리 번역(kit\ko\override)을 덮어 본체에 넣습니다. 자리표시 · 태그 · 단축 글자 모양이 팩과 다르면 멈춥니다.</td></tr>
       <tr><td><code>kit\mingit\apply_mingit.py</code></td><td>PC 에 Git 이 없을 때 쓸 MinGit 을 받아 넣습니다(판 · SHA-256 고정).</td></tr>
       <tr><td><code>kit\web\apply_web.py</code></td><td>Node.js 와 JavaScript · TypeScript · Vue 언어 서버를 받아 넣습니다. 인터넷이 막힌 PC 에서도 언어 서버가 뜹니다.</td></tr>
       <tr><td><code>kit\brand\apply_brand.bat</code></td><td>Moa IDE 로고 · 설치 그림을 넣습니다.</td></tr>
