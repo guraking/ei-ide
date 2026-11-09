@@ -13,6 +13,12 @@ public class SyncCheck {
     eq(ReverseMerge.fetchesAllHeads(java.util.Map.of("remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"), "origin"), true);
     eq(ReverseMerge.fetchesAllHeads(java.util.Map.of("remote.origin.fetch", "+refs/heads/feature/a:refs/remotes/origin/feature/a"), "origin"), false);
     eq(ReverseMerge.fetchesAllHeads(java.util.Map.of(), "origin"), false);
+    // fetch 줄이 여럿이면(Feature/* 를 더 받는 줄 등) 모든 브랜치를 받는 줄이 어디에 있든 그것을 본다.
+    String twoLines = "remote.origin.fetch +refs/heads/*:refs/remotes/origin/*\nremote.origin.fetch +refs/heads/Feature/*:refs/remotes/origin/Feature/*\n";
+    eq(ReverseMerge.fetchesAllHeads(ReverseMerge.parseConfigs(twoLines), "origin"), true);
+    String reversed = "remote.origin.fetch +refs/heads/Feature/*:refs/remotes/origin/Feature/*\nremote.origin.fetch +refs/heads/*:refs/remotes/origin/*\n";
+    eq(ReverseMerge.fetchesAllHeads(ReverseMerge.parseConfigs(reversed), "origin"), true);
+    eq(ReverseMerge.fetchesAllHeads(ReverseMerge.parseConfigs("remote.origin.fetch +refs/heads/develop:refs/remotes/origin/develop\n"), "origin"), false);
     // 받아 온 뒤 비교의 앞선 · 뒤진 수(rev-list --left-right --count HEAD...@{u}).
     eq(SyncPanel.parseLeftRight("2\t5\n"), new SyncPanel.Tracking(2, 5));
     eq(SyncPanel.parseLeftRight("0\t0"), new SyncPanel.Tracking(0, 0));

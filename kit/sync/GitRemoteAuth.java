@@ -135,21 +135,33 @@ final class GitRemoteAuth {
     if (project == null || urls.isEmpty()) return runStored(root, timeoutSec, args);
 
     Attempt first = silentAttempt(project, root, urls);
-    List<ReentrantLock> held = new ArrayList<>();
+    Map<String, ReentrantLock> held = new LinkedHashMap<>();
     try {
       // 서버 이름 순으로 잡아 여러 서버를 함께 쓰는 명령끼리 서로 기다리다 멈추지 않게 한다.
       for (String server : new TreeSet<>(first.headers.keySet())) {
         if (first.headers.get(server).equals(VERIFIED.get(server))) continue;
         ReentrantLock gate = GATES.computeIfAbsent(server, key -> new ReentrantLock());
         gate.lockInterruptibly();
-        held.add(gate);
+        held.put(server, gate);
       }
-      // 기다리는 동안 앞 명령이 값을 지웠거나 로그인 창 값을 남겼을 수 있어 다시 읽는다.
-      if (!held.isEmpty()) first = silentAttempt(project, root, urls);
+      if (!held.isEmpty()) {
+        // 기다리는 동안 앞 명령이 값을 지웠거나 로그인 창 값을 남겼을 수 있어 다시 읽는다.
+        first = silentAttempt(project, root, urls);
+        // 앞 명령이 같은 값으로 성공했으면 그 서버는 줄 세울 까닭이 없어 바로 놓는다. 같은 서버로 가는 저장소 fetch 가 IDE 시작 뒤 첫 조회에서
+        // 하나씩 돌지 않고, 첫 하나가 성공하면 나머지가 함께 돈다.
+        for (java.util.Iterator<Map.Entry<String, ReentrantLock>> it = held.entrySet().iterator(); it.hasNext(); ) {
+          Map.Entry<String, ReentrantLock> entry = it.next();
+          String header = first.headers.get(entry.getKey());
+          if (header != null && header.equals(VERIFIED.get(entry.getKey()))) {
+            entry.getValue().unlock();
+            it.remove();
+          }
+        }
+      }
       return runGated(project, root, urls, first, timeoutSec, ask, args);
     }
     finally {
-      for (ReentrantLock gate : held) gate.unlock();
+      for (ReentrantLock gate : held.values()) gate.unlock();
     }
   }
 

@@ -32,6 +32,7 @@ final class ReverseMerge {
   /** 내 이름으로 커밋한 파일을 「내 파일」로 보는 기간(일). */
   static final int MINE_DAYS = 30;
   private static final String HEADS = "refs/heads/";
+  private static final String FETCH_KEY_SUFFIX = ".fetch";
   private static final com.intellij.openapi.diagnostic.Logger LOG = com.intellij.openapi.diagnostic.Logger.getInstance(ReverseMerge.class);
   private static final char LOG_START = '\u0001';
   private static final char LOG_SEP = '\u001f';
@@ -228,7 +229,12 @@ final class ReverseMerge {
     Map<String, String> result = new HashMap<>();
     for (String line : output.split("\n")) {
       int space = line.indexOf(' ');
-      if (space > 0 && space < line.trim().length()) result.put(line.substring(0, space), line.substring(space + 1).trim());
+      if (space <= 0 || space >= line.trim().length()) continue;
+      String key = line.substring(0, space);
+      String value = line.substring(space + 1).trim();
+      // remote.<원격>.fetch 는 줄이 여럿일 수 있다(예: Feature/* 를 더 받는 줄). 모든 브랜치를 받는 줄이 하나라도 있으면 그것을 남긴다(fetchesAllHeads).
+      if (key.endsWith(FETCH_KEY_SUFFIX) && isAllHeads(result.get(key))) continue;
+      result.put(key, value);
     }
     return result;
   }
@@ -247,7 +253,12 @@ final class ReverseMerge {
    * configs 는 마지막 줄만 남기므로, 마지막 줄이 기본이 아니면 거짓(기준 브랜치를 한 번 더 받는 쪽)이다.
    */
   static boolean fetchesAllHeads(Map<String, String> cfg, String remote) {
-    return ("+" + HEADS + "*:" + remoteRef(remote, "*")).equals(cfg.get("remote." + remote + ".fetch"));
+    return ("+" + HEADS + "*:" + remoteRef(remote, "*")).equals(cfg.get("remote." + remote + FETCH_KEY_SUFFIX));
+  }
+
+  /** fetch 줄이 모든 브랜치를 받는 모양(+refs/heads/*:…)인가. */
+  private static boolean isAllHeads(String refspec) {
+    return refspec != null && refspec.startsWith("+" + HEADS + "*:");
   }
 
   /**
