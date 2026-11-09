@@ -9,16 +9,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.StringJoiner;
+import java.util.regex.MatchResult;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
 /**
  * 정규식 작업대의 일치 · 바꾸기 계산. IntelliJ 클래스를 쓰지 않는다(점검 RegexBenchCheck).
- * JavaScript 문법은 java.util.regex 로 옮겨 돌린다. 옮기는 것: 빈 묶음 [] · [^], 묶음 안 [ · &&,
- * 반복이 아닌 { , u 플래그의 코드 포인트 이스케이프(백슬래시 u{…}). 바꾸기 글은 String.prototype.replace 규칙($$ $& $` $' $n $nn $<이름>)을 따른다.
- * 묶음 안 \b(백스페이스), \s · \S 는 JS 공백 목록(JS_SPACES, ECMAScript WhiteSpace + LineTerminator)으로 옮긴다.
- * shortcut: u 없는 「.」 이 UTF-16 한 칸(이모지 반쪽)에 맞는 것은 흉내 내지 않는다. 틀린 결과가 보고되면 옮김에 더한다.
+ * JavaScript 문법은 java.util.regex 로 옮겨 돌린다(toJava). 옮기는 것: 빈 묶음 [] · [^], 묶음 안 글자 · 범위, 반복이 아닌 { ,
+ * ^ · $ · . 의 JS 줄 끝(LineTerminator) 기준, \s · \S(JS_SPACES), \v · \0 · \cX · \xHH · 백슬래시 u 이스케이프, u 없을 때 모르는 이스케이프(글자 그대로),
+ * 그룹 이름(Java 에는 번호 그룹으로 넣고 이름은 따로 든다), 아직 잡히지 않은 그룹 되참조(빈 글에 맞음).
+ * u 가 없으면 UTF-16 한 칸 단위로 맞춘다: 서로게이트(D800-DFFF)와 사용자 영역 E000-E7FF 를 맞바꾼 글로 돌려 Java 가 이모지를 한 글자로 묶지 않게 한다.
+ * 바꾸기 글은 String.prototype.replace 규칙($$ $& $` $' $n $nn $<이름>)을 따른다.
+ * shortcut: u 없을 때 U+E000-E7FF 글자가 이어 나오면 서로게이트 짝으로 읽혀 틀릴 수 있고, 반복 안 그룹 값을 회차마다 비우는 JS 규칙 ·
+ * 뒤보기 안 되참조 방향은 흉내 내지 않는다. 틀린 결과가 보고되면 옮김에 더한다.
  */
 final class RegexBench {
 
@@ -29,8 +33,9 @@ final class RegexBench {
         JS_GLOBAL(Flavor.JAVASCRIPT, "g", 0),
         // JS i 는 u 가 없어도 ASCII 밖 글자까지 대소문자를 가린다
         JS_IGNORE_CASE(Flavor.JAVASCRIPT, "i", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE),
-        JS_MULTILINE(Flavor.JAVASCRIPT, "m", Pattern.MULTILINE),
-        JS_DOT_ALL(Flavor.JAVASCRIPT, "s", Pattern.DOTALL),
+        // m · s 는 toJava 가 ^ $ . 를 직접 옮겨 Java 플래그가 필요 없다
+        JS_MULTILINE(Flavor.JAVASCRIPT, "m", 0),
+        JS_DOT_ALL(Flavor.JAVASCRIPT, "s", 0),
         JS_UNICODE(Flavor.JAVASCRIPT, "u", 0),
         CASE_INSENSITIVE(Flavor.JAVA, "CASE_INSENSITIVE", Pattern.CASE_INSENSITIVE),
         MULTILINE(Flavor.JAVA, "MULTILINE", Pattern.MULTILINE),
@@ -72,34 +77,23 @@ final class RegexBench {
     /** 시간이 timeoutMs 를 넘으면 TIMEOUT, 되돌이가 너무 깊어 스택이 넘치면 TOO_DEEP 으로 끝낸다. */
     static Result run(Flavor flavor, String pattern, Set<Flag> flags, String text, String replacement, long timeoutMs) {
         boolean js = flavor == Flavor.JAVASCRIPT;
-        Pattern compiled;
+        Compiled compiled;
         try {
             compiled = compile(flavor, pattern, flags);
         } catch (PatternSyntaxException e) {
-            // 옮기며 글자 수가 바뀌었으면 위치가 사용자가 친 패턴과 맞지 않는다
-            int index = !js || toJava(pattern, flags.contains(Flag.JS_UNICODE)).equals(pattern) ? e.getIndex() : -1;
-            return new Result(List.of(), false, null, Problem.SYNTAX, e.getDescription(), index);
+            return new Result(List.of(), false, null, Problem.SYNTAX, e.getDescription(), e.getIndex());
         }
-        String[] names = groupNames(compiled);
-        boolean all = !js || flags.contains(Flag.JS_GLOBAL);
-        CharSequence timed = new TimedText(text, System.nanoTime() + timeoutMs * 1_000_000L);
-        List<Match> matches = new ArrayList<>();
-        boolean truncated = false;
+        CharSequence timed = new TimedText(compiled.subject(text), System.nanoTime() + timeoutMs * 1_000_000L);
         try {
-            Matcher m = compiled.matcher(timed);
-            while (m.find()) {
-                if (matches.size() == MAX_MATCHES) {
-                    truncated = true;
-                    break;
-                }
-                matches.add(toMatch(m, names));
-                if (!all) {
-                    break;
-                }
+            List<MatchResult> found = js ? findJs(compiled, timed, text, flags.contains(Flag.JS_GLOBAL)) : findJava(compiled, timed);
+            List<Match> matches = new ArrayList<>();
+            for (MatchResult r : found.subList(0, Math.min(found.size(), MAX_MATCHES))) {
+                matches.add(toMatch(r, text, compiled));
             }
+            boolean truncated = found.size() > MAX_MATCHES;
             String replaced;
             try {
-                replaced = replace(compiled.matcher(timed), js, all, text, replacement, names);
+                replaced = js ? replaceJs(found, text, replacement, compiled) : compiled.pattern().matcher(timed).replaceAll(replacement);
             } catch (IllegalArgumentException | IndexOutOfBoundsException e) {
                 return new Result(matches, truncated, null, Problem.REPLACEMENT, e.getMessage(), -1);
             }
@@ -111,23 +105,89 @@ final class RegexBench {
         }
     }
 
-    private static Pattern compile(Flavor flavor, String pattern, Set<Flag> flags) {
-        String source = flavor == Flavor.JAVASCRIPT ? toJava(pattern, flags.contains(Flag.JS_UNICODE)) : pattern;
+    /**
+     * 컴파일한 패턴. names[k] · groups[k] 는 사용자 패턴의 그룹 k 의 이름(없으면 null)과 Java 그룹 번호(0 은 일치 전체).
+     * units 면 JS u 없는 모드라 글을 swapUnits 로 바꿔 맞춘다. codePoints 면 JS u 모드라 이모지 가운데서는 일치를 시작하지 않는다.
+     */
+    private record Compiled(Pattern pattern, String[] names, int[] groups, boolean units, boolean codePoints) {
+        String subject(String text) {
+            return units ? swapUnits(text) : text;
+        }
+    }
+
+    /** 패턴 오류는 PatternSyntaxException 이고, 그 위치는 사용자가 친 패턴 기준이다. */
+    private static Compiled compile(Flavor flavor, String pattern, Set<Flag> flags) {
         int bits = 0;
         for (Flag flag : flags) {
             if (flag.flavor == flavor) {
                 bits |= flag.bits;
             }
         }
-        return Pattern.compile(source, bits);
+        if (flavor == Flavor.JAVA) {
+            Pattern compiled = Pattern.compile(pattern, bits);
+            String[] names = groupNames(compiled);
+            int[] groups = new int[names.length];
+            for (int i = 0; i < groups.length; i++) {
+                groups[i] = i;
+            }
+            return new Compiled(compiled, names, groups, false, false);
+        }
+        boolean unicode = flags.contains(Flag.JS_UNICODE);
+        JsPattern converted = toJava(pattern, flags);
+        try {
+            return new Compiled(Pattern.compile(converted.java(), bits), converted.names(), converted.groups(), !unicode, unicode);
+        } catch (PatternSyntaxException e) {
+            throw new PatternSyntaxException(e.getDescription(), pattern, converted.originOf(e.getIndex()));
+        }
     }
 
-    private static Match toMatch(Matcher m, String[] names) {
-        List<Group> groups = new ArrayList<>();
-        for (int i = 0; i <= m.groupCount(); i++) {
-            groups.add(new Group(i, names[i], m.start(i), m.end(i), m.group(i)));
+    private static List<MatchResult> findJava(Compiled compiled, CharSequence timed) {
+        List<MatchResult> found = new ArrayList<>();
+        Matcher m = compiled.pattern().matcher(timed);
+        // Java 는 늘 전부 바꾸므로 목록만 상한 하나 위에서 끊는다(넘은 것은 truncated 로 안다)
+        while (found.size() <= MAX_MATCHES && m.find()) {
+            found.add(m.toMatchResult());
         }
-        return new Match(m.start(), m.end(), groups);
+        return found;
+    }
+
+    /** RegExp exec 를 g 대로 되풀이한다. 빈 일치 뒤에는 u 면 코드 포인트, 아니면 UTF-16 한 칸 건너간다. 바꾸기에 쓰므로 상한 없이 모은다. */
+    private static List<MatchResult> findJs(Compiled compiled, CharSequence timed, String text, boolean global) {
+        List<MatchResult> found = new ArrayList<>();
+        Matcher m = compiled.pattern().matcher(timed);
+        int from = 0;
+        while (from <= text.length() && m.find(from)) {
+            int start = m.start();
+            if (compiled.codePoints() && insidePair(text, start)) {
+                from = start + 1;
+                continue;
+            }
+            found.add(m.toMatchResult());
+            if (!global) {
+                break;
+            }
+            from = m.end() > start ? m.end() : m.end() + (compiled.codePoints() && pairAt(text, m.end()) ? 2 : 1);
+        }
+        return found;
+    }
+
+    private static boolean insidePair(String text, int index) {
+        return index > 0 && index < text.length() && Character.isHighSurrogate(text.charAt(index - 1)) && Character.isLowSurrogate(text.charAt(index));
+    }
+
+    private static boolean pairAt(String text, int index) {
+        return index + 1 < text.length() && Character.isHighSurrogate(text.charAt(index)) && Character.isLowSurrogate(text.charAt(index + 1));
+    }
+
+    /** 일치 · 그룹 값은 원래 글에서 자른다(units 모드의 바꾼 글이 아니라). */
+    private static Match toMatch(MatchResult r, String text, Compiled compiled) {
+        List<Group> groups = new ArrayList<>();
+        for (int k = 0; k < compiled.groups().length; k++) {
+            int start = r.start(compiled.groups()[k]);
+            int end = r.end(compiled.groups()[k]);
+            groups.add(new Group(k, compiled.names()[k], start, end, start < 0 ? null : text.substring(start, end)));
+        }
+        return new Match(r.start(), r.end(), groups);
     }
 
     /** 그룹 번호 → 이름. 이름 없는 번호는 null. */
@@ -139,24 +199,27 @@ final class RegexBench {
         return names;
     }
 
-    private static String replace(Matcher m, boolean js, boolean all, String text, String replacement, String[] names) {
-        if (!js) {
-            return all ? m.replaceAll(replacement) : m.replaceFirst(replacement);
+    private static String replaceJs(List<MatchResult> found, String text, String replacement, Compiled compiled) {
+        StringBuilder out = new StringBuilder();
+        int last = 0;
+        for (MatchResult r : found) {
+            out.append(text, last, r.start()).append(expandJs(replacement, r, text, compiled));
+            last = r.end();
         }
-        boolean named = false;
-        for (String name : names) {
-            named |= name != null;
-        }
-        boolean hasNames = named;
-        return all
-                ? m.replaceAll(r -> Matcher.quoteReplacement(expandJs(replacement, r.start(), r.end(), m, text, hasNames)))
-                : m.replaceFirst(r -> Matcher.quoteReplacement(expandJs(replacement, r.start(), r.end(), m, text, hasNames)));
+        return out.append(text, last, text.length()).toString();
     }
 
     /** String.prototype.replace 의 GetSubstitution. 뜻이 없는 $ 표기는 글자 그대로 둔다. */
-    static String expandJs(String replacement, int start, int end, Matcher m, String text, boolean hasNames) {
+    private static String expandJs(String replacement, MatchResult r, String text, Compiled compiled) {
         StringBuilder out = new StringBuilder();
-        int groups = m.groupCount();
+        String[] names = compiled.names();
+        int groups = names.length - 1;
+        boolean hasNames = false;
+        for (String name : names) {
+            hasNames |= name != null;
+        }
+        int start = r.start();
+        int end = r.end();
         int i = 0;
         while (i < replacement.length()) {
             char c = replacement.charAt(i);
@@ -183,10 +246,10 @@ final class RegexBench {
                         ? (next - '0') * 10 + (replacement.charAt(i + 2) - '0') : -1;
                 int one = next - '0';
                 if (two >= 1 && two <= groups) {
-                    appendGroup(out, m, two);
+                    appendGroup(out, r, text, compiled.groups()[two]);
                     i += 3;
                 } else if (one >= 1 && one <= groups) {
-                    appendGroup(out, m, one);
+                    appendGroup(out, r, text, compiled.groups()[one]);
                     i += 2;
                 } else {
                     out.append(c);
@@ -195,10 +258,11 @@ final class RegexBench {
             } else if (next == '<' && hasNames && replacement.indexOf('>', i + 2) > 0) {
                 int close = replacement.indexOf('>', i + 2);
                 String name = replacement.substring(i + 2, close);
-                try {
-                    appendGroup(out, m, m.pattern().namedGroups().getOrDefault(name, -1));
-                } catch (IndexOutOfBoundsException ignored) {
-                    // 없는 이름은 JS 에서 undefined → 빈 글
+                // 없는 이름은 JS 에서 undefined → 빈 글
+                for (int k = 1; k <= groups; k++) {
+                    if (name.equals(names[k])) {
+                        appendGroup(out, r, text, compiled.groups()[k]);
+                    }
                 }
                 i = close + 1;
             } else {
@@ -209,82 +273,516 @@ final class RegexBench {
         return out.toString();
     }
 
-    private static void appendGroup(StringBuilder out, Matcher m, int group) {
-        if (group < 0) {
-            throw new IndexOutOfBoundsException(group);
-        }
-        String value = m.group(group);
-        if (value != null) {
-            out.append(value);
+    private static void appendGroup(StringBuilder out, MatchResult r, String text, int javaGroup) {
+        if (r.start(javaGroup) >= 0) {
+            out.append(text, r.start(javaGroup), r.end(javaGroup));
         }
     }
 
     /** ECMAScript 의 WhiteSpace · LineTerminator(\s 가 맞는 글자). Java \s 는 이 가운데 ASCII 만 맞는다. */
     private static final String JS_SPACES =
             "\\t\\n\\x0B\\f\\r\\x20\\x{A0}\\x{1680}\\x{2000}-\\x{200A}\\x{2028}\\x{2029}\\x{202F}\\x{205F}\\x{3000}\\x{FEFF}";
+    /** ECMAScript LineTerminator. m 의 ^ · $ 와 s 없는 . 이 이것만 줄 끝으로 본다(Java 는 \u0085 와 \r\n 한 덩이도 줄 끝으로 봄). */
+    private static final String JS_LINE_TERMINATORS = "\\n\\r\\x{2028}\\x{2029}";
+    private static final String ANY_CHAR = "[\\s\\S]";
+    private static final String NOTHING = "(?:)";
+    private static final int INITIAL_ORIGIN = 64;
 
-    /** JavaScript 정규식을 java.util.regex 에서 같은 뜻이 되게 옮긴다. */
-    static String toJava(String js, boolean unicode) {
-        StringBuilder out = new StringBuilder();
+    // u 없는 모드에서 맞바꾸는 두 구역. 둘 다 0x800 칸이라 서로 옮기면 겹치지 않는다.
+    private static final int SURROGATE_FIRST = 0xD800;
+    private static final int SURROGATE_LAST = 0xDFFF;
+    private static final int PRIVATE_FIRST = 0xE000;
+    private static final int PRIVATE_LAST = 0xE7FF;
+    private static final int SWAP_DISTANCE = PRIVATE_FIRST - SURROGATE_FIRST;
+    // \cX 는 X 를 32 로 나눈 나머지 글자다
+    private static final int CONTROL_MODULO = 32;
+    private static final int MAX_LEGACY_OCTAL = 0377;
+    private static final int MAX_OCTAL_DIGITS = 3;
+    private static final int HEX_RADIX = 16;
+    private static final int OCTAL_RADIX = 8;
+    private static final int DECIMAL_RADIX = 10;
+    private static final int HEX2 = 2;
+    private static final int HEX4 = 4;
+    private static final int BACKSPACE = 0x08;
+    private static final int LINE_TABULATION = 0x0B;
+    // JS u 모드가 이스케이프로 받는 문법 글자. 이 밖의 글자 이스케이프는 u 모드에서 오류다.
+    private static final String JS_SYNTAX_CHARS = "^$\\.*+?()[]{}|/";
+    private static final String BAD_ESCAPE = "잘못된 이스케이프";
+    private static final String BAD_RANGE = "묶음 범위의 앞 글자가 뒤 글자보다 큼";
+    private static final String BAD_GROUP_NAME = "잘못된 그룹 이름";
+    private static final String DUPLICATE_GROUP_NAME = "겹친 그룹 이름";
+    private static final String UNKNOWN_GROUP_NAME = "없는 그룹 이름";
+
+    /** UTF-16 값 하나를 맞바꾼다. 서로게이트 ↔ U+E000-E7FF, 나머지는 그대로. */
+    private static int swapUnit(int unit) {
+        if (unit >= SURROGATE_FIRST && unit <= SURROGATE_LAST) {
+            return unit + SWAP_DISTANCE;
+        }
+        if (unit >= PRIVATE_FIRST && unit <= PRIVATE_LAST) {
+            return unit - SWAP_DISTANCE;
+        }
+        return unit;
+    }
+
+    /** 글자마다 swapUnit. 길이 · 위치는 그대로다. */
+    static String swapUnits(String text) {
+        char[] chars = text.toCharArray();
+        for (int i = 0; i < chars.length; i++) {
+            chars[i] = (char) swapUnit(chars[i]);
+        }
+        return new String(chars);
+    }
+
+    /**
+     * toJava 결과. origin[i] 는 java 의 i 번째 글자를 만든 원래 패턴 위치이고, 끝 다음 칸(origin[java 길이])은 원래 길이다.
+     * names[k] 는 JS 그룹 k 의 이름(없으면 null, 0 은 일치 전체), groups[k] 는 그 그룹의 Java 그룹 번호.
+     */
+    record JsPattern(String java, int[] origin, String[] names, int[] groups) {
+        int originOf(int javaIndex) {
+            return javaIndex < 0 ? -1 : origin[Math.min(javaIndex, origin.length - 1)];
+        }
+    }
+
+    /** JavaScript 정규식을 java.util.regex 에서 같은 뜻이 되게 옮긴다. JS 가 받지 않는 꼴이면 원래 패턴 위치와 함께 PatternSyntaxException. */
+    static JsPattern toJava(String js, Set<Flag> flags) {
+        return new JsConverter(js, flags).convert();
+    }
+
+    /** toJava 의 한 번 옮기기. 그룹 이름 · 수는 먼저 훑어(scanGroups) 앞쪽 되참조 · \k 를 가린다. */
+    private static final class JsConverter {
+        private final String js;
+        private final boolean unicode;
+        private final boolean multiline;
+        private final boolean dotAll;
+        private final List<String> names;
+        private final int[] javaOf;
+        // 그룹 k 가 끝까지 맞았는지 알리는 빈 그룹의 Java 번호. 0 이면 아직 닫히지 않았다.
+        private final int[] markerOf;
+        private final StringBuilder out = new StringBuilder();
+        private int[] origin = new int[INITIAL_ORIGIN];
+        private final java.util.ArrayDeque<Integer> open = new java.util.ArrayDeque<>();
+        private int javaCount;
+        private int jsCount;
+
+        JsConverter(String js, Set<Flag> flags) {
+            this.js = js;
+            unicode = flags.contains(Flag.JS_UNICODE);
+            multiline = flags.contains(Flag.JS_MULTILINE);
+            dotAll = flags.contains(Flag.JS_DOT_ALL);
+            names = scanGroups(js);
+            javaOf = new int[names.size() + 1];
+            markerOf = new int[names.size() + 1];
+        }
+
+        JsPattern convert() {
+            int i = 0;
+            while (i < js.length()) {
+                char c = js.charAt(i);
+                if (c == '\\') {
+                    Atom atom = escape(i, false);
+                    emit(atom.java(), i);
+                    i = atom.end();
+                } else if (c == '[') {
+                    i = charClass(i);
+                } else if (c == '(') {
+                    i = openGroup(i);
+                } else if (c == ')') {
+                    Integer k = open.poll();
+                    if (k != null && k > 0) {
+                        // 그룹 끝에 빈 그룹을 두어 그 그룹이 맞았는지 되참조로 알 수 있게 한다
+                        markerOf[k] = ++javaCount;
+                        emit("()", i);
+                    }
+                    emit(")", i);
+                    i++;
+                } else if (c == '^') {
+                    emit(multiline ? "(?<![^" + JS_LINE_TERMINATORS + "])" : "^", i);
+                    i++;
+                } else if (c == '$') {
+                    emit(multiline ? "(?![^" + JS_LINE_TERMINATORS + "])" : "(?!" + ANY_CHAR + ")", i);
+                    i++;
+                } else if (c == '.') {
+                    emit(dotAll ? ANY_CHAR : "[^" + JS_LINE_TERMINATORS + "]", i);
+                    i++;
+                } else if (c == '{' && !isQuantifier(js, i)) {
+                    emit("\\{", i);
+                    i++;
+                } else {
+                    emit(unicode || swapUnit(c) == c ? String.valueOf(c) : hex(swapUnit(c)), i);
+                    i++;
+                }
+            }
+            int[] exact = java.util.Arrays.copyOf(origin, out.length() + 1);
+            exact[out.length()] = js.length();
+            String[] groupNames = new String[names.size() + 1];
+            for (int k = 1; k <= names.size(); k++) {
+                groupNames[k] = names.get(k - 1);
+            }
+            return new JsPattern(out.toString(), exact, groupNames, javaOf);
+        }
+
+        /** ( 하나. 잡는 그룹은 Java 에서 번호 그룹이다(이름은 groupNames 가 든다). 그 밖의 (? 꼴은 그대로 둔다. */
+        private int openGroup(int i) {
+            boolean named = js.startsWith("(?<", i) && i + 3 < js.length() && js.charAt(i + 3) != '=' && js.charAt(i + 3) != '!';
+            if (js.startsWith("(?", i) && !named) {
+                open.push(0);
+                emit("(?", i);
+                return i + 2;
+            }
+            jsCount++;
+            javaOf[jsCount] = ++javaCount;
+            open.push(jsCount);
+            emit("(", i);
+            return named ? js.indexOf('>', i) + 1 : i + 1;
+        }
+
+        /** [ … ] 하나. 글자 하나는 \x{…} 로, 범위는 양 끝 값으로 넣는다. 범위가 될 수 없는 - 는 글자다. */
+        private int charClass(int i) {
+            if (js.startsWith("[]", i)) {
+                emit("(?!)", i);
+                return i + 2;
+            }
+            if (js.startsWith("[^]", i)) {
+                emit(ANY_CHAR, i);
+                return i + 3;
+            }
+            boolean negated = js.startsWith("[^", i);
+            emit(negated ? "[^" : "[", i);
+            int j = i + (negated ? 2 : 1);
+            while (j < js.length() && js.charAt(j) != ']') {
+                Atom first = classAtom(j);
+                int dash = first.end();
+                boolean range = dash + 1 < js.length() && js.charAt(dash) == '-' && js.charAt(dash + 1) != ']';
+                if (!range) {
+                    emit(first.java(), j);
+                    j = dash;
+                    continue;
+                }
+                Atom second = classAtom(dash + 1);
+                if (first.value() < 0 || second.value() < 0) {
+                    // [\d-x] 의 - 는 u 없으면 글자, u 면 오류
+                    if (unicode) {
+                        throw new PatternSyntaxException(BAD_ESCAPE, js, dash);
+                    }
+                    emit(first.java(), j);
+                    emit("\\-", dash);
+                    j = dash + 1;
+                    continue;
+                }
+                if (first.value() > second.value()) {
+                    throw new PatternSyntaxException(BAD_RANGE, js, j);
+                }
+                emitRange(first.value(), second.value(), j);
+                j = second.end();
+            }
+            if (j < js.length()) {
+                emit("]", j);
+                j++;
+            }
+            return j;
+        }
+
+        private Atom classAtom(int j) {
+            if (js.charAt(j) == '\\') {
+                return escape(j, true);
+            }
+            int value = unicode ? js.codePointAt(j) : js.charAt(j);
+            return new Atom(literal(value), value, j + (unicode ? Character.charCount(value) : 1));
+        }
+
+        /** u 없으면 맞바꾼 구역을 따로 떼어 넣는다. */
+        private void emitRange(int low, int high, int from) {
+            if (unicode) {
+                emit(hex(low) + "-" + hex(high), from);
+                return;
+            }
+            int[][] parts = {{low, Math.min(high, SURROGATE_FIRST - 1)}, {Math.max(low, SURROGATE_FIRST), Math.min(high, SURROGATE_LAST)},
+                    {Math.max(low, PRIVATE_FIRST), Math.min(high, PRIVATE_LAST)}, {Math.max(low, PRIVATE_LAST + 1), high}};
+            for (int[] part : parts) {
+                if (part[0] <= part[1]) {
+                    emit(hex(swapUnit(part[0])) + "-" + hex(swapUnit(part[1])), from);
+                }
+            }
+        }
+
+        private String literal(int value) {
+            return hex(unicode ? value : swapUnit(value));
+        }
+
+        /** i 자리 백슬래시에서 시작하는 이스케이프 하나. value 는 글자 하나면 그 값, 아니면 -1. */
+        private Atom escape(int i, boolean inClass) {
+            if (i + 1 >= js.length()) {
+                // 끝의 \ 는 JS · Java 모두 오류다. Java 가 그 위치로 알린다.
+                return new Atom("\\", -1, i + 1);
+            }
+            char d = js.charAt(i + 1);
+            switch (d) {
+                case 'd', 'D', 'w', 'W' -> {
+                    return new Atom("\\" + d, -1, i + 2);
+                }
+                case 's' -> {
+                    return new Atom(inClass ? JS_SPACES : "[" + JS_SPACES + "]", -1, i + 2);
+                }
+                case 'S' -> {
+                    // 묶음 안에서는 Java 겹 묶음(합집합)으로 넣는다. [^…[^공백]] 도 Java 9 부터 바깥 ^ 가 전체에 걸린다.
+                    return new Atom("[^" + JS_SPACES + "]", -1, i + 2);
+                }
+                case 'b' -> {
+                    // 묶음 밖 \b 는 JS · Java(19 부터) 모두 ASCII 낱말 글자 기준이다
+                    return inClass ? value(BACKSPACE, i + 2) : new Atom("\\b", -1, i + 2);
+                }
+                case 'B' -> {
+                    return inClass ? identity(i, d) : new Atom("\\B", -1, i + 2);
+                }
+                case 'f' -> {
+                    return value('\f', i + 2);
+                }
+                case 'n' -> {
+                    return value('\n', i + 2);
+                }
+                case 'r' -> {
+                    return value('\r', i + 2);
+                }
+                case 't' -> {
+                    return value('\t', i + 2);
+                }
+                case 'v' -> {
+                    return value(LINE_TABULATION, i + 2);
+                }
+                case 'c' -> {
+                    return control(i, inClass);
+                }
+                case 'x' -> {
+                    int hex = hexDigits(i + 2, HEX2);
+                    return hex >= 0 ? value(hex, i + 2 + HEX2) : identity(i, d);
+                }
+                case 'u' -> {
+                    return unicodeEscape(i);
+                }
+                case 'p', 'P' -> {
+                    int close = js.indexOf('}', i);
+                    if (unicode && js.startsWith("{", i + 2) && close > 0) {
+                        return new Atom(js.substring(i, close + 1), -1, close + 1);
+                    }
+                    return identity(i, d);
+                }
+                case 'k' -> {
+                    return named(i, inClass);
+                }
+                default -> {
+                    if (d >= '0' && d <= '9') {
+                        return digits(i, inClass);
+                    }
+                    if (JS_SYNTAX_CHARS.indexOf(d) >= 0 || (inClass && d == '-')) {
+                        return value(d, i + 2);
+                    }
+                    return identity(i, d);
+                }
+            }
+        }
+
+        private Atom value(int value, int end) {
+            return new Atom(literal(value), value, end);
+        }
+
+        /** u 없으면 모르는 이스케이프는 그 글자 자체, u 면 오류. */
+        private Atom identity(int i, char d) {
+            if (unicode) {
+                throw new PatternSyntaxException(BAD_ESCAPE, js, i);
+            }
+            return value(d, i + 2);
+        }
+
+        /** \cX. X 가 영문(묶음 안이면 숫자 · _ 도)이 아니면 u 없을 때 \ 와 c 를 글자로 본다. */
+        private Atom control(int i, boolean inClass) {
+            char x = i + 2 < js.length() ? js.charAt(i + 2) : 0;
+            boolean letter = (x >= 'A' && x <= 'Z') || (x >= 'a' && x <= 'z');
+            if (letter || (!unicode && inClass && ((x >= '0' && x <= '9') || x == '_'))) {
+                return value(x % CONTROL_MODULO, i + 3);
+            }
+            if (unicode) {
+                throw new PatternSyntaxException(BAD_ESCAPE, js, i);
+            }
+            // 백슬래시만 먹고 c 는 다음 글자로 읽힌다
+            return value('\\', i + 1);
+        }
+
+        /** 백슬래시 u 넷 · u 모드의 u{…}(짝 서로게이트 두 개는 한 글자). u 없으면 꼴이 틀린 것은 글자 u. */
+        private Atom unicodeEscape(int i) {
+            int close = js.indexOf('}', i);
+            if (unicode && js.startsWith("{", i + 2) && close > i + 3) {
+                int cp = -1;
+                try {
+                    cp = Integer.parseInt(js.substring(i + 3, close), HEX_RADIX);
+                } catch (NumberFormatException e) {
+                    // 아래에서 오류로 알린다
+                }
+                if (cp < 0 || cp > Character.MAX_CODE_POINT) {
+                    throw new PatternSyntaxException(BAD_ESCAPE, js, i);
+                }
+                return value(cp, close + 1);
+            }
+            int unit = hexDigits(i + 2, HEX4);
+            if (unit < 0) {
+                return identity(i, 'u');
+            }
+            int end = i + 2 + HEX4;
+            int low = js.startsWith("\\u", end) ? hexDigits(end + 2, HEX4) : -1;
+            if (unicode && Character.isHighSurrogate((char) unit) && low >= 0 && Character.isLowSurrogate((char) low)) {
+                return value(Character.toCodePoint((char) unit, (char) low), end + 2 + HEX4);
+            }
+            return value(unit, end);
+        }
+
+        /** \k<이름>. 이름 있는 그룹이 하나도 없고 u 가 없으면 글자 k. */
+        private Atom named(int i, boolean inClass) {
+            boolean anyName = false;
+            for (String name : names) {
+                anyName |= name != null;
+            }
+            if (!anyName && !unicode) {
+                return value('k', i + 2);
+            }
+            int close = js.indexOf('>', i);
+            if (inClass || !js.startsWith("<", i + 2) || close < 0) {
+                throw new PatternSyntaxException(BAD_ESCAPE, js, i);
+            }
+            int k = names.indexOf(js.substring(i + 3, close)) + 1;
+            if (k == 0) {
+                throw new PatternSyntaxException(UNKNOWN_GROUP_NAME, js, i);
+            }
+            return backReference(k, close + 1);
+        }
+
+        /** \숫자. 그룹 수 안이면 되참조, 아니면 u 없을 때 옛 8진수(8 · 9 는 글자), u 면 오류. \0 은 뒤에 숫자가 없으면 NUL. */
+        private Atom digits(int i, boolean inClass) {
+            int j = i + 1;
+            while (j < js.length() && Character.isDigit(js.charAt(j))) {
+                j++;
+            }
+            if (js.charAt(i + 1) == '0' && j == i + 2) {
+                return value(0, i + 2);
+            }
+            if (!inClass && js.charAt(i + 1) != '0') {
+                long number = Long.parseLong(js.substring(i + 1, Math.min(j, i + 1 + String.valueOf(Integer.MAX_VALUE).length())), DECIMAL_RADIX);
+                if (number <= names.size()) {
+                    return backReference((int) number, j);
+                }
+            }
+            if (unicode) {
+                throw new PatternSyntaxException(BAD_ESCAPE, js, i);
+            }
+            char first = js.charAt(i + 1);
+            if (first == '8' || first == '9') {
+                return value(first, i + 2);
+            }
+            int value = 0;
+            int end = i + 1;
+            while (end < js.length() && end < i + 1 + MAX_OCTAL_DIGITS && js.charAt(end) >= '0' && js.charAt(end) <= '7'
+                    && value * OCTAL_RADIX + (js.charAt(end) - '0') <= MAX_LEGACY_OCTAL) {
+                value = value * OCTAL_RADIX + (js.charAt(end) - '0');
+                end++;
+            }
+            return value(value, end);
+        }
+
+        /**
+         * 되참조. JS 는 맞지 않았거나 아직 닫히지 않은 그룹을 빈 글로 본다. 닫힌 그룹은 끝 표시 그룹(markerOf)이 잡혔으면 그 값을,
+         * 아니면 빈 글을 맞춘다. 아직 닫히지 않은 그룹(앞쪽 참조 · 자기 안)은 늘 빈 글이다.
+         */
+        private Atom backReference(int k, int end) {
+            if (markerOf[k] == 0) {
+                return new Atom(NOTHING, -1, end);
+            }
+            String marker = "\\" + markerOf[k];
+            return new Atom("(?:" + marker + "\\" + javaOf[k] + "|(?!" + marker + "))", -1, end);
+        }
+
+        /** from 부터 count 자리 16진수 값. 모자라면 -1. */
+        private int hexDigits(int from, int count) {
+            if (from + count > js.length()) {
+                return -1;
+            }
+            int value = 0;
+            for (int j = from; j < from + count; j++) {
+                int digit = Character.digit(js.charAt(j), HEX_RADIX);
+                if (digit < 0) {
+                    return -1;
+                }
+                value = value * HEX_RADIX + digit;
+            }
+            return value;
+        }
+
+        private void emit(String text, int from) {
+            if (out.length() + text.length() >= origin.length) {
+                origin = java.util.Arrays.copyOf(origin, (out.length() + text.length()) * 2 + 1);
+            }
+            for (int k = 0; k < text.length(); k++) {
+                origin[out.length() + k] = from;
+            }
+            out.append(text);
+        }
+    }
+
+    /** 옮긴 글 한 토막. value 는 글자 하나를 뜻하면 그 값(u 면 코드 포인트, 아니면 UTF-16 값), 아니면 -1. end 는 원래 패턴에서 다음 위치. */
+    private record Atom(String java, int value, int end) {}
+
+    private static String hex(int value) {
+        return "\\x{" + Integer.toHexString(value) + "}";
+    }
+
+    /** 잡는 그룹의 이름을 차례로(이름 없으면 null). 이름이 JS 식별자 꼴이 아니거나 겹치면 PatternSyntaxException. */
+    private static List<String> scanGroups(String js) {
+        List<String> names = new ArrayList<>();
         boolean inClass = false;
         int i = 0;
         while (i < js.length()) {
             char c = js.charAt(i);
-            if (c == '\\' && i + 1 < js.length()) {
-                int close = js.indexOf('}', i);
-                if (unicode && js.startsWith("u{", i + 1) && close > 0) {
-                    // Java 의 같은 표기는 \x{…} 다
-                    out.append("\\x").append(js, i + 2, close + 1);
-                    i = close + 1;
-                } else if (inClass && js.charAt(i + 1) == 'b') {
-                    // JS 묶음 안의 \b 는 백스페이스다. 묶음 밖 \b 는 JS · Java(19 부터) 모두 ASCII 낱말 글자 기준이라 그대로 둔다.
-                    out.append("\\x08");
-                    i += 2;
-                } else if (js.charAt(i + 1) == 's') {
-                    out.append(inClass ? JS_SPACES : "[" + JS_SPACES + "]");
-                    i += 2;
-                } else if (js.charAt(i + 1) == 'S') {
-                    // 묶음 안에서는 Java 겹 묶음(합집합)으로 넣는다. [^…[^공백]] 도 Java 9 부터 바깥 ^ 가 전체에 걸린다.
-                    out.append("[^").append(JS_SPACES).append(']');
-                    i += 2;
-                } else {
-                    out.append(js, i, i + 2);
-                    i += 2;
-                }
+            if (c == '\\') {
+                i += 2;
                 continue;
             }
             if (inClass) {
-                if (c == ']') {
-                    inClass = false;
-                    out.append(c);
-                } else if (c == '[') {
-                    // Java 는 묶음 안의 [ 를 겹 묶음으로 본다
-                    out.append("\\[");
-                } else if (c == '&' && i + 1 < js.length() && js.charAt(i + 1) == '&') {
-                    // Java 는 묶음 안의 && 를 교집합으로 본다
-                    out.append("&\\&");
-                    i++;
-                } else {
-                    out.append(c);
-                }
-            } else if (js.startsWith("[]", i)) {
-                out.append("(?!)");
-                i++;
-            } else if (js.startsWith("[^]", i)) {
-                out.append("[\\s\\S]");
-                i += 2;
+                inClass = c != ']';
             } else if (c == '[') {
                 inClass = true;
-                out.append(c);
-                // 묶음 첫 자리의 ^ 다음 ] 는 JS 에서 묶음 끝이다. Java 는 그 ] 를 글자로 보므로 따로 막지 않아도 위 두 경우가 걸러 낸다.
-            } else if (c == '{' && !isQuantifier(js, i)) {
-                out.append("\\{");
-            } else {
-                out.append(c);
+                // [] · [^] 의 ] 는 묶음 끝이다
+                i += js.startsWith("[^", i) ? 1 : 0;
+            } else if (c == '(' && !js.startsWith("(?", i)) {
+                names.add(null);
+            } else if (js.startsWith("(?<", i) && i + 3 < js.length() && js.charAt(i + 3) != '=' && js.charAt(i + 3) != '!') {
+                int close = js.indexOf('>', i);
+                String name = close < 0 ? "" : js.substring(i + 3, close);
+                if (!isJsName(name)) {
+                    throw new PatternSyntaxException(BAD_GROUP_NAME, js, i);
+                }
+                if (names.contains(name)) {
+                    throw new PatternSyntaxException(DUPLICATE_GROUP_NAME, js, i);
+                }
+                names.add(name);
+                i = close;
             }
             i++;
         }
-        return out.toString();
+        return names;
+    }
+
+    /** JS 그룹 이름: 식별자 첫 글자(또는 $ _) 다음 식별자 글자(또는 $). */
+    private static boolean isJsName(String name) {
+        if (name.isEmpty()) {
+            return false;
+        }
+        int first = name.codePointAt(0);
+        if (!Character.isUnicodeIdentifierStart(first) && first != '$' && first != '_') {
+            return false;
+        }
+        for (int cp : name.codePoints().toArray()) {
+            if (!Character.isUnicodeIdentifierPart(cp) && cp != '$') {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** i 자리의 { 가 {n} · {n,} · {n,m} 반복인지. */
@@ -359,10 +857,39 @@ final class RegexBench {
     /** anyOf 면 안의 조각 가운데 하나(또는), 아니면 차례로. */
     record Bunch(List<Piece> pieces, boolean anyOf, Repeating repeating) implements Part {}
 
-    /** 글 모양 전체 설정. whole 이면 글 전체(^…$), wordOnly 면 낱말 단위(\b), needs · minLength 는 whole 일 때만 쓴다(0 이면 조건 없음). */
+    /** 글 모양 전체 설정. whole 이면 글 전체(^…$), wordOnly 면 낱말 단위(앞뒤가 WORD_CHAR 가 아님), needs · minLength 는 whole 일 때만 쓴다(0 이면 조건 없음). */
     record Shape(boolean whole, boolean wordOnly, Set<Need> needs, int minLength) {}
 
-    enum PartProblem { NO_KINDS, NO_WORDS, NO_EXCEPT, RANGE, NAME, EMPTY_GROUP }
+    enum PartProblem { NO_KINDS, NO_WORDS, NO_EXCEPT, RANGE, NAME, EMPTY_GROUP, DUPLICATE_NAME }
+
+    /** 조합 전체의 고칠 점. 줄마다 problem 을 보고, 없으면 두 줄 이상이 같은 이름으로 꺼내는지 본다. 없으면 null. */
+    static PartProblem problem(List<Part> parts) {
+        List<String> names = new ArrayList<>();
+        for (Part part : parts) {
+            PartProblem problem = problem(part);
+            if (problem != null) {
+                return problem;
+            }
+            List<Repeating> repeatings = new ArrayList<>();
+            if (part instanceof Bunch group) {
+                repeatings.add(group.repeating());
+                for (Piece piece : group.pieces()) {
+                    repeatings.add(piece.repeating());
+                }
+            } else {
+                repeatings.add(((Piece) part).repeating());
+            }
+            for (Repeating r : repeatings) {
+                if (r.capture() && !r.name().isEmpty()) {
+                    if (names.contains(r.name())) {
+                        return PartProblem.DUPLICATE_NAME;
+                    }
+                    names.add(r.name());
+                }
+            }
+        }
+        return null;
+    }
 
     /** 패턴을 만들 수 없게 고른 점. 없으면 null. 묶음은 안의 조각 문제를 먼저 돌려준다. */
     static PartProblem problem(Part part) {
@@ -401,6 +928,14 @@ final class RegexBench {
         return null;
     }
 
+    /**
+     * 낱말 단위의 낱말 글자. \b 는 JS · Java 모두 ASCII 기준이라 한글 옆에서 맞지 않으므로 앞뒤 보기로 직접 건다.
+     * \p{L} 은 JS 에서 u 플래그가 있어야 해서 두 문법에 다 통하는 묶음을 쓴다.
+     */
+    private static final String WORD_CHAR = "[가-힣A-Za-z0-9_]";
+    private static final String WORD_START = "(?<!" + WORD_CHAR + ")";
+    private static final String WORD_END = "(?!" + WORD_CHAR + ")";
+
     /** parts 를 차례로 이은 패턴. 모든 줄이 problem 이 없어야 한다. 조각이 없고 조건만 있으면 본문은 「아무 글자 여럿」. */
     static String compose(List<Part> parts, Shape shape) {
         StringBuilder body = new StringBuilder();
@@ -408,7 +943,7 @@ final class RegexBench {
             body.append(part instanceof Bunch group ? group(group) : piece((Piece) part));
         }
         if (!shape.whole()) {
-            return shape.wordOnly() && !body.isEmpty() ? "\\b" + body + "\\b" : body.toString();
+            return shape.wordOnly() && !body.isEmpty() ? WORD_START + body + WORD_END : body.toString();
         }
         StringBuilder out = new StringBuilder("^");
         for (Need need : Need.values()) {
@@ -443,7 +978,7 @@ final class RegexBench {
             case KINDS -> kindsAtom(piece.kinds(), piece.text());
             case WORDS -> wordsAtom(words(piece.text()));
             case ANY -> ".";
-            case EXCEPT -> "[^" + classChars(piece.text()) + "]";
+            case EXCEPT -> exceptAtom(piece.text());
         };
         String body = wrap(atom, needsWrap(piece), piece.repeating());
         String before = piece.before().isEmpty() ? "" : "(?<=" + escape(piece.before(), SPECIAL) + ")";
@@ -451,13 +986,16 @@ final class RegexBench {
         return before + body + after;
     }
 
-    /** 반복을 붙이려면 (?:…) 로 감싸야 하는 조각인지: 두 글자 이상인 낱말 하나. 여러 낱말은 이미 (?:a|b) 다. */
+    /**
+     * 반복을 붙이려면 (?:…) 로 감싸야 하는 조각인지: UTF-16 두 칸 이상인 낱말 하나. 여러 낱말은 이미 (?:a|b) 다.
+     * 이모지 한 글자도 감싼다. JS u 없는 모드는 😀+ 의 + 를 뒤 반쪽에만 건다.
+     */
     private static boolean needsWrap(Piece piece) {
         if (piece.source() != Source.WORDS) {
             return false;
         }
         List<String> words = words(piece.text());
-        return words.size() == 1 && words.get(0).codePointCount(0, words.get(0).length()) > 1;
+        return words.size() == 1 && words.get(0).length() > 1;
     }
 
     private static String wrap(String atom, boolean several, Repeating r) {
@@ -481,7 +1019,10 @@ final class RegexBench {
         return (r.name().isEmpty() ? "(" : "(?<" + r.name() + ">") + body + ")";
     }
 
-    /** 고른 종류와 더할 글자를 한 [ ] 로. 숫자만 · 공백만이면 \d · \s 로 줄인다. */
+    /**
+     * 고른 종류와 더할 글자를 한 [ ] 로. 숫자만 · 공백만이면 \d · \s 로 줄인다.
+     * BMP 밖 글자(이모지)는 JS u 없는 모드의 [ ] 가 반쪽씩 맞추므로 (?:[…]|😀) 처럼 또는으로 붙인다.
+     */
     private static String kindsAtom(Set<CharKind> kinds, String extra) {
         if (extra.isEmpty() && kinds.size() == 1) {
             if (kinds.contains(CharKind.DIGIT)) {
@@ -497,7 +1038,50 @@ final class RegexBench {
                 content.append(kind.range);
             }
         }
-        return "[" + content + classChars(extra) + "]";
+        StringBuilder bmp = new StringBuilder();
+        List<String> astral = astral(extra, bmp);
+        String set = content.isEmpty() && bmp.isEmpty() ? "" : "[" + content + classChars(bmp.toString()) + "]";
+        if (astral.isEmpty()) {
+            return set;
+        }
+        StringJoiner alternatives = new StringJoiner("|", "(?:", ")");
+        if (!set.isEmpty()) {
+            alternatives.add(set);
+        }
+        for (String symbol : astral) {
+            alternatives.add(symbol);
+        }
+        return alternatives.toString();
+    }
+
+    /**
+     * 「이 글자 빼고」. BMP 밖 글자는 [^ ] 대신 앞보기로 뺀다: (?:(?!😀)(?:짝|[^…])).
+     * 짝(SURROGATE_PAIR)을 먼저 두어 JS u 없는 모드에서도 다른 이모지를 반쪽으로 자르지 않는다. Java 는 짝을 한 글자로 읽어 [^…] 로 간다.
+     */
+    private static String exceptAtom(String text) {
+        StringBuilder bmp = new StringBuilder();
+        List<String> astral = astral(text, bmp);
+        if (astral.isEmpty()) {
+            return "[^" + classChars(text) + "]";
+        }
+        String rest = bmp.isEmpty() ? ANY_CHAR : "[^" + classChars(bmp.toString()) + "]";
+        return "(?:(?!" + String.join("|", astral) + ")(?:" + SURROGATE_PAIR + "|" + rest + "))";
+    }
+
+    private static final String SURROGATE_PAIR = "[\\uD800-\\uDBFF][\\uDC00-\\uDFFF]";
+
+    /** text 의 BMP 밖 글자를 겹치지 않게 돌려주고, 나머지 글자는 bmp 에 더한다. */
+    private static List<String> astral(String text, StringBuilder bmp) {
+        List<String> astral = new ArrayList<>();
+        for (int cp : text.codePoints().toArray()) {
+            String symbol = Character.toString(cp);
+            if (Character.isBmpCodePoint(cp)) {
+                bmp.append(symbol);
+            } else if (!astral.contains(symbol)) {
+                astral.add(symbol);
+            }
+        }
+        return astral;
     }
 
     private static String wordsAtom(List<String> words) {
@@ -721,18 +1305,18 @@ final class RegexBench {
 
     /** input 전체가 패턴에 맞는지(입력값 검사), 아니면 일부만 맞는지. 플래그는 run 과 같다(g 는 상관없음). */
     static Check check(Flavor flavor, String pattern, Set<Flag> flags, String input, long timeoutMs) {
-        Pattern compiled;
+        Compiled compiled;
         try {
             compiled = compile(flavor, pattern, flags);
         } catch (PatternSyntaxException e) {
             return new Check(null, null, Problem.SYNTAX);
         }
         try {
-            Matcher m = compiled.matcher(new TimedText(input, System.nanoTime() + timeoutMs * 1_000_000L));
+            Matcher m = compiled.pattern().matcher(new TimedText(compiled.subject(input), System.nanoTime() + timeoutMs * 1_000_000L));
             if (m.matches()) {
                 return new Check(Verdict.FULL, input, Problem.NONE);
             }
-            return m.find() ? new Check(Verdict.PARTIAL, m.group(), Problem.NONE) : new Check(Verdict.NONE, null, Problem.NONE);
+            return m.find() ? new Check(Verdict.PARTIAL, input.substring(m.start(), m.end()), Problem.NONE) : new Check(Verdict.NONE, null, Problem.NONE);
         } catch (Timeout e) {
             return new Check(null, null, Problem.TIMEOUT);
         } catch (StackOverflowError e) {

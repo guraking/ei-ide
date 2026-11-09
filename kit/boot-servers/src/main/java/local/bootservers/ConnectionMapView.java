@@ -48,13 +48,16 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Function;
 
@@ -87,6 +90,8 @@ final class ConnectionMapView {
     private static final int HIT_DISTANCE = 6;
     private static final long MILLIS_PER_MINUTE = 60_000;
     private static final Color UP = new JBColor(0x208A3C, 0x5FB865);
+    // 표에서 같은 줄인지 가릴 때 보는 앞쪽 칸 수(연결 · 설정 · 값)
+    private static final int ROW_KEY_COLUMNS = 3;
     private static final DateTimeFormatter CHECKED_TIME = DateTimeFormatter.ofPattern("HH:mm:ss");
 
     /** 상자 구역. 나열 순서가 위에서 아래 순서다. */
@@ -144,7 +149,11 @@ final class ConnectionMapView {
     private final List<Section> sections = new ArrayList<>();
     private List<Node> nodes = List.of();
     private String selected;
+    // 지금 실행 중인 스프링 부트 서버 이름. 멈춘 서버로 가는 선은 끊긴 것으로 그린다.
+    private Set<String> running = Set.of();
     private boolean updatingProfiles;
+    // 프로필을 바꾼 뒤 아직 「조회」를 누르지 않았으면 true
+    private boolean profileChanged;
 
     /** @param stateColor 서버 이름 → 상자 점 색(서버 창 상태 색) */
     ConnectionMapView(Project project, ServerMonitor monitor, Function<String, Color> stateColor) {
@@ -155,11 +164,13 @@ final class ConnectionMapView {
         profile.addActionListener(e -> {
             if (!updatingProfiles) {
                 monitor.setProfileOverride((String) profile.getSelectedItem());
+                profileChanged = true;
                 updateQuery();
             }
         });
         query.putClientProperty(DarculaButtonUI.DEFAULT_STYLE_KEY, true);
         query.addActionListener(e -> {
+            profileChanged = false;
             monitor.refreshLinks();
             updateQuery();
         });
@@ -168,10 +179,10 @@ final class ConnectionMapView {
         bar.add(query);
         bar.add(gauge);
         bar.add(checkedAt);
-        JPanel profileBox = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(UIUtil.DEFAULT_HGAP), 0));
-        profileBox.add(new JBLabel(BootServersBundle.message("map.profile")));
-        profileBox.add(profile);
-        bar.add(profileBox);
+        // 프로필 목록 상자는 제 줄 폭을 다 채운다.
+        JPanel profileBox = new JPanel(new BorderLayout(JBUI.scale(UIUtil.DEFAULT_HGAP), 0));
+        profileBox.add(new JBLabel(BootServersBundle.message("map.profile")), BorderLayout.WEST);
+        profileBox.add(profile, BorderLayout.CENTER);
         bar.add(legend(BootServersBundle.message("map.legend.up"), UP));
         bar.add(legend(BootServersBundle.message("map.legend.down"), JBUI.CurrentTheme.Label.errorForeground()));
         bar.add(grayLabel(BootServersBundle.message("map.legend.outside")));
@@ -181,7 +192,7 @@ final class ConnectionMapView {
             @Override
             public Component getTableCellRendererComponent(javax.swing.JTable table, Object value, boolean selected, boolean focus, int row, int column) {
                 super.getTableCellRendererComponent(table, value, selected, focus, row, column);
-                ServerMonitor.LinkState s = row < edges.size() ? monitor.state(edges.get(row).link()) : ServerMonitor.LinkState.UNKNOWN;
+                ServerMonitor.LinkState s = row < edges.size() ? state(edges.get(row)) : ServerMonitor.LinkState.UNKNOWN;
                 setForeground(!s.checked() ? NamedColorUtil.getInactiveTextColor() : s.up() ? UP : JBUI.CurrentTheme.Label.errorForeground());
                 return this;
             }
@@ -204,7 +215,7 @@ final class ConnectionMapView {
         column.setLayout(new BoxLayout(column, BoxLayout.Y_AXIS));
         column.setBorder(JBUI.Borders.empty(0, UIUtil.DEFAULT_HGAP, UIUtil.DEFAULT_VGAP, UIUtil.DEFAULT_HGAP));
         JComponent canvasBox = ScrollPaneFactory.createScrollPane(canvas);
-        for (JComponent c : new JComponent[]{bar, canvasBox, grayLabel(BootServersBundle.message("map.table.caption")), tableBox}) {
+        for (JComponent c : new JComponent[]{bar, profileBox, canvasBox, grayLabel(BootServersBundle.message("map.table.caption")), tableBox}) {
             c.setAlignmentX(0);
             column.add(c);
             column.add(Box.createVerticalStrut(JBUI.scale(UIUtil.DEFAULT_VGAP)));
@@ -218,14 +229,14 @@ final class ConnectionMapView {
         root.add(empty, "empty");
     }
 
-    /** 「조회」 단추 · 진행 표시 · 마지막 조회 시각을 monitor 의 지금 상태에 맞춘다. 조회 중에는 단추를 잠근다. */
+    /** 「조회」 단추 · 진행 표시 · 마지막 조회 시각을 monitor 의 지금 상태에 맞춘다. 조회 중에는 단추를 잠근다. 프로필을 바꾼 뒤 조회 전이면 조회 안내를 보인다. */
     private void updateQuery() {
         boolean pending = monitor.linksPending();
         query.setEnabled(!pending);
         gauge.setVisible(pending);
         long at = monitor.linksCheckedAt();
         checkedAt.setVisible(!pending);
-        checkedAt.setText(at == 0 ? BootServersBundle.message("map.query.none")
+        checkedAt.setText(at == 0 || profileChanged ? BootServersBundle.message("map.query.none")
                 : BootServersBundle.message("map.query.last", CHECKED_TIME.format(Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault()))));
     }
 
@@ -251,11 +262,14 @@ final class ConnectionMapView {
         updateProfiles();
         updateQuery();
         List<ServerMonitor.Watched> live = new ArrayList<>();
+        Set<String> names = new HashSet<>();
         for (ServerMonitor.Watched w : monitor.servers()) {
             if (w.live() && w.module() != null) {
                 live.add(w);
+                names.add(w.name());
             }
         }
+        running = names;
         if (live.isEmpty()) {
             empty.getEmptyText().setText(BootServersBundle.message("map.empty"))
                     .appendLine(BootServersBundle.message("map.empty.hint"), SimpleTextAttributes.GRAYED_ATTRIBUTES, null);
@@ -277,10 +291,15 @@ final class ConnectionMapView {
             for (String p : monitor.profileNames()) {
                 m.addElement(p);
             }
+            // 고른 프로필이 설정에서 사라져도 연결은 그 프로필로 찾으므로 목록에 남겨 보인다.
+            String override = monitor.profileOverride();
+            if (override != null && !monitor.profileNames().contains(override)) {
+                m.addElement(override);
+            }
             if (!Objects.equals(listOf(m), listOf((DefaultComboBoxModel<String>) profile.getModel()))) {
                 profile.setModel(m);
             }
-            profile.setSelectedItem(monitor.profileOverride());
+            profile.setSelectedItem(override);
         }
         finally {
             updatingProfiles = false;
@@ -295,7 +314,7 @@ final class ConnectionMapView {
         return result;
     }
 
-    /** 상자 · 선을 만들고 자리를 잡는다. 서버 열은 들어오는 선을 따라 깊이를 매기고(순환은 서버 수에서 멈춤), 바깥은 쓰는 서버 다음 열. */
+    /** 상자 · 선을 만들고 자리를 잡는다. 서버 열은 들어오는 선을 따라 깊이를 매기고(순환을 이루는 선은 세지 않음, MapColumns), 바깥은 쓰는 서버 다음 열. */
     private void build(List<ServerMonitor.Watched> live) {
         Map<String, Node> byId = new LinkedHashMap<>();
         for (ServerMonitor.Watched w : live) {
@@ -317,19 +336,19 @@ final class ConnectionMapView {
         edges = result;
         nodes = new ArrayList<>(byId.values());
 
-        Map<String, Integer> depth = new HashMap<>();
+        List<String> servers = new ArrayList<>();
         for (Node n : nodes) {
             if (n.server() != null) {
-                depth.put(n.id(), 0);
+                servers.add(n.id());
             }
         }
-        for (int round = 0; round < nodes.size(); round++) {
-            for (Edge e : edges) {
-                if (e.to().server() != null && depth.get(e.from().id()) + 1 > depth.get(e.to().id())) {
-                    depth.put(e.to().id(), Math.min(depth.get(e.from().id()) + 1, nodes.size()));
-                }
+        List<String[]> serverEdges = new ArrayList<>();
+        for (Edge e : edges) {
+            if (e.to().server() != null) {
+                serverEdges.add(new String[]{e.from().id(), e.to().id()});
             }
         }
+        Map<String, Integer> depth = MapColumns.depths(servers, serverEdges);
         // 바깥 상자는 그 주소를 쓰는 서버 바로 오른쪽 열(여럿이 쓰면 가장 오른쪽 서버 다음). 선이 다른 상자 뒤를 지나지 않는다.
         for (Edge e : edges) {
             if (e.to().server() == null) {
@@ -356,7 +375,7 @@ final class ConnectionMapView {
     private void layout(Map<String, Integer> depth) {
         FontMetrics titleFm = canvas.getFontMetrics(JBUI.Fonts.label());
         FontMetrics smallFm = canvas.getFontMetrics(JBUI.Fonts.smallFont());
-        Map<Integer, List<Node>> columns = new TreeMap<>();
+        TreeMap<Integer, List<Node>> columns = new TreeMap<>();
         for (Node n : nodes) {
             columns.computeIfAbsent(depth.get(n.id()), k -> new ArrayList<>()).add(n);
         }
@@ -370,9 +389,9 @@ final class ConnectionMapView {
             in.computeIfAbsent(e.to().id(), k -> new ArrayList<>()).add(i);
             lanes.merge(depth.get(e.from().id()), 1, Integer::sum);
             if (depth.get(e.to().id()) > depth.get(e.from().id()) + 1) {
-                lanes.merge(depth.get(e.to().id()) - 1, 1, Integer::sum);
+                lanes.merge(columns.floorKey(depth.get(e.to().id()) - 1), 1, Integer::sum);
             }
-            labels.merge(depth.get(e.to().id()), smallFm.stringWidth(stateText(monitor.state(e.link()))), Math::max);
+            labels.merge(depth.get(e.to().id()), smallFm.stringWidth(stateText(state(e))), Math::max);
         }
         int labelLine = smallFm.getHeight() + JBUI.scale(LABEL_PAD);
         int pad = JBUI.scale(TEXT_PAD);
@@ -381,7 +400,7 @@ final class ConnectionMapView {
         boxes.clear();
         sections.clear();
         int x = JBUI.scale(MARGIN);
-        Map<Integer, Integer> right = new HashMap<>();
+        TreeMap<Integer, Integer> right = new TreeMap<>();
         for (Map.Entry<Integer, List<Node>> column : columns.entrySet()) {
             int col = column.getKey();
             List<Node> list = column.getValue();
@@ -479,7 +498,9 @@ final class ConnectionMapView {
             if (skip[i]) {
                 corridor++;
                 int corridorY = bottom + JBUI.scale(ROW_GAP) / 2 + corridor * JBUI.scale(LANE_GAP);
-                int lastX = right.get(toCol - 1) + used.merge(toCol - 1, 1, Integer::sum) * JBUI.scale(LANE_GAP);
+                // 대상 바로 앞 열이 비어 있으면 그 왼쪽에서 가장 가까운 열 사이로 올라간다.
+                int laneCol = right.floorKey(toCol - 1);
+                int lastX = right.get(laneCol) + used.merge(laneCol, 1, Integer::sum) * JBUI.scale(LANE_GAP);
                 points.add(new Point(laneX, corridorY));
                 points.add(new Point(lastX, corridorY));
                 laneX = lastX;
@@ -498,11 +519,49 @@ final class ConnectionMapView {
         }
     }
 
+    /** 표를 선 목록에 맞춘다. 줄 수가 같으면 바뀐 칸만 고쳐 고른 줄 · 스크롤을 그대로 두고, 줄 수가 바뀌면 다시 채운 뒤 같은 연결 · 설정 줄을 다시 고른다. */
     private void fillTable() {
-        sourceModel.setRowCount(0);
+        List<Object[]> rows = new ArrayList<>();
         for (Edge e : edges) {
-            sourceModel.addRow(new Object[]{e.from().title() + " → " + e.to().title(), e.link().target().key(), e.link().target().value(), stateText(monitor.state(e.link()))});
+            rows.add(new Object[]{e.from().title() + " → " + e.to().title(), e.link().target().key(), e.link().target().value(), stateText(state(e))});
         }
+        if (rows.size() == sourceModel.getRowCount()) {
+            for (int r = 0; r < rows.size(); r++) {
+                for (int c = 0; c < rows.get(r).length; c++) {
+                    if (!Objects.equals(rows.get(r)[c], sourceModel.getValueAt(r, c))) {
+                        sourceModel.setValueAt(rows.get(r)[c], r, c);
+                    }
+                }
+            }
+            return;
+        }
+        int before = sourceTable.getSelectedRow();
+        List<Object> picked = new ArrayList<>();
+        for (int c = 0; before >= 0 && c < ROW_KEY_COLUMNS; c++) {
+            picked.add(sourceModel.getValueAt(before, c));
+        }
+        sourceModel.setRowCount(0);
+        for (Object[] row : rows) {
+            sourceModel.addRow(row);
+        }
+        if (picked.isEmpty()) {
+            return;
+        }
+        for (int r = 0; r < rows.size(); r++) {
+            if (picked.equals(Arrays.asList(rows.get(r)).subList(0, ROW_KEY_COLUMNS))) {
+                sourceTable.setRowSelectionInterval(r, r);
+                return;
+            }
+        }
+    }
+
+    /** 선의 상태. 대상이 우리 서버인데 지금 실행 중이 아니면 마지막 조회 값과 상관없이 끊긴 것으로 본다. */
+    private ServerMonitor.LinkState state(Edge e) {
+        ServerMonitor.LinkState s = monitor.state(e.link());
+        if (e.to().server() == null || running.contains(e.to().server()) || s.checked() && !s.up()) {
+            return s;
+        }
+        return new ServerMonitor.LinkState(true, false, 0, System.currentTimeMillis());
     }
 
     private static String stateText(ServerMonitor.LinkState s) {
@@ -598,7 +657,7 @@ final class ConnectionMapView {
                     paintSection(g2, s);
                 }
                 for (int i = 0; i < edges.size(); i++) {
-                    ServerMonitor.LinkState s = monitor.state(edges.get(i).link());
+                    ServerMonitor.LinkState s = state(edges.get(i));
                     g2.setColor(lineColor(s));
                     g2.setStroke(s.checked() && !s.up()
                             ? new BasicStroke(JBUI.scale(LINE_WIDTH), BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10f, scaled(DASH), 0f)
@@ -610,7 +669,7 @@ final class ConnectionMapView {
                 FontMetrics fm = g2.getFontMetrics();
                 int labelPad = JBUI.scale(LABEL_PAD);
                 for (int i = 0; i < edges.size(); i++) {
-                    ServerMonitor.LinkState s = monitor.state(edges.get(i).link());
+                    ServerMonitor.LinkState s = state(edges.get(i));
                     Route r = routes.get(i);
                     String label = stateText(s);
                     int labelWidth = fm.stringWidth(label);
@@ -657,7 +716,7 @@ final class ConnectionMapView {
             g2.fill(box);
             boolean broken = false;
             for (Edge e : edges) {
-                ServerMonitor.LinkState s = monitor.state(e.link());
+                ServerMonitor.LinkState s = state(e);
                 broken |= e.to() == n && s.checked() && !s.up();
             }
             Color border = broken ? JBUI.CurrentTheme.Label.errorForeground()

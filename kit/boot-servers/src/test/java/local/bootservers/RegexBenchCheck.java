@@ -28,6 +28,7 @@ public final class RegexBenchCheck {
 
     public static void main(String[] args) {
         javascript();
+        jsLikeNode();
         java();
         problems();
         pieces();
@@ -70,6 +71,56 @@ public final class RegexBenchCheck {
         eq(-1, js("(a)|b", none, "b", "").matches().get(0).groups().get(1).start(), "끼지 않은 그룹 위치");
     }
 
+    /** node 22 에서 같은 패턴 · 글로 얻은 값과 맞춘다. 줄 끝 · 이스케이프 · 되참조 · 그룹 이름 · UTF-16 단위. */
+    private static void jsLikeNode() {
+        Set<Flag> none = EnumSet.noneOf(Flag.class);
+        Set<Flag> g = EnumSet.of(Flag.JS_GLOBAL);
+        Set<Flag> gm = EnumSet.of(Flag.JS_GLOBAL, Flag.JS_MULTILINE);
+        Set<Flag> gu = EnumSet.of(Flag.JS_GLOBAL, Flag.JS_UNICODE);
+        eq(0, js("^\\d+$", none, "123\n", "").matches().size(), "m 없는 $ 는 맨 끝만");
+        eq(List.of(2), starts(js("$", g, "a\n", "")), "m 없는 $ 위치");
+        eq(List.of(0, 2, 3), starts(js("^", gm, "a\r\nb", "")), "m 의 ^ 는 \\r · \\n 을 따로 줄 끝으로");
+        eq(List.of(1, 2, 4), starts(js("$", gm, "a\r\nb", "")), "m 의 $ 는 \\r · \\n 을 따로 줄 끝으로");
+        eq(List.of(0, 2), starts(js("^", gm, "a\u2028b\u0085c", "")), "m 의 줄 끝은 \\u2028 · \\u0085 아님");
+        eq(List.of(0, 1), starts(js(".", g, "a\u0085\u2028\r", "")), ". 는 \\u0085 에 맞고 \\u2028 · \\r 에 안 맞음");
+        eq(List.of(0, 1), starts(js(".", EnumSet.of(Flag.JS_GLOBAL, Flag.JS_DOT_ALL), "a\u2028", "")), "s 의 . 는 줄 끝에도");
+        eq(List.of(1), starts(js("\\v", g, "\n\u000B", "")), "\\v 는 \\x0B 하나");
+        eq(List.of(1), starts(js("[\\v]", g, "\n\u000B", "")), "묶음 안 \\v");
+        eq(List.of(1), starts(js("\\0", g, "x\0", "")), "\\0 은 NUL");
+        eq("RZQE", js("\\R\\Z\\Q\\E", none, "RZQE", "").matches().get(0).groups().get(0).value(), "u 없으면 모르는 이스케이프는 글자");
+        eq("p{L}", js("\\p{L}", none, "p{L}", "").matches().get(0).groups().get(0).value(), "u 없으면 \\p 는 글자 p");
+        eq("\u0001\u0001", js("\\cA\\ca", none, "\u0001\u0001", "").matches().get(0).groups().get(0).value(), "\\cX 는 32 로 나눈 나머지");
+        eq("A8", js("\\101\\8", none, "A8", "").matches().get(0).groups().get(0).value(), "옛 8진수 · \\8 은 글자");
+        eq(List.of(0, 1, 2), starts(js("[\\d-x]", g, "-x5", "")), "u 없으면 [\\d-x] 의 - 는 글자");
+        eq("b", js("(a)?\\1b", none, "b", "").matches().get(0).groups().get(0).value(), "맞지 않은 그룹 되참조는 빈 글");
+        eq("ab", js("\\1(a)b", none, "ab", "").matches().get(0).groups().get(0).value(), "앞쪽 되참조는 빈 글");
+        eq("aa", js("(a)\\1", none, "aa", "").matches().get(0).groups().get(0).value(), "닫힌 그룹 되참조");
+        Result named = js("(?<first_name>a)(?<$x>b)(?<한글>c)\\k<$x>", none, "abcb", "$<first_name>$<한글>$2");
+        eq(Problem.NONE, named.problem(), "JS 그룹 이름 _ · $ · 한글");
+        eq("first_name", named.matches().get(0).groups().get(1).name(), "원래 그룹 이름을 보임");
+        eq("$x", named.matches().get(0).groups().get(2).name(), "$ 든 그룹 이름");
+        eq("acb", named.replaced(), "$<이름> 바꾸기");
+        eq("[a|b|b|]", js("(a)(?<n>b)", none, "ab", "[$1|$<n>|$2|$<m>]").replaced(), "그룹 번호 · 이름 바꾸기");
+        eq(List.of(0, 2), starts(js("\uD83D\uDE00+", g, "\uD83D\uDE00\uD83D\uDE00", "")), "u 없으면 + 는 이모지 뒤 반쪽에만");
+        eq(List.of(0, 1), starts(js("[\uD83D\uDE00]", g, "\uD83D\uDE00", "")), "u 없으면 묶음 안 이모지는 반쪽씩");
+        eq(List.of(0, 1), starts(js(".", g, "\uD83D\uDE00", "")), "u 없으면 . 는 반쪽");
+        eq(List.of(0), starts(js(".", gu, "\uD83D\uDE00", "")), "u 면 . 는 한 글자");
+        eq(List.of(1), starts(js("[\\uD800-\\uDBFF][\\uDC00-\\uDFFF]", g, "a\uD83D\uDE00b", "")), "서로게이트 범위");
+        eq(List.of(0, 2), starts(js("(?:)", gu, "\uD83D\uDE00", "")), "u 의 빈 일치는 코드 포인트로 건너감");
+        eq(List.of(0, 1, 2), starts(js("(?:)", g, "\uD83D\uDE00", "")), "u 없으면 빈 일치는 한 칸씩");
+        eq(List.of(1), starts(js("[\uE000]", g, "\uD800\uE000", "")), "사용자 영역 글자는 그대로");
+        eq(Verdict.FULL, RegexBench.check(Flavor.JAVASCRIPT, "^.$", Set.of(), "\u0085", TIMEOUT_MS).verdict(), "확인할 글도 JS 줄 끝 기준");
+        eq("\uD83D", RegexBench.check(Flavor.JAVASCRIPT, "\\uD83D", Set.of(), "\uD83D\uDE00", TIMEOUT_MS).part(), "확인할 글도 UTF-16 단위");
+    }
+
+    private static List<Integer> starts(Result result) {
+        List<Integer> starts = new java.util.ArrayList<>();
+        for (RegexBench.Match match : result.matches()) {
+            starts.add(match.start());
+        }
+        return starts;
+    }
+
     private static void java() {
         Set<Flag> none = EnumSet.noneOf(Flag.class);
         eq(3, run(Flavor.JAVA, "a", none, "aaa", "").matches().size(), "Java 는 늘 전부");
@@ -87,7 +138,14 @@ public final class RegexBenchCheck {
         eq(Problem.SYNTAX, run(Flavor.JAVA, "{x}", none, "", "").problem(), "Java 는 { 글자를 막음");
         Result moved = js("[^](", none, "", "");
         eq(Problem.SYNTAX, moved.problem(), "JS 닫지 않은 괄호");
-        eq(-1, moved.errorIndex(), "옮긴 패턴은 위치를 주지 않음");
+        eq(4, moved.errorIndex(), "옮긴 패턴도 사용자가 친 패턴 기준 위치");
+        eq(6, js("\\s{3,1}", none, "", "").errorIndex(), "\\s 를 옮겨도 오류 위치는 원래 패턴 기준");
+        eq(Problem.SYNTAX, js("(?<1a>x)", none, "", "").problem(), "JS 가 받지 않는 그룹 이름");
+        eq(Problem.SYNTAX, js("(?<a>x)(?<a>y)", none, "", "").problem(), "겹친 그룹 이름");
+        eq(Problem.SYNTAX, js("(?<n>a)\\k<m>", none, "", "").problem(), "없는 이름 되참조");
+        eq(1, js("[z-a]", none, "", "").errorIndex(), "범위 순서 오류는 범위 앞 글자 위치");
+        eq(Problem.SYNTAX, js("\\h", EnumSet.of(Flag.JS_UNICODE), "h", "").problem(), "u 의 모르는 이스케이프는 오류");
+        eq(Problem.SYNTAX, js("[\\d-x]", EnumSet.of(Flag.JS_UNICODE), "", "").problem(), "u 의 [\\d-x] 는 오류");
         Result replacement = run(Flavor.JAVA, "a", none, "a", "$9");
         eq(Problem.REPLACEMENT, replacement.problem(), "Java 없는 그룹");
         eq(1, replacement.matches().size(), "바꾸기 오류여도 일치는 보임");
@@ -140,9 +198,11 @@ public final class RegexBenchCheck {
         }
         eq("", RegexBench.compose(List.<Part>of(), shape(true)), "아무것도 없으면 빈 패턴");
         String word = RegexBench.compose(List.<Part>of(piece(Source.WORDS, Set.of(), "cat", Repeating.ONCE)), new Shape(false, true, Set.of(), 0));
-        eq("\\bcat\\b", word, "낱말 단위");
+        eq("(?<![가-힣A-Za-z0-9_])cat(?![가-힣A-Za-z0-9_])", word, "낱말 단위");
+        String honorific = RegexBench.compose(List.<Part>of(piece(Source.WORDS, Set.of(), "홍길동", Repeating.ONCE)), new Shape(false, true, Set.of(), 0));
         for (Flavor flavor : Flavor.values()) {
             eq(1, run(flavor, word, EnumSet.of(Flag.JS_GLOBAL), "cat category", "").matches().size(), flavor + " 낱말 단위 일치");
+            eq(1, run(flavor, honorific, EnumSet.of(Flag.JS_GLOBAL), "홍길동 님, 홍길동님", "").matches().size(), flavor + " 한글 낱말 단위 일치");
         }
         eq(0, js("\\b홍\\b", Set.of(), "홍", "").matches().size(), "JS \\b 는 한글을 낱말 글자로 보지 않음");
         eq(0, run(Flavor.JAVA, "\\b홍\\b", Set.of(), "홍", "").matches().size(), "Java \\b 도 ASCII 기준");
@@ -156,6 +216,25 @@ public final class RegexBenchCheck {
         eq(RegexBench.PartProblem.RANGE, RegexBench.problem(piece(Source.ANY, Set.of(), "", new Repeating(Repeat.RANGE, 5, 2, false, false, ""))), "N > M");
         eq(RegexBench.PartProblem.NAME, RegexBench.problem(piece(Source.ANY, Set.of(), "", new Repeating(Repeat.ONCE, 0, 0, false, true, "1a"))), "이름 꼴");
         eq(RegexBench.PartProblem.EMPTY_GROUP, RegexBench.problem(new Bunch(List.of(), false, Repeating.ONCE)), "빈 묶음");
+        Piece year = piece(Source.KINDS, EnumSet.of(CharKind.DIGIT), "", new Repeating(Repeat.EXACTLY, 4, 0, false, true, "y"));
+        Bunch yearInside = new Bunch(List.of(year), false, Repeating.ONCE);
+        eq(RegexBench.PartProblem.DUPLICATE_NAME, RegexBench.problem(List.<Part>of(year, yearInside)), "두 줄이 같은 이름");
+        eq(null, RegexBench.problem(List.<Part>of(year, more)), "이름이 하나뿐");
+
+        Repeating many = new Repeating(Repeat.ONE_OR_MORE, 0, 0, false, false, "");
+        String smiles = RegexBench.piece(piece(Source.WORDS, Set.of(), "\uD83D\uDE00", many));
+        eq("(?:\uD83D\uDE00)+", smiles, "이모지 하나도 반복이면 묶음");
+        String smileOrDigit = RegexBench.piece(piece(Source.KINDS, EnumSet.of(CharKind.DIGIT), "\uD83D\uDE00", many));
+        eq("(?:[0-9]|\uD83D\uDE00)+", smileOrDigit, "이모지는 [ ] 밖 또는");
+        String notSmile = RegexBench.piece(piece(Source.EXCEPT, Set.of(), ",\uD83D\uDE00", many));
+        eq("(?:(?!\uD83D\uDE00)(?:[\\uD800-\\uDBFF][\\uDC00-\\uDFFF]|[^,]))+", notSmile, "이모지 빼고는 앞보기");
+        String text = "1\uD83D\uDE00\uD83D\uDE00,\uD83D\uDE01";
+        for (Flavor flavor : Flavor.values()) {
+            eq(1, run(flavor, smiles, EnumSet.of(Flag.JS_GLOBAL), text, "").matches().size(), flavor + " 이모지 반복");
+            eq("1\uD83D\uDE00\uD83D\uDE00", run(flavor, smileOrDigit, Set.of(), text, "").matches().get(0).groups().get(0).value(), flavor + " 이모지 또는 숫자");
+            List<RegexBench.Match> others = run(flavor, notSmile, EnumSet.of(Flag.JS_GLOBAL), text, "").matches();
+            eq("\uD83D\uDE01", others.get(others.size() - 1).groups().get(0).value(), flavor + " 이모지 빼고 다른 이모지는 통째로");
+        }
         eq(null, RegexBench.problem(more), "문제 없는 묶음");
     }
 

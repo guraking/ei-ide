@@ -139,13 +139,12 @@ final class ServerMonitor {
         return profileOverride;
     }
 
-    /** null 이면 서버마다 VM 옵션(없으면 설정)의 프로필. 바꾸면 연결을 바로 다시 찾는다. */
+    /** null 이면 서버마다 VM 옵션(없으면 설정)의 프로필. 고른 값만 남기고, 다음 조회(refreshLinks)부터 쓴다. */
     void setProfileOverride(String profile) {
         profileOverride = profile;
-        refreshLinks();
     }
 
-    /** 연결을 지금 다시 찾고 확인한다(연결 지도의 「조회」 · 알림의 「다시 확인」 · 프로필 바꾸기). 앞 차례가 돌고 있으면 다음 차례(최대 5초 뒤)가 한다. */
+    /** 연결을 지금 다시 찾고 확인한다(연결 지도의 「조회」 · 알림의 「다시 확인」). 앞 차례가 돌고 있으면 다음 차례(최대 5초 뒤)가 한다. */
     void refreshLinks() {
         linksRequested = true;
         AppExecutorUtil.getAppExecutorService().execute(this::tick);
@@ -251,12 +250,18 @@ final class ServerMonitor {
             }
             return result;
         });
+        // 같은 포트를 쓰는 설정이 여럿이면 실행 중인 서버로 잇는다.
         Map<Integer, String> byPort = new HashMap<>();
-        for (Read r : reads) {
-            names.addAll(Links.profileNames(r.config().sources()));
-            Integer port = r.server().live() && r.server().port() != null ? r.server().port() : Links.port(r.config().sources(), r.profiles());
-            if (port != null) {
-                byPort.putIfAbsent(port, r.server().name());
+        for (boolean running : new boolean[]{true, false}) {
+            for (Read r : reads) {
+                if (r.server().live() != running) {
+                    continue;
+                }
+                names.addAll(Links.profileNames(r.config().sources()));
+                Integer port = r.server().live() && r.server().port() != null ? r.server().port() : Links.port(r.config().sources(), r.profiles());
+                if (port != null) {
+                    byPort.putIfAbsent(port, r.server().name());
+                }
             }
         }
         List<Link> result = new ArrayList<>();
