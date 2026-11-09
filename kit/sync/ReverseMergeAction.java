@@ -84,8 +84,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
   private static final JBColor MINE_BG = new JBColor(0xFFF3E0, 0x4A3416);
   /** 단계 번호 동그라미 · 「커밋」 칩의 파랑(Git Log 현재 브랜치와 같은 색). */
   private static final Color STEP_COLOR = ProjectHistoryPanel.HEAD_COLOR;
-  /** 창 맨 위 저장소 이름 글자색(주황). 「내 파일」 경고 주황(MINE_COLOR)보다 붉은 쪽이라 구분된다. */
-  private static final JBColor REPO_COLOR = new JBColor(0xC2571A, 0xF08A4B);
+  /** 창 맨 위 저장소 이름 글자색. 동기화 창 Resolve Conflicts 단추와 같은 빨강. */
+  private static final Color REPO_COLOR = SyncPanel.RESOLVE_BG;
   private static final JBColor COMMITS_BG = new JBColor(0xE3EDFB, 0x25324A);
   private static final JBColor FILES_BG = new JBColor(0xEBECF0, 0x3C3F41);
   private static final JBColor FILES_FG = new JBColor(0x5A5D63, 0xB0B3B8);
@@ -379,7 +379,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
 
     @Override
     protected @Nullable JComponent createCenterPanel() {
-      // 맨 위: 어느 저장소를 합치는지. 합치기 전에 꼭 확인할 값이라 이름만 주황 · 조금 큰 굵은 글씨로, 경로는 옆에 작게.
+      // 맨 위: 어느 저장소를 합치는지. 합치기 전에 꼭 확인할 값이라 이름만 빨강(Resolve Conflicts 단추 색) · 조금 큰 굵은 글씨로, 경로는 옆에 작게.
       // 단계 제목과 같은 HorizontalLayout 이라 왼쪽 줄이 맞는다.
       JPanel where = new JPanel(new HorizontalLayout(JBUI.scale(GAP)));
       where.add(new JBLabel(SyncBundle.message("rmerge.repo")));

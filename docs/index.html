@@ -1131,7 +1131,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
         <div class="scroll">
           <div class="ide">
             <div class="title"><span class="dots"><i></i><i></i><i></i></span>Merge Branches</div>
-            <div class="bar"><span class="mark">1</span>저장소: <b style="color:#f08a4b; font-size:1.1em">backend</b><span class="key">D:\work\backend</span></div>
+            <div class="bar"><span class="mark">1</span>저장소: <b style="color:#c75450; font-size:1.1em">backend</b><span class="key">D:\work\backend</span></div>
             <div class="sub"><b>가져올 브랜치</b></div>
             <div class="bar"><span class="mark">2</span><span class="combo" style="flex:1">origin/develop</span><span class="btn">⇄</span><span class="combo" style="flex:1">origin/feature/order</span><span class="btn fill blue">Compare</span></div>
             <div class="sub" style="display:flex; align-items:center; gap:6px"><span class="mark">3</span><b>미리보기</b><span class="tag in">커밋 3</span><span class="tag in">파일 4</span><span class="tag" style="color:var(--warn)">내 파일 1</span><span style="flex:1"></span>파일을 두 번 누르면 비교</div>
@@ -1148,7 +1148,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
         <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
       </div>
       <ol class="legend">
-        <li><span class="mark">1</span><div><b>저장소</b> <span class="t">합칠 저장소 이름을 창 맨 위에 주황 굵은 글씨로 먼저 보여 줍니다. 옆은 그 폴더입니다.</span></div></li>
+        <li><span class="mark">1</span><div><b>저장소</b> <span class="t">합칠 저장소 이름을 창 맨 위에 빨간 굵은 글씨(Resolve Conflicts 단추 색)로 먼저 보여 줍니다. 옆은 그 폴더입니다.</span></div></li>
         <li><span class="mark">2</span><div><b>From ⇄ Into</b> <span class="t">왼쪽이 가져올 브랜치, 오른쪽이 합칠 곳입니다. 가운데 ⇄ 는 두 브랜치를 맞바꾸고 바로 다시 비교합니다.</span></div></li>
         <li><span class="mark">3</span><div><b>미리보기</b> <span class="t">Compare 를 누르면 두 브랜치를 서버에서 새로 받아 커밋 · 파일 · 내 파일 수와 들어올 파일이 나옵니다. 창을 열어 둔 채 다시 눌러도 새로 받습니다.</span></div></li>
         <li><span class="mark">4</span><div><b>주황 줄</b> <span class="t">내가 고친 파일을 다른 사람도 고친 것입니다. 먼저 두 번 눌러 비교해 보세요.</span></div></li>
@@ -1157,7 +1157,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
     </div>
     <table class="keys map" style="margin-bottom:18px">
       <tr><th>창의 칸</th><th>하는 일</th></tr>
-      <tr><td>저장소</td><td>창 맨 위 「저장소:」 줄에 합칠 저장소 이름(주황 굵은 글씨), 옆에 폴더</td></tr>
+      <tr><td>저장소</td><td>창 맨 위 「저장소:」 줄에 합칠 저장소 이름(빨간 굵은 글씨), 옆에 폴더</td></tr>
       <tr><td>From · Into</td><td>반대 방향(개인 브랜치 → develop)은 가운데 ⇄ 단추로 맞바꾸면 됩니다. 브랜치를 고른 뒤 줄 끝 Compare 로 비교합니다. From 은 가져올 서버 브랜치(develop · main 등), Into 는 합칠 곳(내 개인 브랜치)의 서버 브랜치입니다. 두 상자 모두 origin/ 을 붙여 보이고, 서버에서 지워진 브랜치는 목록에서 빠집니다. 아래 줄에 「서버(origin)의 From 브랜치를 Into 브랜치에 합칩니다. 아래 Push 가 켜져 있으면 합친 결과를 서버로 올립니다」를 적습니다. From 브랜치에 내 PC 에만 있는 커밋이 있으면 빨간 줄로 먼저 Push 하라고 알립니다. 고른 값은 저장소마다 기억합니다. Into 가 지금 브랜치가 아니면 그 브랜치로 옮긴 뒤 합칩니다.</td></tr>
       <tr><td>들어올 파일 표</td><td>파일 · 마지막으로 바꾼 사람 · 때 · 커밋 제목. 칸 너비는 창 너비에 맞춰 늘고, 머리글을 끌어 바꾼 너비와 창 크기는 기억합니다. 파일을 두 번 누르면 Into(왼쪽) ↔ From(오른쪽) 비교 창.</td></tr>
       <tr><td>주황 줄 · ⚠</td><td>내 파일을 다른 사람이 From 에서 고친 것. 충돌 없이 조용히 합쳐져 내 소스가 바뀔 수 있으니 먼저 비교해 보세요. 내 파일은 개인 브랜치에서 바꾼 파일 · 고치는 중인 파일 · 최근 30일 안에 내 Git 이메일로 커밋한 파일입니다.</td></tr>
