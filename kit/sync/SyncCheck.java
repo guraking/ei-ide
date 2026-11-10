@@ -63,10 +63,11 @@ public class SyncCheck {
     eq(ReverseMerge.inTheWay(Set.of(), Set.of("a"), true), List.of());
     eq(ReverseMerge.pathList(List.of("a.txt", "b/c.txt")), "a.txt\nb/c.txt");
     // 기억된 합치기가 지금 브랜치와 관련 있을 때만 쓴다.
-    eq(ReverseMerge.rememberedFor("develop", "featureB", "featureB"), true);
-    eq(ReverseMerge.rememberedFor("featureB", "develop", "featureB"), true);
-    eq(ReverseMerge.rememberedFor("featureA", "develop", "featureB"), false);
-    eq(ReverseMerge.rememberedFor(null, null, "featureB"), false);
+    eq(ReverseMerge.rememberedFor("featureB", "featureB", false), true);
+    eq(ReverseMerge.rememberedFor("develop", "featureB", false), false);
+    eq(ReverseMerge.rememberedFor(null, "featureB", false), false);
+    eq(ReverseMerge.rememberedFor("Feature/b", "feature/b", true), true);
+    eq(ReverseMerge.rememberedFor("Feature/b", "feature/b", false), false);
     // Undo: 커밋을 옮기지 않은 reflog 줄(stash 의 reset: moving to HEAD)은 건너뛴다.
     String f = "\u001f";
     GitUndo.Plan p = GitUndo.plan("", "b" + f + "main@{t3}" + f + "reset: moving to HEAD\nb" + f + "main@{t2}" + f + "commit: 고침\na" + f + "main@{t1}" + f + "commit: 앞", "main");
@@ -320,9 +321,6 @@ public class SyncCheck {
     eq(ReverseMerge.pick(List.of("main", "develop"), null, ReverseMerge.FROM_CANDIDATES), "develop");
     eq(ReverseMerge.pick(List.of("main", "develop"), "main", ReverseMerge.FROM_CANDIDATES), "main");
     eq(ReverseMerge.pick(List.of("main"), "gone", List.of("x")), null);
-    eq(ReverseMerge.intoCandidates(java.util.Map.of("branch.feature/kim.merge", "refs/heads/Feature/kim"), "feature/kim"), List.of("Feature/kim", "feature/kim"));
-    eq(ReverseMerge.intoCandidates(java.util.Map.of("branch.feature/kim.merge", "refs/heads/feature/kim"), "feature/kim"), List.of("feature/kim"));
-    eq(ReverseMerge.intoCandidates(java.util.Map.of(), "feature/kim"), List.of("feature/kim"));
     eq(ReverseMerge.serverSpelling(List.of("develop", "feature/kim"), "Feature/kim"), "feature/kim");
     eq(ReverseMerge.serverSpelling(List.of("develop", "feature/kim"), "feature/kim"), null);
     eq(ReverseMerge.serverSpelling(List.of("develop"), "feature/kim"), null);

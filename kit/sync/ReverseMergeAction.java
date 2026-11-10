@@ -135,28 +135,30 @@ public final class ReverseMergeAction extends DumbAwareAction {
       private List<String> names;
       private String savedFrom;
       private String savedInto;
-      private List<String> intoCandidates;
 
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
         // 서버가 느릴 때 취소를 누르면 기다리던 git 을 끝낸다(작업 스레드를 끊으면 SyncPanel.run 이 프로세스를 죽인다).
-        Future<?> work = ApplicationManager.getApplication().executeOnPooledThread(() -> {
+        // AppExecutorUtil: executeOnPooledThread(Callable) 는 예외를 삼키고 null 을 돌려줘 브랜치 읽기 실패가 안내 없이 넘어간다.
+        Future<?> work = AppExecutorUtil.getAppExecutorService().submit(() -> {
           Map<String, String> cfg = ReverseMerge.configs(root);
           remote = ReverseMerge.remoteOf(cfg, current);
           savedFrom = cfg.get(ReverseMerge.CONFIG_FROM);
           savedInto = cfg.get(ReverseMerge.CONFIG_INTO);
-          intoCandidates = ReverseMerge.intoCandidates(cfg, current);
-          // 다른 브랜치에서 한 합치기의 기억(featureA → develop)은 쓰지 않는다. 그대로 열면 남의 브랜치를 develop 에 올리게 된다.
-          if (!ReverseMerge.rememberedFor(savedFrom, savedInto, current)) {
+          // 지금 브랜치에 합친 기억만 쓴다. 다른 브랜치나 반대 방향(지금 브랜치 → develop)의 기억은 버린다.
+          if (!ReverseMerge.rememberedFor(savedInto, current, ReverseMerge.ignoreCase(root))) {
             savedFrom = null;
             savedInto = null;
           }
           // 받아 둔 브랜치 목록으로 바로 열고 서버 목록은 창이 뜬 뒤 합친다(VPN 에서 ls-remote 는 몇 초 걸린다).
           // 아직 기준 브랜치를 받은 적이 없으면(처음 쓰는 저장소) 서버에 물어야 From 을 채울 수 있다.
           names = ReverseMerge.knownBranches(root, remote);
-          // Into 도 마찬가지다. 받아 둔 이름은 윈도우에서 대소문자가 서버와 다를 수 있어(Feature/ ↔ feature/) 정확히 같은 이름이 없으면 서버에 묻는다.
+          // Into · 기억된 이름도 마찬가지다. 받아 둔 이름은 윈도우에서 대소문자가 서버와 다를 수 있어(Feature/ ↔ feature/) 정확히 같은 이름이 없으면 서버에 묻는다.
+          // 그대로 열면 기억된 쪽만 기본값(develop)으로 바뀌어 From · Into 가 같아질 수 있다.
           if (ReverseMerge.pick(names, savedFrom, ReverseMerge.FROM_CANDIDATES) == null
-              || ReverseMerge.pick(names, savedInto, intoCandidates) == null) {
+              || ReverseMerge.pick(names, savedInto, List.of(current)) == null
+              || savedFrom != null && !names.contains(savedFrom)
+              || savedInto != null && !names.contains(savedInto)) {
             names = ReverseMerge.serverBranches(root, remote);
           }
           return null;
@@ -181,8 +183,10 @@ public final class ReverseMergeAction extends DumbAwareAction {
           return;
         }
         String from = ReverseMerge.pick(names, savedFrom, ReverseMerge.FROM_CANDIDATES);
-        // 개인 브랜치는 저장해 둔 것, 없으면 지금 브랜치가 따라가는 서버 브랜치, 그다음 지금 브랜치(서버에 같은 이름이 있을 때).
-        String into = ReverseMerge.pick(names, savedInto, intoCandidates);
+        // 개인 브랜치는 저장해 둔 것, 없으면 지금 브랜치(서버에 같은 이름이 있을 때).
+        String into = ReverseMerge.pick(names, savedInto, List.of(current));
+        // 같은 브랜치로 열지 않는다(지금 브랜치가 develop 일 때). Into 를 비워 고르라는 안내가 보이게 한다.
+        if (into != null && into.equals(from)) into = null;
         new PreviewDialog(project, repo, root, remote, current, names, from, into).show();
       }
 
@@ -590,6 +594,10 @@ public final class ReverseMergeAction extends DumbAwareAction {
         }
         catch (IOException ex) {
           error = ex.getMessage();
+        }
+        catch (RuntimeException ex) {
+          // 예상 못 한 오류도 안내하고 진행 표시를 끈다.
+          error = String.valueOf(ex);
         }
         catch (InterruptedException ex) {
           Thread.currentThread().interrupt();

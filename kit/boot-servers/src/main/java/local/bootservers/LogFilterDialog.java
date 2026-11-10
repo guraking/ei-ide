@@ -274,6 +274,9 @@ final class LogFilterDialog extends DialogWrapper {
             error = BootServersBundle.message("log.filter.regex.invalid", ex.getDescription());
         } catch (RegexTimeout ex) {
             error = BootServersBundle.message("log.filter.regex.timeout", REGEX_TIMEOUT_SECONDS);
+        } catch (RuntimeException | StackOverflowError ex) {
+            // 깊게 되도는 정규식(StackOverflowError) 등 예상 못 한 오류도 결과로 넘겨 running 을 푼다. 아니면 거르기가 멈춘다.
+            error = String.valueOf(ex);
         }
         LogFilter.Resume next = result == null ? null : result.resume();
         String message = error;

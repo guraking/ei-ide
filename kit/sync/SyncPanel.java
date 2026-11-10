@@ -94,6 +94,7 @@ import org.jetbrains.annotations.Nullable;
 import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.treeStructure.Tree;
 import com.intellij.util.ui.tree.TreeUtil;
+import com.intellij.util.concurrency.AppExecutorUtil;
 import git4idea.repo.GitRepository;
 import git4idea.repo.GitRepositoryChangeListener;
 import git4idea.repo.GitRepositoryManager;
@@ -1437,11 +1438,12 @@ final class SyncPanel extends SimpleToolWindowPanel {
   /**
    * items 마다 work 를 작업 스레드에서 동시에 돌리고 입력 순서대로 결과를 돌려준다(저장소가 많아도 가장 느린 하나만큼 걸린다).
    * 하나가 실패하면 그 예외를 그대로 던지고, 아직 도는 나머지는 중단한다.
+   * Application.executeOnPooledThread(Callable) 는 예외를 기록만 하고 null 을 돌려주므로, 예외를 Future 로 넘기는 AppExecutorUtil 을 쓴다.
    */
   private static <T, R> List<R> inParallel(List<T> items, RepoWork<T, R> work) throws IOException, InterruptedException {
     List<Future<R>> futures = new ArrayList<>();
     for (T item : items) {
-      futures.add(ApplicationManager.getApplication().executeOnPooledThread(() -> work.run(item)));
+      futures.add(AppExecutorUtil.getAppExecutorService().submit(() -> work.run(item)));
     }
     List<R> results = new ArrayList<>();
     try {
@@ -2351,7 +2353,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
           CompletableFuture<LocalOut> local = new CompletableFuture<>();
           try {
             Repo repo = entry.getValue() == Vcs.GIT ? gitRepo(entry.getKey()) : svnRepo(entry.getKey());
-            Future<List<Change>> remote = ApplicationManager.getApplication().executeOnPooledThread(() -> remoteCompare(repo, failures, local));
+            // 원격 비교가 실패하면 그 예외가 await 로 와야 한다(inParallel 과 같은 까닭으로 AppExecutorUtil).
+            Future<List<Change>> remote = AppExecutorUtil.getAppExecutorService().submit(() -> remoteCompare(repo, failures, local));
             remotes.add(remote);
             return new Scanned(repo, repo.vcs() == Vcs.GIT ? compare(repo, true, local) : compareSvn(repo, false), remote);
           }
@@ -2396,6 +2399,11 @@ final class SyncPanel extends SimpleToolWindowPanel {
       }
       catch (IOException e) {
         failures.put(new File(project.getBasePath() == null ? "" : project.getBasePath()), e.getMessage());
+      }
+      catch (RuntimeException e) {
+        // 예상 못 한 오류도 새로고침을 끝낸다. 여기서 빠져나가면 busy 가 풀리지 않아 다시 새로고침할 수 없다.
+        LOG.warn("새로고침 실패", e);
+        failures.put(new File(project.getBasePath() == null ? "" : project.getBasePath()), String.valueOf(e));
       }
       catch (InterruptedException e) {
         Thread.currentThread().interrupt();
@@ -2496,6 +2504,11 @@ final class SyncPanel extends SimpleToolWindowPanel {
       }
       catch (IOException e) {
         error = e.getMessage();
+      }
+      catch (RuntimeException e) {
+        // 예상 못 한 오류도 그 저장소 실패로 보이고 busy 를 푼다. 빠져나가면 다시 새로고침할 수 없다.
+        LOG.warn("저장소 새로고침 실패 " + root, e);
+        error = String.valueOf(e);
       }
       catch (InterruptedException e) {
         Thread.currentThread().interrupt();

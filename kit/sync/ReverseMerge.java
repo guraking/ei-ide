@@ -118,9 +118,13 @@ final class ReverseMerge {
     return names;
   }
 
-  /** 기억된 From · Into 가 지금 브랜치의 합치기였는가(어느 한쪽이 지금 브랜치). 아니면 다른 브랜치에서 한 합치기라 기본값을 쓴다. */
-  static boolean rememberedFor(String savedFrom, String savedInto, String current) {
-    return current.equals(savedFrom) || current.equals(savedInto);
+  /**
+   * 기억된 From · Into 가 지금 브랜치에 합친 것이었는가(Into 가 지금 브랜치). 아니면 기본값을 쓴다.
+   * 지금 브랜치를 develop 에 합친 반대 방향 기억은 쓰지 않는다. 그대로 채우면 평소처럼 Merge 를 눌러 develop 에 올리게 된다.
+   * folded 가 참이면(윈도우) 대소문자만 다른 이름을 같은 브랜치로 본다.
+   */
+  static boolean rememberedFor(String savedInto, String current, boolean folded) {
+    return savedInto != null && (folded ? savedInto.equalsIgnoreCase(current) : savedInto.equals(current));
   }
 
   /** 목록에서 고를 첫 값: 저장해 둔 것, 없으면 candidates 순서로 처음 있는 것, 그것도 없으면 null. */
@@ -283,18 +287,6 @@ final class ReverseMerge {
     return ref.substring(prefix.length(), ref.length() - suffix.length());
   }
 
-  /**
-   * Into 기본값 후보: branch 가 따라가는 서버 브랜치 이름(branch.<이름>.merge), 그다음 branch 이름 그대로.
-   * 서버 이름은 git 설정 그대로라 대소문자가 서버와 같다. 받아 둔 refs/remotes 이름은 윈도우에서 폴더 대소문자를 따라 달라질 수 있다.
-   */
-  static List<String> intoCandidates(Map<String, String> cfg, String branch) {
-    List<String> out = new ArrayList<>();
-    String merge = cfg.get("branch." + branch + ".merge");
-    if (merge != null && merge.startsWith(HEADS)) out.add(merge.substring(HEADS.length()));
-    if (!out.contains(branch)) out.add(branch);
-    return out;
-  }
-
   /** 서버 목록에 대소문자까지 같은 이름이 없고 대소문자만 다른 이름이 있으면 그 서버 이름, 아니면 null. */
   static String serverSpelling(List<String> server, String name) {
     if (name == null || server.contains(name)) return null;
@@ -454,13 +446,9 @@ final class ReverseMerge {
 
   private static Result mergeAlone(File root, String remote, String from, String fromTip, String into, String current, boolean push, boolean stash,
                                    boolean matchCase) throws IOException, InterruptedException {
-    // 윈도우는 대소문자만 다른 브랜치 이름을 한 브랜치로 본다(.git/refs 폴더가 겹침). 옮기거나 새로 만들면 엉뚱한 오류가 나므로 미리 멈춘다.
-    if (!into.equals(current) && into.equalsIgnoreCase(current) && ignoreCase(root)) {
-      throw new IOException(SyncBundle.message("rmerge.case.branch", current, into));
-    }
     fetch(root, remote, into);
     String intoRemote = remoteRef(remote, into);
-    boolean switched = !into.equals(current);
+    boolean switched = !sameBranch(root, into, current);
     boolean stashed = false;
     // 합치기가 시작하는 곳: 옮겨 갈 브랜치(없으면 서버 것으로 만든다) 또는 지금 HEAD. 서버 것이 앞서 있으면 따라잡은 뒤 거기서 합친다.
     String start = !switched ? "HEAD" : hasRef(root, HEADS + into) ? HEADS + into : intoRemote;
@@ -671,8 +659,16 @@ final class ReverseMerge {
     }
   }
 
+  /**
+   * into 가 지금 브랜치인가. 윈도우는 대소문자만 다른 브랜치 이름을 한 브랜치로 본다(.git/refs 폴더가 겹침).
+   * 그때는 옮기지 않고 지금 브랜치에 합쳐 서버 이름(into)으로 올린다.
+   */
+  private static boolean sameBranch(File root, String into, String current) throws InterruptedException {
+    return into.equals(current) || into.equalsIgnoreCase(current) && ignoreCase(root);
+  }
+
   /** 저장소가 파일 이름 대소문자를 가리지 않는가(core.ignorecase). 설정이 없으면 가린다. */
-  private static boolean ignoreCase(File root) throws InterruptedException {
+  static boolean ignoreCase(File root) throws InterruptedException {
     try {
       return Boolean.parseBoolean(git(root, "config", "--bool", "core.ignorecase").trim());
     }
@@ -776,7 +772,7 @@ final class ReverseMerge {
       if (!stashed) throw e;
       throw new IOException(e.getMessage() + "\n" + SyncBundle.message("rmerge.stash.left", current), e);
     }
-    boolean switched = !into.equals(current);
+    boolean switched = !sameBranch(root, into, current);
     try {
       if (push) pushAfterFinish(root, remote, into, switched);
       if (switched) git(root, GIT_LONG_TIMEOUT_SEC, "checkout", current);
