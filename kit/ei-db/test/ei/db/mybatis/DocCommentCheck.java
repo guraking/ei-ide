@@ -201,9 +201,15 @@ public class DocCommentCheck {
     eq(plan.size(), 3);
     for (int i = plan.size() - 1; i >= 0; i--) b.insert(plan.get(i).offset(), plan.get(i).text());
     String done = b.toString();
-    if (!done.contains("SELECT /*+ INDEX(A IX_USER) */ /* UserMapper.selectUserList */ A.*")) throw new AssertionError(done);
-    if (!done.contains("<![CDATA[\n    insert /* UserMapper.insertUser */ into")) throw new AssertionError(done);
-    if (!done.contains("/* UserMapper.deleteUser */ <include refid=\"del\"/>")) throw new AssertionError(done);
+    if (!done.contains("<select id=\"selectUserList\" resultType=\"map\">\n    /* UserMapper.selectUserList */\n    SELECT /*+ INDEX(A IX_USER) */ A.*")) throw new AssertionError(done);
+    if (!done.contains("<![CDATA[\n    /* UserMapper.insertUser */\n    insert into")) throw new AssertionError(done);
+    if (!done.contains("<!-- 설명 -->\n    /* UserMapper.deleteUser */\n    <include refid=\"del\"/>")) throw new AssertionError(done);
+    // SQL 이 태그와 같은 줄이면 그 앞에 붙인다
+    String one = "<mapper namespace=\"a.B\"><select id=\"x\">SELECT 1</select></mapper>";
+    List<SqlIdComment.Insert> onePlan = SqlIdComment.plan(one, MapperDoc.parse(one), "B");
+    eq(onePlan.size(), 1);
+    eq(new StringBuilder(one).insert(onePlan.get(0).offset(), onePlan.get(0).text()).toString(),
+        "<mapper namespace=\"a.B\"><select id=\"x\">/* B.x */ SELECT 1</select></mapper>");
     // 두 번 돌려도 더 넣지 않는다
     eq(SqlIdComment.plan(done, MapperDoc.parse(done), "UserMapper").size(), 0);
     // namespace 가 없으면 파일 이름

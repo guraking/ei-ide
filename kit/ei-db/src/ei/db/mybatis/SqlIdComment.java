@@ -2,13 +2,11 @@ package ei.db.mybatis;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * 매퍼 XML 문장마다 SQL 안에 「/* UserMapper.selectUserList *&#47;」 아이디 주석을 넣을 자리.
- * 주석은 첫 SQL 낱말(SELECT · INSERT · UPDATE · DELETE · MERGE · WITH) 바로 뒤에 넣어 DB 로 함께 넘어가게 한다.
- * Oracle 힌트(「/*+ … *&#47;」)는 첫 낱말 바로 뒤에 있어야 하므로 힌트 뒤에 넣는다. 첫 낱말이 없으면(include 로 시작 등) 본문 맨 앞에 넣는다.
+ * 주석은 문장 본문 첫 줄(여는 태그 · CDATA · XML 주석 다음) 위에 같은 들여쓰기로 한 줄을 따로 넣는다. SQL 글 안이라 DB 로 함께 넘어간다.
+ * SQL 이 여는 태그와 같은 줄에서 시작하면 그 앞에 붙여 넣는다. Oracle 힌트는 SELECT 뒤에 그대로 남는다.
  * 문장 안에 같은 아이디 글이 이미 있으면 건너뛴다. IntelliJ 클래스를 쓰지 않는다.
  */
 public final class SqlIdComment {
@@ -20,9 +18,6 @@ public final class SqlIdComment {
   private static final String CDATA_OPEN = "<![CDATA[";
   private static final String XML_COMMENT_OPEN = "<!--";
   private static final String XML_COMMENT_CLOSE = "-->";
-  private static final String HINT_OPEN = "/*+";
-  private static final String COMMENT_CLOSE = "*/";
-  private static final Pattern KEYWORD = Pattern.compile("(?i)(SELECT|INSERT|UPDATE|DELETE|MERGE|WITH)\\b");
 
   /** 문장 아이디 주석의 이름. namespace 가 없으면 fileBase(확장자 뺀 파일 이름)를 앞에 쓴다. */
   public static String label(MapperDoc doc, String fileBase, String id) {
@@ -66,15 +61,11 @@ public final class SqlIdComment {
     int p = skipSpaceAndXmlComments(t, body, end);
     if (startsWith(t, p, CDATA_OPEN)) p = skipSpaceAndXmlComments(t, p + CDATA_OPEN.length(), end);
     if (p >= end) return null;
-    Matcher m = KEYWORD.matcher(t).region(p, end);
-    if (!m.lookingAt()) return new Insert(p, comment + " ");
-    int after = m.end();
-    int q = skipSpace(t, after, end);
-    if (startsWith(t, q, HINT_OPEN)) {
-      int close = indexOf(t, COMMENT_CLOSE, q + HINT_OPEN.length(), end);
-      if (close >= 0) after = close + COMMENT_CLOSE.length();
-    }
-    return new Insert(after, " " + comment);
+    int lineStart = p;
+    while (lineStart > body && t.charAt(lineStart - 1) != '\n') lineStart--;
+    if (lineStart == body) return new Insert(p, comment + " ");
+    String indent = t.subSequence(lineStart, p).toString();
+    return new Insert(p, comment + "\n" + indent);
   }
 
   private static int skipSpaceAndXmlComments(CharSequence t, int p, int end) {
