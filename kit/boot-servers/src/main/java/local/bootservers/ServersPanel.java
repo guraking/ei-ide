@@ -397,7 +397,9 @@ final class ServersPanel extends SimpleToolWindowPanel {
                     tree.getEmptyText().setText(BootServersBundle.message("servers.empty.none"))
                             .appendSecondaryText(BootServersBundle.message("servers.action.add.was"), SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES, e -> editWas(null));
                 })
-                .submit(AppExecutorUtil.getAppExecutorService());
+                .submit(AppExecutorUtil.getAppExecutorService())
+                // 모듈 읽기가 실패하면 finishOnUiThread 가 불리지 않는다. 진행 표시만이라도 내린다.
+                .onError(e -> ApplicationManager.getApplication().invokeLater(() -> gauge.setVisible(false), ModalityState.any()));
     }
 
     private void reloadLater() {

@@ -539,6 +539,11 @@ final class ProjectHistoryPanel extends JPanel {
         result = null;
         error = e.getMessage();
       }
+      catch (RuntimeException e) {
+        // 읽기 · 해석에서 난 예상 못 한 오류도 상태 글로 보이고 읽는 중 표시를 끈다.
+        result = null;
+        error = String.valueOf(e);
+      }
       catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         return;
@@ -574,6 +579,10 @@ final class ProjectHistoryPanel extends JPanel {
       }
       catch (IOException e) {
         error = e.getMessage();
+      }
+      catch (RuntimeException e) {
+        // load 와 같다. 빠져나가면 loadingMore 가 풀리지 않아 더 읽지 못한다.
+        error = String.valueOf(e);
       }
       catch (InterruptedException e) {
         Thread.currentThread().interrupt();

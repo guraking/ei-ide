@@ -281,7 +281,14 @@ public final class ConnectDialog extends DialogWrapper {
     // 창이 뜨기 전(init)에도 불리므로 current() 를 쓰면 바깥 상태가 잡혀 창이 닫힐 때까지 갱신이 밀린다. 글자만 바꾸므로 any() 로 둔다.
     ModalityState modality = ModalityState.any();
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
-      Path jar = Drivers.jarFor(probe);
+      Path found;
+      try {
+        found = Drivers.jarFor(probe);
+      } catch (RuntimeException e) {
+        // 잘못 적은 jar 경로(InvalidPathException) 등은 「찾지 못함」으로 보이고 진행 표시를 끈다.
+        found = null;
+      }
+      Path jar = found;
       ApplicationManager.getApplication().invokeLater(() -> {
         if (kind != probe.kind || !Objects.equals(driverJar, probe.driverJar)) return;
         boolean chosen = !driverJar.isBlank();

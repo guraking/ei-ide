@@ -139,7 +139,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
         // 서버가 느릴 때 취소를 누르면 기다리던 git 을 끝낸다(작업 스레드를 끊으면 SyncPanel.run 이 프로세스를 죽인다).
-        Future<?> work = ApplicationManager.getApplication().executeOnPooledThread(() -> {
+        // AppExecutorUtil: executeOnPooledThread(Callable) 는 예외를 삼키고 null 을 돌려줘 브랜치 읽기 실패가 안내 없이 넘어간다.
+        Future<?> work = AppExecutorUtil.getAppExecutorService().submit(() -> {
           Map<String, String> cfg = ReverseMerge.configs(root);
           remote = ReverseMerge.remoteOf(cfg, current);
           savedFrom = cfg.get(ReverseMerge.CONFIG_FROM);
@@ -593,6 +594,10 @@ public final class ReverseMergeAction extends DumbAwareAction {
         }
         catch (IOException ex) {
           error = ex.getMessage();
+        }
+        catch (RuntimeException ex) {
+          // 예상 못 한 오류도 안내하고 진행 표시를 끈다.
+          error = String.valueOf(ex);
         }
         catch (InterruptedException ex) {
           Thread.currentThread().interrupt();
