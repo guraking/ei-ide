@@ -16,5 +16,6 @@ assert got == want, repr(got)
 assert bad == ["tag", "quote"], bad
 assert applied == 5, applied
 assert a.shape("열기(_O)") != a.shape("열기"), "단축 글자가 빠지면 모양이 달라야 한다"
+assert a.shape("메서드{0, choice, 1\\#|1<s}") == a.shape("메서드{0, choice, 1\\#|1<}"), "choice 의 부등호는 태그가 아니다"
 assert a.key_of("a\\=b=c") == "a=b" and a.key_of("  # x") is None
 print("apply_ko 점검 통과")

@@ -32,7 +32,8 @@ OUT = ROOT / "bundled-plugins" / PACK_DIR
 OVERRIDE = KIT / "ko" / "override"
 UNTIL_BUILD = re.compile(r'until-build="[^"*]*"')
 PLACEHOLDER = re.compile(r"\{(\d+)")
-TAG = re.compile(r"<(/?[A-Za-z][A-Za-z0-9]*)")
+# 태그 이름 뒤에는 공백 · > · / 가 온다. choice 구문의 「1<s}」 같은 부등호는 태그가 아니다.
+TAG = re.compile(r"<(/?[A-Za-z][A-Za-z0-9]*)(?=[\s>/])")
 # 단축 글자: 팩은 「열기(_O)」, 영어 원문은 「_Open」 · 「&Open」 꼴이다. 팩 줄과 비교할 때만 센다.
 MNEMONIC = re.compile(r"\(_\w\)|&\w")
 
