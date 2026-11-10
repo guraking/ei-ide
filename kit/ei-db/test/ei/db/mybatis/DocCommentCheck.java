@@ -87,7 +87,6 @@ public class DocCommentCheck {
     eq(mapper, """
         /**
          * 사용자 목록을 조회한다.
-         *
          * 표: TB_USER(사용자)
          * 조건: 부서 코드(DEPT_CD)
          * SQL: UserMapper.selectUserList
@@ -118,7 +117,6 @@ public class DocCommentCheck {
     eq(ctrl, """
         /**
          * 사용자 목록을 처리한다.
-         *
          * 주소: GET /user/list
          *
          * @param model 화면 모델

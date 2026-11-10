@@ -290,10 +290,8 @@ public final class DocComment {
       if (!conditions.isEmpty()) info.add("조건: " + withComments(conditions, columnComments, false));
       info.add("SQL: " + String.join(", ", labels));
     }
-    if (!info.isEmpty()) {
-      lines.add("");
-      lines.addAll(info);
-    }
+    // 설명과 정보 줄 사이에 빈 줄을 두지 않는다. 저장할 때 서식 맞춤이 Javadoc 빈 줄을 <p> 로 바꾼다(JD_P_AT_EMPTY_LINES).
+    lines.addAll(info);
     List<String> tags = new ArrayList<>();
     for (Param p : m.params()) tags.add("@param " + p.name() + " " + paramText(p, paramColumns, columnComments, d));
     String ret = m.returnType() == null ? null : returnText(m, d);
