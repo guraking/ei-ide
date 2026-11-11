@@ -52,6 +52,8 @@ final class ServerLauncher {
 
     // 스프링 부트 2.x · 3.x 공통 정규 이름
     private static final String BOOT_APP_ANNOTATION = "org.springframework.boot.autoconfigure.SpringBootApplication";
+    /** 하위 빌드 단위(Maven · Gradle 하위 모듈) 폴더를 알아보는 빌드 파일 이름. */
+    private static final List<String> BUILD_FILES = List.of("pom.xml", "build.gradle", "build.gradle.kts");
 
     private ServerLauncher() {
     }
@@ -125,6 +127,9 @@ final class ServerLauncher {
             start(settings, executor);
             return true;
         }
+        if (!hasJdk(module)) {
+            return false;
+        }
         PsiClass annotation = bootAnnotation(module.getProject());
         if (annotation == null) {
             return false;
@@ -172,6 +177,9 @@ final class ServerLauncher {
         RunnerAndConfigurationSettings settings = findSettings(module);
         if (settings != null) {
             then.accept(settings);
+            return;
+        }
+        if (!hasJdk(module)) {
             return;
         }
         PsiClass annotation = bootAnnotation(module.getProject());
@@ -227,6 +235,15 @@ final class ServerLauncher {
         ExecutionUtil.restart(descriptors.get(0));
     }
 
+    /** 모듈이 쓸 JDK(모듈 SDK, 따로 없으면 프로젝트 SDK)가 있는가. 없으면 고르는 곳을 알리고 false. 화면 스레드에서 부른다. */
+    private static boolean hasJdk(Module module) {
+        if (ModuleRootManager.getInstance(module).getSdk() != null) {
+            return true;
+        }
+        Messages.showErrorDialog(module.getProject(), BootServersBundle.message("launcher.no.jdk", module.getName()), BootServersBundle.message("launcher.title"));
+        return false;
+    }
+
     /** @SpringBootApplication 주석 클래스. 색인 중이거나 스프링 부트 의존성이 없으면 사유를 알리고 null. 화면 스레드에서 부른다. */
     private static PsiClass bootAnnotation(Project project) {
         if (DumbService.isDumb(project)) {
@@ -242,7 +259,10 @@ final class ServerLauncher {
         return annotation;
     }
 
-    /** 모듈 폴더 아래 본 소스의 @SpringBootApplication 클래스들. 읽기 동작 안에서 부른다(화면 스레드 밖 가능). */
+    /**
+     * 모듈 폴더 아래 본 소스의 @SpringBootApplication 클래스들. 읽기 동작 안에서 부른다(화면 스레드 밖 가능).
+     * 하위 빌드 단위 폴더(부모 pom 아래 자식 모듈 등) 안의 클래스는 그 모듈의 것이므로 뺀다. Gradle 소스 세트(src/main)는 빌드 파일이 없어 남는다.
+     */
     private static Collection<PsiClass> mainClasses(Module module, PsiClass annotation) {
         Project project = module.getProject();
         VirtualFile[] roots = ModuleRootManager.getInstance(module).getContentRoots();
@@ -250,7 +270,7 @@ final class ServerLauncher {
         Collection<PsiClass> found = new ArrayList<>();
         for (PsiClass c : AnnotatedElementsSearch.searchPsiClasses(annotation, GlobalSearchScope.projectScope(project)).findAll()) {
             VirtualFile file = c.getContainingFile() == null ? null : c.getContainingFile().getVirtualFile();
-            if (file != null && !index.isInTestSourceContent(file) && isUnderAny(file, roots)) {
+            if (file != null && !index.isInTestSourceContent(file) && isUnderAny(file, roots) && !inChildBuild(file, roots)) {
                 found.add(c);
             }
         }
@@ -261,7 +281,8 @@ final class ServerLauncher {
     private static PsiClass pickMainClass(Module module, Collection<PsiClass> found) {
         Project project = module.getProject();
         if (found.isEmpty()) {
-            Messages.showErrorDialog(project, BootServersBundle.message("launcher.no.main", module.getName()), BootServersBundle.message("launcher.title"));
+            String key = hasChildBuild(module) ? "launcher.parent" : "launcher.no.main";
+            Messages.showErrorDialog(project, BootServersBundle.message(key, module.getName()), BootServersBundle.message("launcher.title"));
             return null;
         }
         if (found.size() > 1) {
@@ -271,6 +292,38 @@ final class ServerLauncher {
             return null;
         }
         return found.iterator().next();
+    }
+
+    /** file 에서 모듈 콘텐츠 루트까지 올라가는 사이(루트 제외)에 빌드 파일이 있는 폴더가 있으면 true. */
+    private static boolean inChildBuild(VirtualFile file, VirtualFile[] roots) {
+        List<VirtualFile> rootList = List.of(roots);
+        for (VirtualFile dir = file.getParent(); dir != null && !rootList.contains(dir); dir = dir.getParent()) {
+            if (hasBuildFile(dir)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 모듈 콘텐츠 루트 바로 아래에 빌드 파일이 있는 폴더(하위 모듈)가 있는가. 화면 스레드에서 부른다. */
+    private static boolean hasChildBuild(Module module) {
+        for (VirtualFile root : ModuleRootManager.getInstance(module).getContentRoots()) {
+            for (VirtualFile child : root.getChildren()) {
+                if (child.isDirectory() && hasBuildFile(child)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasBuildFile(VirtualFile dir) {
+        for (String name : BUILD_FILES) {
+            if (dir.findChild(name) != null) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** 서버 창 · 트리에 보여 줄 상태. */

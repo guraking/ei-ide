@@ -91,6 +91,8 @@
         <listener class="local.bootservers.icons.MenuIcons" topic="com.intellij.ide.AppLifecycleListener"/>
         <!-- 우리 창 · 대화 상자 안 단추 위는 손가락, 나머지는 화살표 커서(입력 커서가 남아 보이던 것) -->
         <listener class="local.bootservers.HandCursor" topic="com.intellij.ide.AppLifecycleListener"/>
+        <!-- 옛 설정 폴더에서 따라 들어온 JetBrains AI 플러그인을 한 번 끔 -->
+        <listener class="local.bootservers.AiPluginOff" topic="com.intellij.ide.AppLifecycleListener"/>
     </applicationListeners>
 
     <projectListeners>

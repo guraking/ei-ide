@@ -23,6 +23,9 @@
   28) 설치 파일(.exe) 압축을 lzma 에서 zlib 로 바꿔 빌드 시간을 줄인다.
   29) 단추 글자를 글자 상자가 아니라 대문자 · 한글 높이 기준으로 세로 가운데에 둔다(맑은 고딕에서 1~2px 아래로 처지던 것).
   30) 새 설정 폴더(MoaIDE…)로 처음 켤 때, 이름을 바꾸기 전 설정 폴더(EIIDE…)도 가져올 후보로 본다.
+  31) IntelliJ 의 20분마다 원격 커밋 확인을 기본으로 끈다.
+  32) 예전 도구로 묶은 jar(zip64 칸 검사에 걸리는 것)도 열도록 설치본 vmoptions 에 검사 끄기 속성을 넣는다.
+  33) 옛 설정 폴더를 가져올 때 우리 플러그인 옛 시험본과 JetBrains AI 플러그인은 옮기지 않는다.
 고치기 전 원본은 <intellij-community>/../backup/<시각>-before/ 에 같은 상대경로로 남긴다.
 모든 원문을 먼저 찾아 본 뒤에 쓴다. 하나라도 못 찾으면 아무 파일도 바꾸지 않는다. 줄끝(LF · CRLF)은 파일마다 원래대로 둔다.
 두 번 실행해도 같은 결과가 된다.
@@ -453,6 +456,21 @@ EDITS = [
     ("plugins/git4idea/shared/src/git4idea/config/GitVcsOptions.kt",
      "  var incomingCommitsCheckStrategy: GitIncomingRemoteCheckStrategy by enum<GitIncomingRemoteCheckStrategy>(GitIncomingRemoteCheckStrategy.LS_REMOTE)\n",
      "  var incomingCommitsCheckStrategy: GitIncomingRemoteCheckStrategy by enum<GitIncomingRemoteCheckStrategy>(GitIncomingRemoteCheckStrategy.NONE)  // Moa IDE: 원격 확인은 동기화 창이 한다\n"),
+    # 32) JBR 21 부터 jar 의 zip64 덧붙임 칸 크기를 엄격히 검사해, 예전 도구로 묶은 jar(예: aspectjweaver 1.8.10)를 IDE 가 열지 못하고
+    #     그 jar 의 클래스가 편집기에서 빨갛게 보인다. 설치본 vmoptions 에 검사를 끄는 JDK 속성을 넣는다(JDK-8302483 이 둔 끄는 길).
+    ("platform/build-scripts/src/org/jetbrains/intellij/build/impl/VmOptionsGenerator.kt",
+     '  "-Djava.util.zip.use.nio.for.zip.file.access=true", // IJPL-149160\n',
+     '  "-Djava.util.zip.use.nio.for.zip.file.access=true", // IJPL-149160\n'
+     '  "-Djdk.util.zip.disableZip64ExtraFieldValidation=true", // Moa IDE: 예전 도구로 묶은 jar 도 연다\n'),
+    # 33) 옛 설정 폴더(EIIDE 등)를 가져올 때 플러그인 폴더에서 옮기지 않을 것: 본체에 든 우리 플러그인 셋의 옛 시험본(본체 판을 가린다)과
+    #     JetBrains AI(com.intellij.ml.llm, 라이선스 없이 켜 두면 30초마다 JetBrains 서버에 묻고 실패한다).
+    ("platform/platform-impl/initial-config-import/src/com/intellij/openapi/application/ConfigImportHelper.java",
+     "    pluginsToMigrate.removeIf(hasPendingUpdate);\n    if (!pluginsToMigrate.isEmpty()) {\n",
+     "    // Moa IDE: 우리 플러그인 옛 시험본과 JetBrains AI 는 옮기지 않는다.\n"
+     "    var moaNotMigrated = java.util.Set.of(\"local.bootservers\", \"ei.database\", \"kinggura.sync\", \"com.intellij.ml.llm\");\n"
+     "    pluginsToMigrate.removeIf(descriptor -> moaNotMigrated.contains(descriptor.getPluginId().getIdString()));\n"
+     "    pluginsToDownload.removeIf(descriptor -> moaNotMigrated.contains(descriptor.getPluginId().getIdString()));\n"
+     "    pluginsToMigrate.removeIf(hasPendingUpdate);\n    if (!pluginsToMigrate.isEmpty()) {\n"),
 ]
 
 
