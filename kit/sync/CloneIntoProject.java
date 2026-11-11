@@ -93,6 +93,7 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
     POM, "target",
     "build.gradle", "build", "build.gradle.kts", "build", "settings.gradle", "build", "settings.gradle.kts", "build",
     "package.json", "node_modules");
+  private static final String PACKAGE_JSON = "package.json";
   private static final String ECLIPSE_CLASSPATH = ".classpath";
   private static final Pattern CLASSPATH_ENTRY = Pattern.compile("<classpathentry\\b[^>]*>");
   private static final Pattern ENTRY_PATH = Pattern.compile("\\bpath=\"([^\"]*)\"");
@@ -337,7 +338,8 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
   }
 
   /**
-   * 워크스페이스 바로 아래 저장소 폴더: .git 이 있거나 그 안에 빌드 파일(buildFiles)이 있는 폴더. 이름순.
+   * 워크스페이스 바로 아래 저장소 폴더: .git 이나 package.json 이 있거나 그 안에 빌드 파일(buildFiles)이 있는 폴더. 이름순.
+   * 모듈이 아닌 폴더는 워크스페이스 트리에서 안 보이므로(HideWorkspaceRoot) Git 없이 복사한 화면 프로젝트도 붙인다.
    * 점으로 시작하는 폴더, 빌드 결과 폴더(SKIP_DIRS), SVN 작업본(Git 과 한 프로젝트에 섞지 않음)은 뺀다. 폴더를 읽지 못하면 빈 목록.
    */
   static List<Path> repoDirs(Path base) {
@@ -354,7 +356,7 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
     for (Path child : children) {
       String name = child.getFileName().toString();
       if (name.startsWith(".") || SKIP_DIRS.contains(name) || Files.isDirectory(child.resolve(".svn"))) continue;
-      if (Files.exists(child.resolve(".git")) || !buildFiles(child).isEmpty()) repos.add(child);
+      if (Files.exists(child.resolve(".git")) || Files.isRegularFile(child.resolve(PACKAGE_JSON)) || !buildFiles(child).isEmpty()) repos.add(child);
     }
     return repos;
   }

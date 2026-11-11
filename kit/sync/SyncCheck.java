@@ -259,7 +259,7 @@ public class SyncCheck {
     eq(CloneIntoProject.buildFiles(repo), List.of(repo.resolve("pom.xml")));
   }
 
-  /** 워크스페이스 판정과 그 아래 저장소 폴더: .git 이나 두 단계 안 빌드 파일이 있는 폴더만, 점 · 빌드 결과 · SVN 폴더는 빼고 이름순. */
+  /** 워크스페이스 판정과 그 아래 저장소 폴더: .git · package.json 이나 두 단계 안 빌드 파일이 있는 폴더만, 점 · 빌드 결과 · SVN 폴더는 빼고 이름순. */
   private static void checkWorkspaceRepos() throws IOException {
     java.nio.file.Path ws = java.nio.file.Files.createTempDirectory("ws");
     eq(CloneIntoProject.looseWorkspace(ws), true);
@@ -270,13 +270,15 @@ public class SyncCheck {
     java.nio.file.Path nested = java.nio.file.Files.createDirectories(ws.resolve("supp-backend/supp"));
     java.nio.file.Files.writeString(nested.resolve("build.gradle"), "");
     java.nio.file.Files.createDirectories(ws.resolve("docs"));
+    java.nio.file.Path web = java.nio.file.Files.createDirectories(ws.resolve("supp-frontend"));
+    java.nio.file.Files.writeString(web.resolve("package.json"), "{}");
     java.nio.file.Files.createDirectories(ws.resolve(".idea"));
     java.nio.file.Files.writeString(ws.resolve(".idea/pom.xml"), "");
     java.nio.file.Files.createDirectories(ws.resolve("svn-app/.svn"));
     java.nio.file.Files.writeString(ws.resolve("svn-app/pom.xml"), "");
     java.nio.file.Files.createDirectories(ws.resolve("target"));
     java.nio.file.Files.writeString(ws.resolve("target/pom.xml"), "");
-    eq(CloneIntoProject.repoDirs(ws), List.of(boot, ws.resolve("supp-backend"), front.getParent()));
+    eq(CloneIntoProject.repoDirs(ws), List.of(boot, ws.resolve("supp-backend"), web, front.getParent()));
     // 저장소 폴더 자체를 열거나 맨 위에 빌드 파일이 있으면 워크스페이스가 아니다.
     eq(CloneIntoProject.looseWorkspace(front.getParent()), false);
     eq(CloneIntoProject.looseWorkspace(boot), false);
