@@ -141,18 +141,22 @@ public final class ReverseMergeAction extends DumbAwareAction {
         // 서버가 느릴 때 취소를 누르면 기다리던 git 을 끝낸다(작업 스레드를 끊으면 SyncPanel.run 이 프로세스를 죽인다).
         // AppExecutorUtil: executeOnPooledThread(Callable) 는 예외를 삼키고 null 을 돌려줘 브랜치 읽기 실패가 안내 없이 넘어간다.
         Future<?> work = AppExecutorUtil.getAppExecutorService().submit(() -> {
-          Map<String, String> cfg = ReverseMerge.configs(root);
+          // 설정 · 대소문자 구분 · 받아 둔 원격 브랜치는 서로 기다릴 필요가 없어 동시에 읽는다. 원격 브랜치는 모든 원격 것을 읽고 원격 이름으로 거른다.
+          Future<Map<String, String>> configs = AppExecutorUtil.getAppExecutorService().submit(() -> ReverseMerge.configs(root));
+          List<String> local = ReverseMerge.gitAll(root, List.of(ReverseMerge.IGNORE_CASE,
+                                                                 new String[]{"for-each-ref", "--format=%(refname)", "refs/remotes/"}));
+          Map<String, String> cfg = SyncPanel.await(configs);
           remote = ReverseMerge.remoteOf(cfg, current);
           savedFrom = cfg.get(ReverseMerge.CONFIG_FROM);
           savedInto = cfg.get(ReverseMerge.CONFIG_INTO);
           // 지금 브랜치에 합친 기억만 쓴다. 다른 브랜치나 반대 방향(지금 브랜치 → develop)의 기억은 버린다.
-          if (!ReverseMerge.rememberedFor(savedInto, current, ReverseMerge.ignoreCase(root))) {
+          if (!ReverseMerge.rememberedFor(savedInto, current, Boolean.parseBoolean(local.get(0).trim()))) {
             savedFrom = null;
             savedInto = null;
           }
           // 받아 둔 브랜치 목록으로 바로 열고 서버 목록은 창이 뜬 뒤 합친다(VPN 에서 ls-remote 는 몇 초 걸린다).
           // 아직 기준 브랜치를 받은 적이 없으면(처음 쓰는 저장소) 서버에 물어야 From 을 채울 수 있다.
-          names = ReverseMerge.knownBranches(root, remote);
+          names = ReverseMerge.parseRefs(local.get(1), remote);
           // Into · 기억된 이름도 마찬가지다. 받아 둔 이름은 윈도우에서 대소문자가 서버와 다를 수 있어(Feature/ ↔ feature/) 정확히 같은 이름이 없으면 서버에 묻는다.
           // 그대로 열면 기억된 쪽만 기본값(develop)으로 바뀌어 From · Into 가 같아질 수 있다.
           if (ReverseMerge.pick(names, savedFrom, ReverseMerge.FROM_CANDIDATES) == null
@@ -587,10 +591,13 @@ public final class ReverseMergeAction extends DumbAwareAction {
         try {
           // 창을 열어 둔 사이 남이 올린 커밋도 보이게 Compare 를 누를 때마다 받는다.
           ReverseMerge.fetch(root, remote, from, into);
+          // 올리지 않은 내 커밋 수는 미리 보기와 서로 기다릴 필요가 없어 동시에 센다.
+          Future<Integer> fromCount = AppExecutorUtil.getAppExecutorService().submit(() -> ReverseMerge.unpushed(root, remote, from));
+          Future<Integer> intoCount = AppExecutorUtil.getAppExecutorService().submit(() -> ReverseMerge.unpushed(root, remote, into));
           preview = ReverseMerge.preview(root, remote, from, into, current);
-          localOnly = ReverseMerge.unpushed(root, remote, from);
+          localOnly = SyncPanel.await(fromCount);
           if (localOnly > 0) localOnlyTop = ReverseMerge.lastUnpushed(root, remote, from);
-          intoLocalOnly = ReverseMerge.unpushed(root, remote, into);
+          intoLocalOnly = SyncPanel.await(intoCount);
         }
         catch (IOException ex) {
           error = ex.getMessage();
@@ -698,8 +705,9 @@ public final class ReverseMergeAction extends DumbAwareAction {
 
         @Override
         public void run(@NotNull ProgressIndicator indicator) {
-          String before = head();
-          Set<String> dirtyBefore = dirtyNow();
+          Start start = start();
+          String before = start.head();
+          Set<String> dirtyBefore = start.dirty();
           try {
             ReverseMerge.saveConfig(root, ReverseMerge.CONFIG_FROM, from);
             ReverseMerge.saveConfig(root, ReverseMerge.CONFIG_INTO, into);
@@ -790,6 +798,27 @@ public final class ReverseMergeAction extends DumbAwareAction {
       repo.update();
     }
 
+    /** 합치기 · 마무리를 시작할 때의 HEAD 와 커밋 안 한 변경 파일. */
+    private record Start(@Nullable String head, Set<String> dirty) {}
+
+    /** head() 와 dirtyNow() 를 동시에 읽는다. 작업본을 바꾸기 전에 둘 다 읽고 돌아온다. */
+    private Start start() {
+      Future<Set<String>> dirty = AppExecutorUtil.getAppExecutorService().submit(this::dirtyNow);
+      String head = head();
+      try {
+        return new Start(head, dirty.get());
+      }
+      catch (ExecutionException e) {
+        // dirtyNow 는 실패를 빈 집합으로 돌려주므로 오지 않는다. 와도 dirtyNow 의 실패와 같게 다룬다.
+        return new Start(head, Set.of());
+      }
+      catch (InterruptedException e) {
+        dirty.cancel(true);
+        Thread.currentThread().interrupt();
+        return new Start(head, Set.of());
+      }
+    }
+
     /** 지금 HEAD 커밋. 읽지 못하면 null(refreshIde 가 저장소 전체를 다시 읽는다). */
     private @Nullable String head() {
       try {
@@ -835,8 +864,9 @@ public final class ReverseMergeAction extends DumbAwareAction {
 
         @Override
         public void run(@NotNull ProgressIndicator indicator) {
-          String before = head();
-          Set<String> dirtyBefore = dirtyNow();
+          Start start = start();
+          String before = start.head();
+          Set<String> dirtyBefore = start.dirty();
           try {
             finished = ReverseMerge.finish(root, remote, into, current, pushAfter, stashed);
           }
