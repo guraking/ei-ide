@@ -103,6 +103,8 @@ public final class BundledFonts implements AppLifecycleListener {
         PropertiesComponent properties = PropertiesComponent.getInstance();
         if (!properties.getBoolean(UI_FONT_APPLIED_KEY)) {
             properties.setValue(UI_FONT_APPLIED_KEY, true);
+            // 새 설정 폴더에서는 화면 글꼴 크기가 0 이다. 0 인 채로 사용자 지정 글꼴을 켜면 화면 배율이 0 이 되어 아이콘이 0×0 이 되고 창이 뜨지 않는다.
+            if (ui.getFontSize2D() <= 0) ui.setFontSize2D(UISettings.getDefFontSize());
             ui.setOverrideLafFonts(true);
             ui.setFontFace(FAMILY);
         }
