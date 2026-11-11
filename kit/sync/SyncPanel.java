@@ -43,6 +43,7 @@ import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.project.ProjectManager;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.vcs.ProjectLevelVcsManager;
 import com.intellij.openapi.vcs.VcsDataKeys;
@@ -96,6 +97,7 @@ import com.intellij.ui.treeStructure.Tree;
 import com.intellij.util.ui.tree.TreeUtil;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import git4idea.config.GitVcsApplicationSettings;
+import git4idea.config.GitVcsSettings;
 import git4idea.repo.GitRepository;
 import git4idea.repo.GitRepositoryChangeListener;
 import git4idea.repo.GitRepositoryManager;
@@ -3499,11 +3501,12 @@ final class SyncPanel extends SimpleToolWindowPanel {
    * 껍데기를 건너뛰면 git 을 띄울 때마다 프로세스 하나가 줄어든다(백신 검사가 있는 PC 에서 한 번에 0.5초 안팎).
    * PATH 에 git 이 없으면 설치본의 MinGit, 그것도 없으면 PATH 의 「git」(실행할 때 찾지 못했다는 오류가 난다).
    */
-  static String gitExecutable() {
-    // 설정 → 버전 관리 → Git 에서 고른 경로가 있으면 IntelliJ Git 과 같은 실행 파일을 쓴다. 그 파일이 없어졌으면 아래 찾기로 넘어간다.
-    String saved = savedGitPath();
-    // WSL 안의 git(\\wsl…)은 윈도우 프로세스로 띄울 수 없어 건너뛴다.
-    if (saved != null && !saved.isBlank() && !saved.startsWith(WSL_PATH_PREFIX) && new File(saved).isFile()) {
+  static String gitExecutable(File dir) {
+    // 설정 → 버전 관리 → Git 에서 고른 경로가 있으면 IntelliJ Git 과 같은 실행 파일을 쓴다. 「이 프로젝트에만」 경로가 먼저다.
+    // 그 파일이 없어졌으면 다음 것으로 넘어간다.
+    for (String saved : new String[]{projectGitPath(dir), savedGitPath()}) {
+      // WSL 안의 git(\\wsl…)은 윈도우 프로세스로 띄울 수 없어 건너뛴다.
+      if (saved == null || saved.isBlank() || saved.startsWith(WSL_PATH_PREFIX) || !new File(saved).isFile()) continue;
       if (!com.intellij.openapi.util.SystemInfo.isWindows) return saved;
       String real = realGitNextTo(new File(saved).getParentFile());
       return real != null ? real : saved;
@@ -3529,6 +3532,26 @@ final class SyncPanel extends SimpleToolWindowPanel {
     return bundled.isFile() ? bundled.getPath() : GIT;
   }
 
+  /**
+   * dir 을 저장소 루트로 가진 열린 프로젝트의 설정 → Git 「이 프로젝트에만」 경로. 그런 프로젝트 · 경로가 없거나
+   * IDE 밖(점검 main) · 닫는 중이라 못 읽으면 null.
+   */
+  private static String projectGitPath(File dir) {
+    if (dir == null || ApplicationManager.getApplication() == null) return null;
+    try {
+      VirtualFile root = LocalFileSystem.getInstance().findFileByIoFile(dir);
+      if (root == null) return null;
+      for (Project open : ProjectManager.getInstance().getOpenProjects()) {
+        if (open.isDisposed() || GitRepositoryManager.getInstance(open).getRepositoryForRootQuick(root) == null) continue;
+        return GitVcsSettings.getInstance(open).getPathToGit();
+      }
+    }
+    catch (RuntimeException e) {
+      LOG.debug("프로젝트 Git 경로 설정 읽기 실패", e);
+    }
+    return null;
+  }
+
   /** 설정 → Git 에서 고른 경로. IDE 밖(점검 main)이거나 IDE 를 닫는 중이라 설정을 못 읽으면 null. */
   private static String savedGitPath() {
     if (ApplicationManager.getApplication() == null) return null;
@@ -3552,10 +3575,29 @@ final class SyncPanel extends SimpleToolWindowPanel {
     return null;
   }
 
-  /** 설치본에 같이 넣은 svn.exe 가 있으면 그 경로, 없으면 PATH 에서 찾을 「svn」. */
+  /**
+   * 설정 → 버전 관리 → Subversion 에서 고른 svn 파일이 있으면 그것, 없으면 설치본에 같이 넣은 svn.exe, 그것도 없으면 PATH 에서 찾을 「svn」.
+   */
   static String svnExecutable() {
+    String saved = savedSvnPath();
+    if (saved != null && !saved.isBlank() && new File(saved).isFile()) return saved;
     File bundled = new File(PathManager.getHomePath(), BUNDLED_SVN);
     return bundled.isFile() ? bundled.getPath() : VCS_NAME_SVN;
+  }
+
+  /**
+   * 설정 → Subversion 의 명령줄 경로. Subversion 플러그인이 꺼져 있으면 그 클래스가 없어(선택 의존) null.
+   * IDE 밖(점검 main) · 닫는 중이라 못 읽어도 null.
+   */
+  private static String savedSvnPath() {
+    if (ApplicationManager.getApplication() == null) return null;
+    try {
+      return org.jetbrains.idea.svn.SvnApplicationSettings.getInstance().getCommandLinePath();
+    }
+    catch (RuntimeException | NoClassDefFoundError e) {
+      LOG.debug("SVN 경로 설정 읽기 실패", e);
+      return null;
+    }
   }
 
   /**
@@ -3587,7 +3629,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
    * null 이 아니면 부른 쪽이 이미 고른 것이라 그대로 쓴다(빈 목록이면 넘길 값이 없다). 회사 PC 는 git 하나에 0.4초 안팎이라 같은 읽기를 두 번 하지 않는다.
    */
   private static byte[] runBytes(File dir, long timeoutSec, List<GitLogins.Login> logins, String exe, String... args) throws IOException, InterruptedException {
-    List<String> command = new ArrayList<>(List.of(VCS_NAME_SVN.equals(exe) ? svnExecutable() : GIT.equals(exe) ? gitExecutable() : exe));
+    List<String> command = new ArrayList<>(List.of(VCS_NAME_SVN.equals(exe) ? svnExecutable() : GIT.equals(exe) ? gitExecutable(dir) : exe));
     command.addAll(List.of(args));
     String label = exe + " " + verb(args);
     boolean limited = GIT.equals(exe) && !GIT_REMOTE_VERBS.contains(verb(args));
