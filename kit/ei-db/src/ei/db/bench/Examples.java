@@ -5207,6 +5207,418 @@ public final class Examples {
             FROM PG_VIEWS v
            WHERE v.SCHEMANAME = CURRENT_SCHEMA()
              AND v.DEFINITION ILIKE '%' || :keyword || '%'"""),
+      new Example("표 · 칼럼 정보", "칼럼 설명(한글)으로 칼럼 찾기", "「납기」처럼 한글 설명에 든 낱말로 어느 표의 어느 칼럼인지 찾습니다.",
+          """
+          SELECT
+                 m.TABLE_NAME
+               , m.COLUMN_NAME
+               , m.COMMENTS
+            FROM USER_COL_COMMENTS m
+           WHERE m.COMMENTS LIKE '%' || :keyword || '%'
+           ORDER BY
+                 m.TABLE_NAME
+               , m.COLUMN_NAME""",
+          """
+          SELECT
+                 t.RELNAME AS TABLE_NAME
+               , a.ATTNAME AS COLUMN_NAME
+               , d.DESCRIPTION AS COMMENTS
+            FROM PG_DESCRIPTION d
+               , PG_CLASS t
+               , PG_ATTRIBUTE a
+           WHERE d.CLASSOID = 'pg_class'::REGCLASS
+             AND d.OBJOID = t.OID
+             AND a.ATTRELID = t.OID
+             AND a.ATTNUM = d.OBJSUBID
+             AND t.RELNAMESPACE = CURRENT_SCHEMA()::REGNAMESPACE
+             AND d.DESCRIPTION ILIKE '%' || :keyword || '%'
+           ORDER BY
+                 t.RELNAME
+               , a.ATTNAME"""),
+      new Example("표 · 칼럼 정보", "표 설명(한글)으로 표 찾기", "「부품」 「협력사」처럼 표 설명에 든 낱말로 표 · 뷰를 찾습니다.",
+          """
+          SELECT
+                 t.TABLE_NAME
+               , t.TABLE_TYPE
+               , t.COMMENTS
+            FROM USER_TAB_COMMENTS t
+           WHERE t.COMMENTS LIKE '%' || :keyword || '%'
+           ORDER BY
+                 t.TABLE_NAME""",
+          """
+          SELECT
+                 t.RELNAME AS TABLE_NAME
+               , t.RELKIND AS TABLE_TYPE
+               , d.DESCRIPTION AS COMMENTS
+            FROM PG_CLASS t
+               , PG_DESCRIPTION d
+           WHERE d.CLASSOID = 'pg_class'::REGCLASS
+             AND d.OBJOID = t.OID
+             AND d.OBJSUBID = 0
+             AND t.RELNAMESPACE = CURRENT_SCHEMA()::REGNAMESPACE
+             AND d.DESCRIPTION ILIKE '%' || :keyword || '%'
+           ORDER BY
+                 t.RELNAME"""),
+      new Example("표 · 칼럼 정보", "이 표를 가리키는 표 (외래 키 거꾸로)", "이 표의 줄을 지우거나 키를 바꾸기 전에, 어느 표가 이 표를 참조하는지 봅니다.",
+          """
+          SELECT
+                 c.TABLE_NAME AS CHILD_TABLE
+               , c.CONSTRAINT_NAME
+               , cc.COLUMN_NAME AS CHILD_COLUMN
+               , cc.POSITION
+               , c.DELETE_RULE
+               , c.STATUS
+            FROM USER_CONSTRAINTS p
+               , USER_CONSTRAINTS c
+               , USER_CONS_COLUMNS cc
+           WHERE p.TABLE_NAME = UPPER(:tableName)
+             AND p.CONSTRAINT_TYPE IN ('P', 'U')
+             AND c.R_CONSTRAINT_NAME = p.CONSTRAINT_NAME
+             AND c.CONSTRAINT_TYPE = 'R'
+             AND cc.CONSTRAINT_NAME = c.CONSTRAINT_NAME
+           ORDER BY
+                 c.TABLE_NAME
+               , c.CONSTRAINT_NAME
+               , cc.POSITION""",
+          """
+          SELECT
+                 c.CONRELID::REGCLASS AS CHILD_TABLE
+               , c.CONNAME AS CONSTRAINT_NAME
+               , PG_GET_CONSTRAINTDEF(c.OID) AS DEFINITION
+            FROM PG_CONSTRAINT c
+           WHERE c.CONTYPE = 'f'
+             AND c.CONFRELID = CAST(:tableName AS REGCLASS)
+           ORDER BY
+                 1, 2"""),
+      new Example("표 · 칼럼 정보", "고유 · 검사 제약 목록 (조건 글 포함)", "표에 걸린 UNIQUE 와 CHECK 제약, 조건 글. Oracle 은 NOT NULL 도 검사 제약(C)으로 나옵니다.",
+          """
+          SELECT
+                 c.CONSTRAINT_NAME
+               , c.CONSTRAINT_TYPE
+               , c.SEARCH_CONDITION
+               , c.STATUS
+            FROM USER_CONSTRAINTS c
+           WHERE c.TABLE_NAME = UPPER(:tableName)
+             AND c.CONSTRAINT_TYPE IN ('U', 'C')
+           ORDER BY
+                 c.CONSTRAINT_TYPE
+               , c.CONSTRAINT_NAME""",
+          """
+          SELECT
+                 c.CONNAME AS CONSTRAINT_NAME
+               , c.CONTYPE AS CONSTRAINT_TYPE
+               , PG_GET_CONSTRAINTDEF(c.OID) AS DEFINITION
+            FROM PG_CONSTRAINT c
+           WHERE c.CONRELID = CAST(:tableName AS REGCLASS)
+             AND c.CONTYPE IN ('u', 'c')
+           ORDER BY
+                 2, 1"""),
+      new Example("표 · 칼럼 정보", "트리거 목록 (표마다 · 켜짐 여부)", "INSERT · UPDATE 때 몰래 값이 바뀐다면 트리거부터 봅니다.",
+          """
+          SELECT
+                 t.TABLE_NAME
+               , t.TRIGGER_NAME
+               , t.TRIGGER_TYPE
+               , t.TRIGGERING_EVENT
+               , t.STATUS
+            FROM USER_TRIGGERS t
+           ORDER BY
+                 t.TABLE_NAME
+               , t.TRIGGER_NAME""",
+          """
+          SELECT
+                 t.TGRELID::REGCLASS AS TABLE_NAME
+               , t.TGNAME AS TRIGGER_NAME
+               , PG_GET_TRIGGERDEF(t.OID) AS DEFINITION
+               , t.TGENABLED AS STATUS
+            FROM PG_TRIGGER t
+               , PG_CLASS c
+           WHERE t.TGRELID = c.OID
+             AND NOT t.TGISINTERNAL
+             AND c.RELNAMESPACE = CURRENT_SCHEMA()::REGNAMESPACE
+           ORDER BY
+                 1, 2"""),
+      new Example("표 · 칼럼 정보", "동의어가 가리키는 대상 (끊긴 동의어 찾기)", "OBJECT_TYPE 이 비면 대상이 없거나 볼 권한이 없습니다. PostgreSQL 은 동의어 대신 검색 경로를 봅니다.",
+          """
+          SELECT
+                 s.SYNONYM_NAME
+               , s.TABLE_OWNER
+               , s.TABLE_NAME
+               , s.DB_LINK
+               , o.OBJECT_TYPE
+               , o.STATUS
+            FROM USER_SYNONYMS s
+               , ALL_OBJECTS o
+           WHERE s.TABLE_OWNER = o.OWNER(+)
+             AND s.TABLE_NAME = o.OBJECT_NAME(+)
+           ORDER BY
+                 s.SYNONYM_NAME""",
+          """
+          SELECT
+                 CURRENT_SETTING('search_path') AS SEARCH_PATH
+               , CURRENT_SCHEMA() AS NOW_SCHEMA"""),
+      new Example("표 · 칼럼 정보", "파티션 목록 (경계 값 · 건수 어림)", "파티션 표가 어떻게 나뉘어 있고 파티션마다 몇 건쯤인지.",
+          """
+          SELECT
+                 p.PARTITION_POSITION
+               , p.PARTITION_NAME
+               , p.HIGH_VALUE
+               , p.NUM_ROWS
+               , p.LAST_ANALYZED
+            FROM USER_TAB_PARTITIONS p
+           WHERE p.TABLE_NAME = UPPER(:tableName)
+           ORDER BY
+                 p.PARTITION_POSITION""",
+          """
+          SELECT
+                 c.RELNAME AS PARTITION_NAME
+               , PG_GET_EXPR(c.RELPARTBOUND, c.OID) AS BOUND
+               , c.RELTUPLES::BIGINT AS NUM_ROWS
+            FROM PG_INHERITS i
+               , PG_CLASS c
+           WHERE i.INHRELID = c.OID
+             AND i.INHPARENT = CAST(:tableName AS REGCLASS)
+           ORDER BY
+                 c.RELNAME"""),
+      new Example("표 · 칼럼 정보", "표 만드는 문장 뽑기 (DDL)", "운영 표를 개발 DB 에 똑같이 만들 때. Oracle 은 'TABLE' 대신 'VIEW' · 'PROCEDURE' · 'INDEX' 도 됩니다. PostgreSQL 은 칼럼 · NOT NULL 만 만들고 키 · 색인은 pg_dump 로 봅니다.",
+          """
+          SELECT
+                 DBMS_METADATA.GET_DDL('TABLE', UPPER(:tableName)) AS DDL
+            FROM DUAL""",
+          """
+          SELECT
+                 'CREATE TABLE ' || c.RELNAME || ' (' || STRING_AGG(a.ATTNAME || ' ' || FORMAT_TYPE(a.ATTTYPID, a.ATTTYPMOD) || CASE WHEN a.ATTNOTNULL THEN ' NOT NULL' ELSE '' END, ', ' ORDER BY a.ATTNUM) || ');' AS DDL
+            FROM PG_CLASS c
+               , PG_ATTRIBUTE a
+           WHERE a.ATTRELID = c.OID
+             AND c.OID = CAST(:tableName AS REGCLASS)
+             AND a.ATTNUM > 0
+             AND NOT a.ATTISDROPPED
+           GROUP BY
+                 c.RELNAME"""),
+      new Example("표 · 칼럼 정보", "이 표가 마지막으로 바뀐 때", "Oracle 은 ORA_ROWSCN 으로 어림합니다(블록 단위, 며칠 넘게 지나면 ORA-08181). PostgreSQL 은 통계 수집 뒤 넣기 · 고치기 · 지우기 건수를 봅니다.",
+          """
+          SELECT
+                 SCN_TO_TIMESTAMP(MAX(o.ORA_ROWSCN)) AS LAST_CHANGED
+            FROM ORDERS o""",
+          """
+          SELECT
+                 s.RELNAME AS TABLE_NAME
+               , s.N_TUP_INS
+               , s.N_TUP_UPD
+               , s.N_TUP_DEL
+               , s.N_MOD_SINCE_ANALYZE
+               , GREATEST(s.LAST_ANALYZE, s.LAST_AUTOANALYZE) AS LAST_ANALYZED
+            FROM PG_STAT_USER_TABLES s
+           WHERE s.RELNAME = LOWER(:tableName)"""),
+      new Example("표 · 칼럼 정보", "표 칼럼을 SELECT 문으로 펼치기", "SELECT * 대신 칼럼을 다 적은 문장을 만들어 매퍼에 붙입니다. 칼럼은 줄 앞 쉼표로 나옵니다.",
+          """
+          SELECT
+                 'SELECT' || CHR(10) || '       ' || LISTAGG(LOWER(:alias) || '.' || c.COLUMN_NAME, CHR(10) || '     , ') WITHIN GROUP (ORDER BY c.COLUMN_ID) || CHR(10) || '  FROM ' || c.TABLE_NAME || ' ' || LOWER(:alias) AS SELECT_SQL
+            FROM USER_TAB_COLUMNS c
+           WHERE c.TABLE_NAME = UPPER(:tableName)
+           GROUP BY
+                 c.TABLE_NAME""",
+          """
+          SELECT
+                 'SELECT' || CHR(10) || '       ' || STRING_AGG(LOWER(:alias) || '.' || UPPER(c.COLUMN_NAME), CHR(10) || '     , ' ORDER BY c.ORDINAL_POSITION) || CHR(10) || '  FROM ' || UPPER(c.TABLE_NAME) || ' ' || LOWER(:alias) AS SELECT_SQL
+            FROM INFORMATION_SCHEMA.COLUMNS c
+           WHERE c.TABLE_SCHEMA = CURRENT_SCHEMA()
+             AND c.TABLE_NAME = LOWER(:tableName)
+           GROUP BY
+                 c.TABLE_NAME"""),
+      new Example("표 · 칼럼 정보", "칼럼 이름을 camelCase 로 (VO · DTO 필드 이름)", "PART_NO → partNo. resultMap · VO 를 손으로 만들 때 칼럼과 필드 이름을 나란히 봅니다.",
+          """
+          SELECT
+                 c.COLUMN_NAME
+               , LOWER(SUBSTR(REPLACE(INITCAP(c.COLUMN_NAME), '_'), 1, 1)) || SUBSTR(REPLACE(INITCAP(c.COLUMN_NAME), '_'), 2) AS FIELD_NAME
+               , c.DATA_TYPE
+               , m.COMMENTS
+            FROM USER_TAB_COLUMNS c
+               , USER_COL_COMMENTS m
+           WHERE c.TABLE_NAME = UPPER(:tableName)
+             AND c.TABLE_NAME = m.TABLE_NAME(+)
+             AND c.COLUMN_NAME = m.COLUMN_NAME(+)
+           ORDER BY
+                 c.COLUMN_ID""",
+          """
+          SELECT
+                 UPPER(a.ATTNAME) AS COLUMN_NAME
+               , LOWER(SUBSTR(REPLACE(INITCAP(a.ATTNAME), '_', ''), 1, 1)) || SUBSTR(REPLACE(INITCAP(a.ATTNAME), '_', ''), 2) AS FIELD_NAME
+               , FORMAT_TYPE(a.ATTTYPID, a.ATTTYPMOD) AS DATA_TYPE
+               , COL_DESCRIPTION(a.ATTRELID, a.ATTNUM) AS COMMENTS
+            FROM PG_ATTRIBUTE a
+           WHERE a.ATTRELID = CAST(:tableName AS REGCLASS)
+             AND a.ATTNUM > 0
+             AND NOT a.ATTISDROPPED
+           ORDER BY
+                 a.ATTNUM"""),
+      new Example("표 · 칼럼 정보", "칼럼 값 종류 수 · 빈 값 비율 (색인 걸 만한가)", "값 종류가 많고 빈 값이 적을수록 색인이 잘 듣습니다. 통계 기준이라 통계가 오래되면 어긋납니다.",
+          """
+          SELECT
+                 s.COLUMN_NAME
+               , s.NUM_DISTINCT
+               , s.NUM_NULLS
+               , t.NUM_ROWS
+               , ROUND(s.NUM_NULLS / NULLIF(t.NUM_ROWS, 0) * 100, 1) AS NULL_PCT
+               , s.HISTOGRAM
+            FROM USER_TAB_COL_STATISTICS s
+               , USER_TABLES t
+           WHERE s.TABLE_NAME = t.TABLE_NAME
+             AND s.TABLE_NAME = UPPER(:tableName)
+           ORDER BY
+                 s.NUM_DISTINCT DESC""",
+          """
+          SELECT
+                 s.ATTNAME AS COLUMN_NAME
+               , s.N_DISTINCT
+               , ROUND(CAST(s.NULL_FRAC * 100 AS NUMERIC), 1) AS NULL_PCT
+               , s.MOST_COMMON_VALS
+            FROM PG_STATS s
+           WHERE s.SCHEMANAME = CURRENT_SCHEMA()
+             AND s.TABLENAME = LOWER(:tableName)
+           ORDER BY
+                 s.N_DISTINCT DESC"""),
+      new Example("의존 관계 · 소스", "이 표를 쓰는 뷰 · 프로시저 · 패키지", "표를 고치거나 지우기 전에 영향받는 DB 객체를 봅니다. PostgreSQL 은 뷰만 기록되어 함수는 「뷰 · 함수 소스에서 글자 찾기」로 봅니다.",
+          """
+          SELECT
+                 d.TYPE
+               , d.NAME
+               , d.DEPENDENCY_TYPE
+            FROM USER_DEPENDENCIES d
+           WHERE d.REFERENCED_NAME = UPPER(:tableName)
+           ORDER BY
+                 d.TYPE
+               , d.NAME""",
+          """
+          SELECT DISTINCT
+                 v.RELKIND AS TYPE
+               , v.RELNAME AS NAME
+            FROM PG_DEPEND d
+               , PG_REWRITE r
+               , PG_CLASS v
+           WHERE d.OBJID = r.OID
+             AND r.EV_CLASS = v.OID
+             AND d.REFOBJID = CAST(:tableName AS REGCLASS)
+             AND v.OID <> d.REFOBJID
+           ORDER BY
+                 1, 2"""),
+      new Example("의존 관계 · 소스", "이 프로시저 · 뷰가 쓰는 표", "프로시저 · 패키지 · 뷰가 안에서 읽고 쓰는 표 · 시퀀스.",
+          """
+          SELECT
+                 d.REFERENCED_TYPE
+               , d.REFERENCED_OWNER
+               , d.REFERENCED_NAME
+            FROM USER_DEPENDENCIES d
+           WHERE d.NAME = UPPER(:objectName)
+             AND d.REFERENCED_TYPE IN ('TABLE', 'VIEW', 'SYNONYM', 'SEQUENCE', 'PACKAGE', 'FUNCTION', 'PROCEDURE')
+             AND d.REFERENCED_OWNER <> 'SYS'
+           ORDER BY
+                 d.REFERENCED_TYPE
+               , d.REFERENCED_NAME""",
+          """
+          SELECT DISTINCT
+                 t.RELKIND AS REFERENCED_TYPE
+               , t.RELNAME AS REFERENCED_NAME
+            FROM PG_REWRITE r
+               , PG_DEPEND d
+               , PG_CLASS t
+           WHERE r.EV_CLASS = CAST(:objectName AS REGCLASS)
+             AND d.OBJID = r.OID
+             AND d.REFCLASSID = 'pg_class'::REGCLASS
+             AND d.REFOBJID = t.OID
+             AND t.OID <> r.EV_CLASS
+           ORDER BY
+                 1, 2"""),
+      new Example("의존 관계 · 소스", "프로시저 · 함수 인자 목록", "부를 때 넣을 인자 이름 · 형 · IN/OUT. Oracle 은 POSITION 0 이 함수 돌려주는 값입니다.",
+          """
+          SELECT
+                 a.PACKAGE_NAME
+               , a.OBJECT_NAME
+               , a.OVERLOAD
+               , a.POSITION
+               , a.ARGUMENT_NAME
+               , a.IN_OUT
+               , a.DATA_TYPE
+            FROM USER_ARGUMENTS a
+           WHERE a.OBJECT_NAME = UPPER(:objectName)
+           ORDER BY
+                 a.PACKAGE_NAME
+               , a.OVERLOAD
+               , a.POSITION""",
+          """
+          SELECT
+                 p.PRONAME AS OBJECT_NAME
+               , PG_GET_FUNCTION_ARGUMENTS(p.OID) AS ARGUMENTS
+               , PG_GET_FUNCTION_RESULT(p.OID) AS RESULT_TYPE
+            FROM PG_PROC p
+           WHERE p.PRONAMESPACE = CURRENT_SCHEMA()::REGNAMESPACE
+             AND p.PRONAME = LOWER(:objectName)"""),
+      new Example("의존 관계 · 소스", "컴파일 오류 내용 (몇째 줄 무슨 오류)", "INVALID 가 된 프로시저 · 뷰의 오류 줄과 글. PostgreSQL 은 만들 때 바로 오류를 내서 남는 오류가 없습니다.",
+          """
+          SELECT
+                 e.TYPE
+               , e.NAME
+               , e.LINE
+               , e.POSITION
+               , e.TEXT
+            FROM USER_ERRORS e
+           ORDER BY
+                 e.NAME
+               , e.TYPE
+               , e.SEQUENCE""",
+          """
+          SELECT
+                 'PostgreSQL 은 CREATE FUNCTION 때 바로 오류를 내서 남아 있는 컴파일 오류가 없습니다.' AS NOTE"""),
+      new Example("의존 관계 · 소스", "프로시저 · 패키지 소스 전체 보기", "DB 에 들어 있는 소스를 줄 번호와 함께 봅니다. 운영에 실제로 올라간 판을 확인할 때.",
+          """
+          SELECT
+                 s.TYPE
+               , s.LINE
+               , s.TEXT
+            FROM USER_SOURCE s
+           WHERE s.NAME = UPPER(:objectName)
+           ORDER BY
+                 s.TYPE
+               , s.LINE""",
+          """
+          SELECT
+                 p.PRONAME AS NAME
+               , PG_GET_FUNCTIONDEF(p.OID) AS SOURCE
+            FROM PG_PROC p
+           WHERE p.PRONAMESPACE = CURRENT_SCHEMA()::REGNAMESPACE
+             AND p.PRONAME = LOWER(:objectName)
+             AND p.PROKIND IN ('f', 'p')"""),
+      new Example("의존 관계 · 소스", "뷰 소스 보기", "뷰가 어떤 SELECT 로 되어 있는지 봅니다.",
+          """
+          SELECT
+                 v.VIEW_NAME
+               , v.TEXT
+            FROM USER_VIEWS v
+           WHERE v.VIEW_NAME = UPPER(:viewName)""",
+          """
+          SELECT
+                 PG_GET_VIEWDEF(CAST(:viewName AS REGCLASS), TRUE) AS TEXT"""),
+      new Example("의존 관계 · 소스", "패키지 안 프로시저 · 함수 목록", "패키지에 들어 있는 프로시저 · 함수 이름. PostgreSQL 은 패키지가 없어 스키마의 함수 목록을 봅니다.",
+          """
+          SELECT
+                 p.OBJECT_NAME AS PACKAGE_NAME
+               , p.PROCEDURE_NAME
+               , p.OVERLOAD
+            FROM USER_PROCEDURES p
+           WHERE p.OBJECT_NAME = UPPER(:packageName)
+             AND p.PROCEDURE_NAME IS NOT NULL
+           ORDER BY
+                 p.SUBPROGRAM_ID""",
+          """
+          SELECT
+                 p.PRONAME AS PROCEDURE_NAME
+               , p.PROKIND
+               , PG_GET_FUNCTION_ARGUMENTS(p.OID) AS ARGUMENTS
+            FROM PG_PROC p
+           WHERE p.PRONAMESPACE = CURRENT_SCHEMA()::REGNAMESPACE
+           ORDER BY
+                 p.PRONAME"""),
       new Example("세션 · 락", "지금 돌고 있는 쿼리", "이 DB 에서 지금 실행 중인 세션과 문장. 볼 권한이 있어야 합니다.",
           """
           SELECT
@@ -5327,6 +5739,247 @@ public final class Examples {
            WHERE l.RELATION = c.OID
              AND l.PID = a.PID
              AND c.RELKIND = 'r'"""),
+      new Example("세션 · 락", "SID 로 그 세션의 SQL 글 보기 (지금 · 바로 전)", "락을 잡은 세션이 무엇을 돌렸는지 봅니다. 잠근 문장은 이미 끝났을 수 있어 「바로 전 SQL」 이 잠근 문장이 아닐 수도 있습니다.",
+          """
+          SELECT
+                 s.SID
+               , s.SERIAL#
+               , s.USERNAME
+               , s.MACHINE
+               , s.PROGRAM
+               , s.STATUS
+               , q.SQL_FULLTEXT AS NOW_SQL
+               , p.SQL_FULLTEXT AS PREV_SQL
+            FROM V$SESSION s
+               , V$SQL q
+               , V$SQL p
+           WHERE s.SID = :sid
+             AND s.SQL_ID = q.SQL_ID(+)
+             AND s.SQL_CHILD_NUMBER = q.CHILD_NUMBER(+)
+             AND s.PREV_SQL_ID = p.SQL_ID(+)
+             AND s.PREV_CHILD_NUMBER = p.CHILD_NUMBER(+)""",
+          """
+          SELECT
+                 a.PID
+               , a.USENAME
+               , a.APPLICATION_NAME
+               , a.CLIENT_ADDR
+               , a.STATE
+               , a.QUERY_START
+               , a.QUERY
+            FROM PG_STAT_ACTIVITY a
+           WHERE a.PID = CAST(:pid AS INTEGER)"""),
+      new Example("세션 · 락", "오래 열린 트랜잭션 (커밋 안 한 세션)", "커밋 · 롤백 없이 붙잡고 있는 세션. 락의 주범은 대개 이쪽입니다. IDE 에서 고치고 커밋을 잊은 세션도 여기 나옵니다.",
+          """
+          SELECT
+                 s.SID
+               , s.SERIAL#
+               , s.USERNAME
+               , s.MACHINE
+               , s.PROGRAM
+               , s.STATUS
+               , t.START_DATE
+               , ROUND((SYSDATE - t.START_DATE) * 24 * 60) AS OPEN_MIN
+               , t.USED_UBLK AS UNDO_BLOCKS
+            FROM V$TRANSACTION t
+               , V$SESSION s
+           WHERE t.ADDR = s.TADDR
+           ORDER BY
+                 t.START_DATE""",
+          """
+          SELECT
+                 a.PID
+               , a.USENAME
+               , a.APPLICATION_NAME
+               , a.CLIENT_ADDR
+               , a.STATE
+               , a.XACT_START
+               , ROUND(EXTRACT(EPOCH FROM NOW() - a.XACT_START) / 60) AS OPEN_MIN
+               , a.QUERY
+            FROM PG_STAT_ACTIVITY a
+           WHERE a.XACT_START IS NOT NULL
+             AND a.PID <> PG_BACKEND_PID()
+           ORDER BY
+                 a.XACT_START"""),
+      new Example("세션 · 락", "막힌 줄이 어느 표 어느 줄인지 (ROWID)", "기다리는 세션이 막힌 표와 줄 위치. 나온 ROWID 로 SELECT * FROM 표 WHERE ROWID = '…' 하면 그 줄이 보입니다. PostgreSQL 은 PAGE · TUPLE 로 WHERE CTID = '(page,tuple)'.",
+          """
+          SELECT
+                 w.SID AS WAITING_SID
+               , w.BLOCKING_SESSION AS BLOCKING_SID
+               , o.OWNER
+               , o.OBJECT_NAME AS TABLE_NAME
+               , DBMS_ROWID.ROWID_CREATE(1, o.DATA_OBJECT_ID, w.ROW_WAIT_FILE#, w.ROW_WAIT_BLOCK#, w.ROW_WAIT_ROW#) AS LOCKED_ROWID
+               , w.SECONDS_IN_WAIT
+            FROM V$SESSION w
+               , ALL_OBJECTS o
+           WHERE w.ROW_WAIT_OBJ# = o.OBJECT_ID
+             AND w.BLOCKING_SESSION IS NOT NULL""",
+          """
+          SELECT
+                 w.PID AS WAITING_PID
+               , PG_BLOCKING_PIDS(w.PID) AS BLOCKING_PIDS
+               , l.LOCKTYPE
+               , l.RELATION::REGCLASS AS TABLE_NAME
+               , l.PAGE
+               , l.TUPLE
+               , l.MODE
+               , w.QUERY
+            FROM PG_LOCKS l
+               , PG_STAT_ACTIVITY w
+           WHERE l.PID = w.PID
+             AND NOT l.GRANTED"""),
+      new Example("세션 · 락", "맨 앞에서 막는 세션 (줄줄이 막힐 때)", "A 가 B 를, B 가 C 를 막을 때 끝까지 거슬러 올라간 첫 세션. 이 세션만 풀면 줄줄이 풀립니다.",
+          """
+          SELECT
+                 s.FINAL_BLOCKING_SESSION AS ROOT_SID
+               , COUNT(*) AS WAITING_CNT
+               , MAX(s.SECONDS_IN_WAIT) AS MAX_WAIT_SEC
+            FROM V$SESSION s
+           WHERE s.FINAL_BLOCKING_SESSION IS NOT NULL
+           GROUP BY
+                 s.FINAL_BLOCKING_SESSION
+           ORDER BY
+                 WAITING_CNT DESC""",
+          """
+          SELECT
+                 a.PID AS ROOT_PID
+               , a.USENAME
+               , a.STATE
+               , a.XACT_START
+               , a.QUERY
+            FROM PG_STAT_ACTIVITY a
+           WHERE CARDINALITY(PG_BLOCKING_PIDS(a.PID)) = 0
+             AND EXISTS (
+                  SELECT 1
+                    FROM PG_STAT_ACTIVITY w
+                   WHERE a.PID = ANY (PG_BLOCKING_PIDS(w.PID))
+                 )"""),
+      new Example("세션 · 락", "내 세션 정보 (SID · 사용자 · 스키마)", "위 결과에 나온 세션이 지금 이 IDE 접속인지 확인할 때.",
+          """
+          SELECT
+                 SYS_CONTEXT('USERENV', 'SID') AS SID
+               , SYS_CONTEXT('USERENV', 'SESSION_USER') AS USER_NAME
+               , SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA') AS SCHEMA_NAME
+               , SYS_CONTEXT('USERENV', 'HOST') AS HOST
+               , SYS_CONTEXT('USERENV', 'MODULE') AS MODULE
+               , SYS_CONTEXT('USERENV', 'DB_NAME') AS DB_NAME
+            FROM DUAL""",
+          """
+          SELECT
+                 PG_BACKEND_PID() AS PID
+               , SESSION_USER AS USER_NAME
+               , CURRENT_SCHEMA() AS SCHEMA_NAME
+               , INET_CLIENT_ADDR() AS CLIENT_ADDR
+               , CURRENT_SETTING('application_name') AS APP_NAME
+               , CURRENT_DATABASE() AS DB_NAME"""),
+      new Example("세션 · 락", "세션이 지금 무엇을 기다리나 (대기 이벤트)", "느린 쿼리가 디스크 · 락 · 네트워크 중 무엇에 붙잡혀 있는지. 놀고 있는(Idle) 세션은 뺍니다.",
+          """
+          SELECT
+                 s.SID
+               , s.USERNAME
+               , s.PROGRAM
+               , s.EVENT
+               , s.WAIT_CLASS
+               , s.SECONDS_IN_WAIT
+               , s.SQL_ID
+            FROM V$SESSION s
+           WHERE s.STATUS = 'ACTIVE'
+             AND s.TYPE = 'USER'
+             AND s.WAIT_CLASS <> 'Idle'
+           ORDER BY
+                 s.SECONDS_IN_WAIT DESC""",
+          """
+          SELECT
+                 a.PID
+               , a.USENAME
+               , a.WAIT_EVENT_TYPE
+               , a.WAIT_EVENT
+               , NOW() - a.QUERY_START AS RUNNING
+               , a.QUERY
+            FROM PG_STAT_ACTIVITY a
+           WHERE a.STATE = 'active'
+             AND a.PID <> PG_BACKEND_PID()
+           ORDER BY
+                 a.QUERY_START"""),
+      new Example("세션 · 락", "오래 걸리는 작업 진행률 (몇 % · 남은 시간)", "큰 표 전체 읽기 · 색인 만들기 · 통계 수집이 얼마나 남았는지. PostgreSQL 은 색인 만들기 진행률이고, VACUUM 은 PG_STAT_PROGRESS_VACUUM 에 있습니다.",
+          """
+          SELECT
+                 l.SID
+               , l.OPNAME
+               , l.TARGET
+               , l.SOFAR
+               , l.TOTALWORK
+               , ROUND(l.SOFAR / NULLIF(l.TOTALWORK, 0) * 100, 1) AS PCT
+               , l.ELAPSED_SECONDS
+               , l.TIME_REMAINING
+            FROM V$SESSION_LONGOPS l
+           WHERE l.SOFAR < l.TOTALWORK
+           ORDER BY
+                 l.START_TIME DESC""",
+          """
+          SELECT
+                 p.PID
+               , p.RELID::REGCLASS AS TABLE_NAME
+               , p.PHASE
+               , p.BLOCKS_DONE
+               , p.BLOCKS_TOTAL
+               , ROUND(100.0 * p.BLOCKS_DONE / NULLIF(p.BLOCKS_TOTAL, 0), 1) AS PCT
+            FROM PG_STAT_PROGRESS_CREATE_INDEX p"""),
+      new Example("세션 · 락", "TEMP 많이 쓰는 세션 (정렬 · 해시가 큰 쿼리)", "ORA-01652(TEMP 모자람)가 날 때 누가 쓰는지. PostgreSQL 은 세션별이 아니라 DB 누계입니다.",
+          """
+          SELECT
+                 s.SID
+               , s.USERNAME
+               , s.PROGRAM
+               , u.TABLESPACE
+               , u.SEGTYPE
+               , ROUND(u.BLOCKS * TO_NUMBER(p.VALUE) / 1024 / 1024) AS USED_MB
+               , u.SQL_ID
+            FROM V$TEMPSEG_USAGE u
+               , V$SESSION s
+               , V$PARAMETER p
+           WHERE u.SESSION_ADDR = s.SADDR
+             AND p.NAME = 'db_block_size'
+           ORDER BY
+                 USED_MB DESC""",
+          """
+          SELECT
+                 d.DATNAME
+               , d.TEMP_FILES
+               , PG_SIZE_PRETTY(d.TEMP_BYTES) AS TEMP_SIZE
+               , d.STATS_RESET
+            FROM PG_STAT_DATABASE d
+           WHERE d.DATNAME = CURRENT_DATABASE()"""),
+      new Example("세션 · 락", "열린 커서 많은 세션 (ORA-01000 최대 커서 넘음)", "ResultSet · Statement 를 안 닫는 프로그램을 찾습니다. PostgreSQL 은 커서 한도 대신 접속 수와 한도를 봅니다.",
+          """
+          SELECT
+                 s.SID
+               , s.USERNAME
+               , s.MACHINE
+               , s.PROGRAM
+               , t.VALUE AS OPEN_CURSORS
+               , (SELECT p.VALUE FROM V$PARAMETER p WHERE p.NAME = 'open_cursors') AS LIMIT_CURSORS
+            FROM V$SESSTAT t
+               , V$STATNAME n
+               , V$SESSION s
+           WHERE t.STATISTIC# = n.STATISTIC#
+             AND n.NAME = 'opened cursors current'
+             AND t.SID = s.SID
+           ORDER BY
+                 t.VALUE DESC""",
+          """
+          SELECT
+                 a.APPLICATION_NAME
+               , a.CLIENT_ADDR
+               , COUNT(*) AS CONN_CNT
+               , CURRENT_SETTING('max_connections') AS LIMIT_CONN
+            FROM PG_STAT_ACTIVITY a
+           WHERE a.BACKEND_TYPE = 'client backend'
+           GROUP BY
+                 a.APPLICATION_NAME
+               , a.CLIENT_ADDR
+           ORDER BY
+                 CONN_CNT DESC"""),
       new Example("성능", "실행 계획 보기", "색인을 타는지, 전체를 읽는지 봅니다. 콘솔의 「실행 계획」 단추와 같습니다.",
           """
           EXPLAIN PLAN FOR
@@ -5435,6 +6088,225 @@ public final class Examples {
             FROM ORDERS o
            GROUP BY
                  o.STATUS"""),
+      new Example("성능", "SQL_ID 로 실제 실행 계획 (DISPLAY_CURSOR)", "이미 돈 SQL 의 실제 계획. 실제 건수(A-Rows)까지 보려면 그 SQL 에 /*+ GATHER_PLAN_STATISTICS */ 를 붙여 돌린 뒤 봅니다. PostgreSQL 은 캐시된 계획을 꺼낼 수 없어 EXPLAIN ANALYZE 로 다시 돌립니다.",
+          """
+          SELECT
+                 p.PLAN_TABLE_OUTPUT
+            FROM TABLE(DBMS_XPLAN.DISPLAY_CURSOR(:sqlId, NULL, 'ALLSTATS LAST')) p""",
+          """
+          EXPLAIN (ANALYZE, BUFFERS)
+          SELECT
+                 o.*
+            FROM ORDERS o
+           WHERE o.STATUS = 'NEW'"""),
+      new Example("성능", "글자로 SQL_ID 찾기 (매퍼 SQL 이 캐시에 있나)", "표 이름이나 매퍼 SQL 의 특이한 글자로 DB 에 남은 SQL 을 찾습니다. 찾은 SQL_ID 로 실행 계획 · 바인드 값을 봅니다.",
+          """
+          SELECT
+                 q.SQL_ID
+               , q.CHILD_NUMBER
+               , q.EXECUTIONS
+               , ROUND(q.ELAPSED_TIME / NULLIF(q.EXECUTIONS, 0) / 1000, 1) AS AVG_MS
+               , q.LAST_ACTIVE_TIME
+               , q.SQL_TEXT
+            FROM V$SQL q
+           WHERE UPPER(q.SQL_TEXT) LIKE '%' || UPPER(:keyword) || '%'
+             AND q.SQL_TEXT NOT LIKE '%V$SQL%'
+           ORDER BY
+                 q.LAST_ACTIVE_TIME DESC""",
+          """
+          SELECT
+                 s.QUERYID
+               , s.CALLS
+               , ROUND(CAST(s.MEAN_EXEC_TIME AS NUMERIC), 1) AS AVG_MS
+               , s.QUERY
+            FROM PG_STAT_STATEMENTS s
+           WHERE s.QUERY ILIKE '%' || :keyword || '%'
+           ORDER BY
+                 s.CALLS DESC"""),
+      new Example("성능", "디스크를 많이 읽는 SQL (상위 20)", "디스크 읽기 · 메모리 읽기가 많은 SQL 순. 색인이 없거나 범위가 넓은 쿼리가 위로 옵니다.",
+          """
+          SELECT *
+            FROM (
+                  SELECT
+                         q.SQL_ID
+                       , q.EXECUTIONS
+                       , q.DISK_READS
+                       , q.BUFFER_GETS
+                       , ROUND(q.BUFFER_GETS / NULLIF(q.EXECUTIONS, 0)) AS GETS_PER_EXEC
+                       , q.SQL_TEXT
+                    FROM V$SQL q
+                   ORDER BY
+                         q.DISK_READS DESC
+                 )
+           WHERE ROWNUM <= 20""",
+          """
+          SELECT
+                 s.QUERYID
+               , s.CALLS
+               , s.SHARED_BLKS_READ
+               , s.SHARED_BLKS_HIT
+               , s.QUERY
+            FROM PG_STAT_STATEMENTS s
+           ORDER BY
+                 s.SHARED_BLKS_READ DESC
+           LIMIT 20"""),
+      new Example("성능", "실행 횟수가 많은 SQL (상위 20)", "한 번은 빨라도 화면마다 수천 번 부르는 SQL. 반복문 안 조회(N+1)를 찾을 때 씁니다.",
+          """
+          SELECT *
+            FROM (
+                  SELECT
+                         q.SQL_ID
+                       , q.EXECUTIONS
+                       , ROUND(q.ELAPSED_TIME / NULLIF(q.EXECUTIONS, 0) / 1000, 2) AS AVG_MS
+                       , ROUND(q.ELAPSED_TIME / 1000000, 1) AS TOTAL_SEC
+                       , q.SQL_TEXT
+                    FROM V$SQL q
+                   ORDER BY
+                         q.EXECUTIONS DESC
+                 )
+           WHERE ROWNUM <= 20""",
+          """
+          SELECT
+                 s.QUERYID
+               , s.CALLS
+               , ROUND(CAST(s.MEAN_EXEC_TIME AS NUMERIC), 2) AS AVG_MS
+               , ROUND(CAST(s.TOTAL_EXEC_TIME / 1000 AS NUMERIC), 1) AS TOTAL_SEC
+               , s.QUERY
+            FROM PG_STAT_STATEMENTS s
+           ORDER BY
+                 s.CALLS DESC
+           LIMIT 20"""),
+      new Example("성능", "한 번 돌 때 오래 걸리는 SQL (1회 평균 상위 20)", "실행 횟수와 상관없이 한 번에 느린 SQL. 화면이 느리다는 말이 나올 때 먼저 봅니다.",
+          """
+          SELECT *
+            FROM (
+                  SELECT
+                         q.SQL_ID
+                       , q.EXECUTIONS
+                       , ROUND(q.ELAPSED_TIME / q.EXECUTIONS / 1000) AS AVG_MS
+                       , ROUND(q.ROWS_PROCESSED / q.EXECUTIONS) AS ROWS_PER_EXEC
+                       , q.SQL_TEXT
+                    FROM V$SQL q
+                   WHERE q.EXECUTIONS > 0
+                   ORDER BY
+                         q.ELAPSED_TIME / q.EXECUTIONS DESC
+                 )
+           WHERE ROWNUM <= 20""",
+          """
+          SELECT
+                 s.QUERYID
+               , s.CALLS
+               , ROUND(CAST(s.MEAN_EXEC_TIME AS NUMERIC)) AS AVG_MS
+               , ROUND(s.ROWS::NUMERIC / s.CALLS) AS ROWS_PER_EXEC
+               , s.QUERY
+            FROM PG_STAT_STATEMENTS s
+           WHERE s.CALLS > 0
+           ORDER BY
+                 s.MEAN_EXEC_TIME DESC
+           LIMIT 20"""),
+      new Example("성능", "SQL 에 들어간 바인드 값 보기", "느린 SQL 이 어떤 값으로 불렸는지. Oracle 은 잡아 둔 값만(기본 15분 간격) 보입니다. PostgreSQL 은 값을 남기지 않아 느린 SQL 을 로그에 남기는 설정을 봅니다.",
+          """
+          SELECT
+                 b.CHILD_NUMBER
+               , b.POSITION
+               , b.NAME
+               , b.DATATYPE_STRING
+               , b.VALUE_STRING
+               , b.LAST_CAPTURED
+            FROM V$SQL_BIND_CAPTURE b
+           WHERE b.SQL_ID = :sqlId
+           ORDER BY
+                 b.CHILD_NUMBER
+               , b.POSITION""",
+          """
+          SELECT
+                 s.NAME
+               , s.SETTING
+               , s.UNIT
+            FROM PG_SETTINGS s
+           WHERE s.NAME IN ('log_min_duration_statement', 'log_statement', 'log_parameter_max_length')"""),
+      new Example("성능", "표 전체를 훑는 SQL (TABLE ACCESS FULL)", "실행 계획에 전체 읽기가 있는 SQL 을 실행 횟수 순으로. 큰 표가 나오면 색인을 볼 차례입니다.",
+          """
+          SELECT
+                 p.OBJECT_NAME AS TABLE_NAME
+               , q.SQL_ID
+               , q.EXECUTIONS
+               , ROUND(q.ELAPSED_TIME / NULLIF(q.EXECUTIONS, 0) / 1000, 1) AS AVG_MS
+               , q.SQL_TEXT
+            FROM V$SQL_PLAN p
+               , V$SQL q
+           WHERE p.SQL_ID = q.SQL_ID
+             AND p.CHILD_NUMBER = q.CHILD_NUMBER
+             AND p.OPERATION = 'TABLE ACCESS'
+             AND p.OPTIONS = 'FULL'
+             AND p.OBJECT_OWNER = USER
+           ORDER BY
+                 q.EXECUTIONS DESC""",
+          """
+          SELECT
+                 s.RELNAME AS TABLE_NAME
+               , s.SEQ_SCAN
+               , s.SEQ_TUP_READ
+               , s.IDX_SCAN
+               , s.N_LIVE_TUP
+            FROM PG_STAT_USER_TABLES s
+           ORDER BY
+                 s.SEQ_TUP_READ DESC"""),
+      new Example("성능", "이 표를 쓰는 SQL (캐시에서)", "표를 바꾸기 전에 지금 이 표를 읽는 SQL 과 횟수를 봅니다.",
+          """
+          SELECT
+                 q.SQL_ID
+               , q.EXECUTIONS
+               , ROUND(q.ELAPSED_TIME / NULLIF(q.EXECUTIONS, 0) / 1000, 1) AS AVG_MS
+               , q.SQL_TEXT
+            FROM V$SQL q
+           WHERE q.SQL_ID IN (
+                  SELECT p.SQL_ID
+                    FROM V$SQL_PLAN p
+                   WHERE p.OBJECT_NAME = UPPER(:tableName)
+                     AND p.OBJECT_OWNER = USER
+                 )
+           ORDER BY
+                 q.EXECUTIONS DESC""",
+          """
+          SELECT
+                 s.QUERYID
+               , s.CALLS
+               , ROUND(CAST(s.MEAN_EXEC_TIME AS NUMERIC), 1) AS AVG_MS
+               , s.QUERY
+            FROM PG_STAT_STATEMENTS s
+           WHERE s.QUERY ILIKE '%' || :tableName || '%'
+           ORDER BY
+                 s.CALLS DESC"""),
+      new Example("성능", "바인드 없이 값을 박은 SQL (같은 꼴 여러 벌)", "MyBatis 의 ${} 처럼 값을 글로 박으면 같은 SQL 이 값마다 따로 파싱됩니다. 꼴이 같은 SQL 이 많은 순. PostgreSQL 은 한 번만 돈 SQL 을 봅니다.",
+          """
+          SELECT *
+            FROM (
+                  SELECT
+                         q.FORCE_MATCHING_SIGNATURE
+                       , COUNT(*) AS SQL_CNT
+                       , MIN(q.SQL_ID) AS SAMPLE_SQL_ID
+                       , MIN(DBMS_LOB.SUBSTR(q.SQL_FULLTEXT, 200, 1)) AS SAMPLE_SQL
+                    FROM V$SQL q
+                   WHERE q.FORCE_MATCHING_SIGNATURE > 0
+                     AND q.FORCE_MATCHING_SIGNATURE <> q.EXACT_MATCHING_SIGNATURE
+                   GROUP BY
+                         q.FORCE_MATCHING_SIGNATURE
+                  HAVING COUNT(*) > 10
+                   ORDER BY
+                         SQL_CNT DESC
+                 )
+           WHERE ROWNUM <= 20""",
+          """
+          SELECT
+                 s.QUERYID
+               , s.CALLS
+               , s.QUERY
+            FROM PG_STAT_STATEMENTS s
+           WHERE s.CALLS = 1
+           ORDER BY
+                 s.TOTAL_EXEC_TIME DESC
+           LIMIT 50"""),
       new Example("정합성 점검", "부모 없는 자식 (고아 데이터)", "주문 표에 없는 주문 번호를 가진 상세 줄.",
           """
           SELECT
@@ -5625,6 +6497,77 @@ public final class Examples {
            GROUP BY
                  p.PROJ_ID
                , p.STATUS"""),
+      new Example("정합성 점검", "조인이 안 맞는 키 (앞뒤 공백 · 줄바꿈이 섞인 값)", "눈으로는 같은데 조인 · = 비교가 안 맞을 때. 앞뒤 공백, 탭, 줄바꿈이 섞인 키를 찾습니다.",
+          """
+          SELECT
+                 p.PART_NO
+               , LENGTH(p.PART_NO) AS LEN
+               , DUMP(p.PART_NO) AS RAW_CODES
+            FROM PART p
+           WHERE p.PART_NO <> TRIM(p.PART_NO)
+              OR INSTR(p.PART_NO, CHR(9)) > 0
+              OR INSTR(p.PART_NO, CHR(10)) > 0
+              OR INSTR(p.PART_NO, CHR(13)) > 0""",
+          """
+          SELECT
+                 p.PART_NO
+               , LENGTH(p.PART_NO) AS LEN
+               , ENCODE(CONVERT_TO(p.PART_NO, 'UTF8'), 'hex') AS RAW_CODES
+            FROM PART p
+           WHERE p.PART_NO <> BTRIM(p.PART_NO)
+              OR p.PART_NO ~ '[\\t\\r\\n]'"""),
+      new Example("정합성 점검", "칼럼 길이가 꽉 찬 값 (잘려 들어간 의심)", "길이 한도에 딱 맞는 값은 넣다가 잘렸을 수 있습니다. Oracle 은 바이트, PostgreSQL 은 글자 수 기준.",
+          """
+          SELECT
+                 o.ORDER_ID
+               , o.REMARK
+               , LENGTHB(o.REMARK) AS BYTE_LEN
+               , c.DATA_LENGTH AS MAX_LEN
+            FROM ORDERS o
+               , USER_TAB_COLUMNS c
+           WHERE c.TABLE_NAME = 'ORDERS'
+             AND c.COLUMN_NAME = 'REMARK'
+             AND LENGTHB(o.REMARK) >= c.DATA_LENGTH""",
+          """
+          SELECT
+                 o.ORDER_ID
+               , o.REMARK
+               , LENGTH(o.REMARK) AS CHAR_LEN
+               , c.CHARACTER_MAXIMUM_LENGTH AS MAX_LEN
+            FROM ORDERS o
+               , INFORMATION_SCHEMA.COLUMNS c
+           WHERE c.TABLE_SCHEMA = CURRENT_SCHEMA()
+             AND c.TABLE_NAME = 'orders'
+             AND c.COLUMN_NAME = 'remark'
+             AND LENGTH(o.REMARK) >= c.CHARACTER_MAXIMUM_LENGTH"""),
+      new Example("정합성 점검", "한글이 깨진 값 (? · � 가 들어간 것)", "문자셋이 다른 곳에서 넘어와 한글이 ? 나 � 로 바뀐 줄을 찾습니다.",
+          """
+          SELECT
+                 p.PART_NO
+               , p.PART_NAME
+            FROM PART p
+           WHERE p.PART_NAME LIKE '%?%'
+              OR INSTR(p.PART_NAME, UNISTR('\\FFFD')) > 0""",
+          """
+          SELECT
+                 p.PART_NO
+               , p.PART_NAME
+            FROM PART p
+           WHERE p.PART_NAME LIKE '%?%'
+              OR POSITION(CHR(65533) IN p.PART_NAME) > 0"""),
+      new Example("정합성 점검", "날짜 칼럼에 시각이 섞인 줄 (= 비교가 안 맞을 때)", "날짜만 넣는다던 칼럼에 시 · 분이 들어 있으면 WHERE 날짜 = :day 가 빠뜨립니다.",
+          """
+          SELECT
+                 o.ORDER_ID
+               , TO_CHAR(o.ORDER_DATE, 'YYYY-MM-DD HH24:MI:SS') AS ORDER_DATE
+            FROM ORDERS o
+           WHERE o.ORDER_DATE <> TRUNC(o.ORDER_DATE)""",
+          """
+          SELECT
+                 o.ORDER_ID
+               , TO_CHAR(o.ORDER_DATE, 'YYYY-MM-DD HH24:MI:SS') AS ORDER_DATE
+            FROM ORDERS o
+           WHERE o.ORDER_DATE <> DATE_TRUNC('day', o.ORDER_DATE)"""),
       new Example("JSON", "JSON 칸에서 값 꺼내기", "메모 칸에 JSON 이 들어 있을 때 키 값을 꺼냅니다(Oracle 12c 이상).",
           """
           SELECT
@@ -15503,5 +16446,590 @@ public final class Examples {
                , s.LAST_VALUE
                , (SELECT MAX(o.ORDER_ID) FROM ORDERS o) AS MAX_ID
             FROM PG_SEQUENCES s
-           WHERE s.SEQUENCENAME = 'seq_order'"""));
+           WHERE s.SEQUENCENAME = 'seq_order'"""),
+      new Example("DB 운영", "표 공간 사용률 (% · 자동 늘림 최대)", "표 공간이 몇 % 찼는지, 자동으로 늘어날 수 있는 최대까지 보면 얼마나 남았는지. DBA 권한이 있어야 합니다. PostgreSQL 은 표 공간마다 크기만 보입니다.",
+          """
+          SELECT
+                 d.TABLESPACE_NAME
+               , ROUND(d.TOTAL_MB) AS TOTAL_MB
+               , ROUND(d.TOTAL_MB - NVL(f.FREE_MB, 0)) AS USED_MB
+               , ROUND((d.TOTAL_MB - NVL(f.FREE_MB, 0)) / d.TOTAL_MB * 100, 1) AS USED_PCT
+               , ROUND(d.MAX_MB) AS MAX_MB
+               , ROUND((d.TOTAL_MB - NVL(f.FREE_MB, 0)) / d.MAX_MB * 100, 1) AS USED_OF_MAX_PCT
+            FROM (
+                  SELECT
+                         df.TABLESPACE_NAME
+                       , SUM(df.BYTES) / 1024 / 1024 AS TOTAL_MB
+                       , SUM(GREATEST(df.MAXBYTES, df.BYTES)) / 1024 / 1024 AS MAX_MB
+                    FROM DBA_DATA_FILES df
+                   GROUP BY
+                         df.TABLESPACE_NAME
+                 ) d
+               , (
+                  SELECT
+                         fs.TABLESPACE_NAME
+                       , SUM(fs.BYTES) / 1024 / 1024 AS FREE_MB
+                    FROM DBA_FREE_SPACE fs
+                   GROUP BY
+                         fs.TABLESPACE_NAME
+                 ) f
+           WHERE d.TABLESPACE_NAME = f.TABLESPACE_NAME(+)
+           ORDER BY
+                 USED_OF_MAX_PCT DESC""",
+          """
+          SELECT
+                 t.SPCNAME AS TABLESPACE_NAME
+               , PG_SIZE_PRETTY(PG_TABLESPACE_SIZE(t.OID)) AS USED_SIZE
+               , PG_TABLESPACE_LOCATION(t.OID) AS LOCATION
+            FROM PG_TABLESPACE t
+           ORDER BY
+                 PG_TABLESPACE_SIZE(t.OID) DESC"""),
+      new Example("DB 운영", "용량 큰 것 (표 · 색인 · LOB 를 표 이름으로)", "색인 · LOB 세그먼트도 어느 표 것인지 붙여 큰 순으로 30개. PostgreSQL 은 표 · 색인 · TOAST 크기를 나눠 봅니다.",
+          """
+          SELECT *
+            FROM (
+                  SELECT
+                         s.SEGMENT_TYPE
+                       , s.SEGMENT_NAME
+                       , COALESCE(i.TABLE_NAME, l.TABLE_NAME, s.SEGMENT_NAME) AS TABLE_NAME
+                       , ROUND(s.BYTES / 1024 / 1024) AS SIZE_MB
+                    FROM USER_SEGMENTS s
+                       , USER_INDEXES i
+                       , USER_LOBS l
+                   WHERE s.SEGMENT_NAME = i.INDEX_NAME(+)
+                     AND s.SEGMENT_NAME = l.SEGMENT_NAME(+)
+                   ORDER BY
+                         s.BYTES DESC
+                 )
+           WHERE ROWNUM <= 30""",
+          """
+          SELECT
+                 c.RELNAME AS TABLE_NAME
+               , PG_SIZE_PRETTY(PG_TOTAL_RELATION_SIZE(c.OID)) AS TOTAL_SIZE
+               , PG_SIZE_PRETTY(PG_RELATION_SIZE(c.OID)) AS TABLE_SIZE
+               , PG_SIZE_PRETTY(PG_INDEXES_SIZE(c.OID)) AS INDEX_SIZE
+               , PG_SIZE_PRETTY(PG_TOTAL_RELATION_SIZE(c.OID) - PG_RELATION_SIZE(c.OID) - PG_INDEXES_SIZE(c.OID)) AS TOAST_SIZE
+            FROM PG_CLASS c
+           WHERE c.RELNAMESPACE = CURRENT_SCHEMA()::REGNAMESPACE
+             AND c.RELKIND IN ('r', 'p')
+           ORDER BY
+                 PG_TOTAL_RELATION_SIZE(c.OID) DESC
+           LIMIT 30"""),
+      new Example("DB 운영", "깨진 색인 (UNUSABLE) 과 다시 만드는 문장", "파티션을 지우거나 표를 옮긴 뒤 색인이 UNUSABLE 이 되면 그 색인을 쓰는 SQL 이 오류 · 느려집니다. FIX_SQL 을 돌리면 다시 만듭니다.",
+          """
+          SELECT
+                 i.INDEX_NAME
+               , i.TABLE_NAME
+               , i.STATUS
+               , 'ALTER INDEX ' || i.INDEX_NAME || ' REBUILD' AS FIX_SQL
+            FROM USER_INDEXES i
+           WHERE i.STATUS = 'UNUSABLE'
+           UNION ALL
+          SELECT
+                 p.INDEX_NAME
+               , i.TABLE_NAME
+               , p.STATUS
+               , 'ALTER INDEX ' || p.INDEX_NAME || ' REBUILD PARTITION ' || p.PARTITION_NAME
+            FROM USER_IND_PARTITIONS p
+               , USER_INDEXES i
+           WHERE p.INDEX_NAME = i.INDEX_NAME
+             AND p.STATUS = 'UNUSABLE'""",
+          """
+          SELECT
+                 i.RELNAME AS INDEX_NAME
+               , x.INDRELID::REGCLASS AS TABLE_NAME
+               , 'REINDEX INDEX ' || i.RELNAME AS FIX_SQL
+            FROM PG_INDEX x
+               , PG_CLASS i
+           WHERE x.INDEXRELID = i.OID
+             AND i.RELNAMESPACE = CURRENT_SCHEMA()::REGNAMESPACE
+             AND NOT x.INDISVALID"""),
+      new Example("DB 운영", "배치 작업 (JOB) 목록 · 다음 실행 시각", "DB 안에서 도는 예약 작업. 옛 DBMS_JOB 은 USER_JOBS 에 있습니다. PostgreSQL 은 pg_cron 확장이 있을 때만.",
+          """
+          SELECT
+                 j.JOB_NAME
+               , j.ENABLED
+               , j.STATE
+               , j.REPEAT_INTERVAL
+               , j.LAST_START_DATE
+               , j.NEXT_RUN_DATE
+               , j.FAILURE_COUNT
+            FROM USER_SCHEDULER_JOBS j
+           ORDER BY
+                 j.NEXT_RUN_DATE""",
+          """
+          SELECT
+                 j.JOBID
+               , j.JOBNAME
+               , j.SCHEDULE
+               , j.COMMAND
+               , j.ACTIVE
+            FROM CRON.JOB j
+           ORDER BY
+                 j.JOBID"""),
+      new Example("DB 운영", "배치 작업 실행 이력 · 실패 (최근 7일)", "언제 돌았고 얼마나 걸렸고 무슨 오류였는지. 실패만 보려면 STATUS 조건을 더합니다.",
+          """
+          SELECT
+                 d.JOB_NAME
+               , d.ACTUAL_START_DATE
+               , d.RUN_DURATION
+               , d.STATUS
+               , d.ERROR#
+               , d.ADDITIONAL_INFO
+            FROM USER_SCHEDULER_JOB_RUN_DETAILS d
+           WHERE d.ACTUAL_START_DATE >= SYSTIMESTAMP - INTERVAL '7' DAY
+           ORDER BY
+                 d.ACTUAL_START_DATE DESC""",
+          """
+          SELECT
+                 r.JOBID
+               , r.START_TIME
+               , r.END_TIME - r.START_TIME AS RUN_DURATION
+               , r.STATUS
+               , r.RETURN_MESSAGE
+            FROM CRON.JOB_RUN_DETAILS r
+           WHERE r.START_TIME >= NOW() - INTERVAL '7 days'
+           ORDER BY
+                 r.START_TIME DESC"""),
+      new Example("DB 운영", "잠긴 계정 · 곧 비밀번호 만료되는 계정", "WAS 접속이 갑자기 안 될 때(ORA-28000 잠김 · ORA-28001 만료). DBA_USERS 는 DBA 권한이 있어야 하고, 없으면 USER_USERS 로 내 계정만 봅니다.",
+          """
+          SELECT
+                 u.USERNAME
+               , u.ACCOUNT_STATUS
+               , u.LOCK_DATE
+               , u.EXPIRY_DATE
+               , u.PROFILE
+            FROM DBA_USERS u
+           WHERE (u.ACCOUNT_STATUS <> 'OPEN'
+                  OR u.EXPIRY_DATE < SYSDATE + 30)
+           ORDER BY
+                 u.EXPIRY_DATE""",
+          """
+          SELECT
+                 r.ROLNAME
+               , r.ROLCANLOGIN
+               , r.ROLVALIDUNTIL
+            FROM PG_ROLES r
+           WHERE r.ROLCANLOGIN
+             AND r.ROLVALIDUNTIL < NOW() + INTERVAL '30 days'
+           ORDER BY
+                 r.ROLVALIDUNTIL"""),
+      new Example("DB 운영", "휴지통에서 지운 표 되살리기 (FLASHBACK TO BEFORE DROP)", "DROP 한 표가 휴지통에 남아 있으면 FIX_SQL 로 되살립니다. PURGE 로 지웠으면 없습니다. PostgreSQL 은 휴지통이 없어 백업에서만 되살립니다.",
+          """
+          SELECT
+                 r.ORIGINAL_NAME
+               , r.OBJECT_NAME
+               , r.TYPE
+               , r.DROPTIME
+               , 'FLASHBACK TABLE ' || r.ORIGINAL_NAME || ' TO BEFORE DROP' AS FIX_SQL
+            FROM USER_RECYCLEBIN r
+           WHERE r.TYPE = 'TABLE'
+           ORDER BY
+                 r.DROPTIME DESC""",
+          """
+          SELECT
+                 'PostgreSQL 은 휴지통이 없어 DROP 한 표는 백업(pg_dump)에서만 되살립니다.' AS NOTE"""),
+      new Example("DB 운영", "DB 버전 · 문자셋 (한글이 몇 바이트인가)", "AL32UTF8 은 한글 한 자 3바이트, KO16MSWIN949 는 2바이트. 칼럼 길이 · 한글 깨짐을 볼 때 먼저 확인합니다.",
+          """
+          SELECT
+                 (SELECT v.BANNER FROM V$VERSION v WHERE ROWNUM = 1) AS VERSION
+               , (SELECT p.VALUE FROM NLS_DATABASE_PARAMETERS p WHERE p.PARAMETER = 'NLS_CHARACTERSET') AS CHARSET
+               , (SELECT p.VALUE FROM NLS_DATABASE_PARAMETERS p WHERE p.PARAMETER = 'NLS_NCHAR_CHARACTERSET') AS NCHAR_CHARSET
+               , (SELECT p.VALUE FROM NLS_DATABASE_PARAMETERS p WHERE p.PARAMETER = 'NLS_LENGTH_SEMANTICS') AS LENGTH_SEMANTICS
+            FROM DUAL""",
+          """
+          SELECT
+                 VERSION() AS VERSION
+               , PG_ENCODING_TO_CHAR(d.ENCODING) AS CHARSET
+               , d.DATCOLLATE
+               , d.DATCTYPE
+            FROM PG_DATABASE d
+           WHERE d.DATNAME = CURRENT_DATABASE()"""),
+      new Example("DB 운영", "DB 링크 목록 (어느 DB 로 이어지나)", "다른 DB 를 부르는 링크와 접속 대상. PostgreSQL 은 외부 서버(postgres_fdw · dblink) 목록입니다.",
+          """
+          SELECT
+                 l.OWNER
+               , l.DB_LINK
+               , l.USERNAME
+               , l.HOST
+               , l.CREATED
+            FROM ALL_DB_LINKS l
+           ORDER BY
+                 l.OWNER
+               , l.DB_LINK""",
+          """
+          SELECT
+                 s.SRVNAME
+               , w.FDWNAME
+               , s.SRVOPTIONS
+            FROM PG_FOREIGN_SERVER s
+               , PG_FOREIGN_DATA_WRAPPER w
+           WHERE s.SRVFDW = w.OID
+           ORDER BY
+                 s.SRVNAME"""),
+      new Example("DB 운영", "통계 뒤로 많이 바뀐 표 · 정리(VACUUM) 필요한 표", "Oracle 은 통계 수집 뒤 넣기 · 고치기 · 지우기 건수(바로 보려면 DBMS_STATS.FLUSH_DATABASE_MONITORING_INFO 먼저). PostgreSQL 은 지운 줄 찌꺼기(dead tuple)가 많은 표.",
+          """
+          SELECT
+                 m.TABLE_NAME
+               , t.NUM_ROWS
+               , m.INSERTS
+               , m.UPDATES
+               , m.DELETES
+               , ROUND((m.INSERTS + m.UPDATES + m.DELETES) / NULLIF(t.NUM_ROWS, 0) * 100, 1) AS CHANGED_PCT
+               , m.TIMESTAMP AS SINCE
+            FROM USER_TAB_MODIFICATIONS m
+               , USER_TABLES t
+           WHERE m.TABLE_NAME = t.TABLE_NAME
+             AND m.PARTITION_NAME IS NULL
+           ORDER BY
+                 m.INSERTS + m.UPDATES + m.DELETES DESC""",
+          """
+          SELECT
+                 s.RELNAME AS TABLE_NAME
+               , s.N_LIVE_TUP
+               , s.N_DEAD_TUP
+               , ROUND(100.0 * s.N_DEAD_TUP / NULLIF(s.N_LIVE_TUP + s.N_DEAD_TUP, 0), 1) AS DEAD_PCT
+               , s.LAST_VACUUM
+               , s.LAST_AUTOVACUUM
+            FROM PG_STAT_USER_TABLES s
+           ORDER BY
+                 s.N_DEAD_TUP DESC"""),
+      new Example("DB 운영", "DB 설정값 찾기 (이름 일부로)", "open_cursors · processes · statement_timeout 같은 설정을 이름 일부로 찾습니다.",
+          """
+          SELECT
+                 p.NAME
+               , p.VALUE
+               , p.ISDEFAULT
+               , p.DESCRIPTION
+            FROM V$PARAMETER p
+           WHERE p.NAME LIKE '%' || LOWER(:keyword) || '%'
+           ORDER BY
+                 p.NAME""",
+          """
+          SELECT
+                 s.NAME
+               , s.SETTING
+               , s.UNIT
+               , s.SOURCE
+               , s.SHORT_DESC
+            FROM PG_SETTINGS s
+           WHERE s.NAME ILIKE '%' || :keyword || '%'
+           ORDER BY
+                 s.NAME"""),
+      new Example("DB 운영", "세션 · 프로세스 한도 얼마나 찼나 (ORA-00018 · too many connections)", "접속이 안 될 때 지금 수 · 지금까지 최대 · 한도를 봅니다.",
+          """
+          SELECT
+                 r.RESOURCE_NAME
+               , r.CURRENT_UTILIZATION
+               , r.MAX_UTILIZATION
+               , r.LIMIT_VALUE
+            FROM V$RESOURCE_LIMIT r
+           WHERE r.RESOURCE_NAME IN ('sessions', 'processes', 'transactions')""",
+          """
+          SELECT
+                 COUNT(*) AS NOW_CONN
+               , CURRENT_SETTING('max_connections') AS LIMIT_CONN
+               , CURRENT_SETTING('superuser_reserved_connections') AS RESERVED_CONN
+            FROM PG_STAT_ACTIVITY a
+           WHERE a.BACKEND_TYPE = 'client backend'"""),
+      new Example("DB 운영", "설치된 옵션 · 확장 목록", "파티션 · 압축 같은 옵션이 켜져 있는지(Oracle), 어떤 확장이 깔려 있는지(PostgreSQL).",
+          """
+          SELECT
+                 o.PARAMETER
+               , o.VALUE
+            FROM V$OPTION o
+           ORDER BY
+                 o.PARAMETER""",
+          """
+          SELECT
+                 e.EXTNAME
+               , e.EXTVERSION
+            FROM PG_EXTENSION e
+           ORDER BY
+                 e.EXTNAME"""),
+      new Example("개발 · 배포 점검", "개발 · 운영 표 구조 비교 (칼럼 다른 것)", "개발 DB 에서 운영 DB 링크(PROD_LINK)로 칼럼 · 형 · 길이 · NULL 허용을 맞대어 한쪽에만 있거나 다른 줄만 봅니다. PostgreSQL 은 같은 DB 의 두 스키마를 비교합니다.",
+          """
+          SELECT
+                 'DEV 에만' AS SIDE
+               , x.*
+            FROM (
+                  SELECT
+                         c.TABLE_NAME
+                       , c.COLUMN_NAME
+                       , c.DATA_TYPE
+                       , c.DATA_LENGTH
+                       , c.NULLABLE
+                    FROM USER_TAB_COLUMNS c
+                   MINUS
+                  SELECT
+                         c.TABLE_NAME
+                       , c.COLUMN_NAME
+                       , c.DATA_TYPE
+                       , c.DATA_LENGTH
+                       , c.NULLABLE
+                    FROM USER_TAB_COLUMNS@PROD_LINK c
+                 ) x
+           UNION ALL
+          SELECT
+                 'PROD 에만'
+               , y.*
+            FROM (
+                  SELECT
+                         c.TABLE_NAME
+                       , c.COLUMN_NAME
+                       , c.DATA_TYPE
+                       , c.DATA_LENGTH
+                       , c.NULLABLE
+                    FROM USER_TAB_COLUMNS@PROD_LINK c
+                   MINUS
+                  SELECT
+                         c.TABLE_NAME
+                       , c.COLUMN_NAME
+                       , c.DATA_TYPE
+                       , c.DATA_LENGTH
+                       , c.NULLABLE
+                    FROM USER_TAB_COLUMNS c
+                 ) y
+           ORDER BY
+                 2, 3, 1""",
+          """
+          SELECT
+                 'DEV 에만' AS SIDE
+               , x.*
+            FROM (
+                  SELECT
+                         c.TABLE_NAME
+                       , c.COLUMN_NAME
+                       , c.DATA_TYPE
+                       , c.CHARACTER_MAXIMUM_LENGTH
+                       , c.IS_NULLABLE
+                    FROM INFORMATION_SCHEMA.COLUMNS c
+                   WHERE c.TABLE_SCHEMA = :devSchema
+                  EXCEPT
+                  SELECT
+                         c.TABLE_NAME
+                       , c.COLUMN_NAME
+                       , c.DATA_TYPE
+                       , c.CHARACTER_MAXIMUM_LENGTH
+                       , c.IS_NULLABLE
+                    FROM INFORMATION_SCHEMA.COLUMNS c
+                   WHERE c.TABLE_SCHEMA = :prodSchema
+                 ) x
+           UNION ALL
+          SELECT
+                 'PROD 에만'
+               , y.*
+            FROM (
+                  SELECT
+                         c.TABLE_NAME
+                       , c.COLUMN_NAME
+                       , c.DATA_TYPE
+                       , c.CHARACTER_MAXIMUM_LENGTH
+                       , c.IS_NULLABLE
+                    FROM INFORMATION_SCHEMA.COLUMNS c
+                   WHERE c.TABLE_SCHEMA = :prodSchema
+                  EXCEPT
+                  SELECT
+                         c.TABLE_NAME
+                       , c.COLUMN_NAME
+                       , c.DATA_TYPE
+                       , c.CHARACTER_MAXIMUM_LENGTH
+                       , c.IS_NULLABLE
+                    FROM INFORMATION_SCHEMA.COLUMNS c
+                   WHERE c.TABLE_SCHEMA = :devSchema
+                 ) y
+           ORDER BY
+                 2, 3, 1"""),
+      new Example("개발 · 배포 점검", "개발 · 운영 객체 비교 (표 · 뷰 · 프로시저가 한쪽에만)", "배포 빠짐을 찾습니다. 운영 DB 링크(PROD_LINK)로 객체 이름 · 종류를 맞댑니다. PostgreSQL 은 두 스키마의 표 · 뷰를 맞댑니다.",
+          """
+          SELECT
+                 'DEV 에만' AS SIDE
+               , x.*
+            FROM (
+                  SELECT
+                         o.OBJECT_TYPE
+                       , o.OBJECT_NAME
+                    FROM USER_OBJECTS o
+                   WHERE o.OBJECT_NAME NOT LIKE 'BIN$%'
+                   MINUS
+                  SELECT
+                         o.OBJECT_TYPE
+                       , o.OBJECT_NAME
+                    FROM USER_OBJECTS@PROD_LINK o
+                 ) x
+           UNION ALL
+          SELECT
+                 'PROD 에만'
+               , y.*
+            FROM (
+                  SELECT
+                         o.OBJECT_TYPE
+                       , o.OBJECT_NAME
+                    FROM USER_OBJECTS@PROD_LINK o
+                   WHERE o.OBJECT_NAME NOT LIKE 'BIN$%'
+                   MINUS
+                  SELECT
+                         o.OBJECT_TYPE
+                       , o.OBJECT_NAME
+                    FROM USER_OBJECTS o
+                 ) y
+           ORDER BY
+                 2, 3""",
+          """
+          SELECT
+                 'DEV 에만' AS SIDE
+               , x.*
+            FROM (
+                  SELECT
+                         t.TABLE_TYPE AS OBJECT_TYPE
+                       , t.TABLE_NAME AS OBJECT_NAME
+                    FROM INFORMATION_SCHEMA.TABLES t
+                   WHERE t.TABLE_SCHEMA = :devSchema
+                  EXCEPT
+                  SELECT
+                         t.TABLE_TYPE
+                       , t.TABLE_NAME
+                    FROM INFORMATION_SCHEMA.TABLES t
+                   WHERE t.TABLE_SCHEMA = :prodSchema
+                 ) x
+           UNION ALL
+          SELECT
+                 'PROD 에만'
+               , y.*
+            FROM (
+                  SELECT
+                         t.TABLE_TYPE
+                       , t.TABLE_NAME
+                    FROM INFORMATION_SCHEMA.TABLES t
+                   WHERE t.TABLE_SCHEMA = :prodSchema
+                  EXCEPT
+                  SELECT
+                         t.TABLE_TYPE
+                       , t.TABLE_NAME
+                    FROM INFORMATION_SCHEMA.TABLES t
+                   WHERE t.TABLE_SCHEMA = :devSchema
+                 ) y
+           ORDER BY
+                 2, 3"""),
+      new Example("개발 · 배포 점검", "칼럼 길이를 줄이기 전에 넘치는 값 찾기", "VARCHAR2(200) → (100) 으로 줄이기 전에, 새 길이를 넘는 줄. Oracle 은 바이트(LENGTHB), PostgreSQL 은 글자 수로 셉니다.",
+          """
+          SELECT
+                 o.ORDER_ID
+               , o.REMARK
+               , LENGTHB(o.REMARK) AS BYTE_LEN
+            FROM ORDERS o
+           WHERE LENGTHB(o.REMARK) > :newLength
+           ORDER BY
+                 BYTE_LEN DESC""",
+          """
+          SELECT
+                 o.ORDER_ID
+               , o.REMARK
+               , LENGTH(o.REMARK) AS CHAR_LEN
+            FROM ORDERS o
+           WHERE LENGTH(o.REMARK) > CAST(:newLength AS INTEGER)
+           ORDER BY
+                 CHAR_LEN DESC"""),
+      new Example("개발 · 배포 점검", "글자 칼럼을 숫자로 바꾸기 전에 안 바뀌는 값 찾기", "VARCHAR2 → NUMBER 로 바꾸거나 TO_NUMBER 로 비교하기 전에 숫자가 아닌 값. 날짜는 VALIDATE_CONVERSION(칼럼 AS DATE, 'YYYYMMDD'). Oracle 12.2 이상.",
+          """
+          SELECT
+                 o.ORDER_ID
+               , o.QTY_TEXT
+            FROM ORDERS o
+           WHERE o.QTY_TEXT IS NOT NULL
+             AND VALIDATE_CONVERSION(o.QTY_TEXT AS NUMBER) = 0""",
+          """
+          SELECT
+                 o.ORDER_ID
+               , o.QTY_TEXT
+            FROM ORDERS o
+           WHERE o.QTY_TEXT IS NOT NULL
+             AND o.QTY_TEXT !~ '^ *-?[0-9]+([.][0-9]+)? *$'"""),
+      new Example("개발 · 배포 점검", "깨진 객체 다시 컴파일하는 문장 만들기", "배포 뒤 INVALID 객체마다 컴파일 문장을 만듭니다. 한 번에 하려면 EXEC DBMS_UTILITY.COMPILE_SCHEMA(USER, FALSE). PostgreSQL 은 INVALID 상태가 없어 깨진 뷰가 없습니다(표를 바꿀 때 막힘).",
+          """
+          SELECT
+                 o.OBJECT_TYPE
+               , o.OBJECT_NAME
+               , 'ALTER ' || DECODE(o.OBJECT_TYPE, 'PACKAGE BODY', 'PACKAGE', 'TYPE BODY', 'TYPE', o.OBJECT_TYPE) || ' ' || o.OBJECT_NAME || DECODE(o.OBJECT_TYPE, 'PACKAGE BODY', ' COMPILE BODY', 'TYPE BODY', ' COMPILE BODY', ' COMPILE') AS FIX_SQL
+            FROM USER_OBJECTS o
+           WHERE o.STATUS = 'INVALID'
+           ORDER BY
+                 DECODE(o.OBJECT_TYPE, 'PACKAGE', 1, 'TYPE', 1, 2)
+               , o.OBJECT_NAME""",
+          """
+          SELECT
+                 'PostgreSQL 은 표를 바꿀 때 뷰가 깨지지 않게 막아 INVALID 객체가 없습니다.' AS NOTE"""),
+      new Example("개발 · 배포 점검", "설명이 빈 칼럼 (표 정의서 빠짐)", "칼럼 설명을 안 단 곳. 산출물 · 표 정의서 내기 전에 채웁니다.",
+          """
+          SELECT
+                 c.TABLE_NAME
+               , c.COLUMN_NAME
+               , c.DATA_TYPE
+               , t.COMMENTS AS TABLE_COMMENT
+            FROM USER_TAB_COLUMNS c
+               , USER_COL_COMMENTS m
+               , USER_TAB_COMMENTS t
+           WHERE c.TABLE_NAME = m.TABLE_NAME
+             AND c.COLUMN_NAME = m.COLUMN_NAME
+             AND c.TABLE_NAME = t.TABLE_NAME
+             AND t.TABLE_TYPE = 'TABLE'
+             AND c.TABLE_NAME NOT LIKE 'BIN$%'
+             AND m.COMMENTS IS NULL
+           ORDER BY
+                 c.TABLE_NAME
+               , c.COLUMN_ID""",
+          """
+          SELECT
+                 t.RELNAME AS TABLE_NAME
+               , a.ATTNAME AS COLUMN_NAME
+               , FORMAT_TYPE(a.ATTTYPID, a.ATTTYPMOD) AS DATA_TYPE
+               , OBJ_DESCRIPTION(t.OID, 'pg_class') AS TABLE_COMMENT
+            FROM PG_CLASS t
+               , PG_ATTRIBUTE a
+           WHERE a.ATTRELID = t.OID
+             AND t.RELKIND = 'r'
+             AND t.RELNAMESPACE = CURRENT_SCHEMA()::REGNAMESPACE
+             AND a.ATTNUM > 0
+             AND NOT a.ATTISDROPPED
+             AND COL_DESCRIPTION(t.OID, a.ATTNUM) IS NULL
+           ORDER BY
+                 t.RELNAME
+               , a.ATTNUM"""),
+      new Example("개발 · 배포 점검", "표 데이터로 INSERT 문 만들기 (코드 표 옮길 때)", "개발 DB 의 코드 표를 운영에 넣을 INSERT 문을 줄마다 만듭니다. 작은따옴표는 두 번으로 바꿉니다.",
+          """
+          SELECT
+                 'INSERT INTO CODE_DTL (GRP_CD, CD, CD_NM, SORT_SEQ, USE_YN) VALUES ('
+                 || '''' || d.GRP_CD || ''', '
+                 || '''' || d.CD || ''', '
+                 || '''' || REPLACE(d.CD_NM, '''', '''''') || ''', '
+                 || NVL(TO_CHAR(d.SORT_SEQ), 'NULL') || ', '
+                 || '''' || d.USE_YN || ''');' AS INSERT_SQL
+            FROM CODE_DTL d
+           WHERE d.GRP_CD = :grpCd
+           ORDER BY
+                 d.SORT_SEQ""",
+          """
+          SELECT
+                 FORMAT('INSERT INTO CODE_DTL (GRP_CD, CD, CD_NM, SORT_SEQ, USE_YN) VALUES (%L, %L, %L, %s, %L);', d.GRP_CD, d.CD, d.CD_NM, COALESCE(d.SORT_SEQ::TEXT, 'NULL'), d.USE_YN) AS INSERT_SQL
+            FROM CODE_DTL d
+           WHERE d.GRP_CD = :grpCd
+           ORDER BY
+                 d.SORT_SEQ"""),
+      new Example("개발 · 배포 점검", "배포 전 오늘 바꾼 객체 목록 (배포 대상 뽑기)", "오늘(또는 기준일 뒤) 만들거나 고친 표 · 뷰 · 프로시저를 배포 목록으로. PostgreSQL 은 객체 변경 시각을 남기지 않아 DDL 로그 · 이벤트 트리거가 있어야 합니다.",
+          """
+          SELECT
+                 o.OBJECT_TYPE
+               , o.OBJECT_NAME
+               , o.CREATED
+               , o.LAST_DDL_TIME
+               , o.STATUS
+            FROM USER_OBJECTS o
+           WHERE o.LAST_DDL_TIME >= TRUNC(SYSDATE)
+             AND o.OBJECT_NAME NOT LIKE 'BIN$%'
+           ORDER BY
+                 o.OBJECT_TYPE
+               , o.OBJECT_NAME""",
+          """
+          SELECT
+                 'PostgreSQL 은 객체를 바꾼 시각을 남기지 않습니다. DDL 이벤트 트리거로 따로 기록해야 합니다.' AS NOTE"""));
 }
