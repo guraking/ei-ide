@@ -136,6 +136,7 @@ public final class WebCheck {
         eq(base.resolve("servers").toString(), plugin.get("location").getAsString(), "플러그인 위치");
         eq("[\"vue\"]", plugin.get("languages").toString(), "플러그인 언어");
         yes(plugin.get("enableForWorkspaceTypeScriptVersions").getAsBoolean(), "작업공간 판에도 플러그인");
+        yes(settings.getAsJsonObject("typescript").get("disableAutomaticTypeAcquisition").getAsBoolean(), "@types 자동 받기 끔");
     }
 
     private static void choose(Path tmp) throws IOException {

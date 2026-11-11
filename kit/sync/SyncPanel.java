@@ -343,6 +343,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static final String BUNDLED_SVN = "plugins/kinggura-sync/svn/bin/svn.exe";
   // 윈도우 Git 은 PATH 에 cmd\git.exe 를 둔다. 이것은 설치 폴더의 mingw64\bin\git.exe 를 다시 띄우는 껍데기라 git 한 번에 프로세스가 둘 뜬다.
   private static final String GIT_EXE_NAME = "git.exe";
+  private static final String WSL_PATH_PREFIX = "\\\\wsl";
   // 설치 폴더 안 실제 git.exe. 예전 판은 mingw64, 새 판(UCRT 빌드)은 ucrt64 아래에 있다. 앞의 것이 먼저다.
   private static final List<String> GIT_REAL_EXES = List.of("mingw64/bin/git.exe", "ucrt64/bin/git.exe");
   // 설치본에 같이 넣은 MinGit(kit/mingit). PC 에 Git 이 없을 때만 쓴다. 이 exe 는 cmd\git.exe 껍데기 없이 바로 돈다.
@@ -360,6 +361,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
   // Git 상태 글자 가운데 경로가 HEAD 에 없을 수 있는 것: 추가 · 이름 바꿈 · 복사. restore --worktree 를 하면 파일이 지워진다.
   private static final String GIT_NEW_PATH_LETTERS = "ARC";
   private static final String SVN_IGNORE_PROP = "svn:ignore";
+  // 서버에 붙는 svn 명령은 인증서 · 로그인을 묻지 않고 바로 실패하게 한다. 숨은 콘솔에서 답을 기다리며 시간 제한까지 멈추지 않게 한다.
+  private static final String SVN_NO_PROMPT = "--non-interactive";
   // svn propget 이 속성이 없을 때 내는 경고 코드(svn 1.9 부터 종료 코드 1 과 함께 나온다).
   private static final String SVN_PROPERTY_NOT_FOUND = "W200017";
   // git ls-files -v 의 첫 글자: skip-worktree 는 'S', assume-unchanged 는 소문자(h · s 등).
@@ -3087,7 +3090,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
 
   /** incoming 에 미리 넣어 둔 서버 쪽 변경도 들어올 변경으로 보고, 이번에 받은 서버 쪽 변경은 incoming 에 더한다. */
   static List<Change> compareSvn(Repo repo, boolean remote, Map<String, String> incoming) throws IOException, InterruptedException {
-    String xml = remote ? run(repo.root(), "svn", "status", "-u", "--xml") : run(repo.root(), "svn", "status", "--xml");
+    String xml = remote ? run(repo.root(), "svn", "status", "-u", SVN_NO_PROMPT, "--xml") : run(repo.root(), "svn", "status", "--xml");
     return parseSvnStatus(repo, xml, incoming);
   }
 
@@ -3375,7 +3378,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       try {
         remote = repo.vcs() == Vcs.GIT
                  ? gitBytes(repo.root(), "show", repo.remoteName() + ":" + change.path())
-                 : runBytes(repo.root(), CMD_TIMEOUT_SEC, "svn", "cat", "-r", "HEAD", svnPath(change.path()));
+                 : runBytes(repo.root(), CMD_TIMEOUT_SEC, "svn", "cat", SVN_NO_PROMPT, "-r", "HEAD", svnPath(change.path()));
       }
       catch (IOException e) {
         remote = new byte[0];  // 원격에 없는 파일(새로 추가했거나 원격에서 지운 파일)
@@ -3498,9 +3501,9 @@ final class SyncPanel extends SimpleToolWindowPanel {
    */
   static String gitExecutable() {
     // 설정 → 버전 관리 → Git 에서 고른 경로가 있으면 IntelliJ Git 과 같은 실행 파일을 쓴다. 그 파일이 없어졌으면 아래 찾기로 넘어간다.
-    // IDE 밖(점검 main)에서는 설정 서비스가 없으므로 건너뛴다.
-    String saved = ApplicationManager.getApplication() == null ? null : GitVcsApplicationSettings.getInstance().getSavedPathToGit();
-    if (saved != null && !saved.isBlank() && new File(saved).isFile()) {
+    String saved = savedGitPath();
+    // WSL 안의 git(\\wsl…)은 윈도우 프로세스로 띄울 수 없어 건너뛴다.
+    if (saved != null && !saved.isBlank() && !saved.startsWith(WSL_PATH_PREFIX) && new File(saved).isFile()) {
       if (!com.intellij.openapi.util.SystemInfo.isWindows) return saved;
       String real = realGitNextTo(new File(saved).getParentFile());
       return real != null ? real : saved;
@@ -3524,6 +3527,18 @@ final class SyncPanel extends SimpleToolWindowPanel {
       }
     }
     return bundled.isFile() ? bundled.getPath() : GIT;
+  }
+
+  /** 설정 → Git 에서 고른 경로. IDE 밖(점검 main)이거나 IDE 를 닫는 중이라 설정을 못 읽으면 null. */
+  private static String savedGitPath() {
+    if (ApplicationManager.getApplication() == null) return null;
+    try {
+      return GitVcsApplicationSettings.getInstance().getSavedPathToGit();
+    }
+    catch (RuntimeException e) {
+      LOG.debug("Git 경로 설정 읽기 실패", e);
+      return null;
+    }
   }
 
   /** git.exe 껍데기가 든 폴더(cmd · bin) 옆의 mingw64 · ucrt64 아래 진짜 git.exe 경로. dir 이 null 이거나 없으면 null. */

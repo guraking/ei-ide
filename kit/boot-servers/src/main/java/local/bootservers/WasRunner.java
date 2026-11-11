@@ -225,8 +225,9 @@ public final class WasRunner {
             Messages.showErrorDialog(project, BootServersBundle.message("was.not.home", server.kind().label, server.home), TITLE);
             return false;
         }
-        String javaHome = System.getenv("JAVA_HOME");
-        if (projectJdkHome() == null && (javaHome == null || javaHome.isBlank())) {
+        // Tomcat 만 미리 본다. catalina 는 JAVA_HOME · JRE_HOME 이 없으면 바로 끝난다. WebLogic(setDomainEnv) · WildFly(PATH 의 java)는 스스로 찾는다.
+        if (server.kind() == WasSettings.Kind.TOMCAT && projectJdkHome() == null
+            && isBlank(System.getenv("JAVA_HOME")) && isBlank(System.getenv("JRE_HOME"))) {
             Messages.showErrorDialog(project, BootServersBundle.message("was.no.jdk", server.kind().label), TITLE);
             return false;
         }
@@ -668,6 +669,10 @@ public final class WasRunner {
             cmd.withEnvironment("JAVA_HOME", home).withEnvironment("JRE_HOME", home);
         }
         return cmd;
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     /** 프로젝트 SDK 의 설치 폴더. SDK 가 없거나 폴더를 모르면 null. */

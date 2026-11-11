@@ -264,6 +264,10 @@ final class WebTools {
         vtsls.add("typescript", typescript);
         JsonObject root = new JsonObject();
         root.add("vtsls", vtsls);
+        // @types 를 npm 으로 받으려는 tsserver 의 자동 받기를 끈다(VS Code 와 같은 typescript.* 설정). 인터넷이 막힌 PC 에서 뒤에서 실패만 되풀이한다.
+        JsonObject typescriptOptions = new JsonObject();
+        typescriptOptions.addProperty("disableAutomaticTypeAcquisition", true);
+        root.add("typescript", typescriptOptions);
         return root;
     }
 

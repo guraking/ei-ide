@@ -51,11 +51,29 @@ final class EiGitAuthEnv {
 
   private EiGitAuthEnv() {}
 
-  /** 화면 스레드가 아닌 곳(git 명령을 띄우는 스레드)에서 부른다. 비밀번호 저장소 · 로그인 창을 쓸 수 있다. */
+  /**
+   * 화면 스레드가 아닌 곳(git 명령을 띄우는 스레드)에서 부른다. 비밀번호 저장소 · 로그인 창을 쓸 수 있다.
+   * 여기서 난 오류는 기록만 하고 넘긴다. 머리글을 못 붙여도 git 명령은 IntelliJ 원래 인증(askpass)으로 돈다.
+   */
   static void prepare(@NotNull Project project,
                       @NotNull GitLineHandler handler,
                       @NotNull GitHttpAuthenticator authenticator,
                       @NotNull Runnable onAuthFailed) {
+    try {
+      prepareHeaders(project, handler, authenticator, onAuthFailed);
+    }
+    catch (com.intellij.openapi.progress.ProcessCanceledException e) {
+      throw e;
+    }
+    catch (RuntimeException e) {
+      LOG.warn("Git 로그인 머리글 준비 실패, 원래 인증으로 진행", e);
+    }
+  }
+
+  private static void prepareHeaders(@NotNull Project project,
+                                     @NotNull GitLineHandler handler,
+                                     @NotNull GitHttpAuthenticator authenticator,
+                                     @NotNull Runnable onAuthFailed) {
     AuthenticationMode mode = handler.getIgnoreAuthenticationMode();
     if (mode == AuthenticationMode.NONE) return;
 
