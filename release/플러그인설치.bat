@@ -27,7 +27,8 @@ tasklist /fi "imagename eq idea64.exe" | find /i "idea64.exe" >nul && (
 )
 if not exist "%SRC%" mkdir "%SRC%"
 
-call :fetch claude-code-jetbrains-plugin "%CC_ZIP%" "Claude Code 플러그인" || goto :netfail
+rem 인터넷이 막힌 PC 에서도 옛 플러그인 치우기 · JDK · Gradle · 드라이버 설치는 이어서 한다.
+call :fetch claude-code-jetbrains-plugin "%CC_ZIP%" "Claude Code 플러그인" || echo Claude Code 플러그인은 받지 못해 건너뜁니다. 인터넷 연결을 확인하세요.
 call :fetch one-dark-theme "%OD_ZIP%" "One Dark 테마" || echo One Dark 테마는 건너뜁니다.
 
 if not exist "%DEST%" mkdir "%DEST%"

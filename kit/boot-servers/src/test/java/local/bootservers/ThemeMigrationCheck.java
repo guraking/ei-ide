@@ -13,6 +13,9 @@ public final class ThemeMigrationCheck {
         check(renamed.contains("value=\"Moa Mono\""), "글꼴 " + renamed);
         check(renamed.contains("parent_scheme=\"Darcula\""), "부모는 그대로 " + renamed);
         check(!renamed.contains("EI "), "옛 이름이 남음 " + renamed);
+        check(ThemeMigration.hasCustomValues(old), "고친 값 있음");
+        check(!ThemeMigration.hasCustomValues("<scheme name=\"_@user_Moa Graphite\" parent_scheme=\"Darcula\">\n  <metaInfo>\n"
+                + "    <property name=\"partialSave\">true</property>\n  </metaInfo>\n</scheme>\n"), "빈 사본");
         System.out.println("ThemeMigrationCheck 통과");
     }
 

@@ -156,15 +156,19 @@ def install(names):
     try:
         for target in targets.values():
             old = target.with_name(target.name + ".old")
+            # 앞서 멈춘 실행이 남긴 .old 는 이번 되돌리기에 쓰지 않는다. 원래 jar 가 없던 자리는 old=None(되돌릴 때 새 jar 를 지움).
+            old.unlink(missing_ok=True)
             if target.exists():
                 shutil.copy2(target, old)
-            os.replace(target.with_name(target.name + ".new"), target)
+            else:
+                old = None
             replaced.append((target, old))
+            os.replace(target.with_name(target.name + ".new"), target)
     except OSError as e:
         restore_errors = []
         for target, old in replaced:
             try:
-                if old.exists():
+                if old is not None:
                     os.replace(old, target)
                 else:
                     target.unlink(missing_ok=True)
@@ -175,7 +179,8 @@ def install(names):
         detail = "\n되돌리지 못한 jar(.old 로 직접 되돌리세요):\n" + "\n".join(restore_errors) if restore_errors else ""
         raise SystemExit(f"\n본체 jar 바꾸기 실패(IDE 가 켜져 jar 를 잡고 있는지 확인하세요): {e}\n바꾼 jar 를 되돌렸습니다.{detail}")
     for target, old in replaced:
-        old.unlink(missing_ok=True)
+        if old is not None:
+            old.unlink(missing_ok=True)
         print(f"넣음: {target}")
 
 

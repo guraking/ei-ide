@@ -54,17 +54,26 @@ public final class Drivers {
 
   /**
    * ~/.m2/repository/<groupPath>/<artifact>/<판>/<artifact>-<판>.jar 중 판이 가장 높은 것(숫자 단위 비교). 없으면 null.
-   * downloadArtifact 를 먼저 보고, 없으면 같은 접두어의 다른 artifact(ojdbc8 등)를 본다. 분류자 jar(-sources 등)는 보지 않는다.
+   * downloadArtifact 를 먼저 보고, 없으면 같은 접두어의 다른 artifact(ojdbc8 등)를, 그래도 없으면 예전 Maven 자리(oldGroupPath)를 본다.
+   * 분류자 jar(-sources 등)는 보지 않는다.
    */
   public static Path findInMaven(DbKind kind) {
     Path group = m2Repository().resolve(kind.groupPath);
     Path best = newest(group.resolve(kind.downloadArtifact), kind.downloadArtifact);
-    if (best != null || !Files.isDirectory(group)) return best;
+    if (best == null) best = newestByPrefix(group, kind.artifactPrefix);
+    if (best == null && kind.oldGroupPath != null) best = newestByPrefix(m2Repository().resolve(kind.oldGroupPath), kind.artifactPrefix);
+    return best;
+  }
+
+  /** group 아래 prefix 로 시작하는 artifact 중 판이 가장 높은 것(artifact 이름이 큰 쪽 먼저). 없거나 못 읽으면 null. */
+  private static Path newestByPrefix(Path group, String prefix) {
+    if (!Files.isDirectory(group)) return null;
+    Path best = null;
     String bestArtifact = null;
     try (Stream<Path> dirs = Files.list(group)) {
       for (Path dir : (Iterable<Path>) dirs::iterator) {
         String artifact = dir.getFileName().toString();
-        if (!artifact.startsWith(kind.artifactPrefix)) continue;
+        if (!artifact.startsWith(prefix)) continue;
         Path jar = newest(dir, artifact);
         if (jar != null && (bestArtifact == null || compareVersions(artifact, bestArtifact) > 0)) {
           best = jar;

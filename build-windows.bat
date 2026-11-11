@@ -73,9 +73,10 @@ set "NOTESOPT=--notes-file"
 set "NOTESVAL=%NOTES%"
 powershell -NoProfile -Command "$t=[IO.File]::ReadAllText($env:CHANGELOG,[Text.Encoding]::UTF8); $m=[regex]::Match($t,'(?ms)^## .*?(?=^## |\z)'); if(-not $m.Success){exit 1}; [IO.File]::WriteAllText($env:NOTES,$m.Value.Trim(),(New-Object Text.UTF8Encoding $false))" || (set "NOTESOPT=--notes" & set "NOTESVAL=빌드 %BUILD_NUMBER%")
 rem GitHub 릴리스로 올린다. gh 명령줄 도구가 있고 로그인돼 있어야 한다(winget install GitHub.cli → gh auth login). 없으면 건너뛴다.
+where gh >nul 2>&1 || echo gh 명령줄 도구가 없어 GitHub 릴리스 업로드는 건너뜁니다.
 where gh >nul 2>&1 && (
-    gh release create "v%BUILD_NUMBER%" "%~dp0release\moaide-%BUILD_NUMBER%.exe" --repo guraking/ei-ide --title "Moa IDE %BUILD_NUMBER%" %NOTESOPT% "%NOTESVAL%" && echo GitHub 릴리스 v%BUILD_NUMBER% 로 올렸습니다.
-) || echo gh 명령줄 도구가 없어 GitHub 릴리스 업로드는 건너뜁니다.
+    gh release create "v%BUILD_NUMBER%" "%~dp0release\moaide-%BUILD_NUMBER%.exe" --repo guraking/ei-ide --title "Moa IDE %BUILD_NUMBER%" %NOTESOPT% "%NOTESVAL%" && echo GitHub 릴리스 v%BUILD_NUMBER% 로 올렸습니다. || echo GitHub 릴리스 올리기 실패 - gh 로그인과 같은 판 태그가 이미 있는지 확인하세요. 설치 파일은 release 폴더에 있습니다.
+)
 rem 더블클릭으로 돌렸을 때 결과를 읽을 수 있게 창을 닫지 않는다.
 pause
 exit /b 0

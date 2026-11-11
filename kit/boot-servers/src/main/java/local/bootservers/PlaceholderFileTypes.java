@@ -32,9 +32,11 @@ public final class PlaceholderFileTypes implements AppLifecycleListener {
     public void appFrameCreated(@NotNull List<String> commandLineArgs) {
         PropertiesComponent properties = PropertiesComponent.getInstance();
         if (properties.getBoolean(APPLIED_KEY)) return;
-        properties.setValue(APPLIED_KEY, true);
-        // 파일 종류 변경은 EDT 의 쓰기 동작 안에서만 허용된다.
-        ApplicationManager.getApplication().invokeLater(() -> WriteAction.run(PlaceholderFileTypes::release));
+        // 파일 종류 변경은 EDT 의 쓰기 동작 안에서만 허용된다. 표시는 끝까지 마친 뒤에 남겨, 도중에 실패하면 다음 실행에 다시 한다.
+        ApplicationManager.getApplication().invokeLater(() -> {
+            WriteAction.run(PlaceholderFileTypes::release);
+            properties.setValue(APPLIED_KEY, true);
+        });
     }
 
     private static void release() {

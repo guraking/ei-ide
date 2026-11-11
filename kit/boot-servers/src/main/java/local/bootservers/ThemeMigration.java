@@ -8,6 +8,7 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.colors.EditorColorsManager;
+import com.intellij.openapi.editor.colors.EditorColorsScheme;
 import org.jetbrains.annotations.NotNull;
 
 import java.nio.charset.StandardCharsets;
@@ -46,6 +47,7 @@ public final class ThemeMigration implements AppLifecycleListener {
     private static final String PREFERRED_LIGHT_TAG = "preferred-light-laf";
     private static final String PREFERRED_DARK_TAG = "preferred-dark-laf";
     private static final String THEME_ID_ATTRIBUTE = "themeId=\"";
+    private static final String NAME_ATTRIBUTE = "name=\"";
     /** 옛 테마 id → 새 테마 id (plugin.xml themeProvider id). */
     private static final Map<String, String> RENAMED = Map.of(
             "EI Glass", "Moa Graphite", "EI Gray", "Moa White",
@@ -69,11 +71,14 @@ public final class ThemeMigration implements AppLifecycleListener {
     }
 
     /**
-     * colors/_@user_EI ….icls 를 새 이름 사본(_@user_Moa ….icls)으로 옮긴다. 새 이름 사본이 이미 있으면 그것을 둔다.
-     * 옛 사본은 colors/_old-EI 로 옮겨 둔다(부모 구성표가 없어 IntelliJ 가 매번 건너뛰던 파일). 옮긴 것이 있으면 구성표를 다시 읽는다.
+     * colors/_@user_EI ….icls 를 새 이름 사본(_@user_Moa ….icls)으로 옮긴다. 새 이름 사본이 이미 있고 사용자가 고친 값이 들어 있으면 그것을 둔다
+     * (고친 값이 없는 빈 사본이면 옛 사본으로 바꾼다). 옛 파일은 colors/_old-EI 로 옮겨 둔다(부모 구성표가 없어 IntelliJ 가 매번 건너뛰던 파일).
+     * 옮긴 것이 있으면 구성표를 다시 읽고, 쓰던 구성표(colors.scheme.xml)가 옛 사본이었으면 새 사본을 쓰게 한다.
      */
     private static void migrateEditorSchemes() {
         Path dir = Path.of(PathManager.getConfigPath(), "colors");
+        String active = savedGlobalScheme();
+        String activeNew = null;
         boolean moved = false;
         for (String oldName : SCHEME_ORDER) {
             Path oldFile = dir.resolve(USER_SCHEME_PREFIX + oldName + SCHEME_EXTENSION);
@@ -81,18 +86,49 @@ public final class ThemeMigration implements AppLifecycleListener {
             String newName = RENAMED.get(oldName);
             Path newFile = dir.resolve(USER_SCHEME_PREFIX + newName + SCHEME_EXTENSION);
             try {
-                if (!Files.exists(newFile)) {
+                if (!Files.exists(newFile) || !hasCustomValues(Files.readString(newFile, StandardCharsets.UTF_8))) {
                     Files.writeString(newFile, renameScheme(Files.readString(oldFile, StandardCharsets.UTF_8), oldName, newName), StandardCharsets.UTF_8);
                 }
                 Path aside = Files.createDirectories(dir.resolve(OLD_SCHEMES_DIR));
                 Files.move(oldFile, aside.resolve(oldFile.getFileName()), StandardCopyOption.REPLACE_EXISTING);
                 moved = true;
+                if ((USER_SCHEME_PREFIX + oldName).equals(active)) activeNew = USER_SCHEME_PREFIX + newName;
             } catch (Exception e) {
                 LOG.warn("편집기 색 구성표 옮기기 실패: " + oldFile, e);
             }
         }
-        if (moved) {
-            ApplicationManager.getApplication().invokeLater(() -> EditorColorsManager.getInstance().reloadKeepingActiveScheme());
+        if (!moved) return;
+        String target = activeNew;
+        ApplicationManager.getApplication().invokeLater(() -> {
+            EditorColorsManager manager = EditorColorsManager.getInstance();
+            manager.reloadKeepingActiveScheme();
+            if (target == null) return;
+            EditorColorsScheme scheme = manager.getScheme(target);
+            if (scheme != null) manager.setGlobalScheme(scheme);
+        });
+    }
+
+    /** 구성표 사본에 사용자가 고친 값(옵션 · 글자 모양 · 색)이 있는가. IntelliJ 는 고친 것이 없어도 metaInfo 만 든 빈 사본을 남긴다. */
+    static boolean hasCustomValues(String xml) {
+        return xml.contains("<option") || xml.contains("<attributes") || xml.contains("<colors");
+    }
+
+    /** options/colors.scheme.xml 의 global_color_scheme 이름. 없거나 못 읽으면 빈 문자열. */
+    private static String savedGlobalScheme() {
+        Path file = Path.of(PathManager.getOptionsPath(), "colors.scheme.xml");
+        if (!Files.isRegularFile(file)) return "";
+        try {
+            String xml = Files.readString(file, StandardCharsets.UTF_8);
+            int element = xml.indexOf("<global_color_scheme ");
+            if (element < 0) return "";
+            int start = xml.indexOf(NAME_ATTRIBUTE, element);
+            if (start < 0) return "";
+            start += NAME_ATTRIBUTE.length();
+            int end = xml.indexOf('"', start);
+            return end < 0 ? "" : xml.substring(start, end);
+        } catch (Exception e) {
+            LOG.warn("colors.scheme.xml 읽기 실패", e);
+            return "";
         }
     }
 
