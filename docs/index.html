@@ -616,7 +616,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
 
     <div class="steps">
       <div class="step"><div class="n">1</div><h4>상위 폴더 열기</h4><p>File → Open 에서 프로젝트들이 들어 있는 폴더를 고릅니다.</p><div class="file">C:\dev\workspace</div></div>
-      <div class="step"><div class="n">2</div><h4>자동 연결</h4><p>그 폴더에 빌드 파일이 없으면 바로 아래 폴더의 <code>pom.xml</code> · <code>build.gradle</code> 을 하나씩 연결합니다. 한 단계 아래까지만, 숨김 폴더는 건너뜁니다.</p></div>
+      <div class="step"><div class="n">2</div><h4>자동 연결</h4><p>그 폴더에 빌드 파일이 없으면 열 때마다 아래 저장소 폴더를 모듈로 붙이고, 두 단계 아래까지의 <code>pom.xml</code> · <code>build.gradle</code> 중 연결 안 된 것을 연결합니다. 숨김 폴더 · 닫은 저장소는 건너뜁니다.</p></div>
       <div class="step"><div class="n">3</div><h4>의존성 받기</h4><p>처음엔 몇 분 걸립니다. 멈춘 것 같으면 아래 「빌드」 창의 Sync 탭을 봅니다.</p></div>
       <div class="step"><div class="n">4</div><h4>저장하면 빌드</h4><p>이클립스 Build Automatically 와 같습니다. 서버 창의 시작 · 재시작도 이 결과를 씁니다.</p></div>
     </div>

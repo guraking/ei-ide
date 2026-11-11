@@ -103,6 +103,26 @@ final class MavenRepos {
     if (notify) SyncPanel.balloon(project, false, SyncBundle.message("open.repo.maven.title"), SyncBundle.message("open.repo.maven"));
   }
 
+  /**
+   * Maven 목록이 읽힌 뒤, 이 pom 이 목록에 없으면(연결도 무시도 안 한 pom) link 를 부른다(CloneIntoProject.linkOnOpen).
+   * 켠 직후처럼 목록이 아직 안 읽혔으면 RETRY_SECONDS 마다 다시 본다(최대 RETRY_LIMIT 번, 넘으면 연결하지 않는다). EDT 에서 부른다.
+   */
+  static void linkIfUnknown(Project project, VirtualFile pom, Runnable link, int attempt) {
+    if (project.isDisposed()) return;
+    MavenProjectsManager manager = MavenProjectsManager.getInstance(project);
+    // setClosed 와 같은 「아직 읽는 중」 판정.
+    boolean loading = !manager.isInitialized() || (manager.isMavenizedProject() && manager.getProjects().isEmpty());
+    if (loading) {
+      if (attempt < RETRY_LIMIT) {
+        AppExecutorUtil.getAppScheduledExecutorService().schedule(
+          () -> ApplicationManager.getApplication().invokeLater(() -> linkIfUnknown(project, pom, link, attempt + 1), project.getDisposed()),
+          RETRY_SECONDS, TimeUnit.SECONDS);
+      }
+      return;
+    }
+    if (!manager.isManagedFile(pom) && manager.findProject(pom) == null) link.run();
+  }
+
   /** 무시 경로(ignored) 중 열 폴더(roots) 안이고, 우리가 무시한 것(ours)이거나 그 폴더에 우리 기록이 없는 것. */
   static List<String> toUnignore(List<String> ignored, List<String> ours, List<String> roots) {
     List<String> result = new ArrayList<>();
