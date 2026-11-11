@@ -442,7 +442,7 @@ public class CloseRepoAction extends DumbAwareAction {
   }
 
   /** Maven 플러그인이 켜져 있으면 true. 꺼져 있으면 MavenRepos 를 읽지 않는다(그 클래스가 Maven 클래스를 쓴다). */
-  private static boolean mavenEnabled() {
+  static boolean mavenEnabled() {
     PluginId id = PluginId.getId(MAVEN_PLUGIN);
     return PluginManagerCore.getPlugin(id) != null && !PluginManagerCore.isDisabled(id);
   }
