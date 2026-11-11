@@ -75,10 +75,10 @@ public final class Patterns {
   /** 칸이 비었을 때 회색으로 보일 예시. */
   public static String hint(Field f) {
     return switch (f) {
-      case TABLE, TABLE2 -> "예: TB_ORDER  (치거나 「고르기…」)";
+      case TABLE, TABLE2 -> "예: TB_ORDER  (치거나 목록에서 고르기)";
       case KEYS, COLS -> "예: CUST_ID, ORDER_NO  (쉼표로 여러 개)";
       case STATUS_VALUES -> "예: 접수, 진행, 완료";
-      default -> "칼럼 이름  (치거나 「고르기…」)";
+      default -> "칼럼 이름  (치거나 목록에서 고르기)";
     };
   }
 
