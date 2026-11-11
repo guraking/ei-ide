@@ -845,7 +845,6 @@ final class ServersPanel extends SimpleToolWindowPanel {
     private static final long GROUP_START_TIMEOUT_MILLIS = 5 * 60 * 1000;
     // plugin.xml 의 알림 묶음 id.
     private static final String NOTIFICATION_GROUP = "서버 실행";
-    private static final String BOOT_KEY_PREFIX = "boot:";
     // 시작을 지시한 뒤 빌드 · 실행 준비도 프로세스도 보이지 않으면 시작이 일어나지 않은 것(오류 창을 띄우고 그만둠)으로 보는 한도.
     // 빌드가 끝난 뒤 실행 창이 뜨기까지의 틈(화면 스레드 한두 차례 · 실행 전 작업 준비)보다 넉넉해야 한다.
     private static final long GROUP_START_GRACE_MILLIS = 15_000;
@@ -875,7 +874,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
     /** 묶음 안에 적는 줄 키. 올린 프로젝트 줄은 묶음에 넣지 않으므로 null. */
     private static String rowKey(Object row) {
         if (row instanceof Boot b) {
-            return BOOT_KEY_PREFIX + b.name();
+            return ServerGroups.BOOT_KEY_PREFIX + b.name();
         }
         return row instanceof WasSettings.Server s ? WasRunner.registryKey(s) : null;
     }
@@ -909,7 +908,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
         if (row instanceof WasSettings.Server s) {
             return s.name;
         }
-        return key.startsWith(BOOT_KEY_PREFIX) ? key.substring(BOOT_KEY_PREFIX.length()) : key;
+        return key.startsWith(ServerGroups.BOOT_KEY_PREFIX) ? key.substring(ServerGroups.BOOT_KEY_PREFIX.length()) : key;
     }
 
     /** 도구 모음 · 우클릭의 「서버 묶음」: 새 묶음, 묶음마다 시작 · 중지 · 편집 · 삭제. */
@@ -1562,7 +1561,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
             // 이름이 바뀌면 실행 관리자의 색인 키도 바뀌므로 다시 등록해 맞춘다. 실행 기록 · 서버 묶음의 줄 키도 새 이름으로 옮긴다.
             runManager.addConfiguration(settings);
             ServerRegistry.getInstance(project).rename(oldName, settings.getName());
-            ServerGroups.getInstance(project).renameMember(BOOT_KEY_PREFIX + oldName, BOOT_KEY_PREFIX + settings.getName());
+            ServerGroups.getInstance(project).renameMember(ServerGroups.BOOT_KEY_PREFIX + oldName, ServerGroups.BOOT_KEY_PREFIX + settings.getName());
         }
         runManager.setSelectedConfiguration(settings);
         Boot applied = new Boot(module, settings);

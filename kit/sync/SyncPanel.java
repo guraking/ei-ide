@@ -2387,8 +2387,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
           }
         })) {
           if (scanned == null) continue;
-          // 매핑이 저장소 안쪽 폴더를 가리키면(지우고 다시 받은 뒤 남은 매핑 등) 맨 위 저장소가 한 번 더 온다. 한 줄만 둔다.
-          if (found.stream().anyMatch(r -> r.root().equals(scanned.repo().root()))) {
+          // 매핑이 저장소 안쪽 폴더를 가리키거나(지우고 다시 받은 뒤 남은 매핑 등) 정션 · 링크로 연 경로면 맨 위 저장소가 한 번 더 온다. 한 줄만 둔다.
+          if (found.stream().anyMatch(r -> sameDir(r.root(), scanned.repo().root()))) {
             LOG.info("같은 저장소를 가리키는 VCS 매핑이 둘 이상입니다: " + scanned.repo().root());
             continue;
           }
@@ -2917,6 +2917,16 @@ final class SyncPanel extends SimpleToolWindowPanel {
    * git 이 알려 준 맨 위 폴더. 매핑 폴더(dir)와 실제로 같은 폴더면(정션 · 심볼릭 링크로 연 경로) IntelliJ 가 쓰는 dir 경로를 그대로 쓴다.
    * 그래야 저장소 알림 · 변경 목록 경로와 저장소 줄이 같은 경로로 맞는다. 다르면(매핑이 저장소 안쪽 폴더) git 의 맨 위 폴더다.
    */
+  /** 같은 폴더면 true. 정션 · 링크 · 대소문자가 달라도 실제 경로로 비교하고, 실제 경로를 못 읽으면 적힌 경로로 비교한다. */
+  static boolean sameDir(File a, File b) {
+    try {
+      return a.getCanonicalFile().equals(b.getCanonicalFile());
+    }
+    catch (IOException e) {
+      return a.equals(b);
+    }
+  }
+
   static File topLevel(File dir, String gitTop) throws IOException {
     File top = new File(gitTop.trim());
     return top.getCanonicalFile().equals(dir.getCanonicalFile()) ? dir : top;

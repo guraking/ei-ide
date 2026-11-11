@@ -1,6 +1,8 @@
 package ei.db;
 
 import com.intellij.openapi.Disposable;
+import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Disposer;
@@ -158,6 +160,27 @@ public final class DbSessions implements Disposable {
   }
 
   public boolean isOpen(String id) { return open.containsKey(id); }
+
+  /**
+   * 스키마 이름(Meta.schemaOf)을 쓰기 전에 부른다. 기본 스키마를 비운 PostgreSQL 은 접속해야 현재 스키마를 알므로,
+   * 아직 모르고 열지 않았으면 작업 스레드에서 열고 then 을 화면 스레드에서 부른다(열린 대화 상자 위에서도 돈다).
+   * 열기에 실패하면 알리고 then 은 부르지 않는다. 그 밖에는 바로 부른다. 화면 스레드에서 부른다.
+   */
+  public void whenSchemaKnown(DbConfig c, Runnable then) {
+    if (!Meta.schemaUnknown(c) || isOpen(c.id)) {
+      then.run();
+      return;
+    }
+    AppExecutorUtil.getAppExecutorService().execute(() -> {
+      try {
+        connection(c);
+      } catch (SQLException | RuntimeException e) {
+        Notify.error(project, EiDbBundle.message("sessions.connect.failed", c.name, e.getMessage()));
+        return;
+      }
+      ApplicationManager.getApplication().invokeLater(then, ModalityState.any(), project.getDisposed());
+    });
+  }
 
   public int pending(String id) { return pending.getOrDefault(id, 0); }
 

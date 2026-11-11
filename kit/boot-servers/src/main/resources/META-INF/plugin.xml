@@ -99,6 +99,8 @@
         <listener class="local.bootservers.ReopenPreviousToolWindow" topic="com.intellij.openapi.wm.ex.ToolWindowManagerListener"/>
         <!-- 새 파일(버전 관리 밖) 위 폴더 목록을 변경 목록 갱신 때마다 만든다(ChangedFolderIconDecorator 가 씀) -->
         <listener class="local.bootservers.UnversionedDirs" topic="com.intellij.openapi.vcs.changes.ChangeListListener"/>
+        <!-- 실행 설정 창에서 이름을 바꿔도 서버 묶음 · 실행 기록이 따라간다. -->
+        <listener class="local.bootservers.BootRenameListener" topic="com.intellij.execution.RunManagerListener"/>
     </projectListeners>
 
     <actions>
