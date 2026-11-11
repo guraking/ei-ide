@@ -7,8 +7,35 @@ import java.util.Set;
 
 /** 자체 점검: java -cp out:test-out:<IDE jar> kinggura.sync.SyncCheck */
 public class SyncCheck {
+  /** git 을 띄우는 횟수를 줄이며 새로 만든 출력 읽기 · 명령 고르기. */
+  static void checkFewerSpawns() {
+    // status --porcelain=v1 -z -uall: 추적 안 함 · 올려 둔 변경 · 올리지 않은 변경, 이름 바꾸기는 옛 경로 칸을 건너뛴다.
+    ReverseMerge.WorkTree w = ReverseMerge.parseStatusZ(" M a.txt\0?? new/b.txt\0R  c2.txt\0c1.txt\0 D d.txt\0");
+    eq(w.untracked(), Set.of("new/b.txt"));
+    eq(w.staged(), true);
+    eq(w.unstaged(), Set.of("a.txt", "d.txt"));
+    eq(ReverseMerge.blocksMerge(w, Set.of("zzz")), true);
+    ReverseMerge.WorkTree clean = ReverseMerge.parseStatusZ(" M a b.txt\0?? x\0");
+    eq(clean.staged(), false);
+    eq(clean.unstaged(), Set.of("a b.txt"));
+    eq(ReverseMerge.blocksMerge(clean, Set.of("x")), false);
+    eq(ReverseMerge.blocksMerge(clean, Set.of("a b.txt")), true);
+    eq(ReverseMerge.parseStatusZ("").untracked(), Set.of());
+    // 충돌이 남은 항목(UU)은 올려 둔 변경으로 보아 합치기를 막는다.
+    eq(ReverseMerge.parseStatusZ("UU m.txt\0").staged(), true);
+    // 옮기지도 따라잡지도 않으면 diff 는 하나, 모두 하면 셋.
+    eq(ReverseMerge.touchedCommands("HEAD", "HEAD", "abc").size(), 1);
+    eq(ReverseMerge.touchedCommands("HEAD", "refs/remotes/origin/f", "abc").size(), 2);
+    eq(ReverseMerge.touchedCommands("refs/heads/f", "refs/remotes/origin/f", "abc").size(), 3);
+    // for-each-ref --format=%(objectname) %(refname)
+    java.util.Map<String, String> tips = ReverseMerge.parseRefTips("aaa refs/remotes/origin/HEAD\nbbb refs/remotes/origin/develop\nccc refs/remotes/up/main\n");
+    eq(tips.get("refs/remotes/origin/develop"), "bbb");
+    eq(ReverseMerge.parseRefs(String.join("\n", tips.keySet()), "origin"), List.of("develop"));
+  }
+
   /** 2026-11-06 동기화 전수조사에서 고친 순수 판단들. */
   static void checkAudit1106() throws Exception {
+    checkFewerSpawns();
     // 인자 없는 fetch 가 기준 브랜치까지 받는지(remote.<원격>.fetch 줄들을 git 규칙대로).
     eq(ReverseMerge.fetches(java.util.Map.of("remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"), "origin", "develop"), true);
     eq(ReverseMerge.fetches(java.util.Map.of("remote.origin.fetch", "refs/heads/*:refs/remotes/origin/*"), "origin", "develop"), true);

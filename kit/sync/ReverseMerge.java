@@ -24,6 +24,8 @@ import static kinggura.sync.SyncPanel.git;
  */
 final class ReverseMerge {
   static final String CONFIG_FROM = "ei.reverseMerge.from";
+  // core.ignorecase 를 읽는 명령. 설정이 없으면 실패하지 않고 false 를 내어 다른 명령과 묶어(gitAll) 돌릴 수 있다.
+  static final String[] IGNORE_CASE = {"config", "--bool", "--default", "false", "core.ignorecase"};
   static final String CONFIG_INTO = "ei.reverseMerge.into";
   /** 브랜치에 원격 설정(branch.<이름>.remote)이 없을 때 쓰는 원격. git clone 의 기본 이름이다. */
   static final String DEFAULT_REMOTE = "origin";
@@ -344,6 +346,16 @@ final class ReverseMerge {
     return parseRefs(git(root, "for-each-ref", "--format=%(refname)", remoteRef(remote, "")), remote);
   }
 
+  /** for-each-ref --format=%(objectname) %(refname) 출력 → 참조 이름 → 커밋. 참조 이름 순서는 출력 순서. */
+  static Map<String, String> parseRefTips(String output) {
+    Map<String, String> tips = new LinkedHashMap<>();
+    for (String line : output.split("\n")) {
+      int space = line.indexOf(' ');
+      if (space > 0) tips.put(line.substring(space + 1).trim(), line.substring(0, space));
+    }
+    return tips;
+  }
+
   /** for-each-ref 가 낸 refs/remotes/<원격>/<이름> 줄에서 이름만. <원격>/HEAD 는 브랜치가 아니라 뺀다. */
   static List<String> parseRefs(String output, String remote) {
     String prefix = remoteRef(remote, "");
@@ -448,22 +460,47 @@ final class ReverseMerge {
                                    boolean matchCase) throws IOException, InterruptedException {
     fetch(root, remote, into);
     String intoRemote = remoteRef(remote, into);
-    boolean switched = !sameBranch(root, into, current);
+    // 서로 기다릴 필요 없는 읽기는 묶어서 동시에 돌린다. 회사 PC 는 git 을 하나 띄울 때마다 보안 검사로 0.5초 안팎이 든다.
+    List<String> local = gitAll(root, List.of(IGNORE_CASE,
+                                              new String[]{"--no-optional-locks", "status", "--porcelain=v1", "-z", "-uall"},
+                                              new String[]{"rev-parse", "HEAD"}));
+    boolean folded = Boolean.parseBoolean(local.get(0).trim());
+    WorkTree work = parseStatusZ(local.get(1));
+    String head = local.get(2).trim();
+    boolean switched = !(into.equals(current) || folded && into.equalsIgnoreCase(current));
     boolean stashed = false;
     // 합치기가 시작하는 곳: 옮겨 갈 브랜치(없으면 서버 것으로 만든다) 또는 지금 HEAD. 서버 것이 앞서 있으면 따라잡은 뒤 거기서 합친다.
     String start = !switched ? "HEAD" : hasRef(root, HEADS + into) ? HEADS + into : intoRemote;
-    String base = Integer.parseInt(git(root, "rev-list", "--count", start + ".." + intoRemote).trim()) > 0 ? intoRemote : start;
-    boolean folded = ignoreCase(root);
-    Map<String, String> renames = folded ? caseRenames(tree(root, base), tree(root, fromTip), tree(root, forkPoint(root, base, fromTip))) : Map.of();
+    List<String[]> second = new ArrayList<>();
+    second.add(new String[]{"rev-list", "--count", start + ".." + intoRemote});
+    if (folded) second.add(new String[]{"ls-tree", "-r", "--name-only", fromTip});
+    List<String> counted = gitAll(root, second);
+    int behind = Integer.parseInt(counted.get(0).trim());
+    String base = behind > 0 ? intoRemote : start;
+    Map<String, String> renames = Map.of();
+    Map<String, Boolean> touched;
+    if (folded) {
+      Set<String> fromTree = lines(counted.get(1));
+      String fork = forkPoint(root, base, fromTip);
+      List<String[]> third = new ArrayList<>(touchedCommands(start, base, fromTip));
+      third.add(new String[]{"ls-tree", "-r", "--name-only", base});
+      if (fork != null) third.add(new String[]{"ls-tree", "-r", "--name-only", fork});
+      List<String> out = gitAll(root, third);
+      int trees = third.size() - (fork != null ? 2 : 1);
+      touched = parseTouched(out.subList(0, trees));
+      renames = caseRenames(lines(out.get(trees)), fromTree, fork != null ? lines(out.get(trees + 1)) : Set.of());
+    }
+    else {
+      touched = parseTouched(gitAll(root, touchedCommands(start, base, fromTip)));
+    }
     if (!renames.isEmpty() && !matchCase) throw new CaseRenameException(renames);
-    Map<String, Boolean> touched = touched(root, start, base, fromTip);
     // 추적 안 한 파일은 Stash 에 들어가지 않고 git 이 덮어쓰지도 않는다. 옮기기 · 합치기 도중에 영어 오류로 멈추지 않게 미리 이름을 알린다.
     // 지우기만 하는 경로는 그 자리에 추적 안 한 파일이 있어도 git 이 멈추지 않으므로 뺀다.
     Set<String> written = new HashSet<>();
     for (Map.Entry<String, Boolean> t : touched.entrySet()) if (t.getValue()) written.add(t.getKey());
-    List<String> inWay = inTheWay(lines(git(root, "ls-files", "--others", "--exclude-standard")), written, folded);
+    List<String> inWay = inTheWay(work.untracked(), written, folded);
     if (!inWay.isEmpty()) throw new IOException(SyncBundle.message("rmerge.untracked", pathList(inWay)));
-    if (blocksMerge(root, touched.keySet())) {
+    if (blocksMerge(work, touched.keySet())) {
       if (!stash) throw new DirtyException();
       git(root, GIT_LONG_TIMEOUT_SEC, "stash", "push", "-m", STASH_MESSAGE);
       stashed = true;
@@ -478,7 +515,8 @@ final class ReverseMerge {
           saveConfig(root, "branch." + into + ".merge", HEADS + into);
         }
       }
-      if (Integer.parseInt(git(root, "rev-list", "--count", "HEAD.." + intoRemote).trim()) > 0) {
+      // 옮기지 않았으면 HEAD 가 start 라 앞에서 센 수를 그대로 쓴다.
+      if ((switched ? Integer.parseInt(git(root, "rev-list", "--count", "HEAD.." + intoRemote).trim()) : behind) > 0) {
         try {
           git(root, GIT_LONG_TIMEOUT_SEC, "merge", "--ff-only", intoRemote);
         }
@@ -488,7 +526,8 @@ final class ReverseMerge {
           throw new IOException(SyncBundle.message("rmerge.diverged", into) + "\n" + diverged.getMessage(), diverged);
         }
       }
-      String beforeMerge = git(root, "rev-parse", "HEAD").trim();
+      // 옮기지도 따라잡지도 않았으면 HEAD 는 처음 읽은 그대로다.
+      String beforeMerge = !switched && behind == 0 ? head : git(root, "rev-parse", "HEAD").trim();
       if (!renames.isEmpty()) matchCase(root, renames, String.format(CASE_MESSAGE, remote + "/" + from));
       try {
         git(root, GIT_LONG_TIMEOUT_SEC, "merge", "--no-edit", "-m", String.format(MERGE_MESSAGE, remote + "/" + from, into), fromTip);
@@ -523,24 +562,65 @@ final class ReverseMerge {
    * 값은 그 경로에 파일을 쓰는가(세 diff 가운데 하나라도 지우기가 아님)다.
    */
   static Map<String, Boolean> touched(File root, String start, String base, String fromTip) throws IOException, InterruptedException {
+    return parseTouched(gitAll(root, touchedCommands(start, base, fromTip)));
+  }
+
+  /** touched 가 돌릴 diff. 양쪽이 같은 커밋 이름인 diff(옮기지 않음 · 따라잡지 않음)는 바뀐 것이 없어 뺀다. */
+  static List<String[]> touchedCommands(String start, String base, String fromTip) {
+    List<String[]> commands = new ArrayList<>();
+    if (!start.equals("HEAD")) commands.add(new String[]{"diff", "--name-status", "--no-renames", "HEAD", start});
+    if (!base.equals(start)) commands.add(new String[]{"diff", "--name-status", "--no-renames", start, base});
+    commands.add(new String[]{"diff", "--name-status", "--no-renames", base + "..." + fromTip});
+    return commands;
+  }
+
+  /** touchedCommands 출력들 → 경로마다 그 경로에 파일을 쓰는가. */
+  static Map<String, Boolean> parseTouched(List<String> outputs) {
     Map<String, Boolean> touched = new LinkedHashMap<>();
-    for (String out : gitAll(root, List.of(new String[]{"diff", "--name-status", "--no-renames", "HEAD", start},
-                                           new String[]{"diff", "--name-status", "--no-renames", start, base},
-                                           new String[]{"diff", "--name-status", "--no-renames", base + "..." + fromTip}))) {
+    for (String out : outputs) {
       for (Map.Entry<String, String> e : SyncPanel.parseNameStatus(out).entrySet()) touched.merge(e.getKey(), !"D".equals(e.getValue()), Boolean::logicalOr);
     }
     return touched;
+  }
+
+  /** 작업본 상태: 추적 안 한 파일, 올려 둔(staged) 변경이 있는가, 올리지 않은 고친 파일. */
+  record WorkTree(Set<String> untracked, boolean staged, Set<String> unstaged) {}
+
+  /**
+   * git status --porcelain=v1 -z -uall 출력 → WorkTree. 한 항목은 「XY 경로」이고 이름 바꾸기(X 또는 Y 가 R · C)는 다음 칸에 옛 경로가 더 온다.
+   * ?? 는 추적 안 한 파일, X 가 빈칸이 아니면 올려 둔 변경, Y 가 빈칸이 아니면 올리지 않은 변경이다.
+   * ls-files --others --exclude-standard · diff --cached --name-only · diff --name-only 셋을 git 한 번으로 대신한다.
+   */
+  static WorkTree parseStatusZ(String output) {
+    Set<String> untracked = new LinkedHashSet<>();
+    Set<String> unstaged = new LinkedHashSet<>();
+    boolean staged = false;
+    String[] items = output.split("\0");
+    for (int k = 0; k < items.length; k++) {
+      String item = items[k];
+      if (item.length() < 4) continue;
+      char x = item.charAt(0);
+      char y = item.charAt(1);
+      String path = item.substring(3);
+      if (x == 'R' || x == 'C' || y == 'R' || y == 'C') k++;
+      if (x == '?' && y == '?') {
+        untracked.add(path);
+        continue;
+      }
+      if (x != ' ') staged = true;
+      if (y != ' ') unstaged.add(path);
+    }
+    return new WorkTree(untracked, staged, unstaged);
   }
 
   /**
    * 커밋 안 한 변경이 합치기를 막는가. 올려 둔(staged) 변경이 있으면 git merge 가 거부하므로 참이다.
    * 아니면 고친 파일이 합치기가 바꾸는 파일(touched)과 겹칠 때만 참이다.
    */
-  static boolean blocksMerge(File root, Set<String> touched) throws IOException, InterruptedException {
-    if (!lines(git(root, "diff", "--cached", "--name-only")).isEmpty()) return true;
-    Set<String> mine = lines(git(root, "diff", "--name-only"));
-    mine.retainAll(touched);
-    return !mine.isEmpty();
+  static boolean blocksMerge(WorkTree work, Set<String> touched) {
+    if (work.staged()) return true;
+    for (String path : work.unstaged()) if (touched.contains(path)) return true;
+    return false;
   }
 
   /**
@@ -570,7 +650,9 @@ final class ReverseMerge {
 
   /** 끝나지 않은 합치기 · cherry-pick · revert · rebase · git am 이 있으면 IOException. 그 위에서 합치면 Stash 가 그 상태를 지우거나 그 일을 대신 마무리하게 된다. */
   private static void refuseInProgress(File root) throws IOException, InterruptedException {
-    File gitDir = new File(git(root, "rev-parse", "--absolute-git-dir").trim());
+    // 보통 저장소는 .git 이 폴더라 git 을 띄우지 않는다. 워크트리 · 서브모듈처럼 .git 이 파일이면 git 에 묻는다.
+    File dotGit = new File(root, ".git");
+    File gitDir = dotGit.isDirectory() ? dotGit : new File(git(root, "rev-parse", "--absolute-git-dir").trim());
     for (String name : GitUndo.IN_PROGRESS) {
       if (new File(gitDir, name).exists()) throw new IOException(SyncBundle.message("rmerge.in.progress", name));
     }
@@ -844,8 +926,14 @@ final class ReverseMerge {
 
   /** 내 PC 의 branch 에만 있고 서버(remote/branch)에는 없는 커밋 수. 내 PC 에 그 브랜치가 없으면 0. */
   static int unpushed(File root, String remote, String branch) throws IOException, InterruptedException {
-    if (!hasRef(root, HEADS + branch)) return 0;
-    return Integer.parseInt(git(root, "rev-list", "--count", remoteRef(remote, branch) + ".." + HEADS + branch).trim());
+    // 보통은 git 한 번으로 센다. 실패하면 내 PC 에 그 브랜치가 없어서(0)인지 다른 까닭인지 가린다.
+    try {
+      return Integer.parseInt(git(root, "rev-list", "--count", remoteRef(remote, branch) + ".." + HEADS + branch).trim());
+    }
+    catch (IOException e) {
+      if (!hasRef(root, HEADS + branch)) return 0;
+      throw e;
+    }
   }
 
   /** unpushed 커밋 가운데 맨 위 커밋의 제목. 없으면 빈 글. */

@@ -225,7 +225,8 @@ final class GitRemoteAuth {
     String knownError = attempt.knownBadError(attempt.knownBad());
     if (knownError != null) throw new IOException(knownError);
     try {
-      String output = SyncPanel.gitWith(root, timeoutSec, List.of(), args);
+      // 위에서 고른 등록 값만 넘긴다. 빈 목록이면 runBytes 가 원격 주소를 다시 읽지 않는다.
+      String output = SyncPanel.gitWith(root, timeoutSec, List.copyOf(attempt.logins.values()), args);
       if (attempt.headers.size() == 1) attempt.verified(attempt.headers.keySet());
       return output;
     }
