@@ -16,6 +16,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import zipfile
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
@@ -46,6 +47,10 @@ CLASS_ATTRS = ("implementation", "class", "instance", "serviceImplementation", "
 # 우리 패키지 클래스 이름만 jar 안에 있는지 본다(플랫폼 클래스는 다른 jar 에 있다).
 OUR_CLASS = re.compile(r"(?:local|ei|kinggura)\.[\w.$]+")
 ICON_ATTR = "icon"
+# jar 의 plugin.xml 에 넣는 판(묶은 때 「년.월일.시분」). 같은 id 가 본체와 설정 폴더 plugins 에 함께 있으면 IntelliJ 는 판이 높은 쪽을 띄우고,
+# 판이 없으면 IDE 판(262.10968.N)으로 보아 같을 때 먼저 찾은 설정 폴더 쪽을 띄운다. 묶은 때를 판으로 쓰면 언제나 나중에 묶은 jar 가 뜬다.
+VERSION_STAMP = time.strftime("%Y.%m%d.%H%M")
+ID_END = "</id>"
 
 
 def jdk_major(home):
@@ -100,15 +105,24 @@ def check_class(path):
     return path.stem
 
 
+def stamp_version(xml):
+    """plugin.xml 글의 </id> 뒤에 <version>VERSION_STAMP</version> 을 넣는다. 이미 판이 있거나 </id> 가 없으면 멈춘다."""
+    if "<version>" in xml or ID_END not in xml:
+        raise SystemExit("plugin.xml 에 <version> 이 이미 있거나 </id> 가 없습니다.")
+    return xml.replace(ID_END, f"{ID_END}\n  <version>{VERSION_STAMP}</version>", 1)
+
+
 def pack(name, classes, target):
     target.unlink(missing_ok=True)
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as z:
-        for root in (classes, RESOURCES[name]):
-            for f in sorted(root.rglob("*")):
-                if f.is_file():
-                    z.write(f, f.relative_to(root).as_posix())
-        for f in META_INF_FILES.get(name, []):
-            z.write(f, "META-INF/" + f.name)
+        files = [(f, f.relative_to(root).as_posix()) for root in (classes, RESOURCES[name])
+                 for f in sorted(root.rglob("*")) if f.is_file()]
+        files += [(f, "META-INF/" + f.name) for f in META_INF_FILES.get(name, [])]
+        for f, arcname in files:
+            if arcname == PLUGIN_XML:
+                z.writestr(arcname, stamp_version(f.read_text(encoding="utf-8")))
+            else:
+                z.write(f, arcname)
 
 
 def missing_in_jar(jar):
