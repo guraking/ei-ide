@@ -754,6 +754,10 @@ public class SyncCheck {
     ucrtReal.getParentFile().mkdirs();
     ucrtReal.createNewFile();
     eq(SyncPanel.findWindowsGit(ucrtCmd.getPath(), bundled), ucrtReal.getPath());
+    // 설정에서 고른 경로: 껍데기면 옆의 진짜 exe, 진짜 exe 자체(ucrt64\bin)면 옆에 더 없으므로 null(고른 경로 그대로 씀).
+    eq(SyncPanel.realGitNextTo(ucrtCmd), ucrtReal.getPath());
+    eq(SyncPanel.realGitNextTo(ucrtReal.getParentFile()), null);
+    eq(SyncPanel.realGitNextTo(null), null);
   }
 
   /** Git 로그인: 서버 주소 다듬기, Basic 머리글, GIT_CONFIG_* 환경값, 저장 형식. */

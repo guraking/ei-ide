@@ -95,6 +95,7 @@ import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.treeStructure.Tree;
 import com.intellij.util.ui.tree.TreeUtil;
 import com.intellij.util.concurrency.AppExecutorUtil;
+import git4idea.config.GitVcsApplicationSettings;
 import git4idea.repo.GitRepository;
 import git4idea.repo.GitRepositoryChangeListener;
 import git4idea.repo.GitRepositoryManager;
@@ -3496,6 +3497,14 @@ final class SyncPanel extends SimpleToolWindowPanel {
    * PATH 에 git 이 없으면 설치본의 MinGit, 그것도 없으면 PATH 의 「git」(실행할 때 찾지 못했다는 오류가 난다).
    */
   static String gitExecutable() {
+    // 설정 → 버전 관리 → Git 에서 고른 경로가 있으면 IntelliJ Git 과 같은 실행 파일을 쓴다. 그 파일이 없어졌으면 아래 찾기로 넘어간다.
+    // IDE 밖(점검 main)에서는 설정 서비스가 없으므로 건너뛴다.
+    String saved = ApplicationManager.getApplication() == null ? null : GitVcsApplicationSettings.getInstance().getSavedPathToGit();
+    if (saved != null && !saved.isBlank() && new File(saved).isFile()) {
+      if (!com.intellij.openapi.util.SystemInfo.isWindows) return saved;
+      String real = realGitNextTo(new File(saved).getParentFile());
+      return real != null ? real : saved;
+    }
     String found = gitPath;
     if (found != null) return found;
     found = com.intellij.openapi.util.SystemInfo.isWindows
@@ -3510,16 +3519,22 @@ final class SyncPanel extends SimpleToolWindowPanel {
     if (path != null) {
       for (String dir : path.split(File.pathSeparator)) {
         if (!new File(dir, GIT_EXE_NAME).isFile()) continue;
-        File parent = new File(dir).getParentFile();
-        if (parent == null) return GIT;
-        for (String name : GIT_REAL_EXES) {
-          File real = new File(parent, name);
-          if (real.isFile()) return real.getPath();
-        }
-        return GIT;
+        String real = realGitNextTo(new File(dir));
+        return real != null ? real : GIT;
       }
     }
     return bundled.isFile() ? bundled.getPath() : GIT;
+  }
+
+  /** git.exe 껍데기가 든 폴더(cmd · bin) 옆의 mingw64 · ucrt64 아래 진짜 git.exe 경로. dir 이 null 이거나 없으면 null. */
+  static String realGitNextTo(File dir) {
+    File parent = dir == null ? null : dir.getParentFile();
+    if (parent == null) return null;
+    for (String name : GIT_REAL_EXES) {
+      File real = new File(parent, name);
+      if (real.isFile()) return real.getPath();
+    }
+    return null;
   }
 
   /** 설치본에 같이 넣은 svn.exe 가 있으면 그 경로, 없으면 PATH 에서 찾을 「svn」. */

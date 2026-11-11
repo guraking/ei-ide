@@ -225,6 +225,11 @@ public final class WasRunner {
             Messages.showErrorDialog(project, BootServersBundle.message("was.not.home", server.kind().label, server.home), TITLE);
             return false;
         }
+        String javaHome = System.getenv("JAVA_HOME");
+        if (projectJdkHome() == null && (javaHome == null || javaHome.isBlank())) {
+            Messages.showErrorDialog(project, BootServersBundle.message("was.no.jdk", server.kind().label), TITLE);
+            return false;
+        }
         if (server.kind() == WasSettings.Kind.JEUS && jeusPassword(server, true) == null) {
             return false;
         }
@@ -658,11 +663,17 @@ public final class WasRunner {
     /** 프로젝트 JDK 로 띄운다. Tomcat setclasspath 는 JRE_HOME 이 있으면 그것을 먼저 쓰므로 둘 다 맞춘다. */
     private GeneralCommandLine withJdk(GeneralCommandLine cmd, Path base) {
         cmd.withWorkDirectory(base.toFile()).withCharset(StandardCharsets.UTF_8);
-        Sdk sdk = ReadAction.compute(() -> ProjectRootManager.getInstance(project).getProjectSdk());
-        if (sdk != null && sdk.getHomePath() != null) {
-            cmd.withEnvironment("JAVA_HOME", sdk.getHomePath()).withEnvironment("JRE_HOME", sdk.getHomePath());
+        String home = projectJdkHome();
+        if (home != null) {
+            cmd.withEnvironment("JAVA_HOME", home).withEnvironment("JRE_HOME", home);
         }
         return cmd;
+    }
+
+    /** 프로젝트 SDK 의 설치 폴더. SDK 가 없거나 폴더를 모르면 null. */
+    private String projectJdkHome() {
+        Sdk sdk = ReadAction.compute(() -> ProjectRootManager.getInstance(project).getProjectSdk());
+        return sdk == null ? null : sdk.getHomePath();
     }
 
     /**

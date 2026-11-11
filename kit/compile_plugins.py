@@ -17,6 +17,7 @@ import shutil
 import subprocess
 import sys
 import zipfile
+import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -38,6 +39,13 @@ CHECK_SOURCES = {
     "boot-servers": KIT / "boot-servers/src/test/java",
     "kinggura-sync": KIT / "sync",
 }
+PLUGIN_XML = "META-INF/plugin.xml"
+# plugin.xml 에서 클래스 이름을 담는 속성.
+CLASS_ATTRS = ("implementation", "class", "instance", "serviceImplementation", "implementationClass",
+               "factoryClass", "provider")
+# 우리 패키지 클래스 이름만 jar 안에 있는지 본다(플랫폼 클래스는 다른 jar 에 있다).
+OUR_CLASS = re.compile(r"(?:local|ei|kinggura)\.[\w.$]+")
+ICON_ATTR = "icon"
 
 
 def jdk_major(home):
@@ -103,6 +111,74 @@ def pack(name, classes, target):
             z.write(f, "META-INF/" + f.name)
 
 
+def missing_in_jar(jar):
+    """jar 의 plugin.xml 과 그것이 config-file 로 부르는 xml 에 적힌 우리 클래스 · /아이콘 중 jar 에 없는 것."""
+    missing = []
+    with zipfile.ZipFile(jar) as z:
+        entries = set(z.namelist())
+        xmls, seen = [PLUGIN_XML], set()
+        while xmls:
+            xml = xmls.pop()
+            if xml in seen:
+                continue
+            seen.add(xml)
+            if xml not in entries:
+                missing.append(xml)
+                continue
+            for el in ET.fromstring(z.read(xml)).iter():
+                if el.get("config-file"):
+                    xmls.append("META-INF/" + el.get("config-file"))
+                for attr in CLASS_ATTRS:
+                    value = (el.get(attr) or "").strip()
+                    if OUR_CLASS.fullmatch(value) and value.replace(".", "/") + ".class" not in entries:
+                        missing.append(f"{xml}: {attr}={value}")
+                icon = (el.get(ICON_ATTR) or "").strip()
+                if icon.startswith("/") and icon[1:] not in entries:
+                    missing.append(f"{xml}: {ICON_ATTR}={icon}")
+    return missing
+
+
+def install(names):
+    """모든 jar 를 <이름>.jar.new 로 먼저 복사한 뒤 바꾼다. 복사나 바꾸기가 하나라도 실패하면 모두 원래대로 둔다."""
+    targets = {n: ROOT / "bundled-plugins" / n / "lib" / f"{n}.jar" for n in names}
+    staged = []
+    try:
+        for name, target in targets.items():
+            target.parent.mkdir(parents=True, exist_ok=True)
+            new = target.with_name(target.name + ".new")
+            staged.append(new)
+            shutil.copy2(WORK / f"{name}.jar", new)
+    except OSError as e:
+        for new in staged:
+            new.unlink(missing_ok=True)
+        raise SystemExit(f"\n새 jar 복사 실패(IDE 가 켜져 jar 를 잡고 있는지 확인하세요): {e}\n본체 jar 를 하나도 바꾸지 않았습니다.")
+    replaced = []
+    try:
+        for target in targets.values():
+            old = target.with_name(target.name + ".old")
+            if target.exists():
+                shutil.copy2(target, old)
+            os.replace(target.with_name(target.name + ".new"), target)
+            replaced.append((target, old))
+    except OSError as e:
+        restore_errors = []
+        for target, old in replaced:
+            try:
+                if old.exists():
+                    os.replace(old, target)
+                else:
+                    target.unlink(missing_ok=True)
+            except OSError as re_err:
+                restore_errors.append(f"{target}: {re_err}")
+        for new in staged:
+            new.unlink(missing_ok=True)
+        detail = "\n되돌리지 못한 jar(.old 로 직접 되돌리세요):\n" + "\n".join(restore_errors) if restore_errors else ""
+        raise SystemExit(f"\n본체 jar 바꾸기 실패(IDE 가 켜져 jar 를 잡고 있는지 확인하세요): {e}\n바꾼 jar 를 되돌렸습니다.{detail}")
+    for target, old in replaced:
+        old.unlink(missing_ok=True)
+        print(f"넣음: {target}")
+
+
 def build(name, javac, jars):
     """한 플러그인을 컴파일 · 점검 · 묶는다. (이름, 성공, 기록)."""
     log = []
@@ -138,6 +214,10 @@ def build(name, javac, jars):
             return name, False, log + tail[-20:]
 
     pack(name, classes, WORK / f"{name}.jar")
+    missing = missing_in_jar(WORK / f"{name}.jar")
+    log.append(f"{'실패' if missing else '통과'} plugin.xml 이 부르는 클래스 · 아이콘: jar 에 없는 것 {len(missing)}개")
+    if missing:
+        return name, False, log + missing
     return name, True, log
 
 
@@ -157,11 +237,7 @@ def main():
         print("\n".join("  " + line for line in log))
     if not all(ok for _, ok, _ in results):
         raise SystemExit("\n실패한 플러그인이 있어 본체 jar 를 하나도 바꾸지 않았습니다.")
-    for name in names:
-        target = ROOT / "bundled-plugins" / name / "lib" / f"{name}.jar"
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(WORK / f"{name}.jar", target)
-        print(f"넣음: {target}")
+    install(names)
 
 
 if __name__ == "__main__":

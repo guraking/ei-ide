@@ -32,9 +32,9 @@ public final class BundledFonts implements AppLifecycleListener {
     // 편집기 기본 글꼴이 쓰는 보통 굵기. 첫 창 전에 등록한다.
     private static final String REGULAR = "MoaMono-Regular.ttf";
     // 글꼴 파일 안의 가족 이름. 화면 글꼴 설정(UISettings.fontFace)에도 이 이름을 넣는다.
-    private static final String FAMILY = "Moa Mono";
+    static final String FAMILY = "Moa Mono";
     // 이름을 바꾸기 전 같은 글꼴의 가족 이름. 이 이름은 더 이상 등록되지 않는다.
-    private static final String OLD_FAMILY = "EI Mono";
+    static final String OLD_FAMILY = "EI Mono";
     /** 화면 글꼴을 바꿨다는 표시. 앱 수준 PropertiesComponent(other.xml)에 남는다. 앞 글꼴(JetBrainsMonoHangul · JBMono Pretendard)로 바꾼 PC 도 한 번 다시 바꾸도록 새 키를 쓴다. */
     private static final String UI_FONT_APPLIED_KEY = "eiide.uiFont.eiMono.applied";
     // 굵게 · 기울임. 화면 글꼴로 쓰면 굵은 글(제목 · 선택 단추)이 첫 화면부터 나오므로 화면을 다시 깔기 전에 함께 등록한다.
