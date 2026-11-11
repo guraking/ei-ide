@@ -380,12 +380,12 @@ final class SyncPanel extends SimpleToolWindowPanel {
   // 목록 우클릭 메뉴가 아래 단추와 같은 동작을 하도록 단추를 눌러 부른다.
   private JButton pullButton;
   private JButton pullAllButton;
-  // 받기(git pull · svn update)가 도는 수(EDT 에서만). 0 보다 크면 받기 단추 둘과 새로고침을 막는다(같은 작업본에 svn update · status 가 겹치면 잠금 오류).
-  private int pulling;
+  // 받기(git pull · svn update)가 도는 수(EDT 에서만 바꾸고, 도구줄은 작업 스레드에서 읽는다). 0 보다 크면 받기 단추 둘과 새로고침을 막는다(같은 작업본에 svn update · status 가 겹치면 잠금 오류).
+  private volatile int pulling;
   private JButton pushButton;
   private JButton resolveButton;
-  // 새로고침이 도는 동안 참(EDT 에서만). 도구줄의 새로고침 동작은 이 값이 참이면 꺼진다.
-  private boolean busy;
+  // 새로고침이 도는 동안 참(EDT 에서만 바꾸고, 도구줄은 작업 스레드에서 읽는다). 도구줄의 새로고침 동작은 이 값이 참이면 꺼진다.
+  private volatile boolean busy;
   // 새로고침이 도는 동안 VCS 매핑이 바뀌었다(EDT 에서만). 끝나면 한 번만 다시 새로고침한다(fetch 가 겹치지 않게).
   private boolean refreshAgain;
   // 새로고침이 도는 동안 VCS 매핑이 바뀌었다(EDT 에서만). 끝나면 mappingChanged 를 한 번 한다.
@@ -399,7 +399,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private List<Change> changes = List.of();
   // 비교를 시작할 때마다 하나 올린다(EDT 에서만). 늦게 끝난 옛 비교가 새 결과를 덮지 않게 끝날 때 이 값과 맞춰 본다.
   private int compareSeq;
-  private Kind modeFilter;  // null 이면 전체
+  private volatile Kind modeFilter;  // null 이면 전체. 도구줄은 작업 스레드에서 읽는다.
   // 알림을 모아 두었다가 다시 비교할 저장소(EDT 에서만). Git 알림이 온 루트, 변경 목록에서 경로가 달라진 곳(Git · SVN).
   private final Set<File> pendingRoots = new HashSet<>();
   private final Set<String> pendingPaths = new HashSet<>();
@@ -435,7 +435,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
   // 위쪽 상태 글이 요약(showSummary)인지(EDT 에서만). 진행 · 알림 글이면 「N분 전」을 다시 그리지 않는다.
   private boolean summaryShown;
   // 폴더별로 묶어 보기(도구줄 토글, IDE 를 다시 켜도 남는다).
-  private boolean byFolder = PropertiesComponent.getInstance().getBoolean(GROUP_BY_FOLDER_KEY);
+  private volatile boolean byFolder = PropertiesComponent.getInstance().getBoolean(GROUP_BY_FOLDER_KEY);
 
   // 저장소별 마지막 git status -b 의 앞선 · 뒤진 커밋 수. Push 단추 숫자와 받을 저장소 고르기에 쓴다. compare 가 채운다.
   private final Map<File, Tracking> tracking = new ConcurrentHashMap<>();
@@ -1653,7 +1653,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       this.run = run;
     }
 
-    @Override public @NotNull ActionUpdateThread getActionUpdateThread() { return ActionUpdateThread.EDT; }
+    @Override public @NotNull ActionUpdateThread getActionUpdateThread() { return ActionUpdateThread.BGT; }
     @Override public void update(@NotNull AnActionEvent e) { e.getPresentation().setEnabled(!busy && pulling == 0); }
     @Override public void actionPerformed(@NotNull AnActionEvent e) { run.run(); }
   }
@@ -1668,7 +1668,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       getTemplatePresentation().putClientProperty(ActionUtil.SHOW_TEXT_IN_TOOLBAR, true);
     }
 
-    @Override public @NotNull ActionUpdateThread getActionUpdateThread() { return ActionUpdateThread.EDT; }
+    @Override public @NotNull ActionUpdateThread getActionUpdateThread() { return ActionUpdateThread.BGT; }
     @Override public boolean isSelected(@NotNull AnActionEvent e) { return modeFilter == kind; }
 
     /**
@@ -1715,7 +1715,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       super(SyncBundle.message("sync.group.folder"), null, AllIcons.Actions.GroupByPackage);
     }
 
-    @Override public @NotNull ActionUpdateThread getActionUpdateThread() { return ActionUpdateThread.EDT; }
+    @Override public @NotNull ActionUpdateThread getActionUpdateThread() { return ActionUpdateThread.BGT; }
     @Override public boolean isSelected(@NotNull AnActionEvent e) { return byFolder; }
 
     @Override

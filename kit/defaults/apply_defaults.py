@@ -447,6 +447,12 @@ EDITS = [
      "    var otherEditionPrefixes = settings != null ? settings.getEditionsToImportFrom() : List.<String>of();\n",
      "    var otherEditionPrefixes = ContainerUtil.append(settings != null ? settings.getEditionsToImportFrom() : List.<String>of(),\n"
      "                                                    \"EIIDE\");  // Moa IDE: 이름을 바꾸기 전 설정 폴더도 가져온다\n"),
+    # 31) IntelliJ 가 20분마다 모든 Git 저장소의 원격에 ls-remote 로 들어온 커밋을 묻는 확인을 기본으로 끈다.
+    #     회사 PC 는 git 한 번에 0.4~0.9 초라 저장소 8개면 30 초가량 git 이 몰린다. 원격 확인은 동기화 창이 fetch 로 한다.
+    #     설정 → 버전 관리 → Git 「원격의 들어오는 커밋 확인」 기본값이다. 프로젝트에서 직접 고른 값이 있으면 그 값을 따른다.
+    ("plugins/git4idea/shared/src/git4idea/config/GitVcsOptions.kt",
+     "  var incomingCommitsCheckStrategy: GitIncomingRemoteCheckStrategy by enum<GitIncomingRemoteCheckStrategy>(GitIncomingRemoteCheckStrategy.LS_REMOTE)\n",
+     "  var incomingCommitsCheckStrategy: GitIncomingRemoteCheckStrategy by enum<GitIncomingRemoteCheckStrategy>(GitIncomingRemoteCheckStrategy.NONE)  // Moa IDE: 원격 확인은 동기화 창이 한다\n"),
 ]
 
 

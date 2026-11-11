@@ -135,6 +135,9 @@ public final class ReverseMergeAction extends DumbAwareAction {
       private List<String> names;
       private String savedFrom;
       private String savedInto;
+      // git config 에 지금 적혀 있는 From · Into(지금 브랜치 것이 아니어도 그대로). 병합 때 같은 값이면 다시 적지 않는다.
+      private String storedFrom;
+      private String storedInto;
 
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
@@ -149,6 +152,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
           remote = ReverseMerge.remoteOf(cfg, current);
           savedFrom = cfg.get(ReverseMerge.CONFIG_FROM);
           savedInto = cfg.get(ReverseMerge.CONFIG_INTO);
+          storedFrom = savedFrom;
+          storedInto = savedInto;
           // 지금 브랜치에 합친 기억만 쓴다. 다른 브랜치나 반대 방향(지금 브랜치 → develop)의 기억은 버린다.
           if (!ReverseMerge.rememberedFor(savedInto, current, Boolean.parseBoolean(local.get(0).trim()))) {
             savedFrom = null;
@@ -191,7 +196,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
         String into = ReverseMerge.pick(names, savedInto, List.of(current));
         // 같은 브랜치로 열지 않는다(지금 브랜치가 develop 일 때). Into 를 비워 고르라는 안내가 보이게 한다.
         if (into != null && into.equals(from)) into = null;
-        new PreviewDialog(project, repo, root, remote, current, names, from, into).show();
+        new PreviewDialog(project, repo, root, remote, current, names, from, into, storedFrom, storedInto).show();
       }
 
       @Override
@@ -231,9 +236,15 @@ public final class ReverseMergeAction extends DumbAwareAction {
     private boolean ready;
     // 미리 본 From 커밋. Merge 는 이 커밋을 합친다(그사이 자동 fetch 가 받아 온 커밋은 넣지 않는다). EDT 에서만 쓴다.
     private String fromTip;
+    // git config 에 적혀 있는 From · Into. 병합 때 고른 값과 같으면 git config 를 다시 부르지 않는다(회사 PC 에서 한 번에 0.3 초 넘게 걸린다).
+    private volatile String storedFrom;
+    private volatile String storedInto;
 
-    PreviewDialog(Project project, GitRepository repo, File root, String remote, String current, List<String> names, String from, String into) {
+    PreviewDialog(Project project, GitRepository repo, File root, String remote, String current, List<String> names, String from, String into,
+                  String storedFrom, String storedInto) {
       super(project, true);
+      this.storedFrom = storedFrom;
+      this.storedInto = storedInto;
       this.project = project;
       this.repo = repo;
       this.root = root;
@@ -709,8 +720,14 @@ public final class ReverseMergeAction extends DumbAwareAction {
           String before = start.head();
           Set<String> dirtyBefore = start.dirty();
           try {
-            ReverseMerge.saveConfig(root, ReverseMerge.CONFIG_FROM, from);
-            ReverseMerge.saveConfig(root, ReverseMerge.CONFIG_INTO, into);
+            if (!from.equals(storedFrom)) {
+              ReverseMerge.saveConfig(root, ReverseMerge.CONFIG_FROM, from);
+              storedFrom = from;
+            }
+            if (!into.equals(storedInto)) {
+              ReverseMerge.saveConfig(root, ReverseMerge.CONFIG_INTO, into);
+              storedInto = into;
+            }
             result = ReverseMerge.merge(root, remote, from, tip, into, current, pushAfter, stash, matchCase);
             if (result != ReverseMerge.Result.MERGED) conflicts = ReverseMerge.conflicts(root);
           }
