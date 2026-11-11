@@ -255,11 +255,11 @@ public final class ValidationAction extends AnAction {
     Picker(Project project, List<DbConfig> conns, String table) {
       super(project, true);
       connection = new ComboBox<>(conns.toArray(new DbConfig[0]));
-      schemaField.setText(Meta.schemaOf(conns.get(0)));
+      fillSchema(project, conns.get(0));
       tableField.setText(table);
       connection.addActionListener(e -> {
         DbConfig c = config();
-        if (c != null) schemaField.setText(Meta.schemaOf(c));
+        if (c != null) fillSchema(project, c);
       });
       setTitle(EiDbBundle.message("validation.title"));
       setOKButtonText(EiDbBundle.message("validation.read.columns"));
@@ -288,6 +288,14 @@ public final class ValidationAction extends AnAction {
     }
 
     DbConfig config() { return (DbConfig) connection.getSelectedItem(); }
+
+    /** 그 접속의 스키마를 칸에 넣는다. 접속해야 아는 스키마면 접속하는 동안 칸을 비워 두어 짐작한 public 으로 읽지 않게 한다. */
+    private void fillSchema(Project project, DbConfig c) {
+      schemaField.setText(Meta.schemaUnknown(c) ? "" : Meta.schemaOf(c));
+      DbSessions.get(project).whenSchemaKnown(c, () -> {
+        if (c == config()) schemaField.setText(Meta.schemaOf(c));
+      });
+    }
 
     String schema() { return schemaField.getText().strip(); }
 

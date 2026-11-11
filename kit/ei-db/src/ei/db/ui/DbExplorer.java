@@ -382,9 +382,14 @@ final class DbExplorer extends SimpleToolWindowPanel {
       DbSessions sessions = DbSessions.get(project);
       background(node, s.c(), () -> {
         Connection conn = sessions.connection(s.c());
-        List<Meta.Table> tables = Meta.tables(conn, s.c(), s.name(), Meta.tableTypes(s.c()));
-        List<Meta.Table> views = Meta.tables(conn, s.c(), s.name(), Meta.viewTypes(s.c()));
-        return () -> fillSchema(node, s, tables, views);
+        // 마디는 접속 전에 만들어진다. 기본 스키마를 비운 PostgreSQL 은 접속한 지금에야 현재 스키마를 알므로 다시 읽어 마디 이름도 바꾼다.
+        Schema real = new Schema(s.c(), Meta.schemaOf(s.c()));
+        List<Meta.Table> tables = Meta.tables(conn, real.c(), real.name(), Meta.tableTypes(real.c()));
+        List<Meta.Table> views = Meta.tables(conn, real.c(), real.name(), Meta.viewTypes(real.c()));
+        return () -> {
+          node.setUserObject(real);
+          fillSchema(node, real, tables, views);
+        };
       });
     } else if (o instanceof ProgramGroup pg) {
       DbSessions sessions = DbSessions.get(project);
@@ -752,9 +757,11 @@ final class DbExplorer extends SimpleToolWindowPanel {
   // ---- 표 · 칼럼 찾기 ----
 
   private void openSearch(DbConfig c) {
-    String schema = Meta.schemaOf(c);
-    ColumnSearch.show(project, c, schema, hit -> {
-      if (!reveal(c, hit.table())) openSelect(c, schema, hit.table());
+    DbSessions.get(project).whenSchemaKnown(c, () -> {
+      String schema = Meta.schemaOf(c);
+      ColumnSearch.show(project, c, schema, hit -> {
+        if (!reveal(c, hit.table())) openSelect(c, schema, hit.table());
+      });
     });
   }
 

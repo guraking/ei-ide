@@ -19,6 +19,9 @@ import java.util.List;
 @State(name = "KingGuraServerGroups", storages = @Storage(StoragePathMacros.WORKSPACE_FILE))
 public final class ServerGroups implements PersistentStateComponent<ServerGroups.StateBean> {
 
+    /** 스프링 부트 서버의 줄 키 앞머리. 뒤에 실행 설정 이름이 붙는다. */
+    static final String BOOT_KEY_PREFIX = "boot:";
+
     /** 직렬화를 위해 공개 필드와 기본 생성자를 쓴다. */
     public static final class Group {
         public String name = "";

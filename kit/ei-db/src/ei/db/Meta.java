@@ -65,6 +65,11 @@ public final class Meta {
     return out;
   }
 
+  /** 기본 스키마를 비운 PostgreSQL 접속이라 접속해야 현재 스키마를 아는데 아직 모르면 true. 이때 schemaOf 는 public 으로 짐작한다. */
+  public static boolean schemaUnknown(DbConfig c) {
+    return c.kind == DbKind.POSTGRES && (c.schema == null || c.schema.isBlank()) && !CURRENT_SCHEMA.containsKey(c.id);
+  }
+
   /** PostgreSQL 에서 비웠으면 접속 뒤 읽은 현재 스키마, 아직 모르면 public. */
   public static String schemaOf(DbConfig c) {
     if (c.kind == DbKind.POSTGRES && (c.schema == null || c.schema.isBlank())) return CURRENT_SCHEMA.getOrDefault(c.id, PG_DEFAULT_SCHEMA);

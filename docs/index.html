@@ -307,7 +307,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
     <h1>설치하고, 서버 띄우고, DB 까지<br>한 화면씩 따라 하기</h1>
     <p>인텔리제이 커뮤니티를 바탕으로 이클립스 흐름을 얹은 가벼운 자바 개발 도구입니다. 설치 순서와 직접 만든 기능(서버 창 · Git · 데이터베이스 · MyBatis · 코드 도구)을 기능별로 나누고, 어느 메뉴에 무엇이 있는지와 단축키를 앞쪽에 모았습니다.</p>
     <div class="chips">
-      <span class="chip">판 <b>262.10968.1053</b></span>
+      <a class="chip" id="build" href="https://github.com/guraking/ei-ide/releases/latest">판 <b>최신</b></a>
       <span class="chip">바탕 <b>IntelliJ Community 2026.2.3</b></span>
       <a class="chip" href="https://github.com/guraking/ei-ide/releases/latest">최신 설치 파일 받기 →</a>
       <a class="chip" href="https://github.com/guraking/ei-ide">저장소</a>
@@ -2210,6 +2210,11 @@ build-windows.bat
       links.forEach(function(a){ a.classList.toggle("on", a.getAttribute("href")==="#"+en.target.id); }); });
   },{rootMargin:"-40% 0px -55% 0px"});
   document.querySelectorAll("section[id]").forEach(function(s){ obs.observe(s); });
+  // 판 번호는 GitHub 마지막 릴리스 태그(v262.10968.N)를 따른다. 못 읽으면 「최신」 링크로 둔다.
+  fetch("https://api.github.com/repos/guraking/ei-ide/releases/latest")
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(rel){ if(rel && /^v?\d+(\.\d+)+$/.test(rel.tag_name||"")) document.querySelector("#build b").textContent=rel.tag_name.replace(/^v/,""); })
+    .catch(function(){});
 })();
 </script>
 </body>

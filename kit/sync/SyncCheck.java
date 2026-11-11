@@ -80,6 +80,17 @@ public class SyncCheck {
     inner.mkdir();
     eq(SyncPanel.topLevel(repo, repo.getCanonicalPath() + "\n"), repo);
     eq(SyncPanel.topLevel(inner, repo.getPath()), repo);
+    // 링크로 연 경로와 실제 경로는 같은 저장소로 본다. 윈도우에서 링크를 만들 권한이 없으면 링크 확인만 건너뛴다.
+    eq(SyncPanel.sameDir(inner, repo), false);
+    File link = new File(repo.getParentFile(), repo.getName() + "-link");
+    try {
+      java.nio.file.Files.createSymbolicLink(link.toPath(), repo.toPath());
+      eq(SyncPanel.sameDir(link, repo), true);
+      link.delete();
+    }
+    catch (java.io.IOException | UnsupportedOperationException noLink) {
+      System.out.println("링크를 만들 수 없어 sameDir 링크 확인을 건너뜀: " + noLink);
+    }
     // 우리 Stash 는 맨 위가 아니어도 찾는다.
     eq(ReverseMerge.ourStash("stash@{0}\tOn feature/kim: 남의것\nstash@{1}\tOn feature/kim: " + ReverseMerge.STASH_MESSAGE + "\n"), "stash@{1}");
     eq(ReverseMerge.ourStash("stash@{0}\tOn main: 남의것\n"), null);
