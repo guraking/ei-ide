@@ -15,6 +15,7 @@
   - `kit/web/apply_web.py` 설치본에 넣을 Node.js 와 웹 언어 서버(vtsls · Vue · typescript 5)를 받아 `bundled-plugins/boot-servers/web` 에 넣는다(판 · SHA-256 고정, 저장소에는 안 올림). 인터넷이 막힌 PC 에서도 .js · .ts · .vue 언어 서버가 뜬다
   - `kit/git-auth` IntelliJ Git 이 https 원격에 인증을 환경값으로 넘기는 손질(`apply_git_auth.py`), 점검 `EiGitAuthCheck.java`
   - `kit/textmate` IntelliJ TextMate 색칠 엔진이 여러 줄 구역(`<!-- -->` 등)이 닫힌 뒤 윗줄 칸 위치를 \G 로 잘못 쓰던 것을 고치는 손질(`apply_textmate.py`), 점검 `apply_textmate_check.py`
+  - `kit/defender` Microsoft Defender 알림의 「제외」 단추가 서명 없는 도우미 대본(`bin\defender-exclusions.ps1`)도 돌리게 하는 손질(`apply_defender.py`), 점검 `apply_defender_check.py`
   - `kit/customize.py`(brand · slim) · `kit/menu/apply_menu.py` · `kit/defaults/apply_defaults.py` · `kit/brand/apply_brand.bat` · `kit/check_update.py`(새 판 점검) · `kit/compile_plugins.py`(플러그인 3개 동시 컴파일 · 점검 → 본체 jar)
 - `bundled-plugins/<이름>/lib/*.jar` 는 빌드 때 본체에 들어간다. `release/플러그인설치.bat` 은 노트북 설치 대본.
 
@@ -54,6 +55,7 @@ python kit\menu\apply_menu.py intellij-community
 python kit\defaults\apply_defaults.py intellij-community
 python kit\git-auth\apply_git_auth.py intellij-community
 python kit\textmate\apply_textmate.py intellij-community
+python kit\defender\apply_defender.py intellij-community
 python kit\ko\apply_ko.py
 python kit\mingit\apply_mingit.py
 python kit\web\apply_web.py
