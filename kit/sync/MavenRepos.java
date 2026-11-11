@@ -104,22 +104,13 @@ final class MavenRepos {
   }
 
   /**
-   * Maven 목록이 읽힌 뒤, 이 pom 이 목록에 없으면(연결도 무시도 안 한 pom) link 를 부른다(CloneIntoProject.linkOnOpen).
-   * 켠 직후처럼 목록이 아직 안 읽혔으면 RETRY_SECONDS 마다 다시 본다(최대 RETRY_LIMIT 번, 넘으면 연결하지 않는다). EDT 에서 부른다.
+   * 이 pom 이 Maven 이 맡은 파일 목록에 없으면(연결도 무시도 안 한 pom) link 를 부른다(CloneIntoProject.linkOnOpen). EDT 에서 부른다.
+   * 맡은 파일 목록(isManagedFile)은 프로젝트 설정에서 바로 읽히므로 Maven 이 아직 안 읽혔거나 한 번도 안 쓴 프로젝트여도 맞다.
+   * findProject 는 다중 모듈의 아래 pom(목록에는 맨 위 pom 만 있음)을 가른다. Maven 이 안 읽혔으면 null 이라 그때는 목록만 본다.
    */
-  static void linkIfUnknown(Project project, VirtualFile pom, Runnable link, int attempt) {
+  static void linkIfUnknown(Project project, VirtualFile pom, Runnable link) {
     if (project.isDisposed()) return;
     MavenProjectsManager manager = MavenProjectsManager.getInstance(project);
-    // setClosed 와 같은 「아직 읽는 중」 판정.
-    boolean loading = !manager.isInitialized() || (manager.isMavenizedProject() && manager.getProjects().isEmpty());
-    if (loading) {
-      if (attempt < RETRY_LIMIT) {
-        AppExecutorUtil.getAppScheduledExecutorService().schedule(
-          () -> ApplicationManager.getApplication().invokeLater(() -> linkIfUnknown(project, pom, link, attempt + 1), project.getDisposed()),
-          RETRY_SECONDS, TimeUnit.SECONDS);
-      }
-      return;
-    }
     if (!manager.isManagedFile(pom) && manager.findProject(pom) == null) link.run();
   }
 

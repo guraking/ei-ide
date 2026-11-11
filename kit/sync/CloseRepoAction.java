@@ -185,6 +185,12 @@ public class CloseRepoAction extends DumbAwareAction {
     return targets;
   }
 
+  /** 우리가 닫아 둔 저장소 경로(CLOSED_KEY, '/' 구분). 고쳐도 되는 새 목록. */
+  static List<String> closedPaths(Project project) {
+    List<String> saved = PropertiesComponent.getInstance(project).getList(CLOSED_KEY);
+    return saved == null ? new ArrayList<>() : new ArrayList<>(saved);
+  }
+
   /** 내린 모듈의 콘텐츠 루트 중 디스크에 있는 폴더(rootsOf). */
   static List<VirtualFile> closedRoots(Project project) {
     List<VirtualFile> roots = new ArrayList<>();
