@@ -3419,7 +3419,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     return run(dir, timeoutSec, GIT, gitArgs(args));
   }
 
-  /** git 과 같고 logins 의 인증을 더 넘긴다(GitRemoteAuth). */
+  /** git 과 같고 logins 의 인증을 더 넘긴다(GitRemoteAuth). logins 는 부른 쪽이 고른 값이다(빈 목록이면 넘길 값 없음, runBytes 참고). */
   static String gitWith(File dir, long timeoutSec, List<GitLogins.Login> logins, String... args) throws IOException, InterruptedException {
     // 같은 저장소의 원격 명령은 창 · 기능(동기화 · Merge Branches)이 달라도 하나씩 돌린다. 겹치면 같은 원격 추적 참조를 두고 cannot lock ref 로 실패한다.
     // ls-remote 는 참조를 바꾸지 않아 줄 세우지 않는다. 서버가 느릴 때 Merge Branches 의 목록 받기가 fetch 를 붙잡지 않게 한다.
@@ -3539,10 +3539,13 @@ final class SyncPanel extends SimpleToolWindowPanel {
    * 표준 입력은 바로 닫아, 자격 증명을 묻는 git 이 입력을 기다리며 시간 제한까지 멈추지 않고 곧바로 실패하게 한다.
    */
   static byte[] runBytes(File dir, long timeoutSec, String exe, String... args) throws IOException, InterruptedException {
-    return runBytes(dir, timeoutSec, List.of(), exe, args);
+    return runBytes(dir, timeoutSec, null, exe, args);
   }
 
-  /** runBytes 와 같고 git 에 logins 의 인증을 더 넘긴다. */
+  /**
+   * runBytes 와 같고 git 에 logins 의 인증을 더 넘긴다. logins 가 null 이면 이 명령이 닿는 서버의 등록 값을 여기서 고르고(원격 주소를 git 으로 읽는다),
+   * null 이 아니면 부른 쪽이 이미 고른 것이라 그대로 쓴다(빈 목록이면 넘길 값이 없다). 회사 PC 는 git 하나에 0.4초 안팎이라 같은 읽기를 두 번 하지 않는다.
+   */
   private static byte[] runBytes(File dir, long timeoutSec, List<GitLogins.Login> logins, String exe, String... args) throws IOException, InterruptedException {
     List<String> command = new ArrayList<>(List.of(VCS_NAME_SVN.equals(exe) ? svnExecutable() : GIT.equals(exe) ? gitExecutable() : exe));
     command.addAll(List.of(args));
@@ -3565,7 +3568,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
         if (GIT_REMOTE_VERBS.contains(verb(args))) {
           builder.environment().put(ENV_MESSAGE_LANGUAGE, MESSAGE_LANGUAGE_UNTRANSLATED);
           // GitRemoteAuth 가 이 저장소 서버의 값을 골라 넘겼으면 그것만, 아니면(저장소를 모를 때 · Clone) 이 명령이 닿는 서버의 등록 값만 넘긴다.
-          builder.environment().putAll(logins.isEmpty() ? GitLogins.env(GitRemoteAuth.configServers(dir, args).keySet(), builder.environment())
+          builder.environment().putAll(logins == null ? GitLogins.env(GitRemoteAuth.configServers(dir, args).keySet(), builder.environment())
                                                         : GitLogins.env(logins, builder.environment()));
         }
       }
