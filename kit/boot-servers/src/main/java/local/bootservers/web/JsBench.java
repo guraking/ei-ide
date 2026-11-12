@@ -37,10 +37,11 @@ public final class JsBench {
     private static final String TEMP_PREFIX = "moa-jsbench";
     /** 끊은 뒤 남은 출력을 다 읽기까지 기다리는 시간. */
     private static final long DRAIN_MS = 1000;
-    /** 브라우저 화면에만 있는 이름. 이것이 없다는 오류면 「화면 전용 코드」 안내를 붙인다. */
+    /** 브라우저 · Vue · React 화면에만 있는 이름. 이것이 없다는 오류면 「화면 전용 코드」 안내를 붙인다. */
     private static final List<String> BROWSER_NAMES = List.of("document", "window", "localStorage", "sessionStorage",
             "navigator", "location", "alert", "confirm", "HTMLElement", "FileReader", "XMLHttpRequest", "axios", "Vue",
-            "ref", "reactive", "computed", "watch", "onMounted", "defineProps", "defineEmits");
+            "ref", "reactive", "computed", "watch", "onMounted", "defineProps", "defineEmits", "React", "useState", "useEffect",
+            "useRef", "useMemo", "useCallback", "useContext");
     private static final String NOT_DEFINED = " is not defined";
 
     /** 실행기 동작. 앞 둘은 코드를 돌리고, 나머지는 입력 데이터를 바꾼다. */
