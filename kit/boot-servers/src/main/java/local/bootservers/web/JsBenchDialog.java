@@ -353,7 +353,11 @@ public final class JsBenchDialog extends DialogWrapper {
         output.getEmptyText().setText(BootServersBundle.message("js.output.empty"))
                 .appendLine(BootServersBundle.message("js.output.empty.more"));
         JBTable table = new JBTable(tableModel);
-        table.setAutoResizeMode(JBTable.AUTO_RESIZE_SUBSEQUENT_COLUMNS);
+        table.setAutoResizeMode(JBTable.AUTO_RESIZE_ALL_COLUMNS);
+        // IntelliJ 기본 표 모양: 칸 선 없이 줄 무늬로 나눈다(칸마다 선을 그리면 바깥 선과 겹쳐 두 줄로 보인다).
+        table.setShowGrid(false);
+        table.setIntercellSpacing(new Dimension(0, 0));
+        table.setStriped(true);
         table.getEmptyText().setText(BootServersBundle.message("js.table.empty"));
         tablePick.addActionListener(e -> showTable(tablePick.getSelectedIndex()));
         tableNote.setForeground(UIUtil.getContextHelpForeground());
