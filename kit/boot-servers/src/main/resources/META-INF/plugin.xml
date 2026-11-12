@@ -93,6 +93,8 @@
         <listener class="local.bootservers.HandCursor" topic="com.intellij.ide.AppLifecycleListener"/>
         <!-- 옛 설정 폴더에서 따라 들어온 JetBrains AI 플러그인을 한 번 끔 -->
         <listener class="local.bootservers.AiPluginOff" topic="com.intellij.ide.AppLifecycleListener"/>
+        <!-- Full Line 기본값(Java 제안 받으면 정렬, 자동 완성 목록과 회색 제안 함께 보이기)을 한 번 바꿈 -->
+        <listener class="local.bootservers.FullLineDefaults" topic="com.intellij.ide.AppLifecycleListener"/>
     </applicationListeners>
 
     <projectListeners>
