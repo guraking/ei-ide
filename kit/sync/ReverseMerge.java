@@ -33,7 +33,7 @@ final class ReverseMerge {
   static final List<String> FROM_CANDIDATES = List.of("develop", "dev", "development", "main", "master");
   /** 내 이름으로 커밋한 파일을 「내 파일」로 보는 기간(일). */
   static final int MINE_DAYS = 30;
-  static final String HEADS = "refs/heads/";
+  private static final String HEADS = "refs/heads/";
   private static final String FETCH_KEY_SUFFIX = ".fetch";
   private static final com.intellij.openapi.diagnostic.Logger LOG = com.intellij.openapi.diagnostic.Logger.getInstance(ReverseMerge.class);
   private static final char LOG_START = '\u0001';

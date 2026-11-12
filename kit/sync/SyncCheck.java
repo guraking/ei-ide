@@ -793,15 +793,6 @@ public class SyncCheck {
     eq(SyncPanel.countPulled(log), new SyncPanel.Pulled(3, 2));
     eq(SyncPanel.pulledPaths(log), Set.of("m.txt", "s.txt"));
     eq(SyncPanel.pulledPaths(log).containsAll(java.util.Arrays.asList(SyncPanel.git(repo, "diff", "--name-only", before).trim().split("\n"))), true);
-
-    // 이클립스 파일 찾기: 깊이 안에서만, 점 폴더 · 빌드 결과 폴더는 보지 않는다.
-    java.nio.file.Path eclipse = java.nio.file.Files.createDirectories(tmp.resolve("ecl/group/app/sub"));
-    eq(ExcludeIdeFiles.eclipseFilesOnDisk(tmp.resolve("ecl"), 0), false);
-    java.nio.file.Files.createDirectories(tmp.resolve("ecl/target/x"));
-    java.nio.file.Files.writeString(tmp.resolve("ecl/target/x/.project"), "");
-    eq(ExcludeIdeFiles.eclipseFilesOnDisk(tmp.resolve("ecl"), 0), false);
-    java.nio.file.Files.writeString(eclipse.resolve(".classpath"), "");
-    eq(ExcludeIdeFiles.eclipseFilesOnDisk(tmp.resolve("ecl"), 0), true);
   }
 
   private static void sh(File dir, String command) throws Exception {

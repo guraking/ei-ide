@@ -11,7 +11,8 @@
   2. 그 플러그인의 *Check.java 를 컴파일해 모두 돌린다(점검마다 JVM 하나, CHECK_WORKERS 개씩 동시에).
   3. 컴파일 결과 + 리소스를 tmpjars\\compile\\<이름>.jar 로 묶는다.
 모든 플러그인이 통과했을 때만 bundled-plugins\\<이름>\\lib\\<이름>.jar 를 바꾼다. 하나라도 실패하면 아무 jar 도 바꾸지 않는다.
-jar 를 바꾼 뒤 Moa Mono 글꼴 파일을 bundled-plugins\\boot-servers\\fonts 에 맞춘다(설치본 plugins\\boot-servers\\fonts, IDE 가 켤 때 파일 그대로 등록).
+먼저 Moa Mono 글꼴 파일을 bundled-plugins\\boot-servers\\fonts 에 맞춘다(설치본 plugins\\boot-servers\\fonts, IDE 가 켤 때 파일 그대로 등록).
+  kit 원본을 옮기기만 하므로 JDK · 지난 빌드 결과가 없어 컴파일이 멈추는 PC(첫 빌드 · 노트북)에서도 build-windows.bat 의 글꼴 확인을 통과한다.
 javac 는 check_update.find_javac(~/.jdks 의 JDK 21 이상 중 가장 높은 판 → JAVA_HOME → PATH)로 찾는다.
 """
 import filecmp
@@ -298,6 +299,7 @@ def main():
     unknown = [n for n in names if n not in PLUGIN_SOURCES]
     if unknown:
         raise SystemExit(f"모르는 플러그인: {', '.join(unknown)} (있는 것: {', '.join(PLUGIN_SOURCES)})")
+    print(f"글꼴 파일: {FONT_TARGET} ({sync_fonts()}개 바꿈)")
     javac = find_javac()
     WORK.mkdir(parents=True, exist_ok=True)
     checks = kit_checks(javac)
@@ -317,7 +319,6 @@ def main():
     if not all(ok for _, ok, _ in results):
         raise SystemExit("\n실패한 플러그인이 있어 본체 jar 를 하나도 바꾸지 않았습니다.")
     install(names)
-    print(f"글꼴 파일: {FONT_TARGET} ({sync_fonts()}개 바꿈)")
 
 
 if __name__ == "__main__":

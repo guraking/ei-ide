@@ -20,6 +20,7 @@ import java.util.concurrent.TimeUnit;
  * 자동완성은 열린 접속에서 읽는다. 아직 열지 않은 접속은 처음 한 번만 뒤에서 연다. 그 열기가 실패하면 clear(끊기 · 새로고침) 전까지
  * 자동완성으로는 다시 열지 않는다(비밀번호가 틀린 접속이 입력마다 로그인해 계정이 잠기지 않게). 문장 실행으로 열린 접속은 그대로 쓴다.
  * 읽기에 실패한 접속은 FAILURE_COOLDOWN_MS 동안 자동완성에서 다시 읽지 않는다(끊긴 접속에 입력마다 묻지 않게).
+ * 콘솔에서 DDL 을 실행하면 그 접속의 것을 비운다(DbSessions). IDE 밖에서 바뀐 표는 탐색기 새로고침 전까지 옛것이 보인다.
  */
 public final class SchemaCache {
   private SchemaCache() {}
@@ -74,6 +75,22 @@ public final class SchemaCache {
     int gen = generation(c.id);
     List<Meta.ForeignKey> read = List.copyOf(Meta.importedKeys(conn, c, schema, table));
     putIfCurrent(FKS, key, read, c.id, gen);
+    return read;
+  }
+
+  /** 스키마의 표 · 뷰를 캐시와 관계없이 DB 에서 다시 읽어 넣는다. 탐색기에서 사용자가 펼칠 때 쓴다(IDE 밖에서 바뀐 표도 보이게). */
+  public static List<Meta.Table> reloadTables(Connection conn, DbConfig c, String schema) throws SQLException {
+    int gen = generation(c.id);
+    List<Meta.Table> read = List.copyOf(Meta.tables(conn, c, schema, Meta.tableAndViewTypes(c)));
+    putIfCurrent(TABLES, key(c.id, schema), read, c.id, gen);
+    return read;
+  }
+
+  /** 표의 칼럼을 캐시와 관계없이 DB 에서 다시 읽어 넣는다. 탐색기에서 사용자가 펼칠 때 쓴다. */
+  public static List<Meta.Column> reloadColumns(Connection conn, DbConfig c, String schema, String table) throws SQLException {
+    int gen = generation(c.id);
+    List<Meta.Column> read = List.copyOf(Meta.columns(conn, c, schema, table));
+    putIfCurrent(COLUMNS, key(c.id, schema, table), read, c.id, gen);
     return read;
   }
 
@@ -175,6 +192,7 @@ public final class SchemaCache {
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       try {
         reader.read(open != null ? open : sessions.connection(c));
+        sessions.endReadTransaction(c);
       } catch (Exception e) {
         FAILED.put(c.id, System.currentTimeMillis());
         LOG.info("자동완성 목록을 읽지 못했습니다(" + TimeUnit.MILLISECONDS.toSeconds(FAILURE_COOLDOWN_MS) + "초 동안 다시 읽지 않음): " + e.getMessage());

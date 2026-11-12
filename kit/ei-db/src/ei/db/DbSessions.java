@@ -61,6 +61,8 @@ public final class DbSessions implements Disposable {
   private static final String PG_TX_WROTE = "SELECT txid_current_if_assigned()";
   /** 조회 뒤 트랜잭션을 닫아도 되는 문장 머리. SET · LOCK 등은 트랜잭션에 걸린 효과가 롤백으로 사라지므로 뺀다. */
   private static final Pattern READ_HEAD = Pattern.compile("^(?:SELECT|WITH|EXPLAIN|SHOW|VALUES)\\b");
+  /** 조회 머리라도 트랜잭션 번호 없이 롤백으로 사라지는 효과(설정 · 트랜잭션 잠금)를 거는 PostgreSQL 함수. */
+  private static final Pattern TX_EFFECT = Pattern.compile("\\b(?:SET_CONFIG|PG_(?:TRY_)?ADVISORY_XACT_LOCK(?:_SHARED)?)\\s*\\(");
   private static final Logger LOG = Logger.getInstance(DbSessions.class);
 
   /** 쉼표 · 「건」 을 허용해 읽은 건수. 1 ~ MAX_ROW_LIMIT 가 아니거나 숫자가 아니면 0. */
@@ -87,6 +89,11 @@ public final class DbSessions implements Disposable {
   private final Map<String, Connection> open = new ConcurrentHashMap<>();
   /** 접속 id 별 잠금. 같은 접속을 동시에 두 번 열거나, 여는 중에 닫지 않게 한다. */
   private final Map<String, Object> locks = new ConcurrentHashMap<>();
+  /**
+   * 접속 id 별 트랜잭션 닫기 잠금. 빈 트랜잭션 확인 · 롤백(endIdleTransaction)과 문장 등록(running)을 서로 막아,
+   * 확인과 롤백 사이에 다른 곳에서 실행한 변경이 함께 롤백되지 않게 한다. 망을 기다릴 수 있어 끊기(close)가 쓰는 locks 와 따로 둔다.
+   */
+  private final Map<String, Object> txLocks = new ConcurrentHashMap<>();
   /** 접속 id → 콘솔에서 바꾼 자동 커밋. 없으면 접속 설정 값. 저장하지 않는다(세션 동안). */
   private final Map<String, Boolean> autoCommitOverrides = new ConcurrentHashMap<>();
   private final Map<String, Integer> pending = new ConcurrentHashMap<>();
@@ -425,7 +432,9 @@ public final class DbSessions implements Disposable {
     long start = System.currentTimeMillis();
     boolean plain = binds == null || binds.isEmpty();
     Statement ps = plain ? conn.createStatement() : conn.prepareStatement(text);
-    running.put(c.id, ps);
+    synchronized (txLock(c.id)) {
+      running.put(c.id, ps);
+    }
     registered.set(ps);
     notifyChanged();
     try (ps) {
@@ -445,10 +454,13 @@ public final class DbSessions implements Disposable {
           for (int i = 0; i < binds.size(); i++) prepared.setObject(i + 1, binds.get(i));
           isQuery = prepared.execute();
         }
-        boolean readOnly = READ_HEAD.matcher(SqlGuard.normalize(text)).find() && !SqlGuard.isWrite(text);
+        String normalized = SqlGuard.normalize(text);
+        boolean readOnly = READ_HEAD.matcher(normalized).find() && !SqlGuard.isWrite(text) && !TX_EFFECT.matcher(normalized).find();
         if (!readOnly) txTouched.add(c.id);
         warnCompileErrors(c, ps, text);
         countChange(c, conn, text);
+        // 표 · 칼럼이 바뀌었을 수 있어 읽어 둔 메타(자동완성 · 탐색기 · 작업대 · 정의서가 같이 씀)와 주석을 비운다.
+        if (SqlGuard.isDdl(text)) Comments.clear(c.id);
         if (!isQuery) {
           int count = ps.getUpdateCount();
           return new QueryResult(text, List.of(), List.of(), List.of(), count, System.currentTimeMillis() - start, false, Map.of(), bindList(binds));
@@ -485,7 +497,11 @@ public final class DbSessions implements Disposable {
           rs.close();
           // 주석 읽기(메타 조회)도 트랜잭션을 열므로 그 뒤에 닫는다.
           Map<String, String> comments = Comments.forQuery(conn, c, text, cols);
-          if (readOnly && running.get(c.id) == ps) endIdleTransaction(c, conn);
+          if (readOnly) {
+            synchronized (txLock(c.id)) {
+              if (running.get(c.id) == ps) endIdleTransaction(c, conn);
+            }
+          }
           return new QueryResult(text, cols, types, rows, -1, millis, truncated, comments, bindList(binds), precisions, scales);
         }
       } catch (SQLException e) {
@@ -504,9 +520,16 @@ public final class DbSessions implements Disposable {
    * 그 접속에서 실행 중인 문장이 없을 때만 endIdleTransaction 대로 닫는다. 화면 스레드에서 부르지 않는다.
    */
   public void endReadTransaction(DbConfig c) {
-    Connection conn = open.get(c.id);
-    if (conn == null || running.containsKey(c.id)) return;
-    endIdleTransaction(c, conn);
+    if (c.kind != DbKind.POSTGRES) return;
+    synchronized (txLock(c.id)) {
+      Connection conn = open.get(c.id);
+      if (conn == null || running.containsKey(c.id)) return;
+      endIdleTransaction(c, conn);
+    }
+  }
+
+  private Object txLock(String id) {
+    return txLocks.computeIfAbsent(id, k -> new Object());
   }
 
   /**

@@ -673,8 +673,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
         // 브랜치가 없는(detached) HEAD 는 rev-parse --abbrev-ref 처럼 "HEAD" 로 본다.
         String branch = Objects.requireNonNullElse(repository.getCurrentBranchName(), "HEAD");
         // 추적 브랜치가 생겼는지는 IntelliJ 가 방금 읽은 저장소 정보로 본다(알림마다 git 을 띄우지 않는다).
+        // 설정만 있고 받아 둔 원격 브랜치가 없으면(서버에서 지운 브랜치, @{u} 실패) 생긴 것으로 보지 않는다. 알림마다 저장소 정보를 다시 읽지 않게 한다.
         git4idea.GitLocalBranch local = repository.getCurrentBranch();
-        boolean tracked = local != null && repository.getBranchTrackInfo(local.getName()) != null;
+        git4idea.repo.GitBranchTrackInfo trackInfo = local == null ? null : repository.getBranchTrackInfo(local.getName());
+        boolean tracked = trackInfo != null && repository.getBranches().getHash(trackInfo.getRemoteBranch()) != null;
         SwingUtilities.invokeLater(() -> {
           // 브랜치가 바뀌었거나 (Push 로) 추적 브랜치가 생긴 저장소는 저장소 정보부터 다시 읽는다(recomparePending, 서버에 묻지 않는다).
           boolean moved = !branch.equals(lastBranch.put(root, branch));
@@ -2837,27 +2839,31 @@ final class SyncPanel extends SimpleToolWindowPanel {
     String from = null;
     try {
       // 안내가 기대는 것(설정 · 받아 둔 원격 브랜치 커밋 · 지금 커밋 · 고친 파일)을 동시에 읽는다. 지난번과 모두 같으면 센 결과도 같아 그대로 쓴다.
-      // 설정은 git 한 번으로 다 읽는다(From · 원격 이름 · 내 이름 · 이메일). 지금 커밋은 원격 브랜치와 같은 for-each-ref 로 지금 브랜치 참조를 함께 읽는다.
-      String headRef = ReverseMerge.HEADS + repo.branch();
+      // 설정은 git 한 번으로 다 읽는다(From · 원격 이름 · 내 이름 · 이메일). 지금 커밋은 .git 안 파일로 읽고(refHash), 못 읽으면 rev-parse 를 함께 돌린다.
+      // 참조 이름으로 찾지 않는다: 윈도우는 Feature/x 와 feature/x 가 같은 파일이라 git 이 내는 참조 이름과 브랜치 이름의 대소문자가 다를 수 있다.
       Future<Map<String, String>> configs = AppExecutorUtil.getAppExecutorService().submit(() -> ReverseMerge.configs(root));
       String[] diffHead = {"--no-optional-locks", "diff", "--name-only", GIT_HEAD};
-      // 아직 커밋이 없는 저장소는 diff HEAD 가 실패한다. 지금 브랜치 참조가 없으면(첫 커밋 전) 안내 없이 끝내고, 있으면 그 오류를 던진다.
+      String[] revParseHead = {"rev-parse", "--verify", "-q", GIT_HEAD};
+      String knownHead = refHash(root, GIT_HEAD);
+      List<String[]> commands = new ArrayList<>(List.of(new String[]{"for-each-ref", "--format=%(objectname) %(refname)", REMOTES_PREFIX}, diffHead));
+      if (knownHead == null) commands.add(revParseHead);
+      // 아직 커밋이 없는 저장소는 diff HEAD · rev-parse HEAD 가 실패한다. HEAD 커밋이 없으면(첫 커밋 전) 안내 없이 끝내고, 있으면 diff 오류를 던진다.
       AtomicReference<IOException> diffFailed = new AtomicReference<>();
-      List<String> state = inParallel(List.of(new String[]{"for-each-ref", "--format=%(objectname) %(refname)", REMOTES_PREFIX, headRef}, diffHead),
-                                      args -> {
-                                        try {
-                                          return git(root, args);
-                                        }
-                                        catch (IOException e) {
-                                          if (args != diffHead) throw e;
-                                          diffFailed.set(e);
-                                          return "";
-                                        }
-                                      });
+      List<String> state = inParallel(commands, args -> {
+        try {
+          return git(root, args);
+        }
+        catch (IOException e) {
+          if (args == revParseHead) return "";
+          if (args != diffHead) throw e;
+          diffFailed.set(e);
+          return "";
+        }
+      });
       Map<String, String> cfg = await(configs);
       Map<String, String> tips = ReverseMerge.parseRefTips(state.get(0));
-      String headTip = tips.remove(headRef);
-      if (headTip == null) {
+      String headTip = knownHead != null ? knownHead : state.get(2).trim();
+      if (headTip.isEmpty()) {
         reverseNotes.remove(root);
         noteCache.remove(root);
         return;
