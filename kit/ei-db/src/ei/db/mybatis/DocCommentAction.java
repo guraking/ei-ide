@@ -6,18 +6,19 @@ import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.application.ex.ApplicationUtil;
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.progress.ProcessCanceledException;
+import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.IndexNotReadyException;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.util.ThrowableComputable;
-import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiAnnotation;
 import com.intellij.psi.PsiAnnotationMemberValue;
@@ -28,23 +29,15 @@ import com.intellij.psi.PsiClassType;
 import com.intellij.psi.PsiDocCommentOwner;
 import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiElement;
-import com.intellij.psi.PsiExpression;
-import com.intellij.psi.PsiField;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiJavaCodeReferenceElement;
 import com.intellij.psi.PsiJavaFile;
 import com.intellij.psi.PsiLiteralExpression;
 import com.intellij.psi.PsiMethod;
-import com.intellij.psi.PsiMethodCallExpression;
 import com.intellij.psi.PsiParameter;
-import com.intellij.psi.PsiReferenceExpression;
 import com.intellij.psi.PsiType;
 import com.intellij.psi.javadoc.PsiDocComment;
-import com.intellij.psi.search.GlobalSearchScope;
-import com.intellij.psi.search.searches.OverridingMethodsSearch;
 import com.intellij.psi.util.PsiTreeUtil;
-import com.intellij.psi.util.PsiUtilCore;
-import com.intellij.util.Processor;
 import ei.db.Comments;
 import ei.db.DbConfig;
 import ei.db.DbKind;
@@ -83,7 +76,6 @@ import java.util.regex.Pattern;
  * 주석은 문서 글로 넣어(PSI 서식 적용 없음) 사용자의 Javadoc 서식 설정이 줄을 합치거나 &lt;p&gt; 를 넣지 않게 한다.
  */
 public final class DocCommentAction extends AnAction {
-  private static final String MAPPER_MARK = "<mapper";
   private static final String XML_EXT = "xml";
   /** 서비스 → 서비스 → … 로 따라가는 최대 깊이. */
   private static final int MAX_DEPTH = 3;
@@ -116,7 +108,7 @@ public final class DocCommentAction extends AnAction {
 
   private static boolean isMapperXml(PsiFile file, Editor editor) {
     VirtualFile vf = file.getVirtualFile();
-    return vf != null && XML_EXT.equalsIgnoreCase(vf.getExtension()) && StringUtil.contains(editor.getDocument().getCharsSequence(), MAPPER_MARK);
+    return vf != null && XML_EXT.equalsIgnoreCase(vf.getExtension()) && MapperDocs.isMapper(editor.getDocument().getCharsSequence());
   }
 
   /** 커서를 감싼 메서드, 없으면 이름 있는 클래스. 자바 파일이 아니면 null. 읽기 접근 안에서 부른다. */
@@ -154,7 +146,7 @@ public final class DocCommentAction extends AnAction {
         Target t = ReadAction.compute(() -> target(project, file, editor.getDocument(), offset));
         found[0] = t;
         if (t != null) {
-          found[1] = dbComments(project, t.method());
+          found[1] = dbCommentsCancelable(project, t.method());
           found[2] = DocCommentSettings.author(t.dir());
         }
         return null;
@@ -310,50 +302,21 @@ public final class DocCommentAction extends AnAction {
     }
     Set<PsiMethod> seen = new HashSet<>();
     seen.add(m);
-    walk(project, m, 0, out, seen, docs);
-    return out;
-  }
+    LayerNav.walk(m, 0, MAX_DEPTH, MAX_IMPLS, seen, new LayerNav.Chain() {
+      @Override
+      public boolean full() { return out.size() >= MAX_SQLS; }
 
-  private static void walk(Project project, PsiMethod method, int depth, List<DocComment.Sql> out, Set<PsiMethod> seen, Map<VirtualFile, MapperDoc> docs) {
-    if (depth >= MAX_DEPTH || method.getBody() == null) return;
-    GlobalSearchScope scope = GlobalSearchScope.projectScope(project);
-    for (PsiMethodCallExpression call : PsiTreeUtil.findChildrenOfType(method.getBody(), PsiMethodCallExpression.class)) {
-      ProgressManager.checkCanceled();
-      if (out.size() >= MAX_SQLS) return;
-      PsiClass type = fieldClass(call);
-      String name = call.getMethodExpression().getReferenceName();
-      if (type == null || name == null) continue;
-      List<MapperIndex.Entry> xmls = type.isInterface() ? MapperIndex.find(project, type.getQualifiedName()) : List.of();
-      if (!xmls.isEmpty()) {
+      @Override
+      public void mapper(PsiClass mapper, String name, List<MapperIndex.Entry> xmls, int depth) {
         addStatements(xmls, name, out, docs);
-        continue;
       }
-      VirtualFile vf = PsiUtilCore.getVirtualFile(type);
-      if (vf == null || !scope.contains(vf) || !LayerRules.isBean(type.isInterface(), LayerNav.annotationNames(type))) continue;
-      PsiMethod called = call.resolveMethod();
-      if (called == null) continue;
-      for (PsiMethod impl : implementations(called, scope)) {
-        if (seen.add(impl)) walk(project, impl, depth + 1, out, seen, docs);
+
+      @Override
+      public void service(PsiMethod target, int depth) {
+        // 서비스 메서드는 주석에 넣지 않고 그 안의 매퍼 호출만 모은다.
       }
-    }
-  }
-
-  /** 호출 대상이 필드면 그 필드 형식의 클래스. 아니면 null. */
-  private static @Nullable PsiClass fieldClass(PsiMethodCallExpression call) {
-    PsiExpression q = call.getMethodExpression().getQualifierExpression();
-    if (!(q instanceof PsiReferenceExpression r) || !(r.resolve() instanceof PsiField f)) return null;
-    return f.getType() instanceof PsiClassType t ? t.resolve() : null;
-  }
-
-  private static List<PsiMethod> implementations(PsiMethod called, GlobalSearchScope scope) {
-    if (called.getBody() != null) return List.of(called);
-    List<PsiMethod> found = new ArrayList<>();
-    OverridingMethodsSearch.search(called, scope, true).forEach((Processor<PsiMethod>) impl -> {
-      ProgressManager.checkCanceled();
-      if (impl.getBody() != null) found.add(impl);
-      return found.size() < MAX_IMPLS;
     });
-    return found;
+    return out;
   }
 
   /** 매퍼 XML 들에서 id 문장의 SQL 글. 같은 이름은 한 번만. */
@@ -406,6 +369,22 @@ public final class DocCommentAction extends AnAction {
       return new DbComments(tableComments, columnComments, EiDbBundle.message("doccomment.db.failed", c.name, ex.getMessage()));
     }
     return new DbComments(tableComments, columnComments, null);
+  }
+
+  /**
+   * {@link #dbComments} 를 다른 스레드에서 돌리고 진행 창의 취소를 기다린다. 닿지 않는 DB 에 접속하느라 막혀 있어도 취소하면 바로 끝난다
+   * (남은 접속 시도는 뒤에서 끝나고 결과는 버린다).
+   */
+  private static @Nullable DbComments dbCommentsCancelable(Project project, DocComment.Method m) {
+    ProgressIndicator indicator = ProgressManager.getInstance().getProgressIndicator();
+    if (indicator == null) return dbComments(project, m);
+    try {
+      return ApplicationUtil.runWithCheckCanceled(() -> dbComments(project, m), indicator);
+    } catch (RuntimeException ex) {
+      throw ex;
+    } catch (Exception ex) {
+      throw new IllegalStateException(ex);
+    }
   }
 
   /** 표 하나의 주석(REMARKS). 없으면 null. MySQL 은 데이터베이스가 catalog 자리다(Meta 와 같다). */

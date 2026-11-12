@@ -8,7 +8,6 @@ import com.intellij.codeInspection.ProblemHighlightType;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.psi.JavaPsiFacade;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiClassOwner;
@@ -33,7 +32,6 @@ import java.util.Set;
 final class MapperPairInspection {
   private MapperPairInspection() {}
 
-  private static final String MAPPER_TAG = "<mapper";
 
   private static ProblemDescriptor[] toArray(List<ProblemDescriptor> list) {
     return list.isEmpty() ? null : list.toArray(ProblemDescriptor.EMPTY_ARRAY);
@@ -44,7 +42,7 @@ final class MapperPairInspection {
     @Override
     public ProblemDescriptor[] checkFile(@NotNull PsiFile file, @NotNull InspectionManager manager, boolean isOnTheFly) {
       CharSequence text = file.getViewProvider().getContents();
-      if (!StringUtil.contains(text, MAPPER_TAG)) return null;
+      if (!MapperDocs.isMapper(file)) return null;
       Project project = file.getProject();
       if (DumbService.isDumb(project)) return null;
       MapperDoc doc = MapperDocs.of(file);

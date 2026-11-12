@@ -106,7 +106,7 @@ public final class PagingGen {
         .append(b).append("       COUNT(*)\n")
         .append(b).append("  FROM (\n")
         .append(reindent(withoutOuterOrderBy(body), b + COUNT_BODY_INDENT))
-        .append(b).append("       )\n")
+        .append(b).append("       ) a\n")
         .append(ind).append("</select>");
     return new Result(statement.end, out.toString(), pageId, countId);
   }

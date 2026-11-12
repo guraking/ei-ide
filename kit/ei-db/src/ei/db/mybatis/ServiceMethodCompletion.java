@@ -13,6 +13,7 @@ import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.RangeMarker;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiClassType;
 import com.intellij.psi.PsiCodeBlock;
@@ -31,8 +32,10 @@ import ei.db.Notify;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -53,6 +56,8 @@ public final class ServiceMethodCompletion extends CompletionContributor {
     PsiClass cls = memberLevelClass(pos, parameters.getEditor().getDocument());
     if (cls == null || cls.isInterface()) return;
     Set<String> offered = new LinkedHashSet<>();
+    // 후보마다 같은 XML 을 다시 읽지 않게 이번 완성에서 읽은 매퍼 문서를 둔다(못 읽은 파일은 null).
+    Map<VirtualFile, MapperDoc> docs = new HashMap<>();
     for (PsiField f : cls.getFields()) {
       if (!(f.getType() instanceof PsiClassType ct)) continue;
       PsiClass mapper = ct.resolve();
@@ -68,7 +73,7 @@ public final class ServiceMethodCompletion extends CompletionContributor {
             .withIcon(AllIcons.Nodes.Method)
             .withTailText(EiDbBundle.message("servicecompletion.tail", f.getName()), true)
             .withTypeText(mapper.getName())
-            .withInsertHandler(new Insert(f.getName(), id, sig(project, mapper.getQualifiedName(), id))));
+            .withInsertHandler(new Insert(f.getName(), id, sig(project, mapper, entries, id, docs))));
       }
     }
   }
@@ -87,12 +92,19 @@ public final class ServiceMethodCompletion extends CompletionContributor {
     return i >= 0 && MEMBER_START_CHARS.indexOf(text.charAt(i)) >= 0 ? cls : null;
   }
 
-  /** 매퍼 인터페이스 메서드가 있으면 그 모양, 없으면 XML 로 짐작. 둘 다 없으면 null. */
-  private static @Nullable ServiceCode.Sig sig(Project project, String namespace, String id) {
-    PsiMethod m = LayerCode.mapperMethod(project, namespace, id);
-    if (m != null) return LayerCode.sigOf(m);
-    LayerCode.Located at = LayerCode.locate(project, namespace, id);
-    return at == null ? null : LayerCode.sigFor(project, at.doc(), at.statement());
+  /** 매퍼 인터페이스 메서드가 있으면 그 모양, 없으면 entries 가운데 id 문장이 있는 첫 XML 로 짐작. 둘 다 없으면 null. */
+  private static @Nullable ServiceCode.Sig sig(Project project, PsiClass mapper, List<MapperIndex.Entry> entries, String id,
+                                               Map<VirtualFile, MapperDoc> docs) {
+    PsiMethod[] ms = mapper.findMethodsByName(id, true);
+    if (ms.length > 0) return LayerCode.sigOf(ms[0]);
+    for (MapperIndex.Entry e : entries) {
+      if (!e.ids().containsKey(id)) continue;
+      if (!docs.containsKey(e.file())) docs.put(e.file(), LayerCode.load(e.file()));
+      MapperDoc doc = docs.get(e.file());
+      MapperDoc.Node st = doc == null ? null : doc.statement(id);
+      if (st != null) return ServiceCode.fromXml(doc, st, alias -> LayerCode.resolveType(project, alias));
+    }
+    return null;
   }
 
   /** 고른 이름을 서비스 메서드 전체로 바꾼다. 쓰기 동작 안에서 불린다. sig 는 후보를 만들 때 구한 것(못 찾았으면 null). */

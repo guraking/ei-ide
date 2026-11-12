@@ -49,6 +49,19 @@ public class EnumGenCheck {
     // 같은 입력이면 같은 글(다시 맞추기에서 「바뀐 것 없음」 판정)
     eq(EnumGen.text("com.x.code", "UseYn", its, src), text);
 
+    // 다시 맞추기는 { 뒤부터 상수 끝 ; 까지만 바꾼다: 만든 파일의 그 구간이 constants 와 같아야 「바뀐 것 없음」을 안다
+    int open = text.indexOf("public enum UseYn {") + "public enum UseYn {".length();
+    int semi = text.indexOf(";\n\n    private final String code;") + 1;
+    eq(text.substring(open, semi), EnumGen.constants(its));
+    // 클래스 안 enum: 바깥 클래스 · import · 손으로 더한 메서드는 남는다
+    String outer = "package a;\n\nimport java.util.List;\n\n@Deprecated\npublic class Codes {\n  /** @ei-sql SELECT 1, 2 FROM DUAL */\n"
+        + "  public enum Yn {\n    Y(\"Y\", \"예\")\n    ;\n    Yn(String c, String l) {}\n    public boolean mine() { return true; }\n  }\n  void keep() {}\n}\n";
+    int s0 = outer.indexOf("enum Yn {") + "enum Yn {".length();
+    int s1 = outer.indexOf("    ;") + "    ;".length();
+    String synced = outer.substring(0, s0) + EnumGen.constants(items("Y", "N")) + outer.substring(s1);
+    ok(synced.contains("import java.util.List;") && synced.contains("@Deprecated") && synced.contains("void keep() {}")
+        && synced.contains("public boolean mine()") && synced.contains("    N(\"N\", \"N명\")\n    ;\n    Yn(String c"), "구간만 바뀜");
+
     String noCols = EnumGen.text("", "E", its, new EnumGen.Source("SELECT 1, 2 FROM DUAL", "운영", null));
     ok(noCols.startsWith("/**"), "패키지 없음");
     eq(EnumGen.source(noCols).columns(), null);

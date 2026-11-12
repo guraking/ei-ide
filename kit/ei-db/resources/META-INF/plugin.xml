@@ -10,6 +10,8 @@
 
   <depends>com.intellij.modules.platform</depends>
   <depends>com.intellij.java</depends>
+  <!-- 정규식 작업대(boot-servers) 옆에 붙는 메뉴. boot-servers 가 먼저 읽혀야 그 자리를 찾는다. -->
+  <depends optional="true" config-file="ei-db-bootservers.xml">local.bootservers</depends>
 
   <extensions defaultExtensionNs="com.intellij">
     <!-- 지난번에 열려 있던 SQL 콘솔 탭을 다시 연다. -->
@@ -19,6 +21,8 @@
     <toolWindow id="EI Database" anchor="right" icon="AllIcons.Nodes.DataTables" factoryClass="ei.db.ui.DbToolWindowFactory"/>
     <!-- .sql 편집기에서 「별칭.칼럼」 칼럼을 한 색으로 -->
     <editorFactoryListener implementation="ei.db.console.ColumnColors"/>
+    <!-- 매퍼 XML 표: 편집한 XML 만 다시 읽는다. -->
+    <editorFactoryDocumentListener implementation="ei.db.mybatis.MapperIndex$Edits"/>
     <!-- SQL 콘솔 · 결과 -->
     <editorNotificationProvider implementation="ei.db.console.ConsoleBar$Provider"/>
     <actionPromoter implementation="ei.db.console.ConsoleRun$Promoter"/>
@@ -62,7 +66,14 @@
   <applicationListeners>
     <!-- 프로젝트를 닫을 때 열린 SQL 콘솔 탭을 기억한다. -->
     <listener class="ei.db.console.ConsoleOpener$Remember" topic="com.intellij.openapi.project.ProjectCloseListener"/>
+    <!-- 매퍼 XML 표: 디스크에서 바뀐 XML 만 다시 읽고, XML · 폴더 구조가 바뀌면 다시 만든다. -->
+    <listener class="ei.db.mybatis.MapperIndex$Files" topic="com.intellij.openapi.vfs.newvfs.BulkFileListener"/>
   </applicationListeners>
+
+  <projectListeners>
+    <!-- 매퍼 XML 표: 소스 · 콘텐츠 루트가 바뀌면 다시 만든다. -->
+    <listener class="ei.db.mybatis.MapperIndex$Roots" topic="com.intellij.openapi.roots.ModuleRootListener"/>
+  </projectListeners>
 
   <actions>
     <action id="ei.db.console.Run" class="ei.db.console.ConsoleRun$Statement" icon="AllIcons.Actions.Execute">
@@ -147,10 +158,9 @@
       <add-to-group group-id="EditorPopupMenu" anchor="last"/>
       <add-to-group group-id="KG.SourceMenu" anchor="last"/>
     </action>
-    <!-- 편집기 우클릭 「주석 만들기」(정규식 작업대 아래): 자바 메서드 · 클래스 문서 주석, 매퍼 XML 은 SQL 아이디 주석 -->
-    <action id="ei.db.DocComment" class="ei.db.mybatis.DocCommentAction" icon="AllIcons.Actions.InlayRenameInComments">
-      <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="KingGura.RegexBench"/>
-    </action>
+    <!-- 편집기 우클릭 「주석 만들기」: 자바 메서드 · 클래스 문서 주석, 매퍼 XML 은 SQL 아이디 주석.
+         메뉴 자리(정규식 작업대 아래)는 boot-servers 가 있을 때 ei-db-bootservers.xml 이 붙인다. -->
+    <action id="ei.db.DocComment" class="ei.db.mybatis.DocCommentAction" icon="AllIcons.Actions.InlayRenameInComments"/>
     <action id="ei.db.gen.EnumSync" class="ei.db.gen.EnumSyncAction" icon="/icons/ei/enumSync.svg">
       <add-to-group group-id="EditorPopupMenu" anchor="last"/>
     </action>

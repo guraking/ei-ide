@@ -6,13 +6,16 @@ import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
+import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
+import com.intellij.openapi.progress.ProcessCanceledException;
+import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.util.text.StringUtil;
+import com.intellij.openapi.util.ThrowableComputable;
 import com.intellij.psi.JavaPsiFacade;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiDocumentManager;
@@ -60,7 +63,7 @@ public final class PagingAction extends AnAction {
     boolean ok = false;
     if (editor != null && e.getProject() != null) {
       CharSequence text = editor.getDocument().getCharsSequence();
-      if (StringUtil.contains(text, "<mapper")) {
+      if (MapperDocs.isMapper(text)) {
         MapperDoc.Node s = MapperDocs.of(e.getProject(), editor).statementAt(editor.getCaretModel().getOffset());
         ok = s != null && SELECT.equals(s.name);
       }
@@ -95,7 +98,16 @@ public final class PagingAction extends AnAction {
       Notify.warning(project, ex.getMessage());
       return;
     }
-    for (MapperIndex.Entry entry : MapperIndex.find(project, doc.namespace)) {
+    // 매퍼 표를 처음 만들 때는 프로젝트의 XML 을 모두 읽으므로 화면 스레드가 아닌 진행 창에서 찾는다.
+    List<MapperIndex.Entry> same;
+    try {
+      same = ProgressManager.getInstance().runProcessWithProgressSynchronously(
+          (ThrowableComputable<List<MapperIndex.Entry>, RuntimeException>) () -> ReadAction.compute(() -> MapperIndex.find(project, doc.namespace)),
+          EiDbBundle.message("paging.progress.find"), true, project);
+    } catch (ProcessCanceledException ex) {
+      return;
+    }
+    for (MapperIndex.Entry entry : same) {
       for (String id : new String[]{r.pageId(), r.countId()}) {
         if (entry.ids().containsKey(id)) {
           Notify.warning(project, EiDbBundle.message("paging.exists", entry.file().getName(), id));

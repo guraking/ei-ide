@@ -20,11 +20,10 @@ public final class MapperGen {
   public enum Kind { RESULT_MAP, LIST, ONE, INSERT, UPDATE, DELETE, MERGE }
 
   /**
-   * oldJoin 은 단일 표 문장이라 지금 글에는 영향이 없다(조인이 생기면 콤마 + WHERE 로 쓴다는 약속만 보존).
    * updateIf 면 UPDATE 의 SET 칼럼마다 &lt;if test="필드 != null"&gt; 로 감싸 null 필드는 건너뛰고, 아니면 모든 칼럼을 그대로 SET 한다.
    * kind 는 이름 표기(Names.sql)와 LIKE 이어 붙이기(MySQL 은 CONCAT)를 정한다.
    */
-  public record Options(boolean oldJoin, boolean cdata, boolean where11, boolean sqlComments, boolean updateIf, DbKind kind) {}
+  public record Options(boolean cdata, boolean where11, boolean sqlComments, boolean updateIf, DbKind kind) {}
 
   /** id 는 XML 문장 id 또는 자바 메서드 이름, text 는 덧붙일 글 그대로. */
   public record Block(String id, String text) {}
