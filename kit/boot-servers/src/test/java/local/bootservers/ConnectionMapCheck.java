@@ -1,17 +1,19 @@
 package local.bootservers;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.TreeSet;
 
-/** MapColumns 자체 점검. 실패하면 예외로 끝난다. */
+/** MapColumns · ColumnWidths 자체 점검. 실패하면 예외로 끝난다. */
 public final class ConnectionMapCheck {
 
     public static void main(String[] args) {
         chain();
         cycle();
         selfAndUnknown();
+        widths();
         System.out.println("ConnectionMapCheck 통과");
     }
 
@@ -35,6 +37,16 @@ public final class ConnectionMapCheck {
                 List.of(new String[]{"A", "B"}, new String[]{"B", "A"}));
         eq(0, ring.get("A"), "고리만 A");
         eq(1, ring.get("B"), "고리만 B");
+    }
+
+    private static void widths() {
+        eq("[120, 80, 300]", Arrays.toString(ColumnWidths.parse("120,80, 300", 3)), "칸 폭 읽기");
+        eq(null, ColumnWidths.parse(null, 3), "기억 없음");
+        eq(null, ColumnWidths.parse("120,80", 3), "칸 수 다름");
+        eq(null, ColumnWidths.parse("120,x,300", 3), "숫자 아님");
+        eq(null, ColumnWidths.parse("120,0,300", 3), "0 폭");
+        eq("[100, 300]", Arrays.toString(ColumnWidths.scale(new int[]{500, 1500}, 400)), "넓은 화면에서 끈 폭도 처음 합으로 맞춤");
+        eq("[1, 400]", Arrays.toString(ColumnWidths.scale(new int[]{1, 100_000}, 400)), "작은 칸도 1 이상");
     }
 
     private static void selfAndUnknown() {

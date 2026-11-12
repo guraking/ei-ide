@@ -36,13 +36,21 @@ public final class WebLspSupport implements LspServerSupportProvider {
     @Override
     public void fileOpened(@NotNull Project project, @NotNull VirtualFile file, @NotNull LspServerStarter starter) {
         String ext = file.getExtension();
-        if (!WebTools.isVue(ext) && !WebTools.isScript(ext)) {
+        if (!WebTools.isVue(ext) && !WebTools.isScript(ext) || running(project, WebLspSupport.class)) {
             return;
         }
         Tools tools = tools(project, file);
         if (tools != null) {
             starter.ensureServerStarted(new TsServerDescriptor(project, tools.node(), tools.base(), tools.tsdk()));
         }
+    }
+
+    /**
+     * 이 제공자의 서버가 이 프로젝트에 이미 있으면 true. 서버는 프로젝트에 하나이므로 그때는 도구 위치 · package.json 을 다시 찾지 않는다.
+     * 받기가 끝나 서버를 멈췄다 다시 띄울 때(restart)는 서버가 없어 다시 찾는다.
+     */
+    static boolean running(Project project, Class<? extends LspServerSupportProvider> provider) {
+        return !LspServerManager.getInstance(project).getServersForProvider(provider).isEmpty();
     }
 
     /** 로컬 파일이고 Node · 언어 서버가 있으면 그 위치, 아니면 null(없는 도구는 받기 알림을 띄운다). */

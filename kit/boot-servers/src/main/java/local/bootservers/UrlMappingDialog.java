@@ -32,9 +32,11 @@ import javax.swing.JPanel;
 import javax.swing.event.DocumentEvent;
 import java.awt.BorderLayout;
 import java.awt.Component;
+import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Point;
+import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -48,8 +50,9 @@ import java.util.List;
 final class UrlMappingDialog extends DialogWrapper {
 
     private static final String COLUMN_GAP = "  ";
-    private static final int DIALOG_WIDTH = 900;
-    private static final int DIALOG_HEIGHT = 500;
+    // 처음 열 때 창 크기: 화면의 비율(그 뒤 크기는 getDimensionServiceKey 로 기억)
+    private static final double WIDTH_SCREEN_RATIO = 0.5;
+    private static final double HEIGHT_SCREEN_RATIO = 0.5;
 
     private final Project project;
     private final List<UrlMappingAction.Endpoint> all;
@@ -118,7 +121,8 @@ final class UrlMappingDialog extends DialogWrapper {
         JPanel panel = new JPanel(new BorderLayout());
         panel.add(north, BorderLayout.NORTH);
         panel.add(new JBScrollPane(list), BorderLayout.CENTER);
-        panel.setPreferredSize(JBUI.size(DIALOG_WIDTH, DIALOG_HEIGHT));
+        Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+        panel.setPreferredSize(new Dimension((int) (screen.width * WIDTH_SCREEN_RATIO), (int) (screen.height * HEIGHT_SCREEN_RATIO)));
         return panel;
     }
 

@@ -11,12 +11,12 @@ import com.intellij.openapi.ui.ValidationInfo;
 import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.SimpleListCellRenderer;
+import com.intellij.ui.TableUtil;
 import com.intellij.ui.components.JBCheckBox;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBTextField;
 import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.FormBuilder;
-import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.NamedColorUtil;
 import com.intellij.util.ui.UIUtil;
 import local.bootservers.was.ExplodedSync;
@@ -39,7 +39,6 @@ import java.util.Set;
 /** WAS 추가 · 편집 대화 상자. 확인을 누르면 {@link #result()} 로 고친 사본을 돌려준다(원본은 건드리지 않는다). */
 final class WasDialog extends DialogWrapper {
 
-    private static final int CHECK_COLUMN_WIDTH = 50;
     private static final int DEPLOY_VISIBLE_ROWS = 6;
 
     private final WasSettings.Server server;
@@ -230,7 +229,8 @@ final class WasDialog extends DialogWrapper {
     @Override
     protected @Nullable JComponent createCenterPanel() {
         JBTable table = new JBTable(new DeployModel());
-        table.getColumnModel().getColumn(0).setMaxWidth(JBUI.scale(CHECK_COLUMN_WIDTH));
+        // 체크 칸은 체크 상자 · 머리글 글자 폭만큼, 나머지 칸이 창 폭을 나눠 쓴다
+        TableUtil.setupCheckboxColumn(table, 0);
         table.setVisibleRowCount(DEPLOY_VISIBLE_ROWS);
         JComponent panel = FormBuilder.createFormBuilder()
                 .addLabeledComponent(BootServersBundle.message("was.dialog.kind"), kind)

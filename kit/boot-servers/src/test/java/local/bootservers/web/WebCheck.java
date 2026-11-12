@@ -83,6 +83,8 @@ public final class WebCheck {
     /** jar 자원(resources/web)이 classpath 에 있어야 한다. */
     private static void pinned(Path tmp) throws IOException {
         yes(WebTools.nodeVersion().matches("v\\d+\\.\\d+\\.\\d+"), "Node 판 고정");
+        yes(WebTools.pinnedNodeSha256("x64") != null, "x64 Node 해시 고정");
+        eq(null, WebTools.pinnedNodeSha256("arm64"), "고정하지 않은 구조는 SHASUMS 로");
         Path servers = tmp.resolve("pinned/servers");
         WebTools.writePinnedPackages(servers);
         JsonObject pkg = JsonParser.parseString(Files.readString(servers.resolve("package.json"))).getAsJsonObject();
@@ -199,13 +201,6 @@ public final class WebCheck {
         eq("x64", NodeDist.arch("amd64"), "amd64");
         eq("arm64", NodeDist.arch("aarch64"), "aarch64");
         eq(null, NodeDist.arch("x86"), "32비트");
-        String index = "[{\"version\":\"v26.1.0\",\"files\":[\"win-x64-zip\"],\"lts\":false},"
-                + "{\"version\":\"v24.9.0\",\"files\":[\"win-arm64-zip\"],\"lts\":\"Krypton\"},"
-                + "{\"version\":\"v24.8.0\",\"files\":[\"win-x64-zip\",\"win-arm64-zip\"],\"lts\":\"Krypton\"}]";
-        eq("v24.8.0", NodeDist.latestLts(index, "x64"), "x64 zip 있는 최신 LTS");
-        eq("v24.9.0", NodeDist.latestLts(index, "arm64"), "arm64 최신 LTS");
-        eq(null, NodeDist.latestLts("[]", "x64"), "빈 목록");
-        eq(null, NodeDist.latestLts("<html>", "x64"), "JSON 아님");
         eq("node-v24.8.0-win-x64.zip", NodeDist.zipName("v24.8.0", "x64"), "zip 이름");
         eq("https://nodejs.org/dist/v24.8.0/node-v24.8.0-win-x64.zip", NodeDist.zipUrl("v24.8.0", "x64"), "zip 주소");
         eq("https://nodejs.org/dist/v24.8.0/SHASUMS256.txt", NodeDist.shasumsUrl("v24.8.0"), "해시 주소");

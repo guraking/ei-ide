@@ -151,6 +151,10 @@ public final class RegexBenchCheck {
         eq(1, replacement.matches().size(), "바꾸기 오류여도 일치는 보임");
         Result slow = RegexBench.run(Flavor.JAVA, "(.*a){20}$", none, "a".repeat(28) + "!", "", SHORT_TIMEOUT_MS);
         eq(Problem.TIMEOUT, slow.problem(), "되돌이 폭주는 끊음");
+        Thread.currentThread().interrupt();
+        Result interrupted = RegexBench.run(Flavor.JAVA, "a+", none, "aaa", "", TIMEOUT_MS);
+        eq(true, Thread.interrupted(), "끊긴 표시는 그대로 남음");
+        eq(Problem.TIMEOUT, interrupted.problem(), "스레드가 끊기면 계산을 멈춤");
         Result many = run(Flavor.JAVA, "", none, "x".repeat(RegexBench.MAX_MATCHES + 5), "");
         eq(RegexBench.MAX_MATCHES, many.matches().size(), "일치 수 상한");
         eq(true, many.truncated(), "상한을 넘음");
