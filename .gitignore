@@ -11,6 +11,8 @@ build-number.txt
 intellij-community-new/
 bundled-plugins/kinggura-sync/git/
 bundled-plugins/boot-servers/web/
+# Moa Mono 글꼴 파일은 kit/boot-servers/src/main/resources/fonts 에 있고, compile_plugins.py 가 여기로 복사한다.
+bundled-plugins/boot-servers/fonts/
 __pycache__/
 bundled-plugins/GrepConsole/
 bundled-plugins/intellij-rainbow-brackets-lite/

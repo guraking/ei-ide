@@ -26,6 +26,16 @@ findstr /c:"Moa IDE" "intellij-community\community-resources\resources\idea\Idea
     echo 이름 바꾸기가 적용되지 않은 소스입니다. 먼저 이름 바꾸기를 적용해야 합니다.
     exit /b 1
 )
+rem 손질 대본(이름 · 덜기 · 메뉴 · 기본값 · Git 인증 · TextMate · Defender · 한국어 팩 · 그림 · 글꼴 파일)이 모두 들어갔는지 본다.
+rem 하나라도 빠지면 빠진 단계와 돌릴 명령을 적고 멈춘다. 손질이 빠진 설치 파일이 릴리스로 올라가지 않게 한다.
+where python >nul 2>nul || (
+    echo python 이 없어 kit 손질을 확인하지 못했습니다. 파이썬을 설치한 뒤 다시 실행하세요.
+    exit /b 1
+)
+python "%~dp0kit\check_kit.py" || (
+    pause
+    exit /b 1
+)
 
 rem 개인용 설치 파일에 필요 없는 단계는 건너뛴다(메이븐 배포 묶음 · 소스 압축 · 검색 색인 · 다른 OS 용 묶음 등).
 rem 메이븐 배포 묶음 단계는 이 PC에서 멈춘 적이 있다.

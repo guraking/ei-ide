@@ -11,6 +11,7 @@ import com.intellij.openapi.actionSystem.Separator;
 import com.intellij.openapi.actionSystem.impl.ActionConfigurationCustomizer;
 import com.intellij.openapi.project.ProjectUtil;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.openapi.vfs.VirtualFileManager;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -92,11 +93,20 @@ final class KingGuraMainMenuCustomizer implements ActionConfigurationCustomizer,
 
   /**
    * 프로젝트 폴더와 그 아래 GRADLE_DEPTH 단계 어디에도 Gradle 파일이 없으면 숨긴다(Clone 이 자동 연결하는 깊이와 같다).
+   * 숨김 폴더와 빌드 결과 · 내려받은 패키지 폴더(SKIP_DIRS, 자동 연결이 내려가지 않는 폴더와 같다)는 보지 않는다.
+   * 찾은 결과는 프로젝트 폴더와 VFS 구조 변경 횟수(파일 만들기 · 지우기 · 이름 바꾸기)로 기억해, 그사이 바뀐 것이 없으면 다시 훑지 않는다.
    * shortcut: 연결 여부가 아니라 파일 유무로 본다. 이 모듈은 projectModel(ModuleManager)에 의존하지 않아 모듈 목록을 못 읽는다.
    */
   private static final class GradleOnly extends AnActionWrapper {
     private static final List<String> GRADLE_FILES = List.of("settings.gradle", "settings.gradle.kts", "build.gradle", "build.gradle.kts");
     private static final int GRADLE_DEPTH = 2;
+    private static final Set<String> SKIP_DIRS = Set.of("target", "build", "out", "bin", "node_modules");
+
+    /** 마지막으로 훑은 프로젝트 폴더 · 그때의 VFS 구조 변경 횟수 · 결과. 여러 스레드에서 update 가 불리므로 한 덩어리로 바꾼다. */
+    private record Scan(VirtualFile dir, long stamp, boolean found) {
+    }
+
+    private volatile Scan lastScan;
 
     GradleOnly(AnAction action) {
       super(action);
@@ -105,9 +115,23 @@ final class KingGuraMainMenuCustomizer implements ActionConfigurationCustomizer,
     @Override
     public void update(AnActionEvent e) {
       super.update(e);
-      if (e.getPresentation().isVisible() && !hasGradleFile(e.getProject() == null ? null : ProjectUtil.guessProjectDir(e.getProject()), 0)) {
+      if (e.getPresentation().isVisible() && !hasGradleFileCached(e.getProject() == null ? null : ProjectUtil.guessProjectDir(e.getProject()))) {
         e.getPresentation().setEnabledAndVisible(false);
       }
+    }
+
+    private boolean hasGradleFileCached(VirtualFile dir) {
+      if (dir == null) {
+        return false;
+      }
+      long stamp = VirtualFileManager.getInstance().getStructureModificationCount();
+      Scan scan = lastScan;
+      if (scan != null && scan.stamp() == stamp && scan.dir().equals(dir)) {
+        return scan.found();
+      }
+      boolean found = hasGradleFile(dir, 0);
+      lastScan = new Scan(dir, stamp, found);
+      return found;
     }
 
     private static boolean hasGradleFile(VirtualFile dir, int depth) {
@@ -123,7 +147,7 @@ final class KingGuraMainMenuCustomizer implements ActionConfigurationCustomizer,
         return false;
       }
       for (VirtualFile child : dir.getChildren()) {
-        if (!child.getName().startsWith(".") && hasGradleFile(child, depth + 1)) {
+        if (!child.getName().startsWith(".") && !SKIP_DIRS.contains(child.getName()) && hasGradleFile(child, depth + 1)) {
           return true;
         }
       }

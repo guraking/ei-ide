@@ -20,14 +20,15 @@ from pathlib import Path
 
 KIT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(KIT))
-from check_update import ROOT, current_build, prefix  # noqa: E402
+from check_update import ROOT, config_version, current_build, prefix  # noqa: E402
 
 PACK_DIR = "localization-ko"
+# 설정 폴더 이름 앞부분: 지금 이름, 이름을 Moa IDE 로 바꾸기 전 이름(새 설정 폴더가 아직 없는 PC). 뒤에 get-source.bat 의 판(2026.2 꼴)이 붙는다.
+CONFIG_PREFIXES = ("MoaIDE", "EIIDE")
+JETBRAINS_CONFIG = Path(os.environ.get("APPDATA", "")) / "JetBrains"
 # 팩을 찾는 곳. 앞의 것이 먼저다.
-PACK_SOURCES = [ROOT / "release" / PACK_DIR, ROOT / "release" / "plugins" / PACK_DIR,
-                Path(os.environ.get("APPDATA", "")) / "JetBrains" / "MoaIDE2026.2" / "plugins" / PACK_DIR,
-                # 이름을 Moa IDE 로 바꾸기 전 설정 폴더. 새 설정 폴더가 아직 없는 PC 에서 쓴다.
-                Path(os.environ.get("APPDATA", "")) / "JetBrains" / "EIIDE2026.2" / "plugins" / PACK_DIR]
+PACK_SOURCES = [ROOT / "release" / PACK_DIR, ROOT / "release" / "plugins" / PACK_DIR] + [
+    JETBRAINS_CONFIG / (name + config_version(current_build())) / "plugins" / PACK_DIR for name in CONFIG_PREFIXES]
 OUT = ROOT / "bundled-plugins" / PACK_DIR
 OVERRIDE = KIT / "ko" / "override"
 UNTIL_BUILD = re.compile(r'until-build="[^"*]*"')
@@ -95,8 +96,14 @@ def overrides_for(name):
     return {key_of(l): l for l in p.read_text(encoding="utf-8").splitlines() if key_of(l)}
 
 
-def overlay_jar(data):
-    """jar(bytes) 의 .properties 에 우리 번역을 덮은 새 jar(bytes), 덮어쓴 줄 수, 못 쓴 「경로: 키」 목록."""
+def override_files():
+    """override 폴더의 번역 파일들(jar 안 경로, / 구분)."""
+    return {p.relative_to(OVERRIDE).as_posix() for p in OVERRIDE.rglob("*.properties")}
+
+
+def overlay_jar(data, used=None):
+    """jar(bytes) 의 .properties 에 우리 번역을 덮은 새 jar(bytes), 덮어쓴 줄 수, 못 쓴 「경로: 키」 목록.
+    used(집합)를 주면 jar 에 있던 .properties 경로를 담는다(팩에 없는 번역 파일을 찾는 데 쓴다)."""
     src, buf, applied, bad = zipfile.ZipFile(io.BytesIO(data)), io.BytesIO(), 0, []
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as dst:
         for info in src.infolist():
@@ -105,6 +112,8 @@ def overlay_jar(data):
                 # 팩은 받은 판(262.10968.63)까지로 묶여 있다. 우리 판 번호는 262.10968.N 이라 끝을 앞자리.* 로 넓힌다.
                 body = UNTIL_BUILD.sub(f'until-build="{prefix(current_build())}.*"', body.decode("utf-8")).encode("utf-8")
             elif info.filename.endswith(".properties"):
+                if used is not None:
+                    used.add(info.filename)
                 new, n, wrong = overlay(body.decode("utf-8"), overrides_for(info.filename))
                 applied += n
                 bad += [f"{info.filename}: {k}" for k in wrong]
@@ -141,9 +150,9 @@ def main():
         if not jars:
             raise SystemExit("팩 lib 폴더에 jar 가 없습니다.")
         print(f"한국어 팩: {src}")
-        total, bad = 0, []
+        total, bad, used = 0, [], set()
         for jar in jars:
-            data, applied, wrong = overlay_jar(jar.read_bytes())
+            data, applied, wrong = overlay_jar(jar.read_bytes(), used)
             jar.write_bytes(data)
             total += applied
             bad += wrong
@@ -151,6 +160,10 @@ def main():
         if bad:
             raise SystemExit(f"우리 번역 {len(bad)}줄이 팩 줄과 모양({{n}} · 태그 · 따옴표 · 단축 글자)이 달라 넣지 않았습니다:\n  "
                              + "\n  ".join(bad[:50]))
+        unused = sorted(override_files() - used)
+        if unused:
+            raise SystemExit(f"우리 번역 파일 {len(unused)}개가 팩 jar 에 없는 경로라 넣지 못했습니다(팩 구조가 바뀌었는지 확인하세요):\n  "
+                             + "\n  ".join(unused))
         if total == 0:
             raise SystemExit(f"덮어쓴 줄이 없습니다. {OVERRIDE} 가 비었거나 팩 구조가 바뀌었는지 확인하세요.")
         if OUT.exists():

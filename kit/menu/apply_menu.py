@@ -6,11 +6,15 @@
 java/ide-customization 모듈(번들 플러그인 com.intellij.java.ide)에
   1) 주 메뉴 순서를 바꾸는 KingGuraMainMenuCustomizer.java 를 복사하고
   2) plugin.xml 에 Source · Search · Project 메뉴와 Window › Show View 를 등록한다.
-두 번 실행해도 같은 결과가 된다.
+plugin.xml 구조를 먼저 확인하고, 맞지 않으면 아무 파일도 바꾸지 않는다. 줄끝(LF · CRLF)은 원래대로 둔다.
+Java 파일은 이미 적용된 소스에도 늘 다시 복사해 kit 의 최신 내용을 따른다. 두 번 실행해도 같은 결과가 된다.
 """
 import shutil
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from patchlib import read_source, write_source  # noqa: E402
 
 MODULE = "java/ide-customization"
 JAVA_DIR = "src/com/intellij/ide/customization/java"
@@ -79,19 +83,19 @@ def main():
     if not xml_path.is_file():
         raise SystemExit(f"plugin.xml 이 없습니다: {xml_path}")
 
+    xml, newline = read_source(xml_path)
+    applied = MARK in xml
+    # 기존 extensions 블록 끝에 등록하고, 메뉴 정의는 파일 끝에 붙인다.
+    if not applied and (xml.count("</extensions>") != 1 or xml.count("</idea-plugin>") != 1):
+        raise SystemExit("아무 파일도 바꾸지 않았습니다. plugin.xml 구조가 예상과 다릅니다(extensions · idea-plugin 닫는 태그가 하나씩이어야 함).")
     java_src = Path(__file__).with_name("KingGuraMainMenuCustomizer.java")
     shutil.copyfile(java_src, module / JAVA_DIR / java_src.name)
-
-    xml = xml_path.read_text(encoding="utf-8")
-    if MARK in xml:
-        print("plugin.xml: 이미 적용됨")
+    if applied:
+        print("plugin.xml: 이미 적용됨, KingGuraMainMenuCustomizer.java 복사")
         return
-    # 기존 extensions 블록 끝에 등록하고, 메뉴 정의는 파일 끝에 붙인다.
-    if xml.count("</extensions>") != 1 or xml.count("</idea-plugin>") != 1:
-        raise SystemExit("plugin.xml 구조가 예상과 다릅니다(extensions · idea-plugin 닫는 태그가 하나씩이어야 함).")
     xml = xml.replace("</extensions>", EXTENSION + "  </extensions>")
     xml = xml.replace("</idea-plugin>", ACTIONS + "</idea-plugin>")
-    xml_path.write_text(xml, encoding="utf-8")
+    write_source(xml_path, xml, newline)
     print("적용 완료: KingGuraMainMenuCustomizer.java, plugin.xml")
 
 

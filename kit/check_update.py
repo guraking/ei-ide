@@ -9,8 +9,9 @@
   1. 지금 판(get-source.bat 의 TAG)과 점검할 판을 비교한다. 같으면 「최신」으로 끝낸다.
   2. 새 판 소스(intellij-community · android)를 intellij-community-new 에 받는다(이미 받았으면 건너뜀).
   3. 받은 새 소스에 brand · slim · 메뉴 · 기본값 대본을 실제로 적용해 본다(새 폴더라 지금 소스는 그대로).
-  4. 새 판 플랫폼 jar(ideaIC-<판>.zip)를 받아 우리 플러그인 소스(kit/ei-db · boot-servers · sync)를 컴파일해 본다.
-  5. 판 번호가 박혀 있어 손봐야 할 곳을 찾아 적는다.
+  4. 새 판 플랫폼 jar(ideaIC-<판>.zip)를 받아 우리 플러그인(kit/ei-db · boot-servers · sync)을 compile_plugins.py 와 같은 방법으로
+     컴파일 · 점검해 본다(본체 jar 는 바꾸지 않음).
+  5. 판 번호(262.10968)나 설정 폴더 판(2026.2)이 박혀 있어 손봐야 할 곳을 찾아 적는다.
 결과는 화면과 logs\\새판점검-<판>.txt 에 남는다. 새 판으로 옮기는 일(TAG 바꾸기 · 폴더 바꾸기)은 하지 않는다.
 """
 import json
@@ -30,6 +31,9 @@ TAG_MARK = ".ei-tag"
 PRODUCT_NAME = "Moa IDE"
 COMMUNITY_GIT = "https://github.com/JetBrains/intellij-community.git"
 ANDROID_GIT = "https://github.com/JetBrains/android.git"
+# 받는 저장소에만 거는 Git 설정(get-source.bat 과 같음). PC 전체 설정(--global)은 건드리지 않는다.
+# autocrlf=input: 손질 대본의 원문이 LF 기준이다. longpaths: 소스에 윈도우 경로 한도(260자)를 넘는 파일이 있다.
+GIT_CLONE_CONFIG = ["-c", "core.autocrlf=input", "-c", "core.longpaths=true"]
 # 2025.3 부터 커뮤니티 판 배포가 통합판(IIU)으로 합쳐져, 정식판 판 번호는 IIU 목록에서 읽는다.
 RELEASES_URL = "https://data.services.jetbrains.com/products/releases?code=IIU&type=release&latest=true"
 PLATFORM_ZIP_URL = ("https://www.jetbrains.com/intellij-repository/releases/"
@@ -70,6 +74,12 @@ def prefix(build):
     return build.rsplit(".", 1)[0]
 
 
+def config_version(build):
+    """262.10968.63 → 2026.2. 설정 폴더 이름(MoaIDE2026.2)에 붙는 판이다(앞 세 자리 = 연도 끝 두 자리 + 그해 몇 번째 판)."""
+    branch = build.split(".", 1)[0]
+    return f"20{branch[:-1]}.{branch[-1]}"
+
+
 def run(cmd, cwd=None):
     """명령을 실행해 (성공 여부, 출력) 을 돌려준다. 출력은 화면에도 그대로 흘린다."""
     print("  $ " + " ".join(str(c) for c in cmd))
@@ -89,10 +99,10 @@ def get_source(build):
             raise SystemExit(f"{NEW_SRC} 에 다른 판({have})이 있습니다. 지우거나 이름을 바꾼 뒤 다시 실행하세요.")
         print(f"새 판 소스가 이미 있습니다: {tag}")
         return
-    ok, _ = run(["git", "clone", "--depth", "1", "--branch", tag, COMMUNITY_GIT, NEW_SRC])
+    ok, _ = run(["git", "clone", *GIT_CLONE_CONFIG, "--depth", "1", "--branch", tag, COMMUNITY_GIT, NEW_SRC])
     if not ok:
         raise SystemExit(f"{tag} 소스를 받지 못했습니다. 태그가 아직 없거나 네트워크 문제입니다. 받다 만 {NEW_SRC} 는 지운 뒤 다시 실행하세요.")
-    ok, _ = run(["git", "clone", "--depth", "1", "--branch", tag, ANDROID_GIT, NEW_SRC / "android"])
+    ok, _ = run(["git", "clone", *GIT_CLONE_CONFIG, "--depth", "1", "--branch", tag, ANDROID_GIT, NEW_SRC / "android"])
     if not ok:
         raise SystemExit(f"android {tag} 를 받지 못했습니다. 받다 만 {NEW_SRC} 는 지운 뒤 다시 실행하세요.")
     mark.write_text(tag, encoding="utf-8")
@@ -142,16 +152,28 @@ def platform_jars(build):
     return out
 
 
+def jdk_major(home):
+    """JDK 폴더의 release 파일에서 주 판 번호를 읽는다. 없거나 못 읽으면 0."""
+    try:
+        m = re.search(r'^JAVA_VERSION="(?:1\.)?(\d+)', (home / "release").read_text(encoding="utf-8", errors="replace"), re.M)
+    except OSError:
+        return 0
+    return int(m.group(1)) if m else 0
+
+
 def find_javac():
-    """~/.jdks 의 JDK 21 이상 중 하나, 없으면 JAVA_HOME, 없으면 PATH 의 javac."""
+    """~/.jdks 아래 JDK 21 이상(이름이 jdk- 로 시작하지 않아도 됨) 중 가장 높은 판, 없으면 JDK 21 이상인 JAVA_HOME, 없으면 PATH 의 javac."""
     exe = "javac.exe" if os.name == "nt" else "javac"
-    jdks = sorted(Path.home().joinpath(".jdks").glob("jdk-2*"), reverse=True)
-    for home in jdks + ([Path(os.environ["JAVA_HOME"])] if "JAVA_HOME" in os.environ else []):
-        if (home / "bin" / exe).is_file():
-            return home / "bin" / exe
+    homes = [h for h in Path.home().joinpath(".jdks").glob("*") if (h / "bin" / exe).is_file()]
+    usable = [(jdk_major(h), h) for h in homes if jdk_major(h) >= int(JAVA_RELEASE)]
+    if usable:
+        return max(usable)[1] / "bin" / exe
+    java_home = Path(os.environ["JAVA_HOME"]) if os.environ.get("JAVA_HOME") else None
+    if java_home and (java_home / "bin" / exe).is_file() and jdk_major(java_home) >= int(JAVA_RELEASE):
+        return java_home / "bin" / exe
     found = shutil.which("javac")
     if not found:
-        raise SystemExit("javac 를 찾지 못했습니다. ~/.jdks 에 JDK 21 이상을 두거나 JAVA_HOME 을 지정하세요.")
+        raise SystemExit(f"javac 를 찾지 못했습니다. ~/.jdks 에 JDK {JAVA_RELEASE} 이상을 두거나 JAVA_HOME 을 지정하세요.")
     return Path(found)
 
 
@@ -161,32 +183,21 @@ def argfile_line(path):
 
 
 def compile_plugins(jar_dir, javac, work):
-    """플러그인마다 소스를 jar_dir 아래 모든 jar 를 classpath 로 컴파일한다. (이름, 성공, 출력) 목록."""
-    jars = sorted(jar_dir.rglob("*.jar"))
+    """플러그인마다 jar_dir 아래 모든 jar 를 classpath 로 compile_plugins.build(컴파일 · 점검 · 묶기)를 돌린다. (이름, 성공, 기록) 목록."""
+    import compile_plugins  # compile_plugins 가 이 파일을 import 하므로 쓸 때 불러온다.
+    jars = [str(j) for j in sorted(jar_dir.rglob("*.jar"))]
+    work.mkdir(parents=True, exist_ok=True)
     results = []
-    for name, rel in PLUGIN_SOURCES.items():
-        sources = [p for p in (KIT / rel).rglob("*.java")
-                   if name not in MIXED_CHECK_SOURCES or not p.name.endswith("Check.java")]
-        if not sources:
-            results.append((name, False, f"소스가 없습니다: kit/{rel}"))
-            continue
-        out = work / name
-        shutil.rmtree(out, ignore_errors=True)
-        out.mkdir(parents=True)
-        args = work / f"{name}.args"
-        lines = ["-encoding", "UTF-8", "--release", JAVA_RELEASE, "-proc:none", "-nowarn",
-                 "-XDaddTypeAnnotationsToSymbol=false", "-d", argfile_line(out),
-                 "-cp", argfile_line(os.pathsep.join(str(j) for j in jars))]
-        lines += [argfile_line(s) for s in sources]
-        args.write_text("\n".join(lines), encoding="utf-8")
-        print(f"\n== 컴파일: {name} ({len(sources)}개 파일)")
-        ok, text = run([javac, "@" + str(args)])
-        results.append((name, ok, text.strip()))
+    for name in PLUGIN_SOURCES:
+        print(f"\n== 컴파일 · 점검: {name}")
+        _, ok, log = compile_plugins.build(name, javac, jars, work)
+        print("\n".join("  " + line for line in log))
+        results.append((name, ok, "\n".join(log)))
     return results
 
 
 def version_spots(old_prefix):
-    """판 번호 앞자리(예: 262.10968)가 박힌 줄. 새 판이 앞자리가 다르면 이 줄들을 손봐야 한다."""
+    """old_prefix(판 번호 앞자리 262.10968 이나 설정 폴더 판 2026.2)가 박힌 줄. 새 판에서 그 값이 바뀌면 이 줄들을 손봐야 한다."""
     spots = []
     for folder, dirs, files in os.walk(ROOT):
         # 소스 · 백업처럼 큰 폴더는 들어가지 않는다.
@@ -231,6 +242,7 @@ def main():
     jar_dir = platform_jars(new)
     compile_results = compile_plugins(jar_dir, find_javac(), ROOT / "tmpjars" / f"compile-{new}")
     spots = version_spots(prefix(old)) if prefix(old) != prefix(new) else []
+    config_spots = version_spots(config_version(old)) if config_version(old) != config_version(new) else []
 
     lines = [f"새 판 점검: {old} → {new} {version}", "", "[kit 대본]"]
     for name, ok, out in kit_results:
@@ -248,6 +260,12 @@ def main():
         lines += ["  " + s for s in spots]
     else:
         lines.append("  앞자리가 같아 손볼 곳이 없습니다.")
+    lines += ["", "[설정 폴더 판(MoaIDE<판>)이 박힌 곳]"]
+    if config_spots:
+        lines.append(f"  설정 폴더가 {config_version(old)} → {config_version(new)} 로 바뀝니다. 옮길 때 아래 줄을 손봐야 합니다.")
+        lines += ["  " + s for s in config_spots]
+    else:
+        lines.append("  설정 폴더 판이 같아 손볼 곳이 없습니다.")
     all_ok = all(ok for _, ok, _ in kit_results + compile_results)
     lines += ["", "결과: " + ("모두 통과 — 새 판으로 옮길 수 있습니다." if all_ok else "고칠 곳이 있습니다(위 실패 항목).")]
     report = "\n".join(lines)
