@@ -37,14 +37,14 @@ final class ServerActions {
         }
     }
 
-    /** 실행 중이 아닐 때만 켜지는 시작 동작. 실행기(실행 · 디버그)만 다르다. */
+    /** 실행 중이 아니고 메인 클래스를 찾는 중도 아닐 때만 켜지는 시작 동작. 실행기(실행 · 디버그)만 다르다. */
     abstract static class StartBase extends AnAction {
         abstract Executor executor();
 
         @Override
         public void update(@NotNull AnActionEvent e) {
             Module module = module(e);
-            e.getPresentation().setEnabled(module != null && !ServerLauncher.isRunning(module));
+            e.getPresentation().setEnabled(module != null && !ServerLauncher.isRunning(module) && !ServerLauncher.isFinding(module));
         }
 
         @Override

@@ -48,8 +48,11 @@ public final class SqlGuard {
     return out.toString().trim().toUpperCase(Locale.ROOT);
   }
 
-  /** DbSessions.normalizeSql 의 본문: 앞뒤 공백과 끝의 ; 하나를 뗀다. PL/SQL 단위(isPlsql)는 ; 를 남긴다. */
-  static String trimStatement(String sql) {
+  /**
+   * 실행 전 문장 정리: 앞뒤 공백과 끝의 ; 하나를 뗀다. PL/SQL 단위(isPlsql: CREATE [OR REPLACE] PROCEDURE · FUNCTION · PACKAGE [BODY] ·
+   * TRIGGER · TYPE [BODY], DECLARE · BEGIN 블록)는 ; 를 남긴다. 콘솔 대기열 비교도 이 함수로 같은 글을 만든다.
+   */
+  public static String trimStatement(String sql) {
     String text = sql.strip();
     if (text.endsWith(";") && !isPlsql(text)) text = text.substring(0, text.length() - 1).strip();
     return text;

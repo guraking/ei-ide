@@ -44,8 +44,10 @@ import javax.swing.JPanel;
 import javax.swing.event.DocumentEvent;
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Dimension;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.ActionEvent;
 import java.util.ArrayList;
@@ -65,7 +67,8 @@ public final class MyBatisRunDialog extends DialogWrapper {
   public static final String CONNECTION_KEY = "ei.db.mybatis.connection";
   private static final String VALUE_KEY = "ei.db.mybatis.value.";
   private static final int PREVIEW_ROWS = 12;
-  private static final int PREVIEW_COLUMNS = 80;
+  /** 미리보기 칸 처음 폭: 화면 폭에 대한 비율(긴 SQL 줄이 창을 넓히지 않게 묶는다). 창을 넓히면 함께 는다. */
+  private static final double PREVIEW_WIDTH_RATIO = 0.4;
   /** 칼럼 · 필드 불일치 알림: 경고 글자색과 알림 띠(Banner)의 경고 바탕 · 테두리. 모두 테마 색. */
   private static final Color WARNING = JBUI.CurrentTheme.Label.warningForeground();
   private static final Color WARNING_BACKGROUND = JBUI.CurrentTheme.Banner.WARNING_BACKGROUND;
@@ -77,7 +80,7 @@ public final class MyBatisRunDialog extends DialogWrapper {
   private final Set<String> listNames;
   private final Map<String, Row> rows = new LinkedHashMap<>();
   private final ComboBox<DbConfig> connection;
-  private final JBTextArea preview = new JBTextArea(PREVIEW_ROWS, PREVIEW_COLUMNS);
+  private final JBTextArea preview = new JBTextArea();
   private final JBLabel summary = new JBLabel();
   private final JPanel warning = new JPanel(new BorderLayout());
   private final PsiClass dto;
@@ -112,22 +115,13 @@ public final class MyBatisRunDialog extends DialogWrapper {
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
         DtoFields.ForRun types = ReadAction.nonBlocking(() -> DtoFields.forRun(project, doc, s)).wrapProgress(indicator).executeSynchronously();
-        ApplicationManager.getApplication().invokeLater(() -> new MyBatisRunDialog(project, doc, s, null, types, findSlow).show(), project.getDisposed());
+        ApplicationManager.getApplication().invokeLater(() -> new MyBatisRunDialog(project, doc, s, types, findSlow).show(), project.getDisposed());
       }
     }.queue();
   }
 
-  /**
-   * prefill 이 null 이면 기억한 값, 아니면 그 값(없는 이름은 빈 값)으로 채운다.
-   * types 는 색인 · PSI 를 보는 일이라 화면 스레드 밖에서 DtoFields.forRun 으로 구해 넘긴다.
-   */
-  public MyBatisRunDialog(Project project, MapperDoc doc, MapperDoc.Node statement, @Nullable Map<String, String> prefill,
-                          DtoFields.ForRun types) {
-    this(project, doc, statement, prefill, types, false);
-  }
-
-  private MyBatisRunDialog(Project project, MapperDoc doc, MapperDoc.Node statement, @Nullable Map<String, String> prefill,
-                           DtoFields.ForRun types, boolean findSlow) {
+  /** 값은 이 문장에서 지난번에 넣은 것으로 채운다. types 는 색인 · PSI 를 보는 일이라 화면 스레드 밖에서 DtoFields.forRun 으로 구해 넘긴다. */
+  private MyBatisRunDialog(Project project, MapperDoc doc, MapperDoc.Node statement, DtoFields.ForRun types, boolean findSlow) {
     super(project);
     this.findSlow = findSlow;
     this.project = project;
@@ -138,7 +132,7 @@ public final class MyBatisRunDialog extends DialogWrapper {
     PropertiesComponent props = PropertiesComponent.getInstance(project);
     for (String name : DynamicSql.paramNames(doc, statement, mappers::get)) {
       Row row = new Row();
-      String text = prefill != null ? prefill.getOrDefault(name, "") : props.getValue(valueKey(name), "");
+      String text = props.getValue(valueKey(name), "");
       row.value.setText(text);
       row.isNull.setSelected(text.isBlank());
       rows.put(name, row);
@@ -247,6 +241,7 @@ public final class MyBatisRunDialog extends DialogWrapper {
     head.add(summary);
     head.add(javax.swing.Box.createHorizontalGlue());
     head.add(copy);
+    preview.setRows(PREVIEW_ROWS);
     preview.setEditable(false);
     preview.setFont(monospace());
     preview.setBorder(JBUI.Borders.empty(6, 10));
@@ -255,6 +250,8 @@ public final class MyBatisRunDialog extends DialogWrapper {
     box.add(head, BorderLayout.NORTH);
     JBScrollPane scroll = new JBScrollPane(preview);
     scroll.setBorder(JBUI.Borders.customLineTop(JBColor.border()));
+    int width = (int) (Toolkit.getDefaultToolkit().getScreenSize().width * PREVIEW_WIDTH_RATIO);
+    scroll.setPreferredSize(new Dimension(width, scroll.getPreferredSize().height));
     box.add(scroll, BorderLayout.CENTER);
     return box;
   }

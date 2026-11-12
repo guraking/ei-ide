@@ -59,6 +59,11 @@ final class GitLogins {
     return parse(PropertiesComponent.getInstance().getValue(LIST_KEY, ""));
   }
 
+  /** 등록한 로그인이 하나라도 있는가(비밀번호 저장소를 열지 않는다). IDE 밖(점검 main)이면 false. */
+  static boolean any() {
+    return ApplicationManager.getApplication() != null && !list().isEmpty();
+  }
+
   /** 등록한 로그인(비밀번호 · 토큰 포함). */
   static List<Login> load() {
     List<Login> result = new ArrayList<>();

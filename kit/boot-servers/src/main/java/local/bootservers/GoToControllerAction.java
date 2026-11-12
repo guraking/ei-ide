@@ -6,6 +6,7 @@ import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.application.WriteIntentReadAction;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.fileEditor.OpenFileDescriptor;
 import com.intellij.openapi.progress.ProgressIndicator;
@@ -122,9 +123,10 @@ public final class GoToControllerAction extends DumbAwareAction {
         }
     }
 
+    /** 화면 스레드에서 부른다. 팝업 고르기 · 비동기 끝맺음은 쓰기 의도 잠금 없이 오므로 편집기를 여는 이동은 잠금 안에서 한다. */
     private static void navigate(Project project, Found item) {
         if (item.file().isValid()) {
-            new OpenFileDescriptor(project, item.file(), item.offset()).navigate(true);
+            WriteIntentReadAction.run(() -> new OpenFileDescriptor(project, item.file(), item.offset()).navigate(true));
         }
     }
 

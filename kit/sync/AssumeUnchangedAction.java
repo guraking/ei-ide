@@ -37,8 +37,6 @@ public class AssumeUnchangedAction extends AnAction implements DumbAware {
 
   /** 알림 설정(Settings → Notifications)에서 이 알림을 가려 끌 수 있게 붙이는 표시 ID. */
   private static final String NOTIFICATION_ID = "kinggura.sync.assumeUnchanged";
-  // git 한 번에 넘기는 경로 수. 윈도우 명령줄 한도(32767자)를 경로 100개 × 최대 260자로도 넘지 않게 나눈다.
-  private static final int PATHS_PER_CALL = 100;
 
   /** 프로젝트 트리 우클릭의 「No Assume Unchanged」. */
   public static final class Undo extends AssumeUnchangedAction {
@@ -66,11 +64,9 @@ public class AssumeUnchangedAction extends AnAction implements DumbAware {
       for (Map.Entry<File, List<String>> entry : byRoot.entrySet()) {
         List<String> paths = entry.getValue();
         try {
-          for (int from = 0; from < paths.size(); from += PATHS_PER_CALL) {
-            List<String> part = paths.subList(from, Math.min(from + PATHS_PER_CALL, paths.size()));
-            SyncPanel.setHidden(entry.getKey(), part, on());
-            count += part.size();
-          }
+          // 명령줄 한도에 맞게 나누는 것은 setHidden 이 한다.
+          SyncPanel.setHidden(entry.getKey(), paths, on());
+          count += paths.size();
         }
         catch (IOException ex) {
           failures.add(entry.getKey().getName() + ": " + ex.getMessage());
@@ -94,7 +90,7 @@ public class AssumeUnchangedAction extends AnAction implements DumbAware {
         VcsDirtyScopeManager.getInstance(project).filePathsDirty(touched, List.of());
         ToolWindow window = ToolWindowManager.getInstance(project).getToolWindow(SyncToolWindowFactory.ID);
         Content content = window == null ? null : window.getContentManager().getContent(0);
-        if (content != null && content.getComponent() instanceof SyncPanel panel) panel.recompareAssumed();
+        if (content != null && content.getComponent() instanceof SyncPanel panel) panel.recompareRoots(byRoot.keySet());
         // 결과는 IntelliJ VCS 알림 풍선으로 알린다(모달 창으로 작업을 막지 않는다). 실패는 오류 풍선.
         String title = on() ? "Assume Unchanged" : "No Assume Unchanged";
         if (error) VcsNotifier.getInstance(project).notifyError(NOTIFICATION_ID, title, m);

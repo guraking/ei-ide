@@ -12,7 +12,7 @@ public final class VueLspSupport implements LspServerSupportProvider {
 
     @Override
     public void fileOpened(@NotNull Project project, @NotNull VirtualFile file, @NotNull LspServerStarter starter) {
-        if (!WebTools.isVue(file.getExtension())) {
+        if (!WebTools.isVue(file.getExtension()) || WebLspSupport.running(project, VueLspSupport.class)) {
             return;
         }
         WebLspSupport.Tools tools = WebLspSupport.tools(project, file);

@@ -18,4 +18,16 @@ assert applied == 5, applied
 assert a.shape("열기(_O)") != a.shape("열기"), "단축 글자가 빠지면 모양이 달라야 한다"
 assert a.shape("메서드{0, choice, 1\\#|1<s}") == a.shape("메서드{0, choice, 1\\#|1<}"), "choice 의 부등호는 태그가 아니다"
 assert a.key_of("a\\=b=c") == "a=b" and a.key_of("  # x") is None
+
+import io
+import zipfile
+
+buf = io.BytesIO()
+with zipfile.ZipFile(buf, "w") as z:
+    z.writestr("messages/ActionsBundle.properties", "a=b\n")
+    z.writestr("META-INF/plugin.xml", '<idea-plugin until-build="262.10968.63"/>')
+used = set()
+_, _, _ = a.overlay_jar(buf.getvalue(), used)
+assert used == {"messages/ActionsBundle.properties"}, used
+assert "messages/ActionsBundle.properties" in a.override_files(), "override 폴더의 jar 안 경로를 / 로 돌려야 한다"
 print("apply_ko 점검 통과")

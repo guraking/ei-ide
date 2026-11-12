@@ -16,7 +16,6 @@ import com.intellij.openapi.util.Key;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.openapi.vfs.VirtualFile;
 import ei.db.DbConfig;
-import ei.db.DbSessions;
 import ei.db.EiDbBundle;
 import ei.db.Notify;
 import ei.db.SqlGuard;
@@ -117,7 +116,7 @@ public final class ConsoleRun {
     Queue q = file.getUserData(QUEUE);
     if (q == null) return;
     SqlParams.Bound stmt = q.rest.poll();
-    q.waiting = normalize(stmt.sql());
+    q.waiting = SqlGuard.trimStatement(stmt.sql());
     if (q.rest.isEmpty()) {
       clear(project, file);
     } else if (q.c.readOnly && SqlGuard.isWrite(stmt.sql())) {
@@ -155,7 +154,7 @@ public final class ConsoleRun {
 
   private static VirtualFile waitingFile(Project project, DbConfig c, String sql) {
     if (sql == null) return null;
-    String key = normalize(sql);
+    String key = SqlGuard.trimStatement(sql);
     for (VirtualFile file : queued(project)) {
       Queue q = file.getUserData(QUEUE);
       if (q != null && q.c.id.equals(c.id) && key.equals(q.waiting)) return file;
@@ -182,11 +181,6 @@ public final class ConsoleRun {
       project.putUserData(QUEUED, set);
     }
     return set;
-  }
-
-  /** DbSessions.run 이 실행 전에 하는 정리와 같다. */
-  static String normalize(String sql) {
-    return DbSessions.normalizeSql(sql);
   }
 
   private abstract static class ConsoleAction extends DumbAwareAction {

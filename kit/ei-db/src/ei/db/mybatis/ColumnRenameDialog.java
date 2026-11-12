@@ -83,9 +83,7 @@ final class ColumnRenameDialog extends DialogWrapper {
   /** 찾은 곳을 보여 주고 바꿀 곳만 남기게 한다. 확인하면 chosen() 이 체크된 줄들. */
   static final class Preview extends DialogWrapper {
     private static final int COL_CHECK = 0;
-    private static final int COL_FILE = 1;
     private static final int COL_LINE = 2;
-    private static final int COL_TEXT = 3;
     /** 칸의 처음 너비 비율(체크 · 파일 · 줄 · 내용). 창 폭에 따라 함께 늘고 사용자가 끌어 바꿀 수 있다. */
     private static final int[] COLUMN_WEIGHTS = {1, 5, 1, 14};
     /** 처음 열 때 화면 폭 · 높이에 대한 창 크기 비율. 사용자가 바꾼 크기는 IntelliJ 가 기억한다. */

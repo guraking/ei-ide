@@ -4,6 +4,7 @@ import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.components.Service;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.util.concurrency.AppExecutorUtil;
@@ -25,8 +26,10 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
+import java.util.function.IntConsumer;
 import java.util.regex.Pattern;
 
 /**
@@ -35,6 +38,9 @@ import java.util.regex.Pattern;
  * 상태(접속 · 미반영 변경 · 실행 중)가 바뀌면 리스너를 부른다(탐색기 점 색, 콘솔 배지 · 중지 단추, 상태줄).
  * 메서드는 화면 스레드가 아닌 곳에서 부른다(접속 · 실행이 막힐 수 있다).
  * 닫을 때(끊기 · 프로젝트 닫힘 · 접속 확인 실패) 자동 커밋이 꺼져 있으면 먼저 롤백한다: Oracle 은 close() 때 미반영 변경을 커밋한다.
+ * 실행 중인 접속을 닫거나, 취소를 보낸 뒤 ABORT_AFTER_CANCEL_SEC 안에 실행이 끝나지 않으면(망이 끊겨 취소가 닿지 않음) 미반영 변경이 없을 때 접속을 끊는다(abort):
+ * 막힌 실행이 풀리고 다음 실행은 새로 접속한다. 미반영 변경이 있으면 알리기만 하고 「끊기」(close)를 기다린다.
+ * PostgreSQL 은 자동 커밋이 꺼져 있어도 아무것도 바꾸지 않은 트랜잭션은 조회 뒤 롤백해 닫는다(「idle in transaction」 으로 남아 남의 ALTER · VACUUM 을 막지 않게).
  */
 @Service(Service.Level.PROJECT)
 public final class DbSessions implements Disposable {
@@ -43,8 +49,21 @@ public final class DbSessions implements Disposable {
   public static final int MAX_ROWS = 500;
   /** 조회 건수 0 은 끝까지 읽는다. */
   public static final int ALL_ROWS = 0;
-  /** 직접 쓰는 조회 건수의 상한. 읽을 때 limit + 1 을 쓰므로 int 끝값을 받으면 넘친다. */
-  public static final int MAX_ROW_LIMIT = 1_000_000;
+  /** 직접 쓰는 조회 건수 · 「더 보기」의 상한. 읽은 행은 모두 메모리에 두므로 넓은 표에서도 IDE 가 멈추지 않을 만큼으로 둔다. */
+  public static final int MAX_ROW_LIMIT = 100_000;
+  /** 한 번에 받아 오는 행 수(드라이버 기본은 Oracle 10 행이라 500 행이면 망을 50 번 오간다). limit + 1 이 더 작으면 그만큼만. */
+  static final int FETCH_SIZE = 500;
+  /** 읽은 행 수를 진행 표시에 알리는 간격(행). */
+  private static final int PROGRESS_EVERY_ROWS = 1000;
+  /** 취소를 보낸 뒤 실행이 끝나기를 기다리는 초. 넘으면 접속을 끊는다. */
+  static final int ABORT_AFTER_CANCEL_SEC = 10;
+  /** PostgreSQL: 지금 트랜잭션이 무언가 바꿨으면(트랜잭션 번호를 받았으면) 번호, 아니면 null(PostgreSQL 10 부터). */
+  private static final String PG_TX_WROTE = "SELECT txid_current_if_assigned()";
+  /** 조회 뒤 트랜잭션을 닫아도 되는 문장 머리. SET · LOCK 등은 트랜잭션에 걸린 효과가 롤백으로 사라지므로 뺀다. */
+  private static final Pattern READ_HEAD = Pattern.compile("^(?:SELECT|WITH|EXPLAIN|SHOW|VALUES)\\b");
+  /** 조회 머리라도 트랜잭션 번호 없이 롤백으로 사라지는 효과(설정 · 트랜잭션 잠금)를 거는 PostgreSQL 함수. */
+  private static final Pattern TX_EFFECT = Pattern.compile("\\b(?:SET_CONFIG|PG_(?:TRY_)?ADVISORY_XACT_LOCK(?:_SHARED)?)\\s*\\(");
+  private static final Logger LOG = Logger.getInstance(DbSessions.class);
 
   /** 쉼표 · 「건」 을 허용해 읽은 건수. 1 ~ MAX_ROW_LIMIT 가 아니거나 숫자가 아니면 0. */
   public static int parseRowCount(String text) {
@@ -70,9 +89,19 @@ public final class DbSessions implements Disposable {
   private final Map<String, Connection> open = new ConcurrentHashMap<>();
   /** 접속 id 별 잠금. 같은 접속을 동시에 두 번 열거나, 여는 중에 닫지 않게 한다. */
   private final Map<String, Object> locks = new ConcurrentHashMap<>();
+  /**
+   * 접속 id 별 트랜잭션 닫기 잠금. 빈 트랜잭션 확인 · 롤백(endIdleTransaction)과 문장 등록(running)을 서로 막아,
+   * 확인과 롤백 사이에 다른 곳에서 실행한 변경이 함께 롤백되지 않게 한다. 망을 기다릴 수 있어 끊기(close)가 쓰는 locks 와 따로 둔다.
+   */
+  private final Map<String, Object> txLocks = new ConcurrentHashMap<>();
   /** 접속 id → 콘솔에서 바꾼 자동 커밋. 없으면 접속 설정 값. 저장하지 않는다(세션 동안). */
   private final Map<String, Boolean> autoCommitOverrides = new ConcurrentHashMap<>();
   private final Map<String, Integer> pending = new ConcurrentHashMap<>();
+  /**
+   * 커밋 · 롤백 뒤 SELECT · WITH 가 아닌 문장(SET · LOCK · 변경 등)을 실행한 접속 id. 이 트랜잭션에는 롤백하면 사라질 효과가 있을 수 있어
+   * endIdleTransaction 이 닫지 않는다. 커밋 · 롤백 · 새로 열기 · 자동 커밋 켜기에서 뺀다.
+   */
+  private final Set<String> txTouched = ConcurrentHashMap.newKeySet();
   private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
   /** 접속 id → 지금 실행 중인 문장. 같은 접속에서 겹쳐 돌면 나중 것만 남는다. */
   private final Map<String, Statement> running = new ConcurrentHashMap<>();
@@ -92,19 +121,6 @@ public final class DbSessions implements Disposable {
   public void addListener(Disposable parent, Runnable listener) {
     listeners.add(listener);
     Disposer.register(parent, () -> listeners.remove(listener));
-  }
-
-  /**
-   * 실행 전 문장 정리: 앞뒤 공백, 끝의 ; 하나. CREATE [OR REPLACE] PROCEDURE · FUNCTION · PACKAGE [BODY] · TRIGGER · TYPE [BODY]
-   * 와 DECLARE · BEGIN 블록은 ; 를 남긴다. 대기열 비교도 이 함수로 같은 글을 만든다.
-   */
-  public static String normalizeSql(String sql) {
-    return SqlGuard.trimStatement(sql);
-  }
-
-  /** 상태가 바뀌었음을 리스너에게 알린다(콘솔 도구줄 · 탐색기 갱신). */
-  public void notifyChanged() {
-    fire();
   }
 
   /** 접속 id 별 자동 커밋 덮어쓰기(콘솔에서 바꾼 값). null 이면 접속 설정 값. */
@@ -137,7 +153,7 @@ public final class DbSessions implements Disposable {
         }
       }
     }
-    fire();
+    notifyChanged();
   }
 
   private void putOverride(String id, Boolean on) {
@@ -148,18 +164,25 @@ public final class DbSessions implements Disposable {
     if (conn.getAutoCommit() == on) return;
     if (on && pending(id) > 0) conn.commit();
     conn.setAutoCommit(on);
-    if (on) pending.put(id, 0);
+    if (on) {
+      pending.put(id, 0);
+      txTouched.remove(id);
+    }
   }
 
   private Object lock(String id) {
     return locks.computeIfAbsent(id, k -> new Object());
   }
 
-  private void fire() {
+  /** 상태가 바뀌었음을 리스너에게 알린다(콘솔 도구줄 · 탐색기 갱신). */
+  public void notifyChanged() {
     for (Runnable r : listeners) r.run();
   }
 
   public boolean isOpen(String id) { return open.containsKey(id); }
+
+  /** 이미 열린 접속. 없으면 null. 새로 열지도, 살아 있는지 묻지도 않는다(자동완성처럼 로그인 · 대기를 일으키면 안 되는 곳에서 쓴다). */
+  public Connection openConnection(String id) { return open.get(id); }
 
   /**
    * 스키마 이름(Meta.schemaOf)을 쓰기 전에 부른다. 기본 스키마를 비운 PostgreSQL 은 접속해야 현재 스키마를 알므로,
@@ -198,12 +221,51 @@ public final class DbSessions implements Disposable {
     return cancel(id, running.get(id));
   }
 
-  /** st 가 아직 그 접속에서 실행 중일 때만 cancel 한다. 같은 접속에서 뒤에 시작한 다른 콘솔의 문장은 멈추지 않는다. 보냈으면 참. */
+  /**
+   * st 가 아직 그 접속에서 실행 중일 때만 cancel 한다. 같은 접속에서 뒤에 시작한 다른 콘솔의 문장은 멈추지 않는다. 보냈으면 참.
+   * 그 문장에 처음 보낼 때 ABORT_AFTER_CANCEL_SEC 뒤의 확인을 걸어 둔다(cancel 자체가 막혀도 확인은 돈다).
+   */
   public boolean cancel(String id, Statement st) throws SQLException {
     if (st == null || running.get(id) != st) return false;
-    cancelled.add(st);
+    if (cancelled.add(st)) {
+      AppExecutorUtil.getAppScheduledExecutorService().schedule(() -> abortIfStuck(id, st), ABORT_AFTER_CANCEL_SEC, TimeUnit.SECONDS);
+    }
     st.cancel();
     return true;
+  }
+
+  /**
+   * 취소한 문장이 아직 돌고 있으면 그 접속을 목록에서 빼고 끊는다. 막힌 실행은 오류로 풀려 CancelledException 이 된다.
+   * 미반영 변경이 있으면 끊지 않고 알리기만 한다(끊으면 변경이 사라진다): 사용자가 「끊기」로 정할 수 있다(close 는 실행 중이면 끊는다).
+   * 접속 id 잠금을 잡지 않는다: 막힌 접속을 쓰는 다른 일이 잠금을 쥐고 있을 수 있다.
+   */
+  private void abortIfStuck(String id, Statement st) {
+    if (running.get(id) != st) return;
+    DbConfig c = DbSettings.getInstance().find(id);
+    String name = c == null ? id : c.name;
+    int lost = pending(id);
+    if (lost > 0) {
+      Notify.error(project, EiDbBundle.message("sessions.stuck.pending", name, ABORT_AFTER_CANCEL_SEC, lost));
+      return;
+    }
+    Connection conn = open.get(id);
+    if (conn == null || !open.remove(id, conn)) return;
+    pending.remove(id);
+    txTouched.remove(id);
+    Comments.clear(id);
+    abort(conn);
+    Notify.error(project, EiDbBundle.message("sessions.aborted", name, ABORT_AFTER_CANCEL_SEC));
+    notifyChanged();
+  }
+
+  /** 접속을 바로 끊는다(망을 기다리지 않는다). 서버는 미반영 변경을 롤백한다. */
+  private static void abort(Connection conn) {
+    try {
+      conn.abort(AppExecutorUtil.getAppExecutorService());
+    } catch (SQLException | RuntimeException e) {
+      // 끊는 것도 실패하면 이미 끊긴 접속이다. 더 할 수 있는 일이 없다.
+      LOG.info("접속 끊기 실패: " + e.getMessage());
+    }
   }
 
   public int maxRows() { return maxRows; }
@@ -212,7 +274,7 @@ public final class DbSessions implements Disposable {
   public void setMaxRows(int rows) {
     if (rows < 0) throw new IllegalArgumentException(EiDbBundle.message("sessions.bad.row.limit", rows));
     maxRows = rows;
-    fire();
+    notifyChanged();
   }
 
   /**
@@ -263,7 +325,8 @@ public final class DbSessions implements Disposable {
     warnOldDriver(c, conn);
     open.put(c.id, conn);
     pending.put(c.id, 0);
-    fire();
+    txTouched.remove(c.id);
+    notifyChanged();
     return conn;
   }
 
@@ -312,8 +375,10 @@ public final class DbSessions implements Disposable {
         if (c.readOnly) props.setProperty("readOnlyMode", "always");
         props.setProperty("autosave", "always");
         props.setProperty("cleanupSavepoints", "true");
+        // 망이 끊긴 접속을 운영체제가 알아채게 한다. 읽기 시간 제한(socketTimeout)은 긴 조회도 끊으므로 두지 않는다.
+        props.setProperty("tcpKeepAlive", "true");
       }
-      case MYSQL -> { /* 더할 속성 없음 */ }
+      case MYSQL -> props.setProperty("connectTimeout", String.valueOf(CONNECT_TIMEOUT_SEC * MILLIS_PER_SEC));
     }
     return props;
   }
@@ -326,7 +391,7 @@ public final class DbSessions implements Disposable {
   }
 
   /**
-   * 한 문장을 실행한다. binds 는 ? 자리 값(순서대로). 끝의 ; 는 normalizeSql 대로 뗀다.
+   * 한 문장을 실행한다. binds 는 ? 자리 값(순서대로). 끝의 ; 는 SqlGuard.trimStatement 대로 뗀다.
    * SELECT 는 이 프로젝트의 조회 건수까지만 읽는다. Oracle 컴파일 경고(PL/SQL 단위 생성)는 알림으로 띄운다.
    */
   public QueryResult run(DbConfig c, String sql, List<Object> binds) throws SQLException {
@@ -339,28 +404,39 @@ public final class DbSessions implements Disposable {
    * registered 에는 등록한 문장을 넣는다. 부르는 쪽은 cancel(id, 그 문장) 으로 자기 실행만 멈춘다.
    */
   public QueryResult run(DbConfig c, String sql, List<Object> binds, BooleanSupplier stop, AtomicReference<Statement> registered) throws SQLException {
-    return run(c, sql, binds, maxRows, stop, registered);
+    return execute(c, sql, binds, maxRows, stop, registered, null);
   }
 
-  /** limit 건까지 읽는다(ALL_ROWS 면 끝까지). 「더 보기」가 건수를 늘려 다시 부른다. */
+  /** limit 건까지 읽는다(ALL_ROWS 면 끝까지). */
   public QueryResult run(DbConfig c, String sql, List<Object> binds, int limit) throws SQLException {
-    return run(c, sql, binds, limit, () -> false, new AtomicReference<>());
+    return run(c, sql, binds, limit, () -> false, new AtomicReference<>(), null);
+  }
+
+  /**
+   * limit 건까지 읽되 stop · registered 는 run(c, sql, binds, stop, registered) 와 같다. 행을 읽는 중에도 stop 을 보고 멈춘다.
+   * progress 는 읽은 행 수를 PROGRESS_EVERY_ROWS 마다 받는다(null 이면 알리지 않음). 「더 보기」가 쓴다.
+   */
+  public QueryResult run(DbConfig c, String sql, List<Object> binds, int limit, BooleanSupplier stop, AtomicReference<Statement> registered,
+                         IntConsumer progress) throws SQLException {
+    return execute(c, sql, binds, limit, stop, registered, progress);
   }
 
   /**
    * 바인드가 없으면 Statement 로 보낸다: PreparedStatement 는 ? 를 자리 표시로 보아 PostgreSQL jsonb 의 ? · ?| · ?& 연산자가 실패한다.
    * 문장은 running 에서 뺀 뒤 닫는다(끝 무렵의 중지가 닫힌 문장에 cancel 을 보내지 않게).
    */
-  private QueryResult run(DbConfig c, String sql, List<Object> binds, int limit, BooleanSupplier stop, AtomicReference<Statement> registered) throws SQLException {
+  private QueryResult execute(DbConfig c, String sql, List<Object> binds, int limit, BooleanSupplier stop, AtomicReference<Statement> registered,
+                              IntConsumer progress) throws SQLException {
     Connection conn = connection(c);
-    String text = sql.strip();
-    text = normalizeSql(text);
+    String text = SqlGuard.trimStatement(sql);
     long start = System.currentTimeMillis();
     boolean plain = binds == null || binds.isEmpty();
     Statement ps = plain ? conn.createStatement() : conn.prepareStatement(text);
-    running.put(c.id, ps);
+    synchronized (txLock(c.id)) {
+      running.put(c.id, ps);
+    }
     registered.set(ps);
-    fire();
+    notifyChanged();
     try (ps) {
       try {
         if (stop.getAsBoolean()) {
@@ -369,6 +445,7 @@ public final class DbSessions implements Disposable {
         }
         // limit + 1 건을 받아 보고 넘치면 잘렸다고 알린다.
         if (limit != ALL_ROWS) ps.setMaxRows(limit + 1);
+        ps.setFetchSize(limit == ALL_ROWS ? FETCH_SIZE : Math.min(limit + 1, FETCH_SIZE));
         boolean isQuery;
         if (plain) {
           isQuery = ps.execute(text);
@@ -377,8 +454,13 @@ public final class DbSessions implements Disposable {
           for (int i = 0; i < binds.size(); i++) prepared.setObject(i + 1, binds.get(i));
           isQuery = prepared.execute();
         }
+        String normalized = SqlGuard.normalize(text);
+        boolean readOnly = READ_HEAD.matcher(normalized).find() && !SqlGuard.isWrite(text) && !TX_EFFECT.matcher(normalized).find();
+        if (!readOnly) txTouched.add(c.id);
         warnCompileErrors(c, ps, text);
         countChange(c, conn, text);
+        // 표 · 칼럼이 바뀌었을 수 있어 읽어 둔 메타(자동완성 · 탐색기 · 작업대 · 정의서가 같이 씀)와 주석을 비운다.
+        if (SqlGuard.isDdl(text)) Comments.clear(c.id);
         if (!isQuery) {
           int count = ps.getUpdateCount();
           return new QueryResult(text, List.of(), List.of(), List.of(), count, System.currentTimeMillis() - start, false, Map.of(), bindList(binds));
@@ -402,9 +484,25 @@ public final class DbSessions implements Disposable {
             List<Object> row = new ArrayList<>(cols.size());
             for (int i = 1; i <= cols.size(); i++) row.add(readValue(rs, i));
             rows.add(row);
+            if (rows.size() % PROGRESS_EVERY_ROWS == 0) {
+              // 드라이버는 행을 받는 사이의 cancel 을 무시할 수 있어 여기서도 멈춘다.
+              if (stop.getAsBoolean()) {
+                cancelled.add(ps);
+                throw new SQLException(EiDbBundle.message("sessions.cancelled"));
+              }
+              if (progress != null) progress.accept(rows.size());
+            }
           }
           long millis = System.currentTimeMillis() - start;
-          return new QueryResult(text, cols, types, rows, -1, millis, truncated, Comments.forQuery(conn, c, text, cols), bindList(binds), precisions, scales);
+          rs.close();
+          // 주석 읽기(메타 조회)도 트랜잭션을 열므로 그 뒤에 닫는다.
+          Map<String, String> comments = Comments.forQuery(conn, c, text, cols);
+          if (readOnly) {
+            synchronized (txLock(c.id)) {
+              if (running.get(c.id) == ps) endIdleTransaction(c, conn);
+            }
+          }
+          return new QueryResult(text, cols, types, rows, -1, millis, truncated, comments, bindList(binds), precisions, scales);
         }
       } catch (SQLException e) {
         if (cancelled.contains(ps)) throw new CancelledException(e);
@@ -412,8 +510,42 @@ public final class DbSessions implements Disposable {
       } finally {
         running.remove(c.id, ps);
         cancelled.remove(ps);
-        fire();
+        notifyChanged();
       }
+    }
+  }
+
+  /**
+   * 메타 읽기(탐색기 · 자동완성 · 작업대 · 정의서) 뒤에 부른다. PostgreSQL 에서 자동 커밋이 꺼져 있으면 메타 조회도 트랜잭션을 연다.
+   * 그 접속에서 실행 중인 문장이 없을 때만 endIdleTransaction 대로 닫는다. 화면 스레드에서 부르지 않는다.
+   */
+  public void endReadTransaction(DbConfig c) {
+    if (c.kind != DbKind.POSTGRES) return;
+    synchronized (txLock(c.id)) {
+      Connection conn = open.get(c.id);
+      if (conn == null || running.containsKey(c.id)) return;
+      endIdleTransaction(c, conn);
+    }
+  }
+
+  private Object txLock(String id) {
+    return txLocks.computeIfAbsent(id, k -> new Object());
+  }
+
+  /**
+   * PostgreSQL 에서 자동 커밋이 꺼져 있고 미반영 변경 · txTouched 가 없을 때, 지금 트랜잭션이 아무것도 바꾸지 않았으면
+   * (변경하는 함수 · FOR UPDATE 잠금이 있으면 트랜잭션 번호가 생긴다) 롤백해 닫는다. 확인에 실패하면(PostgreSQL 9 등) 그대로 둔다.
+   * Oracle · MySQL 은 바꾸지 않는다.
+   */
+  private void endIdleTransaction(DbConfig c, Connection conn) {
+    if (c.kind != DbKind.POSTGRES || pending(c.id) > 0 || txTouched.contains(c.id)) return;
+    try {
+      if (conn.getAutoCommit()) return;
+      try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(PG_TX_WROTE)) {
+        if (rs.next() && rs.getObject(1) == null) conn.rollback();
+      }
+    } catch (SQLException e) {
+      LOG.info("읽기 트랜잭션을 닫지 못했습니다: " + e.getMessage());
     }
   }
 
@@ -435,7 +567,7 @@ public final class DbSessions implements Disposable {
     } else {
       pending.merge(c.id, 1, Integer::sum);
     }
-    fire();
+    notifyChanged();
   }
 
   /** Oracle 은 컴파일 오류가 있는 PL/SQL 단위를 만들어도 실패가 아닌 경고로 돌려준다. */
@@ -469,21 +601,26 @@ public final class DbSessions implements Disposable {
     Connection conn = open.get(id);
     if (conn != null) conn.commit();
     pending.put(id, 0);
-    fire();
+    txTouched.remove(id);
+    notifyChanged();
   }
 
   public void rollback(String id) throws SQLException {
     Connection conn = open.get(id);
     if (conn != null) conn.rollback();
     pending.put(id, 0);
-    fire();
+    txTouched.remove(id);
+    notifyChanged();
   }
 
-  /** 미반영 변경은 롤백된다. 부르는 쪽이 먼저 확인받는다. */
+  /** 미반영 변경은 롤백된다. 부르는 쪽이 먼저 확인받는다. 실행 중이면 롤백 · 닫기가 그 실행 뒤에 막히므로 접속을 끊는다(서버가 롤백). */
   public void close(String id) {
+    boolean busy = running.containsKey(id);
     Connection conn = detach(id);
-    if (conn != null) closeWithoutCommit(conn);
-    fire();
+    if (conn != null) {
+      if (busy) abort(conn); else closeWithoutCommit(conn);
+    }
+    notifyChanged();
   }
 
   /** 접속을 목록에서 빼고(미반영 건수 · 주석 캐시도) 돌려준다. 닫지는 않는다. */
@@ -492,6 +629,7 @@ public final class DbSessions implements Disposable {
     synchronized (lock(id)) {
       conn = open.remove(id);
       pending.remove(id);
+      txTouched.remove(id);
     }
     Comments.clear(id);
     return conn;
@@ -503,22 +641,21 @@ public final class DbSessions implements Disposable {
       if (!conn.getAutoCommit()) conn.rollback();
       conn.close();
     } catch (SQLException e) {
-      try {
-        conn.abort(Runnable::run);
-      } catch (SQLException | RuntimeException ignored) {
-        // 끊는 것도 실패하면 이미 끊긴 접속이다. 더 할 수 있는 일이 없다.
-      }
+      abort(conn);
     }
   }
 
-  /** 롤백 · 닫기는 망을 거쳐 막힐 수 있어(망이 끊긴 경우) 화면 스레드가 아닌 풀 스레드에서 한다. 접속은 먼저 목록에서 뺀다. */
+  /** 롤백 · 닫기는 망을 거쳐 막힐 수 있어(망이 끊긴 경우) 화면 스레드가 아닌 풀 스레드에서 한다. 접속은 먼저 목록에서 뺀다. 실행 중인 접속은 끊는다. */
   @Override
   public void dispose() {
     List<Connection> closing = new ArrayList<>();
+    List<Connection> busy = new ArrayList<>();
     for (String id : new ArrayList<>(open.keySet())) {
+      boolean running = this.running.containsKey(id);
       Connection conn = detach(id);
-      if (conn != null) closing.add(conn);
+      if (conn != null) (running ? busy : closing).add(conn);
     }
+    for (Connection conn : busy) abort(conn);
     if (closing.isEmpty()) return;
     AppExecutorUtil.getAppExecutorService().execute(() -> {
       for (Connection conn : closing) closeWithoutCommit(conn);

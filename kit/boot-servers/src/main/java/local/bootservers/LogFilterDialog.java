@@ -24,6 +24,7 @@ import com.intellij.ui.components.fields.ExtendableTextField;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.NamedColorUtil;
 import com.intellij.util.ui.UIUtil;
+import local.bootservers.ui.DialogSize;
 import org.jetbrains.annotations.NotNull;
 import local.bootservers.ui.Pill;
 import org.jetbrains.annotations.Nullable;
@@ -70,8 +71,9 @@ final class LogFilterDialog extends DialogWrapper {
     private static final String TAB_SHOWN = "    ";
     // 정규식 검색이 콘솔 글 전체를 훑는 데 쓸 수 있는 시간. 넘으면 되돌이 폭주로 보고 거르기를 그만둔다.
     private static final long REGEX_TIMEOUT_SECONDS = 3;
-    private static final int DIALOG_WIDTH = 900;
-    private static final int DIALOG_HEIGHT = 500;
+    // 처음 열 때 크기(화면 비율). 그 뒤에는 사용자가 바꾼 크기를 기억한다.
+    private static final double SCREEN_WIDTH_SHARE = 0.5;
+    private static final double SCREEN_HEIGHT_SHARE = 0.45;
     private static final int ROW_HEIGHT = 22;
     private static final String LINE_NUMBER_FORMAT = "%6d  ";
     // 레벨 꼬리표 폭을 맞출 가장 긴 레벨 이름
@@ -188,7 +190,7 @@ final class LogFilterDialog extends DialogWrapper {
         JPanel panel = new JPanel(new BorderLayout());
         panel.add(north, BorderLayout.NORTH);
         panel.add(new JBScrollPane(list), BorderLayout.CENTER);
-        panel.setPreferredSize(JBUI.size(DIALOG_WIDTH, DIALOG_HEIGHT));
+        panel.setPreferredSize(DialogSize.ofScreen(SCREEN_WIDTH_SHARE, SCREEN_HEIGHT_SHARE));
         return panel;
     }
 

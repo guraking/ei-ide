@@ -89,23 +89,6 @@ final class History {
     return result;
   }
 
-  /**
-   * index 줄에서 lane 칸을 곧게 지나가는 선이 닿는 아래쪽 커밋의 줄 번호. 그 칸에 지나가는 선이 없거나
-   * 목록 안에서 닿지 않으면(목록 밖 커밋을 기다림) -1.
-   */
-  static int passingTarget(List<Row> rows, int index, int lane) {
-    if (!passes(rows.get(index), lane)) return -1;
-    for (int k = index + 1; k < rows.size(); k++) {
-      for (Seg s : rows.get(k).top()) if (s.from() == lane && s.to() == rows.get(k).col()) return k;
-    }
-    return -1;
-  }
-
-  private static boolean passes(Row row, int lane) {
-    for (Seg s : row.bottom()) if (s.from() == lane && s.to() == lane && lane != row.col()) return true;
-    return false;
-  }
-
   // git log --format 의 구분자. 커밋 메시지에 나오지 않는 제어 문자를 쓴다. BODY_END 뒤에 --raw 줄이 온다.
   static final char RECORD_SEP = '\u001e';
   static final char FIELD_SEP = '\u001f';

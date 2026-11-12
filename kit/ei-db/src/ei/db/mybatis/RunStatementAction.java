@@ -5,7 +5,6 @@ import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.editor.Editor;
-import com.intellij.openapi.util.text.StringUtil;
 import org.jetbrains.annotations.NotNull;
 
 /** 편집기 오른쪽 클릭 · Ctrl+Alt+Enter: 커서를 감싼 매퍼 문장을 실행 창으로 연다. */
@@ -27,7 +26,7 @@ public class RunStatementAction extends AnAction {
     boolean ok = false;
     if (editor != null && e.getProject() != null) {
       CharSequence text = editor.getDocument().getCharsSequence();
-      ok = StringUtil.contains(text, "<mapper") && MapperDocs.of(e.getProject(), editor).statementAt(editor.getCaretModel().getOffset()) != null;
+      ok = MapperDocs.isMapper(text) && MapperDocs.of(e.getProject(), editor).statementAt(editor.getCaretModel().getOffset()) != null;
     }
     e.getPresentation().setEnabledAndVisible(ok);
   }

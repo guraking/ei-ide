@@ -129,7 +129,24 @@ public class SyncCheck {
 
   static void eq(Object a, Object b) { if (!java.util.Objects.equals(a, b)) throw new AssertionError(a + " != " + b); }
 
-  public static void main(String[] args) throws Exception {
+  /**
+   * 점검을 돌리고 끝에 JVM 을 끝낸다. git 을 동시에 돌리는 곳(SyncPanel.inParallel)이 쓰는 IDE 작업 스레드는 데몬이 아니어서
+   * 그냥 돌아가면 점검이 끝나도 프로세스가 남는다. 실패하면 원인을 찍고 1 로 끝낸다(빌드 대본이 멈추지 않고 실패로 본다).
+   */
+  public static void main(String[] args) {
+    int code = 0;
+    try {
+      checks();
+    }
+    catch (Throwable e) {
+      e.printStackTrace();
+      code = 1;
+    }
+    System.out.flush();
+    System.exit(code);
+  }
+
+  static void checks() throws Exception {
     // 모른 척 목록: 소문자(assume-unchanged) · 'S'(skip-worktree, 디스크에 있는 것만). 'H' 는 보통 파일.
     Set<String> onDisk = Set.of("skip.yml", "한글 경로/c.txt");
     eq(SyncPanel.parseAssumed("H src/A.java\nh src/main/resources/application-local.yml\nh 한글 경로/b.txt\nS skip.yml\nS sparse.txt\ns 한글 경로/c.txt\n", onDisk::contains),
@@ -216,7 +233,10 @@ public class SyncCheck {
     eq(SyncPanel.nameSlash("tooling/"), -1);
     eq(SyncPanel.nameSlash("Foo.java"), -1);
     // 받기 알림: 커밋 수와 겹치지 않는 파일 수.
-    eq(SyncPanel.countPulled("\u0001\n\nA.java\nb/B.xml\n\u0001\n\nA.java\n"), new SyncPanel.Pulled(2, 2));
+    // PULLED_FORMAT(-m): 합치기 커밋 m 은 부모마다 한 번씩 나오고, 커밋 수는 한 번 · 파일 수에서는 빠진다. 다시 읽을 파일에는 들어간다.
+    String pulledLog = "\u0001c2 c1\n\nA.java\nb/B.xml\n\u0001c1 c0\n\nA.java\n\u0001m c2 x\n\nM.java\n\u0001m c2 x\n\nA.java\n\u0001c0\n\nR.java\n";
+    eq(SyncPanel.countPulled(pulledLog), new SyncPanel.Pulled(4, 3));
+    eq(SyncPanel.pulledPaths(pulledLog), Set.of("A.java", "b/B.xml", "M.java", "R.java"));
     eq(SyncPanel.countPulled(""), new SyncPanel.Pulled(0, 0));
 
     checkUnmappedVcs();
@@ -229,6 +249,7 @@ public class SyncCheck {
     checkFindWindowsGit();
     checkGitLogins();
     checkGitUndo();
+    checkStability1112();
     System.out.println("SyncCheck 통과");
   }
 
@@ -424,9 +445,9 @@ public class SyncCheck {
     eq(ReverseMerge.parseRefs("refs/remotes/origin/HEAD\nrefs/remotes/origin/develop\nrefs/remotes/upstream/x\nrefs/remotes/origin/feature/kim\n", "origin"),
        List.of("develop", "feature/kim"));
     // 개인 브랜치만 받은 clone 은 받아 둔 브랜치만 안다. 서버 목록은 뒤에서 따로 합친다.
-    eq(ReverseMerge.knownBranches(mine, "origin"), List.of("feature/kim"));
+    eq(knownBranches(mine), List.of("feature/kim"));
     ReverseMerge.fetch(mine, "origin", "develop", "feature/kim");
-    eq(ReverseMerge.knownBranches(mine, "origin"), List.of("develop", "feature/kim"));
+    eq(knownBranches(mine), List.of("develop", "feature/kim"));
     ReverseMerge.Preview p = ReverseMerge.preview(mine, "origin", "develop", "feature/kim", "feature/kim");
     eq(p.commits(), 1);
     eq(p.files().size(), 2);  // A.java 는 내용이 같아 diff 에 없다 → B, C
@@ -442,25 +463,25 @@ public class SyncCheck {
     // 커밋 안 한 변경이 있으면 아무것도 하지 않고 멈춘다.
     sh(mine, "echo dirty >> B.java");
     try {
-      ReverseMerge.merge(mine, "origin", "develop", "feature/kim", "feature/kim", true, false);
+      merge(mine, "origin", "develop", "feature/kim", "feature/kim", true, false);
       throw new AssertionError("커밋 안 한 변경이 있으면 합치지 않아야 한다");
     }
     catch (ReverseMerge.DirtyException expected) {
       eq(ReverseMerge.conflicts(mine), Set.of());
     }
     sh(mine, "git checkout -q -- B.java");
-    eq(ReverseMerge.merge(mine, "origin", "develop", "feature/kim", "feature/kim", true, false), ReverseMerge.Result.CONFLICT);
+    eq(merge(mine, "origin", "develop", "feature/kim", "feature/kim", true, false), ReverseMerge.Result.CONFLICT);
     eq(ReverseMerge.conflicts(mine), Set.of("A.java"));
     // 충돌이 남았으면 마무리하지 않는다. 해결하면 합치기 커밋 · 푸시까지 한다.
-    eq(ReverseMerge.finish(mine, "origin", "feature/kim", "feature/kim", true), false);
+    eq(ReverseMerge.finish(mine, "origin", "feature/kim", "feature/kim", true, false), false);
     sh(mine, "echo resolved > A.java && git add A.java");
-    eq(ReverseMerge.finish(mine, "origin", "feature/kim", "feature/kim", true), true);
+    eq(ReverseMerge.finish(mine, "origin", "feature/kim", "feature/kim", true, false), true);
     eq(SyncPanel.git(mine, "rev-parse", "HEAD").trim(), SyncPanel.git(server, "rev-parse", "feature/kim").trim());
-    eq(ReverseMerge.finish(mine, "origin", "feature/kim", "feature/kim", true), false);  // 이미 마무리됨(MERGE_HEAD 없음)
+    eq(ReverseMerge.finish(mine, "origin", "feature/kim", "feature/kim", true, false), false);  // 이미 마무리됨(MERGE_HEAD 없음)
     // 충돌 없는 쪽: 다른 개발자가 내 파일을 건드리지 않은 develop 을 새 개인 브랜치로 합치고 푸시.
     sh(other, "git push -q origin develop~1:refs/heads/feature/new");
     ReverseMerge.fetch(mine, "origin", "develop", "feature/new");
-    eq(ReverseMerge.merge(mine, "origin", "develop", "feature/new", "feature/kim", true, false), ReverseMerge.Result.MERGED);
+    eq(merge(mine, "origin", "develop", "feature/new", "feature/kim", true, false), ReverseMerge.Result.MERGED);
     // 다른 브랜치에 합쳤으면 원래 브랜치로 돌아온다.
     eq(SyncPanel.git(mine, "rev-parse", "--abbrev-ref", "HEAD").trim(), "feature/kim");
     eq(SyncPanel.git(mine, "rev-parse", "feature/new").trim(), SyncPanel.git(server, "rev-parse", "feature/new").trim());
@@ -471,7 +492,7 @@ public class SyncCheck {
     sh(mine, "git checkout -q feature/new && echo l > L.java && git add L.java && git commit -qm l && git checkout -q feature/kim");
     ReverseMerge.fetch(mine, "origin", "develop", "feature/new");
     try {
-      ReverseMerge.merge(mine, "origin", "develop", "feature/new", "feature/kim", true, false);
+      merge(mine, "origin", "develop", "feature/new", "feature/kim", true, false);
       throw new AssertionError("갈라진 개인 브랜치는 멈춰야 한다");
     }
     catch (IOException expected) {
@@ -482,7 +503,7 @@ public class SyncCheck {
     sh(other, "git checkout -q develop && echo d > D.java && echo y >> B.java && git add D.java B.java && git commit -qm d && git push -q origin develop && git push -q origin develop~1:refs/heads/feature/stash");
     sh(mine, "echo keep > K.java && git add K.java && git stash push -q -m 남의것 && echo dirty >> B.java");
     ReverseMerge.fetch(mine, "origin", "develop", "feature/stash");
-    eq(ReverseMerge.merge(mine, "origin", "develop", "feature/stash", "feature/kim", false, true), ReverseMerge.Result.MERGED);
+    eq(merge(mine, "origin", "develop", "feature/stash", "feature/kim", false, true), ReverseMerge.Result.MERGED);
     eq(SyncPanel.git(mine, "rev-parse", "--abbrev-ref", "HEAD").trim(), "feature/kim");
     eq(SyncPanel.git(mine, "status", "--porcelain", "-uno"), " M B.java\n");
     eq(SyncPanel.git(mine, "stash", "list", "--format=%s").contains("남의것"), true);
@@ -493,13 +514,13 @@ public class SyncCheck {
     // 겹치지 않는 변경(A.java)은 묻지 않고 그대로 둔 채 합친다. 올려 둔(staged) 변경은 겹치지 않아도 막는다.
     sh(mine, "echo dirty >> A.java && git add A.java");
     try {
-      ReverseMerge.merge(mine, "origin", "develop", "feature/kim", "feature/kim", false, false);
+      merge(mine, "origin", "develop", "feature/kim", "feature/kim", false, false);
       throw new AssertionError("올려 둔 변경이 있으면 합치지 않아야 한다");
     }
     catch (ReverseMerge.DirtyException expected) {
       sh(mine, "git reset -q");
     }
-    eq(ReverseMerge.merge(mine, "origin", "develop", "feature/kim", "feature/kim", false, false), ReverseMerge.Result.MERGED);
+    eq(merge(mine, "origin", "develop", "feature/kim", "feature/kim", false, false), ReverseMerge.Result.MERGED);
     eq(SyncPanel.git(mine, "status", "--porcelain", "-uno"), " M A.java\n");
     eq(SyncPanel.git(mine, "show", "HEAD:B.java").contains("y"), true);
     eq(SyncPanel.git(mine, "stash", "list", "--format=%s").contains(ReverseMerge.STASH_MESSAGE), false);
@@ -508,7 +529,7 @@ public class SyncCheck {
     sh(mine, "echo unpushed >> A.java && git commit -qam 올리기전 && echo dirty >> A.java");
     sh(other, "echo e > E.java && git add E.java && git commit -qm e && git push -q origin develop");
     ReverseMerge.fetch(mine, "origin", "develop", "feature/kim");
-    eq(ReverseMerge.merge(mine, "origin", "develop", "feature/kim", "feature/kim", false, false), ReverseMerge.Result.MERGED);
+    eq(merge(mine, "origin", "develop", "feature/kim", "feature/kim", false, false), ReverseMerge.Result.MERGED);
     eq(SyncPanel.git(mine, "status", "--porcelain", "-uno"), " M A.java\n");
     sh(mine, "git checkout -q -- A.java");
     // 미리 보기 뒤 남이 서버 개인 브랜치에 올려도, merge 가 into 를 다시 받아 그 위에서 합치고 Push 한다.
@@ -516,7 +537,7 @@ public class SyncCheck {
     sh(other, "git fetch -q origin feature/kim && git checkout -q FETCH_HEAD && echo k > K2.java && git add K2.java && git commit -qm k2"
               + " && git push -q origin HEAD:feature/kim && git checkout -q develop && echo f > F.java && git add F.java && git commit -qm f && git push -q origin develop");
     ReverseMerge.fetch(mine, "origin", "develop");
-    eq(ReverseMerge.merge(mine, "origin", "develop", "feature/kim", "feature/kim", true, false), ReverseMerge.Result.MERGED);
+    eq(merge(mine, "origin", "develop", "feature/kim", "feature/kim", true, false), ReverseMerge.Result.MERGED);
     eq(SyncPanel.git(mine, "rev-parse", "HEAD").trim(), SyncPanel.git(server, "rev-parse", "feature/kim").trim());
     eq(SyncPanel.git(mine, "log", "-1", "--format=%s", "HEAD^1").trim(), "k2");
     // fetch 와 push 사이에 서버가 앞서면(push 주소를 앞선 저장소로 돌려 흉내) 합치기를 되돌리고 PushRejectedException. 커밋 안 한 변경은 그대로.
@@ -526,7 +547,7 @@ public class SyncCheck {
     sh(mine, "git config remote.origin.pushurl " + tmp.resolve("ahead.git").toString().replace('\\', '/') + " && echo dirty >> A.java");
     String beforeRejected = SyncPanel.git(mine, "rev-parse", "HEAD").trim();
     try {
-      ReverseMerge.merge(mine, "origin", "develop", "feature/kim", "feature/kim", true, false);
+      merge(mine, "origin", "develop", "feature/kim", "feature/kim", true, false);
       throw new AssertionError("서버가 앞서면 Push 가 거절돼야 한다");
     }
     catch (ReverseMerge.PushRejectedException expected) {
@@ -546,7 +567,7 @@ public class SyncCheck {
     // 다른 개발자가 develop 에서 Big.vue → big.vue, ui/X.vue → UI/X.vue 로 이름의 대소문자만 바꾸고 내용도 고쳤다(내용이 비슷해 git 이 이름 바꾸기로 본다).
     sh(other, "git checkout -q develop && git pull -q origin develop && mkdir -p ui && echo x > ui/X.vue && seq 1 30 > Big.vue && git add ui Big.vue && git commit -qm ui && git push -q origin develop");
     ReverseMerge.fetch(mine, "origin", "develop", "feature/kim");
-    eq(ReverseMerge.merge(mine, "origin", "develop", "feature/kim", "feature/kim", true, false), ReverseMerge.Result.MERGED);
+    eq(merge(mine, "origin", "develop", "feature/kim", "feature/kim", true, false), ReverseMerge.Result.MERGED);
     // 대소문자를 가리지 않는 파일 시스템(윈도우)에서도 돌도록 임시 이름을 거쳐 옮긴다.
     sh(other, "git mv Big.vue big.tmp && git mv big.tmp big.vue && echo more >> big.vue && git mv ui/X.vue X.tmp && rm -rf ui && mkdir UI && git mv X.tmp UI/X.vue && git commit -qam 대소문자 && git push -q origin develop");
     ReverseMerge.fetch(mine, "origin", "develop", "feature/kim");
@@ -554,7 +575,7 @@ public class SyncCheck {
     // 대소문자를 가리는 저장소면 git 이 그대로 합칠 수 있어 묻지 않는다. 가리지 않는 저장소(윈도우)면 아무것도 하지 않고 멈춘다.
     sh(mine, "git config core.ignorecase true");
     try {
-      ReverseMerge.merge(mine, "origin", "develop", "feature/kim", "feature/kim", true, false);
+      merge(mine, "origin", "develop", "feature/kim", "feature/kim", true, false);
       throw new AssertionError("대소문자만 바뀐 이름이 있으면 묻기 전에 합치지 않아야 한다");
     }
     catch (ReverseMerge.CaseRenameException expected) {
@@ -573,8 +594,6 @@ public class SyncCheck {
     eq(SyncPanel.git(mine, "status", "--porcelain"), "");
     sh(mine, "git config core.ignorecase false");
     ReverseMerge.saveConfig(mine, ReverseMerge.CONFIG_FROM, "develop");
-    eq(ReverseMerge.config(mine, ReverseMerge.CONFIG_FROM), "develop");
-    eq(ReverseMerge.config(mine, ReverseMerge.CONFIG_INTO), null);
     java.util.Map<String, String> cfg = ReverseMerge.configs(mine);
     eq(cfg.get("user.email"), "me@x");
     eq(cfg.get(ReverseMerge.CONFIG_FROM), "develop");
@@ -583,6 +602,17 @@ public class SyncCheck {
     eq(ReverseMerge.parseConfigs("user.name 나\nbranch.a.remote origin\nempty.key\n"), java.util.Map.of("user.name", "나", "branch.a.remote", "origin"));
     eq(ReverseMerge.gitAll(mine, List.of(new String[]{"rev-parse", "--abbrev-ref", "HEAD"}, new String[]{"config", "--get", "user.email"})),
        List.of("feature/kim\n", "me@x\n"));
+  }
+
+  /** 지금까지 받아 둔 원격 브랜치 이름(refs/remotes/origin/*). */
+  private static List<String> knownBranches(File root) throws IOException, InterruptedException {
+    return ReverseMerge.parseRefs(SyncPanel.git(root, "for-each-ref", "--format=%(refname)", ReverseMerge.remoteRef("origin", "")), "origin");
+  }
+
+  /** 지금 받아 둔 From 을 합친다(미리 보기 없이 합치기를 점검할 때). */
+  private static ReverseMerge.Result merge(File root, String remote, String from, String into, String current, boolean push, boolean stash)
+    throws IOException, InterruptedException {
+    return ReverseMerge.merge(root, remote, from, SyncPanel.git(root, "rev-parse", ReverseMerge.remoteRef(remote, from)).trim(), into, current, push, stash, false);
   }
 
   /** 마지막 Git 동작 되돌리기: reflog 줄 해석, 실제 저장소에서 커밋 · 되돌리기의 되돌리기 · 체크아웃 · 합치기 되돌리기와 멈추는 경우. */
@@ -715,6 +745,54 @@ public class SyncCheck {
     // 빈 저장소(추적 대상 없음)는 고를 것이 없다.
     sh(tmp.toFile(), "git init -q empty");
     eq(CloneBranch.remote(tmp.resolve("empty").toFile()), null);
+  }
+
+  /** 2026-11-12 안정화 전수조사: 저장소 찾기 · 참조 읽기 · 빈 저장소 · 받기 목록 · 이클립스 파일 찾기. */
+  private static void checkStability1112() throws Exception {
+    java.nio.file.Path tmp = java.nio.file.Files.createTempDirectory("stab");
+    // 저장소 찾기: 가까운 것부터, 사용자 폴더 · 드라이브 맨 위는 보지 않는다.
+    java.nio.file.Path outer = java.nio.file.Files.createDirectories(tmp.resolve("outer/.git"));
+    java.nio.file.Path inner = java.nio.file.Files.createDirectories(tmp.resolve("outer/a/inner/src"));
+    java.nio.file.Files.createDirectories(tmp.resolve("outer/a/inner/.svn"));
+    eq(SyncPanel.vcsDirsAbove(inner), List.of(tmp.resolve("outer/a/inner"), outer.getParent()));
+    eq(SyncPanel.unmappedVcs(inner.toFile()), SyncPanel.Vcs.SVN);
+    eq(SyncPanel.vcsDirsAbove(tmp), List.of());
+    eq(SyncPanel.aboveWorkspaces(java.nio.file.Path.of(System.getProperty("user.home"))), true);
+    eq(SyncPanel.aboveWorkspaces(tmp.getRoot()), true);
+    eq(SyncPanel.aboveWorkspaces(tmp), false);
+
+    // 참조 읽기(git 없이): 낱 파일 · packed-refs · 기호 참조 · 없음.
+    File repo = tmp.resolve("refs").toFile();
+    sh(tmp.toFile(), "git init -q -b main refs && cd refs && git config user.email a@b && git config user.name a"
+                     + " && echo 1 > a && git add a && git commit -qm one && git update-ref refs/remotes/origin/main HEAD");
+    String head = SyncPanel.git(repo, "rev-parse", "HEAD").trim();
+    eq(SyncPanel.refHash(repo, "HEAD"), head);
+    eq(SyncPanel.refHash(repo, "refs/remotes/origin/main"), head);
+    sh(repo, "git pack-refs --all");
+    eq(new File(repo, ".git/refs/remotes/origin/main").exists(), false);
+    eq(SyncPanel.refHash(repo, "refs/remotes/origin/main"), head);
+    eq(SyncPanel.refHash(repo, "HEAD"), head);
+    eq(SyncPanel.refHash(repo, "refs/remotes/origin/none"), null);
+    eq(SyncPanel.refHash(tmp.toFile(), "HEAD"), null);
+    sh(repo, "echo 2 >> a && git commit -qam two");
+    eq(SyncPanel.refHash(repo, "HEAD"), SyncPanel.git(repo, "rev-parse", "HEAD").trim());
+
+    // 커밋 없는 새 저장소도 저장소 정보를 읽는다(브랜치는 기호 참조, 추적 브랜치 없음).
+    File empty = tmp.resolve("empty").toFile();
+    sh(tmp.toFile(), "git init -q -b main empty");
+    SyncPanel.Repo unborn = SyncPanel.gitRepo(empty);
+    eq(unborn.branch(), "main");
+    eq(unborn.upstream(), null);
+
+    // 받기 목록(PULLED_FORMAT): 합치기 커밋은 한 번만 세고 그 차이도 다시 읽을 파일에 든다.
+    sh(repo, "git checkout -q -b side && echo s > s.txt && git add s.txt && git commit -qm side"
+             + " && git checkout -q main && echo m > m.txt && git add m.txt && git commit -qm main"
+             + " && git merge -q --no-ff -m merge side");
+    String before = SyncPanel.git(repo, "rev-parse", "HEAD~1~1").trim();
+    String log = SyncPanel.git(repo, "log", SyncPanel.PULLED_FORMAT, "--name-only", "--no-renames", "-m", before + "..HEAD");
+    eq(SyncPanel.countPulled(log), new SyncPanel.Pulled(3, 2));
+    eq(SyncPanel.pulledPaths(log), Set.of("m.txt", "s.txt"));
+    eq(SyncPanel.pulledPaths(log).containsAll(java.util.Arrays.asList(SyncPanel.git(repo, "diff", "--name-only", before).trim().split("\n"))), true);
   }
 
   private static void sh(File dir, String command) throws Exception {

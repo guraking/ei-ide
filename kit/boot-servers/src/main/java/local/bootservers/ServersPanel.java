@@ -1,7 +1,5 @@
 package local.bootservers;
 
-import com.intellij.execution.ExecutionListener;
-import com.intellij.execution.ExecutionManager;
 import com.intellij.execution.Executor;
 import com.intellij.execution.RunManager;
 import com.intellij.execution.RunManagerListener;
@@ -10,19 +8,14 @@ import com.intellij.execution.application.ApplicationConfiguration;
 import com.intellij.execution.configurations.RunConfiguration;
 import com.intellij.execution.executors.DefaultDebugExecutor;
 import com.intellij.execution.executors.DefaultRunExecutor;
-import com.intellij.execution.filters.TextConsoleBuilderFactory;
 import com.intellij.execution.impl.RunDialog;
 import com.intellij.execution.process.BaseProcessHandler;
 import com.intellij.execution.process.ProcessHandler;
-import com.intellij.execution.runners.ExecutionEnvironment;
-import com.intellij.execution.ui.ConsoleView;
-import com.intellij.execution.ui.ConsoleViewContentType;
 import com.intellij.execution.ui.RunContentDescriptor;
 import com.intellij.execution.ui.RunContentManager;
 import com.intellij.icons.AllIcons;
 import com.intellij.ide.BrowserUtil;
 import com.intellij.ide.ui.laf.darcula.ui.DarculaButtonUI;
-import com.intellij.ide.projectView.ProjectView;
 import com.intellij.openapi.Disposable;
 import com.intellij.notification.NotificationGroupManager;
 import com.intellij.notification.NotificationType;
@@ -38,7 +31,6 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.application.WriteIntentReadAction;
-import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.ModuleListener;
@@ -67,7 +59,6 @@ import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.TitledSeparator;
 import com.intellij.ui.ColoredListCellRenderer;
-import com.intellij.ui.components.ActionLink;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBPanelWithEmptyText;
 import com.intellij.ui.components.JBTabbedPane;
@@ -186,7 +177,6 @@ final class ServersPanel extends SimpleToolWindowPanel {
     private Map<Module, Set<String>> bootModules = Map.of();
     // 트리 줄 순서대로 늘어놓은 줄(Boot · Server · Deploy). 묶음 줄은 트리에만 있다.
     private List<Object> rows = List.of();
-    private final Map<Object, ServerLauncher.State> lastStates = new HashMap<>();
     // 마지막 tick 에서 구한 줄별 상태. 트리 줄은 여기서 읽고, 없는 줄(tick 전에 생긴 줄)만 그 자리에서 구한다.
     private Map<Object, ServerLauncher.State> shownStates = Map.of();
 
@@ -327,7 +317,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
         splitter.setSecondComponent(side);
         setContent(splitter);
 
-        // 실행 시간 · 상태를 1초마다 다시 그린다. 상태가 바뀐 줄이 있으면 프로젝트 트리 표시도 맞춘다.
+        // 실행 시간 · 상태를 1초마다 다시 그린다. 프로젝트 트리 상태 표시는 ServerStatusRefresher 가 맞춘다.
         // 창이 보이는 동안만 돌고, 보이게 되는 순간 한 번 바로 맞춘다.
         Timer timer = new Timer(TICK_MILLIS, e -> tick());
         addHierarchyListener(e -> {
@@ -390,6 +380,8 @@ final class ServersPanel extends SimpleToolWindowPanel {
         ReadAction.nonBlocking(() -> ServerLauncher.serverModules(project))
                 .inSmartMode(project)
                 .expireWith(parent)
+                // 모듈이 여럿 지워지거나(Maven 다시 읽기) 색인이 잇달아 끝나 겹친 요청은 마지막 하나만 돈다.
+                .coalesceBy(this)
                 .finishOnUiThread(ModalityState.any(), found -> {
                     gauge.setVisible(false);
                     bootModules = found;
@@ -489,14 +481,9 @@ final class ServersPanel extends SimpleToolWindowPanel {
         if (rows.isEmpty()) {
             return;
         }
-        boolean changed = false;
         Map<Object, ServerLauncher.State> states = new HashMap<>();
         for (Object row : rows) {
-            ServerLauncher.State state = stateOf(row);
-            states.put(row, state);
-            if (row instanceof Boot) {
-                changed |= lastStates.put(row, state) != state;
-            }
+            states.put(row, stateOf(row));
         }
         shownStates = states;
         tree.repaint();
@@ -506,9 +493,6 @@ final class ServersPanel extends SimpleToolWindowPanel {
             probe();
         }
         updateTitle(states);
-        if (changed) {
-            ProjectView.getInstance(project).refresh();
-        }
     }
 
     /** 창 제목 옆에 실행 중 · 실패 개수를 보인다. 올린 프로젝트 줄은 세지 않고, 글이 바뀔 때만 고친다. */
@@ -1106,17 +1090,13 @@ final class ServersPanel extends SimpleToolWindowPanel {
     // 로그 파일 고르기 창에서 로그 폴더 기준 하위 폴더를 보일 최대 글자 수. 넘으면 가운데를 줄인다(전체 경로는 풍선 도움말).
     private static final int LOG_FOLDER_MAX_CHARS = 40;
 
-    /** 우클릭 · 「더 보기」 의 로그 파일 보기: 고른 파일을 실행 창 탭에서 보인다. */
+    /** 우클릭 · 「더 보기」 의 로그 파일 보기: WAS 의 로그 파일 목록을 띄우고, 고른 파일을 실행 창 탭에서 보인다. 폴더 읽기는 풀 스레드에서 한다. */
     private void showLogFiles(Object target) {
         WasSettings.Server s = (WasSettings.Server) target;
-        showLogFiles(s, p -> LogFileView.open(project, s.name, p));
-    }
-
-    /** WAS 의 로그 파일 목록을 띄우고, 고른 파일을 open 에 넘긴다. 폴더 읽기는 풀 스레드에서 한다. */
-    private void showLogFiles(WasSettings.Server s, Consumer<Path> open) {
+        Consumer<Path> open = p -> LogFileView.open(project, s.name, p);
         List<Path> roots;
         try {
-            roots = WasLogFiles.roots(s.kind(), WasRunner.getInstance(project).runDir(s), Path.of(s.home), s.jeusDomain, s.jeusServer);
+            roots = WasLogFiles.roots(s.kind(), WasRunner.baseDir(s), Path.of(s.home), s.jeusDomain, s.jeusServer);
         }
         catch (InvalidPathException e) {
             showLogFolderError(s, e);
@@ -1164,7 +1144,8 @@ final class ServersPanel extends SimpleToolWindowPanel {
                         setToolTipText(p.toString());
                     }
                 })
-                .setItemChosenCallback(open::accept)
+                // 팝업 고르기 알림은 쓰기 의도 잠금 없이 온다. 실행 창에 탭을 여는 일은 잠금 안에서 한다.
+                .setItemChosenCallback(p -> WriteIntentReadAction.run(() -> open.accept(p)))
                 .createPopup()
                 .showInFocusCenter();
     }
@@ -1556,12 +1537,9 @@ final class ServersPanel extends SimpleToolWindowPanel {
         ((ApplicationConfiguration) settings.getConfiguration()).setVMParameters(vm);
         RunManager runManager = RunManager.getInstance(project);
         if (!name.equals(settings.getName())) {
-            String oldName = settings.getName();
             settings.setName(runManager.suggestUniqueName(name, settings.getType()));
-            // 이름이 바뀌면 실행 관리자의 색인 키도 바뀌므로 다시 등록해 맞춘다. 실행 기록 · 서버 묶음의 줄 키도 새 이름으로 옮긴다.
+            // 이름이 바뀌면 실행 관리자의 색인 키도 바뀌므로 다시 등록해 맞춘다. 실행 기록 · 서버 묶음의 줄 키는 이때 오는 바뀜 알림으로 BootRenameListener 가 옮긴다.
             runManager.addConfiguration(settings);
-            ServerRegistry.getInstance(project).rename(oldName, settings.getName());
-            ServerGroups.getInstance(project).renameMember(ServerGroups.BOOT_KEY_PREFIX + oldName, ServerGroups.BOOT_KEY_PREFIX + settings.getName());
         }
         runManager.setSelectedConfiguration(settings);
         Boot applied = new Boot(module, settings);
@@ -1573,7 +1551,10 @@ final class ServersPanel extends SimpleToolWindowPanel {
         showDetail();
     }
 
-    /** 고른 줄이 실행 중이면 상태 점검 · 힙을 화면 스레드 밖에서 재고, 그 사이 고른 줄이 바뀌지 않았으면 머리줄에 보인다. */
+    /**
+     * 고른 줄이 실행 중이면 머리줄에 상태 점검 · 힙을 보인다. 힙은 대시보드가 5초마다 잰 마지막 값을 쓰고(같은 서버를 두 번 재지 않게),
+     * 상태 점검(스프링 부트만)은 화면 스레드 밖에서 재고, 그 사이 고른 줄이 바뀌지 않았으면 보인다.
+     */
     private void probe() {
         Object row = detailBoot != null ? detailBoot : detailServer;
         ProcessHandler handler = row == null || stateOf(row) != ServerLauncher.State.RUNNING ? null : handlerOf(row);
@@ -1581,11 +1562,14 @@ final class ServersPanel extends SimpleToolWindowPanel {
             showProbe(row, null, null);
             return;
         }
+        long[] memory = measuredHeap(row);
+        if (!(row instanceof Boot)) {
+            showProbe(row, null, memory);
+            return;
+        }
         long pid = process.getProcess().pid();
-        boolean boot = row instanceof Boot;
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
-            ServerProbe.Health result = boot ? ServerProbe.health(pid) : null;
-            long[] memory = ServerProbe.heap(pid);
+            ServerProbe.Health result = ServerProbe.health(pid);
             ApplicationManager.getApplication().invokeLater(() -> {
                 Object now = detailBoot != null ? detailBoot : detailServer;
                 if (now != null && same(now, row)) {
@@ -1593,6 +1577,14 @@ final class ServersPanel extends SimpleToolWindowPanel {
                 }
             }, ModalityState.any(), project.getDisposed());
         });
+    }
+
+    /** 대시보드 기록의 마지막 힙 { 사용, 최대 }. 아직 재지 않았거나 읽지 못했으면 null. */
+    private long[] measuredHeap(Object row) {
+        String name = row instanceof Boot b ? b.name() : ((WasSettings.Server) row).name;
+        Metrics.History history = monitor.history(name);
+        Metrics.Sample latest = history == null ? null : history.latest();
+        return latest == null || latest.heapUsed() < 0 ? null : new long[] {latest.heapUsed(), latest.heapMax()};
     }
 
     /** 머리줄의 상태 점검 · 힙 글. 값이 null 이면 그 글을 숨긴다. memory 는 { 사용, 최대 } 바이트, 최대를 모르면 -1. */

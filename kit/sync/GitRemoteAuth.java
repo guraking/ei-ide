@@ -218,9 +218,12 @@ final class GitRemoteAuth {
    */
   private static String runStored(File root, long timeoutSec, String... args) throws IOException, InterruptedException {
     Attempt attempt = new Attempt();
-    for (String server : configServers(root, args).keySet()) {
-      GitLogins.Login stored = ApplicationManager.getApplication() == null ? null : GitLogins.stored(server);
-      if (stored != null) attempt.use(server, stored, null);
+    // 등록한 로그인이 없으면 원격 주소를 읽지 않는다(git config 하나를 아낀다).
+    if (GitLogins.any()) {
+      for (String server : configServers(root, args).keySet()) {
+        GitLogins.Login stored = GitLogins.stored(server);
+        if (stored != null) attempt.use(server, stored, null);
+      }
     }
     String knownError = attempt.knownBadError(attempt.knownBad());
     if (knownError != null) throw new IOException(knownError);

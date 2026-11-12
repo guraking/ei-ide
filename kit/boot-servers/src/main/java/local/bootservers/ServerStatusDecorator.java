@@ -1,6 +1,7 @@
 package local.bootservers;
 
 import com.intellij.execution.ExecutionManager;
+import com.intellij.execution.RunnerAndConfigurationSettings;
 import com.intellij.execution.process.ProcessHandler;
 import com.intellij.ide.projectView.PresentationData;
 import com.intellij.ide.projectView.ProjectViewNode;
@@ -28,12 +29,14 @@ public final class ServerStatusDecorator implements ProjectViewNodeDecorator {
         if (module == null) {
             return;
         }
-        ServerLauncher.State state = ServerLauncher.state(module);
+        RunnerAndConfigurationSettings settings = ServerLauncher.shownSettings(module);
+        ServerLauncher.State state = settings == null ? ServerLauncher.State.STOPPED : ServerLauncher.state(settings);
         if (state == ServerLauncher.State.STOPPED) {
             return;
         }
         String text = state.label();
-        ServerRegistry.Run run = ServerRegistry.getInstance(project).get(module.getName());
+        // 포트는 상태를 낸 그 실행 설정의 실행 기록에서 읽는다(모듈 이름과 같은 다른 실행 설정의 옛 기록을 쓰지 않게).
+        ServerRegistry.Run run = ServerRegistry.getInstance(project).get(settings.getName());
         if (state == ServerLauncher.State.RUNNING && run != null && run.port != null) {
             text += " :" + run.port;
         }

@@ -18,12 +18,14 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Predicate;
 
 /**
  * 닫은 저장소를 Maven 에서 빼고 되돌린다(이클립스에서 닫은 프로젝트 대신 로컬 저장소 jar 를 쓰는 것처럼).
  * IntelliJ Maven 은 내린 모듈을 가져오지 않지만(WorkspaceProjectImporter 가 UnloadedModulesNameHolder 로 건너뜀) 그 pom 은 Maven 목록에 남아,
  * 그 저장소를 쓰는 다른 모듈은 내린 모듈에 의존한 채로 남아 컴파일 오류가 난다. 그래서 닫을 때 그 pom 을 무시 목록(Maven 창의 Ignore Projects 와 같음)에 넣고
  * 다시 읽어, 쓰는 쪽 의존이 로컬 저장소 jar 로 바뀌게 한다. 열 때 무시를 풀고 다시 읽어 모듈 의존으로 돌린다.
+ * 저장소를 열 때 · Clone 뒤 pom 연결(linkAll)도 맡는다.
  * Maven 플러그인이 켜져 있을 때만 이 클래스를 읽는다(CloseRepoAction.mavenEnabled). EDT 에서 부른다.
  */
 final class MavenRepos {
@@ -104,14 +106,62 @@ final class MavenRepos {
   }
 
   /**
-   * 이 pom 이 Maven 이 맡은 파일 목록에 없으면(연결도 무시도 안 한 pom) link 를 부른다(CloneIntoProject.linkOnOpen). EDT 에서 부른다.
+   * poms 가운데 Maven 이 맡은 파일 목록에 없는 것(연결도 무시도 안 한 pom)을 연결한다(CloneIntoProject.linkOnOpen · linkBuildFiles). EDT 에서 부른다.
    * 맡은 파일 목록(isManagedFile)은 프로젝트 설정에서 바로 읽히므로 Maven 이 아직 안 읽혔거나 한 번도 안 쓴 프로젝트여도 맞다.
    * findProject 는 다중 모듈의 아래 pom(목록에는 맨 위 pom 만 있음)을 가른다. Maven 이 안 읽혔으면 null 이라 그때는 목록만 본다.
+   * 하나면 link(「Add as Maven Project」)로 연결한다. 여럿이면 Maven 동기화가 pom 수만큼 돌지 않게 한 번에 맡긴다:
+   * 이미 Maven 프로젝트면 모두 addManagedFilesOrUnignore 한 번, 아직 Maven 을 쓴 적 없으면 첫 pom 만 link 로 연결해(Maven 설정 · 신뢰 확인)
+   * 그것이 맡은 파일이 된 뒤 나머지를 한 번에 맡긴다. Maven 이 RETRY_LIMIT 번 안에 준비되지 않으면 나머지를 하나씩 link 한다.
    */
-  static void linkIfUnknown(Project project, VirtualFile pom, Runnable link) {
+  static void linkAll(Project project, List<VirtualFile> poms, Predicate<VirtualFile> link) {
     if (project.isDisposed()) return;
     MavenProjectsManager manager = MavenProjectsManager.getInstance(project);
-    if (!manager.isManagedFile(pom) && manager.findProject(pom) == null) link.run();
+    List<VirtualFile> unknown = new ArrayList<>();
+    for (VirtualFile pom : poms) {
+      if (pom.isValid() && !manager.isManagedFile(pom) && manager.findProject(pom) == null && !unknown.contains(pom)) unknown.add(pom);
+    }
+    if (unknown.isEmpty()) return;
+    if (unknown.size() == 1) {
+      link.test(unknown.get(0));
+      return;
+    }
+    if (manager.isMavenizedProject()) {
+      addWhenReady(project, null, unknown, link, 0);
+      return;
+    }
+    // 첫 연결 동작이 보이지 않는 pom(다른 빌드 도구가 맡음 등)은 건너뛰고 다음 것으로 연결을 연다.
+    for (int k = 0; k < unknown.size(); k++) {
+      if (!link.test(unknown.get(k))) continue;
+      List<VirtualFile> rest = new ArrayList<>(unknown.subList(k + 1, unknown.size()));
+      if (!rest.isEmpty()) addWhenReady(project, unknown.get(k), rest, link, 0);
+      return;
+    }
+  }
+
+  /**
+   * Maven 이 준비되면(읽기 끝 · first 가 있으면 그것이 맡은 파일이 됨) rest 를 한 번에 맡긴다(동기화 한 번). 아직이면 RETRY_SECONDS 뒤 다시 본다.
+   * RETRY_LIMIT 번을 넘기면(신뢰 확인 창을 닫지 않음 등) rest 를 하나씩 link 한다. EDT 에서 부른다.
+   */
+  private static void addWhenReady(Project project, VirtualFile first, List<VirtualFile> rest, Predicate<VirtualFile> link, int attempt) {
+    if (project.isDisposed()) return;
+    MavenProjectsManager manager = MavenProjectsManager.getInstance(project);
+    boolean ready = manager.isInitialized() && (first == null || manager.isManagedFile(first));
+    if (!ready && attempt < RETRY_LIMIT) {
+      AppExecutorUtil.getAppScheduledExecutorService().schedule(
+        () -> ApplicationManager.getApplication().invokeLater(() -> addWhenReady(project, first, rest, link, attempt + 1), project.getDisposed()),
+        RETRY_SECONDS, TimeUnit.SECONDS);
+      return;
+    }
+    List<VirtualFile> still = new ArrayList<>();
+    for (VirtualFile pom : rest) {
+      if (pom.isValid() && !manager.isManagedFile(pom) && manager.findProject(pom) == null) still.add(pom);
+    }
+    if (still.isEmpty()) return;
+    if (ready) {
+      manager.addManagedFilesOrUnignore(still);
+      return;
+    }
+    for (VirtualFile pom : still) link.test(pom);
   }
 
   /** 무시 경로(ignored) 중 열 폴더(roots) 안이고, 우리가 무시한 것(ours)이거나 그 폴더에 우리 기록이 없는 것. */

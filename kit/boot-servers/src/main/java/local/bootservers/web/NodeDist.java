@@ -1,9 +1,5 @@
 package local.bootservers.web;
 
-import com.google.gson.JsonElement;
-import com.google.gson.JsonParseException;
-import com.google.gson.JsonParser;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -22,10 +18,8 @@ import java.util.zip.ZipInputStream;
 final class NodeDist {
 
     static final String DIST_URL = "https://nodejs.org/dist/";
-    static final String INDEX_URL = DIST_URL + "index.json";
     static final String SHASUMS = "SHASUMS256.txt";
 
-    private static final String ZIP_SUFFIX = "-zip";
     private static final int BUFFER = 64 * 1024;
 
     private NodeDist() {
@@ -39,37 +33,6 @@ final class NodeDist {
             case "aarch64", "arm64" -> "arm64";
             default -> null;
         };
-    }
-
-    /** index.json(새 판이 앞) 에서 win-<arch>-zip 이 있는 가장 새 LTS 판(v24.1.0 꼴). 없으면 null. */
-    static String latestLts(String indexJson, String arch) {
-        JsonElement parsed;
-        try {
-            parsed = JsonParser.parseString(indexJson);
-        } catch (JsonParseException e) {
-            return null;
-        }
-        if (!parsed.isJsonArray()) {
-            return null;
-        }
-        String file = "win-" + arch + ZIP_SUFFIX;
-        for (JsonElement e : parsed.getAsJsonArray()) {
-            if (!e.isJsonObject()) {
-                continue;
-            }
-            JsonElement lts = e.getAsJsonObject().get("lts");
-            JsonElement version = e.getAsJsonObject().get("version");
-            JsonElement files = e.getAsJsonObject().get("files");
-            boolean isLts = lts != null && lts.isJsonPrimitive() && !(lts.getAsJsonPrimitive().isBoolean() && !lts.getAsBoolean());
-            if (isLts && version != null && version.isJsonPrimitive() && files != null && files.isJsonArray()) {
-                for (JsonElement f : files.getAsJsonArray()) {
-                    if (f.isJsonPrimitive() && file.equals(f.getAsString())) {
-                        return version.getAsString();
-                    }
-                }
-            }
-        }
-        return null;
     }
 
     static String zipName(String version, String arch) {

@@ -16,9 +16,9 @@ import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBTextField;
 import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.FormBuilder;
-import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.NamedColorUtil;
 import com.intellij.util.ui.UIUtil;
+import local.bootservers.ui.ColumnShares;
 import local.bootservers.was.ExplodedSync;
 import local.bootservers.was.JeusBase;
 import local.bootservers.was.WasSettings;
@@ -39,7 +39,10 @@ import java.util.Set;
 /** WAS 추가 · 편집 대화 상자. 확인을 누르면 {@link #result()} 로 고친 사본을 돌려준다(원본은 건드리지 않는다). */
 final class WasDialog extends DialogWrapper {
 
-    private static final int CHECK_COLUMN_WIDTH = 50;
+    // 배포 표의 글 칸(프로젝트 · 컨텍스트)과 그 처음 비율, 끌어 바꾼 비율을 기억하는 키
+    private static final int[] DEPLOY_TEXT_COLUMNS = {1, 2};
+    private static final double[] DEPLOY_SHARES = {0.6, 0.4};
+    private static final String DEPLOY_COLUMNS_KEY = "KingGura.WasDialog.deployColumns";
     private static final int DEPLOY_VISIBLE_ROWS = 6;
 
     private final WasSettings.Server server;
@@ -230,7 +233,8 @@ final class WasDialog extends DialogWrapper {
     @Override
     protected @Nullable JComponent createCenterPanel() {
         JBTable table = new JBTable(new DeployModel());
-        table.getColumnModel().getColumn(0).setMaxWidth(JBUI.scale(CHECK_COLUMN_WIDTH));
+        ColumnShares.fitCheck(table, 0);
+        ColumnShares.remember(table, DEPLOY_COLUMNS_KEY, DEPLOY_TEXT_COLUMNS, DEPLOY_SHARES);
         table.setVisibleRowCount(DEPLOY_VISIBLE_ROWS);
         JComponent panel = FormBuilder.createFormBuilder()
                 .addLabeledComponent(BootServersBundle.message("was.dialog.kind"), kind)

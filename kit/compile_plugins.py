@@ -4,13 +4,18 @@
 사용법: python kit\\compile_plugins.py [플러그인 이름 ...]
   이름을 주지 않으면 셋 다. 예: python kit\\compile_plugins.py kinggura-sync
 
-하는 일(플러그인마다 따로 동시에)
+하는 일
+  0. kit 손질 대본 점검(KIT_CHECKS · KIT_JAVA_CHECKS)을 먼저 돌린다. 하나라도 실패하면 컴파일하지 않고 멈춘다.
+  플러그인마다 따로 동시에
   1. kit 소스를 지난 빌드 결과(intellij-community\\out\\idea-ce\\dist.all · dist.win.x64)의 jar 로 컴파일한다.
-  2. 그 플러그인의 *Check.java 를 컴파일해 모두 돌린다.
+  2. 그 플러그인의 *Check.java 를 컴파일해 모두 돌린다(점검마다 JVM 하나, CHECK_WORKERS 개씩 동시에).
   3. 컴파일 결과 + 리소스를 tmpjars\\compile\\<이름>.jar 로 묶는다.
 모든 플러그인이 통과했을 때만 bundled-plugins\\<이름>\\lib\\<이름>.jar 를 바꾼다. 하나라도 실패하면 아무 jar 도 바꾸지 않는다.
-javac 는 ~/.jdks 아래 JDK 21 이상(openjdk-27 처럼 이름이 jdk- 로 시작하지 않아도 됨) 중 가장 높은 판, 없으면 check_update.py 의 방법(JAVA_HOME, PATH)으로 찾는다.
+먼저 Moa Mono 글꼴 파일을 bundled-plugins\\boot-servers\\fonts 에 맞춘다(설치본 plugins\\boot-servers\\fonts, IDE 가 켤 때 파일 그대로 등록).
+  kit 원본을 옮기기만 하므로 JDK · 지난 빌드 결과가 없어 컴파일이 멈추는 PC(첫 빌드 · 노트북)에서도 build-windows.bat 의 글꼴 확인을 통과한다.
+javac 는 check_update.find_javac(~/.jdks 의 JDK 21 이상 중 가장 높은 판 → JAVA_HOME → PATH)로 찾는다.
 """
+import filecmp
 import os
 import re
 import shutil
@@ -20,7 +25,6 @@ import time
 import zipfile
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 
 from check_update import KIT, ROOT, JAVA_RELEASE, PLUGIN_SOURCES, MIXED_CHECK_SOURCES, argfile_line, find_javac
 
@@ -51,24 +55,17 @@ ICON_ATTR = "icon"
 # 판이 없으면 IDE 판(262.10968.N)으로 보아 같을 때 먼저 찾은 설정 폴더 쪽을 띄운다. 묶은 때를 판으로 쓰면 언제나 나중에 묶은 jar 가 뜬다.
 VERSION_STAMP = time.strftime("%Y.%m%d.%H%M")
 ID_END = "</id>"
-
-
-def jdk_major(home):
-    """JDK 폴더의 release 파일에서 주 판 번호를 읽는다. 없거나 못 읽으면 0."""
-    try:
-        m = re.search(r'^JAVA_VERSION="(?:1\.)?(\d+)', (home / "release").read_text(encoding="utf-8", errors="replace"), re.M)
-    except OSError:
-        return 0
-    return int(m.group(1)) if m else 0
-
-
-def javac_path():
-    exe = "javac.exe" if os.name == "nt" else "javac"
-    jdks = [(jdk_major(h), h) for h in Path.home().joinpath(".jdks").glob("*") if (h / "bin" / exe).is_file()]
-    usable = [(major, h) for major, h in jdks if major >= int(JAVA_RELEASE)]
-    if usable:
-        return max(usable)[1] / "bin" / exe
-    return find_javac()
+# 플러그인 하나의 점검을 동시에 돌릴 JVM 수. 플러그인 셋이 함께 돌므로 코어 수를 나눠 쓴다.
+CHECK_WORKERS = max(2, (os.cpu_count() or 1) // len(PLUGIN_SOURCES))
+# 컴파일 전에 돌리는 kit 손질 대본 점검(파이썬). 각 파일 폴더에서 돌린다(같은 폴더의 대본을 import 한다).
+KIT_CHECKS = [KIT / "customize_check.py", KIT / "patchlib_check.py", KIT / "check_kit_check.py",
+              KIT / "defaults" / "apply_defaults_check.py", KIT / "ko" / "apply_ko_check.py",
+              KIT / "textmate" / "apply_textmate_check.py", KIT / "defender" / "apply_defender_check.py"]
+# 순수 자바 점검: (소스 폴더, 점검 클래스, 함께 컴파일할 파일). IntelliJ 클래스 없이 JDK 만으로 컴파일 · 실행한다.
+KIT_JAVA_CHECKS = [(KIT / "git-auth", "git4idea.commands.EiGitAuthCheck", ["EiGitAuthCheck.java", "EiGitAuthText.java"])]
+# Moa Mono 글꼴: kit 원본 폴더 → 설치본에 파일로 들어갈 폴더. 원본 폴더의 파일(TTF · 라이선스)을 그대로 맞춘다.
+FONT_SOURCE = KIT / "boot-servers" / "src" / "main" / "resources" / "fonts"
+FONT_TARGET = ROOT / "bundled-plugins" / "boot-servers" / "fonts"
 
 
 def platform_classpath():
@@ -198,46 +195,103 @@ def install(names):
         print(f"넣음: {target}")
 
 
-def build(name, javac, jars):
-    """한 플러그인을 컴파일 · 점검 · 묶는다. (이름, 성공, 기록)."""
+def run_check(java, run_cp, cls, args_file):
+    """점검 클래스 하나를 JVM 하나로 돌린다. (클래스, 성공, 출력 줄)."""
+    ok, text = run_args(java, args_file, ["-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-cp", run_cp, cls])
+    return cls, ok, text.strip().splitlines()
+
+
+def build(name, javac, jars, work=None):
+    """한 플러그인을 컴파일 · 점검 · 묶는다. (이름, 성공, 기록). work 를 주지 않으면 부를 때의 WORK."""
+    work = work or WORK
     log = []
     sources = [p for p in (KIT / PLUGIN_SOURCES[name]).rglob("*.java")
                if name not in MIXED_CHECK_SOURCES or not p.name.endswith("Check.java")]
     if not sources:
         return name, False, [f"소스가 없습니다: kit/{PLUGIN_SOURCES[name]}"]
-    classes = WORK / name
+    classes = work / name
     shutil.rmtree(classes, ignore_errors=True)
     classes.mkdir(parents=True)
-    ok, text = run_args(javac, WORK / f"{name}.args", javac_lines(classes, jars, sources))
+    ok, text = run_args(javac, work / f"{name}.args", javac_lines(classes, jars, sources))
     log.append(f"컴파일 {len(sources)}개 파일: {'통과' if ok else '실패'}")
     if not ok:
         return name, False, log + text.strip().splitlines()[-30:]
 
     checks = sorted(CHECK_SOURCES[name].rglob("*Check.java"))
-    check_classes = WORK / f"{name}-check"
+    check_classes = work / f"{name}-check"
     shutil.rmtree(check_classes, ignore_errors=True)
     check_classes.mkdir()
     classpath = [str(classes), str(RESOURCES[name])] + jars
     if checks:
-        ok, text = run_args(javac, WORK / f"{name}-check.args", javac_lines(check_classes, classpath, checks))
+        ok, text = run_args(javac, work / f"{name}-check.args", javac_lines(check_classes, classpath, checks))
         if not ok:
             return name, False, log + ["점검 컴파일 실패"] + text.strip().splitlines()[-30:]
     java = javac.with_name("java.exe" if os.name == "nt" else "java")
     run_cp = argfile_line(os.pathsep.join([str(check_classes)] + classpath))
-    for check in checks:
-        cls = check_class(check)
-        ok, text = run_args(java, WORK / f"{name}-run.args", ["-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-cp", run_cp, cls])
-        tail = text.strip().splitlines()
+    with ThreadPoolExecutor(CHECK_WORKERS) as pool:
+        runs = list(pool.map(lambda cls: run_check(java, run_cp, cls, work / f"{name}-run-{cls}.args"),
+                             [check_class(check) for check in checks]))
+    failed = []
+    for cls, ok, tail in runs:
         log.append(f"{'통과' if ok else '실패'} {cls}: {tail[-1] if tail else ''}")
         if not ok:
-            return name, False, log + tail[-20:]
+            failed += [f"-- {cls}"] + tail[-20:]
+    if failed:
+        return name, False, log + failed
 
-    pack(name, classes, WORK / f"{name}.jar")
-    missing = missing_in_jar(WORK / f"{name}.jar")
+    pack(name, classes, work / f"{name}.jar")
+    missing = missing_in_jar(work / f"{name}.jar")
     log.append(f"{'실패' if missing else '통과'} plugin.xml 이 부르는 클래스 · 아이콘: jar 에 없는 것 {len(missing)}개")
     if missing:
         return name, False, log + missing
     return name, True, log
+
+
+def kit_checks(javac):
+    """kit 손질 대본 점검을 모두 돌린다. (이름, 성공, 출력 줄) 목록."""
+    results = []
+    for check in KIT_CHECKS:
+        # 점검이 쓰는 한글을 utf-8 로 받는다(윈도우 파이프 기본은 cp949).
+        p = subprocess.run([sys.executable, check.name], cwd=check.parent, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                           encoding="utf-8", errors="replace", env={**os.environ, "PYTHONIOENCODING": "utf-8"})
+        results.append((check.relative_to(KIT).as_posix(), p.returncode == 0, p.stdout.strip().splitlines()))
+    java = javac.with_name("java.exe" if os.name == "nt" else "java")
+    for folder, cls, files in KIT_JAVA_CHECKS:
+        out = WORK / ("kit-" + folder.name)
+        shutil.rmtree(out, ignore_errors=True)
+        out.mkdir(parents=True)
+        ok, text = run_args(javac, WORK / f"kit-{folder.name}.args",
+                            ["-encoding", "UTF-8", "--release", JAVA_RELEASE, "-proc:none", "-d", argfile_line(out)]
+                            + [argfile_line(folder / f) for f in files])
+        if ok:
+            _, ok, lines = run_check(java, argfile_line(out), cls, WORK / f"kit-{folder.name}-run.args")
+        else:
+            lines = ["컴파일 실패"] + text.strip().splitlines()
+        results.append((cls, ok, lines))
+    return results
+
+
+def sync_fonts():
+    """FONT_SOURCE 의 파일을 FONT_TARGET 에 맞춘다(다른 것만 복사, 원본에 없는 파일은 지움). 바꾼 파일 수."""
+    if not FONT_SOURCE.is_dir():
+        raise SystemExit(f"글꼴 원본 폴더가 없습니다: {FONT_SOURCE}")
+    FONT_TARGET.mkdir(parents=True, exist_ok=True)
+    sources = {f.name: f for f in FONT_SOURCE.iterdir() if f.is_file()}
+    count = 0
+    for name, src in sorted(sources.items()):
+        dest = FONT_TARGET / name
+        if dest.is_file() and filecmp.cmp(src, dest, shallow=True):
+            continue
+        # 임시 이름으로 다 복사한 뒤 바꿔 넣어, 끊겨도 반쯤 쓴 글꼴 파일이 제 이름으로 남지 않게 한다.
+        temp = dest.with_name(name + ".new")
+        shutil.copy2(src, temp)
+        os.replace(temp, dest)
+        count += 1
+    for old in FONT_TARGET.iterdir():
+        if old.name not in sources:
+            old.unlink()
+            count += 1
+    return count
 
 
 def main():
@@ -245,9 +299,17 @@ def main():
     unknown = [n for n in names if n not in PLUGIN_SOURCES]
     if unknown:
         raise SystemExit(f"모르는 플러그인: {', '.join(unknown)} (있는 것: {', '.join(PLUGIN_SOURCES)})")
-    javac = javac_path()
-    jars = platform_classpath()
+    print(f"글꼴 파일: {FONT_TARGET} ({sync_fonts()}개 바꿈)")
+    javac = find_javac()
     WORK.mkdir(parents=True, exist_ok=True)
+    checks = kit_checks(javac)
+    for label, ok, lines in checks:
+        print(f"{'통과' if ok else '실패'} kit 점검 {label}: {lines[-1] if lines else ''}")
+        if not ok:
+            print("\n".join("  " + line for line in lines[-20:]))
+    if not all(ok for _, ok, _ in checks):
+        raise SystemExit("\nkit 점검이 실패해 컴파일하지 않았습니다. 본체 jar 를 하나도 바꾸지 않았습니다.")
+    jars = platform_classpath()
     print(f"javac: {javac}, classpath jar {len(jars)}개, 동시 {len(names)}개")
     with ThreadPoolExecutor(len(names)) as pool:
         results = list(pool.map(lambda n: build(n, javac, jars), names))

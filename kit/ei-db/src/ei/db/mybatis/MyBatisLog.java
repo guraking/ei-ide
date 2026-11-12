@@ -9,12 +9,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -40,7 +37,6 @@ public final class MyBatisLog {
   private static final Pattern HEAD_COMMENT = Pattern.compile("^\\s*/\\*\\s*(\\S+)\\s*\\*/");
   private static final Pattern TIMING_HEAD = Pattern.compile("^\\s*[:\\-]?\\s*(\\d+\\.\\s+)?");
   private static final String JAVA_DATE_FORMAT = "EEE MMM dd HH:mm:ss zzz yyyy";
-  private static final int MAX_INCLUDE_DEPTH = 16;
   private static final Set<String> SQL_WORDS = Set.of("AND", "OR", "NOT", "IN", "LIKE", "BETWEEN", "IS", "VALUES",
                                                       "SET", "WHERE", "ESCAPE", "THEN", "WHEN", "ELSE");
 
@@ -285,83 +281,6 @@ public final class MyBatisLog {
     if (v.length() == "yyyy-MM-dd".length()) return Date.valueOf(v);
     if (Character.isDigit(v.charAt(0))) return Timestamp.valueOf(v.replace('T', ' '));
     return new Timestamp(new SimpleDateFormat(JAVA_DATE_FORMAT, Locale.US).parse(v).getTime());
-  }
-
-  /**
-   * 로그의 값을 매퍼 문장의 매개변수 이름에 나눠 준다(대화창 미리 채우기용, 이름 → 입력 글).
-   * 로그 SQL 의 ? 마다 바로 앞의 칼럼 이름(키워드 · 괄호 · 쉼표 · ? 는 건너뜀)을 구하고,
-   * 매퍼의 #{} 자리도 같은 방식으로 구해 차례대로 맞춘다. 맞는 자리가 없으면 다음 자리에 넣는다.
-   * foreach 안의 자리는 collection 이름의 목록으로 모은다.
-   */
-  public static Map<String, String> prefill(MapperDoc doc, MapperDoc.Node statement, Entry entry) {
-    List<String[]> slots = new ArrayList<>();
-    StringBuilder flat = new StringBuilder();
-    flatten(doc, statement, null, null, flat, slots, 0);
-    List<String> logAnchors = anchors(entry.sql, "?");
-    Map<String, List<Object>> lists = new LinkedHashMap<>();
-    Map<String, String> out = new HashMap<>();
-    int pointer = 0;
-    for (int k = 0; k < logAnchors.size() && k < entry.values.size(); k++) {
-      int found = -1;
-      for (int j = pointer; j < slots.size(); j++) {
-        if (slots.get(j)[2].equalsIgnoreCase(logAnchors.get(k))) {
-          found = j;
-          break;
-        }
-      }
-      if (found < 0) found = pointer;
-      if (found >= slots.size()) break;
-      String[] slot = slots.get(found);
-      Object v = entry.values.get(k);
-      if (slot[1] != null) {
-        lists.computeIfAbsent(slot[1], x -> new ArrayList<>()).add(v);
-        pointer = found;
-        boolean nextSame = k + 1 < logAnchors.size() && logAnchors.get(k + 1).equalsIgnoreCase(slot[2]);
-        if (!nextSame) pointer = found + 1;
-      } else {
-        out.put(slot[0], SqlValues.format(v));
-        pointer = found + 1;
-      }
-    }
-    for (Map.Entry<String, List<Object>> l : lists.entrySet()) out.put(l.getKey(), SqlValues.format(l.getValue()));
-    return out;
-  }
-
-  /** slots: {이름, foreach collection 또는 null, 앞 칼럼}. 매퍼 글을 태그 없이 이어 붙이며 #{} 를 ? 로 둔다. */
-  private static void flatten(MapperDoc doc, MapperDoc.Node n, String foreach, String item, StringBuilder flat,
-                              List<String[]> slots, int depth) {
-    for (MapperDoc.Node c : n.children) {
-      if (c.name == null) {
-        String t = c.text;
-        int i = 0;
-        while (true) {
-          int a = t.indexOf("#{", i);
-          int close = a < 0 ? -1 : t.indexOf('}', a);
-          if (close < 0) {
-            flat.append(t, i, t.length());
-            break;
-          }
-          flat.append(t, i, a).append(' ');
-          List<String> before = anchors(flat + "?", "?");
-          String anchor = before.isEmpty() ? "" : before.get(before.size() - 1);
-          String inside = t.substring(a + 2, close);
-          String name = (inside.contains(",") ? inside.substring(0, inside.indexOf(',')) : inside).trim();
-          boolean inItem = foreach != null && (name.equals(item) || name.startsWith(item + "."));
-          slots.add(new String[] {name, inItem ? foreach : null, anchor});
-          flat.append("? ");
-          i = close + 1;
-        }
-      } else if ("foreach".equals(c.name)) {
-        flat.append(' ').append(c.attr("open") == null ? "" : c.attr("open")).append(' ');
-        flatten(doc, c, c.attr("collection") == null ? null : c.attr("collection").trim(), c.attr("item"), flat, slots, depth);
-        flat.append(' ').append(c.attr("close") == null ? "" : c.attr("close")).append(' ');
-      } else if ("include".equals(c.name)) {
-        MapperDoc.Node f = doc.fragment(c.attr("refid"));
-        if (f != null && depth < MAX_INCLUDE_DEPTH) flatten(doc, f, foreach, item, flat, slots, depth + 1);
-      } else if (!"selectKey".equals(c.name)) {
-        flatten(doc, c, foreach, item, flat, slots, depth);
-      }
-    }
   }
 
   /** sql 의 각 marker(?) 바로 앞 칼럼 이름 목록. 문자열 · 주석 안의 ? 는 세지 않는다. */

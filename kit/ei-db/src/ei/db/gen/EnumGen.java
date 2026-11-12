@@ -138,14 +138,7 @@ public final class EnumGen {
       b.append(" * ").append(COLUMNS_TAG).append(' ').append(escape(String.join(COLUMN_SEPARATOR, src.columns()))).append('\n');
     }
     b.append(" */\n");
-    b.append("public enum ").append(cls).append(" {\n");
-    List<String> names = constNames(items);
-    for (int i = 0; i < items.size(); i++) {
-      Item it = items.get(i);
-      b.append(INDENT).append(names.get(i)).append('(').append(literal(it.code())).append(", ").append(literal(it.label())).append(')')
-       .append(i == items.size() - 1 ? "" : ",").append('\n');
-    }
-    b.append(INDENT).append(";\n\n");
+    b.append("public enum ").append(cls).append(" {").append(constants(items)).append("\n\n");
     b.append(INDENT).append("private final String code;\n");
     b.append(INDENT).append("private final String label;\n\n");
     b.append(INDENT).append(cls).append("(String code, String label) {\n");
@@ -166,6 +159,21 @@ public final class EnumGen {
     b.append(INDENT).append(INDENT).append("return null;\n");
     b.append(INDENT).append("}\n");
     return b.append("}\n").toString();
+  }
+
+  /**
+   * enum 여는 중괄호 바로 뒤부터 상수 목록을 끝내는 ; 까지의 글(줄바꿈 · 상수 줄들 · 들여쓴 ;).
+   * 「enum 다시 맞추기」는 파일에서 이 구간만 바꾼다.
+   */
+  public static String constants(List<Item> items) {
+    StringBuilder b = new StringBuilder("\n");
+    List<String> names = constNames(items);
+    for (int i = 0; i < items.size(); i++) {
+      Item it = items.get(i);
+      b.append(INDENT).append(names.get(i)).append('(').append(literal(it.code())).append(", ").append(literal(it.label())).append(')')
+       .append(i == items.size() - 1 ? "" : ",").append('\n');
+    }
+    return b.append(INDENT).append(';').toString();
   }
 
   /** 파일 글에서 태그 값(첫 것). 없으면 null. */

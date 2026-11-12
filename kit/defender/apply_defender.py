@@ -11,10 +11,11 @@ JetBrains 는 배포판에서만 이 대본에 서명하므로 소스로 빌드�
 고칠 원문을 정확히 한 번 찾지 못하면 아무 파일도 바꾸지 않는다. 고치기 전 원본은
 <intellij-community>/../backup/<시각>-before-defender/ 에 남긴다. 두 번 실행해도 같은 결과가 된다.
 """
-import shutil
 import sys
-import time
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import patchlib  # noqa: E402
 
 TARGET = "platform/platform-impl/src/com/intellij/diagnostic/WindowsDefenderChecker.java"
 ORIGINAL = '      if ("NotSigned".equals(status) && ApplicationInfo.getInstance().getBuild().isSnapshot()) {\n'
@@ -23,36 +24,13 @@ PATCHED = '      if ("NotSigned".equals(status)) {\n'
 
 def patch(text):
     """원문을 고친 글을 돌려준다. 이미 고쳐져 있으면 None. 원문이 정확히 한 번 있지 않으면 ValueError."""
-    if PATCHED in text:
-        return None
-    count = text.count(ORIGINAL)
-    if count != 1:
-        raise ValueError(f"원문을 정확히 한 번 찾지 못했습니다({count}번): {ORIGINAL.strip()}")
-    return text.replace(ORIGINAL, PATCHED)
+    return patchlib.edit(text, ORIGINAL, PATCHED)
 
 
 def main():
     if len(sys.argv) != 2:
         raise SystemExit(__doc__)
-    root = Path(sys.argv[1]).resolve()
-    target = root / TARGET
-    if not target.is_file():
-        raise SystemExit(f"아무 파일도 바꾸지 않았습니다. 파일이 없습니다: {target}")
-    raw = target.read_bytes().decode("utf-8")
-    newline = "\r\n" if "\r\n" in raw else "\n"
-    try:
-        fixed = patch(raw.replace("\r\n", "\n"))
-    except ValueError as e:
-        raise SystemExit(f"아무 파일도 바꾸지 않았습니다. {e}\n  {TARGET}")
-    if fixed is None:
-        print(f"이미 적용됨: {TARGET}")
-        return
-
-    backup = root.parent / "backup" / (time.strftime("%Y%m%d-%H%M%S") + "-before-defender")
-    backup.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(target, backup / target.name)
-    target.write_bytes(fixed.replace("\n", newline).encode("utf-8"))
-    print(f"적용: {TARGET}")
+    patchlib.apply_edits(Path(sys.argv[1]).resolve(), [(TARGET, ORIGINAL, PATCHED)], tag="defender")
 
 
 if __name__ == "__main__":

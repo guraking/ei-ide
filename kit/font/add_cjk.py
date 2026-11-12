@@ -2,6 +2,7 @@
 
 쓰는 법: python kit/font/add_cjk.py <NotoSansCJK-Regular.ttc> <NotoSansCJK-Bold.ttc> [글꼴 폴더]
   - 글꼴 폴더 기본값은 kit/boot-servers/src/main/resources/fonts (그 안의 MoaMono-*.ttf 를 덮어쓴다).
+    그 폴더의 글꼴은 boot-servers jar 에 들어가고, compile_plugins.py 가 설치본용 bundled-plugins/boot-servers/fonts 에도 복사한다.
   - Noto Sans CJK(OFL 1.1)의 간체 중국어(SC) 글꼴에서 Moa Mono 에 없는 CJK 글자만 가져온다.
     영문 · 한글 · 기존 글자와 그 힌팅은 건드리지 않는다.
   - 크기는 Moa Mono 한글과 맞춘다: 글자 폭은 한글과 같은 900, 모양은 0.92 배, 세로 가운데는 한글 가운데에 맞춘다.

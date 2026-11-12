@@ -60,12 +60,14 @@ import com.intellij.ui.tabs.JBTabs;
 import com.intellij.ui.tabs.JBTabsFactory;
 import com.intellij.ui.tabs.TabInfo;
 import com.intellij.util.IconUtil;
+import local.bootservers.ui.ColumnShares;
 import local.bootservers.ui.Gauge;
 import local.bootservers.ui.Pill;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import javax.net.ssl.SSLException;
+import javax.swing.BorderFactory;
 import javax.swing.ButtonGroup;
 import javax.swing.JButton;
 import javax.swing.JComponent;
@@ -90,10 +92,6 @@ import javax.swing.AbstractAction;
 import javax.swing.JList;
 import javax.swing.KeyStroke;
 import javax.swing.Timer;
-import javax.swing.event.ChangeEvent;
-import javax.swing.event.ListSelectionEvent;
-import javax.swing.event.TableColumnModelEvent;
-import javax.swing.event.TableColumnModelListener;
 import javax.swing.event.TableModelListener;
 import java.awt.Color;
 import java.awt.Font;
@@ -173,6 +171,9 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
     private static final float REQUEST_RESPONSE_SPLIT = 0.5f;
     /** 요청 영역에서 탭(왼쪽)이 차지하는 비율. 오른쪽은 보낼 요청 미리보기. */
     private static final float TABS_PREVIEW_SPLIT = 0.55f;
+    // 끌어 바꾼 나눔 비율을 기억하는 키(요청 탭 · 미리보기, 요청 · 응답)
+    private static final String TABS_PREVIEW_SPLIT_KEY = "ei.api.split.preview";
+    private static final String REQUEST_RESPONSE_SPLIT_KEY = "ei.api.split.response";
     private static final DateTimeFormatter SENT_TIME = DateTimeFormatter.ofPattern("HH:mm:ss");
     private static final String SEND_SHORTCUT = "control ENTER";
     /** 보내는 중 지난 시간을 고쳐 쓰는 간격(ms). */
@@ -180,13 +181,10 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
     private static final double MS_PER_SECOND = 1000.0;
     private static final Pattern NUMBER = Pattern.compile("-?\\d+(\\.\\d+)?");
     private static final int TABLE_ROW_HEIGHT = 30;
-    /** 체크 칸 너비. 표 끝 「줄 추가」 글을 이름 칸 첫 글자에 맞추는 데도 쓴다. */
-    private static final int CHECK_COLUMN_WIDTH = 32;
     /** 너비 비율을 기억하는 칸(이름 · 값 · 어디서, SHARE_COLUMNS)의 기본 비율. */
     private static final double[] DEFAULT_SHARES = {0.35, 0.42, 0.23};
-    /** 비율을 선호 너비로 넣을 때 곱하는 수. 표는 선호 너비를 비율로만 쓰므로 실제 픽셀이 아니다. */
-    private static final int SHARE_SCALE = 1000;
-    private static final String SHARE_SEPARATOR = ",";
+    /** 표 끝 「줄 추가」 위아래 여백(배율 전). */
+    private static final int ADD_ROW_VGAP = 6;
     private static final String QUERY_COLUMNS_KEY = "ei.api.columns.query";
     private static final String HEADER_COLUMNS_KEY = "ei.api.columns.headers";
     /** 표 칸 좌우 안쪽 여백. */
@@ -405,6 +403,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         preview.add(previewHead, BorderLayout.NORTH);
         preview.add(previewField, BorderLayout.CENTER);
         OnePixelSplitter requestSplit = new OnePixelSplitter(false, TABS_PREVIEW_SPLIT);
+        requestSplit.setSplitterProportionKey(TABS_PREVIEW_SPLIT_KEY);
         // 칸 안 글(긴 안내 · 표 머리)의 최소 너비에 나눔 선이 묶이지 않게 한다.
         requestSplit.setHonorComponentsMinimumSize(false);
         requestSplit.setFirstComponent(requestTabs.getComponent());
@@ -461,6 +460,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
 
         // 요청(위) · 응답(아래)으로 나눠 응답을 전체 폭으로 보인다.
         OnePixelSplitter split = new OnePixelSplitter(true, REQUEST_RESPONSE_SPLIT);
+        split.setSplitterProportionKey(REQUEST_RESPONSE_SPLIT_KEY);
         split.setHonorComponentsMinimumSize(false);
         split.setFirstComponent(requestSplit);
         split.setSecondComponent(response);
@@ -657,8 +657,9 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
     private static JComponent rowsPanel(DefaultTableModel model, IntPredicate locked, String columnsKey) {
         JBTable table = new JBTable(model);
         table.setRowHeight(JBUI.scale(TABLE_ROW_HEIGHT));
-        table.getColumnModel().getColumn(ENABLED_COLUMN).setMaxWidth(JBUI.scale(CHECK_COLUMN_WIDTH));
-        rememberColumnShares(table, columnsKey);
+        // 체크 칸 너비는 표 끝 「줄 추가」 글을 이름 칸 첫 글자에 맞추는 데도 쓴다.
+        int checkWidth = ColumnShares.fitCheck(table, ENABLED_COLUMN);
+        ColumnShares.remember(table, columnsKey, SHARE_COLUMNS, DEFAULT_SHARES);
         Font mono = monoFont();
         // 값은 한글이 많아 화면 글꼴로 둔다(코드 글꼴은 한글 칸 너비가 벌어져 보인다).
         Font text = JBFont.label();
@@ -719,7 +720,8 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
             }
         });
         addRow.setForeground(UIUtil.getContextHelpForeground());
-        addRow.setBorder(JBUI.Borders.empty(6, CELL_PADDING + CHECK_COLUMN_WIDTH, 6, CELL_PADDING));
+        addRow.setBorder(BorderFactory.createEmptyBorder(JBUI.scale(ADD_ROW_VGAP), JBUI.scale(CELL_PADDING) + checkWidth,
+                JBUI.scale(ADD_ROW_VGAP), JBUI.scale(CELL_PADDING)));
         JPanel rows = new JPanel(new BorderLayout());
         rows.setBackground(table.getBackground());
         rows.add(table, BorderLayout.NORTH);
@@ -733,81 +735,6 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         scroll.getViewport().setBackground(table.getBackground());
         scroll.setBorder(JBUI.Borders.empty());
         return scroll;
-    }
-
-    /**
-     * 이름 · 값 · 어디서 칸의 너비 비율. 사용자가 끌어 바꾼 비율을 IDE 설정(key)에 남기고 다음에 연 표에 쓴다.
-     * 비율은 선호 너비로 넣으므로 표 폭이 바뀌면 칸도 같은 비율로 늘고 준다.
-     */
-    private static void rememberColumnShares(JBTable table, String key) {
-        PropertiesComponent settings = PropertiesComponent.getInstance();
-        double[] shares = parseShares(settings.getValue(key));
-        for (int i = 0; i < SHARE_COLUMNS.length; i++) {
-            table.getColumnModel().getColumn(SHARE_COLUMNS[i]).setPreferredWidth((int) Math.round(shares[i] * SHARE_SCALE));
-        }
-        table.getColumnModel().addColumnModelListener(new TableColumnModelListener() {
-            @Override
-            public void columnMarginChanged(ChangeEvent e) {
-                // 표 폭이 바뀔 때도 불리므로 머리글을 끄는 중일 때만 남긴다.
-                if (table.getTableHeader().getResizingColumn() == null) {
-                    return;
-                }
-                int total = 0;
-                for (int column : SHARE_COLUMNS) {
-                    total += table.getColumnModel().getColumn(column).getWidth();
-                }
-                if (total <= 0) {
-                    return;
-                }
-                StringBuilder value = new StringBuilder();
-                for (int column : SHARE_COLUMNS) {
-                    if (value.length() > 0) {
-                        value.append(SHARE_SEPARATOR);
-                    }
-                    value.append(String.format(Locale.ROOT, "%.4f", (double) table.getColumnModel().getColumn(column).getWidth() / total));
-                }
-                settings.setValue(key, value.toString());
-            }
-
-            @Override
-            public void columnAdded(TableColumnModelEvent e) {
-            }
-
-            @Override
-            public void columnRemoved(TableColumnModelEvent e) {
-            }
-
-            @Override
-            public void columnMoved(TableColumnModelEvent e) {
-            }
-
-            @Override
-            public void columnSelectionChanged(ListSelectionEvent e) {
-            }
-        });
-    }
-
-    /** 남긴 비율 글(「0.35,0.45,0.20」). 없거나 깨졌으면 기본 비율. */
-    private static double[] parseShares(@Nullable String value) {
-        if (value == null) {
-            return DEFAULT_SHARES;
-        }
-        String[] parts = value.split(SHARE_SEPARATOR);
-        if (parts.length != DEFAULT_SHARES.length) {
-            return DEFAULT_SHARES;
-        }
-        double[] shares = new double[parts.length];
-        try {
-            for (int i = 0; i < parts.length; i++) {
-                shares[i] = Double.parseDouble(parts[i]);
-                if (!(shares[i] > 0 && shares[i] < 1)) {
-                    return DEFAULT_SHARES;
-                }
-            }
-        } catch (NumberFormatException e) {
-            return DEFAULT_SHARES;
-        }
-        return shares;
     }
 
     /** 보내기 단추 글: 「보내기」 뒤에 단축키(Ctrl+Enter). 글 크기를 하나로 두어 단추 안 세로 가운데가 어긋나지 않게 한다. */

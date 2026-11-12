@@ -19,10 +19,12 @@ import ei.db.EiDbBundle;
 import ei.db.Notify;
 import ei.db.QueryResult;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import java.awt.BorderLayout;
+import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.io.IOException;
 import java.util.List;
@@ -37,9 +39,12 @@ public final class EnumDialog extends DialogWrapper {
   private static final String CODE_PACKAGE = ".code";
   private static final int MIN_COLUMNS = 2;
   /** 대화창 첫 폭과 왼쪽 칸 비율(칸 폭은 분할선으로 바꾼다). */
-  private static final int WIDTH = 1180;
-  private static final float SPLIT = 420f / WIDTH;
-  private static final int HEIGHT = 640;
+  /** 왼쪽 칸 처음 비율(끌어 바꾼 비율은 기억한다). */
+  private static final float SPLIT = 0.36f;
+  /** 처음 열 때 화면 폭 · 높이에 대한 창 크기 비율. 사용자가 바꾼 크기는 IntelliJ 가 기억한다. */
+  private static final double FIRST_WIDTH_RATIO = 0.61;
+  private static final double FIRST_HEIGHT_RATIO = 0.6;
+  private static final String DIMENSION_KEY = "ei.db.gen.EnumDialog";
 
   private final Project project;
   private final DbConfig config;
@@ -105,6 +110,12 @@ public final class EnumDialog extends DialogWrapper {
   }
 
   @Override
+  protected @Nullable String getDimensionServiceKey() { return DIMENSION_KEY; }
+
+  @Override
+  public Dimension getInitialSize() { return Ui.firstSize(FIRST_WIDTH_RATIO, FIRST_HEIGHT_RATIO); }
+
+  @Override
   protected JComponent createCenterPanel() {
     preview = new Preview(project, "java", getDisposable());
     locationField.addBrowseFolderListener(project, FileChooserDescriptorFactory.createSingleFolderDescriptor().withTitle(EiDbBundle.message("enum.location.title")));
@@ -127,7 +138,7 @@ public final class EnumDialog extends DialogWrapper {
     form.setBorder(JBUI.Borders.emptyRight(10));
     JComponent right = preview.component();
     right.setBorder(JBUI.Borders.merge(right.getBorder(), JBUI.Borders.emptyLeft(10), false));
-    return Ui.split("enum", SPLIT, form, right, WIDTH, HEIGHT);
+    return Ui.split("enum", SPLIT, form, right);
   }
 
   @Override

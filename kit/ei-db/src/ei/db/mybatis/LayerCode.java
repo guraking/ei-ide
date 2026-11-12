@@ -21,6 +21,7 @@ import com.intellij.psi.PsiType;
 import com.intellij.psi.PsiTypeElement;
 import com.intellij.psi.codeStyle.CodeStyleManager;
 import com.intellij.psi.search.GlobalSearchScope;
+import com.intellij.psi.search.GlobalSearchScopesCore;
 import com.intellij.psi.search.searches.ReferencesSearch;
 import com.intellij.psi.util.PropertyUtilBase;
 import com.intellij.psi.util.PsiTreeUtil;
@@ -109,21 +110,24 @@ final class LayerCode {
   }
 
   /**
-   * type 형식의 필드를 가진 프로젝트 클래스(인터페이스 · type 자신 제외) 가운데 처음 찾은 것. 없으면 null.
-   * 참조 찾기라 색인 중이 아닐 때 부른다.
+   * type 형식의 필드를 가진 프로젝트 본 소스 클래스(인터페이스 · type 자신 · 테스트 소스 제외) 가운데 처음 찾은 것. 없으면 null.
+   * 참조 찾기라 색인 중이 아닐 때 부른다. 처음 맞는 참조에서 찾기를 멈춘다.
    */
   static @Nullable Holder holderOf(Project project, @Nullable PsiClass type) {
     if (type == null) return null;
-    for (PsiReference ref : ReferencesSearch.search(type, GlobalSearchScope.projectScope(project)).findAll()) {
+    Holder[] found = new Holder[1];
+    ReferencesSearch.search(type, GlobalSearchScopesCore.projectProductionScope(project)).forEach((PsiReference ref) -> {
       ProgressManager.checkCanceled();
       PsiElement el = ref.getElement();
       PsiField f = PsiTreeUtil.getParentOfType(el, PsiField.class);
       PsiTypeElement te = f == null ? null : f.getTypeElement();
-      if (te == null || !PsiTreeUtil.isAncestor(te, el, false)) continue;
+      if (te == null || !PsiTreeUtil.isAncestor(te, el, false)) return true;
       PsiClass c = f.getContainingClass();
-      if (c != null && !c.isInterface() && c != type && c.getQualifiedName() != null) return new Holder(c, f.getName());
-    }
-    return null;
+      if (c == null || c.isInterface() || c == type || c.getQualifiedName() == null) return true;
+      found[0] = new Holder(c, f.getName());
+      return false;
+    });
+    return found[0];
   }
 
   /** cls 의 필드 가운데 형식이 fqn 인 것의 이름. 없으면 null. */

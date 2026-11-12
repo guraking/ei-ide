@@ -62,6 +62,8 @@ final class ServerProbe {
     private static final long CONNECT_TIMEOUT_SECONDS = 10;
     // 시간 제한을 넘긴 호출이 아직 끝나지 않은 프로세스. 그 호출이 끝나면 빠진다.
     private static final Set<Long> STUCK = ConcurrentHashMap.newKeySet();
+    // 띄운 프로세스 pid → 그 java 프로세스 pid(스크립트로 띄운 WAS 는 자식). 한 번 찾으면 살아 있는 동안 자식 프로세스를 다시 훑지 않는다.
+    private static final Map<Long, Long> JAVA_PIDS = new ConcurrentHashMap<>();
     // JMX 호출을 돌리는 스레드. 인텔리제이 클래스를 쓰지 않으므로(MetricsProbeCheck 가 함께 컴파일) JDK 풀을 쓴다. IDE 를 끌 때 막지 않게 데몬.
     private static final ExecutorService CALLS = Executors.newCachedThreadPool(task -> {
         Thread thread = new Thread(task, CALL_THREAD_NAME);
@@ -100,32 +102,11 @@ final class ServerProbe {
         return found.isEmpty() ? null : found.iterator().next();
     }
 
-    /**
-     * 프로세스(또는 그 아래 java 프로세스, catalina.bat 처럼 스크립트로 띄운 경우)의 힙 사용량 { 사용, 최대 } 바이트.
-     * attach 를 못 하면(다른 사용자 · attach 꺼짐 · 끝난 프로세스) null. 최대를 모르면 -1.
-     */
-    static long[] heap(long rootPid) {
-        long pid = javaPid(rootPid);
-        MBeanServerConnection server = connection(rootPid);
-        if (server == null) {
-            return null;
-        }
-        try {
-            MemoryUsage usage = ManagementFactory.newPlatformMXBeanProxy(server, ManagementFactory.MEMORY_MXBEAN_NAME, MemoryMXBean.class)
-                    .getHeapMemoryUsage();
-            return new long[] {usage.getUsed(), usage.getMax()};
-        }
-        catch (IOException | RuntimeException | LinkageError e) {
-            close(pid);
-            return null;
-        }
-    }
-
     /** JVM 값: CPU(0~1, 모르면 NaN) · 코어 수 · 힙 사용 · 최대(모르면 -1) · 스레드 · 최고 스레드 · GC 누적 횟수. */
     record Jvm(double cpu, int cores, long heapUsed, long heapMax, int threads, int peakThreads, long gcCount) {
     }
 
-    /** 대시보드용 JVM 값. heap 과 같은 attach 연결을 쓴다. attach 를 못 하면 null. */
+    /** 대시보드 · 서버 창 머리줄 힙에 쓰는 JVM 값. attach 를 못 하면(다른 사용자 · attach 꺼짐 · 끝난 프로세스) null. */
     static Jvm jvm(long rootPid) {
         long pid = javaPid(rootPid);
         MBeanServerConnection server = connection(rootPid);
@@ -273,20 +254,34 @@ final class ServerProbe {
         }
     }
 
-    /** rootPid 가 java 면 그대로, 아니면 그 아래 첫 java 프로세스. 없으면 rootPid. */
+    /** rootPid 가 java 면 그대로, 아니면 그 아래 첫 java 프로세스. 없으면 rootPid(자식 java 가 아직 안 떴으면 다음에 다시 찾는다). */
     static long javaPid(long rootPid) {
+        Long known = JAVA_PIDS.get(rootPid);
+        if (known != null && isAlive(known)) {
+            return known;
+        }
+        JAVA_PIDS.remove(rootPid);
         Optional<ProcessHandle> root = ProcessHandle.of(rootPid);
-        if (root.isEmpty() || isJava(root.get())) {
+        if (root.isEmpty()) {
+            return rootPid;
+        }
+        if (isJava(root.get())) {
+            JAVA_PIDS.put(rootPid, rootPid);
             return rootPid;
         }
         Iterator<ProcessHandle> it = root.get().descendants().iterator();
         while (it.hasNext()) {
             ProcessHandle child = it.next();
             if (isJava(child)) {
+                JAVA_PIDS.put(rootPid, child.pid());
                 return child.pid();
             }
         }
         return rootPid;
+    }
+
+    private static boolean isAlive(long pid) {
+        return ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false);
     }
 
     private static boolean isJava(ProcessHandle process) {
@@ -297,11 +292,11 @@ final class ServerProbe {
 
     private static void closeDead() {
         for (Long pid : CONNECTIONS.keySet()) {
-            if (ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false)) {
-                continue;
+            if (!isAlive(pid)) {
+                close(pid);
             }
-            close(pid);
         }
+        JAVA_PIDS.values().removeIf(pid -> !isAlive(pid));
     }
 
     private static void close(long pid) {

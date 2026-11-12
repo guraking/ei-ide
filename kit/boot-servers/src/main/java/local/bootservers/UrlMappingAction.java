@@ -148,6 +148,19 @@ public final class UrlMappingAction extends DumbAwareAction {
         return result;
     }
 
+    /** 읽기 동작 안에서 부른다. 메서드에 매핑 주석이 있는가({@link #of} 가 빈 목록이 아닌가). 경로 계산 · 상위 클래스 찾기 없이 주석만 본다. */
+    static boolean isMapped(PsiMethod method) {
+        if (method.getContainingClass() == null) {
+            return false;
+        }
+        for (String annotation : MAPPINGS.keySet()) {
+            if (method.getModifierList().findAnnotation(annotation) != null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** 읽기 동작 안에서 부른다. 메서드 하나의 매핑 줄들(collect 와 같은 규칙). 매핑 주석이 없으면 빈 목록. */
     static List<Endpoint> of(PsiMethod method) {
         List<Endpoint> result = new ArrayList<>();

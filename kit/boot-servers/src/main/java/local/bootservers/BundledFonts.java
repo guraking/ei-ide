@@ -18,6 +18,8 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.swing.UIManager;
+
 /**
  * 플러그인 jar 에 든 글꼴을 JVM 에 등록해 OS 에 설치하지 않아도 편집기 글꼴 목록에 나오게 한다.
  * Moa Mono (JetBrains Mono + Pretendard 한글, 둘 다 OFL 1.1). 한글은 영문 1.5칸 폭이다.
@@ -39,6 +41,8 @@ public final class BundledFonts implements AppLifecycleListener {
     private static final String UI_FONT_APPLIED_KEY = "eiide.uiFont.eiMono.applied";
     // 굵게 · 기울임. 화면 글꼴로 쓰면 굵은 글(제목 · 선택 단추)이 첫 화면부터 나오므로 화면을 다시 깔기 전에 함께 등록한다.
     // 늦게 등록하면 그 사이 자바가 보통 굵기를 번지게 그려 굵기를 흉내 내어 한글 획이 뭉개진다.
+    // 화면 글꼴을 대표하는 LAF 키. 사용자 지정 화면 글꼴은 이 키부터 바뀐다.
+    private static final String LABEL_FONT_KEY = "Label.font";
     private static final List<String> OTHER_FILES = List.of(
             "MoaMono-Bold.ttf", "MoaMono-Italic.ttf", "MoaMono-BoldItalic.ttf");
 
@@ -108,9 +112,18 @@ public final class BundledFonts implements AppLifecycleListener {
             ui.setOverrideLafFonts(true);
             ui.setFontFace(FAMILY);
         }
-        if (ui.getOverrideLafFonts() && FAMILY.equals(ui.getFontFace())) {
+        if (ui.getOverrideLafFonts() && FAMILY.equals(ui.getFontFace()) && !FAMILY.equals(laidOutFamily())) {
             ApplicationManager.getApplication().invokeLater(() -> LafManager.getInstance().updateUI());
         }
+    }
+
+    /**
+     * 지금 깔린 화면 글꼴의 실제 가족 이름. Font 는 처음 쓸 때 찾은 글꼴을 붙잡으므로, 등록 전에 깔렸으면 대신 쓴 가족(Dialog 등)이 나온다.
+     * 등록이 화면보다 먼저였거나 아직 그리지 않았으면 FAMILY 가 나와 화면 전체를 다시 깔 필요가 없다.
+     */
+    private static String laidOutFamily() {
+        Font font = UIManager.getFont(LABEL_FONT_KEY);
+        return font == null ? null : font.getFamily();
     }
 
     /** FAMILY 가 JVM 에 등록되어 있는가. 없는 이름의 Font 는 Dialog 가족으로 대신된다. */

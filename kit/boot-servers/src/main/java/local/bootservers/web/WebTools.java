@@ -57,6 +57,9 @@ final class WebTools {
     static final String PACKAGE_LOCK_JSON = "package-lock.json";
     static final String VERSIONS_PROPERTIES = "versions.properties";
     static final String NODE_VERSION_KEY = "node.version";
+    // 뒤에 구조 이름(x64 · arm64)을 붙인 키에 윈도우 zip 의 SHA-256 을 둔다
+    static final String NODE_SHA256_KEY_PREFIX = "node.sha256.win-";
+    private static final String SHA256_HEX = "[0-9a-fA-F]{64}";
     /** npm 이 패키지를 받는 곳. IDE 프록시 설정을 이 주소 기준으로 고른다. */
     static final String NPM_REGISTRY = "https://registry.npmjs.org/";
     /** npm 에 프록시를 넘기는 환경 변수. */
@@ -179,6 +182,23 @@ final class WebTools {
 
     /** versions.properties 의 Node 판(v24.1.0 꼴). 파일 · 값이 없으면 IOException. */
     static String nodeVersion() throws IOException {
+        String version = pinnedVersions().getProperty(NODE_VERSION_KEY, "").strip();
+        if (version.isEmpty()) {
+            throw new IOException(VERSIONS_PROPERTIES + " 에 " + NODE_VERSION_KEY + " 가 없습니다");
+        }
+        return version;
+    }
+
+    /**
+     * versions.properties 에 고정한 윈도우 zip 의 SHA-256(소문자 16진수). 그 구조(arch: x64 · arm64)의 값이 없거나 16진수 64자가 아니면 null.
+     * 설치본 대본(apply_web.py)과 같은 값을 쓰므로 IDE 「Node 받기」도 SHASUMS256.txt 를 받지 않고 이 값으로 확인한다.
+     */
+    static String pinnedNodeSha256(String arch) throws IOException {
+        String hash = pinnedVersions().getProperty(NODE_SHA256_KEY_PREFIX + arch, "").strip();
+        return hash.matches(SHA256_HEX) ? hash.toLowerCase(Locale.ROOT) : null;
+    }
+
+    private static Properties pinnedVersions() throws IOException {
         Properties versions = new Properties();
         try (InputStream in = WebTools.class.getResourceAsStream(PINNED_RESOURCE_DIR + VERSIONS_PROPERTIES)) {
             if (in == null) {
@@ -186,11 +206,7 @@ final class WebTools {
             }
             versions.load(new InputStreamReader(in, StandardCharsets.UTF_8));
         }
-        String version = versions.getProperty(NODE_VERSION_KEY, "").strip();
-        if (version.isEmpty()) {
-            throw new IOException(VERSIONS_PROPERTIES + " 에 " + NODE_VERSION_KEY + " 가 없습니다");
-        }
-        return version;
+        return versions;
     }
 
     /** npm 에 넘길 프록시 주소 http://[아이디:비밀번호@]호스트:포트. 아이디 · 비밀번호는 주소용으로 인코딩한다. 아이디가 비면 붙이지 않는다. */

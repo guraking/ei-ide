@@ -12,8 +12,8 @@ import com.intellij.toolWindow.ToolWindowDescriptor;
 public final class ToolWindowOrder implements DefaultToolWindowLayoutExtension {
   /** 위 · 아래 순서 그대로. id 는 각 도구 창의 등록 id(설정 열쇠)다. */
   private static final String[] BOTTOM = {
-      "Version Control", "Problems", "Problems View", "Terminal", "Services",
-      "Servers", "Synchronize", "EI Database Result",
+      "Version Control", "Problems View", "Terminal", "Services",
+      "Servers", "Synchronize", "ProjectHistory", "EI Database Result",
       "Build", "Run", "Debug", "Find", "EI ERD", "TODO",
   };
 

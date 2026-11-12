@@ -16,9 +16,12 @@ import com.intellij.util.ui.JBUI;
 import ei.db.EiDbBundle;
 import ei.db.Notify;
 
+import org.jetbrains.annotations.Nullable;
+
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import java.awt.BorderLayout;
+import java.awt.Dimension;
 import java.awt.GridLayout;
 import java.io.IOException;
 import java.util.List;
@@ -34,9 +37,12 @@ final class JsonDtoDialog extends DialogWrapper {
   private static final Pattern PACKAGE = Pattern.compile("([A-Za-z_$][\\w$]*(\\.[A-Za-z_$][\\w$]*)*)?");
   private static final String DEFAULT_CLASS = "ResponseDto";
   /** 대화창 첫 폭과 왼쪽 칸 비율(칸 폭은 분할선으로 바꾼다). */
-  private static final int WIDTH = 1240;
-  private static final float SPLIT = 520f / WIDTH;
-  private static final int HEIGHT = 640;
+  /** 왼쪽 칸 처음 비율(끌어 바꾼 비율은 기억한다). */
+  private static final float SPLIT = 0.42f;
+  /** 처음 열 때 화면 폭 · 높이에 대한 창 크기 비율. 사용자가 바꾼 크기는 IntelliJ 가 기억한다. */
+  private static final double FIRST_WIDTH_RATIO = 0.65;
+  private static final double FIRST_HEIGHT_RATIO = 0.6;
+  private static final String DIMENSION_KEY = "ei.db.gen.JsonDtoDialog";
 
   private final Project project;
   private final Targets.Roots roots;
@@ -69,6 +75,12 @@ final class JsonDtoDialog extends DialogWrapper {
   }
 
   @Override
+  protected @Nullable String getDimensionServiceKey() { return DIMENSION_KEY; }
+
+  @Override
+  public Dimension getInitialSize() { return Ui.firstSize(FIRST_WIDTH_RATIO, FIRST_HEIGHT_RATIO); }
+
+  @Override
   protected JComponent createCenterPanel() {
     preview = new Preview(project, "java", getDisposable());
     locationField.addBrowseFolderListener(project, FileChooserDescriptorFactory.createSingleFolderDescriptor().withTitle(EiDbBundle.message("jsondto.location.title")));
@@ -94,7 +106,7 @@ final class JsonDtoDialog extends DialogWrapper {
 
     JComponent right = preview.component();
     right.setBorder(JBUI.Borders.merge(right.getBorder(), JBUI.Borders.emptyLeft(10), false));
-    JComponent body = Ui.split("jsondto", SPLIT, left, right, WIDTH, HEIGHT);
+    JComponent body = Ui.split("jsondto", SPLIT, left, right);
 
     JPanel root = new JPanel(new BorderLayout(0, JBUI.scale(12)));
     root.add(top, BorderLayout.NORTH);

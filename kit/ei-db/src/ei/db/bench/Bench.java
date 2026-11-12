@@ -7,9 +7,12 @@ import ei.db.DbConfig;
 import ei.db.DbKind;
 import ei.db.DbSessions;
 import ei.db.Meta;
+import ei.db.SchemaCache;
 import ei.db.console.ConsoleRun;
 import ei.db.console.SqlParams;
 
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -19,7 +22,7 @@ import java.util.function.Consumer;
 /**
  * 작업대 탭들이 함께 쓰는 것: 지금 접속, 연결 모양 · 값 자리 선택, 아래 미리 보기로 SQL 보내기, 표 · 칼럼 · 외래 키 읽기.
  * 읽기는 풀 스레드에서 하고 결과는 화면 스레드에서 넘긴다(작업대가 모달이 아니어도 ModalityState.any 로 바로 돈다).
- * 접속이 바뀌면 읽어 둔 것을 비운다. 실패는 onError 로 한국어 글을 넘긴다.
+ * 접속이 바뀌면 읽어 둔 것을 비운다. 표 · 칼럼 · 외래 키는 SchemaCache 를 거쳐 자동완성 · 탐색기와 같이 쓴다. 실패는 onError 로 한국어 글을 넘긴다.
  */
 final class Bench {
   /** 미리 보기 받는 곳: SQL 과 아래에 보일 알림 줄들. */
@@ -100,7 +103,7 @@ final class Bench {
     }
     DbConfig c = config;
     if (c == null) return;
-    load(() -> Meta.tables(DbSessions.get(project).connection(c), c, Meta.schemaOf(c), Meta.tableAndViewTypes(c)), list -> {
+    load(() -> meta(c, conn -> SchemaCache.tables(conn, c, Meta.schemaOf(c))), list -> {
       tables = list;
       done.accept(list);
     });
@@ -116,7 +119,7 @@ final class Bench {
     }
     DbConfig c = config;
     if (c == null) return;
-    load(() -> Meta.columns(DbSessions.get(project).connection(c), c, Meta.schemaOf(c), table), list -> {
+    load(() -> meta(c, conn -> SchemaCache.columns(conn, c, Meta.schemaOf(c), table)), list -> {
       columns.put(key, list);
       done.accept(list);
     });
@@ -132,7 +135,7 @@ final class Bench {
     }
     DbConfig c = config;
     if (c == null) return;
-    load(() -> Meta.importedKeys(DbSessions.get(project).connection(c), c, Meta.schemaOf(c), table), list -> {
+    load(() -> meta(c, conn -> SchemaCache.importedKeys(conn, c, Meta.schemaOf(c), table)), list -> {
       fks.put(key, list);
       done.accept(list);
     });
@@ -178,6 +181,16 @@ final class Bench {
   }
 
   interface Reader<T> { T read() throws Exception; }
+
+  private interface MetaReader<T> { T read(Connection conn) throws SQLException; }
+
+  /** 접속에서 메타를 읽고(SchemaCache 를 거친다), PostgreSQL 자동 커밋 꺼짐이면 그 뒤 빈 트랜잭션을 닫는다. 풀 스레드에서 부른다. */
+  private <T> T meta(DbConfig c, MetaReader<T> reader) throws SQLException {
+    DbSessions sessions = DbSessions.get(project);
+    T value = reader.read(sessions.connection(c));
+    sessions.endReadTransaction(c);
+    return value;
+  }
 
   /** 풀 스레드에서 읽고, 접속이 그대로면 화면 스레드에서 done. 실패는 onError. */
   <T> void load(Reader<T> reader, Consumer<T> done) {

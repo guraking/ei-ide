@@ -24,6 +24,7 @@ import ei.db.EiDbBundle;
 import ei.db.Meta;
 import ei.db.Notify;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import javax.swing.BoxLayout;
 import javax.swing.JComponent;
@@ -33,6 +34,7 @@ import javax.swing.Timer;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
+import java.awt.Dimension;
 import java.awt.Component;
 import java.awt.FlowLayout;
 import java.io.IOException;
@@ -54,9 +56,14 @@ public final class MapperDialog extends DialogWrapper {
   private static final Pattern FQN = Pattern.compile("[A-Za-z_$][\\w$]*(\\.[A-Za-z_$][\\w$]*)*");
   private static final String DTO_PACKAGE = "dto";
   /** 대화창 첫 폭과 왼쪽 칸 비율(칸 폭은 분할선으로 바꾼다). */
-  private static final int WIDTH = 1520;
-  private static final float SPLIT = 620f / WIDTH;
-  private static final int HEIGHT = 820;
+  /** 왼쪽 칸 처음 비율(끌어 바꾼 비율은 기억한다). */
+  private static final float SPLIT = 0.41f;
+  /** 처음 열 때 화면 폭 · 높이에 대한 창 크기 비율. 사용자가 바꾼 크기는 IntelliJ 가 기억한다. */
+  private static final double FIRST_WIDTH_RATIO = 0.79;
+  private static final double FIRST_HEIGHT_RATIO = 0.76;
+  /** 꼬리표 칸 폭을 정할 때 재는 가장 넓은 꼬리표. */
+  private static final String TAG_SAMPLE = "PK";
+  private static final String DIMENSION_KEY = "ei.db.gen.MapperDialog";
   /** 입력이 멈춘 뒤 이만큼 지나서 미리보기를 다시 만든다(글자마다 디스크를 읽지 않게). */
   private static final int REFRESH_DELAY_MS = 300;
 
@@ -74,7 +81,6 @@ public final class MapperDialog extends DialogWrapper {
   private final Map<MapperGen.Kind, JBCheckBox> kindBoxes = new EnumMap<>(MapperGen.Kind.class);
   /** resultMap 칸은 만들 문장 목록과 헷갈리지 않게 「결과 받기」 줄에 따로 둔다(statements() 가 채운다). */
   private final JPanel resultRow = new JPanel(new BorderLayout());
-  private final JBCheckBox oldJoin = new JBCheckBox(EiDbBundle.message("mapper.old.join"), true);
   private final JBCheckBox cdata = new JBCheckBox(EiDbBundle.message("mapper.cdata"), true);
   private final JBCheckBox where11 = new JBCheckBox(EiDbBundle.message("mapper.where11"), true);
   private final JBCheckBox sqlComments = new JBCheckBox(EiDbBundle.message("mapper.sql.comments"), true);
@@ -135,6 +141,12 @@ public final class MapperDialog extends DialogWrapper {
   }
 
   @Override
+  protected @Nullable String getDimensionServiceKey() { return DIMENSION_KEY; }
+
+  @Override
+  public Dimension getInitialSize() { return Ui.firstSize(FIRST_WIDTH_RATIO, FIRST_HEIGHT_RATIO); }
+
+  @Override
   protected JComponent createCenterPanel() {
     xmlPreview = new Preview(project, "xml", getDisposable());
     interfacePreview = new Preview(project, "java", getDisposable());
@@ -149,8 +161,6 @@ public final class MapperDialog extends DialogWrapper {
       Ui.onChange(f, this::refresh);
     }
     for (JBCheckBox b : List.of(makeInterface, makeDto, cdata, where11, sqlComments, updateIf)) b.addActionListener(e -> refresh());
-    oldJoin.setEnabled(false);
-    oldJoin.setToolTipText(EiDbBundle.message("mapper.old.join.tooltip"));
 
     JPanel dtoRow = new JPanel(new BorderLayout(JBUI.scale(12), 0));
     dtoRow.add(dtoField, BorderLayout.CENTER);
@@ -163,7 +173,7 @@ public final class MapperDialog extends DialogWrapper {
         .addLabeledComponent("DTO", dtoRow, true)
         .addLabeledComponent(EiDbBundle.message("mapper.result"), resultRow, true)
         .addLabeledComponent(EiDbBundle.message("mapper.statements"), statements(), true)
-        .addLabeledComponent(EiDbBundle.message("mapper.style"), stack(oldJoin, cdata, where11, sqlComments, updateIf), true)
+        .addLabeledComponent(EiDbBundle.message("mapper.style"), stack(cdata, where11, sqlComments, updateIf), true)
         .addLabeledComponentFillVertically(EiDbBundle.message("mapper.columns.label", table, cols.size()), columnTable())
         .getPanel();
     left.setBorder(JBUI.Borders.emptyRight(12));
@@ -178,7 +188,7 @@ public final class MapperDialog extends DialogWrapper {
     right.add(tabs, BorderLayout.CENTER);
     right.setBorder(JBUI.Borders.emptyLeft(12));
 
-    return Ui.split("mapper", SPLIT, left, right, WIDTH, HEIGHT);
+    return Ui.split("mapper", SPLIT, left, right);
   }
 
   @Override
@@ -240,7 +250,7 @@ public final class MapperDialog extends DialogWrapper {
     t.setShowGrid(false);
     t.getTableHeader().setVisible(false);
     t.setTableHeader(null);
-    t.getColumnModel().getColumn(0).setMaxWidth(JBUI.scale(28));
+    Ui.fitColumn(t, 0, TAG_SAMPLE);
     t.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
       @Override
       public Component getTableCellRendererComponent(JTable table, Object value, boolean selected, boolean focus, int row, int column) {
@@ -276,7 +286,7 @@ public final class MapperDialog extends DialogWrapper {
   }
 
   private MapperGen gen() {
-    MapperGen.Options o = new MapperGen.Options(oldJoin.isSelected(), cdata.isSelected(), where11.isSelected(),
+    MapperGen.Options o = new MapperGen.Options(cdata.isSelected(), where11.isSelected(),
                                                 sqlComments.isSelected(), updateIf.isSelected(), config.kind);
     return new MapperGen(table, cols, mapperField.getText().strip(), dtoType(), o);
   }

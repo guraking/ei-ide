@@ -17,7 +17,6 @@ import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.IconLoader;
-import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
 import ei.db.EiDbBundle;
@@ -33,7 +32,6 @@ import java.util.List;
  * 고른 줄에 감싸거나 커서 자리에 넣는다. 들여쓰기 한 단계는 그 파일의 코드 스타일을 따른다.
  */
 public final class TagGroup extends ActionGroup implements DumbAware {
-  private static final String MAPPER_MARK = "<mapper";
 
   private final AnAction[] children = build();
 
@@ -43,7 +41,7 @@ public final class TagGroup extends ActionGroup implements DumbAware {
   @Override
   public void update(@NotNull AnActionEvent e) {
     Editor editor = e.getData(CommonDataKeys.EDITOR);
-    e.getPresentation().setEnabledAndVisible(editor != null && StringUtil.contains(editor.getDocument().getCharsSequence(), MAPPER_MARK));
+    e.getPresentation().setEnabledAndVisible(editor != null && MapperDocs.isMapper(editor.getDocument().getCharsSequence()));
   }
 
   @Override

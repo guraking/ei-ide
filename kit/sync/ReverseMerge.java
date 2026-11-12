@@ -208,17 +208,6 @@ final class ReverseMerge {
     return rows;
   }
 
-  /** 값이 없으면(종료 코드 1) null. */
-  static String config(File root, String key) throws InterruptedException {
-    try {
-      String value = git(root, "config", "--get", key).trim();
-      return value.isEmpty() ? null : value;
-    }
-    catch (IOException missing) {
-      return null;
-    }
-  }
-
   /**
    * 역머지가 쓰는 설정(user.* · branch.*.remote · ei.reverseMerge.*)을 git 한 번으로 다 읽는다. 하나씩 읽으면 git 을 넷 띄운다(회사 PC 는 하나에 0.8초).
    * 맞는 키가 없으면(종료 코드 1) 빈 맵.
@@ -249,11 +238,6 @@ final class ReverseMerge {
 
   static void saveConfig(File root, String key, String value) throws IOException, InterruptedException {
     git(root, "config", key, value);
-  }
-
-  /** branch 가 쓰는 원격 이름. 설정이 없으면 DEFAULT_REMOTE. */
-  static String remoteOf(File root, String branch) throws InterruptedException {
-    return remoteOf(configs(root), branch);
   }
 
   /**
@@ -296,7 +280,7 @@ final class ReverseMerge {
     return null;
   }
 
-  /** remoteOf 와 같고 configs 로 읽어 둔 설정을 쓴다. */
+  /** branch 가 쓰는 원격 이름(configs 로 읽어 둔 branch.<이름>.remote). 설정이 없으면 DEFAULT_REMOTE. */
   static String remoteOf(Map<String, String> cfg, String branch) {
     String remote = branch == null ? null : cfg.get("branch." + branch + ".remote");
     return remote == null ? DEFAULT_REMOTE : remote;
@@ -304,31 +288,10 @@ final class ReverseMerge {
 
   /**
    * git 명령 여럿을 동시에 돌려 입력 순서대로 결과를 돌려준다. 서로 기다릴 필요 없는 명령을 차례로 띄우면 명령 수만큼 git 시작 시간이 쌓인다.
-   * 하나가 실패하면 그 예외를 던진다. IntelliJ 클래스 없이 돌아 SyncCheck 에서도 쓴다.
+   * 하나가 실패하면 그 예외를 던지고, 부른 쪽이 중단되면 아직 도는 git 도 끝낸다(SyncPanel.inParallel).
    */
   static List<String> gitAll(File root, List<String[]> commands) throws IOException, InterruptedException {
-    String[] out = new String[commands.size()];
-    Exception[] failed = new Exception[commands.size()];
-    List<Thread> threads = new ArrayList<>();
-    for (int k = 0; k < commands.size(); k++) {
-      int at = k;
-      Thread t = new Thread(() -> {
-        try {
-          out[at] = git(root, commands.get(at));
-        }
-        catch (IOException | InterruptedException e) {
-          failed[at] = e;
-        }
-      }, "ei-git");
-      t.start();
-      threads.add(t);
-    }
-    for (Thread t : threads) t.join();
-    for (Exception e : failed) {
-      if (e instanceof IOException io) throw io;
-      if (e instanceof InterruptedException ie) throw ie;
-    }
-    return Arrays.asList(out);
+    return SyncPanel.inParallel(commands, args -> git(root, args));
   }
 
   /** 서버에 있는 브랜치 이름들. 내 fetch 설정과 상관없이 서버에 직접 묻는다. */
@@ -339,11 +302,6 @@ final class ReverseMerge {
   /** serverBranches 와 같고 시간 제한(초)을 따로 준다. */
   static List<String> serverBranches(File root, String remote, long timeoutSec) throws IOException, InterruptedException {
     return parseHeads(GitRemoteAuth.run(root, timeoutSec, true, "ls-remote", "--heads", remote));
-  }
-
-  /** 지금까지 받아 둔 원격 브랜치 이름들(refs/remotes/<원격>/*). 서버에 가지 않아 바로 나온다. 이름순. */
-  static List<String> knownBranches(File root, String remote) throws IOException, InterruptedException {
-    return parseRefs(git(root, "for-each-ref", "--format=%(refname)", remoteRef(remote, "")), remote);
   }
 
   /** for-each-ref --format=%(objectname) %(refname) 출력 → 참조 이름 → 커밋. 참조 이름 순서는 출력 순서. */
@@ -422,11 +380,6 @@ final class ReverseMerge {
                                              new String[]{"log", LOG_FORMAT, LOG_DATE, "--name-only", i + ".." + f}));
     if (!mine.isEmpty()) mine.retainAll(touchedByOthers(logs.get(0), cfg.get("user.name"), email));
     return new Preview(commits, plan(theirs, mine, parseLog(logs.get(1))), fromTip);
-  }
-
-  /** merge 와 같고 지금 받아 둔 From(remoteRef)을 합친다. */
-  static Result merge(File root, String remote, String from, String into, String current, boolean push, boolean stash) throws IOException, InterruptedException {
-    return merge(root, remote, from, git(root, "rev-parse", remoteRef(remote, from)).trim(), into, current, push, stash, false);
   }
 
   /**
@@ -820,11 +773,6 @@ final class ReverseMerge {
   /** 아직 해결하지 않은 충돌 파일(저장소 기준 경로). */
   static Set<String> conflicts(File root) throws IOException, InterruptedException {
     return lines(git(root, "diff", "--name-only", "--diff-filter=U"));
-  }
-
-  /** finish 와 같고 합치기 전에 Stash 하지 않은 합치기를 마무리한다. */
-  static boolean finish(File root, String remote, String into, String current, boolean push) throws IOException, InterruptedException {
-    return finish(root, remote, into, current, push, false);
   }
 
   /**

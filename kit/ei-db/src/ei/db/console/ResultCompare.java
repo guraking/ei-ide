@@ -19,6 +19,7 @@ import com.intellij.util.ui.UIUtil;
 import ei.db.EiDbBundle;
 import ei.db.QueryResult;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import javax.swing.Action;
 import javax.swing.BoxLayout;
@@ -40,9 +41,10 @@ import java.util.List;
 /** 「결과」 창의 두 조회 탭을 비교하는 창. 탭 우클릭 「다른 결과와 비교…」로 연다. 불러온 행만 비교한다. */
 final class ResultCompare extends DialogWrapper {
 
-  /** 창 크기(px, 배율 전). */
-  private static final int WIDTH = 960;
-  private static final int HEIGHT = 520;
+  /** 처음 열 때 화면에 대한 크기 몫. 사용자가 바꾼 크기는 DIMENSION_KEY 로 기억한다. */
+  private static final double FIRST_WIDTH_RATIO = 0.55;
+  private static final double FIRST_HEIGHT_RATIO = 0.5;
+  private static final String DIMENSION_KEY = "ei.db.ResultCompare";
   /** 왼쪽 기준 칼럼 목록이 차지하는 몫. 사용자가 끈 값은 KEY_SPLIT_KEY 로 기억한다. */
   private static final float KEY_SPLIT = 0.2f;
   private static final String KEY_SPLIT_KEY = "ei.db.console.resultCompare.keySplit";
@@ -212,8 +214,16 @@ final class ResultCompare extends DialogWrapper {
     split.setFirstComponent(keys);
     split.setSecondComponent(new JBScrollPane(table));
     panel.add(split, BorderLayout.CENTER);
-    panel.setPreferredSize(new Dimension(JBUI.scale(WIDTH), JBUI.scale(HEIGHT)));
     return panel;
+  }
+
+  @Override
+  protected @Nullable String getDimensionServiceKey() { return DIMENSION_KEY; }
+
+  @Override
+  public Dimension getInitialSize() {
+    Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+    return new Dimension((int) (screen.width * FIRST_WIDTH_RATIO), (int) (screen.height * FIRST_HEIGHT_RATIO));
   }
 
   @Override
@@ -232,8 +242,10 @@ final class ResultCompare extends DialogWrapper {
     for (ResultDiff.Row r : outcome.rows()) {
       if (showSame.isSelected() || r.kind() != ResultDiff.Kind.SAME) shown.add(r);
     }
+    boolean newColumns = !model.columns.equals(outcome.columns());
     model.set(outcome.columns(), shown);
-    fitColumns();
+    // 칼럼이 그대로면(기준 칼럼 · 같은 행 보기만 바꿈) 사용자가 끌어 바꾼 칸 너비를 그대로 둔다.
+    if (newColumns) fitColumns();
   }
 
   /** 머리글과 앞쪽 FIT_ROWS 행이 들어가는 너비(최대 화면 폭의 MAX_COLUMN_SCREEN_SHARE). 넘는 글은 칸 풍선 도움말로 본다. */

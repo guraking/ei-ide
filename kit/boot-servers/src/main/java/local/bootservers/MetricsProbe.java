@@ -83,6 +83,7 @@ final class MetricsProbe {
                 clientErrors = outcomes.contains(CLIENT_ERROR) ? countOf(server, endpoint, TAG_OUTCOME, CLIENT_ERROR) : 0;
                 List<String> uris = Metrics.tagValues(all, TAG_URI);
                 boolean actuator = false;
+                double actuatorMax = 0;
                 for (String uri : uris) {
                     if (!uri.startsWith(ACTUATOR_URI)) {
                         continue;
@@ -90,6 +91,7 @@ final class MetricsProbe {
                     actuator = true;
                     Map<?, ?> one = metric(server, endpoint, REQUESTS, TAG_URI, uri);
                     Map<String, Double> own = Metrics.measurements(one);
+                    actuatorMax = Math.max(actuatorMax, own.getOrDefault(MAX, 0d));
                     count -= own.getOrDefault(COUNT, 0d);
                     total -= own.getOrDefault(TOTAL_TIME, 0d);
                     List<String> ownOutcomes = Metrics.tagValues(one, TAG_OUTCOME);
@@ -100,9 +102,10 @@ final class MetricsProbe {
                         clientErrors -= countOf(server, endpoint, TAG_URI, uri, TAG_OUTCOME, CLIENT_ERROR);
                     }
                 }
-                // 최대는 빼서 구할 수 없어 액추에이터 주소가 있을 때만 나머지 주소의 최대를 하나씩 읽는다.
+                // 최대는 빼서 구할 수 없다. 전체 최대가 액추에이터 주소들의 최대보다 크면 다른 주소의 값이므로 그대로 쓰고,
+                // 액추에이터 주소가 가장 느렸을 때만 나머지 주소의 최대를 하나씩 읽는다.
                 // shortcut: 주소가 MAX_URIS 를 넘으면 앞의 MAX_URIS 개 주소에서만 최대를 고른다. 넘는 서버가 생기면 한도를 설정으로 뺀다.
-                if (actuator) {
+                if (actuator && max <= actuatorMax) {
                     max = 0;
                     for (String uri : uris.subList(0, Math.min(uris.size(), MAX_URIS))) {
                         if (!uri.startsWith(ACTUATOR_URI)) {

@@ -322,6 +322,78 @@ public final class SqlParts {
     return new String(out);
   }
 
+  /** 문장에 나온 표 하나. schema 는 「스키마.표」 의 스키마(없으면 null), name 은 쓴 그대로(따옴표 포함), alias 는 별칭(없으면 null). */
+  public record TableRef(String schema, String name, String alias) {
+    /** 따옴표를 뗀 표 이름. */
+    public String bare() { return name.replace("\"", ""); }
+  }
+
+  /**
+   * 문장에 나온 표들: FROM · JOIN · USING(MERGE) 의 표와 UPDATE · INSERT INTO · MERGE INTO 의 대상 표.
+   * 바깥 문장부터, 그다음 괄호 안 서브쿼리(「(SELECT」 · 「(WITH」)를 앞에서부터 본다. 서브쿼리 · 표 함수 자리는 빠지고 같은 표가 거듭 나오면 거듭 넣는다.
+   * 문자열 · 주석 안은 보지 않는다. 결과 주석 · 자동완성 별칭이 같이 쓴다.
+   */
+  public static List<TableRef> tables(String sql) {
+    // 가린 글로 나눠 주석 · 문자열 조각이 표 이름 · 별칭으로 잡히지 않게 한다(이름 글자는 원문과 같다).
+    String masked = mask(sql);
+    List<TableRef> out = new ArrayList<>();
+    collectTables(masked, out);
+    Matcher m = NESTED_SELECT.matcher(masked.toUpperCase(Locale.ROOT));
+    while (m.find()) {
+      int close = matching(masked, m.start());
+      collectTables(masked.substring(m.start() + 1, close < 0 ? masked.length() : close), out);
+    }
+    return out;
+  }
+
+  /** 깊이 0 의 절만 본다(서브쿼리는 tables 가 따로 본다). */
+  private static void collectTables(String sql, List<TableRef> out) {
+    for (Part p : split(sql)) {
+      switch (p.key()) {
+        case "FROM", "USING" -> {
+          for (Source s : sources(p.body())) {
+            if (!s.subquery() && s.name().indexOf('(') < 0) addTable(out, s.name(), s.alias());
+          }
+        }
+        case "UPDATE", "INTO" -> {
+          String[] words = p.body().split("\\s+|(?=\\()", 2);
+          if (words[0].isEmpty() || words[0].startsWith("(")) break;
+          String rest = words.length > 1 ? words[1].strip() : "";
+          addTable(out, words[0], rest.startsWith("(") ? null : alias(rest.split("\\s+")));
+        }
+        default -> { }
+      }
+    }
+  }
+
+  private static void addTable(List<TableRef> out, String written, String alias) {
+    int dot = written.lastIndexOf('.');
+    String name = written.substring(dot + 1);
+    if (name.isEmpty()) return;
+    out.add(new TableRef(dot < 0 ? null : written.substring(0, dot), name, alias));
+  }
+
+  /**
+   * 바깥 문장의 첫 FROM 첫 표(스키마 제외, 따옴표는 쓴 그대로). 첫 표가 인라인 뷰(쪽 나누기 감싸기 등)면 그 안 문장을 같은 방법으로 본다.
+   * 함수 안의 FROM(EXTRACT(YEAR FROM d) · TRIM(… FROM c))과 문자열 · 주석 안은 보지 않는다. 표 함수면 함수 이름. 없으면 null.
+   */
+  public static String firstTable(String sql) {
+    Part from = find(mainBlock(split(mask(sql))), "FROM");
+    if (from == null) return null;
+    List<Source> sources = sources(from.body());
+    if (sources.isEmpty()) return null;
+    Source s = sources.get(0);
+    String name = s.name();
+    if (s.subquery()) {
+      int end = name.endsWith(")") ? name.length() - 1 : name.length();
+      return firstTable(name.substring(1, Math.max(1, end)));
+    }
+    int paren = name.indexOf('(');
+    if (paren >= 0) name = name.substring(0, paren);
+    name = name.substring(name.lastIndexOf('.') + 1);
+    return name.isEmpty() ? null : name;
+  }
+
   /** 스키마 · 따옴표를 뗀 이름. */
   public static String simpleName(String name) {
     String n = name.replace("\"", "");

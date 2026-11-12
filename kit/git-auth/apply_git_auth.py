@@ -16,6 +16,9 @@ import time
 from pathlib import Path
 
 KIT = Path(__file__).resolve().parent
+sys.path.insert(0, str(KIT.parent))
+from patchlib import encode_source, read_source  # noqa: E402
+
 COMMANDS = "plugins/git4idea/backend/src/commands"
 NEW_FILES = ["EiGitAuthEnv.java", "EiGitAuthText.java"]
 TARGET = COMMANDS + "/GitHandlerAuthenticationManager.java"
@@ -31,9 +34,7 @@ def main():
     target = root / TARGET
     if not target.is_file():
         raise SystemExit(f"아무 파일도 바꾸지 않았습니다. 파일이 없습니다: {target}")
-    raw = target.read_bytes().decode("utf-8")
-    newline = "\r\n" if "\r\n" in raw else "\n"
-    text = raw.replace("\r\n", "\n")
+    text, newline = read_source(target)
     if HOOK not in text and text.count(ANCHOR) != 1:
         raise SystemExit(f"아무 파일도 바꾸지 않았습니다. 원문을 정확히 한 번 찾지 못했습니다({text.count(ANCHOR)}번): {TARGET}\n  {ANCHOR.strip()}")
 
@@ -41,7 +42,7 @@ def main():
     # 한 줄을 먼저 바꿔 넣는다: 중간에 멈추면 새 파일이 빠졌다고 컴파일이 바로 알려 준다(조용히 손질이 빠진 채 빌드되지 않게).
     writes = []
     if HOOK not in text:
-        writes.append((target, text.replace(ANCHOR, ANCHOR + HOOK).replace("\n", newline).encode("utf-8")))
+        writes.append((target, encode_source(text.replace(ANCHOR, ANCHOR + HOOK), newline)))
     for name in NEW_FILES:
         dest = root / COMMANDS / name
         data = (KIT / name).read_bytes()

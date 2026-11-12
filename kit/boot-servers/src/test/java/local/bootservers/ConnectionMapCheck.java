@@ -1,17 +1,21 @@
 package local.bootservers;
 
+import local.bootservers.ui.ColumnShares;
+
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.TreeSet;
 
-/** MapColumns 자체 점검. 실패하면 예외로 끝난다. */
+/** MapColumns · ColumnWidths 자체 점검. 실패하면 예외로 끝난다. */
 public final class ConnectionMapCheck {
 
     public static void main(String[] args) {
         chain();
         cycle();
         selfAndUnknown();
+        widths();
         System.out.println("ConnectionMapCheck 통과");
     }
 
@@ -35,6 +39,15 @@ public final class ConnectionMapCheck {
                 List.of(new String[]{"A", "B"}, new String[]{"B", "A"}));
         eq(0, ring.get("A"), "고리만 A");
         eq(1, ring.get("B"), "고리만 B");
+    }
+
+    private static void widths() {
+        double[] fallback = {0.5, 0.5};
+        eq("[0.3, 0.7]", Arrays.toString(ColumnShares.parse("0.3,0.7", fallback)), "칸 비율 읽기");
+        eq(fallback, ColumnShares.parse(null, fallback), "기억 없음");
+        eq(fallback, ColumnShares.parse("0.3", fallback), "칸 수 다름");
+        eq(fallback, ColumnShares.parse("0.3,x", fallback), "숫자 아님");
+        eq(fallback, ColumnShares.parse("120,80", fallback), "옛 픽셀 폭 기억은 처음 비율로");
     }
 
     private static void selfAndUnknown() {

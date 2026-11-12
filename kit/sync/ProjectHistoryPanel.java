@@ -7,6 +7,7 @@ import com.intellij.diff.requests.MessageDiffRequest;
 import com.intellij.diff.requests.SimpleDiffRequest;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.project.ModuleListener;
 import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.ide.CopyPasteManager;
@@ -120,14 +121,15 @@ final class ProjectHistoryPanel extends JPanel {
   private static final int HASH_COL_W = 72;
   // 끌어서 넓힐 수 있는 칸의 최대 폭(처음 폭의 배수).
   private static final int COL_MAX_FACTOR = 4;
-  // 바뀐 파일 줄 앞 상태 글자 칸의 최소 폭(JBUI.scale 전).
-  private static final int STATUS_COL_W = 16;
+  // 바뀐 파일 줄 앞 상태 글자 칸 폭을 정하는 가장 넓은 상태 글자(M · A · D · R 중 M)와 그 뒤 간격. 폭은 이 글자의 굵은 글꼴 폭이다.
+  private static final String STATUS_SAMPLE = "M";
   // 현재 브랜치 알약 안 브랜치 아이콘 크기(16 픽셀 아이콘 대비).
   private static final float PILL_ICON_SCALE = 0.75f;
   private static final int PILL_H = 18;
   private static final int GAP = 8;
-  // 찾기 칸 폭(px). 2026-10-29 사용자 요청으로 세 배쯤 넓혔다.
-  private static final int SEARCH_W = 400;
+  // 도구줄에서 왼쪽(브랜치 · 단추 · 상태 글)과 오른쪽 찾기 칸의 폭 비율(처음 값). 창 폭에 따라 함께 늘고, 끌어서 바꾼 비율은 키에 기억한다.
+  private static final float SEARCH_RATIO = 0.6f;
+  private static final String SEARCH_RATIO_KEY = "kinggura.sync.gitlog.search.ratio";
   private static final String TOOLBAR_PLACE = "KingGuraGitLogToolbar";
   private static final String POPUP_PLACE = "KingGuraGitLogPopup";
   // 「나로 보기」로 더한 다른 계정(History.Me.aliasKey, 줄마다 하나). 앱 수준이라 모든 프로젝트 · 저장소에 같이 쓴다.
@@ -228,6 +230,8 @@ final class ProjectHistoryPanel extends JPanel {
   // 마지막으로 시작한 load 번호와 화면에 반영한 번호. 새로고침을 연달아 누르면 마지막 결과만 반영하고 그것만 진행 줄을 숨긴다.
   private int loadSeq;
   private int shownSeq;
+  // 모듈 목록이 바뀌어 저장소 목록만 다시 채우는 중(reloadTargets 의 force 가 거짓). 그동안 고른 저장소가 이미 읽어 둔 것과 같으면 다시 읽지 않는다.
+  private boolean keepLoaded;
   private boolean graph;
   // 읽어 온 줄 가운데 가장 많은 가지 수(가지 선을 그리지 않으면 1). 가지 간격을 칸 폭에 맞출 때 쓴다.
   private int graphLanes = 1;
@@ -278,7 +282,6 @@ final class ProjectHistoryPanel extends JPanel {
     files.addMouseListener(new MouseAdapter() {
       @Override public void mouseClicked(MouseEvent e) { if (e.getClickCount() == 2) showDiff(); }
     });
-    filter.setPreferredSize(new Dimension(JBUI.scale(SEARCH_W), filter.getPreferredSize().height));
     filter.getTextEditor().setFont(JBUI.Fonts.label());
     filter.getTextEditor().getEmptyText().setText(SyncBundle.message("history.search.hint"));
     filter.addDocumentListener(new DocumentAdapter() {
@@ -289,10 +292,11 @@ final class ProjectHistoryPanel extends JPanel {
       if (entry != null) CopyPasteManager.getInstance().setContents(new StringSelection(entry.id()));
     });
 
-    // 도구줄: 왼쪽에 현재 브랜치 알약 · 새로고침 · 설명 · 「내 소스 건드린 커밋만」 · 「최근 N개」, 오른쪽 끝에 찾기 칸.
+    // 도구줄: 왼쪽에 현재 브랜치 알약 · 새로고침 · 설명 · 「내 소스 건드린 커밋만」 · 「최근 N개」, 오른쪽에 찾기 칸.
+    // 찾기 칸은 고정 폭 없이 도구줄 폭의 비율(SEARCH_RATIO)을 차지하고, 사이 경계를 끌어 넓히고 줄일 수 있다(상태 글이 바뀌어도 칸 폭은 그대로).
     // 창 머리 아래 선은 IntelliJ 가 그으므로 안쪽 칸에 테두리를 더하면 선이 두 겹이 된다.
     DefaultActionGroup actions = new DefaultActionGroup(
-      DumbAwareAction.create(SyncBundle.message("history.refresh"), AllIcons.Actions.Refresh, e -> reloadTargets()),
+      DumbAwareAction.create(SyncBundle.message("history.refresh"), AllIcons.Actions.Refresh, e -> reloadTargets(true)),
       DumbAwareAction.create(SyncBundle.message("history.legend.action"), AllIcons.General.ContextHelp, e -> showLegend()));
     ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar(TOOLBAR_PLACE, actions, true);
     toolbar.setTargetComponent(this);
@@ -305,8 +309,14 @@ final class ProjectHistoryPanel extends JPanel {
     left.add(gauge);
     JPanel top = new JPanel(new BorderLayout());
     top.setBorder(JBUI.Borders.empty(GAP / 2, GAP / 2, 0, GAP));
-    top.add(left, BorderLayout.WEST);
-    top.add(filter, BorderLayout.EAST);
+    JPanel search = new JPanel(new BorderLayout());
+    search.setBorder(JBUI.Borders.emptyLeft(GAP));
+    search.add(filter, BorderLayout.CENTER);
+    OnePixelSplitter toolRow = new OnePixelSplitter(false, SEARCH_RATIO_KEY, SEARCH_RATIO);
+    toolRow.setHonorComponentsMinimumSize(false);
+    toolRow.setFirstComponent(left);
+    toolRow.setSecondComponent(search);
+    top.add(toolRow, BorderLayout.CENTER);
 
     JScrollPane commitScroll = ScrollPaneFactory.createScrollPane(commits, true);
     commitScroll.setBorder(JBUI.Borders.empty());
@@ -334,12 +344,12 @@ final class ProjectHistoryPanel extends JPanel {
     repos.setSecondComponent(right);
     add(repos, BorderLayout.CENTER);
 
-    reloadTargets();
+    reloadTargets(true);
     // Clone · Close Project · Open Project · 모듈 가져오기 뒤 저장소 목록을 바로 다시 채운다. 한 번에 여러 모듈이 바뀌어도 한 번만 읽는다.
     AtomicBoolean reloadQueued = new AtomicBoolean();
     Runnable queueReload = () -> {
       if (reloadQueued.compareAndSet(false, true)) {
-        ApplicationManager.getApplication().invokeLater(() -> { reloadQueued.set(false); reloadTargets(); }, project.getDisposed());
+        ApplicationManager.getApplication().invokeLater(() -> { reloadQueued.set(false); reloadTargets(false); }, project.getDisposed());
       }
     };
     project.getMessageBus().connect(parent).subscribe(ModuleListener.TOPIC, new ModuleListener() {
@@ -457,7 +467,7 @@ final class ProjectHistoryPanel extends JPanel {
    * 저장소 목록을 이름 순으로 다시 채우고 고른 저장소의 기록을 다시 읽는다. 모듈이 없으면 프로젝트 폴더 하나. 같은 폴더를 가리키는 모듈은 한 번만.
    * 고른 것은 폴더로 다시 찾아 그대로 둔다(브랜치가 바뀌어도). 없으면 첫 줄.
    */
-  private void reloadTargets() {
+  private void reloadTargets(boolean force) {
     Target selected = selectedTarget();
     Map<File, Target> byDir = new LinkedHashMap<>();
     Module[] modules = ModuleManager.getInstance(project).getModules().clone();  // 원본 배열은 공유될 수 있어 복사본을 정렬한다.
@@ -484,7 +494,14 @@ final class ProjectHistoryPanel extends JPanel {
     List<File> dirs = new ArrayList<>(byDir.keySet());
     targets.setListData(byDir.values().toArray(Target[]::new));
     commits.getEmptyText().setText(SyncBundle.message(byDir.isEmpty() ? "history.empty.targets" : "history.empty.commits"));
-    targets.setSelectedIndex(selected == null ? 0 : Math.max(0, dirs.indexOf(selected.dir())));
+    // Maven 다시 읽기 · 모듈 가져오기마다 오는 목록 갱신은 고른 저장소 · 브랜치(Target)가 그대로면 기록을 다시 읽지 않는다. 새로고침 단추는 늘 읽는다.
+    keepLoaded = !force;
+    try {
+      targets.setSelectedIndex(selected == null ? 0 : Math.max(0, dirs.indexOf(selected.dir())));
+    }
+    finally {
+      keepLoaded = false;
+    }
   }
 
   /** dir 이 dirs 가운데 다른 폴더 안에 있고, 둘의 저장소 폴더(.git · .svn 이 있는 가장 가까운 위 폴더)가 같은가. */
@@ -496,12 +513,10 @@ final class ProjectHistoryPanel extends JPanel {
     return false;
   }
 
-  /** .git(폴더 · 파일) 이나 .svn 이 있는 가장 가까운 위 폴더. 없으면 null. */
+  /** .git(폴더 · 파일) 이나 .svn 이 있는 가장 가까운 위 폴더(SyncPanel.vcsDirsAbove). 없으면 null. */
   private static File repoRoot(File dir) {
-    for (File d = dir.getAbsoluteFile(); d != null; d = d.getParentFile()) {
-      if (new File(d, ".git").exists() || new File(d, ".svn").isDirectory()) return d;
-    }
-    return null;
+    List<java.nio.file.Path> found = SyncPanel.vcsDirsAbove(dir.toPath());
+    return found.isEmpty() ? null : found.get(0).toFile();
   }
 
   private static Target target(String name, File dir) {
@@ -527,6 +542,8 @@ final class ProjectHistoryPanel extends JPanel {
   private void load() {
     Target target = selectedTarget();
     if (target == null) return;
+    // 읽는 중이 아니고(shownSeq == loadSeq) 화면의 기록이 같은 저장소 · 브랜치면 그대로 둔다(keepLoaded).
+    if (keepLoaded && loaded != null && shownSeq == loadSeq && target.equals(loaded.target())) return;
     int request = ++loadSeq;
     loading(true);
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
@@ -640,14 +657,21 @@ final class ProjectHistoryPanel extends JPanel {
     Map<String, List<List<History.FileChange>>> sides = before == null ? new HashMap<>() : new HashMap<>(before.sides());
     if (target.vcs() == SyncPanel.Vcs.GIT) {
       if (before == null) {
-        me = History.parseMe(gitOrEmpty(dir, "config", "--get-regexp", "^user\\.(name|email)$")).withAliases(meAliases());
-        branch = gitOrEmpty(dir, "rev-parse", "--abbrev-ref", "HEAD");
-        if (DETACHED.equals(branch)) branch = gitOrEmpty(dir, "rev-parse", "--short", "HEAD");
-        start = gitOrEmpty(dir, "rev-parse", "HEAD");
+        // 서로 기다릴 필요 없는 설정 · 브랜치와 HEAD 커밋 · 원격 이름을 동시에 읽는다(회사 PC 는 git 하나에 0.5초 넘게 걸린다).
+        // rev-parse 한 번이 HEAD 커밋과 브랜치 이름(--abbrev-ref 뒤의 인자만 이름으로 낸다) 두 줄을 낸다.
+        List<String> head = SyncPanel.inParallel(List.of(new String[]{"config", "--get-regexp", "^user\\.(name|email)$"},
+                                                         new String[]{"rev-parse", "HEAD", "--abbrev-ref", "HEAD"},
+                                                         new String[]{"remote"}),
+                                                 args -> gitOrEmpty(dir, args));
+        me = History.parseMe(head.get(0)).withAliases(meAliases());
+        String[] refs = head.get(1).split("\n");
+        start = refs.length == 2 ? refs[0].trim() : "";
+        branch = refs.length == 2 ? refs[1].trim() : "";
+        if (DETACHED.equals(branch)) branch = start.substring(0, Math.min(SHORT_HASH, start.length()));
         // HEAD 를 못 읽었는데 저장소이긴 하면(rev-parse --git-dir 성공) 아직 커밋이 없는 새 저장소다. 저장소가 아니면 그 오류를 그대로 보인다.
         if (start.isEmpty()) SyncPanel.git(dir, "rev-parse", "--git-dir");
         List<String> names = new ArrayList<>();
-        for (String name : gitOrEmpty(dir, "remote").split("\n")) {
+        for (String name : head.get(2).split("\n")) {
           if (!name.isBlank()) names.add(name.trim());
         }
         remotes = names;
@@ -888,6 +912,14 @@ final class ProjectHistoryPanel extends JPanel {
   }
 
   /**
+   * 비교 창을 화면 스레드에서 연다. IDE 의 invokeLater 로 열어야 비교 창 안 편집(저장 등)이 쓰기 안전한 문맥이 된다
+   * (SwingUtilities.invokeLater 로 연 창은 「Write-unsafe context」 오류가 난다). 프로젝트가 닫히면 열지 않는다.
+   */
+  private void openLater(Runnable open) {
+    ApplicationManager.getApplication().invokeLater(open, ModalityState.nonModal(), project.getDisposed());
+  }
+
+  /**
    * 고른 파일의 커밋 직전 내용과 커밋 내용을 비교 창으로 연다. 추가된 파일은 직전 쪽, 삭제된 파일은 커밋 쪽이 빈 내용.
    * 이름을 바꾼 파일은 직전 쪽을 옛 경로로 읽는다. 내용은 바이트로 넘겨 IDE 가 파일 인코딩(프로젝트 설정 · BOM)으로 읽게 한다.
    * 읽기 실패(시간 초과 · 인증 등)는 빈 내용으로 숨기지 않고 비교 창에 오류 문구로 보인다.
@@ -915,7 +947,7 @@ final class ProjectHistoryPanel extends JPanel {
       byte[] beforeBytes = before;
       byte[] afterBytes = after;
       String failure = error;
-      SwingUtilities.invokeLater(() -> {
+      openLater(() -> {
         if (failure != null) {
           DiffManager.getInstance().showDiff(project, new MessageDiffRequest(failure));
           return;
@@ -953,14 +985,14 @@ final class ProjectHistoryPanel extends JPanel {
         contents = new byte[][]{blob(dir, clash.ownerChange().newBlob()), blob(dir, clash.change().newBlob())};
       }
       catch (IOException e) {
-        SwingUtilities.invokeLater(() -> DiffManager.getInstance().showDiff(project, new MessageDiffRequest(e.getMessage())));
+        openLater(() -> DiffManager.getInstance().showDiff(project, new MessageDiffRequest(e.getMessage())));
         return;
       }
       catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         return;
       }
-      SwingUtilities.invokeLater(() -> {
+      openLater(() -> {
         FilePath path = VcsUtil.getFilePath(new File(dir, clash.change().path()), false);
         DiffContentFactory factory = DiffContentFactory.getInstance();
         try {
@@ -1312,7 +1344,8 @@ final class ProjectHistoryPanel extends JPanel {
       FileStatus status = FILE_STATUS.get(value.status());
       Color color = status == null ? DIM : status.getColor();
       Font bold = JBUI.Fonts.label().asBold();
-      int statusWidth = Math.max(JBUI.scale(STATUS_COL_W), getFontMetrics(bold).stringWidth(value.status()));
+      FontMetrics metrics = getFontMetrics(bold);
+      int statusWidth = Math.max(metrics.stringWidth(STATUS_SAMPLE) + JBUI.scale(GAP / 2), metrics.stringWidth(value.status()));
       setIcon(new RowIcon(new SyncPanel.StatusIcon(value.status(), color, bold, statusWidth, fileIcon.getIconHeight()), fileIcon));
       int style = FileStatus.DELETED.equals(status) ? SimpleTextAttributes.STYLE_STRIKEOUT : SimpleTextAttributes.STYLE_PLAIN;
       append(name, status == null ? SimpleTextAttributes.REGULAR_ATTRIBUTES : new SimpleTextAttributes(style, status.getColor()));

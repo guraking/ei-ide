@@ -126,6 +126,8 @@ public final class WasRunner {
     private final Project project;
     private final Map<String, ProcessHandler> running = new ConcurrentHashMap<>();
     private final Map<String, Boolean> debugMode = new ConcurrentHashMap<>();
+    // 살아 있는 프로세스를 띄울 때 쓴 설정(서버 id → 설정). 실행 중에 설정을 고쳐도 중지는 띄운 포트 · 명령으로 보낸다.
+    private final Map<String, WasSettings.Server> launchedWith = new ConcurrentHashMap<>();
     // 이번 IDE 실행 동안 쓰는 JEUS 비밀번호(서버 id → 비밀번호). 기억하지 않기로 한 비밀번호도 중지 · 배포에 쓰려고 둔다.
     private final Map<String, String> jeusPasswords = new ConcurrentHashMap<>();
     // 시작 전 빌드 · 포트 점검 · 실행 폴더 꾸미기 중인 서버 id. 프로세스가 생기거나 실패 · 취소될 때까지 두어, 그사이 다시 누른 시작을 막는다.
@@ -175,13 +177,9 @@ public final class WasRunner {
         return server.kind() != WasSettings.Kind.TOMCAT;
     }
 
-    private Path baseDir(WasSettings.Server server) {
+    /** 서버 전용 실행 폴더. 서버 창의 「로그 파일 보기」 가 로그 폴더를 찾을 때도 쓴다. */
+    static Path baseDir(WasSettings.Server server) {
         return PathManager.getSystemDir().resolve("kinggura-was").resolve(server.id);
-    }
-
-    /** 서버 전용 실행 폴더. 서버 창의 「로그 파일 보기」 가 로그 폴더를 찾을 때 쓴다. */
-    Path runDir(WasSettings.Server server) {
-        return baseDir(server);
     }
 
     /** 시작 전 빌드 · 포트 점검 · 실행 폴더 꾸미기 중이라 프로세스가 아직 없는지. 서버 묶음이 시작을 기다릴 때 쓴다. */
@@ -358,6 +356,7 @@ public final class WasRunner {
         ServerRegistry.Run run = registry.get(registryKey(server));
         run.port = server.httpPort;
         running.put(server.id, handler);
+        launchedWith.put(server.id, server);
         debugMode.put(server.id, debug);
         // 기록기의 출력 감시가 먼저 붙어 있으므로, 같은 출력에서 시작 완료(run.started)가 이미 반영된 뒤에 아래가 불린다.
         handler.addProcessListener(new ProcessListener() {
@@ -383,6 +382,7 @@ public final class WasRunner {
             @Override
             public void processTerminated(@NotNull ProcessEvent event) {
                 running.remove(server.id, handler);
+                launchedWith.remove(server.id, server);
                 if (jeus) {
                     deletePasswordFile(server);
                 }
@@ -685,13 +685,14 @@ public final class WasRunner {
      * 정상 종료 명령(Tomcat: catalina stop, WildFly: 관리 포트로 :shutdown)을 보내고,
      * 명령을 띄운 때부터 STOP_GRACE_SECONDS 안에 끝나지 않으면 강제로 끝낸다.
      * WebLogic 의 stopWebLogic 은 관리자 계정을 물을 수 있어 쓰지 않고 바로 프로세스 종료를 요청한다.
-     * JEUS 는 중지 명령 틀(기본: stopServer)을 쓴다.
+     * JEUS 는 중지 명령 틀(기본: stopServer)을 쓴다. 종료 포트 · 명령은 실행 중에 설정을 고쳤어도 띄울 때의 설정으로 보낸다.
      */
-    void stop(WasSettings.Server server) {
-        ProcessHandler handler = running.get(server.id);
+    void stop(WasSettings.Server edited) {
+        ProcessHandler handler = running.get(edited.id);
         if (handler == null || handler.isProcessTerminated()) {
             return;
         }
+        WasSettings.Server server = launchedWith.getOrDefault(edited.id, edited);
         ServerRegistry.getInstance(project).markStopped(registryKey(server));
         AppExecutorUtil.getAppExecutorService().execute(() -> {
             long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(STOP_GRACE_SECONDS);
@@ -749,8 +750,12 @@ public final class WasRunner {
         }
     }
 
-    /** 실행 중이면 끝난 뒤 같은 방식(실행 · 디버그)으로 다시 띄운다. 꺼져 있으면 그냥 띄운다. 이미 재시작을 기다리는 중이면 아무것도 하지 않는다. */
-    void restart(WasSettings.Server server) {
+    /**
+     * 실행 중이면 끝난 뒤 같은 방식(실행 · 디버그)으로 다시 띄운다. 꺼져 있으면 그냥 띄운다. 이미 재시작을 기다리는 중이면 아무것도 하지 않는다.
+     * 다시 띄울 때는 지금 저장된 설정(실행 중에 고친 포트 · 배포 모듈)을 쓴다. 실행 창 재실행 단추는 띄울 때의 설정을 넘기므로 id 로 다시 찾는다.
+     */
+    void restart(WasSettings.Server given) {
+        WasSettings.Server server = current(given);
         boolean debug = debugMode.getOrDefault(server.id, false);
         ProcessHandler handler = running.get(server.id);
         if (handler == null || handler.isProcessTerminated()) {
@@ -773,6 +778,16 @@ public final class WasRunner {
             return;
         }
         stop(server);
+    }
+
+    /** 같은 id 의 지금 저장된 설정. 지워졌으면 받은 설정. */
+    private WasSettings.Server current(WasSettings.Server server) {
+        for (WasSettings.Server s : WasSettings.getInstance(project).servers()) {
+            if (s.id.equals(server.id)) {
+                return s;
+            }
+        }
+        return server;
     }
 
     /**
