@@ -31,42 +31,24 @@
 두 번 실행해도 같은 결과가 된다.
 """
 import re
-import shutil
 import sys
-import time
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from customize import SLIM_REMOVE  # noqa: E402
+from patchlib import apply_edits  # noqa: E402
 
 # (파일, 바꿀 원문, 바꿀 내용). 원문은 2026.2.3 소스에서 정확히 한 번 나오는 것만 쓴다.
 BUTTON_UI_FILE = "platform/platform-impl/src/com/intellij/ide/ui/laf/darcula/ui/DarculaButtonUI.java"
 DEFAULT_LAF_FILE = "community-resources/resources/idea/IdeaApplicationInfo.xml"
 DEFAULT_LAF_LINE = '  <default-laf dark="Moa Graphite"/>\n'
-# 수정 전에 지울 옛 줄: 파일 → 줄 정규식. 지금 넣을 줄과 같은 줄은 남긴다.
 FONT_FILE = "platform/editor-ui-api/src/com/intellij/openapi/editor/colors/FontPreferences.java"
 # 글꼴 목록을 만드는 서비스. Moa Mono 를 목록보다 먼저 등록하는 곳(12-1).
 FONT_SERVICE_FILE = "platform/platform-impl/src/com/intellij/openapi/editor/impl/FontFamilyServiceImpl.java"
 FONT_ORIGINAL = '    if (SystemInfo.isJetBrainsJvm) {\n      return JETBRAINS_MONO;\n    }\n'
-# 예전 판이 넣은 수정 → 원문. 값만 바뀐 수정은 이미 손질된 소스에서 원문을 못 찾으므로, 읽은 뒤 먼저 원문으로 되돌린다.
 # 5) 자동 연결. Clone(CloneIntoProject.BUILD_DEPTH)처럼 두 단계 아래까지 본다. 빌드 파일을 찾은 폴더 아래와 빌드 결과 폴더로는 내려가지 않는다.
 AUTOLINK_FILE = "platform/external-system-impl/src/com/intellij/openapi/externalSystem/autolink/UnlinkedProjectStartupActivity.kt"
 AUTOLINK_ORIGINAL = "        return\n      }\n    }\n    if (LOG.isDebugEnabled) {"
-AUTOLINK_DEPTH1 = (
-    "        return\n      }\n"
-    "      if (isExpectedAutoLink && unlinkedProjects.isEmpty() && linkedProjects.isEmpty()) {\n"
-    "        // KingGura: 이클립스의 기존 프로젝트 가져오기처럼 한 단계 아래 폴더까지만 본다. 숨김 폴더는 건너뛴다.\n"
-    "        val childPaths = readAction {\n"
-    "          LocalFileSystem.getInstance().findFileByPath(externalProjectPath)?.children.orEmpty()\n"
-    "            .filter { it.isDirectory && !it.name.startsWith(\".\") }\n"
-    "            .map { it.path }\n"
-    "        }\n"
-    "        for (childPath in childPaths.sorted()) {\n"
-    "          val (childLinked, childUnlinked) = findLinkedAndUnlinkedProjects(project, childPath)\n"
-    "          if (childLinked.isEmpty() && childUnlinked.isNotEmpty()) {\n"
-    "            childUnlinked.first().linkAndLoadProjectAsync(project, childPath)\n"
-    "          }\n"
-    "        }\n"
-    "        return\n"
-    "      }\n"
-    "    }\n    if (LOG.isDebugEnabled) {")
 AUTOLINK_DEPTH2 = (
     "        return\n      }\n"
     "      if (isExpectedAutoLink && unlinkedProjects.isEmpty() && linkedProjects.isEmpty()) {\n"
@@ -100,22 +82,108 @@ AUTOLINK_DEPTH2 = (
     "    }\n    if (LOG.isDebugEnabled) {")
 # 9 · 11) 빌드 설정. 번들 제외 목록은 customize.py slim 이 만든다.
 PROPS_FILE = "build/src/org/jetbrains/intellij/build/IdeaCommunityProperties.kt"
-SVN_BUNDLE_ORIGINAL = '      "intellij.dev",\n    ))\n'
-# 예전 판의 10) 은 AI 에이전트 연결 · 플러그인 개발용 실행 도구를 주석과 함께 목록 끝에 넣었다(지금은 slim 목록에 있음).
-# 그 두 줄과 11) 을 지금 slim 결과로 되돌린다. slim 목록에 이미 두 줄이 있으면 덧붙인 것만 지운다(앞의 후보가 먼저).
-PROPS_SLIM_TAIL = '      "intellij.platform.acp.plugin",\n' + SVN_BUNDLE_ORIGINAL
-PROPS_OLD_EDIT = (
-    '      "intellij.platform.acp.plugin",  // KingGura: AI 에이전트 연결은 쓰지 않는다\n'
-    '      "intellij.dev",  // KingGura: 플러그인 개발용 실행 도구는 쓰지 않는다\n'
-    '    )).add("intellij.vcs.svn")  // KingGura: SVN 저장소도 쓴다\n')
-OLD_EDITS = {AUTOLINK_FILE: [(AUTOLINK_DEPTH1, AUTOLINK_ORIGINAL)], FONT_FILE: [
-    ('    if (SystemInfo.isJetBrainsJvm) {\n      return "JetBrainsMonoHangul";  // EI IDE: boot-servers 플러그인이 등록하는 한글 글꼴\n    }\n',
-     FONT_ORIGINAL),
-    ('    if (SystemInfo.isJetBrainsJvm) {\n      return "JBMono Pretendard";  // EI IDE: boot-servers 플러그인이 등록하는 한글 글꼴\n    }\n',
-     FONT_ORIGINAL),
-    ('    if (SystemInfo.isJetBrainsJvm) {\n      return "EI Mono";  // EI IDE: boot-servers 플러그인이 등록하는 한글 글꼴\n    }\n',
-     FONT_ORIGINAL)], PROPS_FILE: [
-    ('      "intellij.dev",\n' + PROPS_OLD_EDIT, SVN_BUNDLE_ORIGINAL), (PROPS_OLD_EDIT, PROPS_SLIM_TAIL)]}
+SVN_BUNDLE_ORIGINAL = f"      {SLIM_REMOVE[-1]},\n    ))\n"
+# 12-1) 글꼴 목록 앞에 넣는 등록 코드와 그 자리(원문). 설치 폴더의 TTF 파일을 먼저 보고, 없으면 boot-servers jar 안을 읽는다.
+FONT_ANCHOR = '  private static boolean isUnsupportedFont('
+FONT_REGISTER = (
+    '  // Moa IDE: Moa Mono 글꼴. 설치 폴더의 EI_FONT_FILES 아래 TTF 를 파일 그대로 등록하고(임시 파일을 만들지 않음),\n'
+    '  // 그 폴더에 TTF 가 없으면(옛 설치본) 본체에 든 boot-servers 플러그인 jar 의 EI_FONT_DIR 아래 TTF 를 읽는다. 위치는 IDE 설치 폴더 기준.\n'
+    '  private static final String EI_FONT_FILES = "plugins/boot-servers/fonts";\n'
+    '  private static final String EI_FONT_JAR = "plugins/boot-servers/lib/boot-servers.jar";\n'
+    '  private static final String EI_FONT_DIR = "fonts/";\n'
+    '  private static final String EI_FONT_EXT = ".ttf";\n'
+    '\n'
+    '  /** Moa IDE: Moa Mono 를 등록한다. 파일 · jar 를 읽지 못하면 기록만 남기고 넘어간다. */\n'
+    '  private static void registerEiFonts() {\n'
+    '    java.nio.file.Path home = java.nio.file.Path.of(com.intellij.openapi.application.PathManager.getHomePath());\n'
+    '    if (!registerEiFontFiles(home.resolve(EI_FONT_FILES))) {\n'
+    '      registerEiFontJar(home.resolve(EI_FONT_JAR));\n'
+    '    }\n'
+    '  }\n'
+    '\n'
+    '  /** dir 아래 TTF 를 파일로 등록한다. TTF 가 하나라도 있었으면 true(등록에 실패한 파일은 기록만 남긴다). */\n'
+    '  private static boolean registerEiFontFiles(java.nio.file.Path dir) {\n'
+    '    if (!java.nio.file.Files.isDirectory(dir)) return false;\n'
+    '    boolean found = false;\n'
+    '    try (java.nio.file.DirectoryStream<java.nio.file.Path> files = java.nio.file.Files.newDirectoryStream(dir, "*" + EI_FONT_EXT)) {\n'
+    '      for (java.nio.file.Path file : files) {\n'
+    '        found = true;\n'
+    '        try {\n'
+    '          GraphicsEnvironment.getLocalGraphicsEnvironment().registerFont(Font.createFont(Font.TRUETYPE_FONT, file.toFile()));\n'
+    '        }\n'
+    '        catch (Exception e) {\n'
+    '          LOG.warn("Moa IDE 글꼴 등록 실패: " + file, e);\n'
+    '        }\n'
+    '      }\n'
+    '    }\n'
+    '    catch (java.io.IOException | java.nio.file.DirectoryIteratorException e) {\n'
+    '      LOG.warn("Moa IDE 글꼴 폴더를 읽지 못함: " + dir, e);\n'
+    '    }\n'
+    '    return found;\n'
+    '  }\n'
+    '\n'
+    '  /** jar 의 EI_FONT_DIR 아래 TTF 를 모두 등록한다. jar 가 없거나 읽지 못하면 기록만 남기고 넘어간다. */\n'
+    '  private static void registerEiFontJar(java.nio.file.Path jar) {\n'
+    '    if (!java.nio.file.Files.isRegularFile(jar)) {\n'
+    '      LOG.warn("Moa IDE 글꼴 jar 가 없음: " + jar);\n'
+    '      return;\n'
+    '    }\n'
+    '    try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(jar.toFile())) {\n'
+    '      java.util.Enumeration<? extends java.util.zip.ZipEntry> entries = zip.entries();\n'
+    '      while (entries.hasMoreElements()) {\n'
+    '        java.util.zip.ZipEntry entry = entries.nextElement();\n'
+    '        String name = entry.getName();\n'
+    '        if (!name.startsWith(EI_FONT_DIR) || !name.endsWith(EI_FONT_EXT)) continue;\n'
+    '        try (java.io.InputStream in = zip.getInputStream(entry)) {\n'
+    '          GraphicsEnvironment.getLocalGraphicsEnvironment().registerFont(Font.createFont(Font.TRUETYPE_FONT, in));\n'
+    '        }\n'
+    '        catch (Exception e) {\n'
+    '          LOG.warn("Moa IDE 글꼴 등록 실패: " + name, e);\n'
+    '        }\n'
+    '      }\n'
+    '    }\n'
+    '    catch (java.io.IOException e) {\n'
+    '      LOG.warn("Moa IDE 글꼴 jar 를 읽지 못함: " + jar, e);\n'
+    '    }\n'
+    '  }\n'
+    '\n')
+# 예전 판(1103 까지)이 FONT_ANCHOR 앞에 넣은 jar 만 읽는 등록 코드. 이미 손질된 소스는 먼저 원문으로 되돌린 뒤 FONT_REGISTER 를 넣는다.
+FONT_REGISTER_JAR_ONLY = (
+    '  // EI IDE: 본체에 든 boot-servers 플러그인 jar 안의 글꼴(EI Mono). 위치는 IDE 설치 폴더 기준.\n'
+    '  private static final String EI_FONT_JAR = "plugins/boot-servers/lib/boot-servers.jar";\n'
+    '  private static final String EI_FONT_DIR = "fonts/";\n'
+    '  private static final String EI_FONT_EXT = ".ttf";\n'
+    '\n'
+    '  /** EI IDE: EI_FONT_JAR 의 EI_FONT_DIR 아래 TTF 를 모두 등록한다. jar 가 없거나 읽지 못하면 기록만 남기고 넘어간다. */\n'
+    '  private static void registerEiFonts() {\n'
+    '    java.nio.file.Path jar = java.nio.file.Path.of(com.intellij.openapi.application.PathManager.getHomePath(), EI_FONT_JAR);\n'
+    '    if (!java.nio.file.Files.isRegularFile(jar)) {\n'
+    '      LOG.warn("EI IDE 글꼴 jar 가 없음: " + jar);\n'
+    '      return;\n'
+    '    }\n'
+    '    try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(jar.toFile())) {\n'
+    '      java.util.Enumeration<? extends java.util.zip.ZipEntry> entries = zip.entries();\n'
+    '      while (entries.hasMoreElements()) {\n'
+    '        java.util.zip.ZipEntry entry = entries.nextElement();\n'
+    '        String name = entry.getName();\n'
+    '        if (!name.startsWith(EI_FONT_DIR) || !name.endsWith(EI_FONT_EXT)) continue;\n'
+    '        try (java.io.InputStream in = zip.getInputStream(entry)) {\n'
+    '          GraphicsEnvironment.getLocalGraphicsEnvironment().registerFont(Font.createFont(Font.TRUETYPE_FONT, in));\n'
+    '        }\n'
+    '        catch (Exception e) {\n'
+    '          LOG.warn("EI IDE 글꼴 등록 실패: " + name, e);\n'
+    '        }\n'
+    '      }\n'
+    '    }\n'
+    '    catch (java.io.IOException e) {\n'
+    '      LOG.warn("EI IDE 글꼴 jar 를 읽지 못함: " + jar, e);\n'
+    '    }\n'
+    '  }\n'
+    '\n'
+    )
+# 예전 판이 넣은 수정 → 원문. 값만 바뀐 수정은 이미 손질된 소스에서 원문을 못 찾으므로, 읽은 뒤 먼저 원문으로 되돌린다.
+OLD_EDITS = {FONT_SERVICE_FILE: [(FONT_REGISTER_JAR_ONLY + FONT_ANCHOR, FONT_ANCHOR)]}
+# 수정 전에 지울 옛 줄: 파일 → 줄 정규식. 지금 넣을 줄과 같은 줄은 남긴다.
 STALE_LINES = {DEFAULT_LAF_FILE: re.compile(r'^ *<default-laf [^\n]*/>\n', re.M)}
 
 EDITS = [
@@ -191,53 +259,22 @@ EDITS = [
      "    return Files.list(dir).use { paths -> paths.filter { Files.isDirectory(it) }.sorted().toList() }\n"
      "  }\n"),
     # 11) SVN(Subversion) 플러그인을 번들에 넣는다. 커뮤니티 소스에 있지만 기본 번들 목록에는 없다(plugins/svn4idea, 모듈 intellij.vcs.svn).
-    #     원문은 customize.py slim 이 만든 번들 제외 목록의 끝(마지막 항목 intellij.dev).
+    #     원문은 customize.py slim 이 만든 번들 제외 목록의 끝(마지막 항목 SLIM_REMOVE[-1]). slim 목록에 항목을 더해도 따라간다.
     (PROPS_FILE, SVN_BUNDLE_ORIGINAL,
-     '      "intellij.dev",\n    )).add("intellij.vcs.svn")  // KingGura: SVN 저장소도 쓴다\n'),
+     f'      {SLIM_REMOVE[-1]},\n    )).add("intellij.vcs.svn")  // KingGura: SVN 저장소도 쓴다\n'),
     # 12) 편집기 기본 글꼴을 Moa Mono(JetBrains Mono + Pretendard 한글)로 한다. 글꼴 파일은 boot-servers 플러그인이 켤 때 등록한다(BundledFonts).
     (FONT_FILE, FONT_ORIGINAL,
      '    if (SystemInfo.isJetBrainsJvm) {\n      return "Moa Mono";  // Moa IDE: boot-servers 플러그인이 등록하는 한글 글꼴\n    }\n'),
     # 12-1) Moa Mono 를 IDE 글꼴 목록(FontFamilyServiceImpl)이 만들어지기 전에 등록한다. 목록은 처음 한 번 getAllFonts() 로 만들고 다시 읽지 않는다.
     #       boot-servers 플러그인은 첫 창이 뜰 때 등록하므로, 편집기 설정에 Moa Mono 가 적혀 있으면 그보다 먼저 목록이 만들어져
-    #       설정 창 글꼴 상자에 「Font missing: Moa Mono」로 보인다. 글꼴 파일은 본체에 든 boot-servers jar 의 /fonts/*.ttf 를 그대로 읽는다.
+    #       설정 창 글꼴 상자에 「Font missing: Moa Mono」로 보인다. 글꼴은 설치 폴더 plugins/boot-servers/fonts/*.ttf 를 파일 그대로 등록한다
+    #       (jar 에서 풀어 임시 파일로 쓰지 않음, compile_plugins.py 가 그 폴더를 채운다). 그 폴더가 없는 옛 설치본은 boot-servers jar 의 /fonts/*.ttf 를 읽는다.
     (FONT_SERVICE_FILE,
      '    try {\n      Font[] fonts = GraphicsEnvironment.getLocalGraphicsEnvironment().getAllFonts();\n',
      '    registerEiFonts();  // EI IDE: 목록을 읽기 전에 EI Mono 를 등록한다\n'
      '    try {\n      Font[] fonts = GraphicsEnvironment.getLocalGraphicsEnvironment().getAllFonts();\n'),
-    (FONT_SERVICE_FILE,
-     '  private static boolean isUnsupportedFont(',
-     '  // EI IDE: 본체에 든 boot-servers 플러그인 jar 안의 글꼴(EI Mono). 위치는 IDE 설치 폴더 기준.\n'
-     '  private static final String EI_FONT_JAR = "plugins/boot-servers/lib/boot-servers.jar";\n'
-     '  private static final String EI_FONT_DIR = "fonts/";\n'
-     '  private static final String EI_FONT_EXT = ".ttf";\n'
-     '\n'
-     '  /** EI IDE: EI_FONT_JAR 의 EI_FONT_DIR 아래 TTF 를 모두 등록한다. jar 가 없거나 읽지 못하면 기록만 남기고 넘어간다. */\n'
-     '  private static void registerEiFonts() {\n'
-     '    java.nio.file.Path jar = java.nio.file.Path.of(com.intellij.openapi.application.PathManager.getHomePath(), EI_FONT_JAR);\n'
-     '    if (!java.nio.file.Files.isRegularFile(jar)) {\n'
-     '      LOG.warn("EI IDE 글꼴 jar 가 없음: " + jar);\n'
-     '      return;\n'
-     '    }\n'
-     '    try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(jar.toFile())) {\n'
-     '      java.util.Enumeration<? extends java.util.zip.ZipEntry> entries = zip.entries();\n'
-     '      while (entries.hasMoreElements()) {\n'
-     '        java.util.zip.ZipEntry entry = entries.nextElement();\n'
-     '        String name = entry.getName();\n'
-     '        if (!name.startsWith(EI_FONT_DIR) || !name.endsWith(EI_FONT_EXT)) continue;\n'
-     '        try (java.io.InputStream in = zip.getInputStream(entry)) {\n'
-     '          GraphicsEnvironment.getLocalGraphicsEnvironment().registerFont(Font.createFont(Font.TRUETYPE_FONT, in));\n'
-     '        }\n'
-     '        catch (Exception e) {\n'
-     '          LOG.warn("EI IDE 글꼴 등록 실패: " + name, e);\n'
-     '        }\n'
-     '      }\n'
-     '    }\n'
-     '    catch (java.io.IOException e) {\n'
-     '      LOG.warn("EI IDE 글꼴 jar 를 읽지 못함: " + jar, e);\n'
-     '    }\n'
-     '  }\n'
-     '\n'
-     '  private static boolean isUnsupportedFont('),
+    (FONT_SERVICE_FILE, FONT_ANCHOR,
+     FONT_REGISTER + FONT_ANCHOR),
     # 13) JetBrains 쪽 자동 업데이트 확인을 끈다. IDE 새 판은 GitHub 릴리스를 보는 boot-servers 가 알리고,
     #     플러그인 확인은 마켓의 번들 플러그인(Java · Gradle 등)을 「새 판」으로 받아 와 여기서 고친 기본값을 덮는 일이 있었다.
     ("platform/platform-impl/src/com/intellij/openapi/updateSettings/impl/UpdateOptions.kt",
@@ -474,76 +511,26 @@ EDITS = [
 ]
 
 
-def read_source(path):
-    """줄끝을 \\n 으로 맞춘 글과 원래 줄끝을 돌려준다. 원문 비교는 \\n 기준이고, 쓸 때 원래 줄끝으로 되돌린다.
-    모든 줄이 \\r\\n 일 때만 바꾼다. LF · CRLF 가 섞인 파일은 그대로 두어(쓸 때도 그대로) 한쪽으로 통일되지 않게 한다.
-    섞인 파일에서 CRLF 줄에 걸친 원문은 찾지 못해 「못 찾음」으로 멈춘다(파일은 쓰지 않는다)."""
-    raw = path.read_bytes().decode("utf-8")
-    crlf = raw.count("\r\n")
-    if crlf > 0 and crlf == raw.count("\n"):
-        return raw.replace("\r\n", "\n"), "\r\n"
-    return raw, "\n"
-
-
-def write_source(path, text, newline):
-    # 바이트로 써서 운영체제가 줄끝을 바꾸지 않게 한다(윈도우의 write_text 는 \n 을 \r\n 으로 바꾼다).
-    path.write_bytes(text.replace("\n", newline).encode("utf-8"))
+def prepare(rel, text):
+    """옛 손질을 원문으로 되돌리고(OLD_EDITS) 옛 줄을 지운다(STALE_LINES)."""
+    for prev, original in OLD_EDITS.get(rel, []):
+        if prev in text:
+            print(f"옛 수정 되돌림: {rel}")
+            text = text.replace(prev, original)
+    stale = STALE_LINES.get(rel)
+    if stale:
+        kept = stale.sub(lambda m: m.group(0) if m.group(0) == DEFAULT_LAF_LINE else "", text)
+        if kept != text:
+            print(f"옛 줄 지움: {rel}")
+            text = kept
+    return text
 
 
 def main():
     if len(sys.argv) != 2:
         raise SystemExit(__doc__)
-    root = Path(sys.argv[1])
-    # 1단계: 모든 수정을 메모리에서만 검사 · 적용한다. 하나라도 못 찾으면 아무 파일도 쓰지 않고 멈춘다.
-    texts = {}
-    changed = []
-    errors = []
-    for rel, old, new in EDITS:
-        if rel not in texts:
-            path = root / rel
-            if not path.is_file():
-                errors.append(f"파일이 없습니다: {rel}")
-                texts[rel] = None
-                continue
-            texts[rel] = read_source(path)
-            for prev, original in OLD_EDITS.get(rel, []):
-                text, newline = texts[rel]
-                if prev in text:
-                    print(f"옛 수정 되돌림: {rel}")
-                    texts[rel] = (text.replace(prev, original), newline)
-                    changed.append(rel)
-            stale = STALE_LINES.get(rel)
-            if stale:
-                text, newline = texts[rel]
-                kept = stale.sub(lambda m: m.group(0) if m.group(0) == DEFAULT_LAF_LINE else "", text)
-                if kept != text:
-                    print(f"옛 줄 지움: {rel}")
-                    texts[rel] = (kept, newline)
-                    changed.append(rel)
-        if texts[rel] is None:
-            continue
-        text, newline = texts[rel]
-        # 바꿀 내용이 원문을 품는 수정(줄 추가)도 있으므로 바꿀 내용이 이미 있으면 적용된 것으로 본다.
-        if new in text:
-            print(f"이미 적용됨: {rel}")
-            continue
-        if text.count(old) != 1:
-            errors.append(f"원문을 정확히 한 번 찾지 못했습니다({text.count(old)}번): {rel}\n  {old[:80]}")
-            continue
-        texts[rel] = (text.replace(old, new), newline)
-        if rel not in changed:
-            changed.append(rel)
-    if errors:
-        raise SystemExit("아무 파일도 바꾸지 않았습니다.\n" + "\n".join(errors))
-    # 2단계: 원본을 남기고 쓴다.
-    backup = root.parent / "backup" / (time.strftime("%Y%m%d-%H%M%S") + "-before")
-    for rel in changed:
-        path = root / rel
-        dest = backup / rel
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(path, dest)
-        write_source(path, *texts[rel])
-        print(f"적용: {rel}")
+    # 모든 수정을 메모리에서 먼저 검사한다. 하나라도 못 찾으면 아무 파일도 쓰지 않는다. 원본은 backup/<시각>-before/ 에 남긴다.
+    apply_edits(Path(sys.argv[1]), EDITS, prepare=prepare)
 
 
 if __name__ == "__main__":

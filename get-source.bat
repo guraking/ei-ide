@@ -11,16 +11,23 @@ where git >nul 2>nul || (
     echo git 이 없습니다. https://git-scm.com 에서 설치한 뒤 다시 실행하세요.
     exit /b 1
 )
-git config --global core.longpaths true
-git config --global core.autocrlf input
+rem Git 설정은 받는 저장소에만 건다. PC 전체 설정(--global)은 바꾸지 않아 회사 저장소 · Moa Git 창에 영향이 없다.
+rem   core.autocrlf=input : 손질 대본의 원문이 LF 줄끝 기준이다.
+rem   core.longpaths=true : 소스에 윈도우 경로 한도 260자를 넘는 파일이 있다.
+set "CLONE_CFG=-c core.autocrlf=input -c core.longpaths=true"
 
 if not exist "intellij-community\.git" (
     echo intellij-community 받는 중...
-    git clone --depth 1 --branch %TAG% https://github.com/JetBrains/intellij-community.git intellij-community || goto fail
+    git clone %CLONE_CFG% --depth 1 --branch %TAG% https://github.com/JetBrains/intellij-community.git intellij-community || goto fail
 )
 if not exist "intellij-community\android\.git" (
     echo android 모듈 받는 중...
-    git clone --depth 1 --branch %TAG% https://github.com/JetBrains/android.git intellij-community\android || goto fail
+    git clone %CLONE_CFG% --depth 1 --branch %TAG% https://github.com/JetBrains/android.git intellij-community\android || goto fail
+)
+rem 예전에 받아 둔 저장소에도 같은 설정을 그 저장소에만 둔다.
+for %%r in ("intellij-community" "intellij-community\android") do (
+    git -C %%r config core.autocrlf input || goto fail
+    git -C %%r config core.longpaths true || goto fail
 )
 echo 완료. 이제 주무셔도 됩니다.
 exit /b 0

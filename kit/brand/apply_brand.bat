@@ -1,4 +1,6 @@
 @echo off
+chcp 949 >nul
+rem 위 줄: 이전 실행에서 바뀐 코드 페이지가 남아 있어도 아래 한글 줄을 바르게 읽도록, 한글이 나오기 전에 949 로 맞춘다.
 rem Moa IDE 그림(아이콘 · 시작 화면 · 설치 프로그램)을 소스에 넣는다. 새로 받은 소스에 한 번 실행한다.
 set "SRC=%~dp0..\..\intellij-community"
 copy /Y "%~dp0win\*" "%SRC%\build\idea-community-images\win\" >nul || goto fail
