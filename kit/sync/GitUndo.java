@@ -35,6 +35,7 @@ final class GitUndo {
   private static final String REFLOG_FORMAT = "--format=%H%x1f%gd%x1f%gs";
   // git 의 상대 시각(「3 minutes ago」)은 영어라 날짜 · 시각으로 받는다.
   private static final String REFLOG_DATE = "--date=format:%Y-%m-%d %H:%M";
+  private static final String[] HEAD_TOP = {"log", "-g", "-n", "1", REFLOG_DATE, REFLOG_FORMAT, "HEAD"};
   private static final String CHECKOUT_PREFIX = "checkout: moving from ";
   private static final String CHECKOUT_TO = " to ";
   private static final List<String> SOFT_PREFIXES = List.of("commit: ", "commit (amend): ");
@@ -57,20 +58,35 @@ final class GitUndo {
 
   private GitUndo() {}
 
-  /** root 의 되돌릴 동작을 읽는다. 할 수 없으면 사용자에게 보일 이유를 담은 IOException. 작업 스레드에서 부른다. */
+  /**
+   * root 의 되돌릴 동작을 읽는다. 할 수 없으면 사용자에게 보일 이유를 담은 IOException. 작업 스레드에서 부른다.
+   * 서로 기다릴 필요 없는 명령(.git 위치 · 브랜치 · HEAD reflog · 추적 브랜치 · 갈라진 곳)은 동시에 돌리고, 브랜치 reflog · 마지막 확인만 이어서 돌린다
+   * (회사 PC 는 git 하나에 0.5초 넘게 걸려 차례로 여덟 번 띄우면 확인 창이 4초 넘게 늦다).
+   */
   static Plan read(File root) throws IOException, InterruptedException {
-    File gitDir = new File(SyncPanel.git(root, "rev-parse", "--absolute-git-dir").trim());
+    List<String[]> first = List.of(new String[]{"rev-parse", "--absolute-git-dir"},
+                                   new String[]{"symbolic-ref", "--short", "-q", "HEAD"},
+                                   HEAD_TOP,
+                                   // 추적 브랜치의 커밋과 이름(rev-parse 는 --abbrev-ref 뒤의 인자만 이름으로 낸다).
+                                   new String[]{"rev-parse", "@{u}", "--abbrev-ref", "@{u}"},
+                                   new String[]{"merge-base", "HEAD", "@{u}"});
+    // 실패해도 되는 명령(브랜치 없음 · 추적 브랜치 없음)은 null 로 받고, .git 위치 · HEAD reflog 실패만 그대로 던진다.
+    List<String> out = SyncPanel.inParallel(first, args -> {
+      try {
+        return SyncPanel.git(root, args);
+      }
+      catch (IOException e) {
+        if (args == first.get(0) || args == HEAD_TOP) throw e;
+        return null;
+      }
+    });
+    File gitDir = new File(out.get(0).trim());
     for (String name : IN_PROGRESS) {
       if (new File(gitDir, name).exists()) throw new IOException(SyncBundle.message("undo.in.progress"));
     }
-    String branch;
-    try {
-      branch = SyncPanel.git(root, "symbolic-ref", "--short", "-q", "HEAD").trim();
-    }
-    catch (IOException detached) {
-      throw new IOException(SyncBundle.message("undo.detached"));
-    }
-    String head = headTop(root);
+    if (out.get(1) == null) throw new IOException(SyncBundle.message("undo.detached"));
+    String branch = out.get(1).trim();
+    String head = out.get(2).trim();
     String log = SyncPanel.git(root, "log", "-g", "-n", String.valueOf(REFLOG_SCAN), REFLOG_DATE, REFLOG_FORMAT, "refs/heads/" + branch).trim();
     Plan plan = plan(head, log, branch);
     if (plan == null) throw new IOException(SyncBundle.message("undo.nothing", branch));
@@ -84,23 +100,24 @@ final class GitUndo {
       return new Plan(plan.mode(), plan.subject(), plan.when(), plan.target(), false, head);
     }
     // 없어질 커밋(target..HEAD) 가운데 이미 서버(@{u})에 있는 것이 있으면 알린다. 서버에서 받아 온 동작(pull 등)을 되돌리는 것은 내 PC 에서만 빠진다.
-    boolean onServer;
-    try {
-      String upstream = SyncPanel.git(root, "rev-parse", "--abbrev-ref", "@{u}").trim();
-      String upstreamHash = SyncPanel.git(root, "rev-parse", "@{u}").trim();
-      String shared = SyncPanel.git(root, "merge-base", "HEAD", "@{u}").trim();
-      int lost = Integer.parseInt(SyncPanel.git(root, "rev-list", "--count", plan.target() + ".." + shared).trim());
-      onServer = lost > 0 && !fromUpstream(plan.subject(), upstream, upstreamHash);
-    }
-    catch (IOException | NumberFormatException noUpstream) {
-      onServer = false;
+    boolean onServer = false;
+    String[] upstream = out.get(3) == null ? new String[0] : out.get(3).trim().split("\n");
+    if (upstream.length == 2 && out.get(4) != null) {
+      try {
+        String shared = out.get(4).trim();
+        int lost = Integer.parseInt(SyncPanel.git(root, "rev-list", "--count", plan.target() + ".." + shared).trim());
+        onServer = lost > 0 && !fromUpstream(plan.subject(), upstream[1].trim(), upstream[0].trim());
+      }
+      catch (IOException | NumberFormatException noCount) {
+        onServer = false;
+      }
     }
     return new Plan(plan.mode(), plan.subject(), plan.when(), plan.target(), onServer, head);
   }
 
   /** HEAD reflog 맨 위 한 줄. 커밋 · 체크아웃 · reset 등 HEAD 를 움직인 모든 동작이 한 줄을 더한다. */
   private static String headTop(File root) throws IOException, InterruptedException {
-    return SyncPanel.git(root, "log", "-g", "-n", "1", REFLOG_DATE, REFLOG_FORMAT, "HEAD").trim();
+    return SyncPanel.git(root, HEAD_TOP).trim();
   }
 
   /** reflog 제목이 서버(upstream, 예: origin/main)에서 받아 온 동작인지. 그 커밋을 되돌려도 서버 커밋을 없애는 것이 아니다. */

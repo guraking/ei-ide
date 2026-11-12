@@ -22,6 +22,7 @@ import java.util.List;
  * 이미 추적 중인 파일에는 효과가 없다(그건 git rm --cached 로 빼야 한다). .git 이 폴더가 아닌 저장소(worktree · submodule)는 건너뛴다.
  * 이클립스 파일(.project · .classpath)을 커밋해 쓰는 저장소(회사 저장소)는 새로 생긴 이클립스 파일도 커밋해야 하므로
  * 이클립스 줄(ECLIPSE_LINES)을 넣지 않고, 예전에 넣었으면 뺀다. 추적 여부는 git ls-files 로 보므로 작업 스레드에서 돈다.
+ * 추적 중인 파일은 디스크에도 있으므로, 저장소 위쪽 ECLIPSE_DEPTH 단계 안에 .project · .classpath 가 하나도 없으면 git 을 띄우지 않고 추적 안 함으로 본다.
  * 빼는 것은 우리 표시 줄(MARKER) 바로 아래에 이어진 우리 줄뿐이다. 사용자가 직접 적은 줄은 지우지 않는다.
  * 매핑이 바뀔 때마다 도는 갱신은 한 번에 하나씩 돈다(LOCK). 같은 exclude 를 둘이 동시에 읽고 쓰지 않는다.
  * 한 번 맞춘 저장소는 IDE 를 끌 때까지 다시 보지 않는다(done). 매핑이 바뀔 때마다 저장소마다 git 을 띄우지 않기 위해서다.
@@ -34,6 +35,9 @@ public final class ExcludeIdeFiles implements VcsListener {
     private static final List<String> ECLIPSE_LINES = List.of(".project", ".classpath", ".settings/");
     // 저장소 어디든 추적 중인 이클립스 설정 파일.
     private static final String[] TRACKED_ECLIPSE = {"ls-files", "--", ":(glob)**/.project", ":(glob)**/.classpath"};
+    private static final List<String> ECLIPSE_FILES = List.of(".project", ".classpath");
+    // .project · .classpath 를 디스크에서 찾는 깊이(저장소 맨 위 0). 저장소 안 묶음 폴더 · 그 아래 이클립스 프로젝트 · 그 아래 하위 프로젝트까지 덮는다.
+    private static final int ECLIPSE_DEPTH = 3;
     private static final String MARKER = "# EI IDE: IDE 가 만드는 파일. 변경 목록에 띄우지 않는다.";
     private static final Object LOCK = new Object();
 
@@ -71,7 +75,8 @@ public final class ExcludeIdeFiles implements VcsListener {
                 if (done.contains(key)) {
                     continue;
                 }
-                boolean eclipseTracked = !SyncPanel.git(root.getPath().toNioPath().toFile(), TRACKED_ECLIPSE).isBlank();
+                Path repo = root.getPath().toNioPath();
+                boolean eclipseTracked = eclipseFilesOnDisk(repo, 0) && !SyncPanel.git(repo.toFile(), TRACKED_ECLIPSE).isBlank();
                 List<String> have = Files.exists(exclude) ? Files.readAllLines(exclude, StandardCharsets.UTF_8) : List.of();
                 List<String> out = eclipseTracked ? withoutOurEclipseLines(have) : new ArrayList<>(have);
                 List<String> add = new ArrayList<>();
@@ -97,6 +102,33 @@ public final class ExcludeIdeFiles implements VcsListener {
                 LOG.warn("exclude 갱신 실패: " + exclude, e);
             }
         }
+    }
+
+    /**
+     * dir 과 그 아래 ECLIPSE_DEPTH 단계 안에 .project · .classpath 가 있는가. 점으로 시작하는 폴더(.git 등)와 빌드 결과 폴더(CloneIntoProject.SKIP_DIRS)는 보지 않는다.
+     * 폴더를 읽지 못하면 있는 것으로 보아 git 으로 확인하게 한다.
+     */
+    static boolean eclipseFilesOnDisk(Path dir, int depth) {
+        for (String name : ECLIPSE_FILES) {
+            if (Files.isRegularFile(dir.resolve(name))) {
+                return true;
+            }
+        }
+        if (depth == ECLIPSE_DEPTH) {
+            return false;
+        }
+        try (var stream = Files.newDirectoryStream(dir, Files::isDirectory)) {
+            for (Path child : stream) {
+                String name = child.getFileName().toString();
+                if (!name.startsWith(".") && !CloneIntoProject.SKIP_DIRS.contains(name) && eclipseFilesOnDisk(child, depth + 1)) {
+                    return true;
+                }
+            }
+        } catch (java.io.IOException e) {
+            LOG.warn("이클립스 파일을 찾다가 폴더를 읽지 못했습니다: " + dir, e);
+            return true;
+        }
+        return false;
     }
 
     /** 우리 표시 줄 바로 아래 이어진 우리 줄(IDE_LINES · ECLIPSE_LINES) 중 이클립스 줄을 뺀다. 그래서 비는 묶음은 표시 줄도 뺀다. 그 밖의 줄은 그대로 둔다. */

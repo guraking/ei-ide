@@ -6,8 +6,10 @@ import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.openapi.ui.Messages;
+import com.intellij.openapi.wm.WindowManager;
 import com.intellij.ui.ColoredListCellRenderer;
 import com.intellij.ui.DocumentAdapter;
+import com.intellij.ui.ScreenUtil;
 import com.intellij.ui.ScrollingUtil;
 import com.intellij.ui.SearchTextField;
 import com.intellij.ui.SimpleTextAttributes;
@@ -15,7 +17,6 @@ import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBList;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.util.ui.FormBuilder;
-import com.intellij.util.ui.JBUI;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -24,6 +25,10 @@ import javax.swing.JComponent;
 import javax.swing.JList;
 import javax.swing.ListSelectionModel;
 import javax.swing.event.DocumentEvent;
+import java.awt.Dimension;
+import java.awt.Rectangle;
+import java.awt.Toolkit;
+import java.awt.Window;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -197,6 +202,10 @@ final class CloneBranch {
 
   /** 「받을 브랜치」 창: 찾기 칸 + 서버 브랜치 목록. 두 번 누르기 · Enter 는 「받기」. */
   private static final class Dialog extends DialogWrapper {
+    // 처음 열 때 창 크기: IDE 가 뜬 화면 폭 · 높이에 대한 비율. 그 뒤는 사용자가 바꾼 크기를 기억한다(getDimensionServiceKey).
+    private static final double FIRST_W = 0.4;
+    private static final double FIRST_H = 0.5;
+    private final @Nullable Project project;
     private final Remote remote;
     private final List<String> mine;
     private final SearchTextField search = new SearchTextField(false);
@@ -206,6 +215,7 @@ final class CloneBranch {
 
     Dialog(@Nullable Project project, String repoName, Remote remote, List<String> mine) {
       super(project, true);
+      this.project = project;
       this.repoName = repoName;
       this.remote = remote;
       this.mine = mine;
@@ -253,12 +263,17 @@ final class CloneBranch {
     }
 
     @Override
+    public Dimension getInitialSize() {
+      Window ide = WindowManager.getInstance().suggestParentWindow(project);
+      Rectangle screen = ide != null ? ScreenUtil.getScreenRectangle(ide) : new Rectangle(Toolkit.getDefaultToolkit().getScreenSize());
+      return new Dimension((int) (screen.width * FIRST_W), (int) (screen.height * FIRST_H));
+    }
+
+    @Override
     protected JComponent createCenterPanel() {
       JBLabel hint = new JBLabel(SyncBundle.message("clonebranch.hint", repoName, remote.name(), remote.defaultBranch()));
       hint.setAllowAutoWrapping(true);
       JBScrollPane scroll = new JBScrollPane(list);
-      // 처음 크기만 정한다. 창은 늘리고 줄일 수 있고 사용자가 바꾼 크기를 기억한다(getDimensionServiceKey).
-      scroll.setPreferredSize(JBUI.size(700, 420));
       return FormBuilder.createFormBuilder()
         .addComponent(hint)
         .addComponent(search)

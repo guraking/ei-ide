@@ -48,6 +48,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -66,16 +67,17 @@ import java.util.regex.Pattern;
  * 받은 폴더와 그 아래 두 단계의 pom.xml · Gradle 파일은 Maven · Gradle 프로젝트로 연결한다(linkBuildFiles).
  * 열 때와 Clone 뒤에 모듈마다 빌드 결과 · 내려받은 라이브러리 폴더를 제외 폴더로 표시한다(excludeBuildOutput). 인덱스 · 검색 · TODO 가 읽지 않는다.
  * 다음이면 false 를 돌려 IntelliJ 기본 동작(새 프로젝트로 열기)에 맡긴다:
- * 시작 화면(기본 프로젝트)에서 받았을 때, 대소문자만 다른 것까지 같은 이름 모듈이 이미 있을 때(Close Project 로 내린 모듈 포함, 윈도우에서 .iml 이 서로 덮이므로.
- * 폴더가 없어진 내린 모듈은 켤 때와 받기 전에 지우므로 세지 않는다, dropStaleClosed),
- * SVN 으로 받았을 때, 열린 프로젝트가 SVN 프로젝트일 때(svnProject).
+ * 시작 화면(기본 프로젝트)에서 받았을 때, SVN 으로 받았을 때, 열린 프로젝트가 SVN 프로젝트일 때(svnProject).
+ * 대소문자만 다른 것까지 같은 이름 모듈이 이미 있으면(Close Project 로 내린 모듈 포함, 윈도우에서 .iml 이 서로 덮이므로) 「이름-2」 처럼 비는 이름으로 붙인다
+ * (워크스페이스 열기와 같다, freeModuleName. 폴더가 없어진 내린 모듈은 켤 때와 받기 전에 지우므로 세지 않는다, dropStaleClosed).
  * IntelliJ 는 SVN 이 하나라도 섞이면 Commit 창 대신 커밋 대화상자를 쓰므로(CommitModeManager.canSetNonModal) Git 과 SVN 을 한 프로젝트에 섞지 않는다.
  * 받은 폴더가 프로젝트 폴더 안이어도 따로 모듈로 붙인다.
  * 워크스페이스 프로젝트(C:\dev\git 처럼 Git 저장소 밖 폴더를 연 것)는 열 때와 Clone 뒤에 그 폴더 자체 모듈(「git」)을 빼고,
  * 프로젝트 창 맨 위의 프로젝트 폴더 줄은 HideWorkspaceRoot 가 그 안의 저장소 모듈 줄들로 바꿔 그린다
  * (IntelliJ 가 열 때마다 다시 등록하므로 등록은 빼지 않는다. 받은 저장소 모듈은 이 폴더 줄 아래에 그려지므로 줄만 지우면 같이 사라진다).
  * 그러면 「git」 줄 없이 받은 저장소 모듈들만 이클립스처럼 나란히 보인다(빈 워크스페이스면 빈 트리, .idea 는 디스크에 그대로).
- * 워크스페이스 판정(workspaceDir): 프로젝트 폴더에 빌드 파일(BUILD_FILES)이 없고, 프로젝트 폴더와 그 위(사용자 폴더 · 드라이브 맨 위는 빼고)에 .git · .svn 이 없고,
+ * 워크스페이스 판정(workspaceDir): 저장소 자동 연결과 같은 판정(looseWorkspace: 프로젝트 폴더에 빌드 파일(BUILD_FILES) · package.json 이 없고,
+ * 사용자 폴더 · 드라이브 맨 위가 아니며, 프로젝트 폴더와 그 위(사용자 폴더 · 드라이브 맨 위는 빼고)에 .git · .svn 이 없음)이고,
  * 프로젝트 폴더 아래에 모듈로 붙은 폴더가 하나 이상 있으며, 프로젝트 폴더를 콘텐츠 루트로 가진 모듈이 없거나 있어도 그 루트 하나뿐이며 소스 폴더가 없다.
  * 그래서 빈 워크스페이스는 첫 Clone 전까지 폴더 줄이 보인다.
  */
@@ -86,7 +88,7 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
   private static final String ACTION_LINK_GRADLE = "Gradle.ImportExternalProject";
   private static final String POM = "pom.xml";
   private static final List<String> BUILD_FILES = List.of(POM, "settings.gradle", "settings.gradle.kts", "build.gradle", "build.gradle.kts");
-  private static final Set<String> SKIP_DIRS = Set.of("target", "build", "out", "bin", "node_modules");
+  static final Set<String> SKIP_DIRS = Set.of("target", "build", "out", "bin", "node_modules");
   // 받은 폴더(0) 아래 몇 단계까지 빌드 파일을 찾는가. 저장소 안 한 단계 아래 이클립스 프로젝트(basic\jpa-mybatis-multi)와 그 아래 한 단계를 덮는다.
   private static final int BUILD_DEPTH = 2;
   // 이 파일이 있는 폴더 → 그 옆의 빌드 결과 · 라이브러리 폴더(Maven · Gradle · npm 기본 위치).
@@ -150,8 +152,9 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
     ApplicationManager.getApplication().invokeAndWait(() -> {
       if (!project.isDisposed()) dropStaleClosed(project, directory);
     });
-    if (moduleNameTaken(project, name)) return false;
-    if (Files.isDirectory(directory.resolve(".svn")) || svnProject(project)) return false;
+    if (Files.isDirectory(directory.resolve(SyncPanel.SVN_DIR)) || svnProject(project)) return false;
+    // 빌드 결과 폴더 찾기는 디스크를 훑으므로 화면 스레드에 올리기 전에 이 스레드에서 한다.
+    List<Path> outputs = outputDirs(directory);
 
     // 이 리스너는 Clone 작업 스레드에서 불린다(CloneableProjectsService.runCloneTask). 모듈 · 매핑은 EDT 에서 바꾼다.
     // 붙이다 실패하면 만든 모듈을 지우고 false 를 돌려 IntelliJ 기본 동작(새 프로젝트로 열기)에 맡긴다. 반쯤 붙은 모듈을 남기지 않는다.
@@ -161,11 +164,13 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
     try {
       ApplicationManager.getApplication().invokeAndWait(() -> {
         if (project.isDisposed()) return;
+        // 같은 이름 모듈(Maven artifactId · 닫은 저장소 등)이 있으면 워크스페이스 열기와 같이 「이름-2」 처럼 비는 이름으로 붙인다(freeModuleName).
+        String moduleName = freeModuleName(project, name);
         created.set(WriteAction.compute(() -> ModuleManager.getInstance(project)
-          .newModule(Path.of(base, Project.DIRECTORY_STORE_FOLDER, "modules", name + ".iml"), ModuleTypeManager.getInstance().getDefaultModuleType().getId())));
+          .newModule(Path.of(base, Project.DIRECTORY_STORE_FOLDER, "modules", moduleName + ".iml"), ModuleTypeManager.getInstance().getDefaultModuleType().getId())));
         ModuleRootModificationUtil.addContentRoot(created.get(), dir);
         ModuleRootModificationUtil.setSdkInherited(created.get());
-        excludeDirs(created.get(), outputDirs(directory), true);
+        excludeDirs(created.get(), outputs, true);
         mapped.set(true);
         addVcsMapping(project, directory);
         removeWorkspaceModule(project);
@@ -193,7 +198,7 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
   /**
    * 폴더가 없어진 닫은 저장소(내린 모듈)를 프로젝트에서 지운다. EDT 에서 부른다.
    * 콘텐츠 루트가 모두 디스크에 없거나 지금 받은 폴더(cloned) 안이면 지운다(닫은 뒤 탐색기에서 지우고 같은 자리에 다시 받은 경우).
-   * 남겨 두면 다시 열 줄도 없이 이름만 잡고 있어, 같은 이름으로 다시 받은 저장소가 워크스페이스에 붙지 않고 새 창으로 열린다(moduleNameTaken).
+   * 남겨 두면 다시 열 줄도 없이 이름만 잡고 있어, 같은 이름으로 다시 받은 저장소가 「이름-2」 로 붙는다(freeModuleName).
    * 콘텐츠 루트를 알 수 없는 내린 모듈(CloseRepoAction.rootsOf 가 빔)은 건드리지 않는다.
    */
   private static void dropStaleClosed(Project project, @Nullable Path cloned) {
@@ -238,40 +243,53 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
    * (이클립스의 Import existing Maven project 처럼). 인덱싱이 끝난 뒤 EDT 에서 부른다. 동작이 없거나(플러그인 꺼짐) 이미 연결된 파일이면 건너뛴다.
    */
   private static void linkBuildFiles(Project project, Path directory) {
+    List<VirtualFile> poms = new ArrayList<>();
     for (Path file : buildFiles(directory)) {
       VirtualFile vf = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(file);
       if (vf == null) continue;
-      String actionId = file.getFileName().toString().equals(POM) ? ACTION_LINK_MAVEN : ACTION_LINK_GRADLE;
-      DumbService.getInstance(project).smartInvokeLater(() -> performLink(project, actionId, vf));
+      if (file.getFileName().toString().equals(POM)) poms.add(vf);
+      else DumbService.getInstance(project).smartInvokeLater(() -> performLink(project, ACTION_LINK_GRADLE, vf));
     }
+    if (poms.isEmpty()) return;
+    // Maven 이 꺼져 있으면 MavenRepos 를 읽을 수 없다. 그때 「Add as Maven Project」 도 없어 performLink 가 건너뛴다.
+    if (CloseRepoAction.mavenEnabled()) {
+      DumbService.getInstance(project).smartInvokeLater(() -> MavenRepos.linkAll(project, poms, vf -> performLink(project, ACTION_LINK_MAVEN, vf)));
+      return;
+    }
+    for (VirtualFile vf : poms) DumbService.getInstance(project).smartInvokeLater(() -> performLink(project, ACTION_LINK_MAVEN, vf));
   }
 
-  /** 빌드 파일 하나에 연결 동작을 실행한다. 동작이 없거나(플러그인 꺼짐) 이미 연결된 파일이면 건너뛴다. EDT 에서 부른다. */
-  private static void performLink(Project project, String actionId, VirtualFile vf) {
+  /** 빌드 파일 하나에 연결 동작을 실행한다. 동작이 없거나(플러그인 꺼짐) 이미 연결된 파일이면 건너뛰고 false. EDT 에서 부른다. */
+  private static boolean performLink(Project project, String actionId, VirtualFile vf) {
     AnAction action = ActionManager.getInstance().getAction(actionId);
-    if (action == null || project.isDisposed()) return;
+    if (action == null || project.isDisposed() || !vf.isValid()) return false;
     var context = SimpleDataContext.builder().add(CommonDataKeys.PROJECT, project).add(CommonDataKeys.VIRTUAL_FILE, vf).build();
     AnActionEvent event = AnActionEvent.createFromAnAction(action, null, ActionPlaces.UNKNOWN, context);
     // update 가 이미 연결된 파일이면 숨긴다. 그때 실행하면 Maven 은 다시 읽고 같은 폴더의 다른 빌드 도구 연결을 끊는다.
     ActionUtil.updateAction(action, event);
-    if (event.getPresentation().isEnabledAndVisible()) ActionUtil.performAction(action, event);
+    if (!event.getPresentation().isEnabledAndVisible()) return false;
+    ActionUtil.performAction(action, event);
+    return true;
   }
 
   /**
-   * 열 때 저장소의 빌드 파일 중 아직 연결 안 된 것을 연결한다(linkBuildFiles 와 같은 파일, 같은 동작). 색인이 끝난 뒤 EDT 에서 돈다.
-   * pom.xml 은 Maven 이 맡은 파일 목록에 없는 것만 연결한다(MavenRepos.linkIfUnknown). 켠 직후 Maven 목록이 비어 있으면
-   * 「Add as Maven Project」 가 이미 연결된 pom 에도 보여, 열 때마다 Maven 을 처음부터 다시 읽기 때문이다.
+   * 열 때 저장소들의 빌드 파일 중 아직 연결 안 된 것을 연결한다(linkBuildFiles 와 같은 동작). 색인이 끝난 뒤 EDT 에서 돈다.
+   * pom.xml 은 모든 저장소 것을 모아 Maven 이 모르는 것만 한 번의 동기화로 연결한다(MavenRepos.linkAll). 저장소마다 따로 연결하면
+   * Maven 을 쓴 적 없는 폴더를 처음 열 때 동기화가 저장소 수만큼 돈다. 켠 직후 Maven 목록이 비어 있으면 「Add as Maven Project」 가
+   * 이미 연결된 pom 에도 보여, 맡은 파일 목록으로 걸러야 열 때마다 Maven 을 처음부터 다시 읽지 않는다.
    */
-  private static void linkOnOpen(Project project, Path repo) {
-    for (Path file : buildFiles(repo)) {
-      VirtualFile vf = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(file);
-      if (vf == null) continue;
-      if (!file.getFileName().toString().equals(POM)) {
-        DumbService.getInstance(project).smartInvokeLater(() -> performLink(project, ACTION_LINK_GRADLE, vf));
+  private static void linkOnOpen(Project project, List<FoundRepo> repos) {
+    List<VirtualFile> poms = new ArrayList<>();
+    for (FoundRepo repo : repos) {
+      for (Path file : repo.builds()) {
+        VirtualFile vf = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(file);
+        if (vf == null) continue;
+        if (file.getFileName().toString().equals(POM)) poms.add(vf);
+        else DumbService.getInstance(project).smartInvokeLater(() -> performLink(project, ACTION_LINK_GRADLE, vf));
       }
-      else if (CloseRepoAction.mavenEnabled()) {
-        DumbService.getInstance(project).smartInvokeLater(() -> MavenRepos.linkIfUnknown(project, vf, () -> performLink(project, ACTION_LINK_MAVEN, vf)));
-      }
+    }
+    if (!poms.isEmpty() && CloseRepoAction.mavenEnabled()) {
+      DumbService.getInstance(project).smartInvokeLater(() -> MavenRepos.linkAll(project, poms, vf -> performLink(project, ACTION_LINK_MAVEN, vf)));
     }
   }
 
@@ -297,61 +315,73 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
   private static void attachWorkspaceReposOrThrow(Project project) {
     String base = project.isDefault() ? null : project.getBasePath();
     if (base == null || !looseWorkspace(Path.of(base)) || svnProject(project)) return;
-    List<String> closed = ReadAction.compute(() -> closedPathsIfLoose(project, base));
-    if (closed == null) return;
+    LooseState state = ReadAction.compute(() -> looseState(project, base));
+    if (state == null) return;
+    // 같은 폴더를 여러 번 훑지 않게 저장소 찾기(repoDirs)가 본 빌드 파일 목록을 연결(linkOnOpen)에 다시 쓴다.
+    Map<Path, List<Path>> builds = new HashMap<>();
     List<FoundRepo> repos = new ArrayList<>();
-    for (Path dir : repoDirs(Path.of(base))) {
+    for (Path dir : repoDirs(Path.of(base), builds)) {
       String path = dir.toString().replace('\\', '/');
-      boolean overlaps = false;
-      for (String root : closed) {
-        if (FileUtil.isAncestor(root, path, false) || FileUtil.isAncestor(path, root, false)) overlaps = true;
-      }
-      VirtualFile vf = overlaps ? null : LocalFileSystem.getInstance().refreshAndFindFileByNioFile(dir);
-      if (vf != null) repos.add(new FoundRepo(dir, vf));
+      if (overlapsAny(path, state.closed())) continue;
+      VirtualFile vf = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(dir);
+      if (vf == null) continue;
+      // 이미 모듈인 저장소는 붙이지 않으므로(attachRepo) 빌드 결과 폴더를 찾지 않는다. 그 제외 표시는 excludeBuildOutput 이 맡는다.
+      List<Path> outputs = overlapsAny(path, state.attached()) ? List.of() : outputDirs(dir);
+      repos.add(new FoundRepo(dir, vf, outputs, builds.computeIfAbsent(dir, CloneIntoProject::buildFiles)));
     }
     if (repos.isEmpty()) return;
     ApplicationManager.getApplication().invokeLater(() -> attachRepos(project, repos), project.getDisposed());
     // 연결은 색인이 끝난 뒤 EDT 에서 돈다(smartInvokeLater). 위 모듈 붙이기보다 늦게 돈다.
-    for (FoundRepo repo : repos) linkOnOpen(project, repo.path());
+    linkOnOpen(project, repos);
   }
 
-  /** 붙일 저장소 폴더와 그 VFS 파일, 빌드 결과 폴더(outputDirs). EDT 에서 디스크를 다시 읽지 않도록 시작 작업 스레드에서 미리 찾는다. */
-  private record FoundRepo(Path path, VirtualFile dir, List<Path> outputs) {
-    FoundRepo(Path path, VirtualFile dir) {
-      this(path, dir, outputDirs(path));
+  /** path 가 paths 가운데 하나와 같거나 그 안 · 위 폴더면 true. */
+  private static boolean overlapsAny(String path, List<String> paths) {
+    for (String root : paths) {
+      if (FileUtil.isAncestor(root, path, false) || FileUtil.isAncestor(path, root, false)) return true;
     }
+    return false;
   }
+
+  /**
+   * 붙일 저장소 폴더와 그 VFS 파일, 빌드 결과 폴더(outputDirs, 이미 모듈이면 빈 목록), 빌드 파일(buildFiles).
+   * EDT 에서 디스크를 다시 읽지 않도록 시작 작업 스레드에서 미리 찾는다.
+   */
+  private record FoundRepo(Path path, VirtualFile dir, List<Path> outputs, List<Path> builds) {}
+
+  /** 워크스페이스 열기 판단에 쓰는 프로젝트 상태: 닫은 저장소 경로와 이미 모듈 콘텐츠 루트인 경로(프로젝트 폴더 빼고). */
+  private record LooseState(List<String> closed, List<String> attached) {}
 
   /**
    * 프로젝트 폴더에 빌드 파일 · package.json 이 없고, 사용자 폴더 · 드라이브 맨 위가 아니고, 그 폴더와 그 위에 .git · .svn 이 없으면 true.
    * package.json 이 맨 위에 있는 폴더는 화면 · 서버를 한 폴더에 둔 프로젝트로 보고 워크스페이스로 바꾸지 않는다.
    */
   static boolean looseWorkspace(Path base) {
-    if (aboveWorkspaces(base) || Files.isRegularFile(base.resolve(PACKAGE_JSON))) return false;
+    if (SyncPanel.aboveWorkspaces(base) || Files.isRegularFile(base.resolve(PACKAGE_JSON))) return false;
     for (String file : BUILD_FILES) {
       if (Files.isRegularFile(base.resolve(file))) return false;
     }
-    for (Path dir = base; dir != null && !aboveWorkspaces(dir); dir = dir.getParent()) {
-      if (Files.exists(dir.resolve(".git")) || Files.isDirectory(dir.resolve(".svn"))) return false;
-    }
-    return true;
+    return SyncPanel.vcsDirsAbove(base).isEmpty();
   }
 
   /**
-   * 닫은 저장소 경로: 내린 모듈의 콘텐츠 루트와 닫은 기록(CloseRepoAction.closedPaths). 프로젝트가 닫혔거나, 프로젝트 폴더를 콘텐츠 루트로 가진 모듈에 소스 폴더가 있으면 null
+   * 닫은 저장소 경로(내린 모듈의 콘텐츠 루트와 닫은 기록 CloseRepoAction.closedPaths)와 이미 모듈 콘텐츠 루트인 경로(프로젝트 폴더 빼고).
+   * 프로젝트가 닫혔거나, 프로젝트 폴더를 콘텐츠 루트로 가진 모듈에 소스 폴더가 있으면 null
    * (소스 폴더를 잡은 폴더 모듈은 사용자가 꾸민 프로젝트이므로 워크스페이스로 보지 않는다, workspaceDir 과 같음). 읽기 잠금 안에서 부른다.
    */
-  private static @Nullable List<String> closedPathsIfLoose(Project project, String base) {
+  private static @Nullable LooseState looseState(Project project, String base) {
     if (project.isDisposed()) return null;
+    List<String> attached = new ArrayList<>();
     for (Module module : ModuleManager.getInstance(project).getModules()) {
       ModuleRootManager rootManager = ModuleRootManager.getInstance(module);
       for (VirtualFile root : rootManager.getContentRoots()) {
-        if (FileUtil.pathsEqual(root.getPath(), base) && rootManager.getSourceRoots().length != 0) return null;
+        if (!FileUtil.pathsEqual(root.getPath(), base)) attached.add(root.getPath());
+        else if (rootManager.getSourceRoots().length != 0) return null;
       }
     }
     List<String> paths = CloseRepoAction.closedPaths(project);
     for (VirtualFile root : CloseRepoAction.closedRoots(project)) paths.add(root.getPath());
-    return paths;
+    return new LooseState(paths, attached);
   }
 
   /** 저장소 폴더들을 차례로 모듈로 붙인다(attachRepo). EDT 에서 부른다. */
@@ -370,12 +400,17 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
    * 점으로 시작하는 폴더, 빌드 결과 폴더(SKIP_DIRS), SVN 작업본(Git 과 한 프로젝트에 섞지 않음)은 뺀다. 폴더를 읽지 못하면 그 폴더만 건너뛴다.
    */
   static List<Path> repoDirs(Path base) {
+    return repoDirs(base, new HashMap<>());
+  }
+
+  /** repoDirs 와 같고, 묶음 폴더 아래에서 찾은 빌드 파일 목록(buildFiles)을 builds 에 남겨 부르는 쪽이 다시 훑지 않게 한다. */
+  static List<Path> repoDirs(Path base, Map<Path, List<Path>> builds) {
     List<Path> repos = new ArrayList<>();
     for (Path child : subDirs(base)) {
       if (isRepoDir(child)) repos.add(child);
       else {
         for (Path grandChild : subDirs(child)) {
-          if (isRepoDir(grandChild) || !buildFiles(grandChild).isEmpty()) repos.add(grandChild);
+          if (isRepoDir(grandChild) || !builds.computeIfAbsent(grandChild, CloneIntoProject::buildFiles).isEmpty()) repos.add(grandChild);
         }
       }
     }
@@ -647,28 +682,23 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
     return inSvn(Path.of(project.getBasePath()));
   }
 
-  /** 이 폴더나 그 위 어디에 .svn 폴더가 있으면 true. */
+  /** 이 폴더나 그 위 어디에 .svn 폴더가 있으면 true. 사용자 폴더 · 그 위 · 드라이브 맨 위의 .svn 은 보지 않는다(SyncPanel.vcsDirsAbove). */
   static boolean inSvn(Path dir) {
-    for (Path d = dir; d != null; d = d.getParent()) {
-      if (Files.isDirectory(d.resolve(".svn"))) return true;
+    for (Path d : SyncPanel.vcsDirsAbove(dir)) {
+      if (Files.isDirectory(d.resolve(SyncPanel.SVN_DIR))) return true;
     }
     return false;
   }
 
   /**
    * 워크스페이스면 프로젝트 폴더를 돌려준다. 아니면 null.
-   * 프로젝트 폴더에 빌드 파일이 있거나(zip 으로 받은 다중 모듈 프로젝트 · 맨 위 묶음 빌드 파일), Git · SVN 저장소 안이거나,
+   * 저장소 자동 연결과 같은 판정(looseWorkspace)이 아니거나(빌드 파일 · package.json 이 맨 위에 있음, Git · SVN 저장소 안, 사용자 폴더 · 드라이브 맨 위),
    * 그 폴더 아래에 모듈로 붙은 폴더가 하나도 없으면(그냥 폴더 · SVN 작업본 · 소스 폴더를 아직 안 정한 프로젝트) 워크스페이스가 아니다.
+   * 두 판정이 다르면 붙이지 않은 프로젝트의 맨 위 모듈이 지워지고 맨 위 파일이 숨겨진다.
    */
   static @Nullable VirtualFile workspaceDir(Project project) {
     String base = project.isDefault() ? null : project.getBasePath();
-    if (base == null) return null;
-    for (String file : BUILD_FILES) {
-      if (Files.isRegularFile(Path.of(base, file))) return null;
-    }
-    for (Path dir = Path.of(base); dir != null && !aboveWorkspaces(dir); dir = dir.getParent()) {
-      if (Files.exists(dir.resolve(".git")) || Files.isDirectory(dir.resolve(".svn"))) return null;
-    }
+    if (base == null || !looseWorkspace(Path.of(base))) return null;
     VirtualFile baseDir = LocalFileSystem.getInstance().findFileByNioFile(Path.of(base));
     if (baseDir == null) return null;
     boolean attached = false;
@@ -685,11 +715,6 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
       if (VfsUtilCore.isAncestor(baseDir, root, true)) attached = true;
     }
     return attached ? baseDir : null;
-  }
-
-  /** 사용자 폴더이거나 그 위, 또는 드라이브 맨 위면 true. 여기 우연히 있는 .git · .svn 은 저장소로 보지 않는다. */
-  static boolean aboveWorkspaces(Path dir) {
-    return dir.getParent() == null || Path.of(System.getProperty("user.home")).startsWith(dir);
   }
 
   private static void removeWorkspaceModule(Project project) {
