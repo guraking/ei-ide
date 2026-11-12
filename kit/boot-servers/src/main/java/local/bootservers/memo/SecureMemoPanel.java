@@ -57,7 +57,8 @@ import java.util.Arrays;
  * 메모는 설정 폴더 파일 하나이고 {@link SecureMemoCipher} 로 암호화한다. 비밀번호는 키를 만든 뒤 바로 지우고,
  * 키는 풀려 있는 동안만 메모리에 두고 잠그면 지운다. 느린 키 만들기는 열 때 · 비밀번호를 정할 때 한 번만 모달 진행 창에서 하고, 저장은 그 키를 쓴다.
  * 저장은 임시 파일에 쓴 뒤 원본과 바꿔치기한다(쓰다 끊겨도 원본이 남음). 「잠그기」와 창이 닫힐 때(IDE 종료 포함)는 바뀐 내용을 먼저 저장한다.
- * shortcut: 프로젝트 창마다 따로 열리므로 두 창에서 동시에 고치면 나중에 저장한 쪽이 이긴다. 여러 창에서 쓰게 되면 하나만 풀리게 막는다.
+ * 메모 파일은 IDE 하나에 하나이므로 한 번에 한 프로젝트 창에서만 풀린다. 다른 창에서 풀려 있으면 열기 · 새로 정하기 · 처음으로를 막아
+ * 두 창이 서로의 글을 덮어쓰지 않게 한다(설정 폴더는 IDE 한 프로세스만 쓰므로 프로세스 안 표시로 충분하다).
  */
 final class SecureMemoPanel extends JPanel implements Disposable {
 
@@ -77,6 +78,8 @@ final class SecureMemoPanel extends JPanel implements Disposable {
     private static final float LOCK_ICON_SCALE = 2f;
     private static final Color LOCK_COLOR = JBColor.namedColor("EIMemo.lockForeground", new JBColor(0xD6264A, 0xFF375F));
     private static final String DIRTY_DOT = "● ";
+    /** 지금 메모가 풀려 있는 창. 없으면 null. 화면 스레드에서만 읽고 쓴다. */
+    private static SecureMemoPanel openPanel;
 
     private final Project project;
     private final Path file = PathManager.getConfigDir().resolve(FILE_NAME);
@@ -212,22 +215,28 @@ final class SecureMemoPanel extends JPanel implements Disposable {
         saveState.setForeground(dirty ? JBUI.CurrentTheme.Label.warningForeground() : NamedColorUtil.getInactiveTextColor());
     }
 
-    /** @param error 앞서 실패한 까닭. 없으면 null. */
+    /** @param error 앞서 실패한 까닭. 없으면 null. 비밀번호를 잊었을 때의 「처음으로」 안내와 단추를 함께 보인다. */
     private void showLocked(String error) {
+        showLocked(error == null ? null : BootServersBundle.message("memo.prompt.error", error), error != null);
+    }
+
+    /** @param message 오류 줄에 그대로 보일 글. 없으면 null. @param offerReset 「처음으로」 단추를 보일지 */
+    private void showLocked(String message, boolean offerReset) {
         boolean exists = Files.exists(file);
         lockTitle.setText(BootServersBundle.message(exists ? "memo.locked.title" : "memo.locked.none"));
         prompt.setText(BootServersBundle.message(exists ? "memo.prompt.enter" : "memo.prompt.none"));
-        errorLabel.setText(error != null ? "<html>" + BootServersBundle.message("memo.prompt.error", error) + "</html>" : "");
-        errorLabel.setVisible(error != null);
+        errorLabel.setText(message != null ? "<html>" + message + "</html>" : "");
+        errorLabel.setVisible(message != null);
         passwordField.setText("");
         passwordField.setVisible(exists);
         unlockButton.setVisible(exists);
         newButton.setVisible(!exists);
-        resetButton.setVisible(exists && error != null);
+        resetButton.setVisible(exists && offerReset);
         cards.show(this, LOCKED);
     }
 
     private void showOpen(SecureMemoCipher.Key key, String text) {
+        openPanel = this;
         this.key = key;
         this.saved = text;
         area.setText(text);
@@ -238,7 +247,19 @@ final class SecureMemoPanel extends JPanel implements Disposable {
         area.requestFocusInWindow();
     }
 
+    /** 다른 창에서 풀려 있으면 그렇다고 잠긴 면에 보이고 true. */
+    private boolean openElsewhere() {
+        if (openPanel == null || openPanel == this) {
+            return false;
+        }
+        showLocked(BootServersBundle.message("memo.open.elsewhere"), false);
+        return true;
+    }
+
     private void unlock() {
+        if (openElsewhere()) {
+            return;
+        }
         char[] entered = passwordField.getPassword();
         SecureMemoCipher.Key opened = null;
         try {
@@ -283,6 +304,14 @@ final class SecureMemoPanel extends JPanel implements Disposable {
     }
 
     private void startNew() {
+        // 잠긴 면을 띄운 뒤 다른 창이 메모를 만들었으면 그 파일을 덮어쓰지 않고 「잠겨 있음」 면으로 바꾼다.
+        if (openElsewhere()) {
+            return;
+        }
+        if (Files.exists(file)) {
+            showLocked(null);
+            return;
+        }
         char[] next = NewPasswordDialog.ask(project, BootServersBundle.message("memo.new.password.title"));
         SecureMemoCipher.Key fresh = next == null ? null : newKey(next);
         if (fresh != null) {
@@ -292,6 +321,9 @@ final class SecureMemoPanel extends JPanel implements Disposable {
     }
 
     private void reset() {
+        if (openElsewhere()) {
+            return;
+        }
         if (Messages.showYesNoDialog(project, BootServersBundle.message("memo.reset.confirm"), title(),
                 BootServersBundle.message("memo.reset.ok"), BootServersBundle.message("common.cancel"), Messages.getWarningIcon()) != Messages.YES) {
             return;
@@ -371,6 +403,9 @@ final class SecureMemoPanel extends JPanel implements Disposable {
     private void clear() {
         key.wipe();
         key = null;
+        if (openPanel == this) {
+            openPanel = null;
+        }
         saved = null;
         area.setText("");
         preview.setText("");

@@ -74,7 +74,7 @@ final class RegexBench {
     private RegexBench() {
     }
 
-    /** 시간이 timeoutMs 를 넘으면 TIMEOUT, 되돌이가 너무 깊어 스택이 넘치면 TOO_DEEP 으로 끝낸다. */
+    /** 시간이 timeoutMs 를 넘거나 부른 스레드가 끊기면 TIMEOUT, 되돌이가 너무 깊어 스택이 넘치면 TOO_DEEP 으로 끝낸다. */
     static Result run(Flavor flavor, String pattern, Set<Flag> flags, String text, String replacement, long timeoutMs) {
         boolean js = flavor == Flavor.JAVASCRIPT;
         Compiled compiled;
@@ -1477,7 +1477,7 @@ final class RegexBench {
         }
     }
 
-    /** 글자를 읽을 때마다 마감 시각을 넘었는지 보고, 넘었으면 Timeout 을 던진다. 되돌이 폭주를 끊는 용도다. */
+    /** 글자를 읽을 때마다 마감 시각을 넘었는지 · 스레드가 끊겼는지(새 입력으로 계산이 필요 없어짐) 보고, 그러면 Timeout 을 던진다. 되돌이 폭주를 끊는 용도다. */
     private record TimedText(String text, long deadline) implements CharSequence {
         @Override
         public int length() {
@@ -1486,7 +1486,7 @@ final class RegexBench {
 
         @Override
         public char charAt(int index) {
-            if (System.nanoTime() > deadline) {
+            if (System.nanoTime() > deadline || Thread.currentThread().isInterrupted()) {
                 throw new Timeout();
             }
             return text.charAt(index);

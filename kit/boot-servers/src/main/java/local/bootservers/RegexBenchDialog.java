@@ -40,13 +40,8 @@ import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.Timer;
-import javax.swing.event.ChangeEvent;
 import javax.swing.event.DocumentEvent;
-import javax.swing.event.ListSelectionEvent;
-import javax.swing.event.TableColumnModelEvent;
-import javax.swing.event.TableColumnModelListener;
 import javax.swing.table.DefaultTableModel;
-import javax.swing.table.TableColumnModel;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.DefaultHighlighter;
 import javax.swing.text.Highlighter;
@@ -58,6 +53,7 @@ import java.awt.Font;
 import java.awt.GridLayout;
 import java.awt.Point;
 import java.awt.Rectangle;
+import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -66,7 +62,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.StringJoiner;
+import java.util.concurrent.Future;
 
 /**
  * 정규식 작업대. 맨 위 「만들기」 탭(자주 쓰는 것 · 질문 따라가기 · 예시로 만들기 · 직접 만들기)에서 패턴을 만들고,
@@ -80,9 +76,11 @@ final class RegexBenchDialog extends DialogWrapper {
     private static final Logger LOG = Logger.getInstance(RegexBenchDialog.class);
     private static final int DEBOUNCE_MS = 150;
     private static final long TIMEOUT_MS = 1000;
-    private static final int DIALOG_WIDTH = 1100;
-    private static final int DIALOG_HEIGHT = 900;
+    // 처음 열 때 창 크기: 화면의 비율(그 뒤 크기는 getDimensionServiceKey 로 기억)
+    private static final double WIDTH_SCREEN_RATIO = 0.6;
+    private static final double HEIGHT_SCREEN_RATIO = 0.8;
     private static final float TEXT_TABS_SPLIT = 0.3f;
+    private static final String SPLIT_KEY = "KingGura.RegexBench.textTabsSplit";
     private static final int SAMPLE_ROWS = 5;
     private static final int RESULT_ROWS = 4;
     private static final int RESULT_MIN_HEIGHT = 120;
@@ -96,9 +94,7 @@ final class RegexBenchDialog extends DialogWrapper {
     // 그룹 표 칸 수와 처음 칸 폭 비율(일치 · 그룹 · 이름 · 값 · 위치). 칸은 창 폭을 따라 늘고, 사용자가 끈 폭은 WIDTHS_KEY 에 기억한다.
     private static final int COLUMN_COUNT = 5;
     private static final int[] COLUMN_WEIGHTS = {1, 1, 2, 5, 2};
-    private static final int WEIGHT_UNIT = 40;
     private static final String WIDTHS_KEY = "KingGura.RegexBench.groupWidths";
-    private static final String WIDTHS_SEPARATOR = ",";
     private static final Color SUCCESS = JBColor.namedColor("Label.successForeground", new JBColor(0x208A3C, 0x5FB865));
     private static final Color WARNING = JBColor.namedColor("Label.warningForeground", new JBColor(0xA36200, 0xE0A040));
 
@@ -142,6 +138,8 @@ final class RegexBenchDialog extends DialogWrapper {
     private Object selectedHighlight;
     // 입력이 바뀔 때마다 오른다. 계산이 끝났을 때 값이 다르면 그 결과는 버린다.
     private int generation;
+    // 돌고 있는 계산. 새 입력이 오면 끊어(스레드 끊기 → RegexBench 가 멈춤) 폭주 패턴이 CPU 를 여럿 잡지 않게 한다.
+    private Future<?> running;
     // 만들기 탭이 마지막으로 채운 시험 글. 사용자가 고친 글은 다른 것을 골라도 덮지 않는다.
     private String filledSample = "";
     // 문법 상자가 바뀌기 전 값. 바꿀 글의 이름 그룹 표기를 옮길 때 쓴다.
@@ -216,7 +214,7 @@ final class RegexBenchDialog extends DialogWrapper {
 
         JPanel top = FormBuilder.createFormBuilder()
                 .addComponent(makeTabs)
-                .addLabeledComponent(BootServersBundle.message("regex.flavor"), row(flavorBox))
+                .addLabeledComponent(BootServersBundle.message("regex.flavor"), flavorBox)
                 .addLabeledComponent(BootServersBundle.message("regex.pattern"), patternField)
                 .addComponentToRightColumn(patternHint)
                 .addLabeledComponent(flagsLabel, flagRow)
@@ -230,7 +228,7 @@ final class RegexBenchDialog extends DialogWrapper {
         samplePanel.add(new JBScrollPane(sampleArea), BorderLayout.CENTER);
 
         groupTable.getEmptyText().setText(BootServersBundle.message("regex.groups.empty"));
-        rememberWidths();
+        ColumnWidths.remember(groupTable, WIDTHS_KEY, COLUMN_WEIGHTS);
         groupTable.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
                 showSelectedRow();
@@ -251,7 +249,8 @@ final class RegexBenchDialog extends DialogWrapper {
         tabs.addTab(BootServersBundle.message("regex.tab.groups"), resultScroll(groupTable));
         tabs.addTab(BootServersBundle.message("regex.tab.replace"), replacePanel);
 
-        OnePixelSplitter split = new OnePixelSplitter(true, TEXT_TABS_SPLIT);
+        // 시험 글 · 결과 탭 사이는 끌 수 있는 분할선이고 비율을 기억한다
+        OnePixelSplitter split = new OnePixelSplitter(true, SPLIT_KEY, TEXT_TABS_SPLIT);
         split.setFirstComponent(samplePanel);
         split.setSecondComponent(tabs);
 
@@ -273,7 +272,8 @@ final class RegexBenchDialog extends DialogWrapper {
         panel.add(top, BorderLayout.NORTH);
         panel.add(split, BorderLayout.CENTER);
         panel.add(codeRow, BorderLayout.SOUTH);
-        panel.setPreferredSize(JBUI.size(DIALOG_WIDTH, DIALOG_HEIGHT));
+        Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+        panel.setPreferredSize(new Dimension((int) (screen.width * WIDTH_SCREEN_RATIO), (int) (screen.height * HEIGHT_SCREEN_RATIO)));
         showDetails();
         return panel;
     }
@@ -304,64 +304,6 @@ final class RegexBenchDialog extends DialogWrapper {
         };
         scroll.setBorder(JBUI.Borders.empty());
         return scroll;
-    }
-
-    /** 그룹 표 칸 폭: 기억한 폭(없거나 깨졌으면 COLUMN_WEIGHTS)을 비율로 놓고, 사용자가 칸 경계를 끌면 그 폭을 기억한다. */
-    private void rememberWidths() {
-        PropertiesComponent props = PropertiesComponent.getInstance();
-        int[] widths = new int[COLUMN_COUNT];
-        for (int i = 0; i < COLUMN_COUNT; i++) {
-            widths[i] = JBUI.scale(COLUMN_WEIGHTS[i] * WEIGHT_UNIT);
-        }
-        String saved = props.getValue(WIDTHS_KEY);
-        if (saved != null) {
-            String[] parts = saved.split(WIDTHS_SEPARATOR);
-            if (parts.length == COLUMN_COUNT) {
-                try {
-                    int[] restored = new int[COLUMN_COUNT];
-                    for (int i = 0; i < COLUMN_COUNT; i++) {
-                        restored[i] = Math.max(1, Integer.parseInt(parts[i]));
-                    }
-                    widths = restored;
-                } catch (NumberFormatException e) {
-                    LOG.warn("그룹 표 칸 폭 기억이 깨져 처음 비율로 엽니다: " + saved, e);
-                }
-            }
-        }
-        TableColumnModel columns = groupTable.getColumnModel();
-        for (int i = 0; i < COLUMN_COUNT; i++) {
-            // 자동 맞춤이라 이 값은 칸끼리의 비율로 쓰인다
-            columns.getColumn(i).setPreferredWidth(widths[i]);
-        }
-        columns.addColumnModelListener(new TableColumnModelListener() {
-            @Override
-            public void columnMarginChanged(ChangeEvent e) {
-                if (groupTable.getTableHeader() == null || groupTable.getTableHeader().getResizingColumn() == null) {
-                    return;
-                }
-                StringJoiner joined = new StringJoiner(WIDTHS_SEPARATOR);
-                for (int i = 0; i < columns.getColumnCount(); i++) {
-                    joined.add(String.valueOf(columns.getColumn(i).getWidth()));
-                }
-                props.setValue(WIDTHS_KEY, joined.toString());
-            }
-
-            @Override
-            public void columnAdded(TableColumnModelEvent e) {
-            }
-
-            @Override
-            public void columnRemoved(TableColumnModelEvent e) {
-            }
-
-            @Override
-            public void columnMoved(TableColumnModelEvent e) {
-            }
-
-            @Override
-            public void columnSelectionChanged(ListSelectionEvent e) {
-            }
-        });
     }
 
     /** 플래그 · 그룹 표 · 바꾸기는 「자세히 보기」 일 때만. 선택은 다음에 열 때도 이어진다. */
@@ -456,6 +398,7 @@ final class RegexBenchDialog extends DialogWrapper {
     @Override
     protected void dispose() {
         debounce.stop();
+        cancelRunning();
         super.dispose();
     }
 
@@ -521,7 +464,15 @@ final class RegexBenchDialog extends DialogWrapper {
         debounce.restart();
     }
 
+    private void cancelRunning() {
+        if (running != null) {
+            running.cancel(true);
+            running = null;
+        }
+    }
+
     private void run() {
+        cancelRunning();
         String pattern = patternField.getText();
         if (pattern.isEmpty()) {
             clearResult();
@@ -536,9 +487,17 @@ final class RegexBenchDialog extends DialogWrapper {
         String text = sampleArea.getText();
         String replacement = replacementField.getText();
         String input = checkField.getText();
-        ApplicationManager.getApplication().executeOnPooledThread(() -> {
-            RegexBench.Result result = RegexBench.run(flavor, pattern, flags, text, replacement, TIMEOUT_MS);
-            RegexBench.Check check = input.isEmpty() ? null : RegexBench.check(flavor, pattern, flags, input, TIMEOUT_MS);
+        running = ApplicationManager.getApplication().executeOnPooledThread(() -> {
+            RegexBench.Result result;
+            RegexBench.Check check;
+            try {
+                result = RegexBench.run(flavor, pattern, flags, text, replacement, TIMEOUT_MS);
+                check = input.isEmpty() ? null : RegexBench.check(flavor, pattern, flags, input, TIMEOUT_MS);
+            } catch (RuntimeException e) {
+                // 풀 스레드는 예외를 삼키므로 여기서 기록한다
+                LOG.warn("정규식 계산 실패: " + pattern, e);
+                return;
+            }
             ApplicationManager.getApplication().invokeLater(() -> {
                 if (mine == generation && !isDisposed()) {
                     show(result);

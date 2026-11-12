@@ -4,10 +4,10 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.openapi.ui.ValidationInfo;
 import com.intellij.ui.ScrollPaneFactory;
+import com.intellij.ui.TableUtil;
 import com.intellij.ui.components.JBTextField;
 import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.FormBuilder;
-import com.intellij.util.ui.JBUI;
 import local.bootservers.BootServersBundle;
 import org.jetbrains.annotations.Nullable;
 
@@ -26,7 +26,6 @@ final class ParamBundleDialog extends DialogWrapper {
     private static final int CHECK_COLUMN = 0;
     private static final int PARAM_COLUMN = 1;
     private static final int FIELD_COLUMN = 2;
-    private static final int CHECK_COLUMN_WIDTH = 50;
     private static final int VISIBLE_ROWS = 8;
 
     private final JBTextField className;
@@ -48,7 +47,8 @@ final class ParamBundleDialog extends DialogWrapper {
         }
         className = new JBTextField(defaultClassName);
         table = new JBTable(new Model());
-        table.getColumnModel().getColumn(CHECK_COLUMN).setMaxWidth(JBUI.scale(CHECK_COLUMN_WIDTH));
+        // 체크 칸은 체크 상자 · 머리글 글자 폭만큼, 나머지 칸이 창 폭을 나눠 쓴다
+        TableUtil.setupCheckboxColumn(table, CHECK_COLUMN);
         table.setVisibleRowCount(VISIBLE_ROWS);
         setTitle(ParamBundleAction.title());
         init();

@@ -78,8 +78,11 @@ final class WebInstaller {
         indicator.setText(BootServersBundle.message("web.install.node.check"));
         String version = WebTools.nodeVersion();
         String zipName = NodeDist.zipName(version, arch);
-        String expected = NodeDist.expectedSha256(
-                HttpRequests.request(NodeDist.shasumsUrl(version)).readString(indicator), zipName);
+        // 고정한 판이면 고정한 해시를 쓰고, 고정하지 않은 구조(arm64 등)만 nodejs.org 의 SHASUMS256.txt 에서 찾는다
+        String expected = WebTools.pinnedNodeSha256(arch);
+        if (expected == null) {
+            expected = NodeDist.expectedSha256(HttpRequests.request(NodeDist.shasumsUrl(version)).readString(indicator), zipName);
+        }
         if (expected == null) {
             throw new IOException(BootServersBundle.message("web.install.node.no.hash", NodeDist.SHASUMS, zipName));
         }
