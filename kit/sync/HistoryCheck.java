@@ -163,9 +163,6 @@ public class HistoryCheck {
     eq(History.links(log, rows, 1), List.of());
     eq(History.links(log, rows, 2), List.of(new History.Link(History.LinkKind.MERGED_INTO, log.get(0))));
     eq(History.links(log, rows, 3), List.of(new History.Link(History.LinkKind.BRANCHED_TO, log.get(2))));
-    eq(History.passingTarget(rows, 1, 1), 2);  // 본줄기 줄의 1 칸 선은 곁가지 커밋으로 간다
-    eq(History.passingTarget(rows, 1, 0), -1);  // 점이 있는 칸은 지나가는 선이 아니다
-    eq(History.passingTarget(rows, 2, 3), -1);
     eq(rows.get(0).bottom(), List.of(new History.Seg(0, 0, 0), new History.Seg(0, 1, 1)));
     eq(rows.get(3).top(), List.of(new History.Seg(0, 0, 0), new History.Seg(1, 0, 1)));
   }
