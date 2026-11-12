@@ -28,11 +28,15 @@ findstr /c:"Moa IDE" "intellij-community\community-resources\resources\idea\Idea
 )
 rem 손질 대본(이름 · 덜기 · 메뉴 · 기본값 · Git 인증 · TextMate · Defender · 한국어 팩 · 그림 · 글꼴 파일)이 모두 들어갔는지 본다.
 rem 하나라도 빠지면 빠진 단계와 돌릴 명령을 적고 멈춘다. 손질이 빠진 설치 파일이 릴리스로 올라가지 않게 한다.
-where python >nul 2>nul || (
-    echo python 이 없어 kit 손질을 확인하지 못했습니다. 파이썬을 설치한 뒤 다시 실행하세요.
+rem 파이썬은 py 실행기(py -3)를 먼저, 없으면 python 을 쓴다.
+set "KIT_PY="
+where py >nul 2>nul && set "KIT_PY=py -3"
+if not defined KIT_PY where python >nul 2>nul && set "KIT_PY=python"
+if not defined KIT_PY (
+    echo 파이썬이 없어 kit 손질을 확인하지 못했습니다. 파이썬을 설치한 뒤 다시 실행하세요.
     exit /b 1
 )
-python "%~dp0kit\check_kit.py" || (
+%KIT_PY% "%~dp0kit\check_kit.py" || (
     pause
     exit /b 1
 )
