@@ -40,7 +40,6 @@ import com.intellij.ui.awt.RelativePoint;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBList;
 import com.intellij.ui.components.JBRadioButton;
-import com.intellij.ui.components.JBTabbedPane;
 import com.intellij.ui.components.JBTextArea;
 import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.FormBuilder;
@@ -64,7 +63,6 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
-import java.awt.Rectangle;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.ActionEvent;
 import java.io.IOException;
@@ -134,7 +132,8 @@ public final class JsBenchDialog extends DialogWrapper {
         }
     };
     private final JBLabel tableNote = new JBLabel();
-    private final JBTabbedPane resultTabs = new JBTabbedPane();
+    private final Switch resultTabs = new Switch();
+    private final JPanel tableTop = new JPanel(new BorderLayout());
     private final Deque<String[]> undo = new ArrayDeque<>();
     private final Action runAction = action(BootServersBundle.message("js.run"), this::run);
     private final Action stopAction = action(BootServersBundle.message("js.stop"), this::stop);
@@ -149,8 +148,6 @@ public final class JsBenchDialog extends DialogWrapper {
     private @Nullable JsExamples.Example shownExample;
     /** 돌던 실행을 멈춘 뒤 그 결과 대신 할 일(예제를 바꿔 고른 경우). null 이면 멈춘 결과를 그대로 보인다. */
     private @Nullable Runnable afterStop;
-    /** 머리줄(코드 · 입력 데이터 · 출력 탭) 높이를 탭 줄 높이에 맞추려고 모아 둔다. */
-    private final List<JComponent> heads = new ArrayList<>();
 
     /** 작업대를 연다. editor 는 열 때의 편집기(없으면 null), initialCode 는 고른 글, typescript 는 처음 언어(null 이면 지난번). */
     public static void open(Project project, @Nullable Editor editor, @Nullable String initialCode, @Nullable Boolean typescript) {
@@ -238,20 +235,17 @@ public final class JsBenchDialog extends DialogWrapper {
         languages.add(tsButton);
         jsButton.addActionListener(e -> languageChanged());
         tsButton.addActionListener(e -> languageChanged());
-        JPanel languageRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, JBUI.scale(PADDING), 0));
-        languageRow.add(jsButton);
-        languageRow.add(tsButton);
+        JPanel languageRow = radioRow(List.of(jsButton, tsButton));
 
-        JBTabbedPane left = new JBTabbedPane();
-        left.setTabComponentInsets(JBUI.emptyInsets());
-        left.addTab(BootServersBundle.message("js.tab.examples"), examplePanel());
-        left.addTab(BootServersBundle.message("js.tab.pipeline"), pipeline.component());
+        Switch left = new Switch();
+        left.add(BootServersBundle.message("js.tab.examples"), examplePanel());
+        left.add(BootServersBundle.message("js.tab.pipeline"), pipeline.component());
 
         OnePixelSplitter codeAndData = splitter(true, CODE_SPLIT, "codeSplit",
-                titled(BootServersBundle.message("js.code"), code, languageRow),
-                titled(BootServersBundle.message("js.data"), data, convertButton()));
+                column(label(BootServersBundle.message("js.code")), languageRow, code),
+                column(label(BootServersBundle.message("js.data")), convertButton(), data));
         OnePixelSplitter center = splitter(false, CENTER_SPLIT, "centerSplit", codeAndData, resultPanel());
-        OnePixelSplitter main = splitter(false, LEFT_SPLIT, "leftSplit", left, center);
+        OnePixelSplitter main = splitter(false, LEFT_SPLIT, "leftSplit", column(left.buttons, null, left.cards), center);
 
         // 줄바꿈 글 칸이 좁을 때 높이가 커져 창이 스스로 늘어나지 않게 최소 크기를 0 으로 둔다.
         JPanel root = new JPanel(new BorderLayout()) {
@@ -261,14 +255,6 @@ public final class JsBenchDialog extends DialogWrapper {
             }
         };
         root.add(main, BorderLayout.CENTER);
-        resultTabs.addComponentListener(new java.awt.event.ComponentAdapter() {
-            @Override
-            public void componentResized(java.awt.event.ComponentEvent e) {
-                for (JComponent head : heads) {
-                    head.revalidate();
-                }
-            }
-        });
 
         DumbAwareAction.create(e -> run()).registerCustomShortcutSet(CustomShortcutSet.fromString(RUN_SHORTCUT), root, getDisposable());
         data.addDocumentListener(new com.intellij.openapi.editor.event.DocumentListener() {
@@ -364,33 +350,37 @@ public final class JsBenchDialog extends DialogWrapper {
         output.setEditable(false);
         output.setFont(EditorColorsManager.getInstance().getGlobalScheme().getFont(EditorFontType.PLAIN));
         output.setBorder(JBUI.Borders.empty(PADDING));
-        output.getEmptyText().setText(BootServersBundle.message("js.output.empty"));
+        output.getEmptyText().setText(BootServersBundle.message("js.output.empty"))
+                .appendLine(BootServersBundle.message("js.output.empty.more"));
         JBTable table = new JBTable(tableModel);
         table.setAutoResizeMode(JBTable.AUTO_RESIZE_SUBSEQUENT_COLUMNS);
         table.getEmptyText().setText(BootServersBundle.message("js.table.empty"));
         tablePick.addActionListener(e -> showTable(tablePick.getSelectedIndex()));
         tableNote.setForeground(UIUtil.getContextHelpForeground());
         JPanel tablePanel = new JPanel(new BorderLayout());
-        JPanel tableTop = FormBuilder.createFormBuilder()
-                .addLabeledComponent(BootServersBundle.message("js.table.pick"), tablePick)
-                .addComponent(tableNote)
-                .getPanel();
+        JPanel pickRow = new JPanel(new BorderLayout());
+        pickRow.add(tablePick, BorderLayout.CENTER);
+        tableTop.add(FormBuilder.createFormBuilder()
+                .addLabeledComponent(BootServersBundle.message("js.table.pick"), pickRow)
+                .getPanel(), BorderLayout.CENTER);
         tableTop.setBorder(JBUI.Borders.empty(PADDING));
+        tableTop.setVisible(false);
+        tableNote.setBorder(JBUI.Borders.empty(PADDING));
         tablePanel.add(tableTop, BorderLayout.NORTH);
+        tablePanel.add(tableNote, BorderLayout.SOUTH);
         tablePanel.add(ScrollPaneFactory.createScrollPane(table, true), BorderLayout.CENTER);
-        resultTabs.setTabComponentInsets(JBUI.emptyInsets());
-        resultTabs.addTab(BootServersBundle.message("js.tab.output"), ScrollPaneFactory.createScrollPane(output, true));
-        resultTabs.addTab(BootServersBundle.message("js.tab.table"), tablePanel);
+        resultTabs.add(BootServersBundle.message("js.tab.output"), ScrollPaneFactory.createScrollPane(output, true));
+        resultTabs.add(BootServersBundle.message("js.tab.table"), tablePanel);
         nodeButton.setVisible(false);
         nodeButton.addActionListener(e -> WebInstaller.installNode(project));
         JPanel foot = new JPanel(new BorderLayout(JBUI.scale(PADDING), 0));
         foot.add(status, BorderLayout.CENTER);
         foot.add(nodeButton, BorderLayout.EAST);
-        foot.setBorder(JBUI.Borders.compound(JBUI.Borders.customLineTop(JBColor.border()), JBUI.Borders.empty(PADDING)));
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.add(resultTabs, BorderLayout.CENTER);
-        panel.add(foot, BorderLayout.SOUTH);
-        return panel;
+        foot.setBorder(JBUI.Borders.empty(PADDING));
+        JPanel body = new JPanel(new BorderLayout());
+        body.add(resultTabs.cards, BorderLayout.CENTER);
+        body.add(foot, BorderLayout.SOUTH);
+        return column(resultTabs.buttons, null, body);
     }
 
     /** 입력 데이터 「바꾸기」: 앞 셋은 데이터 칸을 바꾸고, 뒤 둘은 만든 코드를 출력에 보인다. */
@@ -413,36 +403,66 @@ public final class JsBenchDialog extends DialogWrapper {
         return button;
     }
 
-    /** 칸 머리줄 + 본문. 머리줄은 왼쪽 · 오른쪽 탭 줄과 같은 높이로 맞춘다. */
-    private JComponent titled(String title, JComponent body, @Nullable JComponent extra) {
-        JBLabel label = new JBLabel(title);
-        label.setForeground(UIUtil.getContextHelpForeground());
-        JPanel head = new JPanel(new BorderLayout(JBUI.scale(PADDING), 0)) {
-            @Override
-            public Dimension getPreferredSize() {
-                Dimension size = super.getPreferredSize();
-                return new Dimension(size.width, Math.max(size.height, tabRowHeight()));
-            }
-        };
-        heads.add(head);
-        head.add(label, BorderLayout.CENTER);
-        if (extra != null) {
-            head.add(extra, BorderLayout.EAST);
+    /**
+     * 칸 하나: 머리줄(왼쪽 west, 오른쪽 east) 아래 밑줄 한 줄, 그 아래 본문.
+     * 세 칸 머리줄이 모두 이 모양이라 높이 · 밑줄 위치가 같다.
+     */
+    private static JComponent column(JComponent west, @Nullable JComponent east, JComponent body) {
+        JPanel head = new JPanel(new BorderLayout(JBUI.scale(PADDING), 0));
+        head.add(west, BorderLayout.WEST);
+        if (east != null) {
+            head.add(east, BorderLayout.EAST);
         }
-        head.setBorder(JBUI.Borders.empty(0, PADDING));
+        head.setBorder(JBUI.Borders.compound(JBUI.Borders.customLineBottom(JBColor.border()), JBUI.Borders.empty(PADDING / 2, PADDING)));
         JPanel panel = new JPanel(new BorderLayout());
         panel.add(head, BorderLayout.NORTH);
         panel.add(body, BorderLayout.CENTER);
         return panel;
     }
 
-    /** 결과 탭 줄(출력 · 표)의 높이. 아직 배치 전이면 0. */
-    private int tabRowHeight() {
-        if (resultTabs.getTabCount() == 0 || resultTabs.getUI() == null) {
-            return 0;
+    private static JBLabel label(String text) {
+        JBLabel label = new JBLabel(text);
+        label.setForeground(UIUtil.getContextHelpForeground());
+        return label;
+    }
+
+    /** 라디오 단추를 한 줄로(단추 사이만 띄움). 머리줄 높이를 라디오 높이로 맞추려고 라벨 칸에도 같은 높이를 준다. */
+    private static JPanel radioRow(List<JBRadioButton> radios) {
+        JPanel row = new JPanel(new java.awt.GridBagLayout());
+        java.awt.GridBagConstraints c = new java.awt.GridBagConstraints();
+        for (int i = 0; i < radios.size(); i++) {
+            c.insets = JBUI.insetsLeft(i == 0 ? 0 : PADDING * 2);
+            row.add(radios.get(i), c);
         }
-        Rectangle tab = resultTabs.getUI().getTabBounds(resultTabs, 0);
-        return tab == null ? 0 : tab.y + tab.height;
+        return row;
+    }
+
+    /** 탭 대신 머리줄 라디오로 고르는 판 묶음. 세 칸 머리줄을 같은 모양 · 높이로 두려고 JBTabbedPane 을 쓰지 않는다. */
+    private static final class Switch {
+        final List<JBRadioButton> radios = new ArrayList<>();
+        final JPanel buttons = new JPanel(new BorderLayout());
+        final JPanel cards = new JPanel(new java.awt.CardLayout());
+        private final ButtonGroup group = new ButtonGroup();
+
+        void add(String name, JComponent body) {
+            int index = radios.size();
+            JBRadioButton b = new JBRadioButton(name, index == 0);
+            b.addActionListener(e -> show(index));
+            group.add(b);
+            radios.add(b);
+            cards.add(body, String.valueOf(index));
+            buttons.removeAll();
+            buttons.add(radioRow(radios), BorderLayout.CENTER);
+        }
+
+        void setSelectedIndex(int index) {
+            radios.get(index).setSelected(true);
+            show(index);
+        }
+
+        private void show(int index) {
+            ((java.awt.CardLayout) cards.getLayout()).show(cards, String.valueOf(index));
+        }
     }
 
     private static OnePixelSplitter splitter(boolean vertical, float proportion, String key, JComponent first, JComponent second) {
@@ -725,7 +745,6 @@ public final class JsBenchDialog extends DialogWrapper {
         for (int i = 0; i < tables.size(); i++) {
             tablePick.addItem(BootServersBundle.message("js.table.name", i + 1, tables.get(i).rows().size() + tables.get(i).more()));
         }
-        tablePick.setEnabled(tables.size() > 1);
         if (tables.isEmpty()) {
             showTable(-1);
         } else {
@@ -752,6 +771,7 @@ public final class JsBenchDialog extends DialogWrapper {
         tableModel.setRowCount(0);
         tableModel.setColumnCount(0);
         tableNote.setText("");
+        tableTop.setVisible(tables.size() > 1);
         if (index < 0 || index >= tables.size()) {
             return;
         }
