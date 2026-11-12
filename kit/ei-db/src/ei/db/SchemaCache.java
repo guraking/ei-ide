@@ -17,7 +17,8 @@ import java.util.concurrent.TimeUnit;
  * 표 목록은 표와 뷰(Meta.tableAndViewTypes)를 함께, 칼럼 · 외래 키는 메타 이름 그대로의 표 이름으로 둔다.
  * 작업 스레드용(Connection 을 받는 것)은 없으면 그 자리에서 읽어 넣는다.
  * 자동완성용(Project 를 받는 것)은 화면 · 자동완성 스레드를 막지 않도록 없으면 null 을 돌려주고 뒤에서 읽어 둔다(다음 자동완성부터 쓰인다).
- * 자동완성은 이미 열린 접속에서만 읽는다: 글자를 칠 때 DB 에 로그인하지 않는다(비밀번호가 틀린 접속이 입력마다 로그인해 계정이 잠기지 않게).
+ * 자동완성은 열린 접속에서 읽는다. 아직 열지 않은 접속은 처음 한 번만 뒤에서 연다. 그 열기가 실패하면 clear(끊기 · 새로고침) 전까지
+ * 자동완성으로는 다시 열지 않는다(비밀번호가 틀린 접속이 입력마다 로그인해 계정이 잠기지 않게). 문장 실행으로 열린 접속은 그대로 쓴다.
  * 읽기에 실패한 접속은 FAILURE_COOLDOWN_MS 동안 자동완성에서 다시 읽지 않는다(끊긴 접속에 입력마다 묻지 않게).
  */
 public final class SchemaCache {
@@ -33,6 +34,8 @@ public final class SchemaCache {
   private static final Map<String, List<Meta.Column>> COLUMNS = new ConcurrentHashMap<>();
   private static final Map<String, List<Meta.ForeignKey>> FKS = new ConcurrentHashMap<>();
   private static final Set<String> LOADING = ConcurrentHashMap.newKeySet();
+  /** 자동완성이 열기를 이미 시도한 접속 id. clear 에서 지운다. */
+  private static final Set<String> CONNECT_TRIED = ConcurrentHashMap.newKeySet();
   /** 접속 id → 자동완성 읽기에 마지막으로 실패한 시각(ms). */
   private static final Map<String, Long> FAILED = new ConcurrentHashMap<>();
   /** 접속마다 clear 할 때 오르는 번호. 읽기 시작 뒤 번호가 바뀌었으면 그 결과는 새로고침 전 것이라 버린다. */
@@ -132,6 +135,7 @@ public final class SchemaCache {
       COLUMNS.keySet().removeIf(k -> k.startsWith(prefix));
       FKS.keySet().removeIf(k -> k.startsWith(prefix));
       FAILED.remove(configId);
+      CONNECT_TRIED.remove(configId);
     }
   }
 
@@ -158,16 +162,20 @@ public final class SchemaCache {
   private interface Reader { void read(Connection conn) throws SQLException; }
 
   /**
-   * 그 접속이 이미 열려 있고 쿨다운 중이 아닐 때만 풀 스레드에서 읽는다. 같은 키는 한 번만 동시에 읽는다.
-   * 접속을 새로 열거나 살아 있는지 묻지 않는다(로그인 · 대기 없음). 실패하면 그 시각을 남겨 쿨다운한다.
+   * 쿨다운 중이 아닐 때 풀 스레드에서 읽는다. 같은 키는 한 번만 동시에 읽는다.
+   * 열린 접속은 살아 있는지 묻지 않고 그대로 쓴다. 열리지 않은 접속은 clear 뒤 처음 한 번만 연다(실패해도 다시 열지 않음).
+   * 읽기 · 열기에 실패하면 그 시각을 남겨 쿨다운한다.
    */
   private static void loadOpen(Project project, DbConfig c, String key, Reader reader) {
-    Connection conn = DbSessions.get(project).openConnection(c.id);
-    if (conn == null || coolingDown(c.id) || !LOADING.add(key)) return;
+    DbSessions sessions = DbSessions.get(project);
+    Connection open = sessions.openConnection(c.id);
+    if (coolingDown(c.id)) return;
+    if (open == null && !CONNECT_TRIED.add(c.id)) return;
+    if (!LOADING.add(key)) return;
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       try {
-        reader.read(conn);
-      } catch (SQLException | RuntimeException e) {
+        reader.read(open != null ? open : sessions.connection(c));
+      } catch (Exception e) {
         FAILED.put(c.id, System.currentTimeMillis());
         LOG.info("자동완성 목록을 읽지 못했습니다(" + TimeUnit.MILLISECONDS.toSeconds(FAILURE_COOLDOWN_MS) + "초 동안 다시 읽지 않음): " + e.getMessage());
       } finally {
@@ -181,8 +189,8 @@ public final class SchemaCache {
     return at != null && System.currentTimeMillis() - at < FAILURE_COOLDOWN_MS;
   }
 
-  /** 자동완성 안내용: 그 접속이 열려 있지 않아 목록을 읽지 않는 중이면 true. */
+  /** 자동완성 안내용: 자동완성이 연 접속 열기가 실패해 목록을 읽지 않는 중이면 true. */
   public static boolean waitingForConnection(Project project, DbConfig c) {
-    return !DbSessions.get(project).isOpen(c.id);
+    return !DbSessions.get(project).isOpen(c.id) && FAILED.containsKey(c.id);
   }
 }
