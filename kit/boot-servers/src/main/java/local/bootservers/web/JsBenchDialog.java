@@ -5,7 +5,6 @@ import local.bootservers.ui.DialogSize;
 
 import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.Disposable;
-import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CustomShortcutSet;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
@@ -266,6 +265,9 @@ public final class JsBenchDialog extends DialogWrapper {
         Disposable stopOnClose = () -> {
             columnsTimer.stop();
             stop();
+            if (target != null) {
+                target.dispose();
+            }
         };
         com.intellij.openapi.util.Disposer.register(getDisposable(), stopOnClose);
         return root;

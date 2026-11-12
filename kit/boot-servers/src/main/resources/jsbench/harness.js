@@ -265,14 +265,19 @@ function transpile(code) {
 }
 
 // 코드를 이 프로세스 전역에서 돌린다. 마지막 식의 값을 돌려받으려 먼저 그대로 컴파일하고,
-// 최상위 await 때문에 문법 오류가 나면 async 함수로 감싸 다시 한다(이때는 return 한 값이 결과). 감쌀 때 줄 번호가 밀리지 않게 같은 줄에 붙인다.
+// 문법 오류가 나면(최상위 await · return 은 그대로는 문법 오류다) async 함수로 감싸 다시 한다(이때는 return 한 값이 결과).
+// 감싸도 문법 오류면 처음 오류를 낸다. 감쌀 때 줄 번호가 밀리지 않게 같은 줄에 붙인다.
 async function runCode(code) {
   let script;
   try {
     script = new vm.Script(code, { filename: CODE_FILE });
   } catch (e) {
-    if (!(e instanceof SyntaxError) || !/await|return/.test(e.message)) throw e;
-    script = new vm.Script('(async () => {' + code + '\n})()', { filename: CODE_FILE });
+    if (!(e instanceof SyntaxError)) throw e;
+    try {
+      script = new vm.Script('(async () => {' + code + '\n})()', { filename: CODE_FILE });
+    } catch (ignored) {
+      throw e;
+    }
   }
   let value = script.runInThisContext();
   if (value && typeof value.then === 'function') value = await value;
