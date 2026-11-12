@@ -141,7 +141,16 @@ for (const d = new Date(2026, 10, 1); d <= new Date(2026, 10, 7); d.setDate(d.ge
 }
 console.table(rows);
 --- 데이터
-[{"day":"2026-11-02","amount":1200},{"day":"2026-11-05","amount":800}]
+[
+  {
+    "day": "2026-11-02",
+    "amount": 1200
+  },
+  {
+    "day": "2026-11-05",
+    "amount": 800
+  }
+]
 
 ### 월 목록 만들기 (YYYY-MM)
 > 월별 집계 머리글. 12달 전부터 이번 달까지.
@@ -242,7 +251,20 @@ console.log(Math.floor(new Date('2026-01-01T00:00:00Z').getTime() / 1000));
 const rows = [...data].sort((a, b) => b.regDate.localeCompare(a.regDate));
 console.table(rows);
 --- 데이터
-[{"title":"가","regDate":"2026-10-01"},{"title":"나","regDate":"2026-11-12"},{"title":"다","regDate":"2026-03-15"}]
+[
+  {
+    "title": "가",
+    "regDate": "2026-10-01"
+  },
+  {
+    "title": "나",
+    "regDate": "2026-11-12"
+  },
+  {
+    "title": "다",
+    "regDate": "2026-03-15"
+  }
+]
 
 ### 기간 검색 조건 검사 (시작 ≤ 끝, 최대 3개월)
 > 조회 단추를 누르기 전에 확인합니다.
@@ -331,7 +353,24 @@ for (const r of data) {
 }
 console.table(byMonth);
 --- 데이터
-[{"date":"2026-10-03","amount":100},{"date":"2026-10-28","amount":50},{"date":"2026-11-02","amount":70},{"date":"2026-11-12","amount":30}]
+[
+  {
+    "date": "2026-10-03",
+    "amount": 100
+  },
+  {
+    "date": "2026-10-28",
+    "amount": 50
+  },
+  {
+    "date": "2026-11-02",
+    "amount": 70
+  },
+  {
+    "date": "2026-11-12",
+    "amount": 30
+  }
+]
 
 ### 생일 · 기념일 다가오는 순
 > 올해 지났으면 내년 날짜로 계산합니다.
@@ -339,7 +378,24 @@ const today = new Date(2026, 10, 12);
 const next = md => { const [m, d] = md.split('-').map(Number); const t = new Date(today.getFullYear(), m - 1, d); if (t < today) t.setFullYear(t.getFullYear() + 1); return t; };
 console.table(data.map(p => ({ ...p, days: Math.round((next(p.birthday) - today) / 86400000) })).sort((a, b) => a.days - b.days));
 --- 데이터
-[{"name":"가","birthday":"11-15"},{"name":"나","birthday":"01-03"},{"name":"다","birthday":"11-12"},{"name":"라","birthday":"10-01"}]
+[
+  {
+    "name": "가",
+    "birthday": "11-15"
+  },
+  {
+    "name": "나",
+    "birthday": "01-03"
+  },
+  {
+    "name": "다",
+    "birthday": "11-12"
+  },
+  {
+    "name": "라",
+    "birthday": "10-01"
+  }
+]
 
 ### 근속 연수 · 개월
 > 입사일부터 오늘까지 「3년 4개월」.
@@ -411,7 +467,18 @@ console.log(months(new Date(2025, 2, 15), new Date(2026, 10, 12)), '개월');
 const diffMin = (a, b) => Math.round((new Date(b.replace(' ', 'T')) - new Date(a.replace(' ', 'T'))) / 60000);
 console.table(data.map(r => ({ ...r, minutes: diffMin(r.start, r.end) })));
 --- 데이터
-[{"job":"A","start":"2026-11-12 08:30","end":"2026-11-12 10:15"},{"job":"B","start":"2026-11-12 22:00","end":"2026-11-13 01:30"}]
+[
+  {
+    "job": "A",
+    "start": "2026-11-12 08:30",
+    "end": "2026-11-12 10:15"
+  },
+  {
+    "job": "B",
+    "start": "2026-11-12 22:00",
+    "end": "2026-11-13 01:30"
+  }
+]
 
 ### 분을 「1시간 45분」 으로
 > 105 → 1시간 45분, 45 → 45분.
@@ -444,7 +511,20 @@ console.log(nightMinutes('2026-11-12T20:00', '2026-11-13T07:00') / 60, '시간')
 const thisYear = 2026;
 console.table(data.map(r => ({ ...r, age: thisYear - Number(r.birth.slice(0, 4)), band: Math.floor((thisYear - Number(r.birth.slice(0, 4))) / 10) * 10 + '대' })));
 --- 데이터
-[{"name":"가","birth":"1990-05-01"},{"name":"나","birth":"2001-11-20"},{"name":"다","birth":"1978-02-14"}]
+[
+  {
+    "name": "가",
+    "birth": "1990-05-01"
+  },
+  {
+    "name": "나",
+    "birth": "2001-11-20"
+  },
+  {
+    "name": "다",
+    "birth": "1978-02-14"
+  }
+]
 
 ### 날짜가 오늘 · 이번 주 · 이번 달인지
 > 목록 날짜 옆에 「오늘」 표시.
@@ -544,7 +624,23 @@ for (let d = new Date(2026, 10, 1); d <= new Date(2026, 10, 10); d.setDate(d.get
 }
 console.log(missing);
 --- 데이터
-[{"date":"2026-11-01"},{"date":"2026-11-02"},{"date":"2026-11-04"},{"date":"2026-11-05"},{"date":"2026-11-09"}]
+[
+  {
+    "date": "2026-11-01"
+  },
+  {
+    "date": "2026-11-02"
+  },
+  {
+    "date": "2026-11-04"
+  },
+  {
+    "date": "2026-11-05"
+  },
+  {
+    "date": "2026-11-09"
+  }
+]
 
 ### 연속된 날짜 구간 묶기 (휴가 기간)
 > 하루씩 있는 날짜를 이어진 기간으로.
@@ -1248,14 +1344,43 @@ console.log(0.1 + 0.2 === 0.3, eq(0.1 + 0.2, 0.3));
 > 상태가 사용(Y)인 줄만 남깁니다.
 console.table(data.filter(r => r.useYn === 'Y'));
 --- 데이터
-[{"code":"A","name":"사과","useYn":"Y"},{"code":"B","name":"배","useYn":"N"},{"code":"C","name":"감","useYn":"Y"}]
+[
+  {
+    "code": "A",
+    "name": "사과",
+    "useYn": "Y"
+  },
+  {
+    "code": "B",
+    "name": "배",
+    "useYn": "N"
+  },
+  {
+    "code": "C",
+    "name": "감",
+    "useYn": "Y"
+  }
+]
 
 ### 칸 하나만 뽑기 (map)
 > 체크한 줄의 id 목록을 서버로 보낼 때.
 console.log(data.map(r => r.id));
 console.log(data.filter(r => r.checked).map(r => r.id));
 --- 데이터
-[{"id":11,"checked":true},{"id":12,"checked":false},{"id":13,"checked":true}]
+[
+  {
+    "id": 11,
+    "checked": true
+  },
+  {
+    "id": 12,
+    "checked": false
+  },
+  {
+    "id": 13,
+    "checked": true
+  }
+]
 
 ### 첫 번째로 맞는 것 · 위치 (find · findIndex)
 > 코드로 한 줄 찾기. 없으면 undefined · -1.
@@ -1263,21 +1388,60 @@ const row = data.find(r => r.code === 'B');
 const index = data.findIndex(r => r.code === 'B');
 console.log(row, index, data.find(r => r.code === 'Z'));
 --- 데이터
-[{"code":"A","name":"사과"},{"code":"B","name":"배"}]
+[
+  {
+    "code": "A",
+    "name": "사과"
+  },
+  {
+    "code": "B",
+    "name": "배"
+  }
+]
 
 ### 하나라도 · 모두 (some · every)
 > 체크한 줄이 있는지, 모두 저장됐는지.
 console.log('체크 있음', data.some(r => r.checked));
 console.log('모두 저장됨', data.every(r => r.saved));
 --- 데이터
-[{"checked":false,"saved":true},{"checked":true,"saved":false}]
+[
+  {
+    "checked": false,
+    "saved": true
+  },
+  {
+    "checked": true,
+    "saved": false
+  }
+]
 
 ### 여러 칸 기준 정렬
 > 부서 오름차순, 같은 부서면 금액 내림차순.
 const rows = [...data].sort((a, b) => a.dept.localeCompare(b.dept, 'ko') || b.amount - a.amount);
 console.table(rows);
 --- 데이터
-[{"dept":"영업","name":"가","amount":100},{"dept":"개발","name":"나","amount":300},{"dept":"영업","name":"다","amount":500},{"dept":"개발","name":"라","amount":50}]
+[
+  {
+    "dept": "영업",
+    "name": "가",
+    "amount": 100
+  },
+  {
+    "dept": "개발",
+    "name": "나",
+    "amount": 300
+  },
+  {
+    "dept": "영업",
+    "name": "다",
+    "amount": 500
+  },
+  {
+    "dept": "개발",
+    "name": "라",
+    "amount": 50
+  }
+]
 
 ### 원본을 바꾸지 않는 정렬 (toSorted)
 > sort 는 원본을 바꿉니다. Vue 의 props 배열은 꼭 복사해서 정렬합니다.
@@ -1291,7 +1455,24 @@ console.log([...original].sort((a, b) => a - b), '← 옛 브라우저용');
 const rows = [...data].sort((a, b) => (a.due == null) - (b.due == null) || String(a.due).localeCompare(String(b.due)));
 console.table(rows);
 --- 데이터
-[{"task":"가","due":null},{"task":"나","due":"2026-11-20"},{"task":"다","due":"2026-11-15"},{"task":"라","due":null}]
+[
+  {
+    "task": "가",
+    "due": null
+  },
+  {
+    "task": "나",
+    "due": "2026-11-20"
+  },
+  {
+    "task": "다",
+    "due": "2026-11-15"
+  },
+  {
+    "task": "라",
+    "due": null
+  }
+]
 
 ### 배열 나누기 (n 개씩)
 > 1000건씩 끊어 서버에 보냅니다(Oracle IN 1000개 제한).
@@ -1305,14 +1486,47 @@ const items = data.flatMap(o => o.items.map(i => ({ orderNo: o.orderNo, ...i }))
 console.table(items);
 console.log([[1, [2]], [3]].flat(Infinity));
 --- 데이터
-[{"orderNo":"A1","items":[{"item":"볼트","qty":10},{"item":"너트","qty":20}]},{"orderNo":"A2","items":[{"item":"와셔","qty":5}]}]
+[
+  {
+    "orderNo": "A1",
+    "items": [
+      {
+        "item": "볼트",
+        "qty": 10
+      },
+      {
+        "item": "너트",
+        "qty": 20
+      }
+    ]
+  },
+  {
+    "orderNo": "A2",
+    "items": [
+      {
+        "item": "와셔",
+        "qty": 5
+      }
+    ]
+  }
+]
 
 ### 번호 매기기 (No. 칸)
 > 그리드 순번. 페이지가 있으면 앞 페이지 건수를 더합니다.
 const page = 2, size = 3;
 console.table(data.map((r, i) => ({ no: (page - 1) * size + i + 1, ...r })));
 --- 데이터
-[{"name":"가"},{"name":"나"},{"name":"다"}]
+[
+  {
+    "name": "가"
+  },
+  {
+    "name": "나"
+  },
+  {
+    "name": "다"
+  }
+]
 
 ### 앞 · 뒤 n 개 (slice)
 > 최근 5건, 마지막 건.
@@ -1365,7 +1579,20 @@ const pass = [], fail = [];
 for (const r of data) (r.score >= 60 ? pass : fail).push(r);
 console.log('통과', pass.map(r => r.name), '실패', fail.map(r => r.name));
 --- 데이터
-[{"name":"가","score":72},{"name":"나","score":40},{"name":"다","score":95}]
+[
+  {
+    "name": "가",
+    "score": 72
+  },
+  {
+    "name": "나",
+    "score": 40
+  },
+  {
+    "name": "다",
+    "score": 95
+  }
+]
 
 ### 배열 안에 있는지 (includes · Set)
 > 허용 코드 검사.
@@ -1382,39 +1609,121 @@ console.log(list({ list: [1] }), list({}), list(null));
 > 이력 목록에서 마지막 승인 줄.
 console.log(data.findLast(r => r.status === '승인'));
 --- 데이터
-[{"seq":1,"status":"승인"},{"seq":2,"status":"반려"},{"seq":3,"status":"승인"},{"seq":4,"status":"요청"}]
+[
+  {
+    "seq": 1,
+    "status": "승인"
+  },
+  {
+    "seq": 2,
+    "status": "반려"
+  },
+  {
+    "seq": 3,
+    "status": "승인"
+  },
+  {
+    "seq": 4,
+    "status": "요청"
+  }
+]
 
 ### 칸 두 개만 남긴 새 배열
 > 콤보 상자용 { value, label } 목록 만들기.
 console.table(data.map(r => ({ value: r.code, label: r.name })));
 --- 데이터
-[{"code":"A","name":"사과","price":1000},{"code":"B","name":"배","price":2000}]
+[
+  {
+    "code": "A",
+    "name": "사과",
+    "price": 1000
+  },
+  {
+    "code": "B",
+    "name": "배",
+    "price": 2000
+  }
+]
 
 ### 칸 하나 더 붙이기 (원본은 그대로)
 > 화면 표시용 칸을 덧붙입니다. 펼침(...)으로 새 객체를 만듭니다.
 console.table(data.map(r => ({ ...r, total: r.price * r.qty })));
 --- 데이터
-[{"item":"볼트","price":120,"qty":10},{"item":"너트","price":80,"qty":25}]
+[
+  {
+    "item": "볼트",
+    "price": 120,
+    "qty": 10
+  },
+  {
+    "item": "너트",
+    "price": 80,
+    "qty": 25
+  }
+]
 
 ### 한 칸 값만 바꾸기 (id 로 찾아서)
 > 그리드에서 한 줄 수정. 다른 줄은 그대로 두고 새 배열을 만듭니다.
 const id = 2;
 console.table(data.map(r => r.id === id ? { ...r, status: '완료' } : r));
 --- 데이터
-[{"id":1,"status":"접수"},{"id":2,"status":"처리중"},{"id":3,"status":"접수"}]
+[
+  {
+    "id": 1,
+    "status": "접수"
+  },
+  {
+    "id": 2,
+    "status": "처리중"
+  },
+  {
+    "id": 3,
+    "status": "접수"
+  }
+]
 
 ### id 로 한 줄 지우기 (새 배열)
 > 원본을 건드리지 않고 지운 목록을 만듭니다.
 console.table(data.filter(r => r.id !== 2));
 --- 데이터
-[{"id":1,"name":"가"},{"id":2,"name":"나"},{"id":3,"name":"다"}]
+[
+  {
+    "id": 1,
+    "name": "가"
+  },
+  {
+    "id": 2,
+    "name": "나"
+  },
+  {
+    "id": 3,
+    "name": "다"
+  }
+]
 
 ### 여러 id 한꺼번에 지우기
 > 체크한 줄 삭제.
 const remove = new Set([1, 3]);
 console.table(data.filter(r => !remove.has(r.id)));
 --- 데이터
-[{"id":1,"name":"가"},{"id":2,"name":"나"},{"id":3,"name":"다"},{"id":4,"name":"라"}]
+[
+  {
+    "id": 1,
+    "name": "가"
+  },
+  {
+    "id": 2,
+    "name": "나"
+  },
+  {
+    "id": 3,
+    "name": "다"
+  },
+  {
+    "id": 4,
+    "name": "라"
+  }
+]
 
 ### 원본 배열에서 직접 지우기 (splice)
 > 같은 배열을 다른 곳에서 쓰고 있어 원본을 바꿔야 할 때. 뒤에서부터 지워야 위치가 밀리지 않습니다.
@@ -1444,7 +1753,17 @@ console.log(list.at(-1), list.at(-2), list.at(0));
 console.log(data.reduce((sum, r) => sum + r.amount, 0));
 console.log([].reduce((sum, r) => sum + r.amount, 0));
 --- 데이터
-[{"amount":1000},{"amount":2500},{"amount":700}]
+[
+  {
+    "amount": 1000
+  },
+  {
+    "amount": 2500
+  },
+  {
+    "amount": 700
+  }
+]
 
 ### 최댓값 · 최솟값이 있는 줄
 > 값만이 아니라 그 줄 전체가 필요할 때.
@@ -1452,13 +1771,35 @@ const max = data.reduce((a, b) => b.score > a.score ? b : a);
 const min = data.reduce((a, b) => b.score < a.score ? b : a);
 console.log('최고', max, '최저', min);
 --- 데이터
-[{"name":"가","score":80},{"name":"나","score":95},{"name":"다","score":72}]
+[
+  {
+    "name": "가",
+    "score": 80
+  },
+  {
+    "name": "나",
+    "score": 95
+  },
+  {
+    "name": "다",
+    "score": 72
+  }
+]
 
 ### 배열 → 객체 (코드: 이름)
 > 공통코드를 { A: '사과' } 모양으로.
 console.log(Object.fromEntries(data.map(r => [r.code, r.name])));
 --- 데이터
-[{"code":"A","name":"사과"},{"code":"B","name":"배"}]
+[
+  {
+    "code": "A",
+    "name": "사과"
+  },
+  {
+    "code": "B",
+    "name": "배"
+  }
+]
 
 ### 객체 → 배열
 > { A: 10, B: 20 } 을 표로.
@@ -1469,13 +1810,43 @@ console.table(Object.entries(stock).map(([item, qty]) => ({ item, qty })));
 > 엑셀 붙여 넣기 끝의 빈 줄.
 console.table(data.filter(r => Object.values(r).some(v => v != null && String(v).trim() !== '')));
 --- 데이터
-[{"a":"1","b":"x"},{"a":"","b":""},{"a":"2","b":null},{"a":" ","b":null}]
+[
+  {
+    "a": "1",
+    "b": "x"
+  },
+  {
+    "a": "",
+    "b": ""
+  },
+  {
+    "a": "2",
+    "b": null
+  },
+  {
+    "a": " ",
+    "b": null
+  }
+]
 
 ### 칸 값 목록을 쉼표 글로
 > 체크한 코드를 'A,B,C' 로 서버에 보낼 때.
 console.log(data.filter(r => r.checked).map(r => r.code).join(','));
 --- 데이터
-[{"code":"A","checked":true},{"code":"B","checked":false},{"code":"C","checked":true}]
+[
+  {
+    "code": "A",
+    "checked": true
+  },
+  {
+    "code": "B",
+    "checked": false
+  },
+  {
+    "code": "C",
+    "checked": true
+  }
+]
 
 ### 쉼표 글을 배열로 (빈 칸 · 공백 정리)
 > 'A, B,,C ' → ['A', 'B', 'C'].
@@ -1515,20 +1886,70 @@ for (const [i, name] of ['가', '나', '다'].entries()) console.log(i + 1, name
 const need = ['ADMIN', 'MANAGER'];
 console.table(data.filter(u => u.roles.some(r => need.includes(r))));
 --- 데이터
-[{"user":"홍","roles":["USER"]},{"user":"김","roles":["USER","MANAGER"]},{"user":"이","roles":["ADMIN"]}]
+[
+  {
+    "user": "홍",
+    "roles": [
+      "USER"
+    ]
+  },
+  {
+    "user": "김",
+    "roles": [
+      "USER",
+      "MANAGER"
+    ]
+  },
+  {
+    "user": "이",
+    "roles": [
+      "ADMIN"
+    ]
+  }
+]
 
 ### 칸 값으로 여러 줄 찾기 (in 조건)
 > SQL 의 IN (...) 처럼.
 const codes = new Set(['A', 'C']);
 console.table(data.filter(r => codes.has(r.code)));
 --- 데이터
-[{"code":"A","name":"사과"},{"code":"B","name":"배"},{"code":"C","name":"감"}]
+[
+  {
+    "code": "A",
+    "name": "사과"
+  },
+  {
+    "code": "B",
+    "name": "배"
+  },
+  {
+    "code": "C",
+    "name": "감"
+  }
+]
 
 ### 범위 조건 (between)
 > 금액이 1만 원 이상 5만 원 이하.
 console.table(data.filter(r => r.amount >= 10000 && r.amount <= 50000));
 --- 데이터
-[{"no":1,"amount":5000},{"no":2,"amount":10000},{"no":3,"amount":35000},{"no":4,"amount":70000}]
+[
+  {
+    "no": 1,
+    "amount": 5000
+  },
+  {
+    "no": 2,
+    "amount": 10000
+  },
+  {
+    "no": 3,
+    "amount": 35000
+  },
+  {
+    "no": 4,
+    "amount": 70000
+  }
+]
 
 ### 날짜 범위로 거르기
 > 'YYYY-MM-DD' 글은 글 비교로도 날짜 순서가 맞습니다.
@@ -1536,14 +1957,44 @@ const from = '2026-11-01';
 const to = '2026-11-15';
 console.table(data.filter(r => r.date >= from && r.date <= to));
 --- 데이터
-[{"no":1,"date":"2026-10-31"},{"no":2,"date":"2026-11-01"},{"no":3,"date":"2026-11-12"},{"no":4,"date":"2026-11-16"}]
+[
+  {
+    "no": 1,
+    "date": "2026-10-31"
+  },
+  {
+    "no": 2,
+    "date": "2026-11-01"
+  },
+  {
+    "no": 3,
+    "date": "2026-11-12"
+  },
+  {
+    "no": 4,
+    "date": "2026-11-16"
+  }
+]
 
 ### 글 포함 거르기 (like '%검색어%')
 > 대소문자 무시, 이름 · 코드 어느 쪽이든.
 const q = 'bo';
 console.table(data.filter(r => [r.code, r.name].some(v => v.toLowerCase().includes(q.toLowerCase()))));
 --- 데이터
-[{"code":"BOLT-01","name":"Bolt M8"},{"code":"NUT-02","name":"Nut M8"},{"code":"WSH-03","name":"Washer bo"}]
+[
+  {
+    "code": "BOLT-01",
+    "name": "Bolt M8"
+  },
+  {
+    "code": "NUT-02",
+    "name": "Nut M8"
+  },
+  {
+    "code": "WSH-03",
+    "name": "Washer bo"
+  }
+]
 
 ### 조건 여러 개 (값이 있는 조건만 적용)
 > 검색 폼: 빈 칸 조건은 무시합니다.
@@ -1554,7 +2005,23 @@ const rows = data.filter(r =>
   (cond.minAmount == null || cond.minAmount === '' || r.amount >= cond.minAmount));
 console.table(rows);
 --- 데이터
-[{"dept":"영업","status":"완료","amount":30000},{"dept":"영업","status":"접수","amount":10000},{"dept":"개발","status":"완료","amount":50000}]
+[
+  {
+    "dept": "영업",
+    "status": "완료",
+    "amount": 30000
+  },
+  {
+    "dept": "영업",
+    "status": "접수",
+    "amount": 10000
+  },
+  {
+    "dept": "개발",
+    "status": "완료",
+    "amount": 50000
+  }
+]
 
 ## 중복 처리
 ### 숫자 배열 중복 빼기 [1, 2, 2]
@@ -1585,13 +2052,42 @@ console.log([...new Set(list.filter(v => v != null && String(v).trim() !== ''))]
 const seen = new Set();
 console.table(data.filter(r => !seen.has(r.code) && seen.add(r.code)));
 --- 데이터
-[{"code":"A","name":"사과","seq":1},{"code":"B","name":"배","seq":2},{"code":"A","name":"사과(중복)","seq":3}]
+[
+  {
+    "code": "A",
+    "name": "사과",
+    "seq": 1
+  },
+  {
+    "code": "B",
+    "name": "배",
+    "seq": 2
+  },
+  {
+    "code": "A",
+    "name": "사과(중복)",
+    "seq": 3
+  }
+]
 
 ### 객체 배열 중복 빼기 (Map 으로 한 줄)
 > 같은 키면 뒤의 것이 앞의 것을 덮어씁니다. 「마지막 것 남기기」 와 같습니다.
 console.table([...new Map(data.map(r => [r.code, r])).values()]);
 --- 데이터
-[{"code":"A","price":100},{"code":"B","price":200},{"code":"A","price":150}]
+[
+  {
+    "code": "A",
+    "price": 100
+  },
+  {
+    "code": "B",
+    "price": 200
+  },
+  {
+    "code": "A",
+    "price": 150
+  }
+]
 
 ### 객체 배열 중복 빼기 (여러 칸 기준)
 > 부서 + 직급이 같으면 하나만.
@@ -1601,7 +2097,23 @@ console.table(data.filter(r => {
   return !seen.has(key) && seen.add(key);
 }));
 --- 데이터
-[{"dept":"영업","grade":"과장","name":"가"},{"dept":"영업","grade":"과장","name":"나"},{"dept":"영업","grade":"대리","name":"다"}]
+[
+  {
+    "dept": "영업",
+    "grade": "과장",
+    "name": "가"
+  },
+  {
+    "dept": "영업",
+    "grade": "과장",
+    "name": "나"
+  },
+  {
+    "dept": "영업",
+    "grade": "대리",
+    "name": "다"
+  }
+]
 
 ### 객체 배열 중복 빼기 (모든 칸이 같을 때만)
 > 줄 전체가 똑같은 것만 뺍니다. 칸 순서가 달라도 같은 줄로 봅니다.
@@ -1609,7 +2121,24 @@ const keyOf = r => JSON.stringify(Object.keys(r).sort().map(k => [k, r[k]]));
 const seen = new Set();
 console.table(data.filter(r => !seen.has(keyOf(r)) && seen.add(keyOf(r))));
 --- 데이터
-[{"a":1,"b":"x"},{"b":"x","a":1},{"a":1,"b":"y"},{"a":2,"b":"x"}]
+[
+  {
+    "a": 1,
+    "b": "x"
+  },
+  {
+    "b": "x",
+    "a": 1
+  },
+  {
+    "a": 1,
+    "b": "y"
+  },
+  {
+    "a": 2,
+    "b": "x"
+  }
+]
 
 ### 중복 중 마지막 것 남기기
 > 같은 코드가 여러 번이면 가장 뒤의 줄(나중에 고친 값)을 남깁니다. 원래 순서는 첫 위치 기준입니다.
@@ -1617,7 +2146,28 @@ const last = new Map();
 for (const r of data) last.set(r.code, r);
 console.table([...last.values()]);
 --- 데이터
-[{"code":"A","qty":1},{"code":"B","qty":5},{"code":"A","qty":3},{"code":"C","qty":2},{"code":"B","qty":7}]
+[
+  {
+    "code": "A",
+    "qty": 1
+  },
+  {
+    "code": "B",
+    "qty": 5
+  },
+  {
+    "code": "A",
+    "qty": 3
+  },
+  {
+    "code": "C",
+    "qty": 2
+  },
+  {
+    "code": "B",
+    "qty": 7
+  }
+]
 
 ### 중복 중 날짜가 최신인 것 남기기
 > 품목별 가장 최근 단가.
@@ -1628,7 +2178,28 @@ for (const r of data) {
 }
 console.table([...latest.values()]);
 --- 데이터
-[{"item":"볼트","date":"2026-10-01","price":120},{"item":"너트","date":"2026-09-15","price":80},{"item":"볼트","date":"2026-11-05","price":125},{"item":"너트","date":"2026-08-01","price":75}]
+[
+  {
+    "item": "볼트",
+    "date": "2026-10-01",
+    "price": 120
+  },
+  {
+    "item": "너트",
+    "date": "2026-09-15",
+    "price": 80
+  },
+  {
+    "item": "볼트",
+    "date": "2026-11-05",
+    "price": 125
+  },
+  {
+    "item": "너트",
+    "date": "2026-08-01",
+    "price": 75
+  }
+]
 
 ### 중복 중 금액이 가장 큰 것 남기기
 > 고객별 최고 주문 한 줄.
@@ -1638,7 +2209,28 @@ for (const r of data) {
 }
 console.table([...best.values()]);
 --- 데이터
-[{"customer":"가","orderNo":1,"amount":50000},{"customer":"나","orderNo":2,"amount":30000},{"customer":"가","orderNo":3,"amount":90000},{"customer":"나","orderNo":4,"amount":10000}]
+[
+  {
+    "customer": "가",
+    "orderNo": 1,
+    "amount": 50000
+  },
+  {
+    "customer": "나",
+    "orderNo": 2,
+    "amount": 30000
+  },
+  {
+    "customer": "가",
+    "orderNo": 3,
+    "amount": 90000
+  },
+  {
+    "customer": "나",
+    "orderNo": 4,
+    "amount": 10000
+  }
+]
 
 ### 중복된 값만 찾기 (숫자 · 글 배열)
 > 두 번 이상 나온 값 목록.
@@ -1654,7 +2246,26 @@ const count = new Map();
 for (const r of data) count.set(r.code, (count.get(r.code) || 0) + 1);
 console.table([...count].map(([code, n]) => ({ code, n })).sort((a, b) => b.n - a.n));
 --- 데이터
-[{"code":"A1"},{"code":"B2"},{"code":"A1"},{"code":"C3"},{"code":"A1"},{"code":"B2"}]
+[
+  {
+    "code": "A1"
+  },
+  {
+    "code": "B2"
+  },
+  {
+    "code": "A1"
+  },
+  {
+    "code": "C3"
+  },
+  {
+    "code": "A1"
+  },
+  {
+    "code": "B2"
+  }
+]
 
 ### 중복 줄 번호 알려주기 (엑셀 업로드 검사)
 > 「3행: 2행과 품번이 같습니다」 처럼 사용자에게 보여 줄 글. 줄 번호는 머리글 다음부터 2행으로 셉니다.
@@ -1667,7 +2278,23 @@ data.forEach((r, i) => {
 });
 console.log(messages.join('\n') || '중복 없음');
 --- 데이터
-[{"partNo":"P-100"},{"partNo":"P-200"},{"partNo":"P-100"},{"partNo":"P-300"},{"partNo":"P-200"}]
+[
+  {
+    "partNo": "P-100"
+  },
+  {
+    "partNo": "P-200"
+  },
+  {
+    "partNo": "P-100"
+  },
+  {
+    "partNo": "P-300"
+  },
+  {
+    "partNo": "P-200"
+  }
+]
 
 ### 중복된 줄 모두 보이기 (첫 줄 포함)
 > 그리드에서 중복 줄을 빨갛게 칠할 때. 중복된 줄만 모두 고릅니다.
@@ -1675,21 +2302,64 @@ const count = {};
 for (const r of data) count[r.email] = (count[r.email] || 0) + 1;
 console.table(data.filter(r => count[r.email] > 1));
 --- 데이터
-[{"name":"가","email":"a@x.com"},{"name":"나","email":"b@x.com"},{"name":"다","email":"a@x.com"},{"name":"라","email":"c@x.com"}]
+[
+  {
+    "name": "가",
+    "email": "a@x.com"
+  },
+  {
+    "name": "나",
+    "email": "b@x.com"
+  },
+  {
+    "name": "다",
+    "email": "a@x.com"
+  },
+  {
+    "name": "라",
+    "email": "c@x.com"
+  }
+]
 
 ### 중복 있는지만 빠르게 보기
 > 저장 전 검사. 크기만 비교하면 됩니다.
 const codes = data.map(r => r.code);
 console.log('중복 있음', new Set(codes).size !== codes.length);
 --- 데이터
-[{"code":"A"},{"code":"B"},{"code":"A"}]
+[
+  {
+    "code": "A"
+  },
+  {
+    "code": "B"
+  },
+  {
+    "code": "A"
+  }
+]
 
 ### 객체 안 값 배열의 중복 빼기 { tags: ['a', 'a'] }
 > 줄마다 들어 있는 배열 칸의 중복을 뺍니다. 원본은 두고 새 줄을 만듭니다.
 const rows = data.map(r => ({ ...r, tags: [...new Set(r.tags)] }));
 console.log(JSON.stringify(rows, null, 2));
 --- 데이터
-[{"id":1,"tags":["긴급","품질","긴급"]},{"id":2,"tags":["일반","일반"]}]
+[
+  {
+    "id": 1,
+    "tags": [
+      "긴급",
+      "품질",
+      "긴급"
+    ]
+  },
+  {
+    "id": 2,
+    "tags": [
+      "일반",
+      "일반"
+    ]
+  }
+]
 
 ### 겹친 배열 펼쳐서 중복 빼기 [[1, 2], [2, 3]]
 > 여러 화면에서 고른 id 목록을 하나로.
@@ -1700,7 +2370,30 @@ console.log([...new Set(picked.flat())]);
 > 모든 주문에 쓰인 품목 코드 목록.
 console.log([...new Set(data.flatMap(r => r.items))].sort());
 --- 데이터
-[{"orderNo":1,"items":["B","A"]},{"orderNo":2,"items":["A","C"]},{"orderNo":3,"items":["C","D","B"]}]
+[
+  {
+    "orderNo": 1,
+    "items": [
+      "B",
+      "A"
+    ]
+  },
+  {
+    "orderNo": 2,
+    "items": [
+      "A",
+      "C"
+    ]
+  },
+  {
+    "orderNo": 3,
+    "items": [
+      "C",
+      "D",
+      "B"
+    ]
+  }
+]
 
 ### 중복 합치며 수량 더하기
 > 같은 품목이 여러 줄이면 한 줄로 합치고 수량을 더합니다(장바구니 · 출고 요청).
@@ -1712,7 +2405,28 @@ for (const r of data) {
 }
 console.table([...merged.values()]);
 --- 데이터
-[{"item":"볼트","qty":10},{"item":"너트","qty":5},{"item":"볼트","qty":3},{"item":"와셔","qty":7},{"item":"너트","qty":2}]
+[
+  {
+    "item": "볼트",
+    "qty": 10
+  },
+  {
+    "item": "너트",
+    "qty": 5
+  },
+  {
+    "item": "볼트",
+    "qty": 3
+  },
+  {
+    "item": "와셔",
+    "qty": 7
+  },
+  {
+    "item": "너트",
+    "qty": 2
+  }
+]
 
 ### 중복 합치며 글 칸 이어 붙이기
 > 같은 고객의 비고를 쉼표로 묶습니다.
@@ -1724,7 +2438,24 @@ for (const r of data) {
 }
 console.table([...merged].map(([customer, notes]) => ({ customer, notes: [...new Set(notes)].join(', ') })));
 --- 데이터
-[{"customer":"가","note":"오전 배송"},{"customer":"나","note":"포장 주의"},{"customer":"가","note":"전화 먼저"},{"customer":"가","note":"오전 배송"}]
+[
+  {
+    "customer": "가",
+    "note": "오전 배송"
+  },
+  {
+    "customer": "나",
+    "note": "포장 주의"
+  },
+  {
+    "customer": "가",
+    "note": "전화 먼저"
+  },
+  {
+    "customer": "가",
+    "note": "오전 배송"
+  }
+]
 
 ### 중복 코드에 -1, -2 붙이기
 > 같은 이름이 있으면 뒤에 번호를 붙여 모두 다르게 만듭니다(파일 이름 · 복사본 이름).
@@ -1760,13 +2491,46 @@ console.table(data.filter(r => {
   return !seen.has(key) && seen.add(key);
 }));
 --- 데이터
-[{"user":"홍","time":"2026-11-12 08:51"},{"user":"홍","time":"2026-11-12 08:52"},{"user":"김","time":"2026-11-12 09:01"},{"user":"홍","time":"2026-11-13 08:49"}]
+[
+  {
+    "user": "홍",
+    "time": "2026-11-12 08:51"
+  },
+  {
+    "user": "홍",
+    "time": "2026-11-12 08:52"
+  },
+  {
+    "user": "김",
+    "time": "2026-11-12 09:01"
+  },
+  {
+    "user": "홍",
+    "time": "2026-11-13 08:49"
+  }
+]
 
 ### 중복 빼고 개수 세기 (고유 개수)
 > 주문 건수가 아니라 주문한 고객 수.
 console.log('주문 줄', data.length, '고객 수', new Set(data.map(r => r.customer)).size);
 --- 데이터
-[{"customer":"가"},{"customer":"나"},{"customer":"가"},{"customer":"다"},{"customer":"나"}]
+[
+  {
+    "customer": "가"
+  },
+  {
+    "customer": "나"
+  },
+  {
+    "customer": "가"
+  },
+  {
+    "customer": "다"
+  },
+  {
+    "customer": "나"
+  }
+]
 
 ### 묶음마다 고유 개수 (부서별 고객 수)
 > 묶기와 중복 빼기를 함께.
@@ -1777,7 +2541,28 @@ for (const r of data) {
 }
 console.table([...byDept].map(([dept, set]) => ({ dept, customers: set.size })));
 --- 데이터
-[{"dept":"영업1","customer":"가"},{"dept":"영업1","customer":"나"},{"dept":"영업1","customer":"가"},{"dept":"영업2","customer":"가"},{"dept":"영업2","customer":"다"}]
+[
+  {
+    "dept": "영업1",
+    "customer": "가"
+  },
+  {
+    "dept": "영업1",
+    "customer": "나"
+  },
+  {
+    "dept": "영업1",
+    "customer": "가"
+  },
+  {
+    "dept": "영업2",
+    "customer": "가"
+  },
+  {
+    "dept": "영업2",
+    "customer": "다"
+  }
+]
 
 ### 중복 쌍 찾기 (A-B 와 B-A 를 같은 것으로)
 > 품목 대체 관계처럼 순서가 바뀐 쌍을 하나로 봅니다.
@@ -1887,7 +2672,28 @@ const sum = data.reduce((acc, r) => {
 }, {});
 console.table(Object.entries(sum).map(([dept, amount]) => ({ dept, amount })));
 --- 데이터
-[{"dept":"영업","amount":100},{"dept":"개발","amount":300},{"dept":"영업","amount":500},{"dept":"개발","amount":50},{"dept":"총무","amount":70}]
+[
+  {
+    "dept": "영업",
+    "amount": 100
+  },
+  {
+    "dept": "개발",
+    "amount": 300
+  },
+  {
+    "dept": "영업",
+    "amount": 500
+  },
+  {
+    "dept": "개발",
+    "amount": 50
+  },
+  {
+    "dept": "총무",
+    "amount": 70
+  }
+]
 
 ### 칸으로 묶어 목록 (Object.groupBy)
 > 최신 브라우저 · Node 21 이상. 옛 브라우저면 아래 reduce 판을 씁니다.
@@ -1896,7 +2702,20 @@ console.log(byDept);
 const old = data.reduce((acc, r) => ((acc[r.dept] ||= []).push(r), acc), {});
 console.log(Object.keys(old));
 --- 데이터
-[{"dept":"영업","name":"가"},{"dept":"개발","name":"나"},{"dept":"영업","name":"다"}]
+[
+  {
+    "dept": "영업",
+    "name": "가"
+  },
+  {
+    "dept": "개발",
+    "name": "나"
+  },
+  {
+    "dept": "영업",
+    "name": "다"
+  }
+]
 
 ### 묶어서 개수 · 합계 · 평균 · 최대 한 번에
 > 집계 칸 여러 개를 한 번 돌아 구합니다.
@@ -1910,7 +2729,24 @@ for (const r of data) {
 }
 console.table([...stats.values()].map(s => ({ ...s, avg: Math.round(s.sum / s.count) })));
 --- 데이터
-[{"dept":"영업","amount":100},{"dept":"개발","amount":300},{"dept":"영업","amount":500},{"dept":"개발","amount":50}]
+[
+  {
+    "dept": "영업",
+    "amount": 100
+  },
+  {
+    "dept": "개발",
+    "amount": 300
+  },
+  {
+    "dept": "영업",
+    "amount": 500
+  },
+  {
+    "dept": "개발",
+    "amount": 50
+  }
+]
 
 ### 두 칸으로 묶기 (부서 + 월)
 > 키를 이어 붙여 묶고, 결과에 칸을 다시 나눠 넣습니다.
@@ -1924,14 +2760,54 @@ console.table([...map].map(([key, amount]) => {
   return { dept, month, amount };
 }));
 --- 데이터
-[{"dept":"영업","month":"01","amount":100},{"dept":"영업","month":"01","amount":50},{"dept":"영업","month":"02","amount":70},{"dept":"개발","month":"01","amount":30}]
+[
+  {
+    "dept": "영업",
+    "month": "01",
+    "amount": 100
+  },
+  {
+    "dept": "영업",
+    "month": "01",
+    "amount": 50
+  },
+  {
+    "dept": "영업",
+    "month": "02",
+    "amount": 70
+  },
+  {
+    "dept": "개발",
+    "month": "01",
+    "amount": 30
+  }
+]
 
 ### 개수 세기 (상태별 건수)
 > 대시보드 카드 숫자.
 const counts = data.reduce((acc, r) => ({ ...acc, [r.status]: (acc[r.status] || 0) + 1 }), {});
 console.log(counts);
 --- 데이터
-[{"status":"접수"},{"status":"진행"},{"status":"완료"},{"status":"진행"},{"status":"접수"},{"status":"진행"}]
+[
+  {
+    "status": "접수"
+  },
+  {
+    "status": "진행"
+  },
+  {
+    "status": "완료"
+  },
+  {
+    "status": "진행"
+  },
+  {
+    "status": "접수"
+  },
+  {
+    "status": "진행"
+  }
+]
 
 ### 순위 매기기 (같은 점수 같은 순위)
 > 1, 2, 2, 4 식(RANK). 1, 2, 2, 3 식은 dense 판을 씁니다.
@@ -1943,20 +2819,71 @@ const ranked = sorted.map((r, i) => {
 });
 console.table(ranked);
 --- 데이터
-[{"name":"가","score":90},{"name":"나","score":95},{"name":"다","score":90},{"name":"라","score":80}]
+[
+  {
+    "name": "가",
+    "score": 90
+  },
+  {
+    "name": "나",
+    "score": 95
+  },
+  {
+    "name": "다",
+    "score": 90
+  },
+  {
+    "name": "라",
+    "score": 80
+  }
+]
 
 ### 상위 n 개 (Top N)
 > 매출 상위 3 품목.
 console.table([...data].sort((a, b) => b.sales - a.sales).slice(0, 3));
 --- 데이터
-[{"item":"볼트","sales":500},{"item":"너트","sales":1200},{"item":"와셔","sales":300},{"item":"스프링","sales":900},{"item":"핀","sales":150}]
+[
+  {
+    "item": "볼트",
+    "sales": 500
+  },
+  {
+    "item": "너트",
+    "sales": 1200
+  },
+  {
+    "item": "와셔",
+    "sales": 300
+  },
+  {
+    "item": "스프링",
+    "sales": 900
+  },
+  {
+    "item": "핀",
+    "sales": 150
+  }
+]
 
 ### 누적 합계
 > 월별 누적 매출.
 let running = 0;
 console.table(data.map(r => ({ ...r, cumulative: (running += r.amount) })));
 --- 데이터
-[{"month":"01","amount":100},{"month":"02","amount":250},{"month":"03","amount":80}]
+[
+  {
+    "month": "01",
+    "amount": 100
+  },
+  {
+    "month": "02",
+    "amount": 250
+  },
+  {
+    "month": "03",
+    "amount": 80
+  }
+]
 
 ### 앞 줄과 비교 (증감)
 > 전월 대비 증감 · 증감률.
@@ -1965,14 +2892,40 @@ console.table(data.map((r, i) => {
   return { ...r, diff: prev == null ? null : r.amount - prev, rate: prev ? ((r.amount - prev) / prev * 100).toFixed(1) + '%' : '' };
 }));
 --- 데이터
-[{"month":"01","amount":100},{"month":"02","amount":250},{"month":"03","amount":200}]
+[
+  {
+    "month": "01",
+    "amount": 100
+  },
+  {
+    "month": "02",
+    "amount": 250
+  },
+  {
+    "month": "03",
+    "amount": 200
+  }
+]
 
 ### 구성비 (전체 중 비율)
 > 부서별 금액이 전체의 몇 % 인지.
 const total = data.reduce((s, r) => s + r.amount, 0);
 console.table(data.map(r => ({ ...r, ratio: total ? (r.amount / total * 100).toFixed(1) + '%' : '0%' })));
 --- 데이터
-[{"dept":"영업","amount":600},{"dept":"개발","amount":350},{"dept":"총무","amount":50}]
+[
+  {
+    "dept": "영업",
+    "amount": 600
+  },
+  {
+    "dept": "개발",
+    "amount": 350
+  },
+  {
+    "dept": "총무",
+    "amount": 50
+  }
+]
 
 ### 이동 평균 (최근 3개)
 > 그래프 추세선.
@@ -1982,7 +2935,28 @@ console.table(data.map((r, i) => {
   return { ...r, ma3: i + 1 < n ? null : +(win.reduce((s, x) => s + x.value, 0) / n).toFixed(1) };
 }));
 --- 데이터
-[{"day":1,"value":10},{"day":2,"value":12},{"day":3,"value":9},{"day":4,"value":15},{"day":5,"value":11}]
+[
+  {
+    "day": 1,
+    "value": 10
+  },
+  {
+    "day": 2,
+    "value": 12
+  },
+  {
+    "day": 3,
+    "value": 9
+  },
+  {
+    "day": 4,
+    "value": 15
+  },
+  {
+    "day": 5,
+    "value": 11
+  }
+]
 
 ### 구간별 개수 (점수대 · 금액대)
 > 히스토그램. 10점 단위로 묶습니다.
@@ -1994,7 +2968,26 @@ for (const r of data) {
 }
 console.table(Object.entries(bins).sort().map(([range, count]) => ({ range, count })));
 --- 데이터
-[{"score":72},{"score":75},{"score":81},{"score":95},{"score":68},{"score":79}]
+[
+  {
+    "score": 72
+  },
+  {
+    "score": 75
+  },
+  {
+    "score": 81
+  },
+  {
+    "score": 95
+  },
+  {
+    "score": 68
+  },
+  {
+    "score": 79
+  }
+]
 
 ### 소계 · 합계 줄 넣기
 > 그리드 아래 부서별 소계와 전체 합계 줄.
@@ -2010,7 +3003,23 @@ for (const [dept, rows] of Object.entries(groups)) {
 out.push({ dept: '합계', name: '', amount: total });
 console.table(out);
 --- 데이터
-[{"dept":"영업","name":"가","amount":100},{"dept":"영업","name":"나","amount":200},{"dept":"개발","name":"다","amount":300}]
+[
+  {
+    "dept": "영업",
+    "name": "가",
+    "amount": 100
+  },
+  {
+    "dept": "영업",
+    "name": "나",
+    "amount": 200
+  },
+  {
+    "dept": "개발",
+    "name": "다",
+    "amount": 300
+  }
+]
 
 ### 가장 많이 나온 값 (최빈값)
 > 가장 많이 주문한 품목.
@@ -2019,7 +3028,23 @@ for (const r of data) count.set(r.item, (count.get(r.item) || 0) + 1);
 const [item, times] = [...count].sort((a, b) => b[1] - a[1])[0];
 console.log(item, times);
 --- 데이터
-[{"item":"볼트"},{"item":"너트"},{"item":"볼트"},{"item":"와셔"},{"item":"볼트"}]
+[
+  {
+    "item": "볼트"
+  },
+  {
+    "item": "너트"
+  },
+  {
+    "item": "볼트"
+  },
+  {
+    "item": "와셔"
+  },
+  {
+    "item": "볼트"
+  }
+]
 
 ### 묶어서 첫 줄만 (묶음 대표)
 > 부서마다 첫 번째 사람.
@@ -2027,7 +3052,20 @@ const first = new Map();
 for (const r of data) if (!first.has(r.dept)) first.set(r.dept, r);
 console.table([...first.values()]);
 --- 데이터
-[{"dept":"영업","name":"가"},{"dept":"개발","name":"나"},{"dept":"영업","name":"다"}]
+[
+  {
+    "dept": "영업",
+    "name": "가"
+  },
+  {
+    "dept": "개발",
+    "name": "나"
+  },
+  {
+    "dept": "영업",
+    "name": "다"
+  }
+]
 
 ### 묶음 안 순번 매기기 (ROW_NUMBER)
 > 부서마다 1, 2, 3 …. SQL 의 ROW_NUMBER() OVER (PARTITION BY).
@@ -2038,7 +3076,24 @@ console.table(data.map(r => {
   return { ...r, no: n };
 }));
 --- 데이터
-[{"dept":"영업","name":"가"},{"dept":"개발","name":"나"},{"dept":"영업","name":"다"},{"dept":"영업","name":"라"}]
+[
+  {
+    "dept": "영업",
+    "name": "가"
+  },
+  {
+    "dept": "개발",
+    "name": "나"
+  },
+  {
+    "dept": "영업",
+    "name": "다"
+  },
+  {
+    "dept": "영업",
+    "name": "라"
+  }
+]
 
 ### 묶음 안 순위 (부서별 매출 순위)
 > 부서마다 금액 큰 순서로 1등부터.
@@ -2049,7 +3104,28 @@ for (const [dept, list] of Object.entries(groups)) {
 }
 console.table(rows);
 --- 데이터
-[{"dept":"영업","name":"가","amount":300},{"dept":"영업","name":"나","amount":500},{"dept":"개발","name":"다","amount":200},{"dept":"개발","name":"라","amount":400}]
+[
+  {
+    "dept": "영업",
+    "name": "가",
+    "amount": 300
+  },
+  {
+    "dept": "영업",
+    "name": "나",
+    "amount": 500
+  },
+  {
+    "dept": "개발",
+    "name": "다",
+    "amount": 200
+  },
+  {
+    "dept": "개발",
+    "name": "라",
+    "amount": 400
+  }
+]
 
 ### 묶음마다 상위 n 개
 > 부서별 매출 상위 2명.
@@ -2057,7 +3133,33 @@ const n = 2;
 const groups = Object.groupBy(data, r => r.dept);
 console.table(Object.values(groups).flatMap(list => list.toSorted((a, b) => b.amount - a.amount).slice(0, n)));
 --- 데이터
-[{"dept":"영업","name":"가","amount":300},{"dept":"영업","name":"나","amount":500},{"dept":"영업","name":"다","amount":100},{"dept":"개발","name":"라","amount":400},{"dept":"개발","name":"마","amount":250}]
+[
+  {
+    "dept": "영업",
+    "name": "가",
+    "amount": 300
+  },
+  {
+    "dept": "영업",
+    "name": "나",
+    "amount": 500
+  },
+  {
+    "dept": "영업",
+    "name": "다",
+    "amount": 100
+  },
+  {
+    "dept": "개발",
+    "name": "라",
+    "amount": 400
+  },
+  {
+    "dept": "개발",
+    "name": "마",
+    "amount": 250
+  }
+]
 
 ### 묶음 합계를 각 줄에 붙이기 (SUM OVER)
 > 줄마다 「부서 합계」 와 「부서 내 비율」.
@@ -2065,7 +3167,23 @@ const sums = {};
 for (const r of data) sums[r.dept] = (sums[r.dept] || 0) + r.amount;
 console.table(data.map(r => ({ ...r, deptSum: sums[r.dept], ratio: (r.amount / sums[r.dept] * 100).toFixed(1) + '%' })));
 --- 데이터
-[{"dept":"영업","name":"가","amount":300},{"dept":"영업","name":"나","amount":700},{"dept":"개발","name":"다","amount":400}]
+[
+  {
+    "dept": "영업",
+    "name": "가",
+    "amount": 300
+  },
+  {
+    "dept": "영업",
+    "name": "나",
+    "amount": 700
+  },
+  {
+    "dept": "개발",
+    "name": "다",
+    "amount": 400
+  }
+]
 
 ### 월별 합계 (날짜 글에서 월 뽑기)
 > '2026-11-12' → '2026-11' 로 묶습니다.
@@ -2076,7 +3194,24 @@ for (const r of data) {
 }
 console.table(Object.entries(byMonth).sort().map(([month, amount]) => ({ month, amount })));
 --- 데이터
-[{"date":"2026-09-03","amount":1000},{"date":"2026-10-15","amount":2000},{"date":"2026-10-20","amount":500},{"date":"2026-11-01","amount":800}]
+[
+  {
+    "date": "2026-09-03",
+    "amount": 1000
+  },
+  {
+    "date": "2026-10-15",
+    "amount": 2000
+  },
+  {
+    "date": "2026-10-20",
+    "amount": 500
+  },
+  {
+    "date": "2026-11-01",
+    "amount": 800
+  }
+]
 
 ### 빈 달 0 으로 채운 월별 합계
 > 차트용: 실적 없는 달도 0 으로 나오게 1월~12월을 먼저 만듭니다.
@@ -2086,7 +3221,20 @@ const sums = Object.fromEntries(months.map(m => [m, 0]));
 for (const r of data) if (r.date.startsWith(String(year))) sums[r.date.slice(0, 7)] += r.amount;
 console.table(months.map(m => ({ month: m, amount: sums[m] })));
 --- 데이터
-[{"date":"2026-02-03","amount":1000},{"date":"2026-05-15","amount":2000},{"date":"2026-05-20","amount":500}]
+[
+  {
+    "date": "2026-02-03",
+    "amount": 1000
+  },
+  {
+    "date": "2026-05-15",
+    "amount": 2000
+  },
+  {
+    "date": "2026-05-20",
+    "amount": 500
+  }
+]
 
 ### 요일별 건수
 > 주문이 많은 요일.
@@ -2095,7 +3243,23 @@ const count = Array(7).fill(0);
 for (const r of data) count[new Date(r.date + 'T00:00:00').getDay()]++;
 console.table(names.map((day, i) => ({ day, n: count[i] })));
 --- 데이터
-[{"date":"2026-11-09"},{"date":"2026-11-10"},{"date":"2026-11-10"},{"date":"2026-11-12"},{"date":"2026-11-15"}]
+[
+  {
+    "date": "2026-11-09"
+  },
+  {
+    "date": "2026-11-10"
+  },
+  {
+    "date": "2026-11-10"
+  },
+  {
+    "date": "2026-11-12"
+  },
+  {
+    "date": "2026-11-15"
+  }
+]
 
 ### 시간대별 건수 (0~23시)
 > 접속 로그 시간대 분포.
@@ -2103,7 +3267,20 @@ const count = Array(24).fill(0);
 for (const r of data) count[Number(r.time.slice(11, 13))]++;
 console.table(count.map((n, hour) => ({ hour, n })).filter(r => r.n > 0));
 --- 데이터
-[{"time":"2026-11-12 09:10"},{"time":"2026-11-12 09:45"},{"time":"2026-11-12 13:02"},{"time":"2026-11-12 18:30"}]
+[
+  {
+    "time": "2026-11-12 09:10"
+  },
+  {
+    "time": "2026-11-12 09:45"
+  },
+  {
+    "time": "2026-11-12 13:02"
+  },
+  {
+    "time": "2026-11-12 18:30"
+  }
+]
 
 ### 조건별 건수 한 줄로 (완료 · 진행 · 지연)
 > 대시보드 숫자 카드.
@@ -2115,7 +3292,24 @@ console.log({
   지연: data.filter(r => r.status !== '완료' && r.due < today).length,
 });
 --- 데이터
-[{"status":"완료","due":"2026-11-01"},{"status":"진행","due":"2026-11-10"},{"status":"진행","due":"2026-11-20"},{"status":"접수","due":"2026-11-05"}]
+[
+  {
+    "status": "완료",
+    "due": "2026-11-01"
+  },
+  {
+    "status": "진행",
+    "due": "2026-11-10"
+  },
+  {
+    "status": "진행",
+    "due": "2026-11-20"
+  },
+  {
+    "status": "접수",
+    "due": "2026-11-05"
+  }
+]
 
 ### 묶어서 최솟값 · 최댓값 날짜 (기간)
 > 프로젝트마다 시작일 · 종료일.
@@ -2127,7 +3321,24 @@ for (const r of data) {
 }
 console.table(Object.values(range));
 --- 데이터
-[{"project":"A","date":"2026-03-01"},{"project":"A","date":"2026-01-15"},{"project":"B","date":"2026-05-10"},{"project":"A","date":"2026-06-30"}]
+[
+  {
+    "project": "A",
+    "date": "2026-03-01"
+  },
+  {
+    "project": "A",
+    "date": "2026-01-15"
+  },
+  {
+    "project": "B",
+    "date": "2026-05-10"
+  },
+  {
+    "project": "A",
+    "date": "2026-06-30"
+  }
+]
 
 ### 묶어서 가중 평균 (수량 가중 단가)
 > 단순 평균이 아니라 수량만큼 무게를 줍니다.
@@ -2139,7 +3350,23 @@ for (const r of data) {
 }
 console.table(Object.entries(acc).map(([item, a]) => ({ item, qty: a.qty, avgPrice: Math.round(a.amount / a.qty) })));
 --- 데이터
-[{"item":"볼트","qty":100,"price":120},{"item":"볼트","qty":300,"price":110},{"item":"너트","qty":50,"price":80}]
+[
+  {
+    "item": "볼트",
+    "qty": 100,
+    "price": 120
+  },
+  {
+    "item": "볼트",
+    "qty": 300,
+    "price": 110
+  },
+  {
+    "item": "너트",
+    "qty": 50,
+    "price": 80
+  }
+]
 
 ### 두 단계 묶기 (부서 → 팀 → 사람)
 > 중첩 객체로 묶어 트리 · 아코디언 화면에 씁니다.
@@ -2147,14 +3374,52 @@ const tree = {};
 for (const r of data) ((tree[r.dept] ??= {})[r.team] ??= []).push(r.name);
 console.log(JSON.stringify(tree, null, 2));
 --- 데이터
-[{"dept":"영업","team":"1팀","name":"가"},{"dept":"영업","team":"2팀","name":"나"},{"dept":"영업","team":"1팀","name":"다"},{"dept":"개발","team":"플랫폼","name":"라"}]
+[
+  {
+    "dept": "영업",
+    "team": "1팀",
+    "name": "가"
+  },
+  {
+    "dept": "영업",
+    "team": "2팀",
+    "name": "나"
+  },
+  {
+    "dept": "영업",
+    "team": "1팀",
+    "name": "다"
+  },
+  {
+    "dept": "개발",
+    "team": "플랫폼",
+    "name": "라"
+  }
+]
 
 ### 묶음을 표 줄로 펼치기 (묶음 이름 + 건수 + 목록)
 > 묶은 결과를 그리드에 바로.
 const groups = Object.groupBy(data, r => r.status);
 console.table(Object.entries(groups).map(([status, list]) => ({ status, n: list.length, nos: list.map(r => r.no).join(', ') })));
 --- 데이터
-[{"no":1,"status":"접수"},{"no":2,"status":"완료"},{"no":3,"status":"접수"},{"no":4,"status":"반려"}]
+[
+  {
+    "no": 1,
+    "status": "접수"
+  },
+  {
+    "no": 2,
+    "status": "완료"
+  },
+  {
+    "no": 3,
+    "status": "접수"
+  },
+  {
+    "no": 4,
+    "status": "반려"
+  }
+]
 
 ### 전월 대비 증감률
 > 월별 합계에 앞 달과 비교한 증감 · 증감률을 붙입니다.
@@ -2164,14 +3429,52 @@ const rows = data.map((r, i) => {
 });
 console.table(rows);
 --- 데이터
-[{"month":"2026-08","amount":1000},{"month":"2026-09","amount":1200},{"month":"2026-10","amount":900},{"month":"2026-11","amount":1500}]
+[
+  {
+    "month": "2026-08",
+    "amount": 1000
+  },
+  {
+    "month": "2026-09",
+    "amount": 1200
+  },
+  {
+    "month": "2026-10",
+    "amount": 900
+  },
+  {
+    "month": "2026-11",
+    "amount": 1500
+  }
+]
 
 ### 백분위 · 상위 몇 % 인지
 > 점수가 전체에서 상위 몇 % 인지.
 const sorted = data.map(r => r.score).sort((a, b) => b - a);
 console.table(data.map(r => ({ ...r, top: Math.round((sorted.indexOf(r.score) + 1) / sorted.length * 100) + '%' })));
 --- 데이터
-[{"name":"가","score":70},{"name":"나","score":95},{"name":"다","score":82},{"name":"라","score":60},{"name":"마","score":88}]
+[
+  {
+    "name": "가",
+    "score": 70
+  },
+  {
+    "name": "나",
+    "score": 95
+  },
+  {
+    "name": "다",
+    "score": 82
+  },
+  {
+    "name": "라",
+    "score": 60
+  },
+  {
+    "name": "마",
+    "score": 88
+  }
+]
 
 ## 정렬 고급
 ### 정해진 순서로 정렬 (상태 순서표)
@@ -2180,7 +3483,24 @@ const order = ['접수', '진행', '완료'];
 const rank = s => (order.indexOf(s) + 1 || order.length + 1);
 console.table([...data].sort((a, b) => rank(a.status) - rank(b.status)));
 --- 데이터
-[{"no":1,"status":"완료"},{"no":2,"status":"접수"},{"no":3,"status":"보류"},{"no":4,"status":"진행"}]
+[
+  {
+    "no": 1,
+    "status": "완료"
+  },
+  {
+    "no": 2,
+    "status": "접수"
+  },
+  {
+    "no": 3,
+    "status": "보류"
+  },
+  {
+    "no": 4,
+    "status": "진행"
+  }
+]
 
 ### 그리드 머리글 눌러 정렬 (오름 · 내림 번갈아)
 > 같은 칸을 다시 누르면 방향을 바꿉니다. 숫자 · 글 모두.
@@ -2198,14 +3518,48 @@ function sortBy(rows, key) {
 console.table(sortBy(data, 'qty'));
 console.table(sortBy(data, 'qty'));
 --- 데이터
-[{"item":"볼트","qty":10},{"item":"너트","qty":null},{"item":"와셔","qty":3},{"item":"핀","qty":25}]
+[
+  {
+    "item": "볼트",
+    "qty": 10
+  },
+  {
+    "item": "너트",
+    "qty": null
+  },
+  {
+    "item": "와셔",
+    "qty": 3
+  },
+  {
+    "item": "핀",
+    "qty": 25
+  }
+]
 
 ### 안정 정렬 (같은 값은 원래 순서)
 > 요즘 브라우저 sort 는 안정 정렬이라 앞서 정렬한 순서가 같은 값 안에서 유지됩니다.
 const rows = [...data].sort((a, b) => a.name.localeCompare(b.name, 'ko')).sort((a, b) => a.dept.localeCompare(b.dept, 'ko'));
 console.table(rows);
 --- 데이터
-[{"dept":"영업","name":"다"},{"dept":"개발","name":"나"},{"dept":"영업","name":"가"},{"dept":"개발","name":"라"}]
+[
+  {
+    "dept": "영업",
+    "name": "다"
+  },
+  {
+    "dept": "개발",
+    "name": "나"
+  },
+  {
+    "dept": "영업",
+    "name": "가"
+  },
+  {
+    "dept": "개발",
+    "name": "라"
+  }
+]
 
 ### 한글 · 영문 · 숫자 순서 정하기
 > 숫자 → 한글 → 영문 순.
@@ -2225,7 +3579,20 @@ console.log([10, 9, 100, 1].sort(), [10, 9, 100, 1].sort((a, b) => a - b));
 > 'YYYY-MM-DD HH:mm' 글은 글 비교로 정렬해도 됩니다.
 console.table(data.toSorted((a, b) => b.date.localeCompare(a.date)));
 --- 데이터
-[{"no":1,"date":"2026-11-01 09:00"},{"no":2,"date":"2026-11-12 08:30"},{"no":3,"date":"2026-10-30 17:45"}]
+[
+  {
+    "no": 1,
+    "date": "2026-11-01 09:00"
+  },
+  {
+    "no": 2,
+    "date": "2026-11-12 08:30"
+  },
+  {
+    "no": 3,
+    "date": "2026-10-30 17:45"
+  }
+]
 
 ### 숫자 섞인 코드 정렬 (A2 < A10)
 > numeric 옵션으로 사람 눈에 맞게.
@@ -2242,13 +3609,42 @@ const sortBy = (rows, key, desc = false) => rows.toSorted((a, b) => {
 console.table(sortBy(data, 'amount', true));
 console.table(sortBy(data, 'name'));
 --- 데이터
-[{"name":"나","amount":300},{"name":"가","amount":500},{"name":"다","amount":100}]
+[
+  {
+    "name": "나",
+    "amount": 300
+  },
+  {
+    "name": "가",
+    "amount": 500
+  },
+  {
+    "name": "다",
+    "amount": 100
+  }
+]
 
 ### 고정 줄은 맨 위, 나머지 정렬
 > 공지 글은 항상 위.
 console.table(data.toSorted((a, b) => (b.pinned - a.pinned) || b.date.localeCompare(a.date)));
 --- 데이터
-[{"title":"일반1","pinned":false,"date":"2026-11-10"},{"title":"공지","pinned":true,"date":"2026-10-01"},{"title":"일반2","pinned":false,"date":"2026-11-12"}]
+[
+  {
+    "title": "일반1",
+    "pinned": false,
+    "date": "2026-11-10"
+  },
+  {
+    "title": "공지",
+    "pinned": true,
+    "date": "2026-10-01"
+  },
+  {
+    "title": "일반2",
+    "pinned": false,
+    "date": "2026-11-12"
+  }
+]
 
 ### 트리 순서대로 정렬 (부모 다음에 자식)
 > 경로 글(1 > 1.2 > 1.2.3)을 숫자로 나눠 비교합니다.
@@ -2366,7 +3762,14 @@ const rename = { CUST_NM: 'custName', CUST_ID: 'custId', REG_DT: 'regDate' };
 const rows = data.map(r => Object.fromEntries(Object.entries(r).map(([k, v]) => [rename[k] ?? k, v])));
 console.table(rows);
 --- 데이터
-[{"CUST_ID":"C1","CUST_NM":"가나상사","REG_DT":"2026-11-01","ETC":1}]
+[
+  {
+    "CUST_ID": "C1",
+    "CUST_NM": "가나상사",
+    "REG_DT": "2026-11-01",
+    "ETC": 1
+  }
+]
 
 ### 칸 값을 한꺼번에 바꾸기 (mapValues)
 > 모든 값의 앞뒤 공백 정리.
@@ -2386,7 +3789,16 @@ console.log(byCode.B?.name);
 const map = new Map(data.map(r => [r.code, r.name]));
 console.log(map.get('A'), map.get('Z') ?? '(없음)');
 --- 데이터
-[{"code":"A","name":"사과"},{"code":"B","name":"배"}]
+[
+  {
+    "code": "A",
+    "name": "사과"
+  },
+  {
+    "code": "B",
+    "name": "배"
+  }
+]
 
 ### 폼 초기화 (처음 값으로)
 > 「초기화」 단추. 처음 값을 깊은 복사로 남겨 둡니다.
@@ -2434,7 +3846,19 @@ console.log(Object.fromEntries(Object.entries(codes).map(([k, v]) => [v, k])));
 > 줄마다 칸이 조금씩 다를 때 표 머리글 만들기.
 console.log([...new Set(data.flatMap(r => Object.keys(r)))]);
 --- 데이터
-[{"a":1,"b":2},{"a":3,"c":4},{"d":5}]
+[
+  {
+    "a": 1,
+    "b": 2
+  },
+  {
+    "a": 3,
+    "c": 4
+  },
+  {
+    "d": 5
+  }
+]
 
 ### 객체 비교해 같은 칸 · 다른 칸
 > 두 설정이 어디가 다른지.
@@ -2572,7 +3996,24 @@ console.log(count, [...count.entries()]);
 const groups = Map.groupBy(data, r => r.amount >= 10000 ? '1만 이상' : '1만 미만');
 for (const [k, list] of groups) console.log(k, list.map(r => r.no));
 --- 데이터
-[{"no":1,"amount":5000},{"no":2,"amount":15000},{"no":3,"amount":30000},{"no":4,"amount":800}]
+[
+  {
+    "no": 1,
+    "amount": 5000
+  },
+  {
+    "no": 2,
+    "amount": 15000
+  },
+  {
+    "no": 3,
+    "amount": 30000
+  },
+  {
+    "no": 4,
+    "amount": 800
+  }
+]
 
 ### Set 연산 (합 · 교 · 차, 새 함수)
 > Node 22 · 최신 브라우저의 Set 함수들.
@@ -2609,7 +4050,38 @@ function toTree(rows, idKey = 'id', parentKey = 'parentId') {
 }
 console.log(JSON.stringify(toTree(data), null, 2));
 --- 데이터
-[{"id":1,"parentId":null,"name":"시스템"},{"id":2,"parentId":1,"name":"사용자"},{"id":3,"parentId":1,"name":"권한"},{"id":4,"parentId":null,"name":"구매"},{"id":5,"parentId":4,"name":"발주"},{"id":6,"parentId":5,"name":"발주 등록"}]
+[
+  {
+    "id": 1,
+    "parentId": null,
+    "name": "시스템"
+  },
+  {
+    "id": 2,
+    "parentId": 1,
+    "name": "사용자"
+  },
+  {
+    "id": 3,
+    "parentId": 1,
+    "name": "권한"
+  },
+  {
+    "id": 4,
+    "parentId": null,
+    "name": "구매"
+  },
+  {
+    "id": 5,
+    "parentId": 4,
+    "name": "발주"
+  },
+  {
+    "id": 6,
+    "parentId": 5,
+    "name": "발주 등록"
+  }
+]
 
 ### 트리 → 평평한 목록 (깊이 · 경로 붙여)
 > 트리 그리드를 엑셀로 내릴 때.
@@ -2624,7 +4096,33 @@ function flatten(nodes, depth = 0, path = []) {
 }
 console.table(flatten(data));
 --- 데이터
-[{"name":"시스템","children":[{"name":"사용자","children":[]},{"name":"권한","children":[{"name":"메뉴 권한"}]}]},{"name":"구매","children":[{"name":"발주"}]}]
+[
+  {
+    "name": "시스템",
+    "children": [
+      {
+        "name": "사용자",
+        "children": []
+      },
+      {
+        "name": "권한",
+        "children": [
+          {
+            "name": "메뉴 권한"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "구매",
+    "children": [
+      {
+        "name": "발주"
+      }
+    ]
+  }
+]
 
 ### 트리에서 노드 찾기 · 경로 찾기
 > 지금 메뉴의 위치(브레드크럼).
@@ -2639,7 +4137,28 @@ function findPath(nodes, id, path = []) {
 }
 console.log(findPath(data, 6)?.join(' > '));
 --- 데이터
-[{"id":1,"name":"구매","children":[{"id":5,"name":"발주","children":[{"id":6,"name":"발주 등록"}]}]},{"id":2,"name":"영업"}]
+[
+  {
+    "id": 1,
+    "name": "구매",
+    "children": [
+      {
+        "id": 5,
+        "name": "발주",
+        "children": [
+          {
+            "id": 6,
+            "name": "발주 등록"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 2,
+    "name": "영업"
+  }
+]
 
 ### 트리 거르기 (검색어가 든 가지만)
 > 메뉴 검색: 맞는 노드와 그 조상만 남깁니다.
@@ -2653,7 +4172,35 @@ function filterTree(nodes, keyword) {
 }
 console.log(JSON.stringify(filterTree(data, '발주')));
 --- 데이터
-[{"name":"구매","children":[{"name":"발주","children":[{"name":"발주 등록"},{"name":"발주 조회"}]},{"name":"입고"}]},{"name":"영업","children":[{"name":"수주"}]}]
+[
+  {
+    "name": "구매",
+    "children": [
+      {
+        "name": "발주",
+        "children": [
+          {
+            "name": "발주 등록"
+          },
+          {
+            "name": "발주 조회"
+          }
+        ]
+      },
+      {
+        "name": "입고"
+      }
+    ]
+  },
+  {
+    "name": "영업",
+    "children": [
+      {
+        "name": "수주"
+      }
+    ]
+  }
+]
 
 ### 자식 모두 · 조상 모두 (id 목록)
 > 부모를 체크하면 자식 모두 체크, 자식을 고르면 조상 펼치기.
@@ -2665,7 +4212,32 @@ const ancestors = id => { const out = []; let p = byId.get(id)?.parentId; while 
 console.log('1 의 자손', descendants(1));
 console.log('6 의 조상', ancestors(6));
 --- 데이터
-[{"id":1,"parentId":null},{"id":2,"parentId":1},{"id":3,"parentId":1},{"id":4,"parentId":2},{"id":5,"parentId":null},{"id":6,"parentId":4}]
+[
+  {
+    "id": 1,
+    "parentId": null
+  },
+  {
+    "id": 2,
+    "parentId": 1
+  },
+  {
+    "id": 3,
+    "parentId": 1
+  },
+  {
+    "id": 4,
+    "parentId": 2
+  },
+  {
+    "id": 5,
+    "parentId": null
+  },
+  {
+    "id": 6,
+    "parentId": 4
+  }
+]
 
 ### BOM 전개 (소요량 곱하기)
 > 상위 품목 1개를 만드는 데 드는 하위 품목 수량. 아래로 내려갈수록 수량을 곱합니다.
@@ -2681,7 +4253,33 @@ function explode(item, qty = 1, level = 1, out = []) {
 }
 console.table(explode('완제품A', 10));
 --- 데이터
-[{"parent":"완제품A","child":"조립품B","qty":2},{"parent":"완제품A","child":"볼트","qty":8},{"parent":"조립품B","child":"브래킷","qty":1},{"parent":"조립품B","child":"볼트","qty":4},{"parent":"브래킷","child":"강판","qty":0.5}]
+[
+  {
+    "parent": "완제품A",
+    "child": "조립품B",
+    "qty": 2
+  },
+  {
+    "parent": "완제품A",
+    "child": "볼트",
+    "qty": 8
+  },
+  {
+    "parent": "조립품B",
+    "child": "브래킷",
+    "qty": 1
+  },
+  {
+    "parent": "조립품B",
+    "child": "볼트",
+    "qty": 4
+  },
+  {
+    "parent": "브래킷",
+    "child": "강판",
+    "qty": 0.5
+  }
+]
 
 ### BOM 말단 품목 합계 (원자재 소요)
 > 같은 원자재가 여러 곳에서 쓰이면 더합니다.
@@ -2695,7 +4293,28 @@ const total = new Map();
 })('완제품A', 10);
 console.table([...total].map(([item, qty]) => ({ item, qty })));
 --- 데이터
-[{"parent":"완제품A","child":"조립품B","qty":2},{"parent":"완제품A","child":"볼트","qty":8},{"parent":"조립품B","child":"볼트","qty":4},{"parent":"조립품B","child":"강판","qty":0.5}]
+[
+  {
+    "parent": "완제품A",
+    "child": "조립품B",
+    "qty": 2
+  },
+  {
+    "parent": "완제품A",
+    "child": "볼트",
+    "qty": 8
+  },
+  {
+    "parent": "조립품B",
+    "child": "볼트",
+    "qty": 4
+  },
+  {
+    "parent": "조립품B",
+    "child": "강판",
+    "qty": 0.5
+  }
+]
 
 ### 순환 참조 찾기 (A → B → A)
 > 부모 지정 실수로 무한 반복이 되지 않게 저장 전에 봅니다.
@@ -2711,7 +4330,24 @@ function hasCycle(id) {
 }
 console.log(data.map(r => `${r.id}:${hasCycle(r.id)}`).join(' '));
 --- 데이터
-[{"id":1,"parentId":null},{"id":2,"parentId":3},{"id":3,"parentId":2},{"id":4,"parentId":1}]
+[
+  {
+    "id": 1,
+    "parentId": null
+  },
+  {
+    "id": 2,
+    "parentId": 3
+  },
+  {
+    "id": 3,
+    "parentId": 2
+  },
+  {
+    "id": 4,
+    "parentId": 1
+  }
+]
 
 ### 트리 정렬 (같은 깊이끼리 순서 칸으로)
 > 메뉴 순서(sortOrder) 대로 가지마다 정렬.
@@ -2719,7 +4355,26 @@ const sortTree = nodes => [...nodes].sort((a, b) => a.sortOrder - b.sortOrder).m
 const show = (nodes, d = 0) => nodes.flatMap(n => ['  '.repeat(d) + n.name, ...show(n.children, d + 1)]);
 console.log(show(sortTree(data)).join('\n'));
 --- 데이터
-[{"name":"나","sortOrder":2,"children":[{"name":"나-2","sortOrder":2},{"name":"나-1","sortOrder":1}]},{"name":"가","sortOrder":1}]
+[
+  {
+    "name": "나",
+    "sortOrder": 2,
+    "children": [
+      {
+        "name": "나-2",
+        "sortOrder": 2
+      },
+      {
+        "name": "나-1",
+        "sortOrder": 1
+      }
+    ]
+  },
+  {
+    "name": "가",
+    "sortOrder": 1
+  }
+]
 
 ### 깊이 · 노드 수 세기
 > 트리가 너무 깊은지, 몇 개인지.
@@ -2727,7 +4382,24 @@ const depth = nodes => (nodes?.length ? 1 + Math.max(...nodes.map(n => depth(n.c
 const count = nodes => (nodes || []).reduce((s, n) => s + 1 + count(n.children), 0);
 console.log('깊이', depth(data), '노드', count(data));
 --- 데이터
-[{"name":"a","children":[{"name":"b","children":[{"name":"c"}]}]},{"name":"d"}]
+[
+  {
+    "name": "a",
+    "children": [
+      {
+        "name": "b",
+        "children": [
+          {
+            "name": "c"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "d"
+  }
+]
 
 ### 부서 경로 이름 만들기 (본부 > 팀)
 > 사람 목록에 부서 전체 경로를 붙입니다.
@@ -2735,7 +4407,35 @@ const depts = new Map(data.depts.map(d => [d.id, d]));
 const pathOf = id => { const out = []; for (let d = depts.get(id); d; d = depts.get(d.parentId)) out.unshift(d.name); return out.join(' > '); };
 console.table(data.people.map(p => ({ ...p, deptPath: pathOf(p.deptId) })));
 --- 데이터
-{"depts":[{"id":"D1","parentId":null,"name":"생산본부"},{"id":"D2","parentId":"D1","name":"품질팀"},{"id":"D3","parentId":"D2","name":"검사파트"}],"people":[{"name":"홍길동","deptId":"D3"},{"name":"김철수","deptId":"D1"}]}
+{
+  "depts": [
+    {
+      "id": "D1",
+      "parentId": null,
+      "name": "생산본부"
+    },
+    {
+      "id": "D2",
+      "parentId": "D1",
+      "name": "품질팀"
+    },
+    {
+      "id": "D3",
+      "parentId": "D2",
+      "name": "검사파트"
+    }
+  ],
+  "people": [
+    {
+      "name": "홍길동",
+      "deptId": "D3"
+    },
+    {
+      "name": "김철수",
+      "deptId": "D1"
+    }
+  ]
+}
 
 ### 체크 상태 반영 (부분 선택)
 > 자식이 일부만 체크되면 부모는 「일부」.
@@ -2746,7 +4446,30 @@ function state(node) {
 }
 console.log(data.map(n => `${n.name}:${state(n)}`));
 --- 데이터
-[{"name":"구매","children":[{"name":"발주","checked":true},{"name":"입고","checked":false}]},{"name":"영업","children":[{"name":"수주","checked":true}]}]
+[
+  {
+    "name": "구매",
+    "children": [
+      {
+        "name": "발주",
+        "checked": true
+      },
+      {
+        "name": "입고",
+        "checked": false
+      }
+    ]
+  },
+  {
+    "name": "영업",
+    "children": [
+      {
+        "name": "수주",
+        "checked": true
+      }
+    ]
+  }
+]
 
 ### 트리 깊이마다 들여쓰기 글
 > 콘솔 · 콤보에 트리 모양으로.
@@ -2756,14 +4479,55 @@ const print = (nodes, depth = 0) => nodes.forEach(n => {
 });
 print(data);
 --- 데이터
-[{"name":"본부","children":[{"name":"영업팀","children":[{"name":"1파트"}]},{"name":"개발팀"}]},{"name":"지원본부"}]
+[
+  {
+    "name": "본부",
+    "children": [
+      {
+        "name": "영업팀",
+        "children": [
+          {
+            "name": "1파트"
+          }
+        ]
+      },
+      {
+        "name": "개발팀"
+      }
+    ]
+  },
+  {
+    "name": "지원본부"
+  }
+]
 
 ### 트리 노드 지우기 (자식까지)
 > id 하나를 지우면 그 아래도 모두.
 const remove = (nodes, id) => nodes.filter(n => n.id !== id).map(n => ({ ...n, children: remove(n.children ?? [], id) }));
 console.log(JSON.stringify(remove(data, 2)));
 --- 데이터
-[{"id":1,"name":"A","children":[{"id":2,"name":"A-1","children":[{"id":3,"name":"A-1-a"}]},{"id":4,"name":"A-2"}]}]
+[
+  {
+    "id": 1,
+    "name": "A",
+    "children": [
+      {
+        "id": 2,
+        "name": "A-1",
+        "children": [
+          {
+            "id": 3,
+            "name": "A-1-a"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "name": "A-2"
+      }
+    ]
+  }
+]
 
 ### 트리 노드 옮기기 (부모 바꾸기)
 > 평평한 목록이면 parentId 만 바꾸면 됩니다. 자기 자손 밑으로는 못 옮기게 막습니다.
@@ -2781,21 +4545,81 @@ const total = n => (n.amount ?? 0) + (n.children ?? []).reduce((s, c) => s + tot
 const withSum = n => ({ name: n.name, sum: total(n), children: (n.children ?? []).map(withSum) });
 console.log(JSON.stringify(data.map(withSum), null, 1));
 --- 데이터
-[{"name":"본부","amount":100,"children":[{"name":"1팀","amount":300},{"name":"2팀","amount":200,"children":[{"name":"2-1","amount":50}]}]}]
+[
+  {
+    "name": "본부",
+    "amount": 100,
+    "children": [
+      {
+        "name": "1팀",
+        "amount": 300
+      },
+      {
+        "name": "2팀",
+        "amount": 200,
+        "children": [
+          {
+            "name": "2-1",
+            "amount": 50
+          }
+        ]
+      }
+    ]
+  }
+]
 
 ### 말단 노드만 모으기 (자식 없는 것)
 > 메뉴 중 실제 화면만, BOM 중 원자재만.
 const leaves = nodes => nodes.flatMap(n => n.children?.length ? leaves(n.children) : [n.name]);
 console.log(leaves(data));
 --- 데이터
-[{"name":"설정","children":[{"name":"사용자"},{"name":"권한","children":[{"name":"역할"},{"name":"메뉴 권한"}]}]},{"name":"대시보드"}]
+[
+  {
+    "name": "설정",
+    "children": [
+      {
+        "name": "사용자"
+      },
+      {
+        "name": "권한",
+        "children": [
+          {
+            "name": "역할"
+          },
+          {
+            "name": "메뉴 권한"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "대시보드"
+  }
+]
 
 ### 트리 펼침 목록에 부모 이름 붙이기
 > 평평한 목록에 「상위 메뉴」 칸.
 const byId = new Map(data.map(r => [r.id, r]));
 console.table(data.map(r => ({ ...r, parentName: byId.get(r.parentId)?.name ?? '' })));
 --- 데이터
-[{"id":1,"parentId":null,"name":"설정"},{"id":2,"parentId":1,"name":"사용자"},{"id":3,"parentId":1,"name":"권한"}]
+[
+  {
+    "id": 1,
+    "parentId": null,
+    "name": "설정"
+  },
+  {
+    "id": 2,
+    "parentId": 1,
+    "name": "사용자"
+  },
+  {
+    "id": 3,
+    "parentId": 1,
+    "name": "권한"
+  }
+]
 
 ### 레벨 칸으로 트리 만들기 (BOM 레벨 1, 2, 3)
 > 엑셀 BOM 은 부모 id 대신 레벨 숫자로 옵니다. 바로 위 낮은 레벨이 부모입니다.
@@ -2809,7 +4633,33 @@ for (const r of data) {
 }
 console.log(JSON.stringify(root, null, 1));
 --- 데이터
-[{"level":1,"item":"완제품","qty":1},{"level":2,"item":"몸체","qty":1},{"level":3,"item":"볼트","qty":4},{"level":2,"item":"덮개","qty":2},{"level":3,"item":"나사","qty":6}]
+[
+  {
+    "level": 1,
+    "item": "완제품",
+    "qty": 1
+  },
+  {
+    "level": 2,
+    "item": "몸체",
+    "qty": 1
+  },
+  {
+    "level": 3,
+    "item": "볼트",
+    "qty": 4
+  },
+  {
+    "level": 2,
+    "item": "덮개",
+    "qty": 2
+  },
+  {
+    "level": 3,
+    "item": "나사",
+    "qty": 6
+  }
+]
 
 ### 역전개 (이 부품을 쓰는 상위 품목)
 > 볼트가 바뀌면 어떤 완제품에 영향이 있는지.
@@ -2817,7 +4667,24 @@ const parentsOf = item => data.filter(r => r.child === item).map(r => r.parent);
 const up = (item, seen = new Set()) => parentsOf(item).flatMap(p => seen.has(p) ? [] : (seen.add(p), [p, ...up(p, seen)]));
 console.log(up('볼트'));
 --- 데이터
-[{"parent":"완제품A","child":"몸체"},{"parent":"몸체","child":"볼트"},{"parent":"완제품B","child":"볼트"},{"parent":"완제품C","child":"몸체"}]
+[
+  {
+    "parent": "완제품A",
+    "child": "몸체"
+  },
+  {
+    "parent": "몸체",
+    "child": "볼트"
+  },
+  {
+    "parent": "완제품B",
+    "child": "볼트"
+  },
+  {
+    "parent": "완제품C",
+    "child": "몸체"
+  }
+]
 
 ### 메뉴 권한으로 트리 자르기
 > 권한 있는 화면만 남기고, 화면이 하나도 없는 폴더는 뺍니다.
@@ -2829,7 +4696,33 @@ const prune = nodes => nodes.flatMap(n => {
 });
 console.log(JSON.stringify(prune(data)));
 --- 데이터
-[{"id":"setting","children":[{"id":"user"},{"id":"role"},{"id":"code"}]},{"id":"report","children":[{"id":"sales"}]},{"id":"home"}]
+[
+  {
+    "id": "setting",
+    "children": [
+      {
+        "id": "user"
+      },
+      {
+        "id": "role"
+      },
+      {
+        "id": "code"
+      }
+    ]
+  },
+  {
+    "id": "report",
+    "children": [
+      {
+        "id": "sales"
+      }
+    ]
+  },
+  {
+    "id": "home"
+  }
+]
 
 ### 빵 부스러기 (현재 화면 경로)
 > 메뉴 id 로 「설정 > 권한 > 역할」 글.
@@ -2841,7 +4734,23 @@ const path = id => {
 };
 console.log(path(4));
 --- 데이터
-[{"id":1,"parentId":null,"name":"설정"},{"id":2,"parentId":1,"name":"권한"},{"id":4,"parentId":2,"name":"역할"}]
+[
+  {
+    "id": 1,
+    "parentId": null,
+    "name": "설정"
+  },
+  {
+    "id": 2,
+    "parentId": 1,
+    "name": "권한"
+  },
+  {
+    "id": 4,
+    "parentId": 2,
+    "name": "역할"
+  }
+]
 
 ## JSON
 ### JSON 글 ↔ 객체
@@ -2903,7 +4812,22 @@ function paths(v, prefix = '') {
 }
 console.table(paths(data));
 --- 데이터
-{"result":"OK","data":{"user":{"id":1,"roles":["ADMIN","USER"]},"page":{"no":1,"size":20}}}
+{
+  "result": "OK",
+  "data": {
+    "user": {
+      "id": 1,
+      "roles": [
+        "ADMIN",
+        "USER"
+      ]
+    },
+    "page": {
+      "no": 1,
+      "size": 20
+    }
+  }
+}
 
 ### 큰 JSON 크기 줄이기 (공백 빼기)
 > 보기 좋게 줄 맞춘 JSON 을 한 줄로.
@@ -2911,7 +4835,19 @@ const pretty = JSON.stringify(data, null, 2);
 const compact = JSON.stringify(data);
 console.log(pretty.length, '→', compact.length, '글자');
 --- 데이터
-{"list":[{"code":"A","name":"사과"},{"code":"B","name":"배"}],"total":2}
+{
+  "list": [
+    {
+      "code": "A",
+      "name": "사과"
+    },
+    {
+      "code": "B",
+      "name": "배"
+    }
+  ],
+  "total": 2
+}
 
 ### 응답 감싸기 모양 풀기 (result · data · list)
 > 화면마다 다른 응답 모양에서 목록만 꺼냅니다.
@@ -2922,7 +4858,16 @@ console.log(listOf({ data: { list: [1] } }), listOf({ list: [2] }), listOf({ dat
 > 로그 · 응답 확인용.
 console.log(JSON.stringify(data, null, 2));
 --- 데이터
-{"id":1,"user":{"name":"홍","roles":["USER","ADMIN"]}}
+{
+  "id": 1,
+  "user": {
+    "name": "홍",
+    "roles": [
+      "USER",
+      "ADMIN"
+    ]
+  }
+}
 
 ### JSON 한 줄로 (공백 없이)
 > 요청 본문 · 쿠키 · 저장용.
@@ -2930,7 +4875,10 @@ console.log(JSON.stringify(data));
 --- 데이터
 {
   "id": 1,
-  "tags": ["a", "b"]
+  "tags": [
+    "a",
+    "b"
+  ]
 }
 
 ### 글이 JSON 인지 검사 (안전하게 읽기)
@@ -2972,7 +4920,18 @@ console.log(diff({ a: 1, b: { c: 2, d: [1, 2] } }, { a: 1, b: { c: 3, d: [1, 5] 
 > 붙여 넣은 JSON 배열을 그대로 표로 봅니다.
 console.table(data);
 --- 데이터
-[{"id":1,"name":"볼트","qty":10},{"id":2,"name":"너트","qty":25}]
+[
+  {
+    "id": 1,
+    "name": "볼트",
+    "qty": 10
+  },
+  {
+    "id": 2,
+    "name": "너트",
+    "qty": 25
+  }
+]
 
 ## API 응답 가공
 ### 칸 이름 모두 카멜로 (USER_NM → userNm)
@@ -2982,28 +4941,69 @@ const deepCamel = v => (Array.isArray(v) ? v.map(deepCamel) : v && typeof v === 
   ? Object.fromEntries(Object.entries(v).map(([k, x]) => [camel(k), deepCamel(x)])) : v);
 console.log(JSON.stringify(deepCamel(data), null, 2));
 --- 데이터
-{"ORDER_NO":"O1","CUST_NM":"가나상사","ITEM_LIST":[{"ITEM_CD":"A1","ORDER_QTY":10}],"regDate":"2026-11-12"}
+{
+  "ORDER_NO": "O1",
+  "CUST_NM": "가나상사",
+  "ITEM_LIST": [
+    {
+      "ITEM_CD": "A1",
+      "ORDER_QTY": 10
+    }
+  ],
+  "regDate": "2026-11-12"
+}
 
 ### 날짜 칸 모두 보기 좋게
 > 칸 이름이 Date · Dt · At 으로 끝나는 값을 'YYYY-MM-DD HH:mm' 로.
 const fmt = s => { const d = new Date(s); const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
 console.table(data.map(r => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, /(Date|Dt|At)$/.test(k) && v ? fmt(v) : v]))));
 --- 데이터
-[{"orderNo":"O1","regDt":"2026-11-12T09:05:00","updatedAt":"2026-11-12T13:40:10","memo":"x"}]
+[
+  {
+    "orderNo": "O1",
+    "regDt": "2026-11-12T09:05:00",
+    "updatedAt": "2026-11-12T13:40:10",
+    "memo": "x"
+  }
+]
 
 ### null 을 빈칸 · 기본값으로
 > 그리드에 null 이 글자로 보이지 않게.
 const defaults = { qty: 0, memo: '', useYn: 'Y' };
 console.table(data.map(r => ({ ...r, ...Object.fromEntries(Object.entries(defaults).map(([k, d]) => [k, r[k] ?? d])) })));
 --- 데이터
-[{"code":"A","qty":null,"memo":null,"useYn":null},{"code":"B","qty":3,"memo":"급함","useYn":"N"}]
+[
+  {
+    "code": "A",
+    "qty": null,
+    "memo": null,
+    "useYn": null
+  },
+  {
+    "code": "B",
+    "qty": 3,
+    "memo": "급함",
+    "useYn": "N"
+  }
+]
 
 ### 숫자 글을 숫자로 (서버가 글로 준 숫자)
 > '1200' 을 1200 으로. 앞자리 0 인 코드는 건드리지 않습니다.
 const numberKeys = ['qty', 'price'];
 console.table(data.map(r => ({ ...r, ...Object.fromEntries(numberKeys.map(k => [k, r[k] === '' || r[k] == null ? null : Number(r[k])])) })));
 --- 데이터
-[{"code":"007","qty":"12","price":"1200.5"},{"code":"010","qty":"","price":"80"}]
+[
+  {
+    "code": "007",
+    "qty": "12",
+    "price": "1200.5"
+  },
+  {
+    "code": "010",
+    "qty": "",
+    "price": "80"
+  }
+]
 
 ### 'Y'/'N' ↔ true/false
 > 체크박스는 불, DB 는 Y/N.
@@ -3018,7 +5018,19 @@ const from = total ? (page - 1) * size + 1 : 0;
 const to = Math.min(page * size, total);
 console.log(`${from}-${to} / ${total.toLocaleString('ko-KR')}건`, list.length);
 --- 데이터
-{"list":[{"id":1},{"id":2}],"total":345,"page":3,"size":20}
+{
+  "list": [
+    {
+      "id": 1
+    },
+    {
+      "id": 2
+    }
+  ],
+  "total": 345,
+  "page": 3,
+  "size": 20
+}
 
 ### 응답 칸 빠짐 확인 (계약 검사)
 > 화면이 쓰는 칸이 응답에 다 있는지 개발 중에 봅니다.
@@ -3029,13 +5041,39 @@ data.forEach((r, i) => {
 });
 console.log('확인 끝');
 --- 데이터
-[{"orderNo":"O1","custName":"가","amount":1,"status":"10"},{"orderNo":"O2","amount":2}]
+[
+  {
+    "orderNo": "O1",
+    "custName": "가",
+    "amount": 1,
+    "status": "10"
+  },
+  {
+    "orderNo": "O2",
+    "amount": 2
+  }
+]
 
 ### 큰 목록에서 필요한 칸만 남겨 가볍게
 > 콤보용으로 코드 · 이름만.
 console.table(data.map(({ code, name }) => ({ code, name })));
 --- 데이터
-[{"code":"A","name":"사과","desc":"긴 설명","regUser":"hong","regDt":"2026-01-01"},{"code":"B","name":"배","desc":"긴 설명","regUser":"kim","regDt":"2026-01-02"}]
+[
+  {
+    "code": "A",
+    "name": "사과",
+    "desc": "긴 설명",
+    "regUser": "hong",
+    "regDt": "2026-01-01"
+  },
+  {
+    "code": "B",
+    "name": "배",
+    "desc": "긴 설명",
+    "regUser": "kim",
+    "regDt": "2026-01-02"
+  }
+]
 
 ### 요청 보낼 모양 만들기 (화면 → 서버)
 > 화면 칸을 서버 칸 이름 · 형식으로 바꿉니다. 빈 칸은 null.
@@ -3054,7 +5092,21 @@ console.log(body);
 const page = data;
 console.log({ rows: page.content.length, total: page.totalElements, page: page.number + 1, pages: page.totalPages, last: page.last });
 --- 데이터
-{"content":[{"id":1},{"id":2}],"totalElements":42,"totalPages":5,"number":0,"size":10,"last":false}
+{
+  "content": [
+    {
+      "id": 1
+    },
+    {
+      "id": 2
+    }
+  ],
+  "totalElements": 42,
+  "totalPages": 5,
+  "number": 0,
+  "size": 10,
+  "last": false
+}
 
 ### 응답 코드로 성공 · 실패 나누기
 > 공통 응답 { code, message, data } 모양.
@@ -3065,21 +5117,50 @@ console.log(handle({ code: '0000', data: [1, 2] }), handle({ code: 'E001', messa
 > 그리드에 넣기 전 _checked, _state 를 붙입니다.
 console.table(data.map(r => ({ ...r, _checked: false, _state: 'R' })));
 --- 데이터
-[{"id":1,"name":"가"},{"id":2,"name":"나"}]
+[
+  {
+    "id": 1,
+    "name": "가"
+  },
+  {
+    "id": 2,
+    "name": "나"
+  }
+]
 
 ### 코드 칸에 이름 칸 붙이기 (응답 + 공통코드)
 > 상태 코드 옆에 상태 이름.
 const codeNames = { '10': '접수', '20': '처리중', '30': '완료' };
 console.table(data.map(r => ({ ...r, statusName: codeNames[r.status] ?? r.status })));
 --- 데이터
-[{"no":1,"status":"10"},{"no":2,"status":"30"},{"no":3,"status":"99"}]
+[
+  {
+    "no": 1,
+    "status": "10"
+  },
+  {
+    "no": 2,
+    "status": "30"
+  },
+  {
+    "no": 3,
+    "status": "99"
+  }
+]
 
 ### 서버 칸 이름 → 화면 칸 이름 표로 바꾸기
 > 바꿀 이름 표 하나로 응답 전체를 바꿉니다.
 const rename = { ITEM_CD: 'itemCode', ITEM_NM: 'itemName', UNIT_PRC: 'price' };
 console.table(data.map(r => Object.fromEntries(Object.entries(r).map(([k, v]) => [rename[k] ?? k, v]))));
 --- 데이터
-[{"ITEM_CD":"A1","ITEM_NM":"볼트","UNIT_PRC":120,"ETC":"x"}]
+[
+  {
+    "ITEM_CD": "A1",
+    "ITEM_NM": "볼트",
+    "UNIT_PRC": 120,
+    "ETC": "x"
+  }
+]
 
 ### 깊은 응답에서 목록 꺼내기 (경로가 없을 수도)
 > res.data.result.list 가 없으면 빈 배열.
@@ -3090,7 +5171,16 @@ console.log(list({ data: { result: { list: [1, 2] } } }), list({ data: null }), 
 > 서버가 1762905600000 처럼 숫자로 준 날짜.
 console.table(data.map(r => ({ ...r, created: new Date(r.created).toLocaleString('sv-SE', { timeZone: 'Asia/Seoul' }) })));
 --- 데이터
-[{"id":1,"created":1762905600000},{"id":2,"created":1762941600000}]
+[
+  {
+    "id": 1,
+    "created": 1762905600000
+  },
+  {
+    "id": 2,
+    "created": 1762941600000
+  }
+]
 
 ### 배열로 온 날짜 [2026, 11, 12] 를 글로
 > 잭슨 기본 설정의 LocalDate 응답 모양.
@@ -3101,7 +5191,32 @@ console.log(toDate([2026, 11, 12]), toDate([2026, 11, 12, 9, 5]), toDate('2026-1
 > 주문 아래 줄 목록을 그리드 한 줄씩으로.
 console.table(data.flatMap(o => o.lines.map(l => ({ orderNo: o.orderNo, customer: o.customer, ...l }))));
 --- 데이터
-[{"orderNo":"O1","customer":"가","lines":[{"item":"볼트","qty":10},{"item":"너트","qty":5}]},{"orderNo":"O2","customer":"나","lines":[{"item":"와셔","qty":3}]}]
+[
+  {
+    "orderNo": "O1",
+    "customer": "가",
+    "lines": [
+      {
+        "item": "볼트",
+        "qty": 10
+      },
+      {
+        "item": "너트",
+        "qty": 5
+      }
+    ]
+  },
+  {
+    "orderNo": "O2",
+    "customer": "나",
+    "lines": [
+      {
+        "item": "와셔",
+        "qty": 3
+      }
+    ]
+  }
+]
 
 ### 그리드 줄 → 마스터 · 디테일 모양 (펼친 것 되돌리기)
 > 화면 한 줄씩을 주문별로 묶어 저장 요청 모양으로.
@@ -3113,14 +5228,47 @@ for (const r of data) {
 }
 console.log(JSON.stringify([...orders.values()], null, 2));
 --- 데이터
-[{"orderNo":"O1","customer":"가","item":"볼트","qty":10},{"orderNo":"O1","customer":"가","item":"너트","qty":5},{"orderNo":"O2","customer":"나","item":"와셔","qty":3}]
+[
+  {
+    "orderNo": "O1",
+    "customer": "가",
+    "item": "볼트",
+    "qty": 10
+  },
+  {
+    "orderNo": "O1",
+    "customer": "가",
+    "item": "너트",
+    "qty": 5
+  },
+  {
+    "orderNo": "O2",
+    "customer": "나",
+    "item": "와셔",
+    "qty": 3
+  }
+]
 
 ### 저장 요청에서 빈 칸 · 화면 칸 빼기
 > null · 빈 글 · _ 로 시작하는 칸을 보내지 않습니다.
 const clean = r => Object.fromEntries(Object.entries(r).filter(([k, v]) => !k.startsWith('_') && v != null && v !== ''));
 console.log(data.map(clean));
 --- 데이터
-[{"id":1,"name":"볼트","memo":"","_checked":true,"price":null},{"id":2,"name":"너트","memo":"급함","_state":"U"}]
+[
+  {
+    "id": 1,
+    "name": "볼트",
+    "memo": "",
+    "_checked": true,
+    "price": null
+  },
+  {
+    "id": 2,
+    "name": "너트",
+    "memo": "급함",
+    "_state": "U"
+  }
+]
 
 ### 검색 조건 → 요청 값 (날짜 하이픈 빼기 · 대문자)
 > 서버가 YYYYMMDD 를 받을 때.
@@ -3144,14 +5292,53 @@ for (const r of data) {
 }
 console.table([...map.values()]);
 --- 데이터
-[{"item":"볼트","month":"01","qty":10},{"item":"볼트","month":"02","qty":5},{"item":"너트","month":"01","qty":7},{"item":"너트","month":"03","qty":2},{"item":"볼트","month":"01","qty":3}]
+[
+  {
+    "item": "볼트",
+    "month": "01",
+    "qty": 10
+  },
+  {
+    "item": "볼트",
+    "month": "02",
+    "qty": 5
+  },
+  {
+    "item": "너트",
+    "month": "01",
+    "qty": 7
+  },
+  {
+    "item": "너트",
+    "month": "03",
+    "qty": 2
+  },
+  {
+    "item": "볼트",
+    "month": "01",
+    "qty": 3
+  }
+]
 
 ### 열 → 행 바꾸기 (언피벗)
 > 엑셀처럼 월이 칸인 표를 DB 모양(한 줄에 한 값)으로.
 const rows = data.flatMap(r => Object.entries(r).filter(([k]) => k !== 'item').map(([month, qty]) => ({ item: r.item, month, qty })));
 console.table(rows);
 --- 데이터
-[{"item":"볼트","01":13,"02":5,"03":0},{"item":"너트","01":7,"02":0,"03":2}]
+[
+  {
+    "item": "볼트",
+    "01": 13,
+    "02": 5,
+    "03": 0
+  },
+  {
+    "item": "너트",
+    "01": 7,
+    "02": 0,
+    "03": 2
+  }
+]
 
 ### 행 · 열 맞바꾸기 (전치)
 > 2차원 배열의 가로 · 세로를 바꿉니다.
@@ -3206,7 +5393,23 @@ const rows = data.filter(r => {
 });
 console.table(rows);
 --- 데이터
-[{"code":"B-M8","name":"볼트 M8","maker":"가나"},{"code":"B-M6","name":"볼트 M6","maker":"가나"},{"code":"N-M8","name":"너트 M8","maker":"다라"}]
+[
+  {
+    "code": "B-M8",
+    "name": "볼트 M8",
+    "maker": "가나"
+  },
+  {
+    "code": "B-M6",
+    "name": "볼트 M6",
+    "maker": "가나"
+  },
+  {
+    "code": "N-M8",
+    "name": "너트 M8",
+    "maker": "다라"
+  }
+]
 
 ### 칸별 조건 거르기 (검색 조건 객체)
 > 빈 조건은 건너뛰고, 글은 포함, 숫자는 범위.
@@ -3218,7 +5421,23 @@ const rows = data.filter(r =>
   (cond.maxQty == null || r.qty <= cond.maxQty));
 console.table(rows);
 --- 데이터
-[{"name":"볼트 M8","maker":"가나","qty":10},{"name":"볼트 M6","maker":"다라","qty":3},{"name":"너트","maker":"가나","qty":50}]
+[
+  {
+    "name": "볼트 M8",
+    "maker": "가나",
+    "qty": 10
+  },
+  {
+    "name": "볼트 M6",
+    "maker": "다라",
+    "qty": 3
+  },
+  {
+    "name": "너트",
+    "maker": "가나",
+    "qty": 50
+  }
+]
 
 ### 같은 값 칸 합치기 표시 (rowspan 계산)
 > 부서 칸이 위와 같으면 비워 보이고, 첫 줄에 합칠 줄 수를 둡니다.
@@ -3230,7 +5449,24 @@ const out = data.map((r, i) => {
 });
 console.table(out);
 --- 데이터
-[{"dept":"영업","name":"가"},{"dept":"영업","name":"나"},{"dept":"개발","name":"다"},{"dept":"영업","name":"라"}]
+[
+  {
+    "dept": "영업",
+    "name": "가"
+  },
+  {
+    "dept": "영업",
+    "name": "나"
+  },
+  {
+    "dept": "개발",
+    "name": "다"
+  },
+  {
+    "dept": "영업",
+    "name": "라"
+  }
+]
 
 ### 칸 합계 줄 (그리드 아래 합계)
 > 숫자 칸만 골라 더합니다.
@@ -3238,7 +5474,23 @@ const numeric = Object.keys(data[0]).filter(k => data.every(r => typeof r[k] ===
 const total = Object.fromEntries(numeric.map(k => [k, data.reduce((s, r) => s + r[k], 0)]));
 console.table([...data, { item: '합계', ...total }]);
 --- 데이터
-[{"item":"볼트","qty":10,"amount":1000},{"item":"너트","qty":5,"amount":300},{"item":"와셔","qty":7,"amount":140}]
+[
+  {
+    "item": "볼트",
+    "qty": 10,
+    "amount": 1000
+  },
+  {
+    "item": "너트",
+    "qty": 5,
+    "amount": 300
+  },
+  {
+    "item": "와셔",
+    "qty": 7,
+    "amount": 140
+  }
+]
 
 ### 체크한 줄만 · 모두 체크
 > 전체 선택 칸과 줄 체크.
@@ -3249,7 +5501,20 @@ console.log({ allChecked, someChecked });
 rows.forEach(r => { r.checked = true; });
 console.log(rows.filter(r => r.checked).map(r => r.id));
 --- 데이터
-[{"id":1,"checked":true},{"id":2,"checked":false},{"id":3,"checked":true}]
+[
+  {
+    "id": 1,
+    "checked": true
+  },
+  {
+    "id": 2,
+    "checked": false
+  },
+  {
+    "id": 3,
+    "checked": true
+  }
+]
 
 ### 줄 위아래 같은 값 채우기 (엑셀 병합 칸 풀기)
 > 엑셀에서 병합된 칸을 복사하면 첫 줄에만 값이 있습니다. 빈 칸을 위 값으로 채웁니다.
@@ -3264,7 +5529,28 @@ const rows = data.map(r => {
 });
 console.table(rows);
 --- 데이터
-[{"dept":"영업","team":"1팀","name":"가"},{"dept":"","team":"","name":"나"},{"dept":"","team":"2팀","name":"다"},{"dept":"개발","team":"","name":"라"}]
+[
+  {
+    "dept": "영업",
+    "team": "1팀",
+    "name": "가"
+  },
+  {
+    "dept": "",
+    "team": "",
+    "name": "나"
+  },
+  {
+    "dept": "",
+    "team": "2팀",
+    "name": "다"
+  },
+  {
+    "dept": "개발",
+    "team": "",
+    "name": "라"
+  }
+]
 
 ### 계산 칸 넣기 (단가 × 수량)
 > 금액 · 부가세 칸을 만들어 붙입니다.
@@ -3273,21 +5559,86 @@ console.table(data.map(r => {
   return { ...r, amount, vat: Math.floor(amount * 0.1), total: amount + Math.floor(amount * 0.1) };
 }));
 --- 데이터
-[{"item":"볼트","price":120,"qty":100},{"item":"너트","price":80,"qty":250}]
+[
+  {
+    "item": "볼트",
+    "price": 120,
+    "qty": 100
+  },
+  {
+    "item": "너트",
+    "price": 80,
+    "qty": 250
+  }
+]
 
 ### 코드 → 이름 붙이기 (공통코드 조인)
 > 상태 코드에 이름을 붙입니다. 맵을 한 번 만들고 찾습니다.
 const codeName = new Map(data.codes.map(c => [c.code, c.name]));
 console.table(data.rows.map(r => ({ ...r, statusName: codeName.get(r.status) ?? `(모르는 코드 ${r.status})` })));
 --- 데이터
-{"codes":[{"code":"10","name":"접수"},{"code":"20","name":"진행"},{"code":"90","name":"완료"}],"rows":[{"no":"A1","status":"10"},{"no":"A2","status":"90"},{"no":"A3","status":"99"}]}
+{
+  "codes": [
+    {
+      "code": "10",
+      "name": "접수"
+    },
+    {
+      "code": "20",
+      "name": "진행"
+    },
+    {
+      "code": "90",
+      "name": "완료"
+    }
+  ],
+  "rows": [
+    {
+      "no": "A1",
+      "status": "10"
+    },
+    {
+      "no": "A2",
+      "status": "90"
+    },
+    {
+      "no": "A3",
+      "status": "99"
+    }
+  ]
+}
 
 ### 두 목록 붙이기 (LEFT JOIN)
 > 주문 목록에 거래처 이름을 붙입니다. 없으면 빈칸.
 const custs = new Map(data.custs.map(c => [c.custId, c]));
 console.table(data.orders.map(o => ({ ...o, custName: custs.get(o.custId)?.name ?? '' })));
 --- 데이터
-{"custs":[{"custId":"C1","name":"가나상사"},{"custId":"C2","name":"다라산업"}],"orders":[{"orderNo":"O1","custId":"C1"},{"orderNo":"O2","custId":"C3"},{"orderNo":"O3","custId":"C2"}]}
+{
+  "custs": [
+    {
+      "custId": "C1",
+      "name": "가나상사"
+    },
+    {
+      "custId": "C2",
+      "name": "다라산업"
+    }
+  ],
+  "orders": [
+    {
+      "orderNo": "O1",
+      "custId": "C1"
+    },
+    {
+      "orderNo": "O2",
+      "custId": "C3"
+    },
+    {
+      "orderNo": "O3",
+      "custId": "C2"
+    }
+  ]
+}
 
 ### 한쪽에만 있는 것 (차이 · 대사)
 > ERP 와 엑셀 목록 대사: 한쪽에만 있거나 수량이 다른 줄.
@@ -3299,13 +5650,63 @@ for (const code of new Set([...a.keys(), ...b.keys()])) {
 }
 console.table(out);
 --- 데이터
-{"erp":[{"code":"A","qty":10},{"code":"B","qty":5},{"code":"C","qty":3}],"excel":[{"code":"A","qty":10},{"code":"B","qty":4},{"code":"D","qty":1}]}
+{
+  "erp": [
+    {
+      "code": "A",
+      "qty": 10
+    },
+    {
+      "code": "B",
+      "qty": 5
+    },
+    {
+      "code": "C",
+      "qty": 3
+    }
+  ],
+  "excel": [
+    {
+      "code": "A",
+      "qty": 10
+    },
+    {
+      "code": "B",
+      "qty": 4
+    },
+    {
+      "code": "D",
+      "qty": 1
+    }
+  ]
+}
 
 ### 같은 값 연속 칸 비우기 (그룹 머리만 보이기)
 > 부서가 위 줄과 같으면 빈칸으로 보여 묶음처럼 보이게 합니다.
 console.table(data.map((r, i) => ({ ...r, dept: i > 0 && data[i - 1].dept === r.dept ? '' : r.dept })));
 --- 데이터
-[{"dept":"영업","name":"가"},{"dept":"영업","name":"나"},{"dept":"개발","name":"다"},{"dept":"개발","name":"라"},{"dept":"영업","name":"마"}]
+[
+  {
+    "dept": "영업",
+    "name": "가"
+  },
+  {
+    "dept": "영업",
+    "name": "나"
+  },
+  {
+    "dept": "개발",
+    "name": "다"
+  },
+  {
+    "dept": "개발",
+    "name": "라"
+  },
+  {
+    "dept": "영업",
+    "name": "마"
+  }
+]
 
 ### 줄 번호 역순 (전체 건수부터)
 > 게시판 번호: 전체 42건, 2쪽, 10개씩이면 32부터.
@@ -3330,7 +5731,23 @@ const index = 1;
 const copy = { ...data[index], id: null, _state: 'C' };
 console.table(data.toSpliced(index + 1, 0, copy));
 --- 데이터
-[{"id":1,"item":"볼트","qty":10},{"id":2,"item":"너트","qty":5},{"id":3,"item":"와셔","qty":7}]
+[
+  {
+    "id": 1,
+    "item": "볼트",
+    "qty": 10
+  },
+  {
+    "id": 2,
+    "item": "너트",
+    "qty": 5
+  },
+  {
+    "id": 3,
+    "item": "와셔",
+    "qty": 7
+  }
+]
 
 ### 엑셀에서 붙인 여러 줄을 그리드 칸에 덮어쓰기
 > 고른 칸부터 붙인 값으로 바꿉니다. 그리드 줄이 모자라면 새 줄을 만듭니다.
@@ -3350,7 +5767,23 @@ console.table(grid);
 const rowClass = r => r.qty < r.safety ? 'row-danger' : r.qty < r.safety * 1.5 ? 'row-warning' : '';
 console.table(data.map(r => ({ ...r, cls: rowClass(r) })));
 --- 데이터
-[{"item":"볼트","qty":50,"safety":100},{"item":"너트","qty":130,"safety":100},{"item":"와셔","qty":500,"safety":100}]
+[
+  {
+    "item": "볼트",
+    "qty": 50,
+    "safety": 100
+  },
+  {
+    "item": "너트",
+    "qty": 130,
+    "safety": 100
+  },
+  {
+    "item": "와셔",
+    "qty": 500,
+    "safety": 100
+  }
+]
 
 ### 고친 칸 표시 (원래 값과 비교)
 > 줄마다 바뀐 칸 이름 목록을 붙여 칸에 색을 칠합니다.
@@ -3360,7 +5793,18 @@ console.table(data.map(r => {
   return { ...r, changed: Object.keys(r).filter(k => o && o[k] !== r[k]).join(',') };
 }));
 --- 데이터
-[{"id":1,"qty":12,"price":100},{"id":2,"qty":5,"price":55}]
+[
+  {
+    "id": 1,
+    "qty": 12,
+    "price": 100
+  },
+  {
+    "id": 2,
+    "qty": 5,
+    "price": 55
+  }
+]
 
 ### 저장 전 그리드 검사 (빈 칸 · 음수 · 중복)
 > 틀린 곳을 「n행 칸이름: 내용」 으로 모읍니다.
@@ -3375,7 +5819,24 @@ data.forEach((r, i) => {
 });
 console.log(errors.join('\n') || '문제 없음');
 --- 데이터
-[{"item":"볼트","qty":10},{"item":"","qty":5},{"item":"너트","qty":-1},{"item":"볼트","qty":3}]
+[
+  {
+    "item": "볼트",
+    "qty": 10
+  },
+  {
+    "item": "",
+    "qty": 5
+  },
+  {
+    "item": "너트",
+    "qty": -1
+  },
+  {
+    "item": "볼트",
+    "qty": 3
+  }
+]
 
 ### 펼친 표 → 소계 줄 끼우기 (묶음 끝마다)
 > 부서가 바뀔 때마다 소계 줄, 맨 끝 합계 줄.
@@ -3394,7 +5855,23 @@ data.forEach((r, i) => {
 out.push({ dept: '합계', name: '', amount: total });
 console.table(out);
 --- 데이터
-[{"dept":"영업","name":"가","amount":100},{"dept":"영업","name":"나","amount":200},{"dept":"개발","name":"다","amount":300}]
+[
+  {
+    "dept": "영업",
+    "name": "가",
+    "amount": 100
+  },
+  {
+    "dept": "영업",
+    "name": "나",
+    "amount": 200
+  },
+  {
+    "dept": "개발",
+    "name": "다",
+    "amount": 300
+  }
+]
 
 ### 칸 너비 정하기 (글 길이로)
 > 엑셀 · 그리드 칸 너비를 내용 최대 길이로 잡습니다(한글 2칸).
@@ -3402,14 +5879,38 @@ const width = s => [...String(s ?? '')].reduce((w, c) => w + (/[ㄱ-ㅎ가-힣]/
 const cols = Object.keys(data[0]);
 console.log(Object.fromEntries(cols.map(c => [c, Math.max(width(c), ...data.map(r => width(r[c])))])));
 --- 데이터
-[{"code":"A1","name":"육각 볼트 M8","qty":10},{"code":"B22","name":"너트","qty":1500}]
+[
+  {
+    "code": "A1",
+    "name": "육각 볼트 M8",
+    "qty": 10
+  },
+  {
+    "code": "B22",
+    "name": "너트",
+    "qty": 1500
+  }
+]
 
 ### 트리 그리드 펼침 상태 기억 (id Set)
 > 다시 조회해도 펼쳤던 줄은 펼친 채로.
 const expanded = new Set([1, 3]);
 console.table(data.map(r => ({ ...r, expanded: expanded.has(r.id) })));
 --- 데이터
-[{"id":1,"name":"본부"},{"id":2,"name":"1팀"},{"id":3,"name":"2팀"}]
+[
+  {
+    "id": 1,
+    "name": "본부"
+  },
+  {
+    "id": 2,
+    "name": "1팀"
+  },
+  {
+    "id": 3,
+    "name": "2팀"
+  }
+]
 
 ### 화면 쪽 정렬 + 거르기 + 페이지 한 번에
 > 작은 목록을 서버 없이 다룰 때 순서: 거르기 → 정렬 → 자르기.
@@ -3421,7 +5922,24 @@ const rows = data.filter(r => r.name.includes(q)).toSorted((a, b) => b[sortKey] 
 console.log('전체', rows.length);
 console.table(rows.slice((page - 1) * size, page * size));
 --- 데이터
-[{"name":"볼트 M6","qty":30},{"name":"볼트 M8","qty":120},{"name":"너트","qty":50},{"name":"볼트 M10","qty":80}]
+[
+  {
+    "name": "볼트 M6",
+    "qty": 30
+  },
+  {
+    "name": "볼트 M8",
+    "qty": 120
+  },
+  {
+    "name": "너트",
+    "qty": 50
+  },
+  {
+    "name": "볼트 M10",
+    "qty": 80
+  }
+]
 
 ### 열 고정 · 숨김 설정 저장 모양
 > 사용자 그리드 설정을 칸 이름 배열로 저장하고 되살립니다.
@@ -3435,7 +5953,24 @@ console.table(saved.order.filter(c => all.includes(c)).map(c => ({ col: c, visib
 const badge = { 10: ['접수', 'gray'], 20: ['진행', 'blue'], 90: ['완료', 'green'], 99: ['반려', 'red'] };
 console.table(data.map(r => ({ ...r, label: badge[r.status]?.[0] ?? '?', color: badge[r.status]?.[1] ?? 'gray' })));
 --- 데이터
-[{"no":"A1","status":"10"},{"no":"A2","status":"90"},{"no":"A3","status":"99"},{"no":"A4","status":"55"}]
+[
+  {
+    "no": "A1",
+    "status": "10"
+  },
+  {
+    "no": "A2",
+    "status": "90"
+  },
+  {
+    "no": "A3",
+    "status": "99"
+  },
+  {
+    "no": "A4",
+    "status": "55"
+  }
+]
 
 ### 빈 값 대신 '-' 보이기
 > 표 칸이 비면 '-'.
@@ -3495,14 +6030,39 @@ console.log(highlight('볼트 <M8> 볼트', '볼트'));
 > 표 칸 보이기.
 console.table(data.map(r => ({ ...r, use: r.useYn === 'Y' ? '사용' : '미사용', mark: r.useYn === 'Y' ? '✔' : '' })));
 --- 데이터
-[{"code":"A","useYn":"Y"},{"code":"B","useYn":"N"}]
+[
+  {
+    "code": "A",
+    "useYn": "Y"
+  },
+  {
+    "code": "B",
+    "useYn": "N"
+  }
+]
 
 ### 성별 · 상태 코드 → 글 (표로)
 > 코드 표 하나로 여러 칸.
 const labels = { gender: { M: '남', F: '여' }, status: { A: '재직', L: '휴직', R: '퇴직' } };
 console.table(data.map(r => ({ ...r, gender: labels.gender[r.gender] ?? '-', status: labels.status[r.status] ?? '-' })));
 --- 데이터
-[{"name":"가","gender":"M","status":"A"},{"name":"나","gender":"F","status":"R"},{"name":"다","gender":null,"status":"X"}]
+[
+  {
+    "name": "가",
+    "gender": "M",
+    "status": "A"
+  },
+  {
+    "name": "나",
+    "gender": "F",
+    "status": "R"
+  },
+  {
+    "name": "다",
+    "gender": null,
+    "status": "X"
+  }
+]
 
 ### 여러 줄 요약 (외 n건)
 > '볼트 외 3건' — 결재 제목 · 알림 글.
@@ -3577,7 +6137,23 @@ function changeDept(dept) {
 changeDept('D2');
 console.log(form, teamOptions('D2').map(t => t.name));
 --- 데이터
-[{"dept":"D1","code":"T1","name":"영업1팀"},{"dept":"D1","code":"T3","name":"영업2팀"},{"dept":"D2","code":"T2","name":"개발팀"}]
+[
+  {
+    "dept": "D1",
+    "code": "T1",
+    "name": "영업1팀"
+  },
+  {
+    "dept": "D1",
+    "code": "T3",
+    "name": "영업2팀"
+  },
+  {
+    "dept": "D2",
+    "code": "T2",
+    "name": "개발팀"
+  }
+]
 
 ### 체크 목록 ↔ 쉼표 글 ('A,B,C')
 > DB 에 쉼표로 저장한 다중 선택 값.
@@ -3661,7 +6237,17 @@ console.log([...new Set(text.split(/[\n,\t]+/).map(s => s.trim()).filter(Boolean
 const words = '볼트 m8'.toLowerCase().split(/\s+/).filter(Boolean);
 console.table(data.filter(r => words.every(w => r.name.toLowerCase().includes(w))));
 --- 데이터
-[{"name":"육각 볼트 M8"},{"name":"볼트 M10"},{"name":"너트 M8"}]
+[
+  {
+    "name": "육각 볼트 M8"
+  },
+  {
+    "name": "볼트 M10"
+  },
+  {
+    "name": "너트 M8"
+  }
+]
 
 ## 입력 검증
 ### 필수 칸 검사 (빈 칸 목록)
@@ -3781,7 +6367,23 @@ data.forEach((r, i) => {
 });
 console.table(errors);
 --- 데이터
-[{"code":"A1","qty":3,"date":"2026-11-01"},{"code":"","qty":2,"date":"2026/11/02"},{"code":"A3","qty":0,"date":""}]
+[
+  {
+    "code": "A1",
+    "qty": 3,
+    "date": "2026-11-01"
+  },
+  {
+    "code": "",
+    "qty": 2,
+    "date": "2026/11/02"
+  },
+  {
+    "code": "A3",
+    "qty": 0,
+    "date": ""
+  }
+]
 
 ### HTML 넣기 막기 (글 이스케이프)
 > 사용자가 넣은 글을 innerHTML 로 그릴 때 꼭 바꿉니다. Vue 의 {{ }} 는 알아서 바꿔 줍니다.
@@ -3870,7 +6472,13 @@ const half = s => s.replace(/[！-～]/g, c => String.fromCharCode(c.charCodeAt(
 const clean = v => (typeof v === 'string' ? half(v).trim().replace(/\s+/g, ' ') : v);
 console.table(data.map(r => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, clean(v)]))));
 --- 데이터
-[{"code":" Ａ１ ","name":"볼트　　M8","qty":"１，２００"}]
+[
+  {
+    "code": " Ａ１ ",
+    "name": "볼트　　M8",
+    "qty": "１，２００"
+  }
+]
 
 ### 줄 끝 공백 · 빈 줄 빼기
 > 텍스트 영역 글 정리.
@@ -3887,7 +6495,23 @@ for (const r of data) {
 }
 console.table([...merged.values()]);
 --- 데이터
-[{"name":"홍길동","phone":"010-1234-5678","email":""},{"name":"홍 길동","phone":"01012345678","email":"hong@a.com"},{"name":"김철수","phone":"010-0000-1111","email":"kim@a.com"}]
+[
+  {
+    "name": "홍길동",
+    "phone": "010-1234-5678",
+    "email": ""
+  },
+  {
+    "name": "홍 길동",
+    "phone": "01012345678",
+    "email": "hong@a.com"
+  },
+  {
+    "name": "김철수",
+    "phone": "010-0000-1111",
+    "email": "kim@a.com"
+  }
+]
 
 ### 이상한 값 찾기 (음수 · 미래 날짜 · 빈 코드)
 > 저장 전 데이터 점검 목록.
@@ -3900,7 +6524,23 @@ data.forEach((r, i) => {
 });
 console.table(issues.map(([row, message]) => ({ row, message })));
 --- 데이터
-[{"code":"A","qty":3,"date":"2026-11-01"},{"code":" ","qty":-1,"date":"2026-12-01"},{"code":"C","qty":5,"date":"2026-11-10"}]
+[
+  {
+    "code": "A",
+    "qty": 3,
+    "date": "2026-11-01"
+  },
+  {
+    "code": " ",
+    "qty": -1,
+    "date": "2026-12-01"
+  },
+  {
+    "code": "C",
+    "qty": 5,
+    "date": "2026-11-10"
+  }
+]
 
 ### 형 맞추기 (스키마대로 바꾸기)
 > 칸마다 정한 형으로 바꾸고, 못 바꾸면 오류에 모읍니다.
@@ -3915,7 +6555,20 @@ const rows = data.map((r, i) => Object.fromEntries(Object.entries(schema).map(([
 console.table(rows);
 console.log(errors);
 --- 데이터
-[{"code":" A1","qty":"10","price":"1,200","useYn":"Y"},{"code":"A2","qty":"1.5","price":"x","useYn":"N"}]
+[
+  {
+    "code": " A1",
+    "qty": "10",
+    "price": "1,200",
+    "useYn": "Y"
+  },
+  {
+    "code": "A2",
+    "qty": "1.5",
+    "price": "x",
+    "useYn": "N"
+  }
+]
 
 ### 숫자 칸 정리 (쉼표 · 공백 · 단위 · 빈 값)
 > 엑셀 붙여 넣은 금액 칸을 숫자로. 못 바꾸면 null.
@@ -3926,7 +6579,23 @@ const num = v => {
 };
 console.table(data.map(r => ({ raw: r.amount, num: num(r.amount) })));
 --- 데이터
-[{"amount":"1,200"},{"amount":" 3 000 원"},{"amount":""},{"amount":"-"},{"amount":2500}]
+[
+  {
+    "amount": "1,200"
+  },
+  {
+    "amount": " 3 000 원"
+  },
+  {
+    "amount": ""
+  },
+  {
+    "amount": "-"
+  },
+  {
+    "amount": 2500
+  }
+]
 
 ### 날짜 칸 정리 (여러 모양 → YYYY-MM-DD)
 > 2026.11.12 · 2026/11/12 · 20261112 · 26-11-12.
@@ -3972,7 +6641,28 @@ console.table(data.map(r => {
   return row;
 }));
 --- 데이터
-[{"dept":"영업","team":"1팀","name":"가"},{"dept":"","team":"","name":"나"},{"dept":"","team":"2팀","name":"다"},{"dept":"개발","team":"","name":"라"}]
+[
+  {
+    "dept": "영업",
+    "team": "1팀",
+    "name": "가"
+  },
+  {
+    "dept": "",
+    "team": "",
+    "name": "나"
+  },
+  {
+    "dept": "",
+    "team": "2팀",
+    "name": "다"
+  },
+  {
+    "dept": "개발",
+    "team": "",
+    "name": "라"
+  }
+]
 
 ### 칸 이름 정리 (공백 · 괄호 · 대소문자)
 > 엑셀 머리글 ' 품목 코드(필수) ' → 'itemCode'.
@@ -3988,7 +6678,18 @@ const cols = Object.keys(data[0]);
 const csv = '﻿' + [cols.join(','), ...data.map(r => cols.map(c => esc(r[c])).join(','))].join('\r\n');
 console.log(csv);
 --- 데이터
-[{"code":"A1","name":"볼트, M8","memo":"길이 \"20\""},{"code":"A2","name":"너트","memo":"두 줄\n메모"}]
+[
+  {
+    "code": "A1",
+    "name": "볼트, M8",
+    "memo": "길이 \"20\""
+  },
+  {
+    "code": "A2",
+    "name": "너트",
+    "memo": "두 줄\n메모"
+  }
+]
 
 ### CSV 글 읽기 (따옴표 안 쉼표 · 줄바꿈)
 > 간단한 split(',') 은 따옴표 안 쉼표에서 틀립니다. 한 글자씩 읽습니다.
@@ -4026,7 +6727,18 @@ const cols = Object.keys(data[0]);
 const tsv = [cols, ...data.map(r => cols.map(c => String(r[c] ?? '').replace(/[\t\n]/g, ' ')))].map(r => r.join('\t')).join('\n');
 console.log(tsv);
 --- 데이터
-[{"code":"A1","name":"볼트","qty":10},{"code":"A2","name":"너트","qty":5}]
+[
+  {
+    "code": "A1",
+    "name": "볼트",
+    "qty": 10
+  },
+  {
+    "code": "A2",
+    "name": "너트",
+    "qty": 5
+  }
+]
 
 ### 엑셀 날짜 숫자 → 날짜 (45000 → 2023-03-15)
 > 엑셀은 1900-01-01 을 1 로 셉니다(1900년 2월 29일이 있다고 보는 버릇 때문에 25569 를 뺍니다).
@@ -4047,7 +6759,20 @@ const unknown = Object.keys(data[0]).filter(h => !(h in map));
 if (unknown.length) console.warn('모르는 머리글:', unknown);
 console.table(data.map(r => Object.fromEntries(Object.entries(r).filter(([h]) => h in map).map(([h, v]) => [map[h], v]))));
 --- 데이터
-[{"품번":"A1","품명":"볼트","수량":10,"비고":"x"},{"품번":"A2","품명":"너트","수량":5,"비고":""}]
+[
+  {
+    "품번": "A1",
+    "품명": "볼트",
+    "수량": 10,
+    "비고": "x"
+  },
+  {
+    "품번": "A2",
+    "품명": "너트",
+    "수량": 5,
+    "비고": ""
+  }
+]
 
 ### 엑셀 붙여 넣기 → 객체 배열 (첫 줄 머리글)
 > 탭으로 나눈 글을 바로 객체로. 입력 데이터 칸에 붙이면 작업대가 이 일을 대신합니다.
@@ -4062,7 +6787,18 @@ const cell = v => /[",\n]/.test(String(v ?? '')) ? `"${String(v).replace(/"/g, '
 const csv = '﻿' + [cols.join(','), ...data.map(r => cols.map(c => cell(r[c])).join(','))].join('\r\n');
 console.log(JSON.stringify(csv.slice(0, 40)), '...', csv.length, '글자');
 --- 데이터
-[{"code":"A","name":"볼트, M8","memo":"\"급함\""},{"code":"B","name":"너트","memo":""}]
+[
+  {
+    "code": "A",
+    "name": "볼트, M8",
+    "memo": "\"급함\""
+  },
+  {
+    "code": "B",
+    "name": "너트",
+    "memo": ""
+  }
+]
 
 ### CSV 머리글을 화면 이름으로 (칸 · 이름 표)
 > 내보낼 때 칸 이름 대신 한글 머리글.
@@ -4070,7 +6806,18 @@ const columns = [{ key: 'code', label: '품번' }, { key: 'name', label: '품명
 const lines = [columns.map(c => c.label).join(','), ...data.map(r => columns.map(c => r[c.key] ?? '').join(','))];
 console.log(lines.join('\n'));
 --- 데이터
-[{"code":"A","name":"볼트","qty":10,"extra":1},{"code":"B","name":"너트"}]
+[
+  {
+    "code": "A",
+    "name": "볼트",
+    "qty": 10,
+    "extra": 1
+  },
+  {
+    "code": "B",
+    "name": "너트"
+  }
+]
 
 ### 엑셀 붙여 넣기 숫자 · 날짜 칸 바꾸기
 > 머리글 이름으로 칸 형식을 정해 바꿉니다.
@@ -4393,7 +7140,17 @@ const stockOf = async code => ({ A: 10, B: 0, C: 7 })[code];
 const rows = await Promise.all(data.map(async r => ({ ...r, stock: await stockOf(r.code) })));
 console.table(rows);
 --- 데이터
-[{"code":"A"},{"code":"B"},{"code":"C"}]
+[
+  {
+    "code": "A"
+  },
+  {
+    "code": "B"
+  },
+  {
+    "code": "C"
+  }
+]
 
 ### 실패한 것만 다시 모으기 (allSettled 결과 나누기)
 > 성공 · 실패를 나눠 실패한 id 를 보여 줍니다.
@@ -4449,7 +7206,32 @@ await Promise.all(items.map(async item => {
 const options = [{ value: '', label: '전체' }, ...data.filter(c => c.useYn === 'Y').sort((a, b) => a.sortSeq - b.sortSeq).map(c => ({ value: c.code, label: c.name }))];
 console.table(options);
 --- 데이터
-[{"code":"90","name":"완료","sortSeq":3,"useYn":"Y"},{"code":"10","name":"접수","sortSeq":1,"useYn":"Y"},{"code":"20","name":"진행","sortSeq":2,"useYn":"Y"},{"code":"99","name":"폐기","sortSeq":9,"useYn":"N"}]
+[
+  {
+    "code": "90",
+    "name": "완료",
+    "sortSeq": 3,
+    "useYn": "Y"
+  },
+  {
+    "code": "10",
+    "name": "접수",
+    "sortSeq": 1,
+    "useYn": "Y"
+  },
+  {
+    "code": "20",
+    "name": "진행",
+    "sortSeq": 2,
+    "useYn": "Y"
+  },
+  {
+    "code": "99",
+    "name": "폐기",
+    "sortSeq": 9,
+    "useYn": "N"
+  }
+]
 
 ### 여러 코드 그룹 한 번에 맵으로
 > { STATUS: {10: '접수'}, TYPE: {...} } 모양으로 바꿔 두고 화면에서 씁니다.
@@ -4458,7 +7240,28 @@ for (const c of data) (codes[c.group] ??= {})[c.code] = c.name;
 console.log(codes);
 console.log(codes.STATUS['20'], codes.TYPE?.B);
 --- 데이터
-[{"group":"STATUS","code":"10","name":"접수"},{"group":"STATUS","code":"20","name":"진행"},{"group":"TYPE","code":"A","name":"일반"},{"group":"TYPE","code":"B","name":"긴급"}]
+[
+  {
+    "group": "STATUS",
+    "code": "10",
+    "name": "접수"
+  },
+  {
+    "group": "STATUS",
+    "code": "20",
+    "name": "진행"
+  },
+  {
+    "group": "TYPE",
+    "code": "A",
+    "name": "일반"
+  },
+  {
+    "group": "TYPE",
+    "code": "B",
+    "name": "긴급"
+  }
+]
 
 ### 상태 전환 규칙 (갈 수 있는 다음 상태)
 > 접수 → 진행 → 완료, 반려는 접수로만. 화면 단추를 이 표로 켜고 끕니다.
@@ -4474,7 +7277,23 @@ const rejected = line.find(s => s.result === '반려');
 const nextApprover = rejected ? null : line.find(s => !s.result);
 console.log(rejected ? `${rejected.name} 반려` : nextApprover ? `다음 결재자: ${nextApprover.name}` : '결재 완료');
 --- 데이터
-[{"seq":1,"name":"김과장","result":"승인"},{"seq":2,"name":"이부장","result":null},{"seq":3,"name":"박상무","result":null}]
+[
+  {
+    "seq": 1,
+    "name": "김과장",
+    "result": "승인"
+  },
+  {
+    "seq": 2,
+    "name": "이부장",
+    "result": null
+  },
+  {
+    "seq": 3,
+    "name": "박상무",
+    "result": null
+  }
+]
 
 ### 권한으로 단추 보이기
 > 사용자 권한 목록에 따라 저장 · 삭제 단추를 켭니다.
@@ -4504,7 +7323,20 @@ for (const lot of data) {
 console.table(used);
 console.log(need > 0 ? `${need} 개 모자람` : '출고 가능');
 --- 데이터
-[{"lot":"L01","qty":10},{"lot":"L02","qty":8},{"lot":"L03","qty":20}]
+[
+  {
+    "lot": "L01",
+    "qty": 10
+  },
+  {
+    "lot": "L02",
+    "qty": 8
+  },
+  {
+    "lot": "L03",
+    "qty": 20
+  }
+]
 
 ### 단가 표에서 수량 구간 단가 찾기
 > 100개 이상이면 할인 단가.
@@ -4520,7 +7352,23 @@ const late = data.filter(r => !r.receivedAt && utc(r.dueDate) < Date.UTC(today.g
   .map(r => ({ ...r, lateDays: Math.round((Date.UTC(2026, 10, 12) - utc(r.dueDate)) / 86400000) }));
 console.table(late);
 --- 데이터
-[{"po":"PO1","dueDate":"2026-11-10","receivedAt":null},{"po":"PO2","dueDate":"2026-11-20","receivedAt":null},{"po":"PO3","dueDate":"2026-11-01","receivedAt":"2026-11-02"}]
+[
+  {
+    "po": "PO1",
+    "dueDate": "2026-11-10",
+    "receivedAt": null
+  },
+  {
+    "po": "PO2",
+    "dueDate": "2026-11-20",
+    "receivedAt": null
+  },
+  {
+    "po": "PO3",
+    "dueDate": "2026-11-01",
+    "receivedAt": "2026-11-02"
+  }
+]
 
 ### 근무 시간 합계 (시:분)
 > 출퇴근 시각으로 하루 근무 시간을 구하고 점심 1시간을 뺍니다.
@@ -4530,7 +7378,18 @@ console.table(data.map(r => {
   return { ...r, work: `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}` };
 }));
 --- 데이터
-[{"day":"월","in":"08:52","out":"18:05"},{"day":"화","in":"09:10","out":"20:30"}]
+[
+  {
+    "day": "월",
+    "in": "08:52",
+    "out": "18:05"
+  },
+  {
+    "day": "화",
+    "in": "09:10",
+    "out": "20:30"
+  }
+]
 
 ### 마스터 · 디테일 묶어 저장 모양 만들기
 > 헤더 한 줄 + 품목 여러 줄을 한 번에 보낼 JSON.
@@ -4549,7 +7408,32 @@ console.log(nameOf('10'), nameOf('99'));
 > 공통코드에서 useYn = 'Y' 이고 sortOrder 순.
 console.table(data.filter(c => c.useYn === 'Y').toSorted((a, b) => a.sortOrder - b.sortOrder));
 --- 데이터
-[{"code":"30","name":"완료","sortOrder":3,"useYn":"Y"},{"code":"10","name":"접수","sortOrder":1,"useYn":"Y"},{"code":"90","name":"폐기","sortOrder":9,"useYn":"N"},{"code":"20","name":"처리중","sortOrder":2,"useYn":"Y"}]
+[
+  {
+    "code": "30",
+    "name": "완료",
+    "sortOrder": 3,
+    "useYn": "Y"
+  },
+  {
+    "code": "10",
+    "name": "접수",
+    "sortOrder": 1,
+    "useYn": "Y"
+  },
+  {
+    "code": "90",
+    "name": "폐기",
+    "sortOrder": 9,
+    "useYn": "N"
+  },
+  {
+    "code": "20",
+    "name": "처리중",
+    "sortOrder": 2,
+    "useYn": "Y"
+  }
+]
 
 ### 콤보 맨 앞에 「전체」 · 「선택」
 > 검색 조건은 「전체」(빈 값), 등록은 「선택」.
@@ -4562,14 +7446,51 @@ console.log([{ value: '', label: '-- 선택 --' }, ...items]);
 const byGroup = Object.groupBy(data, c => c.groupCode);
 console.log(Object.fromEntries(Object.entries(byGroup).map(([g, list]) => [g, list.map(c => c.name)])));
 --- 데이터
-[{"groupCode":"STATUS","code":"10","name":"접수"},{"groupCode":"STATUS","code":"20","name":"완료"},{"groupCode":"UNIT","code":"EA","name":"개"},{"groupCode":"UNIT","code":"KG","name":"킬로그램"}]
+[
+  {
+    "groupCode": "STATUS",
+    "code": "10",
+    "name": "접수"
+  },
+  {
+    "groupCode": "STATUS",
+    "code": "20",
+    "name": "완료"
+  },
+  {
+    "groupCode": "UNIT",
+    "code": "EA",
+    "name": "개"
+  },
+  {
+    "groupCode": "UNIT",
+    "code": "KG",
+    "name": "킬로그램"
+  }
+]
 
 ### 상위 코드에 딸린 하위 코드 (대분류 → 중분류)
 > 콤보 연동.
 const subOf = parent => data.filter(c => c.parent === parent).map(c => c.name);
 console.log(subOf('ELEC'), subOf('MECH'));
 --- 데이터
-[{"code":"E1","parent":"ELEC","name":"배선"},{"code":"E2","parent":"ELEC","name":"조명"},{"code":"M1","parent":"MECH","name":"볼트류"}]
+[
+  {
+    "code": "E1",
+    "parent": "ELEC",
+    "name": "배선"
+  },
+  {
+    "code": "E2",
+    "parent": "ELEC",
+    "name": "조명"
+  },
+  {
+    "code": "M1",
+    "parent": "MECH",
+    "name": "볼트류"
+  }
+]
 
 ### 결재 상태로 단추 고르기 (임시 · 상신 · 승인)
 > 상태마다 보일 단추 표.
@@ -4611,7 +7532,26 @@ console.log([500_000, 3_000_000, 50_000_000].map(a => [a.toLocaleString(), lineO
 > 현재고 + 입고 예정이 안전재고보다 적으면 모자란 만큼 발주 수량.
 console.table(data.map(r => ({ ...r, need: Math.max(0, r.safety - (r.stock + r.incoming)) })).filter(r => r.need > 0));
 --- 데이터
-[{"item":"볼트","stock":120,"incoming":0,"safety":200},{"item":"너트","stock":500,"incoming":100,"safety":300},{"item":"와셔","stock":10,"incoming":50,"safety":100}]
+[
+  {
+    "item": "볼트",
+    "stock": 120,
+    "incoming": 0,
+    "safety": 200
+  },
+  {
+    "item": "너트",
+    "stock": 500,
+    "incoming": 100,
+    "safety": 300
+  },
+  {
+    "item": "와셔",
+    "stock": 10,
+    "incoming": 50,
+    "safety": 100
+  }
+]
 
 ### 최소 발주 단위로 올림 (MOQ · 포장 단위)
 > 필요 수량을 포장 단위 배수로 올리고 최소 발주량을 맞춥니다.
@@ -4627,7 +7567,26 @@ for (const r of data) {
   console.log(r.type, r.qty, '→ 재고', qty, '단가', qty ? Math.round(amount / qty) : 0);
 }
 --- 데이터
-[{"type":"입고","qty":100,"price":1000},{"type":"출고","qty":40},{"type":"입고","qty":60,"price":1300},{"type":"출고","qty":50}]
+[
+  {
+    "type": "입고",
+    "qty": 100,
+    "price": 1000
+  },
+  {
+    "type": "출고",
+    "qty": 40
+  },
+  {
+    "type": "입고",
+    "qty": 60,
+    "price": 1300
+  },
+  {
+    "type": "출고",
+    "qty": 50
+  }
+]
 
 ### 수불부 (기초 · 입고 · 출고 · 기말)
 > 날짜별 입출고로 재고 흐름 표.
@@ -4638,13 +7597,40 @@ console.table(data.map(r => {
   return { date: r.date, begin, in: r.in, out: r.out, end: stock };
 }));
 --- 데이터
-[{"date":"11-01","in":30,"out":10},{"date":"11-02","in":0,"out":25},{"date":"11-03","in":40,"out":5}]
+[
+  {
+    "date": "11-01",
+    "in": 30,
+    "out": 10
+  },
+  {
+    "date": "11-02",
+    "in": 0,
+    "out": 25
+  },
+  {
+    "date": "11-03",
+    "in": 40,
+    "out": 5
+  }
+]
 
 ### 생산 수율 · 불량률
 > 투입 대비 양품, 불량 ppm.
 console.table(data.map(r => ({ ...r, yield: (r.good / r.input * 100).toFixed(2) + '%', ppm: Math.round((r.input - r.good) / r.input * 1e6) })));
 --- 데이터
-[{"line":"1라인","input":12000,"good":11950},{"line":"2라인","input":8000,"good":7720}]
+[
+  {
+    "line": "1라인",
+    "input": 12000,
+    "good": 11950
+  },
+  {
+    "line": "2라인",
+    "input": 8000,
+    "good": 7720
+  }
+]
 
 ### 공정 순서대로 작업 시간 합 · 완료 예정
 > 공정마다 걸리는 분을 더해 끝나는 시각.
@@ -4652,7 +7638,24 @@ const start = new Date(2026, 10, 12, 8, 30);
 let t = start.getTime();
 console.table(data.map(p => { t += p.minutes * 60000; return { ...p, end: new Date(t).toLocaleTimeString('ko-KR') }; }));
 --- 데이터
-[{"step":"절단","minutes":45},{"step":"용접","minutes":90},{"step":"도장","minutes":120},{"step":"검사","minutes":30}]
+[
+  {
+    "step": "절단",
+    "minutes": 45
+  },
+  {
+    "step": "용접",
+    "minutes": 90
+  },
+  {
+    "step": "도장",
+    "minutes": 120
+  },
+  {
+    "step": "검사",
+    "minutes": 30
+  }
+]
 
 ### 납품 분할 (트럭 적재 한도)
 > 한 대 최대 중량을 넘지 않게 순서대로 나눠 싣습니다.
@@ -4666,7 +7669,28 @@ for (const box of data) {
 }
 console.log(trucks);
 --- 데이터
-[{"id":"B1","kg":400},{"id":"B2","kg":350},{"id":"B3","kg":300},{"id":"B4","kg":500},{"id":"B5","kg":200}]
+[
+  {
+    "id": "B1",
+    "kg": 400
+  },
+  {
+    "id": "B2",
+    "kg": 350
+  },
+  {
+    "id": "B3",
+    "kg": 300
+  },
+  {
+    "id": "B4",
+    "kg": 500
+  },
+  {
+    "id": "B5",
+    "kg": 200
+  }
+]
 
 ### 품목별 최근 단가 (가장 최근 입고)
 > 날짜로 정렬한 뒤 품목마다 마지막 값.
@@ -4674,7 +7698,28 @@ const latest = new Map();
 for (const r of [...data].sort((a, b) => a.date.localeCompare(b.date))) latest.set(r.item, r);
 console.table([...latest.values()]);
 --- 데이터
-[{"item":"볼트","date":"2026-10-01","price":110},{"item":"볼트","date":"2026-11-05","price":120},{"item":"너트","date":"2026-09-15","price":80},{"item":"너트","date":"2026-08-01","price":75}]
+[
+  {
+    "item": "볼트",
+    "date": "2026-10-01",
+    "price": 110
+  },
+  {
+    "item": "볼트",
+    "date": "2026-11-05",
+    "price": 120
+  },
+  {
+    "item": "너트",
+    "date": "2026-09-15",
+    "price": 80
+  },
+  {
+    "item": "너트",
+    "date": "2026-08-01",
+    "price": 75
+  }
+]
 
 ### 단가 변동 알림 (전 단가보다 n% 오름)
 > 같은 품목의 앞 단가와 비교합니다.
@@ -4685,7 +7730,24 @@ for (const r of data) {
   prev.set(r.item, r.price);
 }
 --- 데이터
-[{"item":"볼트","price":100},{"item":"너트","price":80},{"item":"볼트","price":108},{"item":"너트","price":81}]
+[
+  {
+    "item": "볼트",
+    "price": 100
+  },
+  {
+    "item": "너트",
+    "price": 80
+  },
+  {
+    "item": "볼트",
+    "price": 108
+  },
+  {
+    "item": "너트",
+    "price": 81
+  }
+]
 
 ### 로트 번호 만들기 (날짜 + 라인 + 순번)
 > 'L2611121-003'.
@@ -4696,7 +7758,20 @@ console.log(lot(new Date(2026, 10, 12), 1, 3));
 > 출고 가능 수량.
 console.table(data.map(r => ({ ...r, available: r.onHand - r.allocated + r.incoming })));
 --- 데이터
-[{"item":"볼트","onHand":500,"allocated":200,"incoming":100},{"item":"너트","onHand":50,"allocated":80,"incoming":0}]
+[
+  {
+    "item": "볼트",
+    "onHand": 500,
+    "allocated": 200,
+    "incoming": 100
+  },
+  {
+    "item": "너트",
+    "onHand": 50,
+    "allocated": 80,
+    "incoming": 0
+  }
+]
 
 ### 소요량 · 부족 수량 (BOM × 생산 계획)
 > 계획 수량 × 단위 소요량 - 재고 = 부족분.
@@ -4724,7 +7799,20 @@ console.table(data.map(r => {
   return { ...r, left, flag: left < 0 ? '지남' : left <= 30 ? '임박' : '' };
 }));
 --- 데이터
-[{"lot":"L1","expiry":"2026-11-01"},{"lot":"L2","expiry":"2026-12-05"},{"lot":"L3","expiry":"2027-03-01"}]
+[
+  {
+    "lot": "L1",
+    "expiry": "2026-11-01"
+  },
+  {
+    "lot": "L2",
+    "expiry": "2026-12-05"
+  },
+  {
+    "lot": "L3",
+    "expiry": "2027-03-01"
+  }
+]
 
 ### 리드타임으로 발주 마감일
 > 필요일에서 리드타임(일)만큼 앞으로.
@@ -4735,13 +7823,35 @@ console.table(data.map(r => {
   return { ...r, orderBy: fmt(d) };
 }));
 --- 데이터
-[{"item":"볼트","needDate":"2026-12-01","leadDays":14},{"item":"모터","needDate":"2026-12-01","leadDays":45}]
+[
+  {
+    "item": "볼트",
+    "needDate": "2026-12-01",
+    "leadDays": 14
+  },
+  {
+    "item": "모터",
+    "needDate": "2026-12-01",
+    "leadDays": 45
+  }
+]
 
 ### 설비 가동률 (가동 시간 ÷ 계획 시간)
 > 라인별 가동률과 비가동 시간.
 console.table(data.map(r => ({ ...r, rate: (r.run / r.plan * 100).toFixed(1) + '%', down: r.plan - r.run })));
 --- 데이터
-[{"line":"1라인","plan":480,"run":432},{"line":"2라인","plan":480,"run":300}]
+[
+  {
+    "line": "1라인",
+    "plan": 480,
+    "run": 432
+  },
+  {
+    "line": "2라인",
+    "plan": 480,
+    "run": 300
+  }
+]
 
 ### 불량 유형별 파레토 (누적 비율)
 > 많은 순 정렬 + 누적 %.
@@ -4749,13 +7859,49 @@ const total = data.reduce((s, r) => s + r.n, 0);
 let acc = 0;
 console.table(data.toSorted((a, b) => b.n - a.n).map(r => ({ ...r, cum: ((acc += r.n) / total * 100).toFixed(1) + '%' })));
 --- 데이터
-[{"type":"치수","n":12},{"type":"외관","n":40},{"type":"기능","n":8},{"type":"포장","n":25}]
+[
+  {
+    "type": "치수",
+    "n": 12
+  },
+  {
+    "type": "외관",
+    "n": 40
+  },
+  {
+    "type": "기능",
+    "n": 8
+  },
+  {
+    "type": "포장",
+    "n": 25
+  }
+]
 
 ### 입고 검수 (발주 수량과 입고 수량 비교)
 > 과입고 · 미입고 표시.
 console.table(data.map(r => ({ ...r, diff: r.received - r.ordered, result: r.received === r.ordered ? '정상' : r.received > r.ordered ? '과입고' : '미입고' })));
 --- 데이터
-[{"po":"PO1","item":"볼트","ordered":100,"received":100},{"po":"PO1","item":"너트","ordered":100,"received":80},{"po":"PO2","item":"와셔","ordered":50,"received":60}]
+[
+  {
+    "po": "PO1",
+    "item": "볼트",
+    "ordered": 100,
+    "received": 100
+  },
+  {
+    "po": "PO1",
+    "item": "너트",
+    "ordered": 100,
+    "received": 80
+  },
+  {
+    "po": "PO2",
+    "item": "와셔",
+    "ordered": 50,
+    "received": 60
+  }
+]
 
 ## 영업 · 회계
 ### 할인 적용 순서 (정률 → 정액)
@@ -4774,7 +7920,23 @@ rows.at(-1).vat += diff;
 console.table(rows);
 console.log('합계 세액', totalVat, '맞춘 차이', diff);
 --- 데이터
-[{"item":"A","qty":3,"price":333},{"item":"B","qty":7,"price":1429},{"item":"C","qty":1,"price":15}]
+[
+  {
+    "item": "A",
+    "qty": 3,
+    "price": 333
+  },
+  {
+    "item": "B",
+    "qty": 7,
+    "price": 1429
+  },
+  {
+    "item": "C",
+    "qty": 1,
+    "price": 15
+  }
+]
 
 ### 미수금 나이 (30 · 60 · 90일 구간)
 > 청구일부터 오늘까지 지난 날로 구간을 나눕니다.
@@ -4785,7 +7947,28 @@ const out = {};
 for (const r of data) out[bucket(days(r.billDate))] = (out[bucket(days(r.billDate))] || 0) + r.amount;
 console.table(out);
 --- 데이터
-[{"cust":"가","billDate":"2026-11-01","amount":100},{"cust":"나","billDate":"2026-09-20","amount":250},{"cust":"다","billDate":"2026-07-01","amount":80},{"cust":"라","billDate":"2026-10-05","amount":40}]
+[
+  {
+    "cust": "가",
+    "billDate": "2026-11-01",
+    "amount": 100
+  },
+  {
+    "cust": "나",
+    "billDate": "2026-09-20",
+    "amount": 250
+  },
+  {
+    "cust": "다",
+    "billDate": "2026-07-01",
+    "amount": 80
+  },
+  {
+    "cust": "라",
+    "billDate": "2026-10-05",
+    "amount": 40
+  }
+]
 
 ### 할부 · 월 납입금 (원리금 균등)
 > 원금, 연이율, 개월 수로 매달 낼 돈.
@@ -4807,7 +7990,23 @@ console.log({ pay, income, local, net: pay - income - local });
 const grade = r => (r >= 1.2 ? 'S' : r >= 1 ? 'A' : r >= 0.8 ? 'B' : 'C');
 console.table(data.map(r => ({ ...r, rate: (r.actual / r.target * 100).toFixed(1) + '%', grade: grade(r.actual / r.target) })));
 --- 데이터
-[{"name":"가","target":1000,"actual":1250},{"name":"나","target":800,"actual":810},{"name":"다","target":1200,"actual":700}]
+[
+  {
+    "name": "가",
+    "target": 1000,
+    "actual": 1250
+  },
+  {
+    "name": "나",
+    "target": 800,
+    "actual": 810
+  },
+  {
+    "name": "다",
+    "target": 1200,
+    "actual": 700
+  }
+]
 
 ### 전년 동월 대비
 > 같은 달끼리 짝지어 증감.
@@ -4818,7 +8017,24 @@ const out = data.filter(r => r.ym.startsWith('2026')).map(r => {
 });
 console.table(out);
 --- 데이터
-[{"ym":"2025-10","amount":800},{"ym":"2025-11","amount":900},{"ym":"2026-10","amount":1000},{"ym":"2026-11","amount":850}]
+[
+  {
+    "ym": "2025-10",
+    "amount": 800
+  },
+  {
+    "ym": "2025-11",
+    "amount": 900
+  },
+  {
+    "ym": "2026-10",
+    "amount": 1000
+  },
+  {
+    "ym": "2026-11",
+    "amount": 850
+  }
+]
 
 ### ABC 분석 (매출 누적 비율)
 > 상위 70% 는 A, 90% 까지 B, 나머지 C.
@@ -4827,7 +8043,28 @@ const total = sorted.reduce((s, r) => s + r.sales, 0);
 let acc = 0;
 console.table(sorted.map(r => { acc += r.sales; const ratio = acc / total; return { ...r, cum: (ratio * 100).toFixed(1) + '%', class: ratio <= 0.7 ? 'A' : ratio <= 0.9 ? 'B' : 'C' }; }));
 --- 데이터
-[{"item":"a","sales":500},{"item":"b","sales":300},{"item":"c","sales":100},{"item":"d","sales":60},{"item":"e","sales":40}]
+[
+  {
+    "item": "a",
+    "sales": 500
+  },
+  {
+    "item": "b",
+    "sales": 300
+  },
+  {
+    "item": "c",
+    "sales": 100
+  },
+  {
+    "item": "d",
+    "sales": 60
+  },
+  {
+    "item": "e",
+    "sales": 40
+  }
+]
 
 ### 세금계산서 줄 합계 맞추기 (공급가 · 세액 · 합계)
 > 줄마다 세액을 버림하고 합계를 다시 냅니다.
@@ -4839,7 +8076,18 @@ const rows = data.map(r => {
 console.table(rows);
 console.log('합계', rows.reduce((s, r) => s + r.total, 0).toLocaleString());
 --- 데이터
-[{"item":"볼트","qty":33,"price":123},{"item":"너트","qty":7,"price":85}]
+[
+  {
+    "item": "볼트",
+    "qty": 33,
+    "price": 123
+  },
+  {
+    "item": "너트",
+    "qty": 7,
+    "price": 85
+  }
+]
 
 ### 거래처별 매출 · 순위
 > 매출 큰 순과 비중.
@@ -4848,7 +8096,24 @@ for (const r of data) sums[r.customer] = (sums[r.customer] || 0) + r.amount;
 const total = Object.values(sums).reduce((a, b) => a + b, 0);
 console.table(Object.entries(sums).sort((a, b) => b[1] - a[1]).map(([customer, amount], i) => ({ rank: i + 1, customer, amount, share: (amount / total * 100).toFixed(1) + '%' })));
 --- 데이터
-[{"customer":"가","amount":300},{"customer":"나","amount":500},{"customer":"가","amount":400},{"customer":"다","amount":100}]
+[
+  {
+    "customer": "가",
+    "amount": 300
+  },
+  {
+    "customer": "나",
+    "amount": 500
+  },
+  {
+    "customer": "가",
+    "amount": 400
+  },
+  {
+    "customer": "다",
+    "amount": 100
+  }
+]
 
 ### 입금 배분 (오래된 미수부터 갚기)
 > 입금액을 오래된 청구서부터 채웁니다.
@@ -4860,7 +8125,23 @@ console.table(data.toSorted((a, b) => a.date.localeCompare(b.date)).map(r => {
 }));
 console.log('남은 입금', money);
 --- 데이터
-[{"invoice":"I3","date":"2026-10-20","due":1500},{"invoice":"I1","date":"2026-09-01","due":1000},{"invoice":"I2","date":"2026-10-01","due":800}]
+[
+  {
+    "invoice": "I3",
+    "date": "2026-10-20",
+    "due": 1500
+  },
+  {
+    "invoice": "I1",
+    "date": "2026-09-01",
+    "due": 1000
+  },
+  {
+    "invoice": "I2",
+    "date": "2026-10-01",
+    "due": 800
+  }
+]
 
 ### 수수료 · 구간 요율 (누진)
 > 1천만 원까지 3%, 넘는 부분 2%.
@@ -4906,7 +8187,18 @@ console.log('환차', ((payRate - saleRate) * usd).toLocaleString(), '원');
 > 부서별 예산 · 집행 · 잔액.
 console.table(data.map(r => ({ ...r, left: r.budget - r.spent, rate: (r.spent / r.budget * 100).toFixed(1) + '%' })));
 --- 데이터
-[{"dept":"영업","budget":5000000,"spent":4200000},{"dept":"개발","budget":8000000,"spent":2500000}]
+[
+  {
+    "dept": "영업",
+    "budget": 5000000,
+    "spent": 4200000
+  },
+  {
+    "dept": "개발",
+    "budget": 8000000,
+    "spent": 2500000
+  }
+]
 
 ## 보안 · 인코딩
 ### Base64 글 ↔ 원래 글 (한글 포함)
@@ -5187,7 +8479,32 @@ const number = (nodes, prefix = '') => nodes.flatMap((n, i) => {
 });
 console.log(number(data).join('\n'));
 --- 데이터
-[{"name":"개요","children":[{"name":"목적"},{"name":"범위"}]},{"name":"설계","children":[{"name":"화면","children":[{"name":"목록"}]}]}]
+[
+  {
+    "name": "개요",
+    "children": [
+      {
+        "name": "목적"
+      },
+      {
+        "name": "범위"
+      }
+    ]
+  },
+  {
+    "name": "설계",
+    "children": [
+      {
+        "name": "화면",
+        "children": [
+          {
+            "name": "목록"
+          }
+        ]
+      }
+    ]
+  }
+]
 
 ## 유틸
 ### 한 번만 실행 (once)
@@ -5247,7 +8564,16 @@ const keyBy = (list, key) => Object.fromEntries(list.map(r => [r[key], r]));
 const byCode = keyBy(data, 'code');
 console.log(byCode.B, byCode.Z);
 --- 데이터
-[{"code":"A","name":"사과"},{"code":"B","name":"배"}]
+[
+  {
+    "code": "A",
+    "name": "사과"
+  },
+  {
+    "code": "B",
+    "name": "배"
+  }
+]
 
 ### 범위 숫자 만들기 (range)
 > range(1, 5) → [1, 2, 3, 4, 5].
