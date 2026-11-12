@@ -1,0 +1,8 @@
+<idea-plugin>
+  <actions>
+    <!-- 편집기 우클릭 「주석 만들기」를 정규식 작업대 아래에 둔다. -->
+    <reference ref="ei.db.DocComment">
+      <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="KingGura.RegexBench"/>
+    </reference>
+  </actions>
+</idea-plugin>

@@ -28,6 +28,7 @@ import com.intellij.util.ui.UIUtil;
 import ei.db.console.Badge;
 import ei.db.BarAction;
 import ei.db.DbConfig;
+import ei.db.DbKind;
 import ei.db.DbSessions;
 import ei.db.EiDbBundle;
 import ei.db.Meta;
@@ -41,6 +42,8 @@ import javax.swing.SwingConstants;
 import java.awt.BorderLayout;
 import java.io.IOException;
 import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -59,6 +62,8 @@ public final class ErdView {
   private static final String STRIPE_TITLE = "ERD";
   private static final String TOOLBAR_PLACE = "EiDbErd";
   private static final int MAX_TABLES = 60;
+  /** DB 에서 찾지 못한 표 카드의 종류. */
+  private static final String DEFAULT_TABLE_TYPE = "TABLE";
   /** 배율을 백분율 글로 바꿀 때 곱하는 수 · 실제 크기 배율. */
   private static final int PERCENT = 100;
   private static final double ACTUAL_ZOOM = 1.0;
@@ -78,6 +83,19 @@ public final class ErdView {
     open(project, c, schema, tables, links, unlinked, "조인 그림");
   }
 
+  /** 표 하나의 종류 · 주석(이름이 정확히 같은 것). 없으면 종류 TABLE · 빈 주석. MySQL 은 데이터베이스가 catalog 자리다(Meta 와 같다). */
+  private static Meta.Table table(Connection conn, DbConfig c, String schema, String name) throws SQLException {
+    boolean mysql = c.kind == DbKind.MYSQL;
+    try (ResultSet rs = conn.getMetaData().getTables(mysql ? schema : null, mysql ? null : schema, name, Meta.tableTypes(c))) {
+      while (rs.next()) {
+        if (!name.equals(rs.getString("TABLE_NAME"))) continue;
+        String remarks = rs.getString("REMARKS");
+        return new Meta.Table(name, rs.getString("TABLE_TYPE"), remarks == null ? "" : remarks);
+      }
+    }
+    return new Meta.Table(name, DEFAULT_TABLE_TYPE, "");
+  }
+
   /** links 가 null 이면 DB 외래 키를 읽어 선을 긋는다. */
   private static void open(Project project, DbConfig c, String schema, List<String> tables, List<Meta.ForeignKey> links, Set<String> unlinked, String title) {
     new Task.Backgroundable(project, EiDbBundle.message("erd.progress", schema), true) {
@@ -87,11 +105,14 @@ public final class ErdView {
           Connection conn = DbSessions.get(project).connection(c);
           Map<String, Meta.Table> all = new HashMap<>();
           List<String> names = new ArrayList<>();
-          for (Meta.Table t : Meta.tables(conn, c, schema, Meta.tableTypes(c))) {
-            all.put(t.name(), t);
-            if (tables == null) names.add(t.name());
+          if (tables == null) {
+            for (Meta.Table t : Meta.tables(conn, c, schema, Meta.tableTypes(c))) {
+              all.put(t.name(), t);
+              names.add(t.name());
+            }
+          } else {
+            names.addAll(tables);
           }
-          if (tables != null) names.addAll(tables);
           int total = names.size();
           if (total > MAX_TABLES) names = new ArrayList<>(names.subList(0, MAX_TABLES));
           List<ErdCanvas.Card> cards = new ArrayList<>();
@@ -102,7 +123,7 @@ public final class ErdView {
             String n = names.get(i);
             indicator.setText2(n);
             indicator.setFraction((double) i / names.size());
-            Meta.Table t = all.getOrDefault(n, new Meta.Table(n, "TABLE", ""));
+            Meta.Table t = all.containsKey(n) ? all.get(n) : table(conn, c, schema, n);
             ErdCanvas.Card card = new ErdCanvas.Card(t, Meta.columns(conn, c, schema, n));
             card.unlinked = unlinked.contains(n.toUpperCase(java.util.Locale.ROOT));
             cards.add(card);

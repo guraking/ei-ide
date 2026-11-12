@@ -9,9 +9,11 @@ import com.intellij.ui.EditorTextField;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.util.ui.JBUI;
 import ei.db.EiDbBundle;
+import ei.db.gen.Ui;
 import ei.db.FileTypes;
 import ei.db.Notify;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import javax.swing.Action;
 import javax.swing.JButton;
@@ -19,13 +21,20 @@ import javax.swing.JComponent;
 import javax.swing.JPanel;
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;
-import java.awt.GridLayout;
+import java.awt.Dimension;
 
 /** 「문자열 SQL 정리」 결과: 왼쪽 정리한 SQL, 오른쪽 매퍼 XML 문장. 읽기 전용이고 복사 단추로 가져간다. */
 final class StringSqlDialog extends DialogWrapper {
 
-  private static final int CODE_WIDTH = 520;
-  private static final int CODE_HEIGHT = 480;
+  /** 왼쪽 칸 처음 비율(끌어 바꾼 비율은 기억한다). */
+  private static final float SPLIT = 0.5f;
+  private static final String SPLIT_KEY = "stringsql";
+  /** 처음 열 때 화면 폭 · 높이에 대한 창 크기 비율. 사용자가 바꾼 크기는 IntelliJ 가 기억한다. */
+  private static final double FIRST_WIDTH_RATIO = 0.6;
+  private static final double FIRST_HEIGHT_RATIO = 0.55;
+  private static final String DIMENSION_KEY = "ei.db.mybatis.StringSqlDialog";
+  /** 분할선 양쪽 안쪽 여백(배율 전). */
+  private static final int SECTION_GAP = 8;
 
   private final Project project;
   private final String sql;
@@ -48,16 +57,22 @@ final class StringSqlDialog extends DialogWrapper {
 
   @Override
   protected JComponent createCenterPanel() {
-    JPanel p = new JPanel(new GridLayout(1, 2, JBUI.scale(16), 0));
-    p.add(section(EiDbBundle.message("stringsql.section.sql"), EiDbBundle.message("stringsql.copy.sql"), "sql", sql));
-    p.add(section(EiDbBundle.message("stringsql.section.xml"), EiDbBundle.message("stringsql.copy.xml"), "xml", xml));
-    return p;
+    JComponent left = section(EiDbBundle.message("stringsql.section.sql"), EiDbBundle.message("stringsql.copy.sql"), "sql", sql);
+    JComponent right = section(EiDbBundle.message("stringsql.section.xml"), EiDbBundle.message("stringsql.copy.xml"), "xml", xml);
+    left.setBorder(JBUI.Borders.emptyRight(SECTION_GAP));
+    right.setBorder(JBUI.Borders.emptyLeft(SECTION_GAP));
+    return Ui.split(SPLIT_KEY, SPLIT, left, right);
   }
+
+  @Override
+  protected @Nullable String getDimensionServiceKey() { return DIMENSION_KEY; }
+
+  @Override
+  public Dimension getInitialSize() { return Ui.firstSize(FIRST_WIDTH_RATIO, FIRST_HEIGHT_RATIO); }
 
   private JComponent section(String title, String copyText, String extension, String text) {
     EditorTextField editor = new EditorTextField(EditorFactory.getInstance().createDocument(text), project,
                                                  FileTypes.byExtension(extension), true, false);
-    editor.setPreferredSize(JBUI.size(CODE_WIDTH, CODE_HEIGHT));
     editor.addSettingsProvider(e -> {
       e.setVerticalScrollbarVisible(true);
       e.setHorizontalScrollbarVisible(true);

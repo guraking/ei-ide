@@ -4,7 +4,6 @@ import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Key;
-import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.util.CachedValue;
@@ -21,7 +20,6 @@ import java.util.function.Function;
 final class MapperDocs {
   private MapperDocs() {}
 
-  private static final String MAPPER_MARK = "<mapper";
   private static final Key<CachedValue<MapperDoc>> DOC = Key.create("ei.db.mybatis.MapperDocs.doc");
   private static final Key<CachedValue<Boolean>> IS_MAPPER = Key.create("ei.db.mybatis.MapperDocs.isMapper");
 
@@ -35,9 +33,21 @@ final class MapperDocs {
     return file != null ? of(file) : MapperDoc.parse(editor.getDocument().getImmutableCharSequence());
   }
 
-  /** 글에 &lt;mapper 가 있으면 true. 태그마다 부르는 곳에서 파일 전체를 다시 훑지 않게 한다. */
+  /**
+   * 뿌리 태그가 mapper 인 파일이면 true({@link MapperDoc#isMapperText}). 태그마다 부르는 곳에서 파일을 다시 훑지 않게 파일마다 기억한다.
+   * 프로젝트 창 아이콘처럼 많은 파일에 불리므로 열린 문서가 없으면 문서를 만들지 않고 파일 글을 본다.
+   */
   static boolean isMapper(PsiFile file) {
-    return cached(file, IS_MAPPER, text -> StringUtil.contains(text, MAPPER_MARK));
+    return CachedValuesManager.getCachedValue(file, IS_MAPPER, () -> {
+      Document d = PsiDocumentManager.getInstance(file.getProject()).getCachedDocument(file);
+      CharSequence text = d != null ? d.getImmutableCharSequence() : file.getViewProvider().getContents();
+      return CachedValueProvider.Result.create(MapperDoc.isMapperText(text), d != null ? d : file);
+    });
+  }
+
+  /** 편집기 문서 글이 매퍼면 true. 동작의 update 처럼 편집기 글을 바로 볼 때 쓴다. */
+  static boolean isMapper(CharSequence text) {
+    return MapperDoc.isMapperText(text);
   }
 
   private static <T> T cached(PsiFile file, Key<CachedValue<T>> key, Function<CharSequence, T> read) {

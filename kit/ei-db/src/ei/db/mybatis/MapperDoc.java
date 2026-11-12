@@ -52,6 +52,95 @@ public final class MapperDoc {
     }
   }
 
+  private static final String MAPPER_ROOT = "mapper";
+  private static final char BOM = '\uFEFF';
+  private static final String COMMENT_OPEN = "<!--";
+  private static final String COMMENT_CLOSE = "-->";
+  private static final String PI_OPEN = "<?";
+  private static final String PI_CLOSE = "?>";
+  private static final String DECL_OPEN = "<!";
+
+  /**
+   * 뿌리 요소 이름이 정확히 mapper 이면 true(mybatis-config.xml 의 mappers · 다른 XML 은 false).
+   * 앞의 BOM · 공백 · XML 머리말 · 주석 · DOCTYPE(안쪽 [ ] 포함)은 건너뛰고 첫 요소 이름만 본다.
+   */
+  public static boolean isMapperText(CharSequence text) {
+    int n = text.length();
+    int i = 0;
+    while (i < n) {
+      char c = text.charAt(i);
+      if (c == BOM || Character.isWhitespace(c)) { i++; continue; }
+      if (c != '<') return false;
+      if (startsWith(text, i, COMMENT_OPEN)) {
+        int end = indexOf(text, COMMENT_CLOSE, i + COMMENT_OPEN.length());
+        if (end < 0) return false;
+        i = end + COMMENT_CLOSE.length();
+      } else if (startsWith(text, i, PI_OPEN)) {
+        int end = indexOf(text, PI_CLOSE, i + PI_OPEN.length());
+        if (end < 0) return false;
+        i = end + PI_CLOSE.length();
+      } else if (startsWith(text, i, DECL_OPEN)) {
+        int depth = 0;
+        i += DECL_OPEN.length();
+        while (i < n && (text.charAt(i) != '>' || depth > 0)) {
+          if (text.charAt(i) == '[') depth++;
+          else if (text.charAt(i) == ']') depth--;
+          i++;
+        }
+        if (i >= n) return false;
+        i++;
+      } else {
+        int end = i + 1 + MAPPER_ROOT.length();
+        if (!startsWith(text, i + 1, MAPPER_ROOT)) return false;
+        return end == n || Character.isWhitespace(text.charAt(end)) || text.charAt(end) == '>' || text.charAt(end) == '/';
+      }
+    }
+    return false;
+  }
+
+  private static boolean startsWith(CharSequence text, int at, String s) {
+    if (at + s.length() > text.length()) return false;
+    for (int k = 0; k < s.length(); k++) {
+      if (text.charAt(at + k) != s.charAt(k)) return false;
+    }
+    return true;
+  }
+
+  private static int indexOf(CharSequence text, String s, int from) {
+    for (int k = from; k + s.length() <= text.length(); k++) {
+      if (startsWith(text, k, s)) return k;
+    }
+    return -1;
+  }
+
+  /**
+   * MyBatis 설정 파일(뿌리 configuration)의 &lt;typeAliases&gt;&lt;typeAlias alias type/&gt; 를 별칭(소문자, MyBatis 처럼 대소문자 무시) → 클래스 이름으로.
+   * 설정 파일이 아니거나 없으면 빈 맵. 같은 별칭은 처음 것.
+   */
+  public static Map<String, String> typeAliases(CharSequence text) {
+    Map<String, String> out = new LinkedHashMap<>();
+    Node root = new Parser(text.toString()).parse();
+    for (Node config : root.children) {
+      if (!CONFIGURATION_ROOT.equals(config.name)) continue;
+      for (Node group : config.children) {
+        if (!TYPE_ALIASES.equals(group.name)) continue;
+        for (Node a : group.children) {
+          String alias = a.attr(ALIAS_ATTR);
+          String type = a.attr(TYPE_ATTR);
+          if (!TYPE_ALIAS.equals(a.name) || alias == null || alias.isBlank() || type == null || type.isBlank()) continue;
+          out.putIfAbsent(alias.strip().toLowerCase(java.util.Locale.ROOT), type.strip());
+        }
+      }
+    }
+    return out;
+  }
+
+  private static final String CONFIGURATION_ROOT = "configuration";
+  private static final String TYPE_ALIASES = "typeAliases";
+  private static final String TYPE_ALIAS = "typeAlias";
+  private static final String ALIAS_ATTR = "alias";
+  private static final String TYPE_ATTR = "type";
+
   /** &lt;mapper&gt; 가 없으면 namespace 는 null, 문장 목록은 빈 채로 돌려준다. */
   public static MapperDoc parse(CharSequence text) {
     return new MapperDoc(new Parser(text.toString()).parse());

@@ -3,7 +3,6 @@ package ei.db.mybatis;
 import com.intellij.codeInsight.navigation.actions.GotoDeclarationHandler;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiManager;
@@ -17,7 +16,6 @@ import java.util.List;
  * 네임스페이스가 없거나 자기 네임스페이스면 같은 파일, 다르면 그 네임스페이스의 매퍼 XML(MapperIndex)에서 찾는다.
  */
 public final class MapperRefNav implements GotoDeclarationHandler {
-  private static final String MAPPER_MARK = "<mapper";
 
   @Override
   public PsiElement @Nullable [] getGotoDeclarationTargets(@Nullable PsiElement source, int offset, Editor editor) {
@@ -25,7 +23,7 @@ public final class MapperRefNav implements GotoDeclarationHandler {
     PsiFile file = source.getContainingFile();
     if (file == null) return null;
     CharSequence text = file.getViewProvider().getContents();
-    if (!StringUtil.contains(text, MAPPER_MARK)) return null;
+    if (!MapperDocs.isMapper(file)) return null;
     MapperRefs.Ref ref = MapperRefs.refAt(text, offset);
     if (ref == null) return null;
     MapperDoc doc = MapperDocs.of(file);

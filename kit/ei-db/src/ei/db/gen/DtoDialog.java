@@ -23,6 +23,7 @@ import ei.db.EiDbBundle;
 import ei.db.Notify;
 import ei.db.QueryResult;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import javax.swing.BoxLayout;
 import javax.swing.DefaultCellEditor;
@@ -30,6 +31,7 @@ import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
+import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.GridLayout;
 import java.io.IOException;
@@ -54,9 +56,12 @@ public final class DtoDialog extends DialogWrapper {
   private static final int COL_TYPE = 2;
   private static final int COL_COMMENT = 3;
   /** 대화창 첫 폭과 왼쪽 칸 비율(칸 폭은 분할선으로 바꾼다). */
-  private static final int WIDTH = 1520;
-  private static final float SPLIT = 620f / WIDTH;
-  private static final int HEIGHT = 820;
+  /** 왼쪽 칸 처음 비율(끌어 바꾼 비율은 기억한다). */
+  private static final float SPLIT = 0.41f;
+  /** 처음 열 때 화면 폭 · 높이에 대한 창 크기 비율. 사용자가 바꾼 크기는 IntelliJ 가 기억한다. */
+  private static final double FIRST_WIDTH_RATIO = 0.79;
+  private static final double FIRST_HEIGHT_RATIO = 0.76;
+  private static final String DIMENSION_KEY = "ei.db.gen.DtoDialog";
 
   private final Project project;
   private final QueryResult result;
@@ -139,6 +144,12 @@ public final class DtoDialog extends DialogWrapper {
   }
 
   @Override
+  protected @Nullable String getDimensionServiceKey() { return DIMENSION_KEY; }
+
+  @Override
+  public Dimension getInitialSize() { return Ui.firstSize(FIRST_WIDTH_RATIO, FIRST_HEIGHT_RATIO); }
+
+  @Override
   protected JComponent createCenterPanel() {
     dtoPreview = new Preview(project, "java", getDisposable());
     mapPreview = new Preview(project, "xml", getDisposable());
@@ -195,7 +206,7 @@ public final class DtoDialog extends DialogWrapper {
     right.add(head, BorderLayout.NORTH);
     right.add(tabs, BorderLayout.CENTER);
     right.setBorder(JBUI.Borders.emptyLeft(10));
-    JComponent body = Ui.split("dto", SPLIT, left, right, WIDTH, HEIGHT);
+    JComponent body = Ui.split("dto", SPLIT, left, right);
 
     JPanel root = new JPanel(new BorderLayout(0, JBUI.scale(12)));
     root.add(top, BorderLayout.NORTH);

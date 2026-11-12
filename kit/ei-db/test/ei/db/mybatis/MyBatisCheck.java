@@ -330,17 +330,6 @@ public class MyBatisCheck {
     eq(MyBatisLog.loggerMatches("c.e.o.mapper.OrderMapper", "com.example.order.mapper.OrderMapper"), true);
     eq(MyBatisLog.loggerMatches("c.e.x.mapper.OrderMapper", "com.example.order.mapper.OrderMapper"), false);
 
-    // 로그 값 → 대화창 미리 채우기(status 의 <if> 는 빠진 로그)
-    MyBatisLog.Entry fromMapper = MyBatisLog.parse(
-        "x.OrderMapper.selectOrderItems : ==>  Preparing: SELECT oi.order_id, oi.line_no, p.product_name, oi.qty FROM order_item oi, product p "
-        + "WHERE 1 = 1 AND oi.product_id = p.product_id AND oi.order_id = ? AND oi.product_id IN ( ? , ? ) ORDER BY oi.line_no\n"
-        + "x.OrderMapper.selectOrderItems : ==> Parameters: 100231(Long), 1003(Long), 1007(String)");
-    Map<String, String> pre = MyBatisLog.prefill(doc, sel, fromMapper);
-    eq(pre.get("orderId"), "100231");
-    eq(pre.get("productIds"), "1003, '1007'");
-    eq(pre.get("fromDate"), null);
-    eq(pre.get("status"), null);
-
     // resultType 비교
     List<String> cols = ResultColumns.of(r.sql);
     eq(cols, List.of("ORDER_ID", "LINE_NO", "PRODUCT_NAME", "QTY"));

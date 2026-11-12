@@ -7,7 +7,6 @@ import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.TextRange;
-import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiFile;
@@ -31,7 +30,7 @@ public final class ParamFieldAnnotator extends ExternalAnnotator<PsiFile, List<M
 
   @Override
   public @Nullable PsiFile collectInformation(@NotNull PsiFile file) {
-    return StringUtil.contains(file.getViewProvider().getContents(), "<mapper") ? file : null;
+    return MapperDocs.isMapper(file) ? file : null;
   }
 
   @Override

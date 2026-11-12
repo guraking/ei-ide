@@ -12,7 +12,6 @@ import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiElement;
@@ -41,7 +40,7 @@ public final class LayerCodeAction extends AnAction {
     if (editor != null && project != null) {
       CharSequence text = editor.getDocument().getCharsSequence();
       int offset = editor.getCaretModel().getOffset();
-      if (StringUtil.contains(text, "<mapper")) {
+      if (MapperDocs.isMapper(text)) {
         ok = MapperDocs.of(project, editor).statementAt(offset) != null;
       } else if (!DumbService.isDumb(project)) {
         PsiMethod m = mapperMethodAt(e.getData(CommonDataKeys.PSI_FILE), offset);
@@ -82,7 +81,7 @@ public final class LayerCodeAction extends AnAction {
   /** 읽기 접근 안에서 부른다. */
   private static @Nullable LayerCode.Located locate(Project project, CharSequence text, int offset,
                                                     @Nullable VirtualFile file, @Nullable PsiFile psiFile) {
-    if (StringUtil.contains(text, "<mapper")) {
+    if (MapperDocs.isMapper(text)) {
       MapperDoc doc = MapperDoc.parse(text);
       MapperDoc.Node s = doc.statementAt(offset);
       return s == null || file == null || doc.namespace == null ? null : new LayerCode.Located(file, doc, s);

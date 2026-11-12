@@ -80,7 +80,7 @@ public class PagingGenCheck {
         + "                AND u.USER_NAME = #{userName}\n"
         + "              </if>\n"
         + "            </where>\n"
-        + "           )\n"
+        + "           ) a\n"
         + "  </select>";
     eq(r.text(), expected);
     String merged = xml.substring(0, r.offset()) + r.text() + xml.substring(r.offset());
@@ -128,6 +128,8 @@ public class PagingGenCheck {
         + "     LIMIT #{endRow} - #{startRow} OFFSET #{startRow}\n"
         + "  </select>\n  ");
     eq(pg.text().contains("ROWNUM"), false);
+    // PostgreSQL 15 이하는 FROM 안 하위 조회에 별칭이 있어야 한다
+    eq(pg.text().endsWith("            SELECT 1\n           ) a\n  </select>"), true);
 
     // 페이징 메서드 매개변수
     String at = "@org.apache.ibatis.annotations.Param";

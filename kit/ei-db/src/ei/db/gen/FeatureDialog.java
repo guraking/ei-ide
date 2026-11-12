@@ -24,6 +24,7 @@ import ei.db.EiDbBundle;
 import ei.db.Meta;
 import ei.db.Notify;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import javax.swing.BoxLayout;
 import javax.swing.JComponent;
@@ -68,9 +69,14 @@ public final class FeatureDialog extends DialogWrapper {
   private static final String IMPL_PACKAGE = "impl";
   private static final String CONTROLLER_PACKAGE = "controller";
   /** 대화창 첫 폭과 왼쪽 칸 비율(칸 폭은 분할선으로 바꾼다). */
-  private static final int WIDTH = 1520;
-  private static final float SPLIT = 620f / WIDTH;
-  private static final int HEIGHT = 820;
+  /** 왼쪽 칸 처음 비율(끌어 바꾼 비율은 기억한다). */
+  private static final float SPLIT = 0.41f;
+  /** 처음 열 때 화면 폭 · 높이에 대한 창 크기 비율. 사용자가 바꾼 크기는 IntelliJ 가 기억한다. */
+  private static final double FIRST_WIDTH_RATIO = 0.79;
+  private static final double FIRST_HEIGHT_RATIO = 0.76;
+  /** 꼬리표 칸 폭을 정할 때 재는 가장 넓은 꼬리표. */
+  private static final String TAG_SAMPLE = "PK";
+  private static final String DIMENSION_KEY = "ei.db.gen.FeatureDialog";
   private static final int SCROLL_UNIT = 16;
   private static final int REFRESH_DELAY_MS = 300;
   private static final int COL_SEARCH = 0;
@@ -104,7 +110,6 @@ public final class FeatureDialog extends DialogWrapper {
   private final Map<MapperGen.Kind, JBCheckBox> kindBoxes = new EnumMap<>(MapperGen.Kind.class);
   /** resultMap 칸은 만들 문장 목록과 헷갈리지 않게 「결과 받기」 줄에 따로 둔다(statements() 가 채운다). */
   private final JPanel resultRow = new JPanel(new BorderLayout());
-  private final JBCheckBox oldJoin = new JBCheckBox(EiDbBundle.message("mapper.old.join"), true);
   private final JBCheckBox cdata = new JBCheckBox(EiDbBundle.message("mapper.cdata"), true);
   private final JBCheckBox where11 = new JBCheckBox(EiDbBundle.message("mapper.where11"), true);
   private final JBCheckBox sqlComments = new JBCheckBox(EiDbBundle.message("mapper.sql.comments"), true);
@@ -183,6 +188,12 @@ public final class FeatureDialog extends DialogWrapper {
   }
 
   @Override
+  protected @Nullable String getDimensionServiceKey() { return DIMENSION_KEY; }
+
+  @Override
+  public Dimension getInitialSize() { return Ui.firstSize(FIRST_WIDTH_RATIO, FIRST_HEIGHT_RATIO); }
+
+  @Override
   protected JComponent createCenterPanel() {
     for (int i = 0; i < TAB_OUTS.length; i++) {
       Preview p = new Preview(project, TAB_OUTS[i] == FeatureGen.Out.XML ? "xml" : "java", getDisposable());
@@ -204,8 +215,6 @@ public final class FeatureDialog extends DialogWrapper {
     for (JBCheckBox b : List.of(makeDto, split, mvc, cdata, where11, sqlComments, updateIf)) b.addActionListener(e -> refresh());
     split.addActionListener(e -> implField.setEnabled(split.isSelected()));
     implField.setEnabled(false);
-    oldJoin.setEnabled(false);
-    oldJoin.setToolTipText(EiDbBundle.message("mapper.old.join.tooltip"));
 
     JPanel dtoRow = new JPanel(new BorderLayout(JBUI.scale(12), 0));
     dtoRow.add(dtoField, BorderLayout.CENTER);
@@ -223,7 +232,7 @@ public final class FeatureDialog extends DialogWrapper {
         .addLabeledComponent(EiDbBundle.message("feature.base.url"), urlField, true)
         .addLabeledComponent(EiDbBundle.message("mapper.result"), resultRow, true)
         .addLabeledComponent(EiDbBundle.message("mapper.statements"), statements(), true)
-        .addLabeledComponent(EiDbBundle.message("mapper.style"), stack(oldJoin, cdata, where11, sqlComments, updateIf), true);
+        .addLabeledComponent(EiDbBundle.message("mapper.style"), stack(cdata, where11, sqlComments, updateIf), true);
     String note = gen().missingNote();
     if (note != null) {
       JBLabel warn = new JBLabel(note, AllIcons.General.Warning, JBLabel.LEFT);
@@ -253,7 +262,7 @@ public final class FeatureDialog extends DialogWrapper {
     right.add(tabs, BorderLayout.CENTER);
     right.setBorder(JBUI.Borders.emptyLeft(12));
 
-    return Ui.split("feature", SPLIT, leftScroll, right, WIDTH, HEIGHT);
+    return Ui.split("feature", SPLIT, leftScroll, right);
   }
 
   @Override
@@ -317,8 +326,9 @@ public final class FeatureDialog extends DialogWrapper {
     columnModel.addTableModelListener(e -> refresh());
     JBTable t = new JBTable(columnModel);
     t.setShowGrid(false);
-    t.getColumnModel().getColumn(COL_SEARCH).setMaxWidth(JBUI.scale(44));
-    t.getColumnModel().getColumn(COL_TAG).setMaxWidth(JBUI.scale(28));
+    Ui.fitColumn(t, COL_SEARCH, "");
+    Ui.fitColumn(t, COL_TAG, TAG_SAMPLE);
+    Ui.rememberColumns(t, DIMENSION_KEY);
     t.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
       @Override
       public Component getTableCellRendererComponent(JTable table, Object value, boolean selected, boolean focus, int row, int column) {
@@ -367,7 +377,7 @@ public final class FeatureDialog extends DialogWrapper {
   }
 
   private FeatureGen gen() {
-    MapperGen.Options style = new MapperGen.Options(oldJoin.isSelected(), cdata.isSelected(), where11.isSelected(),
+    MapperGen.Options style = new MapperGen.Options(cdata.isSelected(), where11.isSelected(),
                                                     sqlComments.isSelected(), updateIf.isSelected(), config.kind);
     return new FeatureGen(new FeatureGen.Spec(table, cols, style, kinds(), dtoType(), mapperField.getText().strip(),
         serviceField.getText().strip(), split.isSelected() ? implField.getText().strip() : null,

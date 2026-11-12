@@ -182,35 +182,64 @@ public final class LayerNav implements LineMarkerProvider {
     if (m == null) return out;
     Set<PsiMethod> seen = new HashSet<>();
     seen.add(m);
-    walk(m, 0, out, seen);
+    Project project = m.getProject();
+    walk(m, 0, MAX_DEPTH, MAX_IMPLS, seen, new Chain() {
+      @Override
+      public boolean full() { return out.size() >= MAX_STEPS; }
+
+      @Override
+      public void mapper(PsiClass mapper, String name, List<MapperIndex.Entry> xmls, int depth) {
+        addMapper(project, mapper, name, xmls, depth, out, seen);
+      }
+
+      @Override
+      public void service(PsiMethod target, int depth) {
+        out.add(new Step(depth, EiDbBundle.message("layernav.label.service"), text(target), AllIcons.Nodes.Method, target));
+      }
+    });
     return out;
   }
 
-  /** method 본문의 "필드.메서드()" 호출을 따라간다. 매퍼면 메서드 · XML 문장, 빈이면 구현 메서드를 담고 그 안으로 들어간다. */
-  private static void walk(PsiMethod method, int depth, List<Step> out, Set<PsiMethod> seen) {
-    if (depth >= MAX_DEPTH || method.getBody() == null) return;
+  /** {@link #walk} 가 만나는 것을 받는다. */
+  interface Chain {
+    /** 더 모으지 않을 때 true. */
+    boolean full();
+
+    /** 매퍼 인터페이스 메서드 호출(그 매퍼의 XML 이 있을 때). 그 안으로는 들어가지 않는다. */
+    void mapper(PsiClass mapper, String name, List<MapperIndex.Entry> xmls, int depth);
+
+    /** 프로젝트 빈의 호출된 메서드(구현). 이어서 그 안으로 들어간다. */
+    void service(PsiMethod target, int depth);
+  }
+
+  /**
+   * method 본문의 "필드.메서드()" 호출을 따라간다. 매퍼(XML 이 있는 인터페이스)면 chain.mapper, 프로젝트 빈이면 구현마다 chain.service 를 부르고 그 안으로 들어간다.
+   * 읽기 접근 안에서 부른다. seen 에 든 메서드는 다시 들어가지 않는다.
+   */
+  static void walk(PsiMethod method, int depth, int maxDepth, int maxImpls, Set<PsiMethod> seen, Chain chain) {
+    if (depth >= maxDepth || method.getBody() == null) return;
     Project project = method.getProject();
     GlobalSearchScope scope = GlobalSearchScope.projectScope(project);
     for (PsiMethodCallExpression call : PsiTreeUtil.findChildrenOfType(method.getBody(), PsiMethodCallExpression.class)) {
       ProgressManager.checkCanceled();
-      if (out.size() >= MAX_STEPS) return;
+      if (chain.full()) return;
       PsiClass type = qualifierFieldClass(call);
       if (type == null) continue;
       String name = call.getMethodExpression().getReferenceName();
       if (name == null) continue;
       List<MapperIndex.Entry> xmls = type.isInterface() ? MapperIndex.find(project, type.getQualifiedName()) : List.of();
       if (!xmls.isEmpty()) {
-        addMapper(project, type, name, xmls, depth, out, seen);
+        chain.mapper(type, name, xmls, depth);
         continue;
       }
       VirtualFile vf = PsiUtilCore.getVirtualFile(type);
       if (vf == null || !scope.contains(vf) || !LayerRules.isBean(type.isInterface(), annotationNames(type))) continue;
       PsiMethod called = call.resolveMethod();
       if (called == null) continue;
-      for (PsiMethod target : implementations(called, scope)) {
+      for (PsiMethod target : implementations(called, scope, maxImpls)) {
         if (!seen.add(target)) continue;
-        out.add(new Step(depth, EiDbBundle.message("layernav.label.service"), text(target), AllIcons.Nodes.Method, target));
-        walk(target, depth + 1, out, seen);
+        chain.service(target, depth);
+        walk(target, depth + 1, maxDepth, maxImpls, seen, chain);
       }
     }
   }
@@ -238,14 +267,14 @@ public final class LayerNav implements LineMarkerProvider {
     }
   }
 
-  /** 본문이 있으면 그 메서드, 없으면(추상 · 인터페이스) 프로젝트 안 구현(최대 MAX_IMPLS). 구현이 없으면 그 메서드. */
-  private static Collection<PsiMethod> implementations(PsiMethod called, GlobalSearchScope scope) {
+  /** 본문이 있으면 그 메서드, 없으면(추상 · 인터페이스) 프로젝트 안 구현(최대 maxImpls). 구현이 없으면 그 메서드. */
+  private static Collection<PsiMethod> implementations(PsiMethod called, GlobalSearchScope scope, int maxImpls) {
     if (called.getBody() != null) return List.of(called);
     List<PsiMethod> found = new ArrayList<>();
     OverridingMethodsSearch.search(called, scope, true).forEach((Processor<PsiMethod>) impl -> {
       ProgressManager.checkCanceled();
       if (impl.getBody() != null) found.add(impl);
-      return found.size() < MAX_IMPLS;
+      return found.size() < maxImpls;
     });
     return found.isEmpty() ? List.of(called) : found;
   }

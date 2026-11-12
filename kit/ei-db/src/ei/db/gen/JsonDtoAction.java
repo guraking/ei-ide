@@ -49,7 +49,7 @@ public final class JsonDtoAction extends DumbAwareAction {
 
   /** read action 안에서 부른다. */
   private static JsonDtoDialog.Start start(Project project, VirtualFile dir) {
-    Targets.Roots roots = Targets.find(project);
+    Targets.Roots roots = dir != null ? Targets.find(project, dir) : Targets.find(project);
     if (dir != null && dir.isValid()) {
       ProjectFileIndex index = ProjectFileIndex.getInstance(project);
       VirtualFile sourceRoot = index.getSourceRootForFile(dir);

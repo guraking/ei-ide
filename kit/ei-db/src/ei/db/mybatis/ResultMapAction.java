@@ -10,7 +10,6 @@ import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.psi.PsiClass;
 import ei.db.EiDbBundle;
 import ei.db.Notify;
@@ -32,7 +31,7 @@ public final class ResultMapAction extends AnAction {
   public void update(@NotNull AnActionEvent e) {
     Editor editor = e.getData(CommonDataKeys.EDITOR);
     boolean ok = false;
-    if (editor != null && e.getProject() != null && StringUtil.contains(editor.getDocument().getCharsSequence(), "<mapper")) {
+    if (editor != null && e.getProject() != null && MapperDocs.isMapper(editor.getDocument().getCharsSequence())) {
       MapperDoc.Node s = MapperDocs.of(e.getProject(), editor).statementAt(editor.getCaretModel().getOffset());
       ok = s != null && SELECT.equals(s.name);
     }

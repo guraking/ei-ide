@@ -8,7 +8,6 @@ import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.ide.CopyPasteManager;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.util.text.StringUtil;
 import ei.db.EiDbBundle;
 import ei.db.Notify;
 import org.jetbrains.annotations.NotNull;
@@ -20,7 +19,6 @@ import java.util.function.UnaryOperator;
  * 모양은 매퍼 인터페이스 메서드가 있으면 그것, 없으면 XML 속성으로 짐작한다(색인 중이면 XML 로만).
  */
 public final class ServiceCallAction extends AnAction {
-  private static final String MAPPER_MARK = "<mapper";
   /** namespace 가 없을 때 쓰는 매퍼 필드 이름. */
   private static final String FALLBACK_MAPPER_FIELD = "mapper";
 
@@ -33,7 +31,7 @@ public final class ServiceCallAction extends AnAction {
     boolean ok = false;
     if (editor != null && e.getProject() != null) {
       CharSequence text = editor.getDocument().getCharsSequence();
-      ok = StringUtil.contains(text, MAPPER_MARK) && MapperDocs.of(e.getProject(), editor).statementAt(editor.getCaretModel().getOffset()) != null;
+      ok = MapperDocs.isMapper(text) && MapperDocs.of(e.getProject(), editor).statementAt(editor.getCaretModel().getOffset()) != null;
     }
     e.getPresentation().setEnabledAndVisible(ok);
   }

@@ -13,7 +13,6 @@ import com.intellij.openapi.editor.ScrollType;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiClassType;
 import com.intellij.psi.PsiField;
@@ -109,7 +108,7 @@ public final class DynamicWhereAction extends AnAction {
   private static @Nullable MapperDoc.Node statementAt(Project project, @Nullable Editor editor) {
     if (editor == null) return null;
     CharSequence text = editor.getDocument().getCharsSequence();
-    if (!StringUtil.contains(text, "<mapper")) return null;
+    if (!MapperDocs.isMapper(text)) return null;
     MapperDoc.Node s = MapperDocs.of(project, editor).statementAt(editor.getCaretModel().getOffset());
     return s != null && TAGS.contains(s.name) ? s : null;
   }

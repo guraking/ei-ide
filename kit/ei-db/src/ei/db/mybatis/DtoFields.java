@@ -123,6 +123,11 @@ final class DtoFields {
       String simple = Character.toUpperCase(t.charAt(0)) + t.substring(1);
       PsiClass[] all = PsiShortNamesCache.getInstance(project).getClassesByName(simple, GlobalSearchScope.projectScope(project));
       found = all.length == 1 ? all[0] : pick(project, all, t, from);
+      if (found == null) {
+        // 클래스 이름과 다른 별칭(searchVO → ComDefaultVO)은 MyBatis 설정 파일의 typeAlias 로 찾는다.
+        String type = MapperIndex.typeAlias(project, t);
+        if (type != null) found = JavaPsiFacade.getInstance(project).findClass(type, GlobalSearchScope.allScope(project));
+      }
     }
     if (found == null || found.getQualifiedName() == null || found.getQualifiedName().startsWith("java.")) return null;
     return found;

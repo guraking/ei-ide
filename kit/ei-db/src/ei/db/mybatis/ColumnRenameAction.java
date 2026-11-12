@@ -17,7 +17,6 @@ import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiCompiledElement;
@@ -46,7 +45,6 @@ import java.util.TreeSet;
  * 편집기 오른쪽 클릭(매퍼 XML 에서만 보임, 커서 낱말을 옛 이름으로)과 소스 메뉴에서 연다.
  */
 public final class ColumnRenameAction extends AnAction {
-  private static final String MAPPER_MARK = "<mapper";
 
   @Override
   public @NotNull ActionUpdateThread getActionUpdateThread() { return ActionUpdateThread.BGT; }
@@ -56,7 +54,7 @@ public final class ColumnRenameAction extends AnAction {
     boolean ok = e.getProject() != null;
     if (ok && ActionPlaces.isPopupPlace(e.getPlace())) {
       Editor editor = e.getData(CommonDataKeys.EDITOR);
-      ok = editor != null && StringUtil.contains(editor.getDocument().getCharsSequence(), MAPPER_MARK);
+      ok = editor != null && MapperDocs.isMapper(editor.getDocument().getCharsSequence());
     }
     e.getPresentation().setEnabledAndVisible(ok);
   }
@@ -93,7 +91,7 @@ public final class ColumnRenameAction extends AnAction {
   private static String initialWord(Editor editor) {
     if (editor == null) return "";
     CharSequence text = editor.getDocument().getCharsSequence();
-    if (!StringUtil.contains(text, MAPPER_MARK)) return "";
+    if (!MapperDocs.isMapper(text)) return "";
     String selected = editor.getSelectionModel().getSelectedText();
     if (selected != null && ColumnRename.NAME.matcher(selected.trim()).matches()) return selected.trim();
     return ColumnRename.wordAt(text, editor.getCaretModel().getOffset());

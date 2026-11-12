@@ -12,12 +12,14 @@ import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.JBUI;
 import org.jetbrains.annotations.Nullable;
 import ei.db.EiDbBundle;
+import ei.db.gen.Ui;
 
 import javax.swing.DefaultCellEditor;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
+import java.awt.Dimension;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -32,8 +34,10 @@ final class WhereDialog extends DialogWrapper {
   private static final int COLUMN = 3;
   private static final int OP = 4;
   private static final String[] HEADERS = {EiDbBundle.message("where.col.use"), EiDbBundle.message("common.col.field"), EiDbBundle.message("common.col.type"), EiDbBundle.message("common.col.column"), EiDbBundle.message("where.col.compare")};
-  private static final int TABLE_WIDTH = 640;
-  private static final int TABLE_HEIGHT = 320;
+  /** 처음 열 때 화면 폭 · 높이에 대한 창 크기 비율. 사용자가 바꾼 크기는 IntelliJ 가 기억한다. */
+  private static final double FIRST_WIDTH_RATIO = 0.4;
+  private static final double FIRST_HEIGHT_RATIO = 0.45;
+  private static final String DIMENSION_KEY = "ei.db.mybatis.WhereDialog";
 
   private final List<Field> fields;
   private final JBTextField alias = new JBTextField();
@@ -54,6 +58,8 @@ final class WhereDialog extends DialogWrapper {
       model.addRow(new Object[]{Boolean.FALSE, f.name(), ServiceCode.simple(f.type()), WhereGen.column(f.name()), WhereGen.EQ});
     }
     table = new JBTable(model);
+    Ui.fitColumn(table, USE, "");
+    Ui.rememberColumns(table, DIMENSION_KEY);
     table.getColumnModel().getColumn(OP).setCellEditor(new DefaultCellEditor(new ComboBox<>(WhereGen.OPS.toArray(new String[0]))));
     alias.setText(guessedAlias);
     setTitle(EiDbBundle.message("action.EiDb.MyBatis.DynamicWhere.command") + " — " + dtoName);
@@ -62,12 +68,17 @@ final class WhereDialog extends DialogWrapper {
   }
 
   @Override
+  protected @Nullable String getDimensionServiceKey() { return DIMENSION_KEY; }
+
+  @Override
+  public Dimension getInitialSize() { return Ui.firstSize(FIRST_WIDTH_RATIO, FIRST_HEIGHT_RATIO); }
+
+  @Override
   protected @Nullable JComponent createCenterPanel() {
     JPanel top = FormBuilder.createFormBuilder()
         .addLabeledComponent(new JBLabel(EiDbBundle.message("where.alias.label")), alias)
         .getPanel();
     JBScrollPane scroll = new JBScrollPane(table);
-    scroll.setPreferredSize(JBUI.size(TABLE_WIDTH, TABLE_HEIGHT));
     JPanel panel = new JPanel(new BorderLayout(0, JBUI.scale(8)));
     panel.add(top, BorderLayout.NORTH);
     panel.add(scroll, BorderLayout.CENTER);

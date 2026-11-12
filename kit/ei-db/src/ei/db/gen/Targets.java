@@ -4,6 +4,7 @@ import com.intellij.ide.util.PsiNavigationSupport;
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
+import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.ProjectFileIndex;
@@ -13,6 +14,7 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.VirtualFileManager;
 import com.intellij.openapi.vfs.VirtualFileVisitor;
 import ei.db.EiDbBundle;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -62,11 +64,18 @@ final class Targets {
   }
 
   /**
-   * 테스트 · 생성 소스(generated, 콘텐츠 루트 안 경로로 판정)가 아닌 소스 루트를 모듈별로 모아, 자바 루트가 있는 첫 모듈에서 자바 · 리소스 루트를 함께 고른다.
+   * 테스트 · 생성 소스(generated, 콘텐츠 루트 안 경로로 판정)가 아닌 소스 루트를 모듈별로 모아, 지금 편집기 파일의 모듈(자바 루트가 없으면 자바 루트가 있는 첫 모듈)에서
+   * 자바 · 리소스 루트를 함께 고른다.
    * 이름이 resources 인 루트는 리소스, 나머지는 자바로 본다. 그 모듈에 리소스 루트가 없으면 자바 루트 옆 resources 로 둔다.
    * shortcut: 루트 종류(JavaSourceRootType)가 빌드 클래스패스에 없어 이름 · 경로로 가른다. 이름이 다른 리소스 루트는 자바로 잡힌다.
    */
   static Roots find(Project project) {
+    VirtualFile[] selected = FileEditorManager.getInstance(project).getSelectedFiles();
+    return find(project, selected.length > 0 ? selected[0] : null);
+  }
+
+  /** {@link #find(Project)} 와 같되 context(파일 · 폴더, null 이면 첫 모듈)의 모듈을 먼저 고른다. read action 안에서 부른다. */
+  static Roots find(Project project, @Nullable VirtualFile context) {
     String base = project.getBasePath();
     ProjectFileIndex index = ProjectFileIndex.getInstance(project);
     Map<Module, VirtualFile> javaOf = new LinkedHashMap<>();
@@ -84,9 +93,10 @@ final class Targets {
       VirtualFile res = resOf.isEmpty() ? null : resOf.values().iterator().next();
       return new Roots(base, base + "/" + DEFAULT_JAVA, res != null ? res.getPath() : base + "/" + DEFAULT_RESOURCES, FALLBACK_PACKAGE);
     }
-    Map.Entry<Module, VirtualFile> first = javaOf.entrySet().iterator().next();
-    VirtualFile java = first.getValue();
-    VirtualFile res = resOf.get(first.getKey());
+    Module module = context != null && context.isValid() ? index.getModuleForFile(context) : null;
+    if (module == null || !javaOf.containsKey(module)) module = javaOf.keySet().iterator().next();
+    VirtualFile java = javaOf.get(module);
+    VirtualFile res = resOf.get(module);
     String resPath = res != null ? res.getPath() : siblingResources(java);
     return new Roots(base, java.getPath(), resPath, guessPackage(java));
   }
