@@ -26,6 +26,10 @@ public class ResultTabCheck {
     // 쓴 그대로의 따옴표는 tableRef 에 남는다.
     eq(ResultView.tableRef("SELECT * FROM app.\"order\" o"), "\"order\"");
     eq(ResultView.firstTable("SELECT * FROM app.\"order\" o"), "order");
+    // WITH 뒤 바깥 문장 · 표 함수 · DELETE.
+    eq(ResultView.firstTable("WITH w AS (SELECT * FROM src) SELECT * FROM w"), "w");
+    eq(ResultView.firstTable("SELECT * FROM generate_series(1, 3) g"), "generate_series");
+    eq(ResultView.firstTable("select a from emp e join dept d on d.id = e.d"), "emp");
     System.out.println("ResultTabCheck 통과");
   }
 }

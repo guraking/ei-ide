@@ -14,6 +14,7 @@ import ei.db.DbConfig;
 import ei.db.EiDbBundle;
 import ei.db.Notify;
 import ei.db.QueryResult;
+import ei.db.bench.SqlParts;
 import org.jetbrains.annotations.NotNull;
 
 import com.intellij.ui.components.JBLabel;
@@ -23,7 +24,6 @@ import javax.swing.Icon;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import java.awt.BorderLayout;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -37,7 +37,6 @@ public final class ResultView {
   static final String TOOL_WINDOW_ID = "EI Database Result";
   private static final int MAX_TABS = 10;
   private static final Key<Integer> COUNTER = Key.create("ei.db.console.resultCounter");
-  private static final Pattern FROM = Pattern.compile("(?i)\\bFROM\\b\\s*(\\(|[\\w.$#\"]+)");
   /** 탭이 보이는 결과의 접속 · 문장. 같은 값이면 그 탭을 다시 쓴다. */
   private static final Key<String> SAME = Key.create("ei.db.console.resultSame");
   static final String RUN = "run";
@@ -105,15 +104,11 @@ public final class ResultView {
   }
 
   /** 화면에 보일 오류 문구. 메시지가 없으면 예외 클래스 이름 대신 한국어 문구. */
-  static String message(Exception e) {
+  public static String message(Exception e) {
     return e.getMessage() == null || e.getMessage().isBlank() ? EiDbBundle.message("result.unknown.error") : e.getMessage();
   }
 
-  /**
-   * 바깥 문장의 첫 FROM 뒤 표 이름(스키마 · 따옴표 제외, 쓴 그대로). 주석 · 문자열 안의 FROM 과
-   * 함수 안의 FROM(EXTRACT(YEAR FROM d) · TRIM(… FROM c) · substring(x FROM 2))은 보지 않는다.
-   * FROM 뒤가 ( 인 인라인 뷰(쪽 나누기 감싸기 등)면 그 안 문장의 FROM 을 같은 방법으로 본다. 없으면 null.
-   */
+  /** 바깥 문장의 첫 FROM 첫 표 이름(스키마 · 따옴표 제외, 쓴 그대로). 규칙은 SqlParts.firstTable. 없으면 null. */
   static String firstTable(String sql) {
     String ref = tableRef(sql);
     return ref == null ? null : ref.replace("\"", "");
@@ -121,28 +116,7 @@ public final class ResultView {
 
   /** firstTable 과 같은 표를 쓴 그대로의 따옴표와 함께(스키마 제외). 복사한 INSERT · UPDATE 에 쓴다. 없으면 null. */
   static String tableRef(String sql) {
-    String code = SqlText.code(sql);
-    Matcher m = FROM.matcher(code);
-    int depth = 0;
-    int want = 0;
-    int scanned = 0;
-    while (m.find()) {
-      for (int i = scanned; i < m.start(); i++) {
-        char ch = code.charAt(i);
-        if (ch == '(') depth++;
-        if (ch == ')' && depth > 0) depth--;
-      }
-      scanned = m.start();
-      if (depth < want) return null;
-      if (depth != want) continue;
-      String name = m.group(1);
-      if (name.equals("(")) {
-        want++;
-        continue;
-      }
-      return name.substring(name.lastIndexOf('.') + 1);
-    }
-    return null;
+    return SqlParts.firstTable(sql);
   }
 
   /** 다음 번호를 붙인 탭 이름 「결과 N · 이름」. 결과 패널의 머리줄에도 같은 글을 쓴다. */

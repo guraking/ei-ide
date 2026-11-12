@@ -1,16 +1,12 @@
 package ei.db.ui;
 
 import ei.db.DbConfig;
-import ei.db.DbKind;
 import ei.db.Meta;
 
 import java.sql.Connection;
-import java.sql.DatabaseMetaData;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -26,8 +22,7 @@ final class TableSpec {
   static final List<String> HEADER = List.of("표", "구분", "표 주석", "No", "칼럼", "형", "길이", "NULL", "PK", "기본값", "주석");
   static final String YES = "Y";
   static final String NO = "N";
-  /** 정의서에 싣는 getTables 형. */
-  static final String[] TYPES = {"TABLE", "VIEW"};
+  /** 이 형 이름으로 끝나는 TABLE_TYPE(VIEW · MATERIALIZED VIEW)은 「뷰」. 정의서에 싣는 형은 Meta.tableAndViewTypes. */
   private static final String VIEW_TYPE = "VIEW";
   static final String KIND_TABLE = "표";
   static final String KIND_VIEW = "뷰";
@@ -58,9 +53,9 @@ final class TableSpec {
     return out;
   }
 
-  /** getTables 의 TABLE_TYPE 이 VIEW 면 「뷰」, 나머지는 「표」. */
+  /** getTables 의 TABLE_TYPE 이 VIEW · MATERIALIZED VIEW 면 「뷰」, 나머지(TABLE · PARTITIONED TABLE · FOREIGN TABLE)는 「표」. */
   static String kind(Meta.Table t) {
-    return VIEW_TYPE.equalsIgnoreCase(t.type()) ? KIND_VIEW : KIND_TABLE;
+    return t.type() != null && t.type().toUpperCase(java.util.Locale.ROOT).endsWith(VIEW_TYPE) ? KIND_VIEW : KIND_TABLE;
   }
 
   /** 칼럼을 하나라도 읽은 표만, 순서는 그대로. 권한이 없거나 그사이 지워진 표는 칼럼이 비어 빠진다. */
@@ -79,39 +74,34 @@ final class TableSpec {
     return label.substring(col.type().length() + 1, label.length() - 1);
   }
 
-  /**
-   * 표 하나의 칼럼 · PK · 기본값(COLUMN_DEF, 앞뒤 공백 제거)을 읽는다. 정의서에 쓰지 않는 외래키는 읽지 않는다(fk 는 늘 false).
-   * getColumns 의 표 이름 자리는 LIKE 패턴이라 「_」 · 「%」 가 든 이름은 다른 표와도 맞는다: TABLE_NAME 이 같은 줄만 받는다.
-   */
+  /** 표 하나의 칼럼 · PK · 기본값(COLUMN_DEF, 앞뒤 공백 제거)을 읽는다. 정의서에 쓰지 않는 외래키는 읽지 않는다(fk 는 늘 false). */
   static Table read(Connection conn, DbConfig c, String schema, Meta.Table table) throws SQLException {
-    // Meta 와 같은 규칙: MySQL 은 데이터베이스가 catalog 자리, 나머지는 schema 자리.
-    String catalog = c.kind == DbKind.MYSQL ? schema : null;
-    String schemaArg = c.kind == DbKind.MYSQL ? null : schema;
-    DatabaseMetaData md = conn.getMetaData();
-    Set<String> pks = new HashSet<>();
-    // getPrimaryKeys 의 표 이름은 패턴이 아니라 정확한 이름이다.
-    try (ResultSet rs = md.getPrimaryKeys(catalog, schemaArg, table.name())) {
-      while (rs.next()) pks.add(rs.getString("COLUMN_NAME"));
+    return of(table, columnsByTable(conn, c, schema, List.of(table)).getOrDefault(table.name(), List.of()), Meta.primaryKeys(conn, c, schema, table.name()));
+  }
+
+  /**
+   * 표 이름 → 칼럼 줄. 표가 하나면 그 표만, 여럿이면 스키마의 칼럼을 한 번에 읽는다(표마다 따로 읽으면 표 1천 개에 조회 1천 번).
+   * 이름 맞춤 · 스키마 거르기 · 기본값 읽기는 Meta.columnRows 가 한다.
+   */
+  static Map<String, List<Meta.ColumnRow>> columnsByTable(Connection conn, DbConfig c, String schema, List<Meta.Table> tables) throws SQLException {
+    String only = tables.size() == 1 ? tables.get(0).name() : null;
+    Map<String, List<Meta.ColumnRow>> out = new HashMap<>();
+    for (Meta.ColumnRow r : Meta.columnRows(conn, c, schema, only, true)) {
+      out.computeIfAbsent(r.table(), k -> new ArrayList<>()).add(r);
     }
-    List<Meta.Column> columns = new ArrayList<>();
+    return out;
+  }
+
+  /** 읽은 칼럼 줄과 PK 로 정의서 표 하나를 만든다. */
+  static Table of(Meta.Table table, List<Meta.ColumnRow> rows, Set<String> pks) {
+    List<Meta.Column> columns = new ArrayList<>(rows.size());
     Map<String, String> defaults = new HashMap<>();
-    try (ResultSet rs = md.getColumns(catalog, schemaArg, table.name(), "%")) {
-      while (rs.next()) {
-        // Oracle 의 COLUMN_DEF 는 LONG 이라 칸 번호 순서(TABLE_NAME → … → REMARKS → COLUMN_DEF)대로 읽는다.
-        if (!table.name().equals(rs.getString("TABLE_NAME"))) continue;
-        String name = rs.getString("COLUMN_NAME");
-        String type = rs.getString("TYPE_NAME");
-        int size = rs.getInt("COLUMN_SIZE");
-        int scale = rs.getInt("DECIMAL_DIGITS");
-        boolean nullable = rs.getInt("NULLABLE") != DatabaseMetaData.columnNoNulls;
-        String comment = trim(rs.getString("REMARKS"));
-        String def = rs.getString("COLUMN_DEF");
-        columns.add(new Meta.Column(name, type, size, scale, pks.contains(name), false, nullable, comment));
-        if (def != null && !def.isBlank()) defaults.put(name, def.trim());
-      }
+    for (Meta.ColumnRow r : rows) {
+      Meta.Column col = r.column();
+      columns.add(new Meta.Column(col.name(), col.type(), col.size(), col.scale(), pks.contains(col.name()), false, col.nullable(), col.comment()));
+      if (r.def() != null) defaults.put(col.name(), r.def());
     }
     return new Table(table, columns, defaults);
   }
 
-  private static String trim(String s) { return s == null ? "" : s.trim(); }
 }

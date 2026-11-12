@@ -60,7 +60,49 @@ public final class SqlRunner {
       ConsoleRun.stop(project, c, sql);
       return;
     }
-    new Task.Backgroundable(project, EiDbBundle.message("runner.progress", c.name), true) {
+    queue(project, c, sql, binds, DbSessions.get(project).maxRows(), EiDbBundle.message("runner.progress", c.name), new Outcome() {
+      @Override
+      public void done(QueryResult result) {
+        ResultView.show(project, c, result);
+        if (onSuccess != null) onSuccess.accept(result);
+      }
+
+      @Override
+      public void cancelled() { ResultView.showCancelled(project, c, sql); }
+
+      @Override
+      public void failed(Exception e) { ResultView.showError(project, c, sql, e); }
+    });
+  }
+
+  /**
+   * 결과 창의 「더 보기」: 이미 실행해 보인 조회 문장을 limit 건까지 다시 읽는다(위험 문장 확인은 이미 거쳤다).
+   * 진행 막대에 읽은 행 수를 보이고 취소할 수 있다. 실행 기록에 남는다. onResult 는 성공했을 때 화면 스레드에서 불린다.
+   * 실패는 알림으로, 취소는 아무것도 바꾸지 않는다.
+   */
+  public static void reread(Project project, DbConfig c, String sql, List<Object> binds, int limit, Consumer<QueryResult> onResult) {
+    queue(project, c, sql, binds, limit, EiDbBundle.message("runner.reread.progress", c.name, limit), new Outcome() {
+      @Override
+      public void done(QueryResult result) { onResult.accept(result); }
+
+      @Override
+      public void cancelled() { }
+
+      @Override
+      public void failed(Exception e) { Notify.error(project, EiDbBundle.message("result.more.failed", c.name, ResultView.message(e))); }
+    });
+  }
+
+  /** 실행 결과를 받는 곳. 모두 화면 스레드에서(프로젝트가 닫혔으면 부르지 않는다). */
+  private interface Outcome {
+    void done(QueryResult result);
+    void cancelled();
+    void failed(Exception e);
+  }
+
+  /** 백그라운드 실행(진행 막대 · 취소) → outcome → 실행 기록. limit 건까지 읽는다. */
+  private static void queue(Project project, DbConfig c, String sql, List<Object> binds, int limit, String title, Outcome outcome) {
+    new Task.Backgroundable(project, title, true) {
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
         AtomicBoolean failed = new AtomicBoolean();
@@ -69,17 +111,15 @@ public final class SqlRunner {
             () -> cancelIfAsked(project, c, mine, indicator, failed), CANCEL_POLL_MS, CANCEL_POLL_MS, TimeUnit.MILLISECONDS);
         long start = System.currentTimeMillis();
         try {
-          QueryResult result = DbSessions.get(project).run(c, sql, binds, indicator::isCanceled, mine);
-          ApplicationManager.getApplication().invokeLater(() -> {
-            ResultView.show(project, c, result);
-            if (onSuccess != null && !project.isDisposed()) onSuccess.accept(result);
-          });
+          QueryResult result = DbSessions.get(project).run(c, sql, binds, limit, indicator::isCanceled, mine,
+              rows -> indicator.setText2(EiDbBundle.message("runner.rows.read", rows)));
+          ApplicationManager.getApplication().invokeLater(() -> outcome.done(result), project.getDisposed());
           record(project, c, sql, binds, result.millis(), result.isQuery() ? result.rows().size() : result.updateCount(), true);
         } catch (DbSessions.CancelledException e) {
-          ApplicationManager.getApplication().invokeLater(() -> ResultView.showCancelled(project, c, sql));
+          ApplicationManager.getApplication().invokeLater(outcome::cancelled, project.getDisposed());
           record(project, c, sql, binds, System.currentTimeMillis() - start, RunHistory.NO_COUNT, false);
         } catch (Exception e) {
-          ApplicationManager.getApplication().invokeLater(() -> ResultView.showError(project, c, sql, e));
+          ApplicationManager.getApplication().invokeLater(() -> outcome.failed(e), project.getDisposed());
           record(project, c, sql, binds, System.currentTimeMillis() - start, RunHistory.NO_COUNT, false);
         } finally {
           watch.cancel(false);

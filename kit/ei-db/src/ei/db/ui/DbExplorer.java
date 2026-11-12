@@ -55,6 +55,7 @@ import ei.db.EiDbBundle;
 import ei.db.Meta;
 import ei.db.Notify;
 import ei.db.Passwords;
+import ei.db.SchemaCache;
 import ei.db.SqlRunner;
 import ei.db.console.Badge;
 import ei.db.console.ConsoleOpener;
@@ -159,13 +160,20 @@ final class DbExplorer extends SimpleToolWindowPanel {
   private final Set<DefaultMutableTreeNode> loading = Collections.newSetFromMap(new IdentityHashMap<>());
   /** loading 이 비어 있지 않은 동안 검색 줄 아래에 보이는 진행 막대. */
   private final Gauge gauge = Gauge.create(EiDbBundle.message("explorer.loading"));
-  private final ExecutorService metaQueue = AppExecutorUtil.createBoundedApplicationPoolExecutor("EI Database 탐색기", 1);
+  /**
+   * 접속 id → 그 접속의 메타 읽기 줄(한 번에 하나). 접속마다 따로 두어 한 접속이 막혀도(망 끊김) 다른 접속 나무는 읽힌다.
+   * 창이 닫히면(parent 정리) 줄도 닫힌다. 화면 스레드에서만 만든다.
+   */
+  private static final String META_QUEUE_NAME = "EI Database 탐색기";
+  private final Map<String, ExecutorService> metaQueues = new HashMap<>();
+  private final Disposable parent;
   /** 창 머리에 「접속 N / M」을 보일 내용 탭. attach 전에는 null. */
   private Content content;
 
   DbExplorer(Project project, Disposable parent) {
     super(true, true);
     this.project = project;
+    this.parent = parent;
 
     tree.setRootVisible(false);
     tree.setShowsRootHandles(true);
@@ -384,8 +392,11 @@ final class DbExplorer extends SimpleToolWindowPanel {
         Connection conn = sessions.connection(s.c());
         // 마디는 접속 전에 만들어진다. 기본 스키마를 비운 PostgreSQL 은 접속한 지금에야 현재 스키마를 알므로 다시 읽어 마디 이름도 바꾼다.
         Schema real = new Schema(s.c(), Meta.schemaOf(s.c()));
-        List<Meta.Table> tables = Meta.tables(conn, real.c(), real.name(), Meta.tableTypes(real.c()));
-        List<Meta.Table> views = Meta.tables(conn, real.c(), real.name(), Meta.viewTypes(real.c()));
+        // 표 · 뷰를 한 번에 읽어(SchemaCache, 자동완성 · 작업대와 같이 씀) 형으로 나눈다.
+        List<String> viewTypes = List.of(Meta.viewTypes(real.c()));
+        List<Meta.Table> tables = new ArrayList<>();
+        List<Meta.Table> views = new ArrayList<>();
+        for (Meta.Table t : SchemaCache.tables(conn, real.c(), real.name())) (viewTypes.contains(t.type()) ? views : tables).add(t);
         return () -> {
           node.setUserObject(real);
           fillSchema(node, real, tables, views);
@@ -410,13 +421,16 @@ final class DbExplorer extends SimpleToolWindowPanel {
   private interface Job { Runnable call() throws Exception; }
 
   private void background(DefaultMutableTreeNode node, DbConfig c, Job job) {
-    metaQueue.execute(() -> {
+    ExecutorService queue = metaQueues.computeIfAbsent(c.id,
+        id -> AppExecutorUtil.createBoundedApplicationPoolExecutor(META_QUEUE_NAME, AppExecutorUtil.getAppExecutorService(), 1, parent));
+    queue.execute(() -> {
       Runnable done;
       try {
         done = job.call();
       } catch (Exception e) {
         done = () -> showError(node, c, e);
       }
+      DbSessions.get(project).endReadTransaction(c);
       Runnable finish = done;
       ApplicationManager.getApplication().invokeLater(() -> {
         loading.remove(node);
@@ -437,7 +451,7 @@ final class DbExplorer extends SimpleToolWindowPanel {
     }
     DbSessions sessions = DbSessions.get(project);
     background(node, t.c, () -> {
-      List<Meta.Column> cols = Meta.columns(sessions.connection(t.c), t.c, t.schema, t.table.name());
+      List<Meta.Column> cols = SchemaCache.columns(sessions.connection(t.c), t.c, t.schema, t.table.name());
       return () -> {
         t.columns = cols;
         then.accept(cols);
@@ -691,8 +705,8 @@ final class DbExplorer extends SimpleToolWindowPanel {
       Map<String, List<Meta.Column>> columns = new HashMap<>();
       List<Meta.ForeignKey> fks = new ArrayList<>();
       for (String table : tables) {
-        columns.put(table, Meta.columns(conn, base.c, base.schema, table));
-        fks.addAll(Meta.importedKeys(conn, base.c, base.schema, table));
+        columns.put(table, SchemaCache.columns(conn, base.c, base.schema, table));
+        fks.addAll(SchemaCache.importedKeys(conn, base.c, base.schema, table));
       }
       String sql = SelectSql.join(base.c.kind, base.schema, tables, columns, fks);
       return () -> ConsoleOpener.open(project, base.c, sql);
@@ -722,20 +736,25 @@ final class DbExplorer extends SimpleToolWindowPanel {
         try {
           Connection conn = DbSessions.get(project).connection(c);
           List<Meta.Table> targets = new ArrayList<>();
-          for (Meta.Table t : Meta.tables(conn, c, schema, TableSpec.TYPES)) {
+          for (Meta.Table t : SchemaCache.tables(conn, c, schema)) {
             if (picked == null || picked.contains(t.name())) targets.add(t);
           }
+          Map<String, List<Meta.ColumnRow>> columns = targets.isEmpty() ? Map.of() : TableSpec.columnsByTable(conn, c, schema, targets);
           indicator.setIndeterminate(false);
           for (int i = 0; i < targets.size(); i++) {
             indicator.checkCanceled();
             Meta.Table t = targets.get(i);
             indicator.setText2(EiDbBundle.message("explorer.spec.progress.table", i + 1, targets.size(), t.name()));
             indicator.setFraction((double) i / targets.size());
-            specs.add(TableSpec.read(conn, c, schema, t));
+            // 뷰에는 PK 가 없어 묻지 않는다.
+            Set<String> pks = TableSpec.KIND_VIEW.equals(TableSpec.kind(t)) ? Set.of() : Meta.primaryKeys(conn, c, schema, t.name());
+            specs.add(TableSpec.of(t, columns.getOrDefault(t.name(), List.of()), pks));
           }
         } catch (SQLException e) {
           Notify.error(project, EiDbBundle.message("explorer.spec.read.failed", e.getMessage()));
           return;
+        } finally {
+          DbSessions.get(project).endReadTransaction(c);
         }
         List<TableSpec.Table> filled = TableSpec.filled(specs);
         if (filled.isEmpty()) {
@@ -793,7 +812,7 @@ final class DbExplorer extends SimpleToolWindowPanel {
     DbSessions sessions = DbSessions.get(project);
     // 나무에 없는 표라 붙어 있지 않은 마디를 넘긴다: 실패하면 알림만 하고 나무는 건드리지 않는다.
     background(new DefaultMutableTreeNode(), c, () -> {
-      List<Meta.Column> cols = Meta.columns(sessions.connection(c), c, schema, table);
+      List<Meta.Column> cols = SchemaCache.columns(sessions.connection(c), c, schema, table);
       String sql = SelectSql.build(c.kind, schema, table, cols);
       return () -> ConsoleOpener.open(project, c, sql);
     });

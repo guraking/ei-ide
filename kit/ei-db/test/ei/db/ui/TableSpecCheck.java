@@ -71,6 +71,10 @@ public class TableSpecCheck {
 
     eq(TableSpec.kind(new Meta.Table("V_ITEM", "VIEW", "")), TableSpec.KIND_VIEW);
     eq(TableSpec.kind(new Meta.Table("ITEM", "TABLE", "")), TableSpec.KIND_TABLE);
+    // PostgreSQL 의 구체화 뷰는 뷰, 분할 표 · 외부 표는 표.
+    eq(TableSpec.kind(new Meta.Table("MV_SALES", "MATERIALIZED VIEW", "")), TableSpec.KIND_VIEW);
+    eq(TableSpec.kind(new Meta.Table("ORDERS", "PARTITIONED TABLE", "")), TableSpec.KIND_TABLE);
+    eq(TableSpec.kind(new Meta.Table("EXT", "FOREIGN TABLE", "")), TableSpec.KIND_TABLE);
 
     TableSpec.Table item = new TableSpec.Table(new Meta.Table("ITEM", "TABLE", "상품"), List.of(id, name), Map.of("NAME", "'없음'"));
     TableSpec.Table log = new TableSpec.Table(new Meta.Table("V_LOG", "VIEW", ""), List.of(reg), Map.of());
@@ -102,6 +106,19 @@ public class TableSpecCheck {
     TableSpec.Table none = TableSpec.read(conn(List.of(), List.of(col("A_B", "X", "DATE", 7, 1, "", null))),
                                           new DbConfig(), "APP", new Meta.Table("AXB", "TABLE", ""));
     eq(TableSpec.filled(List.of(none)), List.of());
+    // 표가 여럿이면 스키마의 칼럼을 한 번에 읽어 표별로 나눈다. 다른 스키마 줄은 뺀다.
+    Map<String, Object> a1 = col("A", "ID", "NUMBER", 10, DatabaseMetaData.columnNoNulls, "", null);
+    a1.put("TABLE_SCHEM", "APP");
+    Map<String, Object> elsewhere = col("A", "X", "DATE", 7, DatabaseMetaData.columnNullable, "", null);
+    elsewhere.put("TABLE_SCHEM", "OTHER");
+    Map<String, Object> b1 = col("B", "NM", "VARCHAR2", 20, DatabaseMetaData.columnNullable, "", " 'b' ");
+    Map<String, List<Meta.ColumnRow>> byTable = TableSpec.columnsByTable(conn(List.of(), List.of(a1, elsewhere, b1)), new DbConfig(), "APP",
+        List.of(new Meta.Table("A", "TABLE", ""), new Meta.Table("B", "TABLE", "")));
+    eq(byTable.keySet(), java.util.Set.of("A", "B"));
+    eq(byTable.get("A").size(), 1);
+    TableSpec.Table b = TableSpec.of(new Meta.Table("B", "TABLE", ""), byTable.get("B"), java.util.Set.of("NM"));
+    eq(b.columns(), List.of(new Meta.Column("NM", "VARCHAR2", 20, 0, true, false, true, "")));
+    eq(b.defaults(), Map.of("NM", "'b'"));
     System.out.println("TableSpecCheck OK");
   }
 }

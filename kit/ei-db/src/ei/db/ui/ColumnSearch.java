@@ -145,6 +145,7 @@ final class ColumnSearch extends DialogWrapper {
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       try {
         List<Hit> hits = find(sessions.connection(c), q);
+        sessions.endReadTransaction(c);
         later(gen, () -> showHits(hits));
       } catch (Exception e) {
         String msg = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();

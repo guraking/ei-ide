@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -33,6 +34,8 @@ public final class Meta {
 
   /** PostgreSQL 에서 기본 스키마를 비웠고 아직 접속해 보지 않았을 때 쓰는 스키마. */
   private static final String PG_DEFAULT_SCHEMA = "public";
+  /** 메타 이름 패턴의 「모두」. */
+  private static final String ALL = "%";
   private static final String[] ORACLE_TABLE_TYPES = {"TABLE"};
   private static final String[] ORACLE_VIEW_TYPES = {"VIEW"};
   /** PostgreSQL 드라이버의 TABLE_TYPE 값. 분할 표 · 외부 표는 표로, 구체화 뷰는 뷰로 묶는다. */
@@ -81,15 +84,6 @@ public final class Meta {
 
   private static String schemaArg(DbConfig c, String schema) { return c.kind == DbKind.MYSQL ? null : schema; }
 
-  public static List<String> schemas(Connection conn, DbConfig c) throws SQLException {
-    List<String> out = new ArrayList<>();
-    DatabaseMetaData md = conn.getMetaData();
-    try (ResultSet rs = c.kind == DbKind.MYSQL ? md.getCatalogs() : md.getSchemas()) {
-      while (rs.next()) out.add(rs.getString(1));
-    }
-    return out;
-  }
-
   /** types 예: {"TABLE"}, {"VIEW"}. */
   public static List<Table> tables(Connection conn, DbConfig c, String schema, String[] types) throws SQLException {
     List<Table> out = new ArrayList<>();
@@ -103,26 +97,50 @@ public final class Meta {
     return out;
   }
 
+  /** getColumns 한 줄: 표 이름, 칼럼(pk · fk 는 거짓), 기본값(withDefault 가 아니거나 없으면 null). */
+  public record ColumnRow(String table, Column column, String def) {}
+
   public static List<Column> columns(Connection conn, DbConfig c, String schema, String table) throws SQLException {
-    DatabaseMetaData md = conn.getMetaData();
-    Set<String> pks = new HashSet<>();
-    try (ResultSet rs = md.getPrimaryKeys(catalog(c, schema), schemaArg(c, schema), table)) {
-      while (rs.next()) pks.add(rs.getString("COLUMN_NAME"));
-    }
+    Set<String> pks = primaryKeys(conn, c, schema, table);
     Set<String> fks = new HashSet<>();
     for (ForeignKey fk : importedKeys(conn, c, schema, table)) fks.add(fk.fkColumn());
     List<Column> out = new ArrayList<>();
-    // getColumns 는 이름을 LIKE 패턴으로 보아 _ · % 가 든 표 이름이면 다른 표의 칼럼도 돌려준다. 이름이 정확히 같은 줄만 쓴다.
+    for (ColumnRow r : columnRows(conn, c, schema, table, false)) {
+      Column col = r.column();
+      out.add(new Column(col.name(), col.type(), col.size(), col.scale(), pks.contains(col.name()), fks.contains(col.name()), col.nullable(), col.comment()));
+    }
+    return out;
+  }
+
+  /** 표의 PK 칼럼 이름. getPrimaryKeys 의 표 이름은 패턴이 아니라 정확한 이름이다. */
+  public static Set<String> primaryKeys(Connection conn, DbConfig c, String schema, String table) throws SQLException {
+    Set<String> pks = new HashSet<>();
+    try (ResultSet rs = conn.getMetaData().getPrimaryKeys(catalog(c, schema), schemaArg(c, schema), table)) {
+      while (rs.next()) pks.add(rs.getString("COLUMN_NAME"));
+    }
+    return pks;
+  }
+
+  /**
+   * 칼럼 줄들(DB 가 돌려준 순서: 표 · 칼럼 순번). table 이 null 이면 스키마의 모든 표를 한 번에 읽는다.
+   * getColumns 는 이름을 LIKE 패턴으로 보아 _ · % 가 든 표 이름이면 다른 표의 칼럼도 돌려주므로 table 과 이름이 정확히 같은 줄만,
+   * 스키마가 다른 줄(드라이버가 스키마를 무시한 경우)도 뺀다. TABLE_SCHEM 이 비어 오면 스키마는 맞는 것으로 본다.
+   * Oracle 의 COLUMN_DEF 는 LONG 이라 칸 번호 순서(TABLE_SCHEM → TABLE_NAME → … → REMARKS → COLUMN_DEF)대로 읽는다.
+   */
+  public static List<ColumnRow> columnRows(Connection conn, DbConfig c, String schema, String table, boolean withDefault) throws SQLException {
+    List<ColumnRow> out = new ArrayList<>();
     String schemaName = schemaArg(c, schema);
-    String catalogName = catalog(c, schema);
-    try (ResultSet rs = md.getColumns(catalogName, schemaName, table, "%")) {
+    try (ResultSet rs = conn.getMetaData().getColumns(catalog(c, schema), schemaName, table == null ? ALL : table, ALL)) {
       while (rs.next()) {
-        if (schemaName != null && !schemaName.isEmpty() && !schemaName.equals(rs.getString("TABLE_SCHEM"))) continue;
-        if (!table.equals(rs.getString("TABLE_NAME"))) continue;
+        String rowSchema = rs.getString("TABLE_SCHEM");
+        if (schemaName != null && !schemaName.isEmpty() && rowSchema != null && !schemaName.equals(rowSchema)) continue;
+        String rowTable = rs.getString("TABLE_NAME");
+        if (table != null && !table.equals(rowTable)) continue;
         String name = rs.getString("COLUMN_NAME");
-        out.add(new Column(name, rs.getString("TYPE_NAME"), rs.getInt("COLUMN_SIZE"), rs.getInt("DECIMAL_DIGITS"),
-                           pks.contains(name), fks.contains(name), rs.getInt("NULLABLE") != DatabaseMetaData.columnNoNulls,
-                           nz(rs.getString("REMARKS"))));
+        Column col = new Column(name, rs.getString("TYPE_NAME"), rs.getInt("COLUMN_SIZE"), rs.getInt("DECIMAL_DIGITS"),
+                                false, false, rs.getInt("NULLABLE") != DatabaseMetaData.columnNoNulls, nz(rs.getString("REMARKS")));
+        String def = withDefault ? rs.getString("COLUMN_DEF") : null;
+        out.add(new ColumnRow(rowTable, col, def == null || def.isBlank() ? null : def.trim()));
       }
     }
     return out;
@@ -137,6 +155,19 @@ public final class Meta {
       }
     }
     return out;
+  }
+
+  /**
+   * SQL 에 쓴 이름을 메타가 돌려주는 이름으로: 따옴표로 감쌌으면 따옴표만 뗀 그대로, 아니면 Oracle 은 대문자 · PostgreSQL 은 소문자
+   * (따옴표 없는 이름을 DB 가 그렇게 저장한다), MySQL 은 쓴 그대로.
+   */
+  public static String storedName(DbConfig c, String written) {
+    if (written.startsWith("\"")) return written.replace("\"", "");
+    return switch (c.kind) {
+      case ORACLE -> written.toUpperCase(Locale.ROOT);
+      case POSTGRES -> written.toLowerCase(Locale.ROOT);
+      case MYSQL -> written;
+    };
   }
 
   private static String nz(String s) { return s == null ? "" : s.trim(); }

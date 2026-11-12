@@ -38,6 +38,8 @@ final class BindDialog extends DialogWrapper {
   private static final String VALUE_KEY = "ei.db.console.bind.";
   private static final int MAX_VISIBLE_ROWS = 12;
   private static final int ROW_HEIGHT = 30;
+  /** 값 칸 줄 너비에 더하는 세로 스크롤 막대 자리(px, 배율 전). */
+  private static final int SCROLLBAR_ROOM = 20;
 
   private final Project project;
   private final Map<String, JBTextField> fields = new LinkedHashMap<>();
@@ -101,7 +103,7 @@ final class BindDialog extends DialogWrapper {
     JBScrollPane scroll = new JBScrollPane(top);
     scroll.setBorder(JBUI.Borders.empty());
     int rows = Math.min(params.size() + 1, MAX_VISIBLE_ROWS);
-    scroll.setPreferredSize(new Dimension(grid.getPreferredSize().width + JBUI.scale(20), JBUI.scale(ROW_HEIGHT) * rows));
+    scroll.setPreferredSize(new Dimension(grid.getPreferredSize().width + JBUI.scale(SCROLLBAR_ROOM), JBUI.scale(ROW_HEIGHT) * rows));
 
     JBLabel note = new JBLabel(EiDbBundle.message("bind.note"),
                                UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER);

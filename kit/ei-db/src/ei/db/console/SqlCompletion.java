@@ -29,6 +29,7 @@ import java.util.Set;
 /**
  * SQL 콘솔의 표 · 칼럼 자동완성. 「별칭.」 뒤에서는 그 표의 칼럼만, 그 밖에는 표 이름과 문장에 나온 표들의 칼럼을 낸다.
  * 입력한 글자가 소문자면 소문자로 넣는다(Oracle 은 이름이 대문자로 저장된다). 목록은 SchemaCache 가 뒤에서 읽어 둔다.
+ * 접속이 열려 있지 않으면 목록을 읽지 않고(로그인하지 않는다) 안내만 보인다.
  */
 public final class SqlCompletion extends CompletionContributor {
 
@@ -56,9 +57,12 @@ public final class SqlCompletion extends CompletionContributor {
     CompletionResultSet rs = result.withPrefixMatcher(prefix).caseInsensitive();
     Map<String, String> aliases = SqlAliases.parse(SqlAliases.statementAround(text, offset));
 
+    boolean connected = !SchemaCache.waitingForConnection(project, c);
     if (qualifier != null) {
       String table = aliases.getOrDefault(qualifier.toUpperCase(Locale.ROOT), qualifier);
-      if (!addColumns(rs, project, c, table, lower)) rs.addLookupAdvertisement(EiDbBundle.message("completion.loading.columns"));
+      if (!addColumns(rs, project, c, table, lower)) {
+        rs.addLookupAdvertisement(EiDbBundle.message(connected ? "completion.loading.columns" : "completion.not.connected"));
+      }
       rs.stopHere();
       return;
     }
@@ -74,7 +78,7 @@ public final class SqlCompletion extends CompletionContributor {
     Set<String> related = place == SqlContext.Place.JOIN_TABLE ? referenced(project, c, aliases.values()) : Set.of();
     List<Meta.Table> tables = SchemaCache.tables(project, c);
     if (tables == null) {
-      rs.addLookupAdvertisement(EiDbBundle.message("completion.loading.tables"));
+      rs.addLookupAdvertisement(EiDbBundle.message(connected ? "completion.loading.tables" : "completion.not.connected"));
     } else {
       for (Meta.Table t : tables) {
         boolean near = related.contains(t.name().toUpperCase(Locale.ROOT));

@@ -5,6 +5,15 @@ import java.util.List;
 /** 핵심 판정 자체 점검: java -cp out:test-out ei.db.CoreCheck */
 public class CoreCheck {
   static void eq(Object a, Object b) { if (!java.util.Objects.equals(a, b)) throw new AssertionError(a + " != " + b); }
+
+  /** 「스키마.이름 별칭」 꼴로 펼친 SqlParts.tables. */
+  static List<String> tables(String sql) {
+    List<String> out = new java.util.ArrayList<>();
+    for (ei.db.bench.SqlParts.TableRef t : ei.db.bench.SqlParts.tables(sql)) {
+      out.add((t.schema() == null ? "" : t.schema() + ".") + t.name() + (t.alias() == null ? "" : " " + t.alias()));
+    }
+    return out;
+  }
   public static void main(String[] args) {
     eq(SqlGuard.danger("DELETE FROM order_item;"), "WHERE 없는 DELETE");
     eq(SqlGuard.danger("delete order_item where id = 1"), null);
@@ -18,8 +27,20 @@ public class CoreCheck {
     eq(SqlGuard.table("DELETE FROM app.\"ORDER_ITEM\""), "ORDER_ITEM");
     eq(SqlGuard.isWrite("  select * from dual"), false);
     eq(SqlGuard.isWrite("/* x */ insert into t values (1)"), true);
-    eq(Comments.tablesOf("SELECT a FROM order_item oi, product p WHERE 1 = 1"), List.of("ORDER_ITEM", "PRODUCT"));
-    eq(Comments.tablesOf("select * from app.orders o join users u on o.user_id = u.user_id order by 1"), List.of("ORDERS", "USERS"));
+    // 결과 주석 · 자동완성 별칭 · 결과 탭 이름이 같이 쓰는 표 이름 뽑기(SqlParts.tables · firstTable).
+    eq(tables("SELECT a FROM order_item oi, product p WHERE 1 = 1"), List.of("order_item oi", "product p"));
+    eq(tables("select * from app.orders o join users u on o.user_id = u.user_id order by 1"), List.of("app.orders o", "users u"));
+    eq(tables("SELECT x FROM emp e LEFT OUTER JOIN dept d ON d.id = e.dept_id, \"MyTab\" WHERE e.a IN (SELECT b FROM bonus) -- FROM junk"),
+       List.of("emp e", "dept d", "\"MyTab\"", "bonus"));
+    eq(tables("SELECT 'FROM x' a, EXTRACT(YEAR FROM d) FROM t /* JOIN y */"), List.of("t"));
+    eq(tables("WITH w AS (SELECT * FROM src s) SELECT * FROM w JOIN other o ON o.id = w.id"), List.of("w", "other o", "src s"));
+    eq(tables("SELECT * FROM (SELECT a FROM inner_t i) v, generate_series(1, 3) g"), List.of("inner_t i"));
+    eq(tables("UPDATE hr.emp e SET sal = 1 WHERE id IN (SELECT id FROM bonus)"), List.of("hr.emp e", "bonus"));
+    eq(tables("INSERT INTO log_t(a, b) SELECT a, b FROM src"), List.of("log_t", "src"));
+    eq(tables("MERGE INTO tgt t USING src s ON (t.id = s.id) WHEN MATCHED THEN UPDATE SET t.v = s.v"), List.of("tgt t", "src s"));
+    eq(tables("DELETE FROM order_item WHERE 1 = 1"), List.of("order_item"));
+    eq(tables("SELECT 1 FROM dual"), List.of("dual"));
+    eq(tables("SELECT 1"), List.of());
     eq(new DbConfig().url(), "jdbc:oracle:thin:@//localhost:1521/");
     eq(Drivers.repository(null), "https://repo1.maven.org/maven2/");
     eq(Drivers.repository("<settings><mirrors><mirror><id>n</id><mirrorOf>*</mirrorOf><url>http://nexus.local/repo</url></mirror></mirrors></settings>"), "http://nexus.local/repo/");

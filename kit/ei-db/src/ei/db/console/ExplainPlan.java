@@ -108,10 +108,15 @@ public final class ExplainPlan {
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
         try {
-          Plan plan = plan(DbSessions.get(project), c, sql, binds, source);
-          ApplicationManager.getApplication().invokeLater(() -> ResultView.showPlan(project, c, plan));
+          Plan plan;
+          try {
+            plan = plan(DbSessions.get(project), c, sql, binds, source);
+          } finally {
+            DbSessions.get(project).endReadTransaction(c);
+          }
+          ApplicationManager.getApplication().invokeLater(() -> ResultView.showPlan(project, c, plan), project.getDisposed());
         } catch (Exception e) {
-          ApplicationManager.getApplication().invokeLater(() -> ResultView.showError(project, c, sql, e));
+          ApplicationManager.getApplication().invokeLater(() -> ResultView.showError(project, c, sql, e), project.getDisposed());
         }
       }
     }.queue();
@@ -135,10 +140,10 @@ public final class ExplainPlan {
           ApplicationManager.getApplication().invokeLater(() -> {
             ResultView.showPlan(project, c, plan);
             Notify.info(project, EiDbBundle.message("plan.measure.done", c.name, plan.millis(), plan.fetched()));
-          });
+          }, project.getDisposed());
         } catch (Exception e) {
-          if (indicator.isCanceled()) ApplicationManager.getApplication().invokeLater(() -> ResultView.showCancelled(project, c, sql));
-          else ApplicationManager.getApplication().invokeLater(() -> ResultView.showError(project, c, sql, e));
+          if (indicator.isCanceled()) ApplicationManager.getApplication().invokeLater(() -> ResultView.showCancelled(project, c, sql), project.getDisposed());
+          else ApplicationManager.getApplication().invokeLater(() -> ResultView.showError(project, c, sql, e), project.getDisposed());
         }
       }
     }.queue();

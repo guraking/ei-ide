@@ -61,6 +61,10 @@ import java.util.Set;
 final class BuilderPanel {
   private static final int COUNT_DEBOUNCE_MS = 700;
   private static final float LEFT_SPLIT = 0.28f;
+  /** 표 목록(위)과 고른 표(아래)를 나누는 처음 몫. 사용자가 끈 값은 KEY + "tablesSplit" 로 기억한다. */
+  private static final float TABLES_SPLIT = 0.6f;
+  /** 숨겼다 다시 보이는 칸의 처음 너비에 머리글 글 너비에 더하는 여백(px, 배율 전). */
+  private static final int HEADER_PADDING = 16;
   private static final int MAX_LIMIT = 100_000;
   private static final String NONE = "—";
   private static final String KEY = "ei.db.bench.builder.";
@@ -235,7 +239,11 @@ final class BuilderPanel {
       javax.swing.table.TableColumn c = colTable.getColumnModel().getColumn(alias);
       c.setMinWidth(on ? JBUI.scale(1) : 0);
       c.setMaxWidth(on ? Integer.MAX_VALUE : 0);
-      if (on && c.getPreferredWidth() == 0) c.setPreferredWidth(JBUI.scale(80));
+      if (on && c.getPreferredWidth() == 0) {
+        java.awt.Component header = colTable.getTableHeader().getDefaultRenderer()
+            .getTableCellRendererComponent(colTable, c.getHeaderValue(), false, false, -1, alias);
+        c.setPreferredWidth(header.getPreferredSize().width + JBUI.scale(HEADER_PADDING));
+      }
     }
   }
 
@@ -285,7 +293,8 @@ final class BuilderPanel {
     JPanel top = new JPanel(new BorderLayout(0, JBUI.scale(4)));
     top.add(new JBLabel("1. 표 고르기"), BorderLayout.NORTH);
     top.add(search, BorderLayout.CENTER);
-    JBSplitter tablesSplit = new JBSplitter(true, 0.6f);
+    JBSplitter tablesSplit = new JBSplitter(true, TABLES_SPLIT);
+    tablesSplit.setSplitterProportionKey(KEY + "tablesSplit");
     tablesSplit.setHonorComponentsMinimumSize(false);
     tablesSplit.setFirstComponent(ScrollPaneFactory.createScrollPane(tableList));
     left.setBorder(JBUI.Borders.empty(4, 8, 8, 0));

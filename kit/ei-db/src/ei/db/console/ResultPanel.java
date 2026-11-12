@@ -89,6 +89,7 @@ import com.intellij.openapi.ui.DialogBuilder;
 import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.JBColor;
 import com.intellij.ui.SearchTextField;
+import ei.db.SchemaCache;
 import ei.db.SqlRunner;
 import org.jetbrains.annotations.NotNull;
 import javax.swing.DefaultCellEditor;
@@ -105,9 +106,12 @@ final class ResultPanel extends SimpleToolWindowPanel {
   /** 엑셀이 UTF-8 로 읽게 하는 표식. */
   private static final String BOM = "﻿";
 
-  /** 반영 미리보기 크기(px, 배율 전). */
-  private static final int PREVIEW_WIDTH = 640;
-  private static final int PREVIEW_HEIGHT = 360;
+  /** 반영 미리보기 창을 처음 열 때 화면에 대한 크기 몫. 사용자가 바꾼 크기는 PREVIEW_DIMENSION_KEY 로 기억한다. */
+  private static final double PREVIEW_WIDTH_RATIO = 0.4;
+  private static final double PREVIEW_HEIGHT_RATIO = 0.35;
+  private static final String PREVIEW_DIMENSION_KEY = "ei.db.result.applyPreview";
+  /** 맞춘 칸 너비에 더하는 여백(px, 배율 전). */
+  private static final int CELL_PADDING = 16;
   /** 도구줄 왼쪽 여백 · 묶음 사이 간격(px, 배율 전). */
   private static final int BAR_INSET = 8;
   private static final String TOOLBAR_PLACE = "EiDbResult";
@@ -287,10 +291,12 @@ final class ResultPanel extends SimpleToolWindowPanel {
     if (result.truncated()) {
       JBLabel cut = new JBLabel(EiDbBundle.message("result.truncated", result.rows().size()));
       cut.setForeground(UiColors.WARNING);
+      if (result.rows().size() >= DbSessions.MAX_ROW_LIMIT) cut.setToolTipText(EiDbBundle.message("result.at.limit", DbSessions.MAX_ROW_LIMIT));
       bar.add(cut);
     }
     // 다시 읽기는 문장을 처음부터 다시 실행하므로 변경이 섞인 문장(INSERT … RETURNING 등)에는 두지 않는다.
-    if (result.truncated() && SqlText.isRereadable(result.sql())) {
+    // 상한(MAX_ROW_LIMIT)까지 읽었으면 더 읽지 않는다.
+    if (result.truncated() && SqlText.isRereadable(result.sql()) && result.rows().size() < DbSessions.MAX_ROW_LIMIT) {
       bar.add(button(EiDbBundle.message("result.more", DbSessions.MAX_ROWS), null, () -> readMore(c, result.rows().size() + DbSessions.MAX_ROWS)));
       JBIntSpinner wanted = new JBIntSpinner(Math.min(result.rows().size() + DbSessions.MAX_ROWS, DbSessions.MAX_ROW_LIMIT), 1, DbSessions.MAX_ROW_LIMIT);
       wanted.setToolTipText(EiDbBundle.message("result.wanted.tooltip"));
@@ -386,8 +392,8 @@ final class ResultPanel extends SimpleToolWindowPanel {
   }
 
   /**
-   * 같은 문장을 limit 건까지 다시 읽어 이 탭을 바꾼다. 처음부터 다시 실행하므로 그 사이 바뀐 데이터나 ORDER BY 없는 순서는 달라질 수 있다.
-   * 이미 실행된 조회 문장이라 위험 문장 확인은 다시 하지 않는다.
+   * 같은 문장을 limit 건(MAX_ROW_LIMIT 까지)까지 다시 읽어 이 탭을 바꾼다. 처음부터 다시 실행하므로 그 사이 바뀐 데이터나 ORDER BY 없는 순서는 달라질 수 있다.
+   * 이미 실행된 조회 문장이라 위험 문장 확인은 다시 하지 않는다. 진행 막대에서 취소할 수 있다.
    */
   private void readMore(DbConfig c, int limit) {
     if (grid.isEditing()) grid.getCellEditor().stopCellEditing();
@@ -396,14 +402,8 @@ final class ResultPanel extends SimpleToolWindowPanel {
         EiDbBundle.message("result.more.discard.title"), Messages.getWarningIcon()) != Messages.YES) {
       return;
     }
-    ApplicationManager.getApplication().executeOnPooledThread(() -> {
-      try {
-        QueryResult more = DbSessions.get(project).run(c, result.sql(), result.binds(), limit);
-        ApplicationManager.getApplication().invokeLater(() -> replaceWith(new ResultPanel(project, c, more, table, title)));
-      } catch (Exception e) {
-        Notify.error(project, EiDbBundle.message("result.more.failed", c.name, ResultView.message(e)));
-      }
-    });
+    SqlRunner.reread(project, c, result.sql(), result.binds(), Math.min(limit, DbSessions.MAX_ROW_LIMIT),
+        more -> replaceWith(new ResultPanel(project, c, more, table, title)));
   }
 
   /** 건수 칸에 쓴 수로 다시 읽는다. 1 ~ MAX_ROW_LIMIT 의 수가 아니면 알리고 읽지 않는다. */
@@ -450,7 +450,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
       for (int row = 0; row < rows; row++) {
         width = Math.max(width, table.prepareRenderer(table.getCellRenderer(row, col), row, col).getPreferredSize().width);
       }
-      column.setPreferredWidth(Math.min(width + JBUI.scale(16), maxWidth));
+      column.setPreferredWidth(Math.min(width + JBUI.scale(CELL_PADDING), maxWidth));
     }
   }
 
@@ -715,7 +715,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
       ApplicationManager.getApplication().invokeLater(() -> {
         CopyPasteManager.getInstance().setContents(new StringSelection(sql));
         Notify.info(project, EiDbBundle.message("result.update.copied", rows.size()) + (pks.isEmpty() ? EiDbBundle.message("result.update.no.pk") : "") + lobNotice(sql));
-      });
+      }, project.getDisposed());
     });
   }
 
@@ -729,12 +729,17 @@ final class ResultPanel extends SimpleToolWindowPanel {
    */
   private TableDef tableColumns(DbConfig c, String name) throws Exception {
     String bare = name.substring(name.lastIndexOf('.') + 1).replace("\"", "");
-    Connection conn = DbSessions.get(project).connection(c);
-    for (String candidate : new String[]{bare, bare.toUpperCase(Locale.ROOT), bare.toLowerCase(Locale.ROOT)}) {
-      List<Meta.Column> columns = Meta.columns(conn, c, Meta.schemaOf(c), candidate);
-      if (!columns.isEmpty()) return new TableDef(candidate, columns);
+    DbSessions sessions = DbSessions.get(project);
+    Connection conn = sessions.connection(c);
+    try {
+      for (String candidate : new String[]{bare, bare.toUpperCase(Locale.ROOT), bare.toLowerCase(Locale.ROOT)}) {
+        List<Meta.Column> columns = SchemaCache.columns(conn, c, Meta.schemaOf(c), candidate);
+        if (!columns.isEmpty()) return new TableDef(candidate, columns);
+      }
+      return new TableDef(bare, List.of());
+    } finally {
+      sessions.endReadTransaction(c);
     }
-    return new TableDef(bare, List.of());
   }
 
   /** 찾은 표 이름(저장된 대소문자 그대로)과 그 칼럼. 못 찾으면 칼럼이 빈 목록. */
@@ -787,7 +792,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
         }, project.getDisposed());
       } catch (Exception e) {
         // 다음 두 번 누름에서 다시 읽게 상태를 두지 않는다.
-        ApplicationManager.getApplication().invokeLater(() -> loadingEdit = false);
+        ApplicationManager.getApplication().invokeLater(() -> loadingEdit = false, project.getDisposed());
         Notify.error(project, EiDbBundle.message("result.edit.no.definition", ResultView.message(e)));
       }
     });
@@ -933,10 +938,12 @@ final class ResultPanel extends SimpleToolWindowPanel {
     text.setEditable(false);
     text.setFont(monoFont());
     JBScrollPane scroll = new JBScrollPane(text);
-    scroll.setPreferredSize(new Dimension(JBUI.scale(PREVIEW_WIDTH), JBUI.scale(PREVIEW_HEIGHT)));
+    Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+    scroll.setPreferredSize(new Dimension((int) (screen.width * PREVIEW_WIDTH_RATIO), (int) (screen.height * PREVIEW_HEIGHT_RATIO)));
     JBLabel note = new JBLabel(EiDbBundle.message("result.apply.note", config.name) + (DbSessions.get(project).autoCommit(config) ? "" : EiDbBundle.message("result.apply.note.commit")));
     note.setBorder(JBUI.Borders.emptyBottom(8));
     DialogBuilder dialog = new DialogBuilder(project);
+    dialog.setDimensionServiceKey(PREVIEW_DIMENSION_KEY);
     dialog.setTitle(EiDbBundle.message("result.apply.title", statements.size()));
     dialog.setNorthPanel(note);
     dialog.setCenterPanel(scroll);
