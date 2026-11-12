@@ -9,7 +9,7 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * 실행 설정 이름이 어디서 바뀌든(IntelliJ 실행 설정 창 포함) 서버 묶음의 줄 키와 실행 기록을 새 이름으로 옮긴다.
- * 서버 창이 열려 있지 않아도 받도록 프로젝트 리스너로 둔다. 서버 창에서 바꾼 경우에도 오지만 옮기기는 두 번 해도 같다.
+ * 서버 창이 열려 있지 않아도 받도록 프로젝트 리스너로 둔다. 서버 창 「적용」 의 이름 바꾸기(RunManager.addConfiguration)도 이 알림으로 옮긴다.
  */
 public final class BootRenameListener implements RunManagerListener {
 

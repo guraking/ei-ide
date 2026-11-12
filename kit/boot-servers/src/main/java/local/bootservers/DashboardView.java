@@ -17,6 +17,7 @@ import com.intellij.util.concurrency.AppExecutorUtil;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.NamedColorUtil;
 import com.intellij.util.ui.UIUtil;
+import local.bootservers.ui.ColumnShares;
 import local.bootservers.ui.LineChart;
 
 import javax.swing.BoxLayout;
@@ -108,6 +109,8 @@ final class DashboardView {
         }
     };
     private final JBTable slowTable = new JBTable(slowModel);
+    // 느린 요청 표에서 사용자가 끌어 바꾼 칸 너비 비율을 기억하는 키
+    private static final String SLOW_COLUMNS_KEY = "KingGura.Dashboard.slowColumns";
     private List<Metrics.Slow> shownSlow = List.of();
 
     DashboardView(Project project) {
@@ -139,6 +142,7 @@ final class DashboardView {
         charts.add(chartBox(BootServersBundle.message("dashboard.chart.response"), responseChart));
 
         slowTable.setShowGrid(false);
+        ColumnShares.remember(slowTable, SLOW_COLUMNS_KEY);
         slowTable.getEmptyText().setText(BootServersBundle.message("dashboard.slow.empty"));
         DefaultTableCellRenderer right = new DefaultTableCellRenderer();
         right.setHorizontalAlignment(SwingConstants.RIGHT);

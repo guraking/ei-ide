@@ -118,10 +118,14 @@ final class ServerLauncher {
      * 서버를 시작한다. 실행 설정이 없으면 모듈 안의 @SpringBootApplication 클래스로 새로 만든다.
      * 클래스 찾기는 화면 스레드 밖에서 하고, 찾은 뒤 화면 스레드에서 실행 설정을 만들어 시작한다.
      * 색인 중이거나 스프링 부트 의존성이 없으면 알림만 띄우고 false. 메인 클래스를 하나로 정할 수 없으면 찾은 뒤 알림만 띄운다.
+     * 이미 그 모듈의 메인 클래스를 찾는 중이면 다시 시작하지 않는다(찾기가 끝나면 그 한 번만 시작한다).
      *
-     * @return 시작(또는 클래스 찾기)을 넘겼으면 true
+     * @return 시작(또는 클래스 찾기)을 넘겼거나 이미 찾는 중이면 true
      */
     static boolean start(Module module, Executor executor) {
+        if (isFinding(module)) {
+            return true;
+        }
         RunnerAndConfigurationSettings settings = findSettings(module);
         if (settings != null) {
             start(settings, executor);
@@ -343,16 +347,16 @@ final class ServerLauncher {
     }
 
     /**
-     * 모듈 기준 상태(프로젝트 트리 · 우클릭 메뉴). 살아 있는 실행 설정이 있으면 모듈 이름 설정을 우선해 그 상태,
-     * 없으면 모듈 이름 설정의 마지막 상태(실패 · 중지됨)다.
+     * 모듈 기준으로 보일 실행 설정(프로젝트 트리 · 우클릭 메뉴). 살아 있는 실행 설정이 있으면 모듈 이름 설정을 우선해 그것,
+     * 없으면 모듈 이름 설정(마지막 상태: 실패 · 중지됨). 둘 다 없으면 null.
      */
-    static State state(Module module) {
+    static RunnerAndConfigurationSettings shownSettings(Module module) {
         RunnerAndConfigurationSettings named = findSettings(module);
         List<RunnerAndConfigurationSettings> live = liveSettings(module);
         if (!live.isEmpty()) {
-            return state(live.contains(named) ? named : live.get(0));
+            return live.contains(named) ? named : live.get(0);
         }
-        return named == null ? State.STOPPED : state(named);
+        return named;
     }
 
     static State state(RunnerAndConfigurationSettings settings) {

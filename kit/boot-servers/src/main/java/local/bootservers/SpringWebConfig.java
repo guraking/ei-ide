@@ -14,7 +14,6 @@ import com.intellij.openapi.vfs.VirtualFileManager;
 import com.intellij.openapi.vfs.VirtualFileVisitor;
 import com.intellij.psi.util.CachedValueProvider;
 import com.intellij.psi.util.CachedValuesManager;
-import com.intellij.psi.util.PsiModificationTracker;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.jps.model.java.JavaResourceRootType;
 
@@ -78,9 +77,9 @@ final class SpringWebConfig {
 
     /**
      * 모듈 본 리소스 폴더의 application*.yml · yaml · properties, 그다음 그 안 config 폴더의 것(스프링이 읽는 차례, 뒤가 이긴다).
-     * 읽기 동작 안에서 부른다. 읽지 못한 파일은 값 없이 넣는다.
+     * 읽기 동작 안에서 부른다.
      */
-    static ModuleConfig moduleConfig(Module module) {
+    static List<VirtualFile> configFiles(Module module) {
         List<VirtualFile> files = new ArrayList<>();
         List<VirtualFile> roots = ModuleRootManager.getInstance(module).getSourceRoots(JavaResourceRootType.RESOURCE);
         for (VirtualFile root : roots) {
@@ -92,6 +91,12 @@ final class SpringWebConfig {
                 addConfigFiles(sub, files);
             }
         }
+        return files;
+    }
+
+    /** {@link #configFiles(Module)} 의 파일과 읽은 값. 읽기 동작 안에서 부른다. 읽지 못한 파일은 값 없이 넣는다. */
+    static ModuleConfig moduleConfig(Module module) {
+        List<VirtualFile> files = configFiles(module);
         List<Links.Source> sources = new ArrayList<>();
         for (VirtualFile file : files) {
             String text = text(file);
@@ -138,11 +143,13 @@ final class SpringWebConfig {
         return new ArrayList<>(result);
     }
 
-    /** prefix · suffix · 웹 뿌리. PSI · 파일 · 프로젝트 구조가 바뀌면 다시 모은다. */
+    /**
+     * prefix · suffix · 웹 뿌리. 파일(저장 · 생성 · 삭제) · 프로젝트 구조가 바뀌면 다시 모은다.
+     * 글을 고칠 때마다(PSI 바뀜) 리소스 아래 모든 XML 을 다시 읽지 않도록 PSI 바뀜에는 묶지 않는다. 설정 · XML 을 고친 값은 저장된 뒤 반영된다.
+     */
     static ViewSettings viewSettings(Project project) {
         return CachedValuesManager.getManager(project).getCachedValue(project, () -> CachedValueProvider.Result.create(
                 collectViewSettings(project),
-                PsiModificationTracker.getInstance(project),
                 VirtualFileManager.getInstance(),
                 ProjectRootManager.getInstance(project)));
     }

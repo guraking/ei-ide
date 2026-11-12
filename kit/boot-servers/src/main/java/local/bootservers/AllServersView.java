@@ -8,6 +8,7 @@ import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.NamedColorUtil;
 import com.intellij.util.ui.UIUtil;
+import local.bootservers.ui.ColumnShares;
 import local.bootservers.ui.LineChart;
 import local.bootservers.ui.Pill;
 
@@ -41,6 +42,8 @@ final class AllServersView {
     private static final int SPARK_HEIGHT = 20;
     private static final int SPARK_COLUMN = 10;
     private static final int STATE_COLUMN = 1;
+    // 사용자가 끌어 바꾼 칸 너비 비율을 기억하는 키
+    private static final String COLUMNS_KEY = "KingGura.AllServers.columns";
     private static final String CARD_EMPTY = "empty";
     private static final String CARD_TABLE = "table";
 
@@ -81,6 +84,7 @@ final class AllServersView {
 
     AllServersView(Consumer<String> onPick) {
         table.setShowGrid(false);
+        ColumnShares.remember(table, COLUMNS_KEY);
         table.setRowHeight(JBUI.scale(SPARK_HEIGHT + UIUtil.DEFAULT_VGAP * 2));
         TableCellRenderer cells = new Cells();
         for (int c = 0; c < columns.length; c++) {

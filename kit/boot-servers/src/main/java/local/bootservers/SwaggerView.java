@@ -29,8 +29,10 @@ import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 편집기 안의 Swagger UI 화면(JCEF). Swagger UI 파일은 jar 에 넣어 두어 인터넷 없이 돈다.
@@ -47,24 +49,33 @@ final class SwaggerView implements Disposable {
     private static final String INDEX = "index.html";
     private static final String SPEC = "spec.json";
     private static final String RESOURCE_DIR = "/swagger-ui/";
+    private static final String BUNDLE = "swagger-ui-bundle.js";
+    private static final String CSS = "swagger-ui.css";
     private static final Map<String, String> FILES = Map.of(
-            "swagger-ui-bundle.js", "application/javascript",
-            "swagger-ui.css", "text/css");
+            BUNDLE, "application/javascript",
+            CSS, "text/css");
     private static final String HTTPS = "https";
     private static final int HTTP_PORT = 80;
     private static final int HTTPS_PORT = 443;
     private static final int HTTP_OK = 200;
     private static final int HTTP_NOT_FOUND = 404;
     private static final Logger LOG = Logger.getInstance(SwaggerView.class);
+    // jar 의 Swagger UI 파일은 플러그인이 바뀌기 전에는 그대로라 브라우저가 오래 두고 쓴다. 주소에 내용 지문을 붙여 바뀌면 새로 받게 한다.
+    private static final String CACHE_STATIC = "max-age=31536000, immutable";
+    // 사양 · 첫 화면은 고칠 때마다 바뀌므로 두지 않는다.
+    private static final String CACHE_NONE = "no-store";
+    private static final int RADIX_HEX = 16;
+    // jar 에서 한 번 읽은 Swagger UI 파일(이름 → 내용). 글을 고칠 때마다 다시 읽지 않는다.
+    private static final Map<String, byte[]> STATIC_FILES = new ConcurrentHashMap<>();
 
     // persistAuthorization: 「Authorize」 에 넣은 토큰을 이 출처의 브라우저 저장소에 두어 다시 열어도 남는다.
     private static final String PAGE = """
             <!doctype html>
             <html><head><meta charset="utf-8">
-            <link rel="stylesheet" href="swagger-ui.css">
+            <link rel="stylesheet" href="swagger-ui.css?v=%s">
             <style>body{margin:0;background:#fff}</style>
             </head><body><div id="ui"></div>
-            <script src="swagger-ui-bundle.js"></script>
+            <script src="swagger-ui-bundle.js?v=%s"></script>
             <script>
             window.ui = SwaggerUIBundle({url: 'spec.json', dom_id: '#ui', deepLinking: true, persistAuthorization: true,
               tryItOutEnabled: true, displayRequestDuration: true, filter: true});
@@ -171,22 +182,41 @@ final class SwaggerView implements Disposable {
 
     private CefResourceHandler answer(String name) {
         if (INDEX.equals(name)) {
-            return new Bytes(HTTP_OK, "text/html", PAGE.getBytes(StandardCharsets.UTF_8));
+            String page = PAGE.formatted(fingerprint(CSS), fingerprint(BUNDLE));
+            return new Bytes(HTTP_OK, "text/html", page.getBytes(StandardCharsets.UTF_8), CACHE_NONE);
         }
         if (SPEC.equals(name)) {
-            return new Bytes(HTTP_OK, "application/json", specJson.getBytes(StandardCharsets.UTF_8));
+            return new Bytes(HTTP_OK, "application/json", specJson.getBytes(StandardCharsets.UTF_8), CACHE_NONE);
         }
         String mime = FILES.get(name);
-        if (mime != null) {
-            try (InputStream in = SwaggerView.class.getResourceAsStream(RESOURCE_DIR + name)) {
-                if (in != null) {
-                    return new Bytes(HTTP_OK, mime, in.readAllBytes());
-                }
-            } catch (IOException e) {
-                LOG.warn("Swagger UI 파일을 읽지 못했습니다: " + name, e);
-            }
+        byte[] data = mime == null ? null : staticFile(name);
+        return data != null ? new Bytes(HTTP_OK, mime, data, CACHE_STATIC) : new Bytes(HTTP_NOT_FOUND, "text/plain", new byte[0], CACHE_NONE);
+    }
+
+    /** jar 의 Swagger UI 파일. 처음 한 번만 읽는다. 없거나 못 읽으면 null(다음에 다시 읽어 본다). */
+    private static byte[] staticFile(String name) {
+        byte[] cached = STATIC_FILES.get(name);
+        if (cached != null) {
+            return cached;
         }
-        return new Bytes(HTTP_NOT_FOUND, "text/plain", new byte[0]);
+        try (InputStream in = SwaggerView.class.getResourceAsStream(RESOURCE_DIR + name)) {
+            if (in == null) {
+                LOG.warn("Swagger UI 파일이 jar 에 없습니다: " + name);
+                return null;
+            }
+            byte[] data = in.readAllBytes();
+            STATIC_FILES.put(name, data);
+            return data;
+        } catch (IOException e) {
+            LOG.warn("Swagger UI 파일을 읽지 못했습니다: " + name, e);
+            return null;
+        }
+    }
+
+    /** 파일 내용 지문(주소 꼬리). 파일이 없으면 0. */
+    private static String fingerprint(String name) {
+        byte[] data = staticFile(name);
+        return data == null ? "0" : Integer.toString(Arrays.hashCode(data), RADIX_HEX);
     }
 
     @Override
@@ -198,12 +228,14 @@ final class SwaggerView implements Disposable {
         private final int status;
         private final String mime;
         private final byte[] data;
+        private final String cacheControl;
         private int offset;
 
-        Bytes(int status, String mime, byte[] data) {
+        Bytes(int status, String mime, byte[] data, String cacheControl) {
             this.status = status;
             this.mime = mime;
             this.data = data;
+            this.cacheControl = cacheControl;
         }
 
         @Override
@@ -222,7 +254,7 @@ final class SwaggerView implements Disposable {
         public void getResponseHeaders(CefResponse response, IntRef length, StringRef redirect) {
             response.setStatus(status);
             response.setMimeType(mime);
-            response.setHeaderByName("Cache-Control", "no-store", true);
+            response.setHeaderByName("Cache-Control", cacheControl, true);
             length.set(data.length);
         }
 

@@ -4,6 +4,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.openapi.ui.ValidationInfo;
 import com.intellij.ui.CollectionListModel;
+import com.intellij.ui.OnePixelSplitter;
 import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.SimpleListCellRenderer;
 import com.intellij.ui.ToolbarDecorator;
@@ -19,7 +20,6 @@ import javax.swing.JComponent;
 import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.ListCellRenderer;
-import java.awt.GridLayout;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
@@ -33,9 +33,13 @@ import java.util.Map;
 final class ServerGroupDialog extends DialogWrapper {
 
     private static final int LIST_ROWS = 10;
-    // 두 목록 사이 · 이름 줄과 목록 사이 간격
+    // 두 목록 사이(나눔 선 양쪽 절반씩) · 이름 줄과 목록 사이 간격
     private static final int LIST_GAP = 8;
     private static final int SECTION_GAP = 4;
+    // 두 목록 나눔 비율(처음 반반)과 끌어 바꾼 비율 · 창 크기를 기억하는 키
+    private static final float LIST_PROPORTION = 0.5f;
+    private static final String LIST_SPLIT_KEY = "KingGura.ServerGroupDialog.split";
+    private static final String DIMENSION_KEY = "KingGura.ServerGroupDialog";
 
     private final Map<String, String> labels;
     private final List<String> otherNames;
@@ -94,15 +98,21 @@ final class ServerGroupDialog extends DialogWrapper {
                 .setAddAction(button -> addSelected())
                 .setRemoveAction(button -> removeSelected())
                 .createPanel();
-        JPanel lists = new JPanel(new GridLayout(1, 2, JBUI.scale(LIST_GAP), 0));
-        lists.add(FormBuilder.createFormBuilder()
+        JPanel left = FormBuilder.createFormBuilder()
                 .addComponent(new JBLabel(BootServersBundle.message("group.dialog.available")))
                 .addComponentFillVertically(ScrollPaneFactory.createScrollPane(availableList), 0)
-                .getPanel());
-        lists.add(FormBuilder.createFormBuilder()
+                .getPanel();
+        left.setBorder(JBUI.Borders.emptyRight(LIST_GAP / 2));
+        JPanel right = FormBuilder.createFormBuilder()
                 .addComponent(new JBLabel(BootServersBundle.message("group.dialog.order")))
                 .addComponentFillVertically(order, 0)
-                .getPanel());
+                .getPanel();
+        right.setBorder(JBUI.Borders.emptyLeft(LIST_GAP / 2));
+        OnePixelSplitter lists = new OnePixelSplitter(false, LIST_PROPORTION);
+        lists.setSplitterProportionKey(LIST_SPLIT_KEY);
+        lists.setHonorComponentsMinimumSize(false);
+        lists.setFirstComponent(left);
+        lists.setSecondComponent(right);
         return FormBuilder.createFormBuilder()
                 .addLabeledComponent(BootServersBundle.message("group.dialog.name"), name)
                 .addComponentFillVertically(lists, JBUI.scale(SECTION_GAP))
@@ -123,6 +133,11 @@ final class ServerGroupDialog extends DialogWrapper {
                 available.add(key);
             }
         }
+    }
+
+    @Override
+    protected @Nullable String getDimensionServiceKey() {
+        return DIMENSION_KEY;
     }
 
     @Override

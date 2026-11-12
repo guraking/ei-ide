@@ -34,7 +34,7 @@ public final class MetricsProbeCheck {
         List<String> asked = new ArrayList<>();
         // unique-names 를 켠 앱처럼 context 꼬리가 붙은 이름
         ObjectName name = new ObjectName("org.springframework.boot:type=Endpoint,name=Metrics,context=1a2b");
-        server.registerMBean(new FakeEndpoint(asked), name);
+        server.registerMBean(new FakeEndpoint(ANSWERS, asked), name);
         try {
             MetricsProbe.Requests r = MetricsProbe.requests(server);
             check(r.access() == MetricsProbe.Access.OK, "OK");
@@ -53,11 +53,29 @@ public final class MetricsProbeCheck {
         finally {
             server.unregisterMBean(name);
         }
+        quietActuator(server, name);
         System.out.println("MetricsProbeCheck 통과");
     }
 
+    /** 액추에이터 주소가 가장 느리지 않으면 전체 최대를 그대로 쓰고 주소마다 최대를 묻지 않는다. */
+    private static void quietActuator(MBeanServer server, ObjectName name) throws Exception {
+        Map<String, Map<String, Object>> answers = Map.of(
+                REQUESTS, m(110, 2.0, 3.0, List.of(tag("outcome", "SUCCESS"), tag("uri", "/actuator/prometheus", "/api/{id}", "/slow"))),
+                REQUESTS + "[uri:/actuator/prometheus]", m(10, 0.1, 0.2, List.of(tag("outcome", "SUCCESS"))));
+        List<String> asked = new ArrayList<>();
+        server.registerMBean(new FakeEndpoint(answers, asked), name);
+        try {
+            MetricsProbe.Requests r = MetricsProbe.requests(server);
+            check(r.maxSeconds() == 3.0 && r.count() == 100, "다른 주소가 가장 느림: " + r);
+            check(!asked.contains(REQUESTS + "[uri:/api/{id}]") && !asked.contains(REQUESTS + "[uri:/slow]"), "주소마다 최대를 물음: " + asked);
+        }
+        finally {
+            server.unregisterMBean(name);
+        }
+    }
+
     /** 스프링 부트 EndpointMBean 처럼 연산 이름으로만 고르고, 응답은 JSON 과 같은 모양의 Map 으로 돌려준다. */
-    private record FakeEndpoint(List<String> asked) implements DynamicMBean {
+    private record FakeEndpoint(Map<String, Map<String, Object>> answers, List<String> asked) implements DynamicMBean {
         @Override
         public Object invoke(String action, Object[] params, String[] signature) {
             if (action.equals("listNames")) {
@@ -66,7 +84,7 @@ public final class MetricsProbeCheck {
             }
             String key = (String) params[0] + (params[1] == null ? "" : params[1].toString());
             asked.add(key);
-            return ANSWERS.get(key);
+            return answers.get(key);
         }
 
         @Override

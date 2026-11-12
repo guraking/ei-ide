@@ -54,7 +54,8 @@ public final class ApiRequestAction extends AnAction {
     @Override
     public void update(@NotNull AnActionEvent e) {
         PsiMethod method = method(e);
-        e.getPresentation().setEnabledAndVisible(method != null && !UrlMappingAction.of(method).isEmpty());
+        // 우클릭 때마다 불리므로 주석만 본다. 경로는 누를 때 계산한다.
+        e.getPresentation().setEnabledAndVisible(method != null && UrlMappingAction.isMapped(method));
     }
 
     @Override

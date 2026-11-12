@@ -1,6 +1,7 @@
 package local.bootservers;
 
 import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.application.WriteIntentReadAction;
 import com.intellij.openapi.editor.colors.EditorColorsManager;
 import com.intellij.openapi.editor.colors.EditorFontType;
 import com.intellij.openapi.project.Project;
@@ -21,6 +22,7 @@ import com.intellij.ui.components.JBTextField;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.NamedColorUtil;
 import com.intellij.util.ui.UIUtil;
+import local.bootservers.ui.DialogSize;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -48,8 +50,9 @@ import java.util.List;
 final class UrlMappingDialog extends DialogWrapper {
 
     private static final String COLUMN_GAP = "  ";
-    private static final int DIALOG_WIDTH = 900;
-    private static final int DIALOG_HEIGHT = 500;
+    // 처음 열 때 크기(화면 비율). 그 뒤에는 사용자가 바꾼 크기를 기억한다.
+    private static final double SCREEN_WIDTH_SHARE = 0.5;
+    private static final double SCREEN_HEIGHT_SHARE = 0.45;
 
     private final Project project;
     private final List<UrlMappingAction.Endpoint> all;
@@ -118,7 +121,7 @@ final class UrlMappingDialog extends DialogWrapper {
         JPanel panel = new JPanel(new BorderLayout());
         panel.add(north, BorderLayout.NORTH);
         panel.add(new JBScrollPane(list), BorderLayout.CENTER);
-        panel.setPreferredSize(JBUI.size(DIALOG_WIDTH, DIALOG_HEIGHT));
+        panel.setPreferredSize(DialogSize.ofScreen(SCREEN_WIDTH_SHARE, SCREEN_HEIGHT_SHARE));
         return panel;
     }
 
@@ -175,7 +178,8 @@ final class UrlMappingDialog extends DialogWrapper {
             return;
         }
         super.doOKAction();
-        method.navigate(true);
+        // 2026.2 는 단추 · 두 번 누르기 처리에 쓰기 의도 잠금을 주지 않는다. 편집기를 여는 이동은 잠금 안에서 한다.
+        WriteIntentReadAction.run(() -> method.navigate(true));
     }
 
     private void refresh() {

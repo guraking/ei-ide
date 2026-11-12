@@ -18,7 +18,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 애플리케이션 실행 설정(스프링 부트 서버)의 프로세스가 뜨면 실행 기록을 시작하고, 뜨거나 시작을 마치거나 끝날 때 프로젝트 트리를 다시 그려 상태 표시를 맞춘다.
+ * 애플리케이션 실행 설정(스프링 부트 서버)의 프로세스가 뜨면 실행 기록을 시작하고, 뜨거나 시작을 마치거나 끝날 때 프로젝트 트리를 다시 그려 상태 표시를 맞춘다(트리를 다시 그리는 곳은 여기 한 곳이다).
  * 중지(서버 창 · 실행 창 · 툴바 · Ctrl+F2 어디서든) 뒤 STOP_GRACE_SECONDS 안에 끝나지 않으면 프로세스를 강제로 끝낸다.
  * 다른 종류의 실행 설정은 보지 않는다. WAS 는 WasRunner 가 직접 기록 · 중지한다.
  */
@@ -78,13 +78,6 @@ public final class ServerStatusRefresher implements ExecutionListener {
             }
         });
         ProjectView.getInstance(project).refresh();
-    }
-
-    @Override
-    public void processTerminated(@NotNull String executorId, @NotNull ExecutionEnvironment env, @NotNull ProcessHandler handler, int exitCode) {
-        if (isServer(env.getRunnerAndConfigurationSettings())) {
-            ProjectView.getInstance(project).refresh();
-        }
     }
 
     private void refreshLater() {

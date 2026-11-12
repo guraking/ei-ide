@@ -65,8 +65,8 @@ public final class ProgramListAction extends DumbAwareAction {
     private static final char CLASS_METHOD_SEPARATOR = '.';
     private static final Logger LOG = Logger.getInstance(ProgramListAction.class);
 
-    /** 훑은 파일 하나. text 는 이진 · 너무 큼 · 못 읽음이면 null. */
-    private record Source(String module, String path, String name, String text, long modified) {
+    /** 훑은 파일 하나. 글은 목록 줄을 만들 때 하나씩 읽고 버린다. */
+    private record Source(String module, String path, VirtualFile file) {
     }
 
     private record Collected(List<List<Object>> programs, List<List<Object>> urls) {
@@ -101,10 +101,7 @@ public final class ProgramListAction extends DumbAwareAction {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 indicator.setIndeterminate(true);
-                collected = ReadAction.nonBlocking(() -> collect(project, indicator))
-                        .inSmartMode(project)
-                        .wrapProgress(indicator)
-                        .executeSynchronously();
+                collected = collect(project, indicator);
                 indicator.setText2(target.toString());
                 try {
                     XlsxBook.write(target, List.of(
@@ -140,15 +137,36 @@ public final class ProgramListAction extends DumbAwareAction {
         });
     }
 
-    /** 읽기 동작 안에서 부른다. */
+    /**
+     * 작업 스레드에서 부른다. 파일 목록 · URL 매핑은 짧은 읽기 동작으로 모으고(편집이 끼면 그 동작만 다시 돈다),
+     * 파일 글은 읽기 동작 밖에서 하나씩 읽어 목록 줄을 만든 뒤 버린다(프로젝트 전체 글을 메모리에 쥐지 않는다).
+     */
     private static Collected collect(Project project, ProgressIndicator indicator) {
-        List<Source> sources = scan(project, indicator);
+        List<Source> sources = ReadAction.nonBlocking(() -> scan(project, indicator))
+                .inSmartMode(project)
+                .wrapProgress(indicator)
+                .executeSynchronously();
         sources.sort(Comparator.comparing(Source::module).thenComparing(Source::path));
         List<List<Object>> programs = new ArrayList<>();
         for (Source source : sources) {
-            programs.add(ProgramList.programRow(programs.size() + 1, source.module(), source.path(), source.name(),
-                    source.text(), source.modified()));
+            indicator.checkCanceled();
+            indicator.setText2(source.path());
+            VirtualFile file = source.file();
+            if (!file.isValid()) {
+                continue;
+            }
+            programs.add(ProgramList.programRow(programs.size() + 1, source.module(), source.path(), file.getName(),
+                    text(file), file.getTimeStamp()));
         }
+        List<List<Object>> urls = ReadAction.nonBlocking(() -> urlRows(project))
+                .inSmartMode(project)
+                .wrapProgress(indicator)
+                .executeSynchronously();
+        return new Collected(programs, urls);
+    }
+
+    /** 읽기 동작 안에서 부른다. */
+    private static List<List<Object>> urlRows(Project project) {
         List<List<Object>> urls = new ArrayList<>();
         List<UrlMappingAction.Endpoint> endpoints = UrlMappingAction.collect(project);
         if (endpoints != null) {
@@ -157,7 +175,7 @@ public final class ProgramListAction extends DumbAwareAction {
                 urls.add(urlRow(urls.size() + 1, endpoint));
             }
         }
-        return new Collected(programs, urls);
+        return urls;
     }
 
     private static List<Object> urlRow(int no, UrlMappingAction.Endpoint endpoint) {
@@ -197,7 +215,7 @@ public final class ProgramListAction extends DumbAwareAction {
                         if (seen.add(file)) {
                             String path = relativePath(file, base);
                             indicator.setText2(path);
-                            result.add(new Source(module.getName(), path, file.getName(), text(file), file.getTimeStamp()));
+                            result.add(new Source(module.getName(), path, file));
                         }
                         return false;
                     }
