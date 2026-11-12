@@ -1,8 +1,12 @@
 <idea-plugin>
   <actions>
-    <!-- 편집기 우클릭 「주석 만들기」를 정규식 작업대 아래에 둔다. -->
+    <!-- 편집기 우클릭 「작업대」 묶음(서버 창 플러그인)에 쿼리 작업대를 넣는다. DB 콘솔에서만 보인다(QueryBenchAction$InConsole). -->
+    <reference ref="ei.db.console.QueryBench">
+      <add-to-group group-id="KingGura.Workbenches" anchor="first"/>
+    </reference>
+    <!-- 편집기 우클릭 「주석 만들기」를 「작업대」 묶음 아래에 둔다. -->
     <reference ref="ei.db.DocComment">
-      <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="KingGura.RegexBench"/>
+      <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="KingGura.Workbenches"/>
     </reference>
   </actions>
 </idea-plugin>
