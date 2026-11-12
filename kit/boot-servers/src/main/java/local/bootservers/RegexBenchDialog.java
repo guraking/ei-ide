@@ -1,5 +1,8 @@
 package local.bootservers;
 
+import local.bootservers.ui.ColumnShares;
+import local.bootservers.ui.DialogSize;
+
 import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
@@ -53,7 +56,6 @@ import java.awt.Font;
 import java.awt.GridLayout;
 import java.awt.Point;
 import java.awt.Rectangle;
-import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -93,7 +95,7 @@ final class RegexBenchDialog extends DialogWrapper {
     private static final String LINE_FLAGS = "gm";
     // 그룹 표 칸 수와 처음 칸 폭 비율(일치 · 그룹 · 이름 · 값 · 위치). 칸은 창 폭을 따라 늘고, 사용자가 끈 폭은 WIDTHS_KEY 에 기억한다.
     private static final int COLUMN_COUNT = 5;
-    private static final int[] COLUMN_WEIGHTS = {1, 1, 2, 5, 2};
+    private static final double[] COLUMN_SHARES = {1 / 11.0, 1 / 11.0, 2 / 11.0, 5 / 11.0, 2 / 11.0};
     private static final String WIDTHS_KEY = "KingGura.RegexBench.groupWidths";
     private static final Color SUCCESS = JBColor.namedColor("Label.successForeground", new JBColor(0x208A3C, 0x5FB865));
     private static final Color WARNING = JBColor.namedColor("Label.warningForeground", new JBColor(0xA36200, 0xE0A040));
@@ -228,7 +230,7 @@ final class RegexBenchDialog extends DialogWrapper {
         samplePanel.add(new JBScrollPane(sampleArea), BorderLayout.CENTER);
 
         groupTable.getEmptyText().setText(BootServersBundle.message("regex.groups.empty"));
-        ColumnWidths.remember(groupTable, WIDTHS_KEY, COLUMN_WEIGHTS);
+        ColumnShares.remember(groupTable, WIDTHS_KEY, COLUMN_SHARES);
         groupTable.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
                 showSelectedRow();
@@ -272,8 +274,7 @@ final class RegexBenchDialog extends DialogWrapper {
         panel.add(top, BorderLayout.NORTH);
         panel.add(split, BorderLayout.CENTER);
         panel.add(codeRow, BorderLayout.SOUTH);
-        Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
-        panel.setPreferredSize(new Dimension((int) (screen.width * WIDTH_SCREEN_RATIO), (int) (screen.height * HEIGHT_SCREEN_RATIO)));
+        panel.setPreferredSize(DialogSize.ofScreen(WIDTH_SCREEN_RATIO, HEIGHT_SCREEN_RATIO));
         showDetails();
         return panel;
     }

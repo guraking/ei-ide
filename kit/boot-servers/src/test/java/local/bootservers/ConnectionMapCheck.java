@@ -1,5 +1,7 @@
 package local.bootservers;
 
+import local.bootservers.ui.ColumnShares;
+
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -40,13 +42,12 @@ public final class ConnectionMapCheck {
     }
 
     private static void widths() {
-        eq("[120, 80, 300]", Arrays.toString(ColumnWidths.parse("120,80, 300", 3)), "칸 폭 읽기");
-        eq(null, ColumnWidths.parse(null, 3), "기억 없음");
-        eq(null, ColumnWidths.parse("120,80", 3), "칸 수 다름");
-        eq(null, ColumnWidths.parse("120,x,300", 3), "숫자 아님");
-        eq(null, ColumnWidths.parse("120,0,300", 3), "0 폭");
-        eq("[100, 300]", Arrays.toString(ColumnWidths.scale(new int[]{500, 1500}, 400)), "넓은 화면에서 끈 폭도 처음 합으로 맞춤");
-        eq("[1, 400]", Arrays.toString(ColumnWidths.scale(new int[]{1, 100_000}, 400)), "작은 칸도 1 이상");
+        double[] fallback = {0.5, 0.5};
+        eq("[0.3, 0.7]", Arrays.toString(ColumnShares.parse("0.3,0.7", fallback)), "칸 비율 읽기");
+        eq(fallback, ColumnShares.parse(null, fallback), "기억 없음");
+        eq(fallback, ColumnShares.parse("0.3", fallback), "칸 수 다름");
+        eq(fallback, ColumnShares.parse("0.3,x", fallback), "숫자 아님");
+        eq(fallback, ColumnShares.parse("120,80", fallback), "옛 픽셀 폭 기억은 처음 비율로");
     }
 
     private static void selfAndUnknown() {

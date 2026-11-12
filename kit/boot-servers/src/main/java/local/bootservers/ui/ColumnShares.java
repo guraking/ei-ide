@@ -86,11 +86,19 @@ public final class ColumnShares {
 
     /** 모든 칸의 너비 비율을 key 로 기억한다(처음에는 똑같이 나눈다). */
     public static void remember(JTable table, String key) {
+        remember(table, key, (double[]) null);
+    }
+
+    /** 모든 칸의 너비 비율을 key 로 기억한다. defaults 는 칸마다 처음 비율(합 1, 칸 수와 같은 길이), null 이면 똑같이 나눈다. */
+    public static void remember(JTable table, String key, double @Nullable [] defaults) {
         int[] columns = new int[table.getColumnModel().getColumnCount()];
+        if (defaults != null && defaults.length != columns.length) {
+            throw new IllegalArgumentException("칸 수와 비율 수가 다릅니다: " + columns.length + " ≠ " + defaults.length);
+        }
         for (int i = 0; i < columns.length; i++) {
             columns[i] = i;
         }
-        remember(table, key, columns, null);
+        remember(table, key, columns, defaults);
     }
 
     /** 체크 칸을 체크 상자 · 머리글 글 가운데 넓은 쪽 + 여백으로 고정하고 그 너비(px)를 돌려준다. */
@@ -108,7 +116,7 @@ public final class ColumnShares {
     }
 
     /** 남긴 비율 글(「0.35,0.45,0.20」). 없거나 깨졌거나 칸 수가 다르면 fallback. */
-    static double[] parse(@Nullable String value, double[] fallback) {
+    public static double[] parse(@Nullable String value, double[] fallback) {
         if (value == null) {
             return fallback;
         }

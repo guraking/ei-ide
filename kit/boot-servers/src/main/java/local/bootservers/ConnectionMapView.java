@@ -1,5 +1,7 @@
 package local.bootservers;
 
+import local.bootservers.ui.ColumnShares;
+
 import com.intellij.ide.ui.laf.darcula.ui.DarculaButtonUI;
 import com.intellij.openapi.application.WriteIntentReadAction;
 import com.intellij.openapi.fileEditor.OpenFileDescriptor;
@@ -93,7 +95,7 @@ final class ConnectionMapView {
     // 표에서 같은 줄인지 가릴 때 보는 앞쪽 칸 수(연결 · 설정 · 값)
     private static final int ROW_KEY_COLUMNS = 3;
     // 아래 표 칸(연결 · 설정 · 값 · 상태)의 처음 폭 비율과, 사용자가 끈 폭을 남기는 IDE 설정 키
-    private static final int[] TABLE_WEIGHTS = {2, 3, 4, 1};
+    private static final double[] TABLE_SHARES = {0.2, 0.3, 0.4, 0.1};
     private static final String TABLE_WIDTHS_KEY = "KingGura.ConnectionMap.columnWidths";
     private static final DateTimeFormatter CHECKED_TIME = DateTimeFormatter.ofPattern("HH:mm:ss");
 
@@ -192,7 +194,7 @@ final class ConnectionMapView {
 
         sourceTable.setShowGrid(false);
         // 칸은 표 폭(창 폭)을 따라 늘고, 끈 폭은 기억한다
-        ColumnWidths.remember(sourceTable, TABLE_WIDTHS_KEY, TABLE_WEIGHTS);
+        ColumnShares.remember(sourceTable, TABLE_WIDTHS_KEY, TABLE_SHARES);
         sourceTable.getColumnModel().getColumn(3).setCellRenderer(new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(javax.swing.JTable table, Object value, boolean selected, boolean focus, int row, int column) {
