@@ -1,3 +1,682 @@
+## 넣기 · 빼기 · 찾기 · 바꾸기
+### 특정 값 빼기 (배열)
+> 맨 위 target 을 바꿔 보세요. 같은 값이 여러 개면 모두 빠집니다. 원본은 그대로입니다.
+const target = 'B';
+const list = ['A', 'B', 'C', 'B', 'D'];
+console.log(list.filter(v => v !== target));
+
+### 특정 값 첫 번째 하나만 빼기
+> 같은 값이 여러 개여도 앞의 하나만 뺍니다.
+const target = 'B';
+const list = ['A', 'B', 'C', 'B', 'D'];
+const i = list.indexOf(target);
+console.log(i < 0 ? list : list.toSpliced(i, 1));
+
+### 여러 값 한꺼번에 빼기
+> 빼고 싶은 값을 배열로 적습니다.
+const remove = ['B', 'D'];
+const list = ['A', 'B', 'C', 'D', 'E'];
+const set = new Set(remove);
+console.log(list.filter(v => !set.has(v)));
+
+### 숫자 배열에서 특정 숫자 빼기
+> 글 '3' 과 숫자 3 은 다릅니다. 화면에서 받은 값이면 숫자로 바꿔 비교합니다.
+const target = '3';
+const list = [1, 2, 3, 4, 3];
+console.log(list.filter(v => v !== Number(target)));
+
+### n 번째 자리 빼기 (위치로)
+> 위치는 0 부터 셉니다. index = 2 면 세 번째.
+const index = 2;
+const list = ['A', 'B', 'C', 'D'];
+console.log(list.filter((_, i) => i !== index));
+
+### 맨 앞 · 맨 뒤 빼기
+> 원본을 두려면 slice, 원본에서 바로 빼려면 shift · pop.
+const list = ['A', 'B', 'C', 'D'];
+console.log('앞 뺀 것', list.slice(1), '뒤 뺀 것', list.slice(0, -1));
+const copy = [...list];
+console.log('shift', copy.shift(), 'pop', copy.pop(), '남은 것', copy);
+
+### 원본 배열에서 바로 빼기 (splice)
+> 다른 곳에서 같은 배열을 쓰고 있어 원본을 바꿔야 할 때.
+const target = 'C';
+const list = ['A', 'B', 'C', 'D'];
+const i = list.indexOf(target);
+if (i >= 0) list.splice(i, 1);
+console.log(list);
+
+### 키 값으로 줄 빼기 (id 로)
+> 맨 위 removeId 를 바꿔 보세요. 그 id 의 줄이 빠집니다.
+const removeId = 2;
+console.table(data.filter(r => r.id !== removeId));
+--- 데이터
+[
+  {
+    "id": 1,
+    "name": "볼트",
+    "qty": 10
+  },
+  {
+    "id": 2,
+    "name": "너트",
+    "qty": 5
+  },
+  {
+    "id": 3,
+    "name": "와셔",
+    "qty": 7
+  }
+]
+
+### 키 이름도 골라서 빼기 (칸 · 값을 변수로)
+> 어떤 칸으로 뺄지도 바꿀 수 있습니다. key = 'code', value = 'B'.
+const key = 'code';
+const value = 'B';
+console.table(data.filter(r => r[key] !== value));
+--- 데이터
+[
+  {
+    "code": "A",
+    "name": "사과"
+  },
+  {
+    "code": "B",
+    "name": "배"
+  },
+  {
+    "code": "C",
+    "name": "감"
+  }
+]
+
+### 여러 id 빼기 (체크한 줄 삭제)
+> 체크한 id 목록을 Set 으로 만들어 뺍니다.
+const removeIds = [1, 3];
+const set = new Set(removeIds);
+console.table(data.filter(r => !set.has(r.id)));
+--- 데이터
+[
+  {
+    "id": 1,
+    "name": "볼트"
+  },
+  {
+    "id": 2,
+    "name": "너트"
+  },
+  {
+    "id": 3,
+    "name": "와셔"
+  },
+  {
+    "id": 4,
+    "name": "핀"
+  }
+]
+
+### 체크된 줄 빼기 (checked 칸)
+> 그리드 「선택 삭제」.
+console.table(data.filter(r => !r.checked));
+--- 데이터
+[
+  {
+    "id": 1,
+    "name": "볼트",
+    "checked": true
+  },
+  {
+    "id": 2,
+    "name": "너트",
+    "checked": false
+  },
+  {
+    "id": 3,
+    "name": "와셔",
+    "checked": true
+  }
+]
+
+### 두 칸이 모두 같은 줄 빼기 (복합 키)
+> 주문번호 + 줄번호가 같은 줄.
+const orderNo = 'O1';
+const lineNo = 2;
+console.table(data.filter(r => !(r.orderNo === orderNo && r.lineNo === lineNo)));
+--- 데이터
+[
+  {
+    "orderNo": "O1",
+    "lineNo": 1,
+    "item": "볼트"
+  },
+  {
+    "orderNo": "O1",
+    "lineNo": 2,
+    "item": "너트"
+  },
+  {
+    "orderNo": "O2",
+    "lineNo": 1,
+    "item": "와셔"
+  }
+]
+
+### 조건으로 빼기 (수량 0 · 사용 안 함)
+> 조건에 맞는 줄을 뺍니다. 남길 조건을 filter 에 적습니다.
+console.table(data.filter(r => r.qty > 0 && r.useYn === 'Y'));
+--- 데이터
+[
+  {
+    "item": "볼트",
+    "qty": 10,
+    "useYn": "Y"
+  },
+  {
+    "item": "너트",
+    "qty": 0,
+    "useYn": "Y"
+  },
+  {
+    "item": "와셔",
+    "qty": 7,
+    "useYn": "N"
+  }
+]
+
+### 빈 값 줄 빼기 (이름이 빈 줄)
+> null · undefined · 빈 글 · 공백만 있는 칸.
+console.table(data.filter(r => r.name != null && String(r.name).trim() !== ''));
+--- 데이터
+[
+  {
+    "id": 1,
+    "name": "볼트"
+  },
+  {
+    "id": 2,
+    "name": ""
+  },
+  {
+    "id": 3,
+    "name": null
+  },
+  {
+    "id": 4,
+    "name": "  "
+  },
+  {
+    "id": 5,
+    "name": "너트"
+  }
+]
+
+### 원본 객체 배열에서 바로 빼기 (findIndex + splice)
+> Vue reactive 배열처럼 같은 배열을 고쳐야 할 때.
+const removeId = 2;
+const rows = data;
+const i = rows.findIndex(r => r.id === removeId);
+if (i >= 0) rows.splice(i, 1);
+console.table(rows);
+--- 데이터
+[
+  {
+    "id": 1,
+    "name": "볼트"
+  },
+  {
+    "id": 2,
+    "name": "너트"
+  },
+  {
+    "id": 3,
+    "name": "와셔"
+  }
+]
+
+### 원본에서 조건 맞는 줄 모두 빼기 (뒤에서부터)
+> 앞에서부터 splice 하면 위치가 밀려 하나씩 건너뜁니다.
+const rows = data;
+for (let i = rows.length - 1; i >= 0; i--) {
+  if (rows[i].qty === 0) rows.splice(i, 1);
+}
+console.table(rows);
+--- 데이터
+[
+  {
+    "item": "A",
+    "qty": 0
+  },
+  {
+    "item": "B",
+    "qty": 0
+  },
+  {
+    "item": "C",
+    "qty": 5
+  },
+  {
+    "item": "D",
+    "qty": 0
+  }
+]
+
+### 객체에서 키 하나 빼기
+> 원본을 두려면 펼침(...rest), 원본에서 빼려면 delete.
+const removeKey = 'password';
+const user = { id: 'hong', name: '홍길동', password: '1234' };
+const { [removeKey]: _, ...rest } = user;
+console.log(rest, user);
+
+### 객체에서 여러 키 빼기
+> 저장 요청 전에 화면 전용 칸을 뺍니다.
+const removeKeys = ['_checked', '_state', 'createdAt'];
+const row = { id: 1, name: '볼트', _checked: true, _state: 'U', createdAt: '2026-11-12' };
+console.log(Object.fromEntries(Object.entries(row).filter(([k]) => !removeKeys.includes(k))));
+
+### 객체 배열 모든 줄에서 키 빼기
+> 표 전체에서 password 칸 빼기.
+const removeKey = 'password';
+console.table(data.map(({ [removeKey]: _, ...rest }) => rest));
+--- 데이터
+[
+  {
+    "id": "hong",
+    "name": "홍길동",
+    "password": "1234"
+  },
+  {
+    "id": "kim",
+    "name": "김철수",
+    "password": "abcd"
+  }
+]
+
+### 값이 빈 키만 빼기 (객체)
+> 검색 조건에서 빈 칸을 빼고 보냅니다.
+const cond = { name: '볼트', dept: '', status: null, page: 1 };
+console.log(Object.fromEntries(Object.entries(cond).filter(([, v]) => v !== '' && v != null)));
+
+### 쉼표 글에서 값 하나 빼기 ('A,B,C' → 'A,C')
+> DB 에 쉼표로 저장된 코드 목록.
+const target = 'B';
+const text = 'A,B,C';
+console.log(text.split(',').filter(v => v !== target).join(','));
+
+### 글에서 특정 글자 빼기
+> 하이픈 · 공백 · 쉼표 빼기.
+console.log('010-1234-5678'.replaceAll('-', ''), '1,234,567'.replaceAll(',', ''), ' A 0 1 '.replaceAll(' ', ''));
+
+### 줄 안 배열에서 특정 값 빼기 (주문 줄 안 품목)
+> 모든 주문에서 품목 'B' 를 뺍니다.
+const target = 'B';
+console.log(JSON.stringify(data.map(o => ({ ...o, items: o.items.filter(v => v !== target) })), null, 2));
+--- 데이터
+[
+  {
+    "orderNo": "O1",
+    "items": [
+      "A",
+      "B",
+      "C"
+    ]
+  },
+  {
+    "orderNo": "O2",
+    "items": [
+      "B"
+    ]
+  }
+]
+
+### 특정 주문의 특정 줄 빼기 (마스터 → 디테일)
+> 주문 O1 의 lineNo 2 만 뺍니다.
+const orderNo = 'O1';
+const lineNo = 2;
+console.log(JSON.stringify(data.map(o => o.orderNo !== orderNo ? o : { ...o, lines: o.lines.filter(l => l.lineNo !== lineNo) }), null, 2));
+--- 데이터
+[
+  {
+    "orderNo": "O1",
+    "lines": [
+      {
+        "lineNo": 1,
+        "item": "볼트"
+      },
+      {
+        "lineNo": 2,
+        "item": "너트"
+      }
+    ]
+  },
+  {
+    "orderNo": "O2",
+    "lines": [
+      {
+        "lineNo": 1,
+        "item": "와셔"
+      }
+    ]
+  }
+]
+
+### Map · Set 에서 빼기
+> delete 는 있었으면 true.
+const set = new Set(['A', 'B', 'C']);
+const map = new Map([['A', 1], ['B', 2]]);
+console.log(set.delete('B'), set, map.delete('Z'), map);
+
+### 값 넣기 (없을 때만)
+> 이미 있으면 넣지 않습니다.
+const value = 'C';
+const list = ['A', 'B'];
+const next = list.includes(value) ? list : [...list, value];
+console.log(next);
+
+### 값 넣기 · 빼기 토글 (있으면 빼고 없으면 넣기)
+> 체크박스 · 즐겨찾기 버튼.
+const toggle = (list, v) => list.includes(v) ? list.filter(x => x !== v) : [...list, v];
+let picked = ['A', 'B'];
+picked = toggle(picked, 'B');
+console.log(picked);
+picked = toggle(picked, 'C');
+console.log(picked);
+
+### 줄 추가 (새 id 붙여)
+> 새 id = 지금 가장 큰 id + 1. 저장 전 화면 임시 번호에 씁니다.
+const nextId = Math.max(0, ...data.map(r => r.id)) + 1;
+console.table([...data, { id: nextId, name: '핀', qty: 0 }]);
+--- 데이터
+[
+  {
+    "id": 1,
+    "name": "볼트",
+    "qty": 10
+  },
+  {
+    "id": 5,
+    "name": "너트",
+    "qty": 5
+  }
+]
+
+### 특정 id 줄 바로 뒤에 넣기
+> 「아래에 줄 추가」 단추.
+const afterId = 1;
+const i = data.findIndex(r => r.id === afterId);
+console.table(data.toSpliced(i + 1, 0, { id: null, name: '(새 줄)' }));
+--- 데이터
+[
+  {
+    "id": 1,
+    "name": "볼트"
+  },
+  {
+    "id": 2,
+    "name": "너트"
+  },
+  {
+    "id": 3,
+    "name": "와셔"
+  }
+]
+
+### 맨 위에 줄 넣기
+> 새 줄을 맨 위에 보이는 그리드.
+console.table([{ id: null, name: '(새 줄)' }, ...data]);
+--- 데이터
+[
+  {
+    "id": 1,
+    "name": "볼트"
+  },
+  {
+    "id": 2,
+    "name": "너트"
+  }
+]
+
+### 있으면 바꾸고 없으면 넣기 (upsert)
+> 같은 id 가 있으면 칸을 덮고, 없으면 끝에 넣습니다.
+const upsert = (rows, row) => rows.some(r => r.id === row.id) ? rows.map(r => r.id === row.id ? { ...r, ...row } : r) : [...rows, row];
+console.table(upsert(data, { id: 2, qty: 99 }));
+console.table(upsert(data, { id: 9, name: '핀', qty: 1 }));
+--- 데이터
+[
+  {
+    "id": 1,
+    "name": "볼트",
+    "qty": 10
+  },
+  {
+    "id": 2,
+    "name": "너트",
+    "qty": 5
+  }
+]
+
+### 객체에 키 넣기 · 바꾸기
+> 원본을 두고 새 객체로.
+const key = 'status';
+const value = '완료';
+const row = { id: 1, name: '볼트' };
+console.log({ ...row, [key]: value }, row);
+
+### 특정 값을 다른 값으로 바꾸기 (배열)
+> 'B' 를 모두 'Z' 로.
+const from = 'B';
+const to = 'Z';
+console.log(['A', 'B', 'C', 'B'].map(v => v === from ? to : v));
+
+### id 로 찾아 한 칸 바꾸기
+> 그리드 한 줄 수정. 다른 줄은 그대로.
+const id = 2;
+const key = 'qty';
+const value = 30;
+console.table(data.map(r => r.id === id ? { ...r, [key]: value } : r));
+--- 데이터
+[
+  {
+    "id": 1,
+    "name": "볼트",
+    "qty": 10
+  },
+  {
+    "id": 2,
+    "name": "너트",
+    "qty": 5
+  }
+]
+
+### 여러 줄 한꺼번에 바꾸기 (체크한 줄 상태 일괄)
+> 체크한 줄의 상태를 모두 「완료」 로.
+const ids = new Set([1, 3]);
+console.table(data.map(r => ids.has(r.id) ? { ...r, status: '완료' } : r));
+--- 데이터
+[
+  {
+    "id": 1,
+    "status": "접수"
+  },
+  {
+    "id": 2,
+    "status": "접수"
+  },
+  {
+    "id": 3,
+    "status": "처리중"
+  }
+]
+
+### 모든 줄 한 칸 같은 값으로 (전체 선택 · 초기화)
+> 「전체 선택」 · 수량 0 으로 초기화.
+console.table(data.map(r => ({ ...r, checked: true, qty: 0 })));
+--- 데이터
+[
+  {
+    "id": 1,
+    "qty": 10
+  },
+  {
+    "id": 2,
+    "qty": 5
+  }
+]
+
+### 원본 줄 직접 바꾸기 (find 후 고치기)
+> Vue reactive 목록에서 찾은 줄을 바로 고칩니다.
+const row = data.find(r => r.id === 2);
+if (row) row.qty += 1;
+console.table(data);
+--- 데이터
+[
+  {
+    "id": 1,
+    "qty": 10
+  },
+  {
+    "id": 2,
+    "qty": 5
+  }
+]
+
+### id 로 한 줄 찾기 (없을 때 처리)
+> 못 찾으면 undefined 입니다. ?. 로 안전하게 씁니다.
+const id = 3;
+const row = data.find(r => r.id === id);
+console.log(row ?? '없음', row?.name ?? '-');
+--- 데이터
+[
+  {
+    "id": 1,
+    "name": "볼트"
+  },
+  {
+    "id": 2,
+    "name": "너트"
+  }
+]
+
+### 키 값으로 여러 줄 찾기
+> 맨 위 key · value 를 바꿔 보세요.
+const key = 'dept';
+const value = '영업';
+console.table(data.filter(r => r[key] === value));
+--- 데이터
+[
+  {
+    "name": "가",
+    "dept": "영업"
+  },
+  {
+    "name": "나",
+    "dept": "개발"
+  },
+  {
+    "name": "다",
+    "dept": "영업"
+  }
+]
+
+### 값이 있는지 · 몇 번째인지
+> includes 는 있는지, indexOf 는 위치(없으면 -1).
+const target = 'C';
+const list = ['A', 'B', 'C'];
+console.log(list.includes(target), list.indexOf(target), list.indexOf('Z'));
+
+### id 가 목록에 있는지 (객체 배열)
+> 저장 전 중복 확인.
+const id = 2;
+console.log(data.some(r => r.id === id), data.findIndex(r => r.id === id));
+--- 데이터
+[
+  {
+    "id": 1
+  },
+  {
+    "id": 2
+  },
+  {
+    "id": 3
+  }
+]
+
+### 객체에 키가 있는지 · 값 꺼내기
+> 칸 이름을 변수로 받을 때.
+const key = 'price';
+const row = { name: '볼트', price: 0 };
+console.log(key in row, row[key], row.qty ?? '칸 없음');
+
+### 첫 번째 · 마지막 줄 꺼내기
+> 최신 한 건, 가장 오래된 한 건.
+console.log(data[0], data.at(-1));
+--- 데이터
+[
+  {
+    "no": 1
+  },
+  {
+    "no": 2
+  },
+  {
+    "no": 3
+  }
+]
+
+### 위치 옮기기 (n 번째를 m 번째로)
+> 끌어서 순서 바꾸기.
+const from = 0;
+const to = 2;
+const list = ['A', 'B', 'C', 'D'];
+const copy = list.toSpliced(from, 1);
+console.log(copy.toSpliced(to, 0, list[from]));
+
+### 두 줄 자리 바꾸기 (id 로)
+> 위 · 아래 단추.
+const a = 1;
+const b = 3;
+const i = data.findIndex(r => r.id === a);
+const j = data.findIndex(r => r.id === b);
+const rows = [...data];
+[rows[i], rows[j]] = [rows[j], rows[i]];
+console.table(rows);
+--- 데이터
+[
+  {
+    "id": 1,
+    "name": "가"
+  },
+  {
+    "id": 2,
+    "name": "나"
+  },
+  {
+    "id": 3,
+    "name": "다"
+  }
+]
+
+### 칸 값 더하기 · 빼기 (재고 출고)
+> 출고 수량만큼 재고에서 뺍니다. 모자라면 막습니다.
+const item = '너트';
+const out = 8;
+const rows = data.map(r => {
+  if (r.item !== item) return r;
+  if (r.stock < out) throw new Error(`${item} 재고 ${r.stock} 개로 ${out} 개를 출고할 수 없습니다.`);
+  return { ...r, stock: r.stock - out };
+});
+console.table(rows);
+--- 데이터
+[
+  {
+    "item": "볼트",
+    "stock": 100
+  },
+  {
+    "item": "너트",
+    "stock": 20
+  }
+]
+
 ## 날짜 · 시간
 ### 오늘 날짜를 YYYY-MM-DD 로
 > 화면 검색 조건 기본값에 가장 많이 씁니다. toISOString 은 UTC 라 한국 시간 자정 전후로 하루가 틀어지므로 쓰지 않습니다.
@@ -1661,87 +2340,6 @@ console.table(data.map(r => ({ ...r, total: r.price * r.qty })));
     "qty": 25
   }
 ]
-
-### 한 칸 값만 바꾸기 (id 로 찾아서)
-> 그리드에서 한 줄 수정. 다른 줄은 그대로 두고 새 배열을 만듭니다.
-const id = 2;
-console.table(data.map(r => r.id === id ? { ...r, status: '완료' } : r));
---- 데이터
-[
-  {
-    "id": 1,
-    "status": "접수"
-  },
-  {
-    "id": 2,
-    "status": "처리중"
-  },
-  {
-    "id": 3,
-    "status": "접수"
-  }
-]
-
-### id 로 한 줄 지우기 (새 배열)
-> 원본을 건드리지 않고 지운 목록을 만듭니다.
-console.table(data.filter(r => r.id !== 2));
---- 데이터
-[
-  {
-    "id": 1,
-    "name": "가"
-  },
-  {
-    "id": 2,
-    "name": "나"
-  },
-  {
-    "id": 3,
-    "name": "다"
-  }
-]
-
-### 여러 id 한꺼번에 지우기
-> 체크한 줄 삭제.
-const remove = new Set([1, 3]);
-console.table(data.filter(r => !remove.has(r.id)));
---- 데이터
-[
-  {
-    "id": 1,
-    "name": "가"
-  },
-  {
-    "id": 2,
-    "name": "나"
-  },
-  {
-    "id": 3,
-    "name": "다"
-  },
-  {
-    "id": 4,
-    "name": "라"
-  }
-]
-
-### 원본 배열에서 직접 지우기 (splice)
-> 같은 배열을 다른 곳에서 쓰고 있어 원본을 바꿔야 할 때. 뒤에서부터 지워야 위치가 밀리지 않습니다.
-const list = [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }];
-for (let i = list.length - 1; i >= 0; i--) {
-  if (list[i].id % 2 === 0) list.splice(i, 1);
-}
-console.log(list);
-
-### 맨 앞 · 맨 뒤에 넣기 (원본 그대로)
-> 새 줄을 위에 추가하는 그리드.
-const list = ['B', 'C'];
-console.log(['A', ...list], [...list, 'D'], list);
-
-### 정해진 위치에 넣기 (toSpliced)
-> 2번째 자리에 끼워 넣습니다. 원본은 그대로입니다.
-const list = ['A', 'B', 'D'];
-console.log(list.toSpliced(2, 0, 'C'), list);
 
 ### 마지막 요소 (at)
 > 배열 끝에서 n 번째. list[list.length - 1] 대신.
