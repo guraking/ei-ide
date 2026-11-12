@@ -35,9 +35,14 @@ final class ExamplePanel {
   private final JBList<Examples.Example> list = new JBList<>(Examples.ALL);
   private final JBTextArea description = new JBTextArea();
   private final JBSplitter root = new JBSplitter(false, SPLIT);
+  /** Examples.ALL 과 같은 순서의 찾기용 소문자 글(묶음 · 제목 · 설명 · 두 DB 의 SQL). 글자를 칠 때마다 다시 만들지 않게 한 번만 만든다. */
+  private final List<String> haystacks = new ArrayList<>(Examples.ALL.size());
 
   ExamplePanel(Bench bench, JComponent slot) {
     this.bench = bench;
+    for (Examples.Example e : Examples.ALL) {
+      haystacks.add((e.group() + " " + e.title() + " " + e.description() + " " + e.oracle() + " " + e.postgres()).toLowerCase(Locale.ROOT));
+    }
     list.setCellRenderer(new ColoredListCellRenderer<>() {
       @Override
       protected void customizeCellRenderer(@NotNull JList<? extends Examples.Example> l, Examples.Example e, int index, boolean selected, boolean focus) {
@@ -76,8 +81,9 @@ final class ExamplePanel {
     String[] words = search.getText().strip().toLowerCase(Locale.ROOT).split("\\s+");
     Examples.Example keep = list.getSelectedValue();
     List<Examples.Example> shown = new ArrayList<>();
-    for (Examples.Example e : Examples.ALL) {
-      String hay = (e.group() + " " + e.title() + " " + e.description() + " " + e.oracle() + " " + e.postgres()).toLowerCase(Locale.ROOT);
+    for (int i = 0; i < Examples.ALL.size(); i++) {
+      Examples.Example e = Examples.ALL.get(i);
+      String hay = haystacks.get(i);
       boolean all = true;
       for (String w : words) if (!w.isEmpty() && !hay.contains(w)) all = false;
       if (all) shown.add(e);

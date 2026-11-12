@@ -199,7 +199,7 @@ public final class ConsoleOpener {
     counts(project).merge(c.id, n, Math::max);
     ConsoleStore store = ConsoleStore.get(project);
     String saved = store.load(c.id, n);
-    LightVirtualFile file = new LightVirtualFile(n == 1 ? fileName(c) : EiDbBundle.message("console.file.name.numbered", c.name, n), saved == null ? "" : saved);
+    LightVirtualFile file = new LightVirtualFile(fileName(c, n), saved == null ? "" : saved);
     file.putUserData(CONFIG_ID, c.id);
     file.putUserData(NUMBER, n);
     consoles(project).put(c.id, file);
@@ -244,25 +244,30 @@ public final class ConsoleOpener {
     return c;
   }
 
-  /** 콘솔을 다른 접속에 묶는다. 그 접속에 이미 콘솔이 있으면 그 콘솔은 목록에서만 빠진다(탭은 남는다). */
+  /**
+   * 콘솔을 다른 접속에 묶는다. 옛 접속의 「마지막 콘솔」 기억은 이 콘솔일 때만 지운다(같은 접속의 다른 콘솔 기억은 남긴다).
+   * 새 접속에 이미 콘솔이 있으면 그 콘솔은 목록에서만 빠진다(탭은 남는다). 탭 이름은 새 접속의 번호대로 바꾼다(번호 붙은 콘솔끼리 겹치지 않게).
+   */
   static void rebind(Project project, VirtualFile file, DbConfig target) {
     Map<String, LightVirtualFile> consoles = consoles(project);
-    consoles.remove(file.getUserData(CONFIG_ID));
+    String oldId = file.getUserData(CONFIG_ID);
+    if (oldId != null && file instanceof LightVirtualFile old) consoles.remove(oldId, old);
     if (file instanceof LightVirtualFile light) consoles.put(target.id, light);
     file.putUserData(CONFIG_ID, target.id);
     int n = ConsoleStore.get(project).rebind(file, target.id, counts(project).getOrDefault(target.id, 0));
     counts(project).put(target.id, n);
     file.putUserData(NUMBER, n);
     try {
-      file.rename(ConsoleOpener.class, fileName(target));
+      file.rename(ConsoleOpener.class, fileName(target, n));
     } catch (IOException e) {
       // 메모리 파일은 이름 바꾸기에 실패하지 않는다. 실패해도 탭 이름만 옛것으로 남는다.
       Notify.error(project, EiDbBundle.message("console.rename.failed", e.getMessage()));
     }
   }
 
-  private static String fileName(DbConfig c) {
-    return EiDbBundle.message("console.file.name", c.name);
+  /** 접속 c 의 n 번째 콘솔 파일 이름. 첫 콘솔은 번호 없이. */
+  private static String fileName(DbConfig c, int n) {
+    return n == 1 ? EiDbBundle.message("console.file.name", c.name) : EiDbBundle.message("console.file.name.numbered", c.name, n);
   }
 
   private static Map<String, Integer> counts(Project project) {

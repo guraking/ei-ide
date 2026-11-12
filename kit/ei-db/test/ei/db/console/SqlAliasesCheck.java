@@ -15,6 +15,15 @@ public class SqlAliasesCheck {
     eq(m.get("PRODUCT"), "product"); eq(m.containsKey("SET"), false);
     m = SqlAliases.parse("SELECT a FROM orders AS o WHERE 1 = 1");
     eq(m.get("O"), "orders");
+    // 서브쿼리 안 별칭 · 따옴표 이름 · MERGE · INSERT 대상.
+    m = SqlAliases.parse("SELECT x. FROM (SELECT * FROM emp x WHERE x.a = 1) v JOIN \"Dept\" d ON d.id = v.d");
+    eq(m.get("X"), "emp"); eq(m.get("D"), "Dept"); eq(m.containsKey("V"), false);
+    m = SqlAliases.parse("MERGE INTO tgt t USING src s ON (t.id = s.id) WHEN MATCHED THEN UPDATE SET t.v = s.v");
+    eq(m.get("T"), "tgt"); eq(m.get("S"), "src");
+    m = SqlAliases.parse("INSERT INTO log_t (a) SELECT a FROM src");
+    eq(m.get("LOG_T"), "log_t"); eq(m.get("SRC"), "src");
+    m = SqlAliases.parse("select e. from emp e where");
+    eq(m.get("E"), "emp");
     eq(SqlAliases.statementAround("select 1;\nselect * from t;", 12), "\nselect * from t");
     System.out.println("SqlAliasesCheck 통과");
   }

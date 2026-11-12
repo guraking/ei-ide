@@ -20,12 +20,15 @@ import ei.db.Notify;
 import ei.db.SqlRunner;
 import ei.db.mybatis.SqlValues;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.ListSelectionModel;
 import javax.swing.event.DocumentEvent;
 import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.Toolkit;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
@@ -42,8 +45,10 @@ final class HistoryDialog extends DialogWrapper {
 
   /** 목록 한 줄에 보일 문장 글자 수. 넘으면 줄임표, 전체는 툴팁. */
   private static final int PREVIEW_CHARS = 160;
-  private static final int WIDTH = 760;
-  private static final int HEIGHT = 440;
+  /** 처음 열 때 화면에 대한 크기 몫. 사용자가 바꾼 크기는 DIMENSION_KEY 로 기억한다. */
+  private static final double FIRST_WIDTH_RATIO = 0.45;
+  private static final double FIRST_HEIGHT_RATIO = 0.45;
+  private static final String DIMENSION_KEY = "ei.db.HistoryDialog";
 
   private final Project project;
   private final List<RunHistory.Entry> all;
@@ -57,7 +62,7 @@ final class HistoryDialog extends DialogWrapper {
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       try {
         List<RunHistory.Entry> entries = RunHistory.get().entries();
-        ApplicationManager.getApplication().invokeLater(() -> new HistoryDialog(project, entries).show(), ModalityState.any());
+        ApplicationManager.getApplication().invokeLater(() -> new HistoryDialog(project, entries).show(), ModalityState.any(), project.getDisposed());
       } catch (IOException e) {
         Notify.error(project, EiDbBundle.message("history.read.failed", e.getMessage()));
       }
@@ -99,8 +104,16 @@ final class HistoryDialog extends DialogWrapper {
     JPanel panel = new JPanel(new BorderLayout(0, JBUI.scale(6)));
     panel.add(search, BorderLayout.NORTH);
     panel.add(ScrollPaneFactory.createScrollPane(list), BorderLayout.CENTER);
-    panel.setPreferredSize(JBUI.size(WIDTH, HEIGHT));
     return panel;
+  }
+
+  @Override
+  protected @Nullable String getDimensionServiceKey() { return DIMENSION_KEY; }
+
+  @Override
+  public Dimension getInitialSize() {
+    Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+    return new Dimension((int) (screen.width * FIRST_WIDTH_RATIO), (int) (screen.height * FIRST_HEIGHT_RATIO));
   }
 
   @Override
