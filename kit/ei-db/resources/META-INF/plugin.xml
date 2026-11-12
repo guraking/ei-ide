@@ -100,9 +100,8 @@
       <keyboard-shortcut keymap="$default" first-keystroke="control shift E"/>
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="ei.db.console.RunAll"/>
     </action>
-    <action id="ei.db.console.QueryBench" class="ei.db.console.QueryBenchAction$InConsole" icon="AllIcons.Actions.Edit">
-      <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="ei.db.console.Explain"/>
-    </action>
+    <!-- 콘솔 우클릭은 서버 창 플러그인의 「작업대」 묶음에 들어간다(ei-db-bootservers.xml). -->
+    <action id="ei.db.console.QueryBench" class="ei.db.console.QueryBenchAction$InConsole" icon="AllIcons.Actions.Edit"/>
     <action id="ei.db.QueryBench" class="ei.db.console.QueryBenchAction">
       <add-to-group group-id="ToolsMenu" anchor="last"/>
     </action>
