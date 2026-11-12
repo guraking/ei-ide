@@ -3,6 +3,8 @@ package local.bootservers.web;
 import local.bootservers.BootServersBundle;
 
 import com.intellij.openapi.ui.ComboBox;
+import com.intellij.ui.EditorNotificationPanel;
+import com.intellij.ui.InlineBanner;
 import com.intellij.ui.components.JBTextArea;
 import com.intellij.ui.components.JBRadioButton;
 import com.intellij.ui.components.JBScrollPane;
@@ -51,6 +53,7 @@ final class JsPipelinePanel {
     private final JBRadioButton descending = new JBRadioButton(BootServersBundle.message("js.pipe.descending"));
     private final JSpinner limit = new JSpinner(new SpinnerNumberModel(0, 0, LIMIT_MAX, LIMIT_STEP));
     private final JBTextArea hint = new JBTextArea(BootServersBundle.message("js.pipe.hint"));
+    private final InlineBanner noData = new InlineBanner(BootServersBundle.message("js.pipe.no.data"), EditorNotificationPanel.Status.Warning);
     private final JComponent root;
 
     JsPipelinePanel(Consumer<String> make) {
@@ -75,20 +78,22 @@ final class JsPipelinePanel {
         JButton makeButton = new JButton(BootServersBundle.message("js.pipe.make"));
         makeButton.putClientProperty(com.intellij.ide.ui.laf.darcula.ui.DarculaButtonUI.DEFAULT_STYLE_KEY, true);
         makeButton.addActionListener(e -> make.accept(JsPipeline.generate(spec())));
+        noData.showCloseButton(false);
         JPanel form = FormBuilder.createFormBuilder()
+                .addComponent(noData)
                 .addComponent(hint)
                 .addSeparator()
-                .addLabeledComponent(BootServersBundle.message("js.pipe.filter.column"), filterColumn)
-                .addLabeledComponent(BootServersBundle.message("js.pipe.filter.op"), filterOp)
+                .addLabeledComponent(BootServersBundle.message("js.pipe.filter.column"), wide(filterColumn))
+                .addLabeledComponent(BootServersBundle.message("js.pipe.filter.op"), wide(filterOp))
                 .addLabeledComponent(BootServersBundle.message("js.pipe.filter.value"), filterValue)
                 .addSeparator()
-                .addLabeledComponent(BootServersBundle.message("js.pipe.distinct"), distinctColumn)
+                .addLabeledComponent(BootServersBundle.message("js.pipe.distinct"), wide(distinctColumn))
                 .addSeparator()
-                .addLabeledComponent(BootServersBundle.message("js.pipe.group"), groupColumn)
-                .addLabeledComponent(BootServersBundle.message("js.pipe.aggregate"), aggregate)
-                .addLabeledComponent(BootServersBundle.message("js.pipe.agg.column"), aggColumn)
+                .addLabeledComponent(BootServersBundle.message("js.pipe.group"), wide(groupColumn))
+                .addLabeledComponent(BootServersBundle.message("js.pipe.aggregate"), wide(aggregate))
+                .addLabeledComponent(BootServersBundle.message("js.pipe.agg.column"), wide(aggColumn))
                 .addSeparator()
-                .addLabeledComponent(BootServersBundle.message("js.pipe.sort"), sortColumn)
+                .addLabeledComponent(BootServersBundle.message("js.pipe.sort"), wide(sortColumn))
                 .addLabeledComponent(BootServersBundle.message("js.pipe.order"), orderRow)
                 .addLabeledComponent(BootServersBundle.message("js.pipe.limit"), limit)
                 .addSeparator()
@@ -104,8 +109,9 @@ final class JsPipelinePanel {
         return root;
     }
 
-    /** 입력 데이터의 칸 이름으로 목록을 다시 채운다. 고르거나 쳐 둔 칸은 그대로 둔다. */
+    /** 입력 데이터의 칸 이름으로 목록을 다시 채운다. 고르거나 쳐 둔 칸은 그대로 둔다. 칸이 없으면 맨 위에 붙여 넣으라는 알림을 보인다. */
     void setColumns(List<String> columns) {
+        noData.setVisible(columns.isEmpty());
         for (ComboBox<String> box : List.of(filterColumn, distinctColumn, groupColumn, aggColumn, sortColumn)) {
             Object kept = box.getEditor().getItem();
             box.removeAllItems();
@@ -163,6 +169,13 @@ final class JsPipelinePanel {
         public boolean getScrollableTracksViewportHeight() {
             return false;
         }
+    }
+
+    /** FormBuilder 는 콤보 상자를 늘리지 않으므로 판에 담아 줄 폭을 다 채운다. */
+    private static JComponent wide(JComponent box) {
+        JPanel row = new JPanel(new BorderLayout());
+        row.add(box, BorderLayout.CENTER);
+        return row;
     }
 
     private static ComboBox<String> columnBox() {

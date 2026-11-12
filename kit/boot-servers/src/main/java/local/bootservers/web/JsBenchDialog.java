@@ -63,7 +63,8 @@ import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
-import java.awt.GridLayout;
+import java.awt.FlowLayout;
+import java.awt.Rectangle;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.ActionEvent;
 import java.io.IOException;
@@ -113,7 +114,13 @@ public final class JsBenchDialog extends DialogWrapper {
     private final EditorTextField code;
     private final EditorTextField data;
     private final SearchTextField search = new SearchTextField(false);
-    private final JBList<JsExamples.Example> list = new JBList<>();
+    /** 예제 목록. 칸 폭을 따라가 가로 스크롤이 생기지 않는다(넘친 제목은 마우스를 올리면 IntelliJ 가 펼쳐 보인다). */
+    private final JBList<JsExamples.Example> list = new JBList<>() {
+        @Override
+        public boolean getScrollableTracksViewportWidth() {
+            return true;
+        }
+    };
     private final JBTextArea description = new JBTextArea();
     private final JsPipelinePanel pipeline = new JsPipelinePanel(this::useGenerated);
     private final JBLabel status = new JBLabel();
@@ -138,6 +145,12 @@ public final class JsBenchDialog extends DialogWrapper {
     /** 코드 칸 파일 이름(언어에 따라 JS_NAME · TS_NAME). 색칠 문법을 고른다. */
     private String codeName;
     private @Nullable JsBench.Run running;
+    /** 지금 코드 칸에 놓인 예제. 찾기로 목록을 다시 채울 때 같은 예제를 다시 돌리지 않게 한다. */
+    private @Nullable JsExamples.Example shownExample;
+    /** 돌던 실행을 멈춘 뒤 그 결과 대신 할 일(예제를 바꿔 고른 경우). null 이면 멈춘 결과를 그대로 보인다. */
+    private @Nullable Runnable afterStop;
+    /** 머리줄(코드 · 입력 데이터 · 출력 탭) 높이를 탭 줄 높이에 맞추려고 모아 둔다. */
+    private final List<JComponent> heads = new ArrayList<>();
 
     /** 작업대를 연다. editor 는 열 때의 편집기(없으면 null), initialCode 는 고른 글, typescript 는 처음 언어(null 이면 지난번). */
     public static void open(Project project, @Nullable Editor editor, @Nullable String initialCode, @Nullable Boolean typescript) {
@@ -225,13 +238,9 @@ public final class JsBenchDialog extends DialogWrapper {
         languages.add(tsButton);
         jsButton.addActionListener(e -> languageChanged());
         tsButton.addActionListener(e -> languageChanged());
-        JPanel languageRow = new JPanel(new GridLayout(1, 2));
+        JPanel languageRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, JBUI.scale(PADDING), 0));
         languageRow.add(jsButton);
         languageRow.add(tsButton);
-        JPanel top = FormBuilder.createFormBuilder()
-                .addLabeledComponent(BootServersBundle.message("js.language"), languageRow)
-                .getPanel();
-        top.setBorder(JBUI.Borders.emptyBottom(PADDING));
 
         JBTabbedPane left = new JBTabbedPane();
         left.setTabComponentInsets(JBUI.emptyInsets());
@@ -239,7 +248,7 @@ public final class JsBenchDialog extends DialogWrapper {
         left.addTab(BootServersBundle.message("js.tab.pipeline"), pipeline.component());
 
         OnePixelSplitter codeAndData = splitter(true, CODE_SPLIT, "codeSplit",
-                titled(BootServersBundle.message("js.code"), code, null),
+                titled(BootServersBundle.message("js.code"), code, languageRow),
                 titled(BootServersBundle.message("js.data"), data, convertButton()));
         OnePixelSplitter center = splitter(false, CENTER_SPLIT, "centerSplit", codeAndData, resultPanel());
         OnePixelSplitter main = splitter(false, LEFT_SPLIT, "leftSplit", left, center);
@@ -251,8 +260,15 @@ public final class JsBenchDialog extends DialogWrapper {
                 return new Dimension(0, 0);
             }
         };
-        root.add(top, BorderLayout.NORTH);
         root.add(main, BorderLayout.CENTER);
+        resultTabs.addComponentListener(new java.awt.event.ComponentAdapter() {
+            @Override
+            public void componentResized(java.awt.event.ComponentEvent e) {
+                for (JComponent head : heads) {
+                    head.revalidate();
+                }
+            }
+        });
 
         DumbAwareAction.create(e -> run()).registerCustomShortcutSet(CustomShortcutSet.fromString(RUN_SHORTCUT), root, getDisposable());
         data.addDocumentListener(new com.intellij.openapi.editor.event.DocumentListener() {
@@ -285,6 +301,7 @@ public final class JsBenchDialog extends DialogWrapper {
                                                  boolean selected, boolean focus) {
                 append(e.group() + "  ", SimpleTextAttributes.GRAYED_ATTRIBUTES);
                 append(e.title());
+                setToolTipText(e.title());
                 if (e.viewOnly()) {
                     append("  " + BootServersBundle.message("js.example.view.only"), SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES);
                 }
@@ -308,11 +325,13 @@ public final class JsBenchDialog extends DialogWrapper {
         description.setLineWrap(true);
         description.setWrapStyleWord(true);
         description.setOpaque(false);
-        description.setBorder(JBUI.Borders.empty(PADDING));
+        description.setBorder(JBUI.Borders.compound(JBUI.Borders.customLineTop(JBColor.border()), JBUI.Borders.empty(PADDING)));
         description.setText(BootServersBundle.message("js.examples.intro", examples.size()));
         JPanel panel = new JPanel(new BorderLayout(0, JBUI.scale(4)));
         panel.add(search, BorderLayout.NORTH);
-        panel.add(ScrollPaneFactory.createScrollPane(list), BorderLayout.CENTER);
+        javax.swing.JScrollPane listScroll = ScrollPaneFactory.createScrollPane(list, true);
+        listScroll.setHorizontalScrollBarPolicy(javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        panel.add(listScroll, BorderLayout.CENTER);
         panel.add(description, BorderLayout.SOUTH);
         panel.setBorder(JBUI.Borders.empty(PADDING));
         return panel;
@@ -358,20 +377,20 @@ public final class JsBenchDialog extends DialogWrapper {
                 .getPanel();
         tableTop.setBorder(JBUI.Borders.empty(PADDING));
         tablePanel.add(tableTop, BorderLayout.NORTH);
-        tablePanel.add(ScrollPaneFactory.createScrollPane(table), BorderLayout.CENTER);
+        tablePanel.add(ScrollPaneFactory.createScrollPane(table, true), BorderLayout.CENTER);
         resultTabs.setTabComponentInsets(JBUI.emptyInsets());
-        resultTabs.addTab(BootServersBundle.message("js.tab.output"), ScrollPaneFactory.createScrollPane(output));
+        resultTabs.addTab(BootServersBundle.message("js.tab.output"), ScrollPaneFactory.createScrollPane(output, true));
         resultTabs.addTab(BootServersBundle.message("js.tab.table"), tablePanel);
         nodeButton.setVisible(false);
         nodeButton.addActionListener(e -> WebInstaller.installNode(project));
-        JPanel head = new JPanel(new BorderLayout(JBUI.scale(PADDING), 0));
-        head.add(status, BorderLayout.CENTER);
-        head.add(nodeButton, BorderLayout.EAST);
-        head.setBorder(JBUI.Borders.empty(0, PADDING, PADDING, PADDING));
+        JPanel foot = new JPanel(new BorderLayout(JBUI.scale(PADDING), 0));
+        foot.add(status, BorderLayout.CENTER);
+        foot.add(nodeButton, BorderLayout.EAST);
+        foot.setBorder(JBUI.Borders.compound(JBUI.Borders.customLineTop(JBColor.border()), JBUI.Borders.empty(PADDING)));
         JPanel panel = new JPanel(new BorderLayout());
-        panel.add(head, BorderLayout.NORTH);
         panel.add(resultTabs, BorderLayout.CENTER);
-        return titled(BootServersBundle.message("js.result"), panel, null);
+        panel.add(foot, BorderLayout.SOUTH);
+        return panel;
     }
 
     /** 입력 데이터 「바꾸기」: 앞 셋은 데이터 칸을 바꾸고, 뒤 둘은 만든 코드를 출력에 보인다. */
@@ -394,19 +413,36 @@ public final class JsBenchDialog extends DialogWrapper {
         return button;
     }
 
-    private static JComponent titled(String title, JComponent body, @Nullable JComponent extra) {
+    /** 칸 머리줄 + 본문. 머리줄은 왼쪽 · 오른쪽 탭 줄과 같은 높이로 맞춘다. */
+    private JComponent titled(String title, JComponent body, @Nullable JComponent extra) {
         JBLabel label = new JBLabel(title);
         label.setForeground(UIUtil.getContextHelpForeground());
-        JPanel head = new JPanel(new BorderLayout(JBUI.scale(PADDING), 0));
+        JPanel head = new JPanel(new BorderLayout(JBUI.scale(PADDING), 0)) {
+            @Override
+            public Dimension getPreferredSize() {
+                Dimension size = super.getPreferredSize();
+                return new Dimension(size.width, Math.max(size.height, tabRowHeight()));
+            }
+        };
+        heads.add(head);
         head.add(label, BorderLayout.CENTER);
         if (extra != null) {
             head.add(extra, BorderLayout.EAST);
         }
-        head.setBorder(JBUI.Borders.empty(PADDING, PADDING, PADDING / 2, PADDING));
+        head.setBorder(JBUI.Borders.empty(0, PADDING));
         JPanel panel = new JPanel(new BorderLayout());
         panel.add(head, BorderLayout.NORTH);
         panel.add(body, BorderLayout.CENTER);
         return panel;
+    }
+
+    /** 결과 탭 줄(출력 · 표)의 높이. 아직 배치 전이면 0. */
+    private int tabRowHeight() {
+        if (resultTabs.getTabCount() == 0 || resultTabs.getUI() == null) {
+            return 0;
+        }
+        Rectangle tab = resultTabs.getUI().getTabBounds(resultTabs, 0);
+        return tab == null ? 0 : tab.y + tab.height;
     }
 
     private static OnePixelSplitter splitter(boolean vertical, float proportion, String key, JComponent first, JComponent second) {
@@ -432,9 +468,11 @@ public final class JsBenchDialog extends DialogWrapper {
             e.getSettings().setFoldingOutlineShown(false);
             e.getSettings().setAdditionalLinesCount(0);
             e.getContentComponent().setBorder(JBUI.Borders.empty(PADDING));
+            e.setBorder(JBUI.Borders.empty());
             e.setHighlighter(com.intellij.openapi.editor.highlighter.EditorHighlighterFactory.getInstance()
                     .createEditorHighlighter(project, new LightVirtualFile(name.get(), fileType(name.get()), "")));
         });
+        field.setBorder(JBUI.Borders.empty());
         field.setPlaceholder(BootServersBundle.message(lineNumbers ? "js.code.empty" : "js.data.empty"));
         field.setShowPlaceholderWhenFocused(true);
         return field;
@@ -462,18 +500,37 @@ public final class JsBenchDialog extends DialogWrapper {
         }
     }
 
+    /** 예제를 고르면 코드 · 데이터를 채우고 바로 돌려 결과를 보인다. 화면 전용 예제는 돌리지 않고 그렇다고 알린다. */
     private void useExample(@Nullable JsExamples.Example e) {
         if (e == null) {
-            description.setText(BootServersBundle.message("js.examples.intro", examples.size()));
+            if (shownExample == null) {
+                description.setText(BootServersBundle.message("js.examples.intro", examples.size()));
+            }
             return;
         }
+        if (e == shownExample) {
+            return;
+        }
+        shownExample = e;
         description.setText(e.title() + "\n" + e.description());
         fill(e.code(), e.data());
-        if (e.viewOnly()) {
-            setStatus(BootServersBundle.message("js.example.view.only.note"), false);
-        } else {
-            setStatus(BootServersBundle.message("js.example.ready"), false);
+        Runnable next = e.viewOnly() ? this::showViewOnly : this::run;
+        if (running != null) {
+            afterStop = next;
+            stop();
+            return;
         }
+        next.run();
+    }
+
+    /** 화면 전용 예제: 출력 · 표를 비우고 돌리지 않는 까닭을 보인다. */
+    private void showViewOnly() {
+        tables.clear();
+        tablePick.removeAllItems();
+        showTable(-1);
+        output.setText(BootServersBundle.message("js.example.view.only.output"));
+        resultTabs.setSelectedIndex(OUTPUT_TAB);
+        setStatus(BootServersBundle.message("js.example.view.only.note"), false);
     }
 
     private void useGenerated(String generated) {
@@ -588,6 +645,12 @@ public final class JsBenchDialog extends DialogWrapper {
         runAction.setEnabled(true);
         stopAction.setEnabled(false);
         if (isDisposed()) {
+            return;
+        }
+        if (afterStop != null) {
+            Runnable next = afterStop;
+            afterStop = null;
+            next.run();
             return;
         }
         if (result == null) {
