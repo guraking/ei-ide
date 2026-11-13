@@ -233,6 +233,8 @@ def spots_in(path, old_prefix):
 
 
 def main():
+    # 윈도우 콘솔(cp949)에 없는 글자가 하위 대본 출력에 섞여도 멈추지 않는다.
+    sys.stdout.reconfigure(errors="replace")
     if len(sys.argv) > 2:
         raise SystemExit(__doc__)
     old = current_build()

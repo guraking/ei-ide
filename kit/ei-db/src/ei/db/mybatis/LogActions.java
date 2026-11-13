@@ -7,7 +7,7 @@ import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
-import com.intellij.openapi.actionSystem.LangDataKeys;
+import com.intellij.openapi.actionSystem.ExecutionDataKeys;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.project.Project;
@@ -49,7 +49,7 @@ public final class LogActions {
   static Editor editor(AnActionEvent e) {
     Editor editor = e.getData(CommonDataKeys.EDITOR);
     if (editor != null) return editor;
-    ConsoleView console = e.getData(LangDataKeys.CONSOLE_VIEW);
+    ConsoleView console = e.getData(ExecutionDataKeys.CONSOLE_VIEW);
     return console instanceof ConsoleViewImpl impl ? impl.getEditor() : null;
   }
 

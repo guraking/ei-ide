@@ -4108,6 +4108,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
     return bundled.isFile() ? bundled.getPath() : VCS_NAME_SVN;
   }
 
+  private static final String SVN_SETTINGS_CLASS = "org.jetbrains.idea.svn.SvnApplicationSettings";
+
   /**
    * 설정 → Subversion 의 명령줄 경로. Subversion 플러그인이 꺼져 있으면 그 클래스가 없어(선택 의존) null.
    * IDE 밖(점검 main) · 닫는 중이라 못 읽어도 null.
@@ -4115,9 +4117,12 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static String savedSvnPath() {
     if (ApplicationManager.getApplication() == null) return null;
     try {
-      return org.jetbrains.idea.svn.SvnApplicationSettings.getInstance().getCommandLinePath();
+      // Subversion 플러그인 jar 없이도 컴파일되도록 이름으로 부른다(플랫폼 배포본에 svn4idea 가 없는 판이 있다).
+      Class<?> settings = Class.forName(SVN_SETTINGS_CLASS);
+      Object instance = settings.getMethod("getInstance").invoke(null);
+      return (String) settings.getMethod("getCommandLinePath").invoke(instance);
     }
-    catch (RuntimeException | NoClassDefFoundError e) {
+    catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
       LOG.debug("SVN 경로 설정 읽기 실패", e);
       return null;
     }
