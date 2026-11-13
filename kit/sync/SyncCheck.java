@@ -289,7 +289,37 @@ public class SyncCheck {
     checkGitLogins();
     checkGitUndo();
     checkStability1112();
+    checkPullFailures();
+    checkStability1113();
+    checkStabilityC1113();
+    checkAmbiguousBranch();
     System.out.println("SyncCheck 통과");
+  }
+
+  /** 대소문자 막기 줄 정리(남길 브랜치를 막는 옛 음수 줄은 지움) · 추적 원격이 없을 때 하나뿐인 원격. 진짜 git 저장소로. */
+  private static void checkStability1113() throws Exception {
+    eq(ReverseMerge.regexQuoted("^refs/heads/a.b/*"), "\\^refs/heads/a\\.b/\\*");
+    File tmp = java.nio.file.Files.createTempDirectory("stab1113").toFile();
+    sh(tmp, "git init -q --bare srv.git && git init -q -b main seed && cd seed && git config user.name t && git config user.email t@t"
+            + " && git commit -q --allow-empty -m one && git branch Feature/a && git branch feature/b && git branch fix/a.b"
+            + " && git push -q ../srv.git main Feature/a feature/b fix/a.b && cd .. && git clone -q srv.git mine");
+    File mine = new File(tmp, "mine");
+    // 옛 줄: 소문자 쪽을 막아 두었는데 지금 브랜치가 feature/b 로 바뀜. 글자 그대로 같은 줄만 지우고(fix/aXb 줄은 남김) 대문자 쪽을 막는다.
+    sh(mine, "git config --add remote.origin.fetch '^refs/heads/feature/*' && git config --add remote.origin.fetch '^refs/heads/feature/*'"
+             + " && git config --add remote.origin.fetch '^refs/heads/fix/aXb' && git update-ref -d refs/remotes/origin/feature/b");
+    eq(ReverseMerge.blockCaseClashes(mine, ReverseMerge.configs(mine), "origin", java.util.Arrays.asList("feature/b", null)), true);
+    eq(SyncPanel.git(mine, "config", "--get-all", "remote.origin.fetch"), "+refs/heads/*:refs/remotes/origin/*\n^refs/heads/fix/aXb\n^refs/heads/Feature/*\n");
+    eq(SyncPanel.git(mine, "rev-parse", "--verify", "-q", "refs/remotes/origin/feature/b").isBlank(), false);
+    // 두 번째: 줄이 그대로다.
+    ReverseMerge.blockCaseClashes(mine, ReverseMerge.configs(mine), "origin", java.util.Arrays.asList("feature/b", null));
+    eq(SyncPanel.git(mine, "config", "--get-all", "remote.origin.fetch"), "+refs/heads/*:refs/remotes/origin/*\n^refs/heads/fix/aXb\n^refs/heads/Feature/*\n");
+    // 추적 브랜치 없는 브랜치: 원격이 하나뿐이면 그 원격, 여럿이면 origin.
+    sh(mine, "git remote rename origin corp");
+    eq(ReverseMerge.remoteOf(ReverseMerge.configs(mine), "local-only"), "corp");
+    eq(ReverseMerge.remoteOf(ReverseMerge.configs(mine), "main"), "corp");
+    sh(mine, "git remote add other ../srv.git");
+    eq(ReverseMerge.remoteOf(ReverseMerge.configs(mine), "local-only"), ReverseMerge.DEFAULT_REMOTE);
+    eq(ReverseMerge.remoteOf(java.util.Map.of(), null), ReverseMerge.DEFAULT_REMOTE);
   }
 
   private static SyncPanel.Change out(String status, SyncPanel.Repo repo) {
@@ -786,6 +816,50 @@ public class SyncCheck {
     eq(CloneBranch.remote(tmp.resolve("empty").toFile()), null);
   }
 
+  /** 같은 짧은 이름의 태그가 있어 git 이 「heads/이름」 · 「remotes/원격/이름」으로 내도 브랜치 · 추적 브랜치 이름은 그대로. */
+  private static void checkAmbiguousBranch() throws Exception {
+    java.nio.file.Path tmp = java.nio.file.Files.createTempDirectory("ambig");
+    sh(tmp.toFile(), "git init -q -b main srv && git -C srv -c user.email=a@b -c user.name=a commit -q --allow-empty -m a && git -C srv branch x"
+                     + " && git clone -q srv r && git -C r checkout -q x && git -C r tag x && git -C r tag origin/x");
+    File r = tmp.resolve("r").toFile();
+    SyncPanel.Repo repo = SyncPanel.gitRepo(r);
+    eq(repo.branch(), "x");
+    eq(repo.upstream(), "origin/x");
+    eq(SyncPanel.unambiguous(r, "heads/x", SyncPanel.AMBIGUOUS_HEADS), "x");
+    sh(r, "git update-ref refs/heads/heads/y HEAD");
+    eq(SyncPanel.unambiguous(r, "heads/y", SyncPanel.AMBIGUOUS_HEADS), "heads/y");
+  }
+
+  /** 받기 실패 글 가르기: 갈라짐 · 덮어쓰기 · 충돌만 받기 창으로, 서버 연결 · 인증 실패는 이유를 보인다. 메시지 없는 예외는 예외 이름. */
+  private static void checkPullFailures() {
+    eq(SyncPanel.pullNeedsDialog("git merge 실패: fatal: Not possible to fast-forward, aborting."), true);
+    eq(SyncPanel.pullNeedsDialog("git merge 실패: error: Your local changes to the following files would be overwritten by merge:\n\ta.txt"), true);
+    eq(SyncPanel.pullNeedsDialog("git pull 실패: error: Pulling is not possible because you have unmerged files."), true);
+    eq(SyncPanel.pullNeedsDialog("git fetch 실패: fatal: unable to access 'https://git.example.com/a.git/': Could not resolve host: git.example.com"), false);
+    eq(SyncPanel.pullNeedsDialog("git fetch 실패: fatal: Authentication failed for 'https://git.example.com/a.git/'"), false);
+    eq(SyncPanel.messageOf(new IOException((String) null)), "java.io.IOException");
+    eq(SyncPanel.messageOf(new IOException("x")), "x");
+  }
+
+  /** 2026-11-13 안정화: 커밋 없는 저장소의 Undo · 연결 작업본의 index.lock 안내 · Assume Unchanged 가 추적하는 파일만 고르기. */
+  private static void checkStabilityC1113() throws Exception {
+    java.nio.file.Path tmp = java.nio.file.Files.createTempDirectory("stabc");
+    File r = tmp.resolve("r").toFile();
+    sh(tmp.toFile(), "git init -q -b main r");
+    try {
+      GitUndo.read(r);
+      throw new AssertionError("커밋 없는 저장소는 되돌릴 것이 없어야 한다");
+    }
+    catch (IOException expected) {
+      eq(expected.getMessage(), SyncBundle.message("undo.nothing", "main"));
+    }
+    sh(r, "git config user.email me@x && git config user.name 나 && echo 1 > a && echo 2 > '새 [b].txt' && git add a && git commit -qm one"
+          + " && git worktree add -q ../w && touch \"$(git -C ../w rev-parse --absolute-git-dir)/index.lock\"");
+    eq(GitUndo.lockHint(tmp.resolve("w").toFile(), "x").contains("index.lock"), true);
+    eq(GitUndo.lockHint(r, "x"), "x");
+    eq(AssumeUnchangedAction.tracked(r, List.of("새 [b].txt", "a", "없음")), List.of("a"));
+  }
+
   /** 2026-11-12 안정화 전수조사: 저장소 찾기 · 참조 읽기 · 빈 저장소 · 받기 목록 · 이클립스 파일 찾기. */
   private static void checkStability1112() throws Exception {
     java.nio.file.Path tmp = java.nio.file.Files.createTempDirectory("stab");
@@ -911,15 +985,13 @@ public class SyncCheck {
     eq(GitLogins.header(token), "Authorization: Basic " + java.util.Base64.getEncoder().encodeToString("oauth2:glpat-1".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
 
     java.util.Map<String, String> env = GitLogins.env(List.of(pw, empty, token), java.util.Map.of());
-    eq(env.get("GIT_CONFIG_COUNT"), "2");
-    eq(env.get("GIT_CONFIG_KEY_0"), "http.https://a.com/.extraHeader");
-    eq(env.get("GIT_CONFIG_KEY_1"), "http.https://b.com:8443/.extraHeader");
-    eq(env.get("GIT_CONFIG_VALUE_1"), GitLogins.header(token));
-    // IDE 에 이미 GIT_CONFIG_COUNT 가 있으면 그 뒤에 잇는다.
-    java.util.Map<String, String> after = GitLogins.env(List.of(pw), java.util.Map.of("GIT_CONFIG_COUNT", "2"));
-    eq(after.get("GIT_CONFIG_KEY_2"), "http.https://a.com/.extraHeader");
-    eq(after.get("GIT_CONFIG_COUNT"), "3");
+    eq(env, java.util.Map.of("GIT_CONFIG_PARAMETERS", "'http.https://a.com/.extraHeader=" + GitLogins.header(pw) + "' 'http.https://b.com:8443/.extraHeader="
+                                                      + GitLogins.header(token) + "'"));
+    // IDE 에 이미 GIT_CONFIG_PARAMETERS 가 있으면 그 뒤에 잇는다.
+    eq(GitLogins.env(List.of(pw), java.util.Map.of("GIT_CONFIG_PARAMETERS", "'a.b=1' ")).get("GIT_CONFIG_PARAMETERS"),
+       "'a.b=1' 'http.https://a.com/.extraHeader=" + GitLogins.header(pw) + "'");
     eq(GitLogins.env(List.of(empty), java.util.Map.of()), java.util.Map.of());
+    eq(GitLogins.quoted("it's"), "'it'\\''s'");
 
     List<GitLogins.Login> parsed = GitLogins.parse(GitLogins.format(List.of(pw, token)) + "\nbroken\nhttps://d.com\tWHAT\tx");
     eq(parsed.size(), 2);
