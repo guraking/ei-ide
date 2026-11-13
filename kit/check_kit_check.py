@@ -40,6 +40,8 @@ def make_source(src):
     texts.setdefault(auth.TARGET, []).append(auth.ANCHOR)
     menu = c.load("menu/apply_menu.py")
     texts[f"{menu.MODULE}/{menu.PLUGIN_XML}"] = ["<idea-plugin>\n  <extensions>\n  </extensions>\n</idea-plugin>\n"]
+    for name, anchor, _added in menu.DEPS:
+        texts[f"{menu.MODULE}/{name}"] = [anchor]
     (src / menu.MODULE / menu.JAVA_DIR).mkdir(parents=True)
     for rel, parts in texts.items():
         (src / rel).parent.mkdir(parents=True, exist_ok=True)
