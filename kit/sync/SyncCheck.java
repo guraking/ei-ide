@@ -292,6 +292,7 @@ public class SyncCheck {
     checkPullFailures();
     checkStability1113();
     checkStabilityC1113();
+    checkAmbiguousBranch();
     System.out.println("SyncCheck 통과");
   }
 
@@ -813,6 +814,20 @@ public class SyncCheck {
     // 빈 저장소(추적 대상 없음)는 고를 것이 없다.
     sh(tmp.toFile(), "git init -q empty");
     eq(CloneBranch.remote(tmp.resolve("empty").toFile()), null);
+  }
+
+  /** 같은 짧은 이름의 태그가 있어 git 이 「heads/이름」 · 「remotes/원격/이름」으로 내도 브랜치 · 추적 브랜치 이름은 그대로. */
+  private static void checkAmbiguousBranch() throws Exception {
+    java.nio.file.Path tmp = java.nio.file.Files.createTempDirectory("ambig");
+    sh(tmp.toFile(), "git init -q -b main srv && git -C srv -c user.email=a@b -c user.name=a commit -q --allow-empty -m a && git -C srv branch x"
+                     + " && git clone -q srv r && git -C r checkout -q x && git -C r tag x && git -C r tag origin/x");
+    File r = tmp.resolve("r").toFile();
+    SyncPanel.Repo repo = SyncPanel.gitRepo(r);
+    eq(repo.branch(), "x");
+    eq(repo.upstream(), "origin/x");
+    eq(SyncPanel.unambiguous(r, "heads/x", SyncPanel.AMBIGUOUS_HEADS), "x");
+    sh(r, "git update-ref refs/heads/heads/y HEAD");
+    eq(SyncPanel.unambiguous(r, "heads/y", SyncPanel.AMBIGUOUS_HEADS), "heads/y");
   }
 
   /** 받기 실패 글 가르기: 갈라짐 · 덮어쓰기 · 충돌만 받기 창으로, 서버 연결 · 인증 실패는 이유를 보인다. 메시지 없는 예외는 예외 이름. */

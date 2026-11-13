@@ -290,6 +290,9 @@ final class SyncPanel extends SimpleToolWindowPanel {
   // git status -b 브랜치 줄 끝의 「[ahead 2, behind 3]」. 브랜치 이름에는 공백이 없어 이 꼴은 괄호 안에만 나온다.
   private static final Pattern TRACKING_COUNT = Pattern.compile("(ahead|behind) (\\d+)");
   private static final String TRACKING_AHEAD = "ahead";
+  // rev-parse --abbrev-ref 가 짧은 이름이 겹칠 때 붙이는 앞말(unambiguous).
+  static final String AMBIGUOUS_HEADS = "heads/";
+  static final String AMBIGUOUS_REMOTES = "remotes/";
   // 추적 브랜치가 없는 Git 저장소의 비교 기준과 detached HEAD 의 브랜치 이름(rev-parse --abbrev-ref).
   private static final String GIT_HEAD = "HEAD";
   static final String GIT_DIR = ".git";
@@ -3243,7 +3246,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
     // 보통은 한 번에 읽는다(최상위 폴더 · 브랜치 · 추적 브랜치 세 줄). 실패하면 어느 것이 없는지 가리려고 하나씩 읽는다.
     try {
       String[] lines = git(dir, "rev-parse", "--show-toplevel", "--abbrev-ref", "HEAD", "@{u}").trim().split("\n");
-      if (lines.length == 3) return new Repo(topLevel(dir, lines[0]), Vcs.GIT, lines[1].trim(), lines[2].trim());
+      if (lines.length == 3) {
+        File top = topLevel(dir, lines[0]);
+        return new Repo(top, Vcs.GIT, unambiguous(top, lines[1].trim(), AMBIGUOUS_HEADS), unambiguous(top, lines[2].trim(), AMBIGUOUS_REMOTES));
+      }
     }
     catch (IOException oneShotFailed) {
       // 아래에서 하나씩 다시 읽어 알맞은 오류를 낸다.
@@ -3251,7 +3257,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     File root = topLevel(dir, git(dir, "rev-parse", "--show-toplevel"));
     String branch;
     try {
-      branch = git(root, "rev-parse", "--abbrev-ref", "HEAD").trim();
+      branch = unambiguous(root, git(root, "rev-parse", "--abbrev-ref", "HEAD").trim(), AMBIGUOUS_HEADS);
     }
     catch (IOException noCommit) {
       // 아직 커밋이 없는 새 저장소는 HEAD 커밋이 없어 rev-parse 가 실패한다. 브랜치 이름은 기호 참조로 읽고 첫 커밋할 파일을 보인다.
@@ -3263,12 +3269,21 @@ final class SyncPanel extends SimpleToolWindowPanel {
       }
     }
     try {
-      return new Repo(root, Vcs.GIT, branch, git(root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}").trim());
+      return new Repo(root, Vcs.GIT, branch, unambiguous(root, git(root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}").trim(), AMBIGUOUS_REMOTES));
     }
     catch (IOException noUpstream) {
       // 아직 Push 하지 않은 새 브랜치 · detached HEAD 도 목록에 두고 작업본 변경을 보인다.
       return new Repo(root, Vcs.GIT, branch, null);
     }
+  }
+
+  /**
+   * rev-parse --abbrev-ref 의 짧은 이름을 브랜치 · 원격 브랜치 이름으로. 같은 짧은 이름의 태그 등이 있으면 git 은 「heads/이름」 · 「remotes/원격/이름」으로
+   * 낸다. kind 는 그 앞말(heads/ · remotes/)이고, 그 앞말까지 든 참조(refs/heads/heads/…)가 실제로 없을 때만 떼어 낸다.
+   */
+  static String unambiguous(File root, String name, String kind) {
+    if (!name.startsWith(kind) || refHash(root, "refs/" + kind + name) != null) return name;
+    return name.substring(kind.length());
   }
 
   /**
