@@ -332,6 +332,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
   /** git 이 참조를 잠그지 못했을 때 내는 말머리(값 어긋남 · 참조 없음 · 파일 잠김 등 모두). */
   private static final String LOCK_REF_ERROR = "cannot lock ref";
   // 서버에서 지운 원격 추적 참조가 남아 대소문자만 다른 새 브랜치 폴더를 막을 때 git 이 내는 문구('…/Feature' exists; cannot create '…/feature/x'). 1번 묶음이 막는 참조.
+  // git 이 DLL 을 읽지 못했을 때 내는 문구(윈도우 git: http.c · run-command). 보안 프로그램이 잠깐 막은 경우라 다시 실행한다(runBytes).
+  private static final List<String> LIBRARY_LOAD_ERRORS = List.of("LoadLibraryExW() failed", "failed to load library");
+  private static final int LIBRARY_RETRIES = 2;
+  private static final long LIBRARY_RETRY_DELAY_MS = 1000;
   private static final Pattern REF_BLOCKED = Pattern.compile("'(refs/remotes/[^']+)' exists; cannot create 'refs/remotes/[^']+'");
   // 터미널에서 아이디 · 비밀번호를 묻지 않고 곧바로 실패하게 한다(표준 입력이 닫혀 있어 물어도 답할 수 없다).
   private static final String ENV_TERMINAL_PROMPT = "GIT_TERMINAL_PROMPT";
@@ -3767,6 +3771,20 @@ final class SyncPanel extends SimpleToolWindowPanel {
     return null;
   }
 
+  /**
+   * 오류 출력을 글로. svn 은 시스템 문자 집합(한글 윈도우는 CP949)으로 낸다. git 은 UTF-8 이지만 윈도우 시스템 오류 문구(FormatMessage,
+   * 예: LoadLibraryExW() failed with: …)는 시스템 문자 집합으로 섞여 나온다. UTF-8 로 읽어 깨지는 바이트가 있으면 시스템 문자 집합으로 읽는다.
+   */
+  static String decodeError(byte[] bytes, String exe) {
+    if (!GIT.equals(exe)) return new String(bytes, NATIVE_CHARSET);
+    try {
+      return StandardCharsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(bytes)).toString();
+    }
+    catch (java.nio.charset.CharacterCodingException notUtf8) {
+      return new String(bytes, NATIVE_CHARSET);
+    }
+  }
+
   static boolean isGitAuthError(String message) {
     return message != null && containsAny(message, GIT_AUTH_ERRORS);
   }
@@ -3916,6 +3934,22 @@ final class SyncPanel extends SimpleToolWindowPanel {
    * null 이 아니면 부른 쪽이 이미 고른 것이라 그대로 쓴다(빈 목록이면 넘길 값이 없다). 회사 PC 는 git 하나에 0.4초 안팎이라 같은 읽기를 두 번 하지 않는다.
    */
   private static byte[] runBytes(File dir, long timeoutSec, List<GitLogins.Login> logins, String exe, String... args) throws IOException, InterruptedException {
+    // 서버에 닿는 git 은 git-remote-https 가 libcurl-4.dll 을 읽는다. 회사 PC 의 보안 프로그램(응용 프로그램 제어)이 여러 git 이 함께 뜰 때
+    // 그 읽기를 가끔 막는다(LoadLibraryExW() failed). 서버에 닿기 전에 끝난 실패라 조금 쉬었다가 다시 해도 안전하다.
+    for (int attempt = 1; ; attempt++) {
+      try {
+        return runOnce(dir, timeoutSec, logins, exe, args);
+      }
+      catch (IOException e) {
+        if (attempt > LIBRARY_RETRIES || e.getMessage() == null || !GIT.equals(exe) || !GIT_REMOTE_VERBS.contains(verb(args)) || !containsAny(e.getMessage(), LIBRARY_LOAD_ERRORS)) throw e;
+        LOG.warn("git 이 라이브러리를 읽지 못해 다시 실행(" + attempt + "/" + LIBRARY_RETRIES + ") [" + dir.getName() + "] " + e.getMessage());
+        Thread.sleep(LIBRARY_RETRY_DELAY_MS * attempt);
+      }
+    }
+  }
+
+  /** runBytes 의 한 번 실행. */
+  private static byte[] runOnce(File dir, long timeoutSec, List<GitLogins.Login> logins, String exe, String... args) throws IOException, InterruptedException {
     List<String> command = new ArrayList<>(List.of(VCS_NAME_SVN.equals(exe) ? svnExecutable() : GIT.equals(exe) ? gitExecutable(dir) : exe));
     command.addAll(List.of(args));
     String label = exe + " " + verb(args);
@@ -3956,8 +3990,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       }
       ran = System.currentTimeMillis() - launched;
       if (process.exitValue() != 0) {
-        Charset errCharset = "svn".equals(exe) ? NATIVE_CHARSET : StandardCharsets.UTF_8;
-        String err = new String(Files.readAllBytes(errFile.toPath()), errCharset).trim();
+        String err = decodeError(Files.readAllBytes(errFile.toPath()), exe).trim();
         String hint = GIT.equals(exe) && containsAny(err, GIT_AUTH_ERRORS) ? "\n" + SyncBundle.message("sync.git.auth") : "";
         throw new IOException(label + " 실패: " + (err.isEmpty() ? "종료 코드 " + process.exitValue() : err) + hint);
       }

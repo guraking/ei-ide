@@ -161,6 +161,8 @@ public class SyncCheck {
     eq(ReverseMerge.intoTip("origin", "Feature/x", "feature/x", false), "refs/remotes/origin/Feature/x");
     eq(ReverseMerge.folded(java.util.Map.of("core.ignorecase", "true")), true);
     eq(ReverseMerge.folded(java.util.Map.of()), false);
+    // git 오류는 UTF-8 이면 그대로, 아니면 시스템 문자 집합으로 읽는다(깨진 UTF-8 이 대체 문자로 남지 않는다).
+    eq(SyncPanel.decodeError("fatal: 한글".getBytes(java.nio.charset.StandardCharsets.UTF_8), "git"), "fatal: 한글");
   }
 
   static void eq(Object a, Object b) { if (!java.util.Objects.equals(a, b)) throw new AssertionError(a + " != " + b); }
