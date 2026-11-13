@@ -196,6 +196,7 @@ def compile_plugins(jar_dir, javac, work):
     """플러그인마다 jar_dir 아래 모든 jar 를 classpath 로 compile_plugins.build(컴파일 · 점검 · 묶기)를 돌린다. (이름, 성공, 기록) 목록."""
     import compile_plugins  # compile_plugins 가 이 파일을 import 하므로 쓸 때 불러온다.
     jars = [str(j) for j in sorted(jar_dir.rglob("*.jar"))]
+    compile_plugins.CHECK_JVM_OPTIONS[:] = [compile_plugins.home_option(jar_dir)]
     work.mkdir(parents=True, exist_ok=True)
     results = []
     for name in PLUGIN_SOURCES:

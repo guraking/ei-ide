@@ -99,13 +99,24 @@ def dist_is_other_line(build_file, build):
         return False
 
 
+# 점검 JVM 에 더 넘길 옵션. 플랫폼 jar 묶음으로 돌릴 때만 채운다.
+CHECK_JVM_OPTIONS = []
+
+
+def home_option(jar_dir):
+    """플랫폼 jar 묶음에는 product-info.json 이 없어 PathManager 가 설치 폴더를 못 찾는다. 점검 JVM 에 그 폴더를 설치 폴더로 알려 주는 옵션."""
+    return argfile_line("-Didea.home.path=" + str(jar_dir))
+
+
 def platform_classpath():
     """지난 빌드 결과의 jar 중 우리 플러그인 것을 뺀 목록. 우리 것은 지금 컴파일하는 소스가 대신한다.
     지난 빌드가 없거나 다른 판(커뮤니티 판을 올린 뒤 첫 빌드)이면 지금 판의 플랫폼 jar 묶음을 받아 쓴다."""
     build = current_build()
     if not all(d.is_dir() for d in DIST_DIRS) or dist_is_other_line(DIST_BUILD_FILE, build):
         print(f"지난 빌드 결과가 {build} 판이 아니어서 플랫폼 jar 묶음을 받아 컴파일합니다.")
-        return [str(jar) for jar in sorted(platform_jars(build).rglob("*.jar")) if not PLUGIN_SOURCES.keys() & set(jar.parts)]
+        jar_dir = platform_jars(build)
+        CHECK_JVM_OPTIONS.append(home_option(jar_dir))
+        return [str(jar) for jar in sorted(jar_dir.rglob("*.jar")) if not PLUGIN_SOURCES.keys() & set(jar.parts)]
     jars = []
     for d in DIST_DIRS:
         if not d.is_dir():
@@ -270,7 +281,7 @@ def install(names):
 
 def run_check(java, run_cp, cls, args_file):
     """점검 클래스 하나를 JVM 하나로 돌린다. (클래스, 성공, 출력 줄)."""
-    ok, text = run_args(java, args_file, ["-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-cp", run_cp, cls])
+    ok, text = run_args(java, args_file, ["-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", *CHECK_JVM_OPTIONS, "-cp", run_cp, cls])
     return cls, ok, text.strip().splitlines()
 
 
