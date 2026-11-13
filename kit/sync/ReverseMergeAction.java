@@ -333,7 +333,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
     @Override
     protected void dispose() {
       if (serverList != null) serverList.cancel(true);
-      for (Future<?> compare : compares) compare.cancel(true);
+      // 도는 받기는 끊지 않는다(강제로 끝내면 참조 잠금 파일이 남아 다음 받기가 실패한다). 아직 시작하지 않은 비교만 뺀다.
+      for (Future<?> compare : compares) compare.cancel(false);
       super.dispose();
     }
 

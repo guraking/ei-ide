@@ -387,7 +387,7 @@ final class JGitRead {
         case "--quiet" -> quiet = true;
         default -> {
           if (arg.startsWith("-")) return null;
-          String line = abbrev ? abbreviated(repo, arg) : symbolicFullName ? null : hashOf(repo, arg);
+          String line = abbrev ? abbreviated(repo, arg) : symbolicFullName ? fullName(repo, arg) : hashOf(repo, arg);
           if (line == null) {
             if (verify && quiet && arg.startsWith(Constants.R_REFS) && missing(repo, arg)) throw new GitFailure("종료 코드 1");
             return null;
@@ -398,6 +398,14 @@ final class JGitRead {
     }
     if (verify && (abbrev || symbolicFullName)) return null;
     return utf8(out);
+  }
+
+  /** --symbolic-full-name 뒤의 HEAD: 지금 브랜치의 전체 참조 이름(떨어진 HEAD 면 HEAD). HEAD 커밋이 없거나 그 밖 이름은 null. */
+  private static String fullName(Repository repo, String rev) throws IOException {
+    if (!rev.equals(Constants.HEAD)) return null;
+    Ref head = repo.exactRef(Constants.HEAD);
+    if (head == null || head.getObjectId() == null) return null;
+    return head.isSymbolic() ? head.getTarget().getName() : Constants.HEAD;
   }
 
   /** --abbrev-ref 의 짧은 이름. HEAD 는 지금 브랜치(떨어진 HEAD 면 HEAD), @{u} 는 추적 브랜치. 그 밖 · 못 가리면 null. */

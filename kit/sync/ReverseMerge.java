@@ -35,6 +35,8 @@ final class ReverseMerge {
   static final int MINE_DAYS = 30;
   static final String HEADS = "refs/heads/";
   private static final String FETCH_KEY_SUFFIX = ".fetch";
+  // git config --unset-all 이 맞는 값이 없을 때 내는 종료 코드(git-config(1): 5, 오류 글 없음)를 SyncPanel.runOnce 가 옮긴 글.
+  private static final String CONFIG_NO_MATCH = "종료 코드 5";
   private static final com.intellij.openapi.diagnostic.Logger LOG = com.intellij.openapi.diagnostic.Logger.getInstance(ReverseMerge.class);
   private static final char LOG_START = '\u0001';
   private static final char LOG_SEP = '\u001f';
@@ -368,7 +370,13 @@ final class ReverseMerge {
       for (String branch : keep) {
         if (branch == null || !excluded(List.of(line), branch)) continue;
         // 값 정규식(POSIX 확장)으로 그 줄과 글자까지 같은 값만 지운다. 같은 줄이 여럿이면 모두.
-        git(root, "config", "--unset-all", key, "^" + regexQuoted(line) + "$");
+        try {
+          git(root, "config", "--unset-all", key, "^" + regexQuoted(line) + "$");
+        }
+        catch (IOException gone) {
+          // 종료 코드 5 는 맞는 값이 없음이다(그사이 다른 곳에서 지움). 바라던 상태라 넘어간다.
+          if (!SyncPanel.messageOf(gone).contains(CONFIG_NO_MATCH)) throw gone;
+        }
         removed.add(line);
         break;
       }
@@ -940,7 +948,8 @@ final class ReverseMerge {
     }
     String message = cause.getMessage() + "\n" + SyncBundle.message("rmerge.stash.left", current);
     // 부른 쪽이 Push 거절을 알아보고 「다시 합치고 Push」를 묻게 종류를 지킨다.
-    return cause instanceof PushRejectedException ? new PushRejectedException(message, cause) : new IOException(message, cause);
+    // 원래 브랜치로 돌아가지 못했으면 다시 합치기가 지금 브랜치(Into)에서 돌게 되므로 묻지 않는다.
+    return cause instanceof PushRejectedException && back ? new PushRejectedException(message, cause) : new IOException(message, cause);
   }
 
   /** 아직 해결하지 않은 충돌 파일(저장소 기준 경로). */

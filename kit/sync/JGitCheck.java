@@ -45,7 +45,7 @@ public class JGitCheck {
       a("rev-parse", "--show-toplevel", "--abbrev-ref", "HEAD", "@{u}"), a("rev-parse", "--abbrev-ref", "HEAD"),
       a("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"), a("rev-parse", "refs/remotes/origin/feature/kim"),
       a("rev-parse", "--verify", "--quiet", "refs/heads/develop"), a("rev-parse", "--verify", "--quiet", "refs/heads/none"),
-      a("rev-parse", "v1a"), a("rev-parse", "HEAD^"), a("rev-parse", "mywork"),
+      a("rev-parse", "v1a"), a("rev-parse", "HEAD^"), a("rev-parse", "mywork"), a("rev-parse", "HEAD", "--symbolic-full-name", "HEAD"),
       a("rev-list", "--count", "@{u}..HEAD"), a("rev-list", "--count", "HEAD..refs/remotes/origin/feature/kim"),
       a("rev-list", "--left-right", "--count", "HEAD...@{u}"), a("rev-list", "--left-right", "--count", "--no-merges", "HEAD...refs/heads/mywork"),
       a("rev-list", "--count", "refs/heads/mywork..HEAD"), a("rev-list", "--count", "HEAD.."),
@@ -65,6 +65,7 @@ public class JGitCheck {
     sh(mine, "git checkout -q --detach HEAD");
     same(mine, a("rev-parse", "--abbrev-ref", "HEAD"), true);
     same(mine, a("symbolic-ref", "--short", "-q", "HEAD"), true);
+    same(mine, a("rev-parse", "HEAD", "--symbolic-full-name", "HEAD"), true);
     sh(mine, "git checkout -q develop");
     // 맡지 않고 git 에 넘기는 모양(null).
     for (String[] c : List.of(a("rev-parse", "HEAD~1"), a("rev-parse", "abc1234"), a("status"), a("log", "-1"), a("config", "--get", "user.name"),
