@@ -174,8 +174,10 @@ public class JGitCheck {
       GitLogins.Login quoted = new GitLogins.Login(server, GitLogins.Kind.PASSWORD, "kim's id", "p w'");
       for (java.util.Map<String, String> base : List.of(java.util.Map.<String, String>of(), java.util.Map.of("GIT_CONFIG_PARAMETERS", "'core.quotepath=false'"))) {
         sent.set(null);
-        ProcessBuilder builder = new ProcessBuilder("git", "-c", "i18n.logOutputEncoding=UTF-8", "ls-remote", "--heads", server + "/x.git").directory(repo).redirectErrorStream(true);
+        ProcessBuilder builder = new ProcessBuilder("git", "-c", "credential.helper=", "-c", "i18n.logOutputEncoding=UTF-8", "ls-remote", "--heads", server + "/x.git").directory(repo).redirectErrorStream(true);
+        // 윈도우 Git 의 기본 자격 증명 도우미(GCM)가 401 뒤 로그인 창을 띄우지 않게 한다. 머리글만 확인하는 점검이다.
         builder.environment().put("GIT_TERMINAL_PROMPT", "0");
+        builder.environment().put("GCM_INTERACTIVE", "never");
         builder.environment().remove("GIT_CONFIG_PARAMETERS");
         builder.environment().putAll(base);
         builder.environment().putAll(GitLogins.env(List.of(quoted), base));
