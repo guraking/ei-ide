@@ -195,8 +195,18 @@ final class CloneBranch {
 
   /** 서버 브랜치 remote/branch 를 같은 이름의 내 브랜치로 꺼내고 추적을 건다. 같은 이름 내 브랜치가 이미 있으면 그리로 바꾼다. */
   static void checkout(File dir, String remote, String branch) throws IOException, InterruptedException {
-    boolean exists = !SyncPanel.git(dir, "for-each-ref", "--format=%(refname)", "refs/heads/" + branch).isBlank();
-    if (exists) SyncPanel.git(dir, SyncPanel.GIT_LONG_TIMEOUT_SEC, "checkout", branch, "--");
+    // 윈도우는 대소문자만 다른 내 브랜치를 같은 브랜치로 본다. 그 철자로 옮겨야 HEAD 와 추적 설정이 맞는다.
+    // for-each-ref 는 이름 앞부분을 대소문자까지 맞춰 찾아 그런 브랜치를 놓치므로 rev-parse 로 확인한다.
+    String local = ReverseMerge.localSpelling(dir, branch, ReverseMerge.ignoreCase(dir));
+    boolean exists;
+    try {
+      SyncPanel.git(dir, "rev-parse", "--verify", "--quiet", "refs/heads/" + local);
+      exists = true;
+    }
+    catch (IOException missing) {
+      exists = false;
+    }
+    if (exists) SyncPanel.git(dir, SyncPanel.GIT_LONG_TIMEOUT_SEC, "checkout", local, "--");
     else SyncPanel.git(dir, SyncPanel.GIT_LONG_TIMEOUT_SEC, "checkout", "--track", remote + "/" + branch, "--");
   }
 

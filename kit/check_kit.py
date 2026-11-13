@@ -76,6 +76,7 @@ def missing_steps(root):
     defaults = load("defaults/apply_defaults.py")
     textmate = load("textmate/apply_textmate.py")
     defender = load("defender/apply_defender.py")
+    git_retry = load("git-retry/apply_git_retry.py")
     steps = [
         ("이름 바꾸기(brand)", f'python kit\\customize.py {SRC_DIR} "{PRODUCT_NAME}" brand',
          lambda: edits_applied(src, customize.brand_edits(PRODUCT_NAME))),
@@ -88,6 +89,7 @@ def missing_steps(root):
          lambda: edits_applied(src, [(textmate.TARGET, textmate.ORIGINAL, textmate.PATCHED)])),
         ("Defender 제외", f"python kit\\defender\\apply_defender.py {SRC_DIR}",
          lambda: edits_applied(src, [(defender.TARGET, defender.ORIGINAL, defender.PATCHED)])),
+        ("Git 다시 하기", f"python kit\\git-retry\\apply_git_retry.py {SRC_DIR}", lambda: edits_applied(src, git_retry.EDITS)),
         ("한국어 팩", "python kit\\ko\\apply_ko.py", lambda: any((root / KO_LIB).glob("*.jar"))),
         ("그림(아이콘 · 시작 화면)", "kit\\brand\\apply_brand.bat",
          lambda: all(same_files(KIT / "brand" / d, src / t) for d, t in BRAND_DIRS.items())),

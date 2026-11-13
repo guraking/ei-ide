@@ -127,6 +127,44 @@ public class SyncCheck {
     eq(GitLogins.matching(List.of(a, b), Set.of()), List.of());
   }
 
+  /** 대소문자만 다른 서버 브랜치를 막는 음수 refspec. */
+  static void checkCaseClash() {
+    List<String> server = List.of("Feature/gpm/dxplmdev.hbchoi", "develop", "feature/gpm/dxplmdev.jmlee", "feature/gpm/dxplmdev.kim", "main");
+    // 내 추적 브랜치가 쓰는 소문자 폴더를 남긴다.
+    eq(ReverseMerge.caseClashExcludes(server, List.of("feature/gpm/dxplmdev.jmlee")), List.of("^refs/heads/Feature/*"));
+    // 내 브랜치가 대문자 쪽이면 대문자를 남긴다(axplm-back-serviceadapter 모양).
+    eq(ReverseMerge.caseClashExcludes(server, List.of("Feature/gpm/dxplmdev.jmlee")), List.of("^refs/heads/feature/*"));
+    // keep 이 비거나 null 이면 브랜치가 많은 철자.
+    eq(ReverseMerge.caseClashExcludes(server, java.util.Arrays.asList(null, "develop")), List.of("^refs/heads/Feature/*"));
+    // 겹치지 않으면 빈 목록. 서로 다른 이름의 폴더는 겹침이 아니다.
+    eq(ReverseMerge.caseClashExcludes(List.of("develop", "feature/a", "bugfix/a"), List.of()), List.of());
+    // 깊은 단계만 겹침, 이름 자체(잎)만 겹침, 잎과 폴더가 겹침.
+    eq(ReverseMerge.caseClashExcludes(List.of("feature/GPM/x", "feature/gpm/y", "feature/gpm/z"), List.of()), List.of("^refs/heads/feature/GPM/*"));
+    eq(ReverseMerge.caseClashExcludes(List.of("Develop", "develop", "main"), List.of("develop")), List.of("^refs/heads/Develop"));
+    eq(ReverseMerge.caseClashExcludes(List.of("Release", "release/1", "release/2"), List.of()), List.of("^refs/heads/Release"));
+    eq(ReverseMerge.excluded(List.of("^refs/heads/Feature/*"), "Feature/gpm/dxplmdev.jmlee"), true);
+    eq(ReverseMerge.excluded(List.of("^refs/heads/Feature/*"), "feature/gpm/dxplmdev.jmlee"), false);
+    eq(ReverseMerge.excluded(List.of("^refs/heads/Develop"), "Develop"), true);
+    eq(ReverseMerge.excluded(List.of("^refs/heads/Develop"), "Develop2"), false);
+    // 받기 설정에 음수 줄이 있으면 그 브랜치는 받지 않는 것으로 본다(역머지 From 은 따로 받음).
+    eq(ReverseMerge.fetches(java.util.Map.of("remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*\n^refs/heads/Feature/*"), "origin", "Feature/x"), false);
+    eq(ReverseMerge.negativeRefspecs("git version 2.47.1.windows.1"), true);
+    eq(ReverseMerge.negativeRefspecs("git version 2.29.0"), true);
+    eq(ReverseMerge.negativeRefspecs("git version 2.28.0"), false);
+    eq(ReverseMerge.negativeRefspecs("git version 3.0.0"), true);
+    eq(ReverseMerge.negativeRefspecs(""), false);
+    // 윈도우: for-each-ref 가 디스크 폴더 철자로 낸 참조도 찾고, 서버 철자 Into 가 지금 브랜치면 HEAD 와 비교한다.
+    java.util.Map<String, String> tips = java.util.Map.of("refs/remotes/origin/Feature/gpm/develop", "abc");
+    eq(ReverseMerge.tipOf(tips, "refs/remotes/origin/feature/gpm/develop", true), "abc");
+    eq(ReverseMerge.tipOf(tips, "refs/remotes/origin/feature/gpm/develop", false), null);
+    eq(ReverseMerge.intoTip("origin", "Feature/x", "feature/x", true), "HEAD");
+    eq(ReverseMerge.intoTip("origin", "Feature/x", "feature/x", false), "refs/remotes/origin/Feature/x");
+    eq(ReverseMerge.folded(java.util.Map.of("core.ignorecase", "true")), true);
+    eq(ReverseMerge.folded(java.util.Map.of()), false);
+    // git 오류는 UTF-8 이면 그대로, 아니면 시스템 문자 집합으로 읽는다(깨진 UTF-8 이 대체 문자로 남지 않는다).
+    eq(SyncPanel.decodeError("fatal: 한글".getBytes(java.nio.charset.StandardCharsets.UTF_8), "git"), "fatal: 한글");
+  }
+
   static void eq(Object a, Object b) { if (!java.util.Objects.equals(a, b)) throw new AssertionError(a + " != " + b); }
 
   /**
@@ -147,6 +185,7 @@ public class SyncCheck {
   }
 
   static void checks() throws Exception {
+    checkCaseClash();
     // 모른 척 목록: 소문자(assume-unchanged) · 'S'(skip-worktree, 디스크에 있는 것만). 'H' 는 보통 파일.
     Set<String> onDisk = Set.of("skip.yml", "한글 경로/c.txt");
     eq(SyncPanel.parseAssumed("H src/A.java\nh src/main/resources/application-local.yml\nh 한글 경로/b.txt\nS skip.yml\nS sparse.txt\ns 한글 경로/c.txt\n", onDisk::contains),

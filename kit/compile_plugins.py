@@ -9,19 +9,21 @@
   플러그인마다 따로 동시에
   1. kit 소스를 지난 빌드 결과(intellij-community\\out\\idea-ce\\dist.all · dist.win.x64)의 jar 로 컴파일한다.
   2. 그 플러그인의 *Check.java 를 컴파일해 모두 돌린다(점검마다 JVM 하나, CHECK_WORKERS 개씩 동시에).
-  3. 컴파일 결과 + 리소스를 tmpjars\\compile\\<이름>.jar 로 묶는다.
+  3. 컴파일 결과 + 리소스 + BUNDLED_LIBS(판 · SHA-256 고정, Maven Central 에서 받아 tmpjars\\libs 에 둠)를 tmpjars\\compile\\<이름>.jar 로 묶는다.
 모든 플러그인이 통과했을 때만 bundled-plugins\\<이름>\\lib\\<이름>.jar 를 바꾼다. 하나라도 실패하면 아무 jar 도 바꾸지 않는다.
 먼저 Moa Mono 글꼴 파일을 bundled-plugins\\boot-servers\\fonts 에 맞춘다(설치본 plugins\\boot-servers\\fonts, IDE 가 켤 때 파일 그대로 등록).
   kit 원본을 옮기기만 하므로 JDK · 지난 빌드 결과가 없어 컴파일이 멈추는 PC(첫 빌드 · 노트북)에서도 build-windows.bat 의 글꼴 확인을 통과한다.
 javac 는 check_update.find_javac(~/.jdks 의 JDK 21 이상 중 가장 높은 판 → JAVA_HOME → PATH)로 찾는다.
 """
 import filecmp
+import hashlib
 import os
 import re
 import shutil
 import subprocess
 import sys
 import time
+import urllib.request
 import zipfile
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
@@ -45,6 +47,22 @@ CHECK_SOURCES = {
     "kinggura-sync": KIT / "sync",
 }
 PLUGIN_XML = "META-INF/plugin.xml"
+# 플러그인 jar 에 클래스째 함께 묶는 라이브러리: (Maven Central 경로, SHA-256). 받은 jar 는 LIB_DIR 에 두고 다음부터 그것을 쓴다.
+# 플러그인 클래스 로더가 자기 jar 를 먼저 찾으므로 IDE 안 다른 판(설정 동기화의 JGit 등)과 섞이지 않는다.
+MAVEN_CENTRAL = "https://repo1.maven.org/maven2/"
+BUNDLED_LIBS = {
+    # 동기화 창의 읽기 · 조회(kinggura.sync.JGitRead). JGit 이 부르는 slf4j-api · commons-codec 은 IDE 본체 jar 에 있어 넣지 않는다.
+    "kinggura-sync": [
+        ("org/eclipse/jgit/org.eclipse.jgit/7.8.0.202609011348-r/org.eclipse.jgit-7.8.0.202609011348-r.jar",
+         "cc63976f92e8058d05a543f320a6237accf2f17b745ab20946f246ac0b54dfd6"),
+        ("com/googlecode/javaewah/JavaEWAH/1.2.3/JavaEWAH-1.2.3.jar",
+         "d65226949713c4c61a784f41c51167e7b0316f93764398ebba9e4336b3d954c2"),
+    ],
+}
+LIB_DIR = ROOT / "tmpjars" / "libs"
+LIB_DOWNLOAD_TIMEOUT_SEC = 300
+# 묶는 라이브러리에서 빼는 것: 그 jar 자신의 매니페스트 · 서명(남으면 우리 jar 가 서명이 깨진 jar 로 읽힌다) · 모듈 정보.
+LIB_SKIP = re.compile(r"META-INF/(MANIFEST\.MF|[^/]+\.(SF|RSA|DSA|EC))|(.*/)?module-info\.class", re.IGNORECASE)
 # plugin.xml 에서 클래스 이름을 담는 속성.
 CLASS_ATTRS = ("implementation", "class", "instance", "serviceImplementation", "implementationClass",
                "factoryClass", "provider")
@@ -61,6 +79,7 @@ CHECK_WORKERS = max(2, (os.cpu_count() or 1) // len(PLUGIN_SOURCES))
 KIT_CHECKS = [KIT / "customize_check.py", KIT / "patchlib_check.py", KIT / "check_kit_check.py",
               KIT / "defaults" / "apply_defaults_check.py", KIT / "ko" / "apply_ko_check.py",
               KIT / "textmate" / "apply_textmate_check.py", KIT / "defender" / "apply_defender_check.py",
+              KIT / "git-retry" / "apply_git_retry_check.py",
               KIT / "fullline" / "apply_fullline_check.py"]
 # 순수 자바 점검: (소스 폴더, 점검 클래스, 함께 컴파일할 파일). IntelliJ 클래스 없이 JDK 만으로 컴파일 · 실행한다.
 KIT_JAVA_CHECKS = [(KIT / "git-auth", "git4idea.commands.EiGitAuthCheck", ["EiGitAuthCheck.java", "EiGitAuthText.java"])]
@@ -116,11 +135,48 @@ def pack(name, classes, target):
         files = [(f, f.relative_to(root).as_posix()) for root in (classes, RESOURCES[name])
                  for f in sorted(root.rglob("*")) if f.is_file()]
         files += [(f, "META-INF/" + f.name) for f in META_INF_FILES.get(name, [])]
+        written = set()
         for f, arcname in files:
+            written.add(arcname)
             if arcname == PLUGIN_XML:
                 z.writestr(arcname, stamp_version(f.read_text(encoding="utf-8")))
             else:
                 z.write(f, arcname)
+        # 앞 것이 이긴다: 우리 파일, 그다음 BUNDLED_LIBS 순서. 같은 이름(라이선스 글 등)은 한 번만 넣는다.
+        for lib in bundled_libs(name):
+            with zipfile.ZipFile(lib) as source:
+                for info in source.infolist():
+                    if info.is_dir() or info.filename in written or LIB_SKIP.fullmatch(info.filename):
+                        continue
+                    written.add(info.filename)
+                    z.writestr(info.filename, source.read(info), zipfile.ZIP_DEFLATED)
+
+
+def sha256(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def bundled_libs(name):
+    """name 플러그인에 묶을 라이브러리 jar 들. LIB_DIR 에 없거나 SHA-256 이 다르면 받는다. 받은 것도 다르면 멈춘다."""
+    jars = []
+    for path, expected in BUNDLED_LIBS.get(name, []):
+        jar = LIB_DIR / path.rsplit("/", 1)[1]
+        if not jar.is_file() or sha256(jar) != expected:
+            LIB_DIR.mkdir(parents=True, exist_ok=True)
+            part = jar.with_name(jar.name + ".part")
+            try:
+                with urllib.request.urlopen(MAVEN_CENTRAL + path, timeout=LIB_DOWNLOAD_TIMEOUT_SEC) as response, part.open("wb") as out:
+                    shutil.copyfileobj(response, out)
+            except OSError as e:
+                part.unlink(missing_ok=True)
+                raise SystemExit(f"라이브러리를 받지 못했습니다: {MAVEN_CENTRAL + path}\n{e}")
+            actual = sha256(part)
+            if actual != expected:
+                part.unlink()
+                raise SystemExit(f"받은 라이브러리의 SHA-256 이 다릅니다: {jar.name}\n기대 {expected}\n실제 {actual}")
+            os.replace(part, jar)
+        jars.append(jar)
+    return jars
 
 
 def missing_in_jar(jar):
@@ -213,6 +269,7 @@ def build(name, javac, jars, work=None):
     classes = work / name
     shutil.rmtree(classes, ignore_errors=True)
     classes.mkdir(parents=True)
+    jars = jars + [str(lib) for lib in bundled_libs(name)]
     ok, text = run_args(javac, work / f"{name}.args", javac_lines(classes, jars, sources))
     log.append(f"컴파일 {len(sources)}개 파일: {'통과' if ok else '실패'}")
     if not ok:

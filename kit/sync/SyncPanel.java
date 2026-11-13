@@ -246,8 +246,12 @@ final class SyncPanel extends SimpleToolWindowPanel {
   // 서버 명령(fetch · push 등)은 오래 걸려 이 자리를 붙잡으면 로컬 비교가 서버를 기다리게 되므로 세지 않는다.
   private static final int MAX_LOCAL_GIT_PROCESSES = 6;
   private static final Semaphore LOCAL_GIT_SLOTS = new Semaphore(MAX_LOCAL_GIT_PROCESSES);
+  // 서버에 닿는 git(fetch · pull · push · ls-remote · clone)을 함께 띄우는 수. 회사 PC 보안 프로그램이 여럿이 함께 libcurl-4.dll 을 읽으면
+  // 가끔 막는다(8개를 함께 받을 때 2개 실패). 회사 PC 에서 혼자 도는 fetch 는 1.8~2초라 저장소 8개는 둘씩이면 약 8초, 하나씩이면 약 15초다.
+  private static final int MAX_REMOTE_GIT_PROCESSES = 2;
+  private static final Semaphore REMOTE_GIT_SLOTS = new Semaphore(MAX_REMOTE_GIT_PROCESSES);
   // 우리가 띄운 git · svn 명령마다 걸린 시간을 적는다. Help › Diagnostic Tools › Debug Log Settings 에 「#kinggura.sync.time」을 넣으면 idea.log 에 보인다.
-  private static final Logger TIME_LOG = Logger.getInstance("#kinggura.sync.time");
+  static final Logger TIME_LOG = Logger.getInstance("#kinggura.sync.time");
   private static final String TOOLBAR_PLACE = "KingGuraSynchronizeToolbar";
   // 기본(강조색) 단추 위에 놓는 흰 받기 아이콘. 테마마다 기본 단추 바탕이 강조색이고 글자가 흰색이다.
   private static final String PULL_SELECTED_ICON = "/icons/ei/pullSelected.svg";
@@ -329,7 +333,14 @@ final class SyncPanel extends SimpleToolWindowPanel {
   // 원격 추적 참조를 읽은 값과 잠글 때 값이 달라 fetch · pull 이 멈출 때 git 이 내는 문구(LANGUAGE=C 로 띄워 영어로 온다). 1번 묶음이 참조 이름.
   // 다른 git 과 겹친 경우와, 윈도우에서 대소문자만 다른 폴더(Feature/ · feature/)에 든 낱개 참조와 packed-refs 값이 어긋난 경우에 난다.
   private static final Pattern REF_RACE = Pattern.compile("cannot lock ref '(refs/remotes/[^']+)': is at \\p{XDigit}+ but expected \\p{XDigit}+");
+  /** git 이 참조를 잠그지 못했을 때 내는 말머리(값 어긋남 · 참조 없음 · 파일 잠김 등 모두). */
+  private static final String LOCK_REF_ERROR = "cannot lock ref";
   // 서버에서 지운 원격 추적 참조가 남아 대소문자만 다른 새 브랜치 폴더를 막을 때 git 이 내는 문구('…/Feature' exists; cannot create '…/feature/x'). 1번 묶음이 막는 참조.
+  // git 이 DLL 을 읽지 못했을 때 내는 문구(윈도우 git: http.c · run-command). 보안 프로그램이 잠깐 막은 경우라 다시 실행한다(runBytes).
+  private static final List<String> LIBRARY_LOAD_ERRORS = List.of("LoadLibraryExW() failed", "failed to load library");
+  private static final int LIBRARY_RETRIES = 3;
+  private static final Semaphore LIBRARY_RETRY_SLOT = new Semaphore(1);
+  private static final long LIBRARY_RETRY_DELAY_MS = 1000;
   private static final Pattern REF_BLOCKED = Pattern.compile("'(refs/remotes/[^']+)' exists; cannot create 'refs/remotes/[^']+'");
   // 터미널에서 아이디 · 비밀번호를 묻지 않고 곧바로 실패하게 한다(표준 입력이 닫혀 있어 물어도 답할 수 없다).
   private static final String ENV_TERMINAL_PROMPT = "GIT_TERMINAL_PROMPT";
@@ -1904,7 +1915,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
               String before = refHash(root, GIT_HEAD);
               if (before == null) before = git(root, "rev-parse", GIT_HEAD).trim();
               befores.put(root, before);
-              GitRemoteAuth.run(root, GIT_LONG_TIMEOUT_SEC, true, "pull", "--ff-only", "--quiet");
+              pullFastForward(root);
               // 받은 커밋 수 · 파일 수(알림)와 새로 읽을 파일을 git log 한 번으로 얻는다(PULLED_FORMAT).
               String log = git(root, "log", PULLED_FORMAT, "--name-only", "--no-renames", "-m", before + "..HEAD");
               pulled.add(countPulled(log));
@@ -2477,6 +2488,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
             return new Scanned(repo, repo.vcs() == Vcs.GIT ? compare(repo, true, local) : compareSvn(repo, false), remote);
           }
           catch (IOException e) {
+            LOG.warn("저장소 정보 읽기 실패 [" + entry.getKey().getName() + "] " + e.getMessage());
             failures.put(entry.getKey(), e.getMessage());
             return null;
           }
@@ -2622,7 +2634,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
         // 브랜치를 바꿨을 수 있어 저장소 정보부터 다시 읽는다.
         updated = vcs == Vcs.GIT ? gitRepo(root) : svnRepo(root);
         if (updated.vcs() == Vcs.GIT) {
-          if (fetch && updated.upstream() != null) fetch(updated.root());
+          if (fetch) updated = withUpstream(updated);
+          if (fetch && updated.upstream() != null) fetch(updated);
           updateReverseNote(updated, fetch);
           fresh = compare(updated);
         }
@@ -2631,6 +2644,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
         }
       }
       catch (IOException e) {
+        LOG.warn("저장소 새로고침 실패 [" + name + "] " + e.getMessage());
         error = e.getMessage();
       }
       catch (RuntimeException e) {
@@ -2764,11 +2778,13 @@ final class SyncPanel extends SimpleToolWindowPanel {
   }
 
   /** 원격을 받아 와 다시 비교한다. 원격 실패는 failures 에 저장소별로 적고 지금 상태 비교 결과를 돌려준다. */
-  private List<Change> remoteCompare(Repo repo, Map<File, String> failures, CompletableFuture<LocalOut> local) throws IOException, InterruptedException {
+  private List<Change> remoteCompare(Repo scanned, Map<File, String> failures, CompletableFuture<LocalOut> local) throws IOException, InterruptedException {
+    Repo repo = scanned;
     try {
       if (repo.vcs() == Vcs.GIT) {
+        repo = withUpstream(repo);
         // 추적 브랜치가 없으면 받아 와도 비교할 원격이 없다(원격이 아예 없는 저장소는 fetch 가 실패한다).
-        if (repo.upstream() != null) fetch(repo.root());
+        if (repo.upstream() != null) fetch(repo);
         // 방금 fetch 가 그 원격의 브랜치를 다 받았으면(fetchedAll) 역머지 안내는 기준 브랜치를 다시 받지 않는다.
         updateReverseNote(repo, true, repo.upstream() != null);
         return compareFetched(repo, localOf(local));
@@ -2776,6 +2792,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       return compareSvnRemote(repo);
     }
     catch (IOException e) {
+      LOG.warn("원격 확인 실패 [" + repo.root().getName() + "] " + e.getMessage());
       failures.put(repo.root(), e.getMessage());
       if (repo.vcs() == Vcs.GIT) return compareFetched(repo, localOf(local));
       svnIncoming.remove(repo.root());
@@ -2787,15 +2804,97 @@ final class SyncPanel extends SimpleToolWindowPanel {
    * git fetch. 도는 동안 그 루트를 fetching 에 두어 fetch 가 낸 저장소 알림으로 다시 비교하지 않게 한다.
    * 그 저장소에 다른 fetch · pull 이 돌고 있으면 끝나기를 기다린다(같은 참조를 동시에 바꾸면 cannot lock ref 로 실패한다).
    */
-  private void fetch(File root) throws IOException, InterruptedException {
+  private void fetch(Repo repo) throws IOException, InterruptedException {
+    File root = repo.root();
     lockFetch(root);
     try {
-      // --prune: 서버에서 지운 브랜치의 원격 추적 참조를 지운다. 남으면 Merge Branches 목록에 보이고, 윈도우에서 대소문자만 다른 새 브랜치 폴더를 막는다.
-      GitRemoteAuth.run(root, GIT_LONG_TIMEOUT_SEC, false, "fetch", "--quiet", "--prune");
+      try {
+        // --prune: 서버에서 지운 브랜치의 원격 추적 참조를 지운다. 남으면 Merge Branches 목록에 보이고, 윈도우에서 대소문자만 다른 새 브랜치 폴더를 막는다.
+        GitRemoteAuth.run(root, GIT_LONG_TIMEOUT_SEC, false, "fetch", "--quiet", "--prune");
+      }
+      catch (IOException e) {
+        // 참조를 잠그지 못한 오류(다시 해도 안 된 것)는 대개 대소문자만 다른 서버 브랜치 때문이다. 막을 것이 없으면 원래 오류를 낸다.
+        if (refRace(e.getMessage()) == null && !e.getMessage().contains(LOCK_REF_ERROR)) throw e;
+        LOG.warn("원격 받기 실패, 대소문자만 다른 서버 브랜치를 확인 [" + root.getName() + "] " + e.getMessage());
+        if (!blockCaseClashes(repo)) throw e;
+        return;
+      }
+      // 받은 뒤 추적 브랜치 사본이 없으면 --prune 이 대소문자만 다른 철자로 보고 지운 것이다(윈도우).
+      if (refHash(root, REMOTES_PREFIX + repo.upstream()) == null) refetchUpstream(repo);
     }
     finally {
       unlockFetch(root);
     }
+  }
+
+  /**
+   * git pull --ff-only --quiet 과 같은 받기. 서버에서 받는 것은 추적 브랜치 하나를 fetch(JGitRead 가 맡을 수 있어 git 의 libcurl 을 읽지 않는다)로,
+   * 합치기는 git merge --ff-only 로 한다. merge 에 원격/브랜치 이름을 넘겨 reflog 가 「merge 원격/브랜치: Fast-forward」가 되게 한다(GitUndo.fromUpstream).
+   * 떨어진 HEAD · 추적 브랜치 없음 · 로컬 원격 · 설정의 fetch refspec 이 그 브랜치를 refs/remotes/원격/브랜치 로 받지 않는 저장소(single-branch 등) ·
+   * 하위 모듈이 있는 저장소는 git pull 그대로 한다.
+   */
+  static void pullFastForward(File root) throws IOException, InterruptedException {
+    String branch;
+    try {
+      branch = git(root, "symbolic-ref", "--short", "-q", GIT_HEAD).trim();
+    }
+    catch (IOException detached) {
+      branch = null;
+    }
+    Map<String, String> cfg = branch == null ? Map.of() : ReverseMerge.configs(root);
+    String remote = cfg.get("branch." + branch + ".remote");
+    String tracked = trackedBranch(cfg, branch);
+    String upstream = remote + "/" + tracked;
+    // 같은 이름의 태그 · 로컬 브랜치가 있으면 merge 가 그쪽을 먼저 읽는다(git 이름 풀기 차례).
+    boolean shadowed = refHash(root, "refs/" + upstream) != null || refHash(root, "refs/tags/" + upstream) != null || refHash(root, ReverseMerge.HEADS + upstream) != null;
+    if (remote == null || tracked == null || remote.equals(".") || shadowed || !ReverseMerge.fetches(cfg, remote, tracked) || new File(root, ".gitmodules").exists()) {
+      GitRemoteAuth.run(root, GIT_LONG_TIMEOUT_SEC, true, "pull", "--ff-only", "--quiet");
+      return;
+    }
+    ReverseMerge.fetch(root, remote, tracked);
+    git(root, GIT_LONG_TIMEOUT_SEC, "merge", "--ff-only", "--quiet", upstream);
+  }
+
+  /** ReverseMerge.blockCaseClashes 를 이 저장소의 원격 · 남길 브랜치(추적 브랜치 · 지금 브랜치 · 역머지 From 순)로 부른다. */
+  private static boolean blockCaseClashes(Repo repo) throws IOException, InterruptedException {
+    Map<String, String> cfg = ReverseMerge.configs(repo.root());
+    String remote = ReverseMerge.remoteOf(cfg, repo.branch());
+    return ReverseMerge.blockCaseClashes(repo.root(), cfg, remote, Arrays.asList(trackedBranch(cfg, repo.branch()), repo.branch(), cfg.get(ReverseMerge.CONFIG_FROM)));
+  }
+
+  /** branch.<branch>.merge 가 가리키는 서버 브랜치 이름(refs/heads/ 뺀 것). 설정이 없거나 브랜치가 아니면 null. */
+  private static String trackedBranch(Map<String, String> cfg, String branch) {
+    String merge = cfg.get("branch." + branch + ".merge");
+    return merge != null && merge.startsWith(ReverseMerge.HEADS) ? merge.substring(ReverseMerge.HEADS.length()) : null;
+  }
+
+  /**
+   * 추적 브랜치가 설정에는 있는데 받아 둔 사본이 없을 때: 대소문자만 다른 서버 브랜치를 막고 다시 받으며, 막을 것이 없으면 그 브랜치만 받는다.
+   * 사본이 있으면 true. 서버에서 지운 브랜치 등으로 받지 못하면 로그만 남기고 false.
+   */
+  private static boolean refetchUpstream(Repo repo) throws InterruptedException {
+    File root = repo.root();
+    Map<String, String> cfg = ReverseMerge.configs(root);
+    String branch = trackedBranch(cfg, repo.branch());
+    if (branch == null) return false;
+    String remote = ReverseMerge.remoteOf(cfg, repo.branch());
+    LOG.warn("추적 브랜치 사본이 없음 [" + root.getName() + "] " + remote + "/" + branch);
+    try {
+      if (!ReverseMerge.blockCaseClashes(root, cfg, remote, Arrays.asList(branch, repo.branch(), cfg.get(ReverseMerge.CONFIG_FROM)))) {
+        ReverseMerge.fetchQuietly(root, remote, branch);
+      }
+      return true;
+    }
+    catch (IOException e) {
+      LOG.warn("추적 브랜치를 다시 받지 못함 [" + root.getName() + "] " + e.getMessage());
+      return false;
+    }
+  }
+
+  /** upstream 이 null 인데 추적 브랜치 설정이 있으면(받아 둔 사본이 지워짐) refetchUpstream 뒤 저장소 정보를 다시 읽는다. detached HEAD 는 그대로. */
+  private static Repo withUpstream(Repo repo) throws IOException, InterruptedException {
+    if (repo.upstream() != null || GIT_HEAD.equals(repo.branch())) return repo;
+    return refetchUpstream(repo) ? gitRepo(repo.root()) : repo;
   }
 
   /** root 를 fetching 에 넣는다. 이미 있으면(그 저장소에 fetch · pull 이 도는 중) 빠질 때까지 기다린다. 놓을 때는 unlockFetch. */
@@ -2873,17 +2972,20 @@ final class SyncPanel extends SimpleToolWindowPanel {
       String savedInto = cfg.get(ReverseMerge.CONFIG_INTO);
       // 기억된 합치기가 지금 브랜치와 관련 있을 때만 그 기준을 쓴다: develop → 내 브랜치였으면 From, 내 브랜치 → develop 이었으면 Into.
       // 다른 개인 브랜치의 기억(featureA → develop)이면 featureA 를 기준으로 삼지 않고 아래 기본(develop 등)을 쓴다.
-      from = repo.branch().equals(savedInto) ? savedFrom : repo.branch().equals(savedFrom) ? savedInto : null;
+      // 윈도우는 대소문자만 다른 이름을 같은 브랜치로 본다(Merge Branches 는 서버 철자를 기억한다).
+      boolean folded = ReverseMerge.folded(cfg);
+      from = ReverseMerge.rememberedFor(savedInto, repo.branch(), folded) ? savedFrom
+             : ReverseMerge.rememberedFor(savedFrom, repo.branch(), folded) ? savedInto : null;
       String remote = ReverseMerge.remoteOf(cfg, repo.branch());
       // Merge Branches 로 합친 적이 없어 기억된 기준이 없으면 Merge Branches 창과 같은 기본(develop 등 받아 둔 첫 후보)을 쓴다.
       if (from == null) from = ReverseMerge.pick(ReverseMerge.parseRefs(String.join("\n", tips.keySet()), remote), null, ReverseMerge.FROM_CANDIDATES);
-      if (from == null || from.equals(repo.branch())) {
+      if (from == null || ReverseMerge.rememberedFor(from, repo.branch(), folded)) {
         reverseNotes.remove(root);
         noteCache.remove(root);
         return;
       }
       String fromRef = ReverseMerge.remoteRef(remote, from);
-      String tip = tips.get(fromRef);
+      String tip = ReverseMerge.tipOf(tips, fromRef, folded);
       if (fetch && !(fetchedAll && ReverseMerge.fetches(cfg, remote, from))) {
         // 받기 설정이 기준 브랜치를 받지 않아 서버에 한 번 더 묻는다. 조회가 느릴 때 idea.log 에서 까닭(설정 줄)을 볼 수 있게 남긴다.
         if (fetchedAll) LOG.info("역머지 기준 " + from + " 을(를) 따로 받음 [" + root.getName() + "] remote." + remote + ".fetch=" + cfg.get("remote." + remote + ".fetch"));
@@ -3702,6 +3804,20 @@ final class SyncPanel extends SimpleToolWindowPanel {
     return null;
   }
 
+  /**
+   * 오류 출력을 글로. svn 은 시스템 문자 집합(한글 윈도우는 CP949)으로 낸다. git 은 UTF-8 이지만 윈도우 시스템 오류 문구(FormatMessage,
+   * 예: LoadLibraryExW() failed with: …)는 시스템 문자 집합으로 섞여 나온다. UTF-8 로 읽어 깨지는 바이트가 있으면 시스템 문자 집합으로 읽는다.
+   */
+  static String decodeError(byte[] bytes, String exe) {
+    if (!GIT.equals(exe)) return new String(bytes, NATIVE_CHARSET);
+    try {
+      return StandardCharsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(bytes)).toString();
+    }
+    catch (java.nio.charset.CharacterCodingException notUtf8) {
+      return new String(bytes, NATIVE_CHARSET);
+    }
+  }
+
   static boolean isGitAuthError(String message) {
     return message != null && containsAny(message, GIT_AUTH_ERRORS);
   }
@@ -3851,12 +3967,41 @@ final class SyncPanel extends SimpleToolWindowPanel {
    * null 이 아니면 부른 쪽이 이미 고른 것이라 그대로 쓴다(빈 목록이면 넘길 값이 없다). 회사 PC 는 git 하나에 0.4초 안팎이라 같은 읽기를 두 번 하지 않는다.
    */
   private static byte[] runBytes(File dir, long timeoutSec, List<GitLogins.Login> logins, String exe, String... args) throws IOException, InterruptedException {
+    // 읽기 · 조회는 JGit 으로 먼저 한다(git 을 띄우지 않아 보안 프로그램 검사 · libcurl 읽기가 없다). 맡지 않거나 실패하면 null 이라 아래 git 으로 간다.
+    if (GIT.equals(exe)) {
+      byte[] out = JGitRead.run(dir, timeoutSec, logins, args);
+      if (out != null) return out;
+    }
+    // 서버에 닿는 git 은 git-remote-https 가 libcurl-4.dll 을 읽는다. 회사 PC 의 보안 프로그램(응용 프로그램 제어)이 여러 git 이 함께 뜰 때
+    // 그 읽기를 가끔 막는다(LoadLibraryExW() failed). 서버에 닿기 전에 끝난 실패라 조금 쉬었다가 다시 해도 안전하다.
+    // 다시 하는 실행은 한 번에 하나씩 돌려(LIBRARY_RETRY_SLOT) 여럿이 함께 DLL 을 읽다 또 막히지 않게 한다.
+    for (int attempt = 1; ; attempt++) {
+      boolean retry = attempt > 1;
+      if (retry) LIBRARY_RETRY_SLOT.acquire();
+      try {
+        return runOnce(dir, timeoutSec, logins, exe, args);
+      }
+      catch (IOException e) {
+        if (attempt > LIBRARY_RETRIES || e.getMessage() == null || !GIT.equals(exe) || !GIT_REMOTE_VERBS.contains(verb(args)) || !containsAny(e.getMessage(), LIBRARY_LOAD_ERRORS)) throw e;
+        LOG.warn("git 이 라이브러리를 읽지 못해 다시 실행(" + attempt + "/" + LIBRARY_RETRIES + ") [" + dir.getName() + "] " + e.getMessage());
+        Thread.sleep(LIBRARY_RETRY_DELAY_MS * attempt);
+      }
+      finally {
+        if (retry) LIBRARY_RETRY_SLOT.release();
+      }
+    }
+  }
+
+  /** runBytes 의 한 번 실행. */
+  private static byte[] runOnce(File dir, long timeoutSec, List<GitLogins.Login> logins, String exe, String... args) throws IOException, InterruptedException {
     List<String> command = new ArrayList<>(List.of(VCS_NAME_SVN.equals(exe) ? svnExecutable() : GIT.equals(exe) ? gitExecutable(dir) : exe));
     command.addAll(List.of(args));
     String label = exe + " " + verb(args);
     boolean limited = GIT.equals(exe) && !GIT_REMOTE_VERBS.contains(verb(args));
     long queued = System.currentTimeMillis();
+    boolean remote = GIT.equals(exe) && GIT_REMOTE_VERBS.contains(verb(args));
     if (limited) LOCAL_GIT_SLOTS.acquire();
+    if (remote) REMOTE_GIT_SLOTS.acquire();
     long started = System.currentTimeMillis();
     long ran = -1;
     File outFile = null;
@@ -3891,8 +4036,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       }
       ran = System.currentTimeMillis() - launched;
       if (process.exitValue() != 0) {
-        Charset errCharset = "svn".equals(exe) ? NATIVE_CHARSET : StandardCharsets.UTF_8;
-        String err = new String(Files.readAllBytes(errFile.toPath()), errCharset).trim();
+        String err = decodeError(Files.readAllBytes(errFile.toPath()), exe).trim();
         String hint = GIT.equals(exe) && containsAny(err, GIT_AUTH_ERRORS) ? "\n" + SyncBundle.message("sync.git.auth") : "";
         throw new IOException(label + " 실패: " + (err.isEmpty() ? "종료 코드 " + process.exitValue() : err) + hint);
       }
@@ -3903,6 +4047,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       if (outFile != null && !outFile.delete()) outFile.deleteOnExit();
       if (errFile != null && !errFile.delete()) errFile.deleteOnExit();
       if (limited) LOCAL_GIT_SLOTS.release();
+      if (remote) REMOTE_GIT_SLOTS.release();
       // 전체 = 임시 파일 만들기 · 실행 · 출력 읽기 · 지우기, 실행 = 프로세스만, 대기 = 로컬 git 자리 기다린 시간.
       if (TIME_LOG.isDebugEnabled()) {
         TIME_LOG.debug("[" + dir.getName() + "] " + label + " 전체 " + (System.currentTimeMillis() - started) + " ms, 실행 " + ran + " ms, 대기 "
