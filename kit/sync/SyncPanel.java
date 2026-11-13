@@ -251,7 +251,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static final int MAX_REMOTE_GIT_PROCESSES = 2;
   private static final Semaphore REMOTE_GIT_SLOTS = new Semaphore(MAX_REMOTE_GIT_PROCESSES);
   // 우리가 띄운 git · svn 명령마다 걸린 시간을 적는다. Help › Diagnostic Tools › Debug Log Settings 에 「#kinggura.sync.time」을 넣으면 idea.log 에 보인다.
-  private static final Logger TIME_LOG = Logger.getInstance("#kinggura.sync.time");
+  static final Logger TIME_LOG = Logger.getInstance("#kinggura.sync.time");
   private static final String TOOLBAR_PLACE = "KingGuraSynchronizeToolbar";
   // 기본(강조색) 단추 위에 놓는 흰 받기 아이콘. 테마마다 기본 단추 바탕이 강조색이고 글자가 흰색이다.
   private static final String PULL_SELECTED_ICON = "/icons/ei/pullSelected.svg";
@@ -3939,6 +3939,11 @@ final class SyncPanel extends SimpleToolWindowPanel {
    * null 이 아니면 부른 쪽이 이미 고른 것이라 그대로 쓴다(빈 목록이면 넘길 값이 없다). 회사 PC 는 git 하나에 0.4초 안팎이라 같은 읽기를 두 번 하지 않는다.
    */
   private static byte[] runBytes(File dir, long timeoutSec, List<GitLogins.Login> logins, String exe, String... args) throws IOException, InterruptedException {
+    // 읽기 · 조회는 JGit 으로 먼저 한다(git 을 띄우지 않아 보안 프로그램 검사 · libcurl 읽기가 없다). 맡지 않거나 실패하면 null 이라 아래 git 으로 간다.
+    if (GIT.equals(exe)) {
+      byte[] out = JGitRead.run(dir, timeoutSec, logins, args);
+      if (out != null) return out;
+    }
     // 서버에 닿는 git 은 git-remote-https 가 libcurl-4.dll 을 읽는다. 회사 PC 의 보안 프로그램(응용 프로그램 제어)이 여러 git 이 함께 뜰 때
     // 그 읽기를 가끔 막는다(LoadLibraryExW() failed). 서버에 닿기 전에 끝난 실패라 조금 쉬었다가 다시 해도 안전하다.
     // 다시 하는 실행은 한 번에 하나씩 돌려(LIBRARY_RETRY_SLOT) 여럿이 함께 DLL 을 읽다 또 막히지 않게 한다.
