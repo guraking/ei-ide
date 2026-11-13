@@ -31,6 +31,7 @@ import java.util.regex.Pattern;
 /**
  * 서버와 통신하는 git 명령을 IntelliJ Git(kit/git-auth 의 EiGitAuthEnv)과 같은 순서로 인증해 돌린다.
  * 첫 실행: 설정 → Git 로그인(runBytes 가 넣음) → 이번 실행에서 로그인 창에 넣은 값 → IntelliJ 가 기억한 비밀번호 · GitLab · GitHub 계정 토큰.
+ * IntelliJ 가 모르는 저장소도 열린 프로젝트가 있으면 같은 순서로 하고(원격 주소는 저장소 설정에서 읽는다), 열린 프로젝트가 없으면 Git 로그인 값만 쓴다.
  * 아직 성공한 적 없는 값은 서버마다 한 명령만 들고 나가고, 같은 서버의 다른 명령은 그 결과를 기다려 성공한 값을 쓰거나 실패한 값은 다시 보내지 않는다(계정 잠김 방지).
  * 인증에 실패하면 ask 일 때만 실패한 서버의 값을 지우고 IntelliJ 로그인 창으로 물어 한 번 더 돌린다. 자동 fetch(ask 아님)는 값을 지우지 않는다.
  * 화면 스레드에서 부르지 않는다.
@@ -123,13 +124,28 @@ final class GitRemoteAuth {
     Project project = null;
     Map<String, String> urls = new LinkedHashMap<>();
     if (ApplicationManager.getApplication() != null) {
+      Project anyOpen = null;
       VirtualFile dir = LocalFileSystem.getInstance().findFileByIoFile(root);
       for (Project open : ProjectManager.getInstance().getOpenProjects()) {
-        GitRepository repo = dir == null ? null : GitRepositoryManager.getInstance(open).getRepositoryForRootQuick(dir);
+        GitRepository repo;
+        try {
+          // 닫히는 중인 창(두 번째 창 등)의 서비스는 읽지 않는다.
+          if (open.isDisposed()) continue;
+          repo = dir == null ? null : GitRepositoryManager.getInstance(open).getRepositoryForRootQuick(dir);
+        }
+        catch (RuntimeException closing) {
+          continue;
+        }
+        if (anyOpen == null) anyOpen = open;
         if (repo == null) continue;
         project = open;
         urls = serverUrls(remoteUrls(repo));
         break;
+      }
+      // IntelliJ 가 아직 모르는 저장소(방금 붙음 · IDE 를 켠 직후)도 기억한 비밀번호 · GitLab 토큰을 쓰게, 열린 프로젝트로 묻고 원격은 저장소 설정에서 읽는다.
+      if (project == null && anyOpen != null) {
+        project = anyOpen;
+        urls = configServers(root, args);
       }
     }
     if (project == null || urls.isEmpty()) return runStored(root, timeoutSec, args);
@@ -213,7 +229,7 @@ final class GitRemoteAuth {
   }
 
   /**
-   * IntelliJ 가 모르는 저장소(VCS 매핑 밖 · 아직 VFS 에 없음 · Clone): 설정 → Git 로그인 값만 넣어 돌린다(runBytes 가 이 명령이 닿는 서버 것을 고른다).
+   * 열린 프로젝트가 없거나 https 원격이 없을 때: 설정 → Git 로그인 값만 넣어 돌린다(runBytes 가 이 명령이 닿는 서버 것을 고른다).
    * 그 값이 앞서 인증에 실패했으면 다시 보내지 않고 그 오류로 끝내고(자동 원격 확인이 같은 틀린 비밀번호로 계정을 잠그지 않게), 실패하면 기록한다.
    */
   private static String runStored(File root, long timeoutSec, String... args) throws IOException, InterruptedException {

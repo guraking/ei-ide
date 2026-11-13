@@ -4,6 +4,7 @@ import com.intellij.openapi.diagnostic.Logger;
 import org.eclipse.jgit.api.FetchCommand;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.TransportCommand;
+import org.eclipse.jgit.internal.JGitText;
 import org.eclipse.jgit.lib.Config;
 import org.eclipse.jgit.lib.Constants;
 import org.eclipse.jgit.lib.FileMode;
@@ -60,7 +61,8 @@ import java.util.regex.Pattern;
  * config(JGit 은 시스템 설정 위치를 git 을 띄워 찾는다), 저장소 · 작업본을 바꾸는 명령(pull · push · merge · checkout · stash · reset · commit · mv 등).
  *
  * 서버 명령은 Git 로그인 머리글이 있는 https 서버와 로컬 경로 원격만 맡는다(JGit 은 git 의 비밀번호 도우미를 쓰지 못한다).
- * 머리글이 거절되면 git 으로 다시 한다(git 은 거절된 뒤 비밀번호 도우미에 묻고, 그 실패 글을 GitRemoteAuth 가 읽는다).
+ * 머리글이 거절되면(401) git 으로 다시 하지 않고 git 과 같은 인증 실패 글(Authentication failed for '주소')의 IOException 을 던진다.
+ * git 도 같은 머리글을 다시 보내 한 명령에 두 번 실패하게 되고(서버 계정 잠김이 빨라진다), GitRemoteAuth 가 이 글로 실패한 서버를 알아본다.
  * 연결 · 인증서 단계에서 실패한 서버(프록시 · 회사 인증서가 git 과 다름)는 이번 실행 동안 git 에만 맡긴다.
  * fetch 의 prune 은 JGit 이 제외 refspec(^refs/heads/…)을 보지 않아 여기서 git 과 같게 한다. core.ignorecase 저장소에서는 서버에 대소문자만 다른 이름이
  * 있는 참조를 지우지 않는다(윈도우에서 같은 파일이라 지우면 내 추적 참조가 사라진다).
@@ -89,10 +91,12 @@ final class JGitRead {
   // fetch · ls-remote 가 응답 없이 기다리는 최대 초(연결 · 읽기 하나마다). 넘으면 실패로 보고 git 으로 다시 한다.
   private static final int IO_TIMEOUT_SEC = 30;
   private static final String HEADER_SEP = ": ";
+  /** git 이 서버에서 인증을 거절당했을 때 내는 글(SyncPanel.isGitAuthError · GitRemoteAuth.failedServers 가 읽는다). */
+  private static final String AUTH_FAILED = "fatal: Authentication failed for '%s'";
   /** 연결 · 인증서 단계에서 JGit 이 실패한 서버(GitLogins.serverOf 모양). */
   private static final Set<String> GIT_ONLY_SERVERS = ConcurrentHashMap.newKeySet();
 
-  /** git 이 오류 글 없이 내는 종료 코드 1. run 이 runOnce 와 같은 글의 IOException 으로 바꾼다. */
+  /** git 이 실패할 자리(오류 글 없는 종료 코드 1 · 서버 인증 실패). run 이 runOnce 와 같은 글의 IOException 으로 바꾼다. */
   private static final class GitFailure extends Exception {
     GitFailure(String message) {
       super(message, null, false, false);
@@ -233,14 +237,14 @@ final class JGitRead {
     if (rc.getURIs().isEmpty()) return null;
     URIish uri = rc.getURIs().get(0);
     String scheme = uri.getScheme();
-    if (scheme == null && uri.getHost() == null || "file".equals(scheme)) return new File(uri.getPath()).isAbsolute() ? new Server(null, Map.of()) : null;
+    if (scheme == null && uri.getHost() == null || "file".equals(scheme)) return new File(uri.getPath()).isAbsolute() ? new Server(null, null, Map.of()) : null;
     if (logins == null || !GitLogins.isHttpUrl(uri.toString())) return null;
     String name = GitLogins.serverOf(uri.toString());
     GitLogins.Login login = GitLogins.find(logins, name);
     if (login == null || login.secret() == null || login.secret().isEmpty() || GIT_ONLY_SERVERS.contains(name)) return null;
     String header = GitLogins.header(login);
     int sep = header.indexOf(HEADER_SEP);
-    return new Server(name, Map.of(header.substring(0, sep), header.substring(sep + HEADER_SEP.length())));
+    return new Server(name, uri.toString(), Map.of(header.substring(0, sep), header.substring(sep + HEADER_SEP.length())));
   }
 
   private static <C extends TransportCommand<C, ?>> C prepare(C command, Server server, long timeoutSec) {
@@ -279,9 +283,9 @@ final class JGitRead {
     }
   }
 
-  /** 원격 하나. name 은 https 서버(로컬 경로면 null). */
-  private record Server(String name, Map<String, String> headers) {
-    /** 명령을 돌린다. 연결 · 인증서 단계 실패면 그 서버를 git 에만 맡긴다. 예외는 그대로 던진다. */
+  /** 원격 하나. name 은 https 서버, url 은 원격 주소(로컬 경로면 둘 다 null). */
+  private record Server(String name, String url, Map<String, String> headers) {
+    /** 명령을 돌린다. 연결 · 인증서 단계 실패면 그 서버를 git 에만 맡긴다. 머리글이 거절되면 git 의 인증 실패 글로 끝낸다. 그 밖의 예외는 그대로 던진다. */
     <T> T call(org.eclipse.jgit.api.GitCommand<T> command, String remote) throws Exception {
       try {
         return command.call();
@@ -291,9 +295,21 @@ final class JGitRead {
           GIT_ONLY_SERVERS.add(name);
           LOG.warn("JGit 이 서버에 닿지 못해 이번 실행 동안 git 으로만 받음 [" + remote + "] " + name + ": " + e);
         }
+        if (name != null && authRejected(e)) throw new GitFailure(String.format(AUTH_FAILED, url) + "\n" + SyncBundle.message("sync.git.auth"));
         throw e;
       }
     }
+  }
+
+  /** 서버가 401 로 거절했다(JGit 은 비밀번호 도우미가 없어 다시 묻지 않고 이 글로 끝낸다). */
+  private static boolean authRejected(Throwable e) {
+    String notAuthorized = JGitText.get().notAuthorized;
+    String noProvider = JGitText.get().noCredentialsProvider;
+    for (Throwable t = e; t != null; t = t.getCause()) {
+      String message = t.getMessage();
+      if (t instanceof org.eclipse.jgit.errors.TransportException && message != null && (message.endsWith(notAuthorized) || message.endsWith(noProvider))) return true;
+    }
+    return false;
   }
 
   private static boolean networkFailure(Throwable e) {
@@ -371,7 +387,7 @@ final class JGitRead {
         case "--quiet" -> quiet = true;
         default -> {
           if (arg.startsWith("-")) return null;
-          String line = abbrev ? abbreviated(repo, arg) : symbolicFullName ? null : hashOf(repo, arg);
+          String line = abbrev ? abbreviated(repo, arg) : symbolicFullName ? fullName(repo, arg) : hashOf(repo, arg);
           if (line == null) {
             if (verify && quiet && arg.startsWith(Constants.R_REFS) && missing(repo, arg)) throw new GitFailure("종료 코드 1");
             return null;
@@ -382,6 +398,14 @@ final class JGitRead {
     }
     if (verify && (abbrev || symbolicFullName)) return null;
     return utf8(out);
+  }
+
+  /** --symbolic-full-name 뒤의 HEAD: 지금 브랜치의 전체 참조 이름(떨어진 HEAD 면 HEAD). HEAD 커밋이 없거나 그 밖 이름은 null. */
+  private static String fullName(Repository repo, String rev) throws IOException {
+    if (!rev.equals(Constants.HEAD)) return null;
+    Ref head = repo.exactRef(Constants.HEAD);
+    if (head == null || head.getObjectId() == null) return null;
+    return head.isSymbolic() ? head.getTarget().getName() : Constants.HEAD;
   }
 
   /** --abbrev-ref 의 짧은 이름. HEAD 는 지금 브랜치(떨어진 HEAD 면 HEAD), @{u} 는 추적 브랜치. 그 밖 · 못 가리면 null. */
