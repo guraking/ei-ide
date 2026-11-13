@@ -96,8 +96,12 @@ final class ProjectHistoryPanel extends JPanel {
   private static final int SHORT_HASH = 7;
   // 비교 창 내용(git show · svn cat)을 읽는 시간 제한(초). SyncPanel.git 의 기본 제한과 같다.
   private static final long CAT_TIMEOUT_SEC = 120;
-  // rev-parse --abbrev-ref 가 브랜치 대신 돌려주는 값(떨어진 HEAD). 이때는 짧은 해시를 보인다.
+  // rev-parse --symbolic-full-name 이 브랜치 대신 돌려주는 값(떨어진 HEAD). 이때는 짧은 해시를 보인다.
   private static final String DETACHED = "HEAD";
+  // HEAD 커밋과 브랜치 전체 이름(refs/heads/…, 떨어진 HEAD 면 HEAD)을 읽는 git 인자.
+  private static final String[] HEAD_REFS = {"rev-parse", "HEAD", "--symbolic-full-name", "HEAD"};
+  // 브랜치 전체 이름의 앞부분.
+  private static final String BRANCH_REF = "refs/heads/";
   // svn 이 아이디 · 비밀번호를 묻지 않고 바로 실패하게 한다(묻는 입력을 기다리며 시간 제한까지 멈추지 않게).
   private static final String SVN_NO_PROMPT = "--non-interactive";
   // svnPrefixes 에서 리비전 번호 대신 「다음 묶음을 거를 경로」를 담는 키. 리비전은 숫자뿐이라 겹치지 않는다.
@@ -502,6 +506,15 @@ final class ProjectHistoryPanel extends JPanel {
     finally {
       keepLoaded = false;
     }
+    // 마지막 저장소를 닫아 고를 것이 없으면 load 가 불리지 않는다. 읽는 중인 결과를 버리고 진행 막대 · 표 · 브랜치 · 상태 글을 비운다.
+    if (selectedTarget() == null) {
+      shownSeq = ++loadSeq;
+      loaded = null;
+      branch.setRefs(List.of(), "");
+      fillCommits();
+      loading(false);
+      status.setText("");
+    }
   }
 
   /** dir 이 dirs 가운데 다른 폴더 안에 있고, 둘의 저장소 폴더(.git · .svn 이 있는 가장 가까운 위 폴더)가 같은가. */
@@ -658,18 +671,24 @@ final class ProjectHistoryPanel extends JPanel {
     if (target.vcs() == SyncPanel.Vcs.GIT) {
       if (before == null) {
         // 서로 기다릴 필요 없는 설정 · 브랜치와 HEAD 커밋 · 원격 이름을 동시에 읽는다(회사 PC 는 git 하나에 0.5초 넘게 걸린다).
-        // rev-parse 한 번이 HEAD 커밋과 브랜치 이름(--abbrev-ref 뒤의 인자만 이름으로 낸다) 두 줄을 낸다.
+        // rev-parse 한 번이 HEAD 커밋과 브랜치 전체 이름(--symbolic-full-name 뒤의 인자만 이름으로 낸다) 두 줄을 낸다.
         List<String> head = SyncPanel.inParallel(List.of(new String[]{"config", "--get-regexp", "^user\\.(name|email)$"},
-                                                         new String[]{"rev-parse", "HEAD", "--abbrev-ref", "HEAD"},
+                                                         HEAD_REFS,
                                                          new String[]{"remote"}),
                                                  args -> gitOrEmpty(dir, args));
         me = History.parseMe(head.get(0)).withAliases(meAliases());
         String[] refs = head.get(1).split("\n");
+        if (refs.length != 2 || refs[0].isBlank()) {
+          // HEAD 를 못 읽었다. 저장소가 아니면 그 오류를 그대로 보인다(rev-parse --git-dir).
+          SyncPanel.git(dir, "rev-parse", "--git-dir");
+          // HEAD 커밋이 있는데 못 읽었으면(바쁜 PC 시간 초과 등) 다시 읽어 실패하면 그 오류를 보인다. 커밋이 없으면 아직 커밋이 없는 새 저장소다.
+          if (gitOrNull(dir, "rev-parse", "--verify", "-q", "HEAD") != null) refs = SyncPanel.git(dir, HEAD_REFS).trim().split("\n");
+        }
         start = refs.length == 2 ? refs[0].trim() : "";
         branch = refs.length == 2 ? refs[1].trim() : "";
+        // 같은 이름 태그가 있어도 「heads/…」가 붙지 않게 전체 이름에서 refs/heads/ 를 뗀다.
+        if (branch.startsWith(BRANCH_REF)) branch = branch.substring(BRANCH_REF.length());
         if (DETACHED.equals(branch)) branch = start.substring(0, Math.min(SHORT_HASH, start.length()));
-        // HEAD 를 못 읽었는데 저장소이긴 하면(rev-parse --git-dir 성공) 아직 커밋이 없는 새 저장소다. 저장소가 아니면 그 오류를 그대로 보인다.
-        if (start.isEmpty()) SyncPanel.git(dir, "rev-parse", "--git-dir");
         List<String> names = new ArrayList<>();
         for (String name : head.get(2).split("\n")) {
           if (!name.isBlank()) names.add(name.trim());
@@ -940,6 +959,10 @@ final class ProjectHistoryPanel extends JPanel {
       catch (IOException e) {
         error = e.getMessage();
       }
+      catch (RuntimeException e) {
+        // 예상 못 한 오류도 버리지 않고 비교 창에 오류 문구로 보인다(load 와 같다).
+        error = String.valueOf(e);
+      }
       catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         return;
@@ -986,6 +1009,11 @@ final class ProjectHistoryPanel extends JPanel {
       }
       catch (IOException e) {
         openLater(() -> DiffManager.getInstance().showDiff(project, new MessageDiffRequest(e.getMessage())));
+        return;
+      }
+      catch (RuntimeException e) {
+        // 예상 못 한 오류도 버리지 않고 비교 창에 오류 문구로 보인다(load 와 같다).
+        openLater(() -> DiffManager.getInstance().showDiff(project, new MessageDiffRequest(String.valueOf(e))));
         return;
       }
       catch (InterruptedException e) {

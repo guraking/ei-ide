@@ -55,6 +55,9 @@ final class GitUndo {
   // 「merge origin/main: Fast-forward」 · 「reset: moving to origin/main」 처럼 upstream 을 받아 들인 동작.
   private static final String MERGE_PREFIX = "merge ";
   private static final String RESET_TO_PREFIX = "reset: moving to ";
+  // 작업본 바로 아래 .git 폴더 이름과 그 안에 git 이 남기는 색인 잠금 파일 이름.
+  private static final String GIT_DIR = ".git";
+  private static final String INDEX_LOCK = "index.lock";
 
   private GitUndo() {}
 
@@ -70,13 +73,13 @@ final class GitUndo {
                                    // 추적 브랜치의 커밋과 이름(rev-parse 는 --abbrev-ref 뒤의 인자만 이름으로 낸다).
                                    new String[]{"rev-parse", "@{u}", "--abbrev-ref", "@{u}"},
                                    new String[]{"merge-base", "HEAD", "@{u}"});
-    // 실패해도 되는 명령(브랜치 없음 · 추적 브랜치 없음)은 null 로 받고, .git 위치 · HEAD reflog 실패만 그대로 던진다.
+    // 실패해도 되는 명령(브랜치 없음 · 추적 브랜치 없음 · 커밋 없는 저장소의 HEAD reflog)은 null 로 받고, .git 위치 실패만 그대로 던진다.
     List<String> out = SyncPanel.inParallel(first, args -> {
       try {
         return SyncPanel.git(root, args);
       }
       catch (IOException e) {
-        if (args == first.get(0) || args == HEAD_TOP) throw e;
+        if (args == first.get(0)) throw e;
         return null;
       }
     });
@@ -86,7 +89,16 @@ final class GitUndo {
     }
     if (out.get(1) == null) throw new IOException(SyncBundle.message("undo.detached"));
     String branch = out.get(1).trim();
-    String head = out.get(2).trim();
+    if (out.get(2) == null) {
+      // 아직 커밋이 없는 저장소는 되돌릴 것이 없다. 커밋이 있는데 HEAD reflog 를 못 읽었으면 다시 읽어 그 오류를 보인다.
+      try {
+        SyncPanel.git(root, "rev-parse", "--verify", "-q", "HEAD");
+      }
+      catch (IOException noCommit) {
+        throw new IOException(SyncBundle.message("undo.nothing", branch));
+      }
+    }
+    String head = out.get(2) == null ? headTop(root) : out.get(2).trim();
     String log = SyncPanel.git(root, "log", "-g", "-n", String.valueOf(REFLOG_SCAN), REFLOG_DATE, REFLOG_FORMAT, "refs/heads/" + branch).trim();
     Plan plan = plan(head, log, branch);
     if (plan == null) throw new IOException(SyncBundle.message("undo.nothing", branch));
@@ -224,11 +236,19 @@ final class GitUndo {
   }
 
   /**
-   * 시간 초과로 끊긴 git 은 .git/index.lock 을 남겨 다음 git 이 모두 멈춘다. 그 파일이 남았으면 지우는 법을 오류 끝에 붙인다.
+   * 시간 초과로 끊긴 git 은 .git 폴더의 index.lock 을 남겨 다음 git 이 모두 멈춘다. 그 파일이 남았으면 지우는 법을 오류 끝에 붙인다.
+   * .git 폴더는 git 에 물어 연결 작업본(worktree) · 하위 모듈도 맞게 찾는다. 물을 수 없으면 root/.git 을 본다.
    * 다른 git 이 아직 쓰고 있을 수 있어 직접 지우지 않는다.
    */
-  static String lockHint(File root, String message) {
-    File lock = new File(root, ".git/index.lock");
+  static String lockHint(File root, String message) throws InterruptedException {
+    File gitDir;
+    try {
+      gitDir = new File(SyncPanel.git(root, "rev-parse", "--absolute-git-dir").trim());
+    }
+    catch (IOException notRepo) {
+      gitDir = new File(root, GIT_DIR);
+    }
+    File lock = new File(gitDir, INDEX_LOCK);
     return lock.isFile() ? message + "\n\n" + SyncBundle.message("undo.index.lock", lock.getPath()) : message;
   }
 

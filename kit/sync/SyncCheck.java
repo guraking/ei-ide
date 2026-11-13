@@ -291,6 +291,7 @@ public class SyncCheck {
     checkStability1112();
     checkPullFailures();
     checkStability1113();
+    checkStabilityC1113();
     System.out.println("SyncCheck 통과");
   }
 
@@ -823,6 +824,25 @@ public class SyncCheck {
     eq(SyncPanel.pullNeedsDialog("git fetch 실패: fatal: Authentication failed for 'https://git.example.com/a.git/'"), false);
     eq(SyncPanel.messageOf(new IOException((String) null)), "java.io.IOException");
     eq(SyncPanel.messageOf(new IOException("x")), "x");
+  }
+
+  /** 2026-11-13 안정화: 커밋 없는 저장소의 Undo · 연결 작업본의 index.lock 안내 · Assume Unchanged 가 추적하는 파일만 고르기. */
+  private static void checkStabilityC1113() throws Exception {
+    java.nio.file.Path tmp = java.nio.file.Files.createTempDirectory("stabc");
+    File r = tmp.resolve("r").toFile();
+    sh(tmp.toFile(), "git init -q -b main r");
+    try {
+      GitUndo.read(r);
+      throw new AssertionError("커밋 없는 저장소는 되돌릴 것이 없어야 한다");
+    }
+    catch (IOException expected) {
+      eq(expected.getMessage(), SyncBundle.message("undo.nothing", "main"));
+    }
+    sh(r, "git config user.email me@x && git config user.name 나 && echo 1 > a && echo 2 > '새 [b].txt' && git add a && git commit -qm one"
+          + " && git worktree add -q ../w && touch \"$(git -C ../w rev-parse --absolute-git-dir)/index.lock\"");
+    eq(GitUndo.lockHint(tmp.resolve("w").toFile(), "x").contains("index.lock"), true);
+    eq(GitUndo.lockHint(r, "x"), "x");
+    eq(AssumeUnchangedAction.tracked(r, List.of("새 [b].txt", "a", "없음")), List.of("a"));
   }
 
   /** 2026-11-12 안정화 전수조사: 저장소 찾기 · 참조 읽기 · 빈 저장소 · 받기 목록 · 이클립스 파일 찾기. */
