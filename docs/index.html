@@ -440,13 +440,13 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
     <h3>프로젝트 트리 우클릭</h3>
     <table class="keys map">
       <tr><th>항목</th><th>하는 일</th></tr>
-      <tr><td>Spring Boot Server ▸ Start Server · Start in Debug · Restart · Stop (맨 위)</td><td>고른 모듈의 스프링 부트 서버 (<a href="#servers">서버 창</a>)</td></tr>
+      <tr><td>Spring Boot Server ▸ Start Server · Start in Debug · Restart · Stop (맨 위)</td><td>고른 모듈의 스프링 부트 서버. 빌드 파일이 한 단계 아래인 저장소 폴더 줄에서도 보입니다 (<a href="#servers">서버 창</a>)</td></tr>
       <tr><td>Workspace ▸ Module from Existing Sources · Get from Version Control · Create Git Repository · Manage Remotes</td><td>다른 프로젝트 추가 · Git 연결 (<a href="#project">Maven · Gradle</a>)</td></tr>
       <tr><td>Export Program List to Excel…</td><td>프로그램 목록 엑셀</td></tr>
       <tr><td>Generate DTO from JSON…</td><td>고른 패키지에 DTO 만들기</td></tr>
       <tr><td>Git ▸ Synchronize Workspace · Subversion ▸ Synchronize Workspace</td><td>그 저장소만 비교하는 Synchronize 창</td></tr>
       <tr><td>Git ▸ Merge Branches…</td><td>그 저장소로 역머지 창</td></tr>
-      <tr><td>Close Project · Open Project (맨 위, 저장소 폴더 줄)</td><td>이클립스처럼 저장소 하나만 닫기 · 다시 열기. 닫힌 저장소는 색인 · 검색 · 컴파일 · 동기화 창 · Git Log 에서 빠지고 트리에 닫힌 아이콘 줄로 남습니다. 파일은 그대로입니다. 이 저장소를 쓰는 다른 Maven 모듈은 닫는 동안 로컬 Maven 저장소의 jar 를 씁니다(jar 가 없으면 닫기 전에 묻습니다)</td></tr>
+      <tr><td>Close Project · Open Project (맨 위, 저장소 폴더 줄)</td><td>이클립스처럼 저장소 하나만 닫기 · 다시 열기. 닫힌 저장소는 색인 · 검색 · 컴파일 · 동기화 창 · Git Log 에서 빠지고 트리에 닫힌 아이콘 줄로 남습니다. 파일은 그대로입니다. 빌드 파일이 한 단계 아래에 있는 저장소는 저장소 폴더 줄에서 닫으면 그 안 모듈이 모두 닫힙니다. 이 저장소를 쓰는 다른 Maven 모듈은 닫는 동안 로컬 Maven 저장소의 jar 를 씁니다(jar 가 없으면 닫기 전에 묻습니다)</td></tr>
       <tr><td>Assume Unchanged · No Assume Unchanged (맨 아래)</td><td>내 PC 에서만 고친 파일을 변경 목록에서 숨기기 · 되돌리기</td></tr>
       <tr><td><kbd>F5</kbd> (Reload from Disk)</td><td>고른 프로젝트 · 폴더 · 파일을 디스크에서 다시 읽기</td></tr>
     </table>
@@ -641,7 +641,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
         <li><span class="mark">1</span><div><b>Maven 은 따로 안 깔아도 됨</b> <span class="t">번들 Maven 3 을 그대로 씁니다. 저장소에 mvnw(Maven Wrapper)가 있어도 Wrapper 로 바꾸거나 인터넷에서 받지 않습니다. 회사에서 정한 판이 있으면 그 설치 폴더를 고릅니다.</span></div></li>
         <li><span class="mark">2</span><div><b>이클립스와 같은 두 경로</b> <span class="t">이클립스 Preferences → Maven → User Settings 의 설정 파일 · 로컬 저장소를 그대로 적고 「재정의」를 켭니다. 이미 받아 둔 jar 를 써서 인터넷을 거의 타지 않고, 사내 mirror 도 settings.xml 에서 따라옵니다.</span></div></li>
         <li><span class="mark">3</span><div><b>오프라인 작업</b> <span class="t">사내망 밖이거나 저장소에 못 닿을 때 켜면, 로컬 저장소에 있는 것만으로 읽습니다.</span></div></li>
-        <li><span class="mark">↻</span><div><b>pom.xml 을 고친 뒤</b> <span class="t">프로젝트 트리 우클릭 맨 위의 Maven 다시 읽기(고른 프로젝트만). 이클립스 Maven → Update Project 와 같습니다.</span></div></li>
+        <li><span class="mark">↻</span><div><b>pom.xml 을 고친 뒤</b> <span class="t">프로젝트 트리 우클릭 맨 위의 Maven 다시 읽기(고른 프로젝트만). pom.xml 이 한 단계 아래에 있는 저장소 폴더 줄에서도 보입니다. 이클립스 Maven → Update Project 와 같습니다.</span></div></li>
       </ol>
     </div>
 
@@ -659,7 +659,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
         <li><span class="mark">1</span><div><b>IDE 가 직접 빌드</b> <span class="t">원래 인텔리제이는 Gradle 에 맡기지만 Moa IDE 는 새 프로젝트를 「IntelliJ IDEA」 로 둡니다. 그래야 저장할 때 자동 빌드가 돌고 서버 재시작이 빠릅니다. 예전에 「Gradle」 로 정해 둔 프로젝트는 여기서 바꿉니다.</span></div></li>
         <li><span class="mark">2</span><div><b>Gradle JVM</b> <span class="t">build.gradle 을 읽을 때 쓰는 자바입니다. 프로젝트 JDK 와 같게 두는 것이 가장 덜 꼬입니다. 설치 3번에서 넣은 Temurin 17 · 21 · 27 이 목록에 있습니다.</span></div></li>
         <li><span class="mark">G</span><div><b>언제나 내장 Gradle 9.9.1</b> <span class="t">사내망은 wrapper 가 Gradle 을 받지 못하므로, Moa IDE 는 저장소에 wrapper 가 있어도 설치 폴더 <code>plugins\boot-servers\gradle\gradle-9.9.1</code> 의 Gradle 로 모든 Gradle 프로젝트를 읽고 빌드합니다. 사내 넥서스 등 저장소 설정은 build.gradle · init 스크립트를 그대로 따릅니다. Gradle 9 는 JVM 17 이상이 필요하고, 아주 옛날 Gradle 문법(예: <code>compile</code>)은 오류가 납니다.</span></div></li>
-        <li><span class="mark">↻</span><div><b>build.gradle 을 고친 뒤</b> <span class="t">프로젝트 트리 우클릭 맨 위의 Gradle 다시 읽기(전체, Sync All Gradle Projects). 이클립스 Gradle → Refresh 와 같습니다. 트리에 Gradle 프로젝트가 있을 때만 보입니다.</span></div></li>
+        <li><span class="mark">↻</span><div><b>build.gradle 을 고친 뒤</b> <span class="t">프로젝트 트리 우클릭 맨 위의 Gradle 다시 읽기(전체, Sync All Gradle Projects). 이클립스 Gradle → Refresh 와 같습니다. Gradle 프로젝트 안의 줄이나 그 저장소 폴더 줄에서만 보입니다.</span></div></li>
         <li><span class="mark">i</span><div><b>모듈이 셋으로 보여도 정상</b> <span class="t">Gradle 프로젝트는 <code>batch</code> · <code>batch.main</code> · <code>batch.test</code> 로 나뉩니다. 서버 창은 이것을 알아서 한 서버로 묶습니다.</span></div></li>
       </ol>
     </div>
@@ -784,7 +784,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
         <li><span class="mark">R</span><div><b>정규식 작업대</b> <span class="t">Search → 「Regex Workbench…」 또는 편집기 우클릭 「작업대 ▸」(고른 글이 시험 글로). 맨 위 「만들기」 탭 넷 가운데 편한 것으로 패턴을 만듭니다. <b>자주 쓰는 것</b>: 연락처 · 개인정보, 웹 · 네트워크, 날짜 · 시간 · 숫자, 글자 검사, 글 다듬기, 개발 · SQL · 로그 여섯 묶음 63개 단추(이메일 · 휴대폰 · 번호 가리기 · 쿼리 값 · 날짜 바꾸기 · MyBatis <code>${…}</code> · 예외 이름 …)를 누르면 끝납니다. <b>질문 따라가기</b>: 어디에 쓰는지 · 어떤 글자인지 · 몇 자인지 · 띄어쓰기 · 꼭 들어갈 것에 답하면 바로 만들어집니다. <b>예시로 만들기</b>: 맞아야 할 글 · 틀려야 할 글을 한 줄에 하나씩 넣고 「패턴 만들기」(예: 홍길동 · 김 철수 → <code>^[가-힣]+(?:\s[가-힣]+)*$</code>). <b>직접 만들기</b>: 조각 · 묶음 · 반복 · 앞뒤 조건을 고르기만으로 조합합니다. 「JavaScript(프론트)」 · 「Java(백엔드)」 문법으로 시험하고, 「확인할 글」 에 낱말을 치면 맞음 · 일부만 · 안 맞음이 바로 보입니다. 플래그 · 그룹 표 · 바꾸기 결과는 「자세히 보기」 를 켤 때만 보입니다. 아래 「코드」 칸의 <code>/…/gm</code> · <code>Pattern.compile("…")</code> 을 「복사」. 1초 넘게 걸리는 패턴은 멈추고 알립니다.</span></div></li>
         <li><span class="mark">C</span><div><b>주석 만들기</b> <span class="t">자바 편집기에서 메서드(또는 클래스) 안에 커서를 두고 우클릭 「주석 만들기」. 메서드 이름 · 매개변수 · 돌려주는 형식으로 한국어 설명(<code>selectUserList</code> → 「사용자 목록을 조회한다.」)과 <code>@param</code> · <code>@return</code> · <code>@throws</code> 를 채우고, 매퍼 메서드는 그 XML 문장, 컨트롤러 · 서비스는 부르는 매퍼 문장까지 따라가 「표: TB_USER(사용자)」 · 「조건: 부서 코드(DEPT_CD)」 · 「SQL: UserMapper.selectUserList」 줄을 넣습니다. 한글 표 · 칼럼 주석은 매퍼 쿼리 실행에 마지막으로 쓴 DB 접속에서 읽고, <code>@param</code> 설명도 그 칼럼 주석을 씁니다. 컨트롤러는 「주소: GET /user/list」 줄이 붙습니다. <code>@author</code> 는 그 저장소의 Git 사용자 이름, <code>@since</code> 는 오늘 날짜. 이미 주석이 있으면 바꿀지 묻습니다. <b>매퍼 XML</b> 에서 누르면 아이디 주석이 없는 모든 문장의 SQL 첫 줄 위에 <code>/* UserMapper.selectUserList */</code> 한 줄을 넣어 DB 로그 · 느린 쿼리 목록에서 어느 쿼리인지 보이게 합니다. 설정 → 도구 → 주석 만들기에서 작성자 · 날짜 넣기 · 회사 용어 사전(<code>word.gpm=개발 관리</code>)을 바꿉니다.</span></div></li>
         <li><span class="mark">N</span><div><b>뷰 · 설정 이동</b> <span class="t">컨트롤러의 <code>return "order/list"</code> 를 <kbd>Ctrl</kbd>+클릭하면 그 JSP 로(prefix · suffix 는 설정에서, 없으면 <code>/WEB-INF/views/ … .jsp</code>). JSP 우클릭 「Go to Controller」은 반대로. <code>${db.url}</code> 을 <kbd>Ctrl</kbd>+클릭하면 application*.yml · properties 의 그 키로(프로필 파일마다 따로).</span></div></li>
-        <li><span class="mark">X</span><div><b>프로그램 목록 엑셀</b> <span class="t">Project 메뉴 또는 프로젝트 트리 우클릭 「Export Program List to Excel…」. 소스 · 리소스 · 웹 폴더의 전체 파일(구분 · 경로 · 클래스 · 설명 · 줄 수 · 수정일)과 URL 목록을 시트 두 장으로 저장합니다.</span></div></li>
+        <li><span class="mark">X</span><div><b>프로그램 목록 엑셀</b> <span class="t">Project 메뉴 또는 프로젝트 트리 우클릭 「Export Program List to Excel…」. 소스 · 리소스 · 웹 폴더의 전체 파일(구분 · 경로 · 클래스 · 설명 · 줄 수 · 수정일)과 URL 목록을 시트 두 장으로 저장합니다. 트리에서 폴더를 골라 우클릭으로 누르면 그 폴더 안의 것만, Project 메뉴에서는 전체를 담습니다.</span></div></li>
         <li><span class="mark">4</span><div><b>오른쪽 칸에서 바로 고치기</b> <span class="t">프로필 · VM 옵션 · 포트를 고치고 「적용」. 프로젝트 트리의 모듈 옆에도 상태 · 포트가 나오고 우클릭으로 시작 · 중지할 수 있습니다.</span></div></li>
       </ol>
     </div>

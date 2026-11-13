@@ -819,6 +819,12 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
             inner.add(node);
           }
         }
+        if (workspaceNode != null) {
+          // 2026.3 은 내린 모듈의 폴더를 맨 위 줄로도 넣는다. 워크스페이스 안의 것은 워크스페이스 폴더 아래 제자리(inner · 중간 폴더 줄)에 보이므로 맨 위 것은 뺀다.
+          List<VirtualFile> closed = CloseRepoAction.closedRoots(project);
+          shown.removeIf(node -> node.getValue() instanceof PsiDirectory d && closed.contains(d.getVirtualFile())
+                                 && VfsUtilCore.isAncestor(baseDir, d.getVirtualFile(), true));
+        }
         shown.addAll(0, inner);
         // 밖에 붙였다가 닫은 저장소는 IntelliJ 가 맨 위에 보통 폴더 줄로 남기기도 해 맨 위 줄 전체에서 닫힌 줄로 바꾼다.
         List<AbstractTreeNode<?>> result = CloseRepoAction.withClosedRepos(project, parent, shown, baseDir, settings);

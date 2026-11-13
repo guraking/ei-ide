@@ -62,6 +62,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * 상태는 IntelliJ 가 workspace.xml 에 저장한다.
  * 닫기 · 열기 뒤의 정리(VCS 매핑 · Maven · 편집기)는 sync 가 한다. IntelliJ 의 Load/Unload Modules · Remove Module 로 바꿔도 ModuleSync 가 같은 sync 를 부른다.
  * 우클릭 메뉴 맨 위에 둔다. 닫기는 모듈 폴더 줄이면 어느 프로젝트에서나 보이고, 프로젝트 폴더 줄에서는 보이지 않는다(누르면 프로젝트 전체가 내려간다).
+ * 모듈 폴더가 아닌 저장소 폴더 줄(.git · .svn 이 있고 빌드 파일은 한 단계 아래, 저장소\하위\pom.xml)에서도 보이고, 그 안 모듈을 모두 닫고 연다.
+ * 안의 모듈이 모두 닫힌 저장소 폴더는 VCS 매핑도 떼어 동기화 창 · Git Log 에서 빠진다.
  * 닫을 저장소를 다른 모듈이 쓰는데 그 jar 가 로컬 Maven 저장소에 없으면(그 모듈이 오류 남) 닫기 전에 묻는다.
  * 폴더 · 파일은 건드리지 않는다. 여러 줄을 골라 한꺼번에 닫고 열 수 있다.
  */
@@ -155,7 +157,9 @@ public class CloseRepoAction extends DumbAwareAction {
       if (close()) {
         if (base != null && FileUtil.pathsEqual(file.getPath(), base)) continue;
         Module module = ModuleUtilCore.findModuleForFile(file, project);
-        if (module == null || !List.of(ModuleRootManager.getInstance(module).getContentRoots()).contains(file)) continue;
+        boolean moduleRoot = module != null && List.of(ModuleRootManager.getInstance(module).getContentRoots()).contains(file);
+        // 모듈 폴더가 아니어도 저장소 폴더(빌드 파일이 한 단계 아래에 있는 저장소\하위\pom.xml)면 그 안 모듈을 모두 센다.
+        if (!moduleRoot && !repoFolder(file)) continue;
         for (Module inner : ModuleManager.getInstance(project).getModules()) {
           List<String> paths = new ArrayList<>();
           boolean under = false;
@@ -170,7 +174,14 @@ public class CloseRepoAction extends DumbAwareAction {
       var unloaded = ModuleManager.getInstance(project).getUnloadedModuleDescriptions();
       boolean selected = false;
       for (UnloadedModuleDescription description : unloaded) {
-        if (containsPath(rootsOf(project, description), file.getPath())) selected = true;
+        List<String> roots = rootsOf(project, description);
+        if (containsPath(roots, file.getPath())) selected = true;
+        // 프로젝트 폴더가 아닌 저장소 폴더 줄은 그 안에 닫은 모듈이 있으면 연다.
+        if (repoFolder(file) && (base == null || !FileUtil.pathsEqual(file.getPath(), base))) {
+          for (String root : roots) {
+            if (FileUtil.isAncestor(file.getPath(), root, true)) selected = true;
+          }
+        }
       }
       if (!selected) continue;
       for (UnloadedModuleDescription description : unloaded) {
@@ -183,6 +194,50 @@ public class CloseRepoAction extends DumbAwareAction {
       }
     }
     return targets;
+  }
+
+  /** 폴더 바로 아래에 .git 이나 .svn 이 있으면 true(저장소의 맨 위 폴더). */
+  private static boolean repoFolder(VirtualFile dir) {
+    return dir.findChild(SyncPanel.GIT_DIR) != null || dir.findChild(SyncPanel.SVN_DIR) != null;
+  }
+
+  /**
+   * roots 가운데 하나를 품은(같은 폴더는 빼고) VCS 매핑 폴더 중, 올라온 모듈의 콘텐츠 루트(loaded)를 하나도 품지 않고 그 안에 들어 있지도 않은 것. 기본 매핑은 뺀다.
+   * 올라온 모듈 폴더 안에 든 저장소(모듈 안의 중첩 저장소)는 그 모듈의 파일이 아직 열려 있으므로 떼지 않는다.
+   * 빌드 파일이 한 단계 아래에 있는 저장소(저장소\하위\pom.xml)는 매핑이 모듈 폴더가 아니라 그 위 저장소 폴더에 걸려 있어, 안의 모듈이 모두 닫히면 이것으로 찾아 뗀다.
+   */
+  private static List<String> mappingsAbove(Project project, List<String> roots, List<String> loaded) {
+    List<String> found = new ArrayList<>();
+    String base = project.getBasePath();
+    for (VcsDirectoryMapping mapping : ProjectLevelVcsManager.getInstance(project).getDirectoryMappings()) {
+      if (mapping.isDefaultMapping()) continue;
+      String dir = mapping.getDirectory();
+      boolean above = false;
+      for (String root : roots) {
+        if (FileUtil.isAncestor(dir, root, true)) above = true;
+      }
+      for (String root : loaded) {
+        // 프로젝트 폴더 자체 모듈(Maven 다시 읽기 사이 잠깐 다시 등록됨)은 모든 저장소를 품으므로 세지 않는다.
+        if (base != null && FileUtil.pathsEqual(root, base)) continue;
+        if (FileUtil.isAncestor(dir, root, false) || FileUtil.isAncestor(root, dir, false)) above = false;
+      }
+      if (above) found.add(dir);
+    }
+    return found;
+  }
+
+  /**
+   * 무시해 둔 「등록 안 된 VCS 루트」 가운데 roots 중 하나를 품은(같은 폴더는 빼고) 폴더. 닫을 때 mappingsAbove 로 뗀 저장소 폴더를 열 때 되찾는다.
+   * shortcut: 사용자가 알림에서 직접 무시한 윗 저장소 폴더도 같이 잡힌다, 그런 신고가 오면 뗀 폴더를 따로 적어 둔다.
+   */
+  private static List<String> ignoredAbove(Project project, List<String> roots) {
+    List<String> found = new ArrayList<>();
+    for (String dir : VcsConfiguration.getInstance(project).IGNORED_UNREGISTERED_ROOTS) {
+      for (String root : roots) {
+        if (FileUtil.isAncestor(dir, root, true) && !containsPath(found, dir)) found.add(dir);
+      }
+    }
+    return found;
   }
 
   /** 우리가 닫아 둔 저장소 경로(CLOSED_KEY, '/' 구분). 고쳐도 되는 새 목록. */
@@ -201,6 +256,37 @@ public class CloseRepoAction extends DumbAwareAction {
       }
     }
     return roots;
+  }
+
+  /**
+   * 트리에 닫힌 줄로 보일 폴더. 프로젝트 폴더 안의 닫은 루트(closedRoots)마다, 그 위에 저장소 폴더(repoFolder, 프로젝트 폴더보다 아래)가 있고
+   * 그 폴더가 올라온 모듈의 콘텐츠 루트를 품지도 그 안에 들지도 않으면 루트 대신 그 저장소 폴더를 넣는다(빌드 파일이 한 단계 아래인 저장소를 닫으면 저장소 줄이 닫힌 줄이 된다).
+   * 안의 모듈이 일부만 닫혔거나 프로젝트 폴더 밖에 붙인 저장소면 닫은 루트 그대로다(밖에서는 위로 어디까지가 저장소인지 정할 기준이 없다).
+   */
+  static List<VirtualFile> closedRows(Project project) {
+    List<VirtualFile> roots = closedRoots(project);
+    if (roots.isEmpty()) return roots;
+    List<VirtualFile> loaded = new ArrayList<>();
+    for (Module module : ModuleManager.getInstance(project).getModules()) loaded.addAll(List.of(ModuleRootManager.getInstance(module).getContentRoots()));
+    String base = project.getBasePath();
+    List<VirtualFile> rows = new ArrayList<>();
+    for (VirtualFile root : roots) {
+      VirtualFile row = root;
+      boolean inside = base != null && FileUtil.isAncestor(base, root.getPath(), true);
+      for (VirtualFile up = root.getParent(); inside && up != null && !FileUtil.pathsEqual(up.getPath(), base); up = up.getParent()) {
+        if (!repoFolder(up)) continue;
+        boolean open = false;
+        for (VirtualFile other : loaded) {
+          // 프로젝트 폴더 자체 모듈(Maven 다시 읽기 사이 잠깐 다시 등록됨)은 세지 않는다. 세면 그사이 닫힌 줄이 열린 폴더 줄로 바뀐다.
+          if (FileUtil.pathsEqual(other.getPath(), base)) continue;
+          if (VfsUtilCore.isAncestor(up, other, false) || VfsUtilCore.isAncestor(other, up, false)) open = true;
+        }
+        if (!open) row = up;
+        break;
+      }
+      if (!rows.contains(row)) rows.add(row);
+    }
+    return rows;
   }
 
   /**
@@ -245,18 +331,20 @@ public class CloseRepoAction extends DumbAwareAction {
   }
 
   /**
-   * 폴더 dir 의 아래 줄 목록(shown)에서 닫은 저장소 폴더 줄을 ClosedRepoNode 로 바꾸고, dir 바로 아래인데 목록에 없는 닫은 저장소는 닫힌 줄로 더한다.
+   * 폴더 dir 의 아래 줄 목록(shown)에서 닫은 저장소 폴더 줄(closedRows)을 ClosedRepoNode 로 바꾸고, dir 바로 아래인데 목록에 없는 닫은 저장소는 닫힌 줄로 더한다.
    * dir 은 워크스페이스 폴더(맨 위 줄)이거나 트리의 어느 폴더 줄이다(중간 폴더 · 저장소 안 하위 모듈 자리).
    */
   static List<AbstractTreeNode<?>> withClosedRepos(Project project, AbstractTreeNode<?> parent, List<AbstractTreeNode<?>> shown,
                                                    VirtualFile dir, ViewSettings settings) {
-    List<VirtualFile> closed = closedRoots(project);
+    List<VirtualFile> closed = closedRows(project);
     if (closed.isEmpty()) return new ArrayList<>(shown);
     PsiManager psi = PsiManager.getInstance(project);
     Set<VirtualFile> placed = new LinkedHashSet<>();
     List<AbstractTreeNode<?>> result = new ArrayList<>();
     for (AbstractTreeNode<?> node : shown) {
       VirtualFile file = node.getValue() instanceof PsiDirectory d ? d.getVirtualFile() : null;
+      // 닫은 저장소 폴더는 한 줄만 둔다. 2026.3 은 내린 모듈의 폴더를 맨 위 줄로도 넣어 같은 폴더가 두 번 올 수 있다.
+      if (file != null && closed.contains(file) && placed.contains(file)) continue;
       if (file == null || !closed.contains(file) || node instanceof ClosedRepoNode) {
         result.add(node);
         if (file != null) placed.add(file);
@@ -374,16 +462,28 @@ public class CloseRepoAction extends DumbAwareAction {
 
     List<String> detach = new ArrayList<>(closing);
     detach.addAll(gone);
+    // 안의 모듈이 모두 닫힌 저장소 폴더. 매핑을 떼고, IntelliJ 가 다시 붙이라고 알리지 않게 무시 목록에 넣는다.
+    // 루트를 아직 모르는 올라온 모듈(IDE 를 다시 켠 직후의 Maven 모듈)이 있으면 그 저장소에 열린 모듈이 남았는지 알 수 없으므로 떼지 않는다.
+    boolean rootsKnown = true;
+    for (Module module : ModuleManager.getInstance(project).getModules()) {
+      if (ModuleRootManager.getInstance(module).getContentRoots().length == 0) rootsKnown = false;
+    }
+    List<String> closedRepos = rootsKnown ? mappingsAbove(project, closing, loaded) : List.of();
+    detach.addAll(closedRepos);
     removeVcsMappings(project, detach);
     VcsConfiguration configuration = VcsConfiguration.getInstance(project);
+    configuration.addIgnoredUnregisteredRoots(closedRepos);
     if (!closing.isEmpty()) {
       configuration.addIgnoredUnregisteredRoots(closing);
       closeEditors(project, closing);
       if (mavenEnabled()) MavenRepos.setClosed(project, closing, true);
     }
     if (!opening.isEmpty()) {
+      List<String> openedRepos = ignoredAbove(project, opening);
       configuration.removeFromIgnoredUnregisteredRoots(opening);
+      configuration.removeFromIgnoredUnregisteredRoots(openedRepos);
       for (String root : opening) CloneIntoProject.addVcsMapping(project, Path.of(root));
+      for (String root : openedRepos) CloneIntoProject.addVcsMapping(project, Path.of(root));
       if (mavenEnabled()) MavenRepos.setClosed(project, opening, false);
     }
     for (String root : closing) {

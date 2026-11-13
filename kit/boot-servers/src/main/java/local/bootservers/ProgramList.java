@@ -76,11 +76,40 @@ final class ProgramList {
     private static final String DOC_END = "*/";
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
+    /** VirtualFile 경로의 폴더 구분 글자. */
+    private static final char PATH_SEPARATOR = '/';
+
     private ProgramList() {
     }
 
     static boolean isExcludedDir(String name) {
         return EXCLUDED_DIRS.contains(name);
+    }
+
+    /** path 가 scope 의 경로 중 하나와 같거나 그 폴더 안이면 true. scope 가 비면 전체라는 뜻이라 true. 경로는 '/' 구분. */
+    static boolean inScope(String path, List<String> scope) {
+        if (scope.isEmpty()) {
+            return true;
+        }
+        for (String picked : scope) {
+            if (path.equals(picked) || path.startsWith(picked + PATH_SEPARATOR)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** dir 아래를 훑어야 하면 true: dir 가 scope 안이거나, scope 의 경로 중 하나가 dir 안에 있다. */
+    static boolean reachesScope(String dir, List<String> scope) {
+        if (inScope(dir, scope)) {
+            return true;
+        }
+        for (String picked : scope) {
+            if (picked.startsWith(dir + PATH_SEPARATOR)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** 확장자(소문자, 점 뺌). 없으면 빈 글. */

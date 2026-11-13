@@ -5,7 +5,9 @@ import com.intellij.openapi.actionSystem.ActionManager;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.AnActionWrapper;
+import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.actionSystem.Constraints;
+import com.intellij.openapi.actionSystem.CustomizedDataContext;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.actionSystem.Separator;
 import com.intellij.openapi.actionSystem.impl.ActionConfigurationCustomizer;
@@ -31,6 +33,8 @@ final class KingGuraMainMenuCustomizer implements ActionConfigurationCustomizer,
     "FileMenu", "EditMenu", "KG.SourceMenu", "RefactoringMenu", "GoToMenu", "KG.SearchMenu", "KG.ProjectMenu", "RunMenu");
   private static final Set<String> HIDDEN = Set.of("ViewMenu", "CodeMenu", "BuildMenu", "ToolsMenu");
   private static final List<String> TAIL = List.of("WindowMenu", "HelpMenu");
+  /** 저장소 폴더를 알아보는 VCS 관리 폴더 이름(Git · SVN). */
+  private static final List<String> REPO_DIRS = List.of(".git", ".svn");
 
   @Override
   public void customize(ActionManager actionManager) {
@@ -71,12 +75,12 @@ final class KingGuraMainMenuCustomizer implements ActionConfigurationCustomizer,
     if (!(actionManager.getAction("ProjectViewPopupMenu") instanceof DefaultActionGroup treePopup)) {
       return;
     }
-    // Maven.ReimportProject: 고른 프로젝트만 다시 읽기(Maven 프로젝트가 아니면 스스로 숨는다),
-    // ExternalSystem.RefreshAllProjects: 그래들 프로젝트 전체 다시 읽기(연결된 프로젝트가 없어도 보이므로 GradleOnly 로 감싼다)
+    // Maven.ReimportProject: 고른 프로젝트만 다시 읽기(Maven 프로젝트가 아니면 스스로 숨는다. 저장소 폴더 줄은 MavenBelow 가 한 단계 아래 pom 을 넘긴다),
+    // ExternalSystem.RefreshAllProjects: 그래들 프로젝트 전체 다시 읽기(연결된 프로젝트가 없어도 보이므로 GradleOnly 로 감싸 Gradle 프로젝트 줄에서만 보인다)
     List<AnAction> refresh = new ArrayList<>();
     AnAction maven = actionManager.getAction("Maven.ReimportProject");
     if (maven != null) {
-      refresh.add(maven);
+      refresh.add(new MavenBelow(maven));
     }
     AnAction gradle = actionManager.getAction("ExternalSystem.RefreshAllProjects");
     if (gradle != null) {
@@ -92,6 +96,53 @@ final class KingGuraMainMenuCustomizer implements ActionConfigurationCustomizer,
   }
 
   /**
+   * 고른 폴더 하나가 저장소 폴더(REPO_DIRS 가 바로 아래에 있음)이고 Maven 프로젝트 폴더가 아니며(pom.xml 없음) 바로 아래 폴더들에 pom.xml 이 있으면,
+   * 그 pom 들을 고른 것으로 바꿔 넘긴다. 저장소 폴더만 보는 것은 메뉴를 열 때마다 큰 폴더(node_modules 등)의 아래를 훑지 않기 위해서다.
+   * 빌드 파일이 한 단계 아래에 있는 저장소 폴더 줄(저장소\하위\pom.xml)에서도 Maven 다시 읽기가 보이고 그 안 프로젝트를 다시 읽는다.
+   * Maven 이 모르는 pom 이면 원래 동작이 스스로 숨는다. 그 밖의 선택은 그대로 넘긴다.
+   */
+  private static final class MavenBelow extends AnActionWrapper {
+    private static final String POM = "pom.xml";
+
+    MavenBelow(AnAction action) {
+      super(action);
+    }
+
+    @Override
+    public void update(AnActionEvent e) {
+      super.update(below(e));
+    }
+
+    @Override
+    public void actionPerformed(AnActionEvent e) {
+      super.actionPerformed(below(e));
+    }
+
+    private static AnActionEvent below(AnActionEvent e) {
+      VirtualFile[] files = e.getData(CommonDataKeys.VIRTUAL_FILE_ARRAY);
+      if (files == null || files.length != 1 || !files[0].isValid() || !files[0].isDirectory() || files[0].findChild(POM) != null
+          || !isRepoDir(files[0])) {
+        return e;
+      }
+      List<VirtualFile> poms = new ArrayList<>();
+      for (VirtualFile child : files[0].getChildren()) {
+        VirtualFile pom = child.isDirectory() ? child.findChild(POM) : null;
+        if (pom != null && !pom.isDirectory()) {
+          poms.add(pom);
+        }
+      }
+      if (poms.isEmpty()) {
+        return e;
+      }
+      VirtualFile[] below = poms.toArray(VirtualFile.EMPTY_ARRAY);
+      return e.withDataContext(CustomizedDataContext.withSnapshot(e.getDataContext(), sink -> sink.set(CommonDataKeys.VIRTUAL_FILE_ARRAY, below)));
+    }
+  }
+
+  /**
+   * 고른 줄이 프로젝트 폴더가 아니면: 그 폴더나 그 위(프로젝트 폴더까지)에 Gradle 파일이 있거나 바로 아래 폴더에 있을 때만 보인다
+   * (Gradle 프로젝트 안의 줄, 빌드 파일이 한 단계 아래인 저장소 폴더 줄). Maven 만 있는 저장소 줄에서는 숨는다.
+   * 고른 줄이 없거나 프로젝트 폴더면 아래 규칙으로 본다.
    * 프로젝트 폴더와 그 아래 GRADLE_DEPTH 단계 어디에도 Gradle 파일이 없으면 숨긴다(Clone 이 자동 연결하는 깊이와 같다).
    * 숨김 폴더와 빌드 결과 · 내려받은 패키지 폴더(SKIP_DIRS, 자동 연결이 내려가지 않는 폴더와 같다)는 보지 않는다.
    * 찾은 결과는 프로젝트 폴더와 VFS 구조 변경 횟수(파일 만들기 · 지우기 · 이름 바꾸기)로 기억해, 그사이 바뀐 것이 없으면 다시 훑지 않는다.
@@ -115,9 +166,30 @@ final class KingGuraMainMenuCustomizer implements ActionConfigurationCustomizer,
     @Override
     public void update(AnActionEvent e) {
       super.update(e);
-      if (e.getPresentation().isVisible() && !hasGradleFileCached(e.getProject() == null ? null : ProjectUtil.guessProjectDir(e.getProject()))) {
+      if (!e.getPresentation().isVisible()) {
+        return;
+      }
+      VirtualFile projectDir = e.getProject() == null ? null : ProjectUtil.guessProjectDir(e.getProject());
+      VirtualFile selected = e.getData(CommonDataKeys.VIRTUAL_FILE);
+      boolean shown = selected == null || selected.equals(projectDir) ? hasGradleFileCached(projectDir) : nearGradleFile(selected, projectDir);
+      if (!shown) {
         e.getPresentation().setEnabledAndVisible(false);
       }
+    }
+
+    /** 고른 파일의 폴더나 그 위 폴더(projectDir 까지, projectDir 밖이면 맨 위까지)에 Gradle 파일이 있거나, 그 폴더가 저장소 폴더이고 바로 아래 폴더에 있으면 true. */
+    private static boolean nearGradleFile(VirtualFile selected, VirtualFile projectDir) {
+      VirtualFile dir = selected.isDirectory() ? selected : selected.getParent();
+      for (VirtualFile up = dir; up != null; up = up.getParent()) {
+        if (hasGradleFile(up, GRADLE_DEPTH)) {
+          return true;
+        }
+        if (up.equals(projectDir)) {
+          break;
+        }
+      }
+      // 아래쪽은 저장소 폴더일 때만 본다(메뉴를 열 때마다 큰 폴더의 아래를 훑지 않게).
+      return isRepoDir(dir) && hasGradleFile(dir, GRADLE_DEPTH - 1);
     }
 
     private boolean hasGradleFileCached(VirtualFile dir) {
@@ -153,6 +225,16 @@ final class KingGuraMainMenuCustomizer implements ActionConfigurationCustomizer,
       }
       return false;
     }
+  }
+
+  /** 폴더 바로 아래에 VCS 관리 폴더(.git · .svn)가 있으면 true. */
+  private static boolean isRepoDir(VirtualFile dir) {
+    for (String name : REPO_DIRS) {
+      if (dir.findChild(name) != null) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private static void addById(DefaultActionGroup group, List<String> ids, ActionManager actionManager) {

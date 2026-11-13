@@ -1,5 +1,6 @@
 package local.bootservers;
 
+import com.intellij.icons.AllIcons;
 import com.intellij.ide.projectView.PresentationData;
 import com.intellij.ide.projectView.ProjectViewNode;
 import com.intellij.ide.projectView.ProjectViewNodeDecorator;
@@ -37,6 +38,10 @@ public final class ChangedFolderIconDecorator implements ProjectViewNodeDecorato
         VirtualFile file = node.getVirtualFile();
         Icon icon = data.getIcon(false);
         if (project == null || project.isDisposed() || file == null || !file.isDirectory() || icon == null) {
+            return;
+        }
+        // 닫힌 저장소 줄(내린 모듈 아이콘)은 칠하지 않는다. 닫은 직후에는 VCS 상태가 몇 초 남아 있어 닫힌 아이콘 · 흐린 글자를 덮는다.
+        if (icon == AllIcons.Modules.UnloadedModule) {
             return;
         }
         FileStatus status = FileStatusManager.getInstance(project).getRecursiveStatus(file);
