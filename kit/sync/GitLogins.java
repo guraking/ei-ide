@@ -11,7 +11,6 @@ import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -20,7 +19,7 @@ import java.util.Objects;
 /**
  * 설정 → 버전 관리 → Git 로그인에 등록한 서버별 https 로그인.
  * git 이 비밀번호를 물으려고 도우미(sh.exe · askpass 스크립트 · Git Credential Manager)를 띄우지 않도록,
- * git 을 띄울 때 서버마다 `http.<서버>/.extraHeader = Authorization: Basic ...` 를 환경변수(GIT_CONFIG_COUNT, git 2.31 이상)로 넘긴다.
+ * git 을 띄울 때 서버마다 `http.<서버>/.extraHeader = Authorization: Basic ...` 를 환경변수 GIT_CONFIG_PARAMETERS(`git -c` 와 같은 자리, 모든 판의 git 이 읽는다)로 넘긴다.
  * git 은 원격 주소와 맞는 서버의 값만 쓰고, 값은 명령줄 · 로그에 남지 않는다.
  *
  * 목록(서버 · 방식 · 아이디)은 앱 수준 PropertiesComponent, 비밀번호 · 토큰은 IDE 비밀번호 저장소(PasswordSafe)에 서버 주소로 둔다.
@@ -39,10 +38,13 @@ final class GitLogins {
   private static final String TOKEN_USER = "oauth2";
   private static final String FIELD_SEP = "\t";
   private static final String LINE_SEP = "\n";
-  /** git 이 읽는 환경 설정 개수 · 키 · 값(git-config(1) ENVIRONMENT). */
-  private static final String ENV_COUNT = "GIT_CONFIG_COUNT";
-  private static final String ENV_KEY = "GIT_CONFIG_KEY_";
-  private static final String ENV_VALUE = "GIT_CONFIG_VALUE_";
+  /**
+   * `git -c` 값을 하위 git 에 물려주는 환경값. 한 항목은 작은따옴표로 감싼 `'키=값'`, 항목 사이는 공백(git 2.31 미만은 이 모양만 읽는다).
+   * GIT_CONFIG_COUNT 는 git 2.31 부터라 쓰지 않는다(둘 다 넣으면 새 git 이 머리글을 두 번 보낸다).
+   */
+  static final String ENV_PARAMETERS = "GIT_CONFIG_PARAMETERS";
+  private static final String QUOTE = "'";
+  private static final String QUOTE_ESCAPED = "'\\''";
   /** 주소에 적어도 적지 않아도 같은 서버로 보는 기본 포트. */
   private static final int HTTPS_PORT = 443;
   private static final int HTTP_PORT = 80;
@@ -123,7 +125,7 @@ final class GitLogins {
   /**
    * git 을 띄울 때 더할 환경값. servers(serverOf 로 다듬은 주소)에 든 서버의 로그인만 넣는다. 등록이 없으면 빈 맵.
    * git 은 이 환경값을 훅(pre-push 등)에도 물려주므로, 그 명령이 닿지 않는 다른 서버의 비밀번호는 넘기지 않는다.
-   * base 는 IDE 의 환경(이미 GIT_CONFIG_COUNT 가 있으면 그 뒤에 잇는다).
+   * base 는 IDE 의 환경(이미 GIT_CONFIG_PARAMETERS 가 있으면 그 뒤에 잇는다).
    */
   static Map<String, String> env(java.util.Set<String> servers, Map<String, String> base) {
     // IDE 없이 도는 점검(SyncCheck)에서는 저장한 로그인이 없다.
@@ -157,25 +159,21 @@ final class GitLogins {
     return lower.startsWith("https://") || lower.startsWith("http://");
   }
 
-  /** env 의 순수 부분. 비밀번호 · 토큰이 빈 로그인은 건너뛴다. */
+  /** env 의 순수 부분. 비밀번호 · 토큰이 빈 로그인은 건너뛴다. 넣을 값이 없으면 빈 맵. */
   static Map<String, String> env(List<Login> logins, Map<String, String> base) {
-    Map<String, String> env = new LinkedHashMap<>();
-    int start;
-    try {
-      start = Integer.parseInt(base.getOrDefault(ENV_COUNT, "0").trim());
-    }
-    catch (NumberFormatException e) {
-      start = 0;
-    }
-    int index = start;
+    String before = base.getOrDefault(ENV_PARAMETERS, "").trim();
+    StringBuilder params = new StringBuilder(before);
     for (Login login : logins) {
       if (login.secret() == null || login.secret().isEmpty()) continue;
-      env.put(ENV_KEY + index, "http." + login.server() + "/.extraHeader");
-      env.put(ENV_VALUE + index, header(login));
-      index++;
+      if (params.length() > 0) params.append(' ');
+      params.append(quoted("http." + login.server() + "/.extraHeader=" + header(login)));
     }
-    if (index > start) env.put(ENV_COUNT, String.valueOf(index));
-    return env;
+    return params.length() == before.length() ? Map.of() : Map.of(ENV_PARAMETERS, params.toString());
+  }
+
+  /** git 의 sq_quote 모양: 작은따옴표로 감싸고 안의 작은따옴표는 '\'' 로. */
+  static String quoted(String text) {
+    return QUOTE + text.replace(QUOTE, QUOTE_ESCAPED) + QUOTE;
   }
 
   /** `Authorization: Basic base64(아이디:비밀번호)`. 토큰 방식에서 아이디가 비면 TOKEN_USER. */

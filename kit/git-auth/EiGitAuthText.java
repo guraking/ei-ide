@@ -4,7 +4,6 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Map;
@@ -26,10 +25,13 @@ final class EiGitAuthText {
   static final String TOKEN_USER = "oauth2";
   private static final String FIELD_SEP = "\t";
   private static final String LINE_SEP = "\n";
-  /** git 이 읽는 환경 설정 개수 · 키 · 값(git-config(1) ENVIRONMENT, git 2.31 이상). */
-  static final String ENV_COUNT = "GIT_CONFIG_COUNT";
-  private static final String ENV_KEY = "GIT_CONFIG_KEY_";
-  private static final String ENV_VALUE = "GIT_CONFIG_VALUE_";
+  /**
+   * `git -c` 값을 하위 git 에 물려주는 환경값. 한 항목은 작은따옴표로 감싼 `'키=값'`, 항목 사이는 공백(git 2.31 미만은 이 모양만 읽는다).
+   * GIT_CONFIG_COUNT 는 git 2.31 부터라 쓰지 않는다(둘 다 넣으면 새 git 이 머리글을 두 번 보낸다).
+   */
+  static final String ENV_PARAMETERS = "GIT_CONFIG_PARAMETERS";
+  private static final String QUOTE = "'";
+  private static final String QUOTE_ESCAPED = "'\\''";
   /**
    * git 이 인증에 실패했거나 비밀번호 도우미를 띄우지 못했을 때 내는 줄(소문자로 비교).
    * git 의 한국어 번역은 이 문구들을 영어로 두지만, 번역이 바뀌거나 도우미(Git Credential Manager)가 한국어로 낼 때를 위해 한국어 문구도 본다.
@@ -103,26 +105,22 @@ final class EiGitAuthText {
   }
 
   /**
-   * 서버 → 머리글을 git 환경값으로. base 의 GIT_CONFIG_COUNT(숫자가 아니면 0) 뒤에 잇는다.
+   * 서버 → 머리글을 git 환경값으로. base 의 GIT_CONFIG_PARAMETERS 뒤에 잇는다.
    * headers 가 비면 빈 맵.
    */
   static Map<String, String> env(Map<String, String> headers, Map<String, String> base) {
-    Map<String, String> env = new LinkedHashMap<>();
-    int start;
-    try {
-      start = Integer.parseInt(base.getOrDefault(ENV_COUNT, "0").trim());
-    }
-    catch (NumberFormatException e) {
-      start = 0;
-    }
-    int index = start;
+    String before = base.getOrDefault(ENV_PARAMETERS, "").trim();
+    StringBuilder params = new StringBuilder(before);
     for (Map.Entry<String, String> entry : headers.entrySet()) {
-      env.put(ENV_KEY + index, "http." + entry.getKey() + "/.extraHeader");
-      env.put(ENV_VALUE + index, entry.getValue());
-      index++;
+      if (params.length() > 0) params.append(' ');
+      params.append(quoted("http." + entry.getKey() + "/.extraHeader=" + entry.getValue()));
     }
-    if (index > start) env.put(ENV_COUNT, String.valueOf(index));
-    return env;
+    return params.length() == before.length() ? Map.of() : Map.of(ENV_PARAMETERS, params.toString());
+  }
+
+  /** git 의 sq_quote 모양: 작은따옴표로 감싸고 안의 작은따옴표는 '\'' 로. */
+  static String quoted(String text) {
+    return QUOTE + text.replace(QUOTE, QUOTE_ESCAPED) + QUOTE;
   }
 
   /** git 출력 한 줄이 인증 실패 · 도우미 실패인지. */

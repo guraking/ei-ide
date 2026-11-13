@@ -140,7 +140,8 @@ public class JGitCheck {
     AtomicReference<String> sent = new AtomicReference<>();
     HttpServer http = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
     http.createContext("/", exchange -> {
-      sent.set(exchange.getRequestHeaders().getFirst("Authorization"));
+      List<String> auth = exchange.getRequestHeaders().get("Authorization");
+      sent.set(auth == null ? null : String.join(" | ", auth));
       exchange.getResponseHeaders().add("WWW-Authenticate", "Basic realm=\"x\"");
       exchange.sendResponseHeaders(401, -1);
       exchange.close();
@@ -153,12 +154,35 @@ public class JGitCheck {
       sh(repo, "git remote add origin " + server + "/x.git");
       eq(JGitRead.run(repo, 30, List.of(), full(a("fetch", "--quiet"))), null);
       eq(JGitRead.run(repo, 30, null, full(a("ls-remote", "--heads", "origin"))), null);
-      // 머리글을 보내고, 거절되면 git 에 맡긴다(git 은 비밀번호 도우미에 더 묻는다).
+      // 머리글을 보내고, 거절되면 git 으로 다시 하지 않고 git 과 같은 인증 실패 글로 끝낸다.
       GitLogins.Login login = new GitLogins.Login(server, GitLogins.Kind.PASSWORD, "kim", "wrong");
       for (String[] c : List.of(a("fetch", "--quiet"), a("ls-remote", "--heads", "origin"))) {
         sent.set(null);
-        eq(JGitRead.run(repo, 30, List.of(login), full(c)), null);
+        try {
+          JGitRead.run(repo, 30, List.of(login), full(c));
+          throw new AssertionError("거절된 머리글은 인증 실패여야 한다: " + c[0]);
+        }
+        catch (IOException e) {
+          eq(e.getMessage().startsWith("git " + c[0] + " 실패: fatal: Authentication failed for '" + server + "/x.git'"), true);
+          eq(SyncPanel.isGitAuthError(e.getMessage()), true);
+          eq(GitRemoteAuth.failedServers(List.of(server, "https://other.com"), e.getMessage()), List.of(server));
+        }
         eq("Authorization: " + sent.get(), GitLogins.header(login));
+      }
+      // git 에 넘기는 환경값(GIT_CONFIG_PARAMETERS): 머리글이 한 번만 가고, 작은따옴표 · 공백이 든 값도 그대로 간다.
+      GitLogins.Login quoted = new GitLogins.Login(server, GitLogins.Kind.PASSWORD, "kim's id", "p w'");
+      for (java.util.Map<String, String> base : List.of(java.util.Map.<String, String>of(), java.util.Map.of("GIT_CONFIG_PARAMETERS", "'core.quotepath=false'"))) {
+        sent.set(null);
+        ProcessBuilder builder = new ProcessBuilder("git", "-c", "i18n.logOutputEncoding=UTF-8", "ls-remote", "--heads", server + "/x.git").directory(repo).redirectErrorStream(true);
+        builder.environment().put("GIT_TERMINAL_PROMPT", "0");
+        builder.environment().remove("GIT_CONFIG_PARAMETERS");
+        builder.environment().putAll(base);
+        builder.environment().putAll(GitLogins.env(List.of(quoted), base));
+        Process process = builder.start();
+        process.getOutputStream().close();
+        process.getInputStream().readAllBytes();
+        eq(process.waitFor() != 0, true);
+        eq("Authorization: " + sent.get(), GitLogins.header(quoted));
       }
       // 다른 서버로 넘겨지면 그 서버에는 머리글을 보내지 않는다.
       AtomicReference<String> leaked = new AtomicReference<>("없음");

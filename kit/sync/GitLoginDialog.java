@@ -99,15 +99,29 @@ final class GitLoginDialog extends DialogWrapper {
     if (name.contains(":") || name.contains("\t") || name.contains("\n")) return new ValidationInfo(SyncBundle.message("gitlogin.error.user"), user);
     if (password.isSelected() && name.isEmpty()) return new ValidationInfo(SyncBundle.message("gitlogin.error.user.empty"), user);
     GitLogins.Kind kind = token.isSelected() ? GitLogins.Kind.TOKEN : GitLogins.Kind.PASSWORD;
-    if (secret.getPassword().length == 0 && (!GitLogins.serverOf(server.getText()).equals(oldServer) || kind != oldKind)) {
+    if (secret.getPassword().length == 0 && (!sameAsOld(GitLogins.serverOf(server.getText())) || kind != oldKind)) {
       return new ValidationInfo(SyncBundle.message("gitlogin.error.secret"), secret);
     }
     return null;
   }
 
+  /** serverOf 로 다듬은 주소가 고치는 줄의 서버인가. 예전에 기본 포트를 적어 저장한 줄(`https://host:443`)도 같은 서버로 본다. */
+  private boolean sameAsOld(String typedServer) {
+    if (oldServer == null) return false;
+    try {
+      return GitLogins.serverOf(oldServer).equals(typedServer);
+    }
+    catch (IllegalArgumentException e) {
+      return oldServer.equals(typedServer);
+    }
+  }
+
   GitLogins.Login result() {
     char[] typed = secret.getPassword();
-    return new GitLogins.Login(GitLogins.serverOf(server.getText()), token.isSelected() ? GitLogins.Kind.TOKEN : GitLogins.Kind.PASSWORD,
+    String name = GitLogins.serverOf(server.getText());
+    // 값을 비워 두면 저장된 값을 잇는다. 비밀번호 저장소 키는 저장한 주소 그대로라 같은 서버면 그 주소를 둔다.
+    if (typed.length == 0 && sameAsOld(name)) name = oldServer;
+    return new GitLogins.Login(name, token.isSelected() ? GitLogins.Kind.TOKEN : GitLogins.Kind.PASSWORD,
                                password.isSelected() ? user.getText().trim() : "", typed.length == 0 ? null : new String(typed));
   }
 }
