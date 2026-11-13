@@ -28,6 +28,7 @@
   33) 옛 설정 폴더를 가져올 때 우리 플러그인 옛 시험본과 JetBrains AI 플러그인은 옮기지 않는다.
   34) Maven 은 Maven Wrapper(mvnw) 대신 언제나 내장 Maven 3 을 쓰고, Wrapper 배포본을 받지 않는다.
   35) Gradle 은 Wrapper 대신 언제나 설치본에 넣은 Gradle(kit/gradle/apply_gradle.py)을 쓴다.
+      프로젝트의 wrapper 가 9 보다 낮은 판을 적었으면 설치본의 8 대, 그 밖에는 9 대다.
 고치기 전 원본은 <intellij-community>/../backup/<시각>-before/ 에 같은 상대경로로 남긴다.
 모든 원문을 먼저 찾아 본 뒤에 쓴다. 하나라도 못 찾으면 아무 파일도 바꾸지 않는다. 줄끝(LF · CRLF)은 파일마다 원래대로 둔다.
 두 번 실행해도 같은 결과가 된다.
@@ -82,9 +83,29 @@ AUTOLINK_DEPTH2 = (
     "        return\n"
     "      }\n"
     "    }\n    if (LOG.isDebugEnabled) {")
-# 35) 설치본에 넣은 Gradle 의 IDE 설치 폴더 기준 위치. kit/gradle/apply_gradle.py 의 TARGET · HOME 과 같아야 한다.
+# 35) 설치본에 넣은 Gradle 들의 IDE 설치 폴더 기준 위치. kit/gradle/apply_gradle.py 의 TARGET · VERSIONS 와 같아야 한다.
 GRADLE_SETTINGS_FILE = "plugins/gradle/settings/src/settings/GradleProjectSettings.java"
 GRADLE_HOME = "plugins/boot-servers/gradle/gradle-9.9.1"
+GRADLE_HOME_8 = "plugins/boot-servers/gradle/gradle-8.14.7"
+# wrapper 가 적은 판의 맨 앞 숫자가 이보다 낮으면 GRADLE_HOME_8 을 쓴다(GRADLE_HOME 의 맨 앞 숫자).
+GRADLE_MAJOR = 9
+GRADLE_HOME_ORIGINAL = "  public @Nullable Path getGradleHomePath() {\n    return myGradleHome;\n  }\n"
+GRADLE_TYPE_ORIGINAL = "  public @Nullable DistributionType getDistributionType() {\n    return myDistributionType;\n  }\n"
+# 1106~1108 이 넣은 35(판을 가리지 않고 9 대 하나만 씀). OLD_EDITS 가 원문으로 되돌린 뒤 지금 것을 넣는다.
+GRADLE_HOME_1106 = (
+     "  public @Nullable Path getGradleHomePath() {\n"
+     "    Path moaGradle = moaGradleHome();\n"
+     "    return moaGradle != null ? moaGradle : myGradleHome;\n"
+     "  }\n"
+     "\n"
+     "  // Moa IDE: 설치본에 넣은 Gradle(IDE 설치 폴더 기준). 사내망은 Wrapper 배포본 받기가 막히므로 언제나 이것을 쓴다.\n"
+     f"  private static final String MOA_GRADLE_HOME = \"{GRADLE_HOME}\";\n"
+     "\n"
+     "  /** Moa IDE: 설치본의 Gradle 폴더. 없으면(옛 설치) null 이라 프로젝트 설정을 그대로 쓴다. */\n"
+     "  private static @Nullable Path moaGradleHome() {\n"
+     "    Path home = Path.of(com.intellij.openapi.application.PathManager.getHomePath(), MOA_GRADLE_HOME);\n"
+     "    return java.nio.file.Files.isDirectory(home.resolve(\"lib\")) ? home : null;\n"
+     "  }\n")
 # 9 · 11) 빌드 설정. 번들 제외 목록은 customize.py slim 이 만든다.
 PROPS_FILE = "build/src/org/jetbrains/intellij/build/IdeaCommunityProperties.kt"
 SVN_BUNDLE_ORIGINAL = f"      {SLIM_REMOVE[-1]},\n    ))\n"
@@ -187,7 +208,8 @@ FONT_REGISTER_JAR_ONLY = (
     '\n'
     )
 # 예전 판이 넣은 수정 → 원문. 값만 바뀐 수정은 이미 손질된 소스에서 원문을 못 찾으므로, 읽은 뒤 먼저 원문으로 되돌린다.
-OLD_EDITS = {FONT_SERVICE_FILE: [(FONT_REGISTER_JAR_ONLY + FONT_ANCHOR, FONT_ANCHOR)]}
+OLD_EDITS = {FONT_SERVICE_FILE: [(FONT_REGISTER_JAR_ONLY + FONT_ANCHOR, FONT_ANCHOR)],
+             GRADLE_SETTINGS_FILE: [(GRADLE_HOME_1106, GRADLE_HOME_ORIGINAL)]}
 # 수정 전에 지울 옛 줄: 파일 → 줄 정규식. 지금 넣을 줄과 같은 줄은 남긴다.
 STALE_LINES = {DEFAULT_LAF_FILE: re.compile(r'^ *<default-laf [^\n]*/>\n', re.M)}
 
@@ -531,8 +553,7 @@ EDITS = [
      "      withBackgroundProgress(project, MavenProjectBundle.message(\"maven.installing.wrapper\"), false) {\n"),
     # 35) Gradle 도 사내망에서 Wrapper 배포본 받기가 막힌다. 프로젝트마다 고른 배포 방식 · 경로를 읽는 곳(동기화 · 빌드 · 실행 · 설정 창)이
     #     모두 이 두 getter 를 지나므로, 설치본의 Gradle 이 있으면 「지정 위치」와 그 경로를 돌려준다. 없으면(옛 설치) 원래 값을 쓴다.
-    (GRADLE_SETTINGS_FILE,
-     "  public @Nullable Path getGradleHomePath() {\n    return myGradleHome;\n  }\n",
+    (GRADLE_SETTINGS_FILE, GRADLE_HOME_ORIGINAL,
      "  public @Nullable Path getGradleHomePath() {\n"
      "    Path moaGradle = moaGradleHome();\n"
      "    return moaGradle != null ? moaGradle : myGradleHome;\n"
@@ -540,14 +561,41 @@ EDITS = [
      "\n"
      "  // Moa IDE: 설치본에 넣은 Gradle(IDE 설치 폴더 기준). 사내망은 Wrapper 배포본 받기가 막히므로 언제나 이것을 쓴다.\n"
      f"  private static final String MOA_GRADLE_HOME = \"{GRADLE_HOME}\";\n"
+     "  // Moa IDE: wrapper 가 MOA_GRADLE_MAJOR 보다 낮은 판을 적은 프로젝트가 쓰는 Gradle. Gradle 9 가 없앤 API 를 부르는 옛 플러그인이 그런 프로젝트에 남아 있다.\n"
+     f"  private static final String MOA_GRADLE_HOME_8 = \"{GRADLE_HOME_8}\";\n"
+     f"  private static final int MOA_GRADLE_MAJOR = {GRADLE_MAJOR};\n"
+     "  // gradle-wrapper.properties 의 distributionUrl 줄에서 Gradle 판의 맨 앞 숫자(…/gradle-8.14.3-bin.zip 의 8).\n"
+     "  private static final java.util.regex.Pattern MOA_WRAPPER_MAJOR =\n"
+     "    java.util.regex.Pattern.compile(\"^\\\\s*distributionUrl\\\\s*[=:].*gradle-(\\\\d{1,3})\\\\.\", java.util.regex.Pattern.MULTILINE);\n"
      "\n"
-     "  /** Moa IDE: 설치본의 Gradle 폴더. 없으면(옛 설치) null 이라 프로젝트 설정을 그대로 쓴다. */\n"
-     "  private static @Nullable Path moaGradleHome() {\n"
-     "    Path home = Path.of(com.intellij.openapi.application.PathManager.getHomePath(), MOA_GRADLE_HOME);\n"
+     "  /**\n"
+     "   * Moa IDE: 설치본의 Gradle 폴더. 프로젝트의 wrapper 가 MOA_GRADLE_MAJOR 보다 낮은 판을 적었으면 8 대, 그 밖에는(wrapper 없음 포함) 9 대.\n"
+     "   * 8 대 폴더가 없으면 9 대를 쓰고, 그것도 없으면(옛 설치) null 이라 프로젝트 설정을 그대로 쓴다.\n"
+     "   */\n"
+     "  private @Nullable Path moaGradleHome() {\n"
+     "    Path ide = Path.of(com.intellij.openapi.application.PathManager.getHomePath());\n"
+     "    int major = moaWrapperMajor();\n"
+     "    Path older = ide.resolve(MOA_GRADLE_HOME_8);\n"
+     "    if (major > 0 && major < MOA_GRADLE_MAJOR && java.nio.file.Files.isDirectory(older.resolve(\"lib\"))) return older;\n"
+     "    Path home = ide.resolve(MOA_GRADLE_HOME);\n"
      "    return java.nio.file.Files.isDirectory(home.resolve(\"lib\")) ? home : null;\n"
+     "  }\n"
+     "\n"
+     "  /** Moa IDE: 프로젝트의 gradle/wrapper/gradle-wrapper.properties 가 적은 Gradle 판의 맨 앞 숫자. 파일이 없거나 읽지 못하거나 판을 못 찾으면 0. */\n"
+     "  private int moaWrapperMajor() {\n"
+     "    String project = getExternalProjectPath();\n"
+     "    if (project == null) return 0;\n"
+     "    try {\n"
+     "      Path wrapper = Path.of(project, \"gradle\", \"wrapper\", \"gradle-wrapper.properties\");\n"
+     "      if (!java.nio.file.Files.isRegularFile(wrapper)) return 0;\n"
+     "      java.util.regex.Matcher found = MOA_WRAPPER_MAJOR.matcher(java.nio.file.Files.readString(wrapper));\n"
+     "      return found.find() ? Integer.parseInt(found.group(1)) : 0;\n"
+     "    }\n"
+     "    catch (java.io.IOException | RuntimeException e) {\n"
+     "      return 0;\n"
+     "    }\n"
      "  }\n"),
-    (GRADLE_SETTINGS_FILE,
-     "  public @Nullable DistributionType getDistributionType() {\n    return myDistributionType;\n  }\n",
+    (GRADLE_SETTINGS_FILE, GRADLE_TYPE_ORIGINAL,
      "  public @Nullable DistributionType getDistributionType() {\n"
      "    return moaGradleHome() != null ? DistributionType.LOCAL : myDistributionType;  // Moa IDE: 35\n"
      "  }\n"),
