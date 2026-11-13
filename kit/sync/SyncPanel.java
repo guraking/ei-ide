@@ -372,6 +372,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static final List<String> PULL_DIALOG_ERRORS = List.of("Not possible to fast-forward", "would be overwritten", "unmerged", "not concluded your merge", "unresolved conflict");
   // git 이 남은 잠금 파일 때문에 참조를 바꾸지 못했을 때의 글(refs.c: Unable to create '…lock': File exists).
   private static final String STALE_LOCK_ERROR = ".lock': File exists";
+  // 받으려는 브랜치가 서버에 없을 때 git fetch 가 내는 글(fetch-pack: couldn't find remote ref).
+  private static final String REMOTE_REF_GONE = "couldn't find remote ref";
+  /** 추적 브랜치가 서버에 없다고 알게 된 「저장소 경로\n원격/브랜치」. IDE 를 끌 때까지 둔다. */
+  private static final Set<String> GONE_UPSTREAMS = ConcurrentHashMap.newKeySet();
   private static final String ACTION_REVERSE_MERGE = "KingGura.ReverseMerge";
   private static final String ACTION_PUSH = "Vcs.Push";
   private static final String ACTION_COMMIT = "CheckinProject";
@@ -2867,6 +2871,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
         repo = withUpstream(repo);
         // 추적 브랜치가 없으면 받아 와도 비교할 원격이 없다(원격이 아예 없는 저장소는 fetch 가 실패한다).
         if (repo.upstream() != null) repo = fetch(repo);
+        else fetchGone(repo);
         // 방금 fetch 가 그 원격의 브랜치를 다 받았으면(fetchedAll) 역머지 안내는 기준 브랜치를 다시 받지 않는다.
         updateReverseNote(repo, true, repo.upstream() != null);
         return compareFetched(repo, localOf(local));
@@ -2916,6 +2921,24 @@ final class SyncPanel extends SimpleToolWindowPanel {
       if (!upstreamMissing(root, repo.upstream())) return repo;
       refetchUpstream(repo);
       return upstreamMissing(root, repo.upstream()) ? new Repo(root, repo.vcs(), repo.branch(), null) : repo;
+    }
+    finally {
+      unlockFetch(root);
+    }
+  }
+
+  /**
+   * 추적 브랜치가 서버에서 지워진 저장소(goneUpstream)는 원격 전체를 받아 다른 원격 브랜치를 새로 둔다. 그 브랜치가 다시 생겨 받아 왔으면
+   * 지운 목록에서 빼 다음 새로고침이 추적 브랜치와 비교하게 한다.
+   */
+  private void fetchGone(Repo repo) throws IOException, InterruptedException {
+    String upstream = goneUpstream(repo);
+    if (upstream == null) return;
+    File root = repo.root();
+    lockFetch(root);
+    try {
+      GitRemoteAuth.run(root, GIT_LONG_TIMEOUT_SEC, false, "fetch", "--quiet", "--prune");
+      if (!upstreamMissing(root, upstream)) GONE_UPSTREAMS.remove(goneKey(root, upstream));
     }
     finally {
       unlockFetch(root);
@@ -3008,14 +3031,39 @@ final class SyncPanel extends SimpleToolWindowPanel {
     }
     catch (IOException e) {
       LOG.warn("추적 브랜치를 다시 받지 못함 [" + root.getName() + "] " + e.getMessage());
+      // 서버에 그 브랜치가 없으면(머지 뒤 지움) 다음 새로고침부터 다시 받으려 하지 않는다(goneUpstream).
+      if (messageOf(e).contains(REMOTE_REF_GONE)) GONE_UPSTREAMS.add(goneKey(root, remote + "/" + branch));
       return false;
     }
   }
 
   /** upstream 이 null 인데 추적 브랜치 설정이 있으면(받아 둔 사본이 지워짐) refetchUpstream 뒤 저장소 정보를 다시 읽는다. detached HEAD 는 그대로. */
   private static Repo withUpstream(Repo repo) throws IOException, InterruptedException {
-    if (repo.upstream() != null || GIT_HEAD.equals(repo.branch())) return repo;
+    if (repo.upstream() != null || GIT_HEAD.equals(repo.branch()) || goneUpstream(repo) != null) return repo;
     return refetchUpstream(repo) ? gitRepo(repo.root()) : repo;
+  }
+
+  /**
+   * 추적 브랜치가 서버에 없다고 알게 된 저장소면 그 원격/브랜치, 아니면 null. 이 저장소는 추적 브랜치를 다시 받으려 하지 않고(서버 브랜치 목록 읽기 ·
+   * 실패하는 받기를 새로고침마다 하지 않게) remoteCompare 가 원격 전체를 받는다. 서버에 그 브랜치가 다시 생겨 받아 오면 목록에서 뺀다.
+   */
+  private static String goneUpstream(Repo repo) {
+    if (GONE_UPSTREAMS.isEmpty()) return null;
+    try {
+      Map<String, String> cfg = ReverseMerge.configs(repo.root());
+      String branch = trackedBranch(cfg, repo.branch());
+      if (branch == null) return null;
+      String upstream = ReverseMerge.remoteOf(cfg, repo.branch()) + "/" + branch;
+      return GONE_UPSTREAMS.contains(goneKey(repo.root(), upstream)) ? upstream : null;
+    }
+    catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      return null;
+    }
+  }
+
+  private static String goneKey(File root, String upstream) {
+    return root.getAbsolutePath() + "\n" + upstream;
   }
 
   /** root 를 fetching 에 넣는다. 이미 있으면(그 저장소에 fetch · pull 이 도는 중) 빠질 때까지 기다린다. 놓을 때는 unlockFetch. */
