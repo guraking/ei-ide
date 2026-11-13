@@ -2,7 +2,6 @@ package kinggura.sync;
 
 import com.intellij.icons.AllIcons;
 import com.intellij.ide.projectView.PresentationData;
-import com.intellij.ide.projectView.ProjectView;
 import com.intellij.ide.projectView.ViewSettings;
 import com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode;
 import com.intellij.ide.util.treeView.AbstractTreeNode;
@@ -108,8 +107,6 @@ public class CloseRepoAction extends DumbAwareAction {
     // 열기는 고른 줄을 우리가 닫은 것으로 본다. 이 판 전에 닫아 CLOSED_KEY 에 없는 저장소도 매핑 · Maven 이 돌아온다.
     if (close()) sync(project, roots, List.of(), true);
     else sync(project, List.of(), roots, true);
-    // 닫힌 줄 · 열린 줄 모양이 바로 바뀌게 트리를 다시 그린다. 두지 않으면 다음 모듈 변경 알림이 올 때까지 옛 줄 모양이 남는다.
-    ProjectView.getInstance(project).refresh();
   }
 
   /**
