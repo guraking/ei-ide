@@ -300,7 +300,8 @@ public class SyncCheck {
   private static void checkStability1113() throws Exception {
     eq(ReverseMerge.regexQuoted("^refs/heads/a.b/*"), "\\^refs/heads/a\\.b/\\*");
     File tmp = java.nio.file.Files.createTempDirectory("stab1113").toFile();
-    sh(tmp, "git init -q --bare srv.git && git init -q -b main seed && cd seed && git config user.name t && git config user.email t@t"
+    // 서버 쪽(srv · seed)은 대소문자를 가리는 리눅스 서버처럼 쓰려고 reftable 로 만든다. 윈도우에서 파일 ref 면 feature/ 와 Feature/ 가 한 폴더로 겹친다.
+    sh(tmp, "git init -q --bare --ref-format=reftable srv.git && git init -q --ref-format=reftable -b main seed && cd seed && git config user.name t && git config user.email t@t"
             + " && git commit -q --allow-empty -m one && git branch Feature/a && git branch feature/b && git branch fix/a.b"
             + " && git push -q ../srv.git main Feature/a feature/b fix/a.b && cd .. && git clone -q srv.git mine");
     File mine = new File(tmp, "mine");
@@ -860,8 +861,9 @@ public class SyncCheck {
     catch (IOException expected) {
       eq(expected.getMessage(), SyncBundle.message("undo.nothing", "main"));
     }
+    // 윈도우 ProcessBuilder 는 인자 속 큰따옴표를 그대로 넘기지 못해 sh 에서 짝이 깨진다. 임시 폴더 경로에는 공백이 없다.
     sh(r, "git config user.email me@x && git config user.name 나 && echo 1 > a && echo 2 > '새 [b].txt' && git add a && git commit -qm one"
-          + " && git worktree add -q ../w && touch \"$(git -C ../w rev-parse --absolute-git-dir)/index.lock\"");
+          + " && git worktree add -q ../w && touch $(git -C ../w rev-parse --absolute-git-dir)/index.lock");
     eq(GitUndo.lockHint(tmp.resolve("w").toFile(), "x").contains("index.lock"), true);
     eq(GitUndo.lockHint(r, "x"), "x");
     eq(AssumeUnchangedAction.tracked(r, List.of("새 [b].txt", "a", "없음")), List.of("a"));
