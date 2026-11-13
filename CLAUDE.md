@@ -1,11 +1,11 @@
 # Moa IDE — 작업 안내 (Claude 용)
 
-인텔리제이 커뮤니티 2026.2.3(태그 `idea/262.10968.63`)을 바탕으로 이클립스 흐름을 얹은 개인 IDE.
+인텔리제이 커뮤니티 2026.3(태그 `idea/263.7307.200`)을 바탕으로 이클립스 흐름을 얹은 개인 IDE.
 지금 상태 · 다음 할 일은 `진행상황.md`, 바뀐 내용은 `수정내역.md`, 사용법은 `README.md` · `docs/index.html`.
 
 ## 폴더
 - 사용자 PC 원본: `D:\myide` (이 저장소 + 받은 소스 `intellij-community` + `backup` · `logs` · `tmpjars` · `release` 내용물)
-- 사용자 설정 폴더: `%APPDATA%\JetBrains\MoaIDE2026.2` (시험용 플러그인은 `plugins\<이름>-N.jar`, 옛 판은 `..\_to_delete`)
+- 사용자 설정 폴더: `%APPDATA%\JetBrains\MoaIDE2026.3` (시험용 플러그인은 `plugins\<이름>-N.jar`, 옛 판은 `..\_to_delete`)
 - `kit/` 소스 손질 대본과 우리 플러그인 소스
   - `kit/ei-db` 데이터베이스(접속 · 콘솔 · 결과 · MyBatis · 생성 · ERD), 점검 `kit/ei-db/test/**/*Check.java`
   - `kit/boot-servers` 서버 창(스프링 부트 · WAS), 점검 `src/test/java`
@@ -15,7 +15,6 @@
   - `kit/web/apply_web.py` 설치본에 넣을 Node.js 와 웹 언어 서버(vtsls · Vue · typescript 5)를 받아 `bundled-plugins/boot-servers/web` 에 넣는다(판 · SHA-256 고정, 저장소에는 안 올림). 인터넷이 막힌 PC 에서도 .js · .ts · .vue 언어 서버가 뜬다
   - `kit/gradle/apply_gradle.py` 설치본에 넣을 Gradle 배포본(판 · SHA-256 고정)을 받아 `bundled-plugins/boot-servers/gradle` 에 푼다(저장소에는 안 올림). IntelliJ 는 모든 Gradle 프로젝트를 이 Gradle 로 돌린다(apply_defaults 35)
   - `kit/git-auth` IntelliJ Git 이 https 원격에 인증을 환경값으로 넘기는 손질(`apply_git_auth.py`), 점검 `EiGitAuthCheck.java`
-  - `kit/textmate` IntelliJ TextMate 색칠 엔진이 여러 줄 구역(`<!-- -->` 등)이 닫힌 뒤 윗줄 칸 위치를 \G 로 잘못 쓰던 것을 고치는 손질(`apply_textmate.py`), 점검 `apply_textmate_check.py`
   - `kit/defender` Microsoft Defender 알림의 「제외」 단추가 서명 없는 도우미 대본(`bin\defender-exclusions.ps1`)도 돌리게 하는 손질(`apply_defender.py`), 점검 `apply_defender_check.py`
   - `kit/git-retry` IntelliJ Git 의 서버 명령(Clone · Push · Fetch)이 보안 프로그램에 막혀 libcurl-4.dll 을 못 읽으면 1 · 2 · 3초 쉬고 세 번까지 다시 하는 손질(`apply_git_retry.py`), 점검 `apply_git_retry_check.py`
   - `kit/patchlib.py` 손질 대본 공용(원문 정확히 한 번 찾기 · 전부 아니면 아무것도 안 씀 · 백업), `kit/check_kit.py` 빌드 전에 손질이 다 들어갔는지 확인(build-windows.bat 이 부름), 점검 `*_check.py`
@@ -24,7 +23,7 @@
 
 ## 바꿀 때마다 반영할 곳 (빠짐없이)
 1. 본체 jar `D:\myide\bundled-plugins\<플러그인>\lib\*.jar`
-2. 바로 시험할 사용자 플러그인 `%APPDATA%\JetBrains\MoaIDE2026.2\plugins\<이름>-N.jar` (N 하나 올림, 옛 것은 `_to_delete` 로 옮김)
+2. 바로 시험할 사용자 플러그인 `%APPDATA%\JetBrains\MoaIDE2026.3\plugins\<이름>-N.jar` (N 하나 올림, 옛 것은 `_to_delete` 로 옮김)
 3. kit 소스 (`D:\myide\kit\...`)
 4. 이 저장소(깃허브 `guraking/ei-ide`) — 커밋 · 푸시
 5. `README.md` · `docs/index.html` · `진행상황.md` · `수정내역.md`
@@ -63,7 +62,6 @@ python kit\customize.py intellij-community "Moa IDE" slim
 python kit\menu\apply_menu.py intellij-community
 python kit\defaults\apply_defaults.py intellij-community
 python kit\git-auth\apply_git_auth.py intellij-community
-python kit\textmate\apply_textmate.py intellij-community
 python kit\defender\apply_defender.py intellij-community
 python kit\git-retry\apply_git_retry.py intellij-community
 python kit\ko\apply_ko.py
@@ -74,12 +72,14 @@ kit\brand\apply_brand.bat
 python kit\compile_plugins.py
 build-windows.bat
 ```
-- 판 번호 `262.10968.N`, N 은 GitHub 마지막 릴리스 번호와 이 PC 의 `build-number.txt` 중 큰 쪽 + 1(1000 이상, 성공한 빌드만 기록). 노트북에서 빌드하는 법은 `docs/노트북-빌드.md`. 결과 `release\moaide-262.10968.N.exe`, 끝나면 GitHub 릴리스로 올림.
+- 판 번호 `263.7307.N`, N 은 GitHub 마지막 릴리스 번호와 이 PC 의 `build-number.txt` 중 큰 쪽 + 1(1000 이상, 성공한 빌드만 기록). 노트북에서 빌드하는 법은 `docs/노트북-빌드.md`. 결과 `release\moaide-263.7307.N.exe`, 끝나면 GitHub 릴리스로 올림.
 - 커뮤니티 새 판: `python kit\check_update.py` (새 소스를 `intellij-community-new` 에 받아 kit 적용 · 플러그인 컴파일 · 판 번호 박힌 곳 보고).
+  판을 올리면 `get-source.bat` 의 TAG · `build-windows.bat` 의 판 번호 앞자리를 바꾸고, 옛 `intellij-community` 폴더는 이름을 바꿔 둔 뒤 새로 받는다(`get-source.bat` 은 다른 판 폴더가 있으면 멈춘다).
+  글이 맞아 손질이 들어가도 컴파일이 깨질 수 있다(옮겨진 클래스 · 빠진 import). 손질이 넣는 이름을 새 소스에서 하나씩 확인한다.
 
 ## 플러그인 컴파일 · 점검
 - JDK 21 이상의 javac, `--release 21 -proc:none -XDaddTypeAnnotationsToSymbol=false`, classpath 는 같은 판 IDE 의 `lib/**/*.jar` 와 `plugins/**/lib/*.jar`
-  (`kit/check_update.py` 의 `compile_plugins` 가 같은 일을 한다. 플랫폼 jar 는 `ideaIC-<판>.zip` 을 intellij-repository 에서 받을 수 있다).
+  (`kit/check_update.py` 의 `compile_plugins` 가 같은 일을 한다. 플랫폼 jar 는 `ideaIC-<판>.zip`, 없으면 `ideaIU-<판>.zip` 을 intellij-repository 에서 받는다).
 - 결과 jar: 컴파일 결과 + 리소스(`resources/` 또는 `src/main/resources/`)를 묶는다.
-- 빌드 전에는 `python kit\compile_plugins.py` 로 셋을 동시에 컴파일 · 점검해 본체 jar 를 바꾼다(지난 빌드 결과 `out\idea-ce\dist.all` 의 jar 를 classpath 로 씀, 하나라도 실패하면 아무 jar 도 안 바꿈).
+- 빌드 전에는 `python kit\compile_plugins.py` 로 셋을 동시에 컴파일 · 점검해 본체 jar 를 바꾼다(지난 빌드 결과 `out\idea-ce\dist.all` 의 jar 를 classpath 로 씀. 지난 빌드가 없거나 다른 판이면 그 판의 플랫폼 jar 묶음을 `tmpjars` 에 받아 씀, 하나라도 실패하면 아무 jar 도 안 바꿈).
 - 순수 논리(파서 · SQL 만들기 · 파일 형식)는 IntelliJ 클래스 없이 두고 `*Check.java`(main 자체 점검)로 확인. 모든 점검이 통과해야 반영한다.

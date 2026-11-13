@@ -74,7 +74,6 @@ def missing_steps(root):
     """root(작업 폴더: intellij-community · bundled-plugins 가 있는 곳)에서 빠진 단계: (설명, 돌릴 명령) 목록."""
     src = root / SRC_DIR
     defaults = load("defaults/apply_defaults.py")
-    textmate = load("textmate/apply_textmate.py")
     defender = load("defender/apply_defender.py")
     git_retry = load("git-retry/apply_git_retry.py")
     steps = [
@@ -85,8 +84,6 @@ def missing_steps(root):
         ("이클립스 메뉴", f"python kit\\menu\\apply_menu.py {SRC_DIR}", lambda: menu_applied(src)),
         ("기본값", f"python kit\\defaults\\apply_defaults.py {SRC_DIR}", lambda: edits_applied(src, defaults.EDITS)),
         ("Git 인증", f"python kit\\git-auth\\apply_git_auth.py {SRC_DIR}", lambda: git_auth_applied(src)),
-        ("TextMate 엔진", f"python kit\\textmate\\apply_textmate.py {SRC_DIR}",
-         lambda: edits_applied(src, [(textmate.TARGET, textmate.ORIGINAL, textmate.PATCHED)])),
         ("Defender 제외", f"python kit\\defender\\apply_defender.py {SRC_DIR}",
          lambda: edits_applied(src, [(defender.TARGET, defender.ORIGINAL, defender.PATCHED)])),
         ("Git 다시 하기", f"python kit\\git-retry\\apply_git_retry.py {SRC_DIR}", lambda: edits_applied(src, git_retry.EDITS)),

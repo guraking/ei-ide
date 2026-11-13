@@ -12,13 +12,13 @@ rem 내려받기 · 풀기는 옆의 임시 폴더(.partial)에서 하고, 다 됐을 때만 제자리로 
 rem 경로는 괄호 · & 가 들어 있어도 되게 늘 따옴표로 감싼다. 지연 확장은 쓰지 않는다.
 setlocal
 set "HERE=%~dp0"
-set "DEST=%APPDATA%\JetBrains\MoaIDE2026.2\plugins"
+set "DEST=%APPDATA%\JetBrains\MoaIDE2026.3\plugins"
 set "SRC=%HERE%plugins"
-set "CC_ZIP=https://plugins.jetbrains.com/pluginManager?action=download&id=com.anthropic.code.plugin&build=IC-262.10968.63"
+set "CC_ZIP=https://plugins.jetbrains.com/pluginManager?action=download&id=com.anthropic.code.plugin&build=IC-263.7307.200"
 rem Gradle wrapper 의 배포판 폴더 이름은 distributionUrl 의 MD5 를 36진수로 쓴 값이다. 판을 바꾸면 함께 바꾼다.
 set "GRADLE_VER=8.14.6"
 set "GRADLE_HASH=aynuqaj6iwevsbr5c5qdwq08s"
-set "OD_ZIP=https://plugins.jetbrains.com/pluginManager?action=download&id=com.markskelton.one-dark-theme&build=IC-262.10968.63"
+set "OD_ZIP=https://plugins.jetbrains.com/pluginManager?action=download&id=com.markskelton.one-dark-theme&build=IC-263.7307.200"
 
 tasklist /fi "imagename eq idea64.exe" | find /i "idea64.exe" >nul && (
   echo Moa IDE 를 먼저 종료한 뒤 다시 실행하세요.

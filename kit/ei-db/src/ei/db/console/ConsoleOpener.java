@@ -125,7 +125,7 @@ public final class ConsoleOpener {
     int at = index < 0 || index > window.getTabCount() ? window.getTabCount() : index;
     FileEditorOpenOptions d = new FileEditorOpenOptions();
     FileEditorOpenOptions options = d.copy(false, d.reuseOpen, d.usePreviewTab, false, d.pin, at, d.isExactState,
-        d.openMode, d.waitForCompositeOpen, d.isSingletonEditorInWindow, d.forceFocus, d.internalHint);
+        d.openMode, d.window, d.waitForCompositeOpen, d.isSingletonEditorInWindow, d.forceFocus, d.internalHint);
     editors.openFile(file, window, options);
   }
 

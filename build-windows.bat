@@ -30,7 +30,7 @@ findstr /c:"Moa IDE" "intellij-community\community-resources\resources\idea\Idea
     echo 이름 바꾸기가 적용되지 않은 소스입니다. 먼저 이름 바꾸기를 적용해야 합니다.
     exit /b 1
 )
-rem 손질 대본(이름 · 덜기 · 메뉴 · 기본값 · Git 인증 · TextMate · Defender · 한국어 팩 · 그림 · 글꼴 파일)이 모두 들어갔는지 본다.
+rem 손질 대본(이름 · 덜기 · 메뉴 · 기본값 · Git 인증 · Defender · 한국어 팩 · 그림 · 글꼴 파일)이 모두 들어갔는지 본다.
 rem 하나라도 빠지면 빠진 단계와 돌릴 명령을 적고 멈춘다. 손질이 빠진 설치 파일이 릴리스로 올라가지 않게 한다.
 rem 파이썬은 py 실행기(py -3)를 먼저, 없으면 python 을 쓴다.
 set "KIT_PY="
@@ -52,7 +52,7 @@ set "SKIP=maven_artifacts,sources_archive,search_index,cross_platform_dist,doc_a
 if not exist logs mkdir logs
 set "LOG=%CD%\logs\build-windows.log"
 
-rem 판 번호 마지막 자리 N(262.10968.N)은 GitHub 마지막 릴리스 번호와 이 PC 의 build-number.txt 가운데 큰 쪽에 1 을 더한다.
+rem 판 번호 마지막 자리 N(263.7307.N)은 GitHub 마지막 릴리스 번호와 이 PC 의 build-number.txt 가운데 큰 쪽에 1 을 더한다.
 rem 데스크탑 · 노트북 어느 쪽에서 빌드해도 다른 PC 가 올린 릴리스 다음 번호가 된다. build-number.txt 는 빌드가 성공했을 때만 올린다(멈추거나 실패한 빌드는 번호를 쓰지 않는다).
 set "LAST=0"
 if exist build-number.txt set /p LAST=<build-number.txt
@@ -64,7 +64,7 @@ if %REL%==0 echo GitHub 마지막 릴리스 번호를 읽지 못해 이 PC 의 build-number.txt
 set /a N=LAST
 if %REL% GTR %N% set /a N=REL
 set /a N+=1
-set "BUILD_NUMBER=262.10968.%N%"
+set "BUILD_NUMBER=263.7307.%N%"
 echo 판 번호: %BUILD_NUMBER%
 echo 빌드를 시작합니다. 기록: %LOG%
 

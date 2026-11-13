@@ -24,7 +24,7 @@ MARK = "<!-- KingGura: eclipse menus -->"
 EXTENSION = """    <actionConfigurationCustomizer implementation="com.intellij.ide.customization.java.KingGuraMainMenuCustomizer"/>
 """
 
-# 참조하는 동작 ID 는 2026.2.3 소스(LangActions.xml · PlatformActions.xml · JavaActions.xml)에서 확인한 것만 쓴다.
+# 참조하는 동작 ID 는 2026.3 소스(LangActions.xml · PlatformActions.xml · JavaActions.xml)에서 확인한 것만 쓴다.
 ACTIONS = MARK + """
   <actions>
     <group id="KG.SourceMenu" text="_Source" popup="true">

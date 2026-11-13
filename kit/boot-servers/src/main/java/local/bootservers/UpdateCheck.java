@@ -25,8 +25,9 @@ import java.util.regex.Pattern;
 
 /**
  * IDE 를 켤 때 GitHub 릴리스를 한 번 보고 지금 판보다 새 판이 있으면 알림을 띄운다.
- * 릴리스 태그는 build-windows.bat 이 붙이는 「v262.10968.N」 꼴이고, 지금 판은 ApplicationInfo 의 「IC-262.10968.N」 이다.
- * 판 번호 앞자리(262.10968)가 다르면 비교하지 않는다. 네트워크 실패는 조용히 넘긴다.
+ * 릴리스 태그는 build-windows.bat 이 붙이는 「v263.7307.N」 꼴이고, 지금 판은 ApplicationInfo 의 「IC-263.7307.N」 이다.
+ * 마지막 자리 N 만 비교한다. N 은 바탕 커뮤니티 판(앞자리)이 바뀌어도 이어서 매기므로, 앞자리가 달라도 N 이 크면 새 판이다.
+ * 네트워크 실패는 조용히 넘긴다.
  * 「지금 업데이트」는 설치 파일을 임시 폴더에 받고, IDE 가 닫힌 뒤 설치 화면을 띄운다(설치 화면에서 옛 판 정리를 고를 수 있다).
  */
 public final class UpdateCheck implements AppLifecycleListener {
@@ -56,12 +57,11 @@ public final class UpdateCheck implements AppLifecycleListener {
     }
 
     private void check() {
-        String build = ApplicationInfo.getInstance().getBuild().asStringWithoutProductCode(); // 262.10968.2
+        String build = ApplicationInfo.getInstance().getBuild().asStringWithoutProductCode(); // 263.7307.N
         int dot = build.lastIndexOf('.');
         if (dot < 0) {
             return;
         }
-        String base = build.substring(0, dot);
         int current;
         try {
             current = Integer.parseInt(build.substring(dot + 1));
@@ -76,7 +76,7 @@ public final class UpdateCheck implements AppLifecycleListener {
             return;
         }
         Matcher tag = TAG.matcher(json);
-        if (!tag.find() || !tag.group(1).equals(base)) {
+        if (!tag.find()) {
             return;
         }
         int latest = Integer.parseInt(tag.group(2));
@@ -86,7 +86,7 @@ public final class UpdateCheck implements AppLifecycleListener {
         Matcher exe = EXE.matcher(json);
         Matcher page = PAGE.matcher(json);
         String url = exe.find() ? exe.group(1) : page.find() ? page.group(1) : "https://github.com/guraking/ei-ide/releases";
-        String version = base + "." + latest;
+        String version = tag.group(1) + "." + latest;
         boolean installable = url.startsWith(DOWNLOAD_PREFIX) && url.endsWith(".exe");
         ApplicationManager.getApplication().invokeLater(() -> NotificationGroupManager.getInstance()
                 .getNotificationGroup("Moa IDE 새 판")

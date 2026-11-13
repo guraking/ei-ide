@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """check_kit 점검: 원문만 담은 가짜 소스에 kit 대본을 빌드 순서대로 모두 돌리면 빠진 단계가 없고,
-빈 작업 폴더에서는 모든 단계가 빠졌다고 나오며, 한 단계(TextMate)를 되돌리면 그 단계만 나오는지 본다."""
+빈 작업 폴더에서는 모든 단계가 빠졌다고 나오며, 한 단계(Defender)를 되돌리면 그 단계만 나오는지 본다."""
 import shutil
 import subprocess
 import sys
@@ -19,7 +19,7 @@ def run(*args):
 
 
 def make_source(src):
-    """brand · slim · 기본값 · 메뉴 · Git 인증 · TextMate · Defender 의 원문을 담은 가짜 소스."""
+    """brand · slim · 기본값 · 메뉴 · Git 인증 · Defender 의 원문을 담은 가짜 소스."""
     defaults = c.load("defaults/apply_defaults.py")
     texts = {}
     for rel, old, _ in defaults.EDITS:
@@ -32,9 +32,8 @@ def make_source(src):
         'return "IdeaIC${appInfo.majorVersion}.${appInfo.minorVersionMainPart}"\nx = "ideaIC-$buildNumber"\n')
     for _, old, _ in c.customize.slim_edits():
         texts[PROPS].append(old + "\n")
-    for rel in ("textmate/apply_textmate.py", "defender/apply_defender.py"):
-        module = c.load(rel)
-        texts.setdefault(module.TARGET, []).append(module.ORIGINAL)
+    defender = c.load("defender/apply_defender.py")
+    texts.setdefault(defender.TARGET, []).append(defender.ORIGINAL)
     retry = c.load("git-retry/apply_git_retry.py")
     texts.setdefault(retry.TARGET, []).extend(old for _, old, _ in retry.EDITS)
     auth = c.load("git-auth/apply_git_auth.py")
@@ -52,7 +51,7 @@ def apply_all(root):
     run(KIT / "customize.py", src, c.PRODUCT_NAME, "brand")
     run(KIT / "customize.py", src, c.PRODUCT_NAME, "slim")
     for script in ("menu/apply_menu.py", "defaults/apply_defaults.py", "git-auth/apply_git_auth.py",
-                   "textmate/apply_textmate.py", "defender/apply_defender.py", "git-retry/apply_git_retry.py"):
+                   "defender/apply_defender.py", "git-retry/apply_git_retry.py"):
         run(KIT / script, src)
     for folder, target in c.BRAND_DIRS.items():
         shutil.copytree(KIT / "brand" / folder, src / target, dirs_exist_ok=True)
@@ -69,15 +68,15 @@ def main():
         fonts.mkdir()
         (fonts / "Fake.ttf").write_bytes(b"ttf")
         c.compile_plugins.FONT_SOURCE = fonts
-        assert len(c.missing_steps(root)) == 11, c.missing_steps(root)
+        assert len(c.missing_steps(root)) == 10, c.missing_steps(root)
         make_source(root / c.SRC_DIR)
         apply_all(root)
         missing = c.missing_steps(root)
         assert missing == [], missing
-        textmate = c.load("textmate/apply_textmate.py")
-        target = root / c.SRC_DIR / textmate.TARGET
-        target.write_bytes(target.read_bytes().replace(textmate.PATCHED.encode(), textmate.ORIGINAL.encode()))
-        assert [label for label, _ in c.missing_steps(root)] == ["TextMate 엔진"], c.missing_steps(root)
+        defender = c.load("defender/apply_defender.py")
+        target = root / c.SRC_DIR / defender.TARGET
+        target.write_bytes(target.read_bytes().replace(defender.PATCHED.encode(), defender.ORIGINAL.encode()))
+        assert [label for label, _ in c.missing_steps(root)] == ["Defender 제외"], c.missing_steps(root)
     print("check_kit 점검 통과")
 
 
