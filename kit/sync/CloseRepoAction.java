@@ -257,6 +257,8 @@ public class CloseRepoAction extends DumbAwareAction {
     List<AbstractTreeNode<?>> result = new ArrayList<>();
     for (AbstractTreeNode<?> node : shown) {
       VirtualFile file = node.getValue() instanceof PsiDirectory d ? d.getVirtualFile() : null;
+      // 닫은 저장소 폴더는 한 줄만 둔다. 2026.3 은 내린 모듈의 폴더를 맨 위 줄로도 넣어 같은 폴더가 두 번 올 수 있다.
+      if (file != null && closed.contains(file) && placed.contains(file)) continue;
       if (file == null || !closed.contains(file) || node instanceof ClosedRepoNode) {
         result.add(node);
         if (file != null) placed.add(file);
