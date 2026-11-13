@@ -59,7 +59,7 @@ def menu_applied(src):
     xml = module / menu.PLUGIN_XML
     java = KIT / "menu" / "KingGuraMainMenuCustomizer.java"
     target = module / menu.JAVA_DIR / java.name
-    return (xml.is_file() and menu.MARK in read_source(xml)[0]
+    return (xml.is_file() and menu.MARK in read_source(xml)[0] and menu.deps_applied(module)
             and target.is_file() and target.read_bytes() == java.read_bytes())
 
 
