@@ -26,8 +26,8 @@ PLUGIN_VERSION = "262.10968.63"
 HOST = "https://download.jetbrains.com/resources/ml/full-line/models"
 # 태그: (판, SHA-256). 태그는 언어 ID 소문자(Java) 또는 supporter 의 customTag(HTML).
 MODELS = {
-    "java": ("0.1.87-native-llama-bundle", "TODO"),
-    "html": ("0.1.12-native-llama-bundle", "TODO"),
+    "java": ("0.1.87-native-llama-bundle", "f1a5c4a3c38f0ab01dbf87b71cfab8494cf96cb96241fbb5a97fe96d8ab36ae9"),
+    "html": ("0.1.12-native-llama-bundle", "67e97964f6fe40add3c6c8ba2adae122e9e1c9b272907216e9ffe6b1a337fd7e"),
 }
 PLUGIN = Path(__file__).resolve().parents[2] / "bundled-plugins" / "fullLine"
 
