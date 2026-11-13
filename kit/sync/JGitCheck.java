@@ -96,9 +96,42 @@ public class JGitCheck {
     eq(JGitRead.run(mine, 30, List.of(), full(a("fetch", "--quiet", "--prune"))).length, 0);
     eq(git(mine, "for-each-ref", "--format=%(refname)", "refs/remotes/origin/feature/UP"), "");
 
+    checkPull(tmp, seed);
     checkHttp(tmp);
     eq(handled > 40, true);
     System.out.println("JGitCheck 통과 (" + handled + "개 견줌)");
+  }
+
+  /** 받기(SyncPanel.pullFastForward): 추적 브랜치만 받고 앞으로 감기, reflog 는 GitUndo 가 서버에서 받은 것으로 본다. 못 맞는 저장소는 git pull. */
+  private static void checkPull(File tmp, File seed) throws Exception {
+    sh(tmp, "git clone -q origin.git puller && cd puller && git reset -q --hard HEAD~1");
+    File puller = new File(tmp, "puller");
+    sh(seed, "git checkout -q develop && printf 'f\\n' > F.java && git add -A && git commit -qm six && git push -q origin develop");
+    SyncPanel.pullFastForward(puller);
+    eq(git(puller, "rev-parse", "HEAD"), git(seed, "rev-parse", "HEAD"));
+    String top = git(puller, "log", "-g", "-1", "--format=%gs").trim();
+    eq(top, "merge origin/develop: Fast-forward");
+    eq(GitUndo.fromUpstream(top, "origin/develop", ""), true);
+    // 앞으로 감을 수 없으면 git pull --ff-only 와 같은 글로 실패한다.
+    sh(puller, "git config user.name t && git config user.email t@t && printf 'g\\n' > G.java && git add -A && git commit -qm mine");
+    sh(seed, "printf 'h\\n' > H.java && git add -A && git commit -qm seven && git push -q origin develop");
+    try {
+      SyncPanel.pullFastForward(puller);
+      throw new AssertionError("앞으로 감기 실패가 나야 함");
+    }
+    catch (IOException e) {
+      eq(e.getMessage().contains("Not possible to fast-forward"), true);
+    }
+    eq(git(puller, "rev-parse", "refs/remotes/origin/develop"), git(seed, "rev-parse", "HEAD"));
+    // 설정의 fetch refspec 이 추적 브랜치를 받지 않는 저장소(single-branch)는 git pull 로 받는다.
+    sh(tmp, "git clone -q --single-branch -b feature/kim origin.git single && cd single && git reset -q --hard HEAD~1");
+    File single = new File(tmp, "single");
+    SyncPanel.pullFastForward(single);
+    eq(git(single, "rev-parse", "HEAD"), git(seed, "rev-parse", "feature/kim"));
+    sh(single, "git config --replace-all remote.origin.fetch '+refs/heads/develop:refs/remotes/origin/develop' && git reset -q --hard HEAD~1");
+    SyncPanel.pullFastForward(single);
+    eq(git(single, "rev-parse", "HEAD"), git(seed, "rev-parse", "feature/kim"));
+    eq(git(single, "log", "-g", "-1", "--format=%gs").startsWith("pull"), true);
   }
 
   /** https 서버: Git 로그인이 없으면 git 에 맡기고, 있으면 그 머리글을 보낸다. */

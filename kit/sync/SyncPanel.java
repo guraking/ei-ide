@@ -1915,7 +1915,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
               String before = refHash(root, GIT_HEAD);
               if (before == null) before = git(root, "rev-parse", GIT_HEAD).trim();
               befores.put(root, before);
-              GitRemoteAuth.run(root, GIT_LONG_TIMEOUT_SEC, true, "pull", "--ff-only", "--quiet");
+              pullFastForward(root);
               // 받은 커밋 수 · 파일 수(알림)와 새로 읽을 파일을 git log 한 번으로 얻는다(PULLED_FORMAT).
               String log = git(root, "log", PULLED_FORMAT, "--name-only", "--no-renames", "-m", before + "..HEAD");
               pulled.add(countPulled(log));
@@ -2825,6 +2825,34 @@ final class SyncPanel extends SimpleToolWindowPanel {
     finally {
       unlockFetch(root);
     }
+  }
+
+  /**
+   * git pull --ff-only --quiet 과 같은 받기. 서버에서 받는 것은 추적 브랜치 하나를 fetch(JGitRead 가 맡을 수 있어 git 의 libcurl 을 읽지 않는다)로,
+   * 합치기는 git merge --ff-only 로 한다. merge 에 원격/브랜치 이름을 넘겨 reflog 가 「merge 원격/브랜치: Fast-forward」가 되게 한다(GitUndo.fromUpstream).
+   * 떨어진 HEAD · 추적 브랜치 없음 · 로컬 원격 · 설정의 fetch refspec 이 그 브랜치를 refs/remotes/원격/브랜치 로 받지 않는 저장소(single-branch 등) ·
+   * 하위 모듈이 있는 저장소는 git pull 그대로 한다.
+   */
+  static void pullFastForward(File root) throws IOException, InterruptedException {
+    String branch;
+    try {
+      branch = git(root, "symbolic-ref", "--short", "-q", GIT_HEAD).trim();
+    }
+    catch (IOException detached) {
+      branch = null;
+    }
+    Map<String, String> cfg = branch == null ? Map.of() : ReverseMerge.configs(root);
+    String remote = cfg.get("branch." + branch + ".remote");
+    String tracked = trackedBranch(cfg, branch);
+    String upstream = remote + "/" + tracked;
+    // 같은 이름의 태그 · 로컬 브랜치가 있으면 merge 가 그쪽을 먼저 읽는다(git 이름 풀기 차례).
+    boolean shadowed = refHash(root, "refs/" + upstream) != null || refHash(root, "refs/tags/" + upstream) != null || refHash(root, ReverseMerge.HEADS + upstream) != null;
+    if (remote == null || tracked == null || remote.equals(".") || shadowed || !ReverseMerge.fetches(cfg, remote, tracked) || new File(root, ".gitmodules").exists()) {
+      GitRemoteAuth.run(root, GIT_LONG_TIMEOUT_SEC, true, "pull", "--ff-only", "--quiet");
+      return;
+    }
+    ReverseMerge.fetch(root, remote, tracked);
+    git(root, GIT_LONG_TIMEOUT_SEC, "merge", "--ff-only", "--quiet", upstream);
   }
 
   /** ReverseMerge.blockCaseClashes 를 이 저장소의 원격 · 남길 브랜치(추적 브랜치 · 지금 브랜치 · 역머지 From 순)로 부른다. */
