@@ -329,6 +329,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
   // 원격 추적 참조를 읽은 값과 잠글 때 값이 달라 fetch · pull 이 멈출 때 git 이 내는 문구(LANGUAGE=C 로 띄워 영어로 온다). 1번 묶음이 참조 이름.
   // 다른 git 과 겹친 경우와, 윈도우에서 대소문자만 다른 폴더(Feature/ · feature/)에 든 낱개 참조와 packed-refs 값이 어긋난 경우에 난다.
   private static final Pattern REF_RACE = Pattern.compile("cannot lock ref '(refs/remotes/[^']+)': is at \\p{XDigit}+ but expected \\p{XDigit}+");
+  /** git 이 참조를 잠그지 못했을 때 내는 말머리(값 어긋남 · 참조 없음 · 파일 잠김 등 모두). */
+  private static final String LOCK_REF_ERROR = "cannot lock ref";
   // 서버에서 지운 원격 추적 참조가 남아 대소문자만 다른 새 브랜치 폴더를 막을 때 git 이 내는 문구('…/Feature' exists; cannot create '…/feature/x'). 1번 묶음이 막는 참조.
   private static final Pattern REF_BLOCKED = Pattern.compile("'(refs/remotes/[^']+)' exists; cannot create 'refs/remotes/[^']+'");
   // 터미널에서 아이디 · 비밀번호를 묻지 않고 곧바로 실패하게 한다(표준 입력이 닫혀 있어 물어도 답할 수 없다).
@@ -2477,6 +2479,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
             return new Scanned(repo, repo.vcs() == Vcs.GIT ? compare(repo, true, local) : compareSvn(repo, false), remote);
           }
           catch (IOException e) {
+            LOG.warn("저장소 정보 읽기 실패 [" + entry.getKey().getName() + "] " + e.getMessage());
             failures.put(entry.getKey(), e.getMessage());
             return null;
           }
@@ -2622,7 +2625,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
         // 브랜치를 바꿨을 수 있어 저장소 정보부터 다시 읽는다.
         updated = vcs == Vcs.GIT ? gitRepo(root) : svnRepo(root);
         if (updated.vcs() == Vcs.GIT) {
-          if (fetch && updated.upstream() != null) fetch(updated.root());
+          if (fetch) updated = withUpstream(updated);
+          if (fetch && updated.upstream() != null) fetch(updated);
           updateReverseNote(updated, fetch);
           fresh = compare(updated);
         }
@@ -2631,6 +2635,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
         }
       }
       catch (IOException e) {
+        LOG.warn("저장소 새로고침 실패 [" + name + "] " + e.getMessage());
         error = e.getMessage();
       }
       catch (RuntimeException e) {
@@ -2764,11 +2769,13 @@ final class SyncPanel extends SimpleToolWindowPanel {
   }
 
   /** 원격을 받아 와 다시 비교한다. 원격 실패는 failures 에 저장소별로 적고 지금 상태 비교 결과를 돌려준다. */
-  private List<Change> remoteCompare(Repo repo, Map<File, String> failures, CompletableFuture<LocalOut> local) throws IOException, InterruptedException {
+  private List<Change> remoteCompare(Repo scanned, Map<File, String> failures, CompletableFuture<LocalOut> local) throws IOException, InterruptedException {
+    Repo repo = scanned;
     try {
       if (repo.vcs() == Vcs.GIT) {
+        repo = withUpstream(repo);
         // 추적 브랜치가 없으면 받아 와도 비교할 원격이 없다(원격이 아예 없는 저장소는 fetch 가 실패한다).
-        if (repo.upstream() != null) fetch(repo.root());
+        if (repo.upstream() != null) fetch(repo);
         // 방금 fetch 가 그 원격의 브랜치를 다 받았으면(fetchedAll) 역머지 안내는 기준 브랜치를 다시 받지 않는다.
         updateReverseNote(repo, true, repo.upstream() != null);
         return compareFetched(repo, localOf(local));
@@ -2776,6 +2783,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       return compareSvnRemote(repo);
     }
     catch (IOException e) {
+      LOG.warn("원격 확인 실패 [" + repo.root().getName() + "] " + e.getMessage());
       failures.put(repo.root(), e.getMessage());
       if (repo.vcs() == Vcs.GIT) return compareFetched(repo, localOf(local));
       svnIncoming.remove(repo.root());
@@ -2787,15 +2795,69 @@ final class SyncPanel extends SimpleToolWindowPanel {
    * git fetch. 도는 동안 그 루트를 fetching 에 두어 fetch 가 낸 저장소 알림으로 다시 비교하지 않게 한다.
    * 그 저장소에 다른 fetch · pull 이 돌고 있으면 끝나기를 기다린다(같은 참조를 동시에 바꾸면 cannot lock ref 로 실패한다).
    */
-  private void fetch(File root) throws IOException, InterruptedException {
+  private void fetch(Repo repo) throws IOException, InterruptedException {
+    File root = repo.root();
     lockFetch(root);
     try {
-      // --prune: 서버에서 지운 브랜치의 원격 추적 참조를 지운다. 남으면 Merge Branches 목록에 보이고, 윈도우에서 대소문자만 다른 새 브랜치 폴더를 막는다.
-      GitRemoteAuth.run(root, GIT_LONG_TIMEOUT_SEC, false, "fetch", "--quiet", "--prune");
+      try {
+        // --prune: 서버에서 지운 브랜치의 원격 추적 참조를 지운다. 남으면 Merge Branches 목록에 보이고, 윈도우에서 대소문자만 다른 새 브랜치 폴더를 막는다.
+        GitRemoteAuth.run(root, GIT_LONG_TIMEOUT_SEC, false, "fetch", "--quiet", "--prune");
+      }
+      catch (IOException e) {
+        // 참조를 잠그지 못한 오류(다시 해도 안 된 것)는 대개 대소문자만 다른 서버 브랜치 때문이다. 막을 것이 없으면 원래 오류를 낸다.
+        if (refRace(e.getMessage()) == null && !e.getMessage().contains(LOCK_REF_ERROR)) throw e;
+        LOG.warn("원격 받기 실패, 대소문자만 다른 서버 브랜치를 확인 [" + root.getName() + "] " + e.getMessage());
+        if (!blockCaseClashes(repo)) throw e;
+        return;
+      }
+      // 받은 뒤 추적 브랜치 사본이 없으면 --prune 이 대소문자만 다른 철자로 보고 지운 것이다(윈도우).
+      if (refHash(root, REMOTES_PREFIX + repo.upstream()) == null) refetchUpstream(repo);
     }
     finally {
       unlockFetch(root);
     }
+  }
+
+  /** ReverseMerge.blockCaseClashes 를 이 저장소의 원격 · 남길 브랜치(추적 브랜치 · 지금 브랜치 · 역머지 From 순)로 부른다. */
+  private static boolean blockCaseClashes(Repo repo) throws IOException, InterruptedException {
+    Map<String, String> cfg = ReverseMerge.configs(repo.root());
+    String remote = ReverseMerge.remoteOf(cfg, repo.branch());
+    return ReverseMerge.blockCaseClashes(repo.root(), cfg, remote, Arrays.asList(trackedBranch(cfg, repo.branch()), repo.branch(), cfg.get(ReverseMerge.CONFIG_FROM)));
+  }
+
+  /** branch.<branch>.merge 가 가리키는 서버 브랜치 이름(refs/heads/ 뺀 것). 설정이 없거나 브랜치가 아니면 null. */
+  private static String trackedBranch(Map<String, String> cfg, String branch) {
+    String merge = cfg.get("branch." + branch + ".merge");
+    return merge != null && merge.startsWith(ReverseMerge.HEADS) ? merge.substring(ReverseMerge.HEADS.length()) : null;
+  }
+
+  /**
+   * 추적 브랜치가 설정에는 있는데 받아 둔 사본이 없을 때: 대소문자만 다른 서버 브랜치를 막고 다시 받으며, 막을 것이 없으면 그 브랜치만 받는다.
+   * 사본이 있으면 true. 서버에서 지운 브랜치 등으로 받지 못하면 로그만 남기고 false.
+   */
+  private static boolean refetchUpstream(Repo repo) throws InterruptedException {
+    File root = repo.root();
+    Map<String, String> cfg = ReverseMerge.configs(root);
+    String branch = trackedBranch(cfg, repo.branch());
+    if (branch == null) return false;
+    String remote = ReverseMerge.remoteOf(cfg, repo.branch());
+    LOG.warn("추적 브랜치 사본이 없음 [" + root.getName() + "] " + remote + "/" + branch);
+    try {
+      if (!ReverseMerge.blockCaseClashes(root, cfg, remote, Arrays.asList(branch, repo.branch(), cfg.get(ReverseMerge.CONFIG_FROM)))) {
+        ReverseMerge.fetchQuietly(root, remote, branch);
+      }
+      return true;
+    }
+    catch (IOException e) {
+      LOG.warn("추적 브랜치를 다시 받지 못함 [" + root.getName() + "] " + e.getMessage());
+      return false;
+    }
+  }
+
+  /** upstream 이 null 인데 추적 브랜치 설정이 있으면(받아 둔 사본이 지워짐) refetchUpstream 뒤 저장소 정보를 다시 읽는다. detached HEAD 는 그대로. */
+  private static Repo withUpstream(Repo repo) throws IOException, InterruptedException {
+    if (repo.upstream() != null || GIT_HEAD.equals(repo.branch())) return repo;
+    return refetchUpstream(repo) ? gitRepo(repo.root()) : repo;
   }
 
   /** root 를 fetching 에 넣는다. 이미 있으면(그 저장소에 fetch · pull 이 도는 중) 빠질 때까지 기다린다. 놓을 때는 unlockFetch. */

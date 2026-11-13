@@ -33,7 +33,7 @@ final class ReverseMerge {
   static final List<String> FROM_CANDIDATES = List.of("develop", "dev", "development", "main", "master");
   /** 내 이름으로 커밋한 파일을 「내 파일」로 보는 기간(일). */
   static final int MINE_DAYS = 30;
-  private static final String HEADS = "refs/heads/";
+  static final String HEADS = "refs/heads/";
   private static final String FETCH_KEY_SUFFIX = ".fetch";
   private static final com.intellij.openapi.diagnostic.Logger LOG = com.intellij.openapi.diagnostic.Logger.getInstance(ReverseMerge.class);
   private static final char LOG_START = '\u0001';
@@ -42,7 +42,7 @@ final class ReverseMerge {
   private static final String LOG_DATE = "--date=format:%m-%d %H:%M";
   private static final String AUTHOR_FORMAT = "--format=%x01%an%x1f%ae";
   /** configs 가 한 번에 읽는 설정 키(git config --get-regexp). */
-  private static final String CONFIG_KEYS = "^(user\\.(name|email)|branch\\..*\\.remote|remote\\..*\\.fetch|ei\\.reverseMerge\\..*)$";
+  private static final String CONFIG_KEYS = "^(user\\.(name|email)|branch\\..*\\.(remote|merge)|remote\\..*\\.fetch|ei\\.reverseMerge\\..*)$";
 
   /** 들어올 파일 하나. author · when · subject 는 기준 브랜치에서 이 파일을 마지막으로 바꾼 커밋. */
   record Incoming(String path, String author, String when, String subject, boolean mine) {}
@@ -102,6 +102,12 @@ final class ReverseMerge {
   private static final String CASE_TMP_SUFFIX = ".moa-case-tmp";
   /** 합치기를 막는 추적 안 한 파일을 안내에 보이는 줄 수. 나머지는 개수로 알린다. */
   private static final int PATH_LIST_MAX = 10;
+  /** blockCaseClashes 가 git branch -d -r 한 번에 넘기는 원격 추적 참조 수. 윈도우 명령 줄 길이 한도 안에 들게 한다. */
+  private static final int DELETE_BATCH = 100;
+  /** 음수 refspec 이 들어온 git 판 2.29(릴리스 노트 2.29.0 「negative refspecs」). */
+  private static final int NEGATIVE_REFSPEC_MAJOR = 2;
+  private static final int NEGATIVE_REFSPEC_MINOR = 29;
+  private static final java.util.regex.Pattern GIT_VERSION = java.util.regex.Pattern.compile("git version (\\d+)\\.(\\d+)");
 
   private ReverseMerge() {}
 
@@ -261,6 +267,119 @@ final class ReverseMerge {
       if (part != null && spec.substring(colon + 1).replace("*", part).equals(remoteRef(remote, branch))) fetched = true;
     }
     return fetched;
+  }
+
+  /**
+   * 대소문자만 다른 서버 브랜치 · 폴더(Feature/x 와 feature/y 등)를 가려, 받지 않을 쪽의 음수 refspec(^refs/heads/…) 목록을 낸다.
+   * 윈도우는 대소문자만 다른 원격 추적 참조가 같은 파일 · 폴더라, 둘 다 받으면 fetch --prune 이 디스크의 철자를 보고 남길 브랜치의 사본까지 지운다.
+   * 앞 폴더부터 한 단계씩 보고, 소문자로 같은 이름이 둘 이상이면 keep(앞쪽이 먼저)이 쓰는 철자를, keep 에 없으면 브랜치가 더 많은 철자를 남긴다.
+   * 막은 철자 아래 브랜치는 더 깊은 단계에서 보지 않는다. 겹치는 이름이 없으면 빈 목록.
+   */
+  static List<String> caseClashExcludes(List<String> branches, List<String> keep) {
+    List<String> left = new ArrayList<>(branches);
+    List<String> excludes = new ArrayList<>();
+    for (int depth = 1; ; depth++) {
+      Map<String, Map<String, Integer>> spellings = new TreeMap<>();
+      for (String b : left) {
+        String p = namePrefix(b, depth);
+        if (p != null) spellings.computeIfAbsent(p.toLowerCase(Locale.ROOT), k -> new TreeMap<>()).merge(p, 1, Integer::sum);
+      }
+      if (spellings.isEmpty()) return excludes;
+      for (Map<String, Integer> group : spellings.values()) {
+        if (group.size() < 2) continue;
+        String kept = keptSpelling(group, keep, depth);
+        for (String spelling : group.keySet()) {
+          if (spelling.equals(kept)) continue;
+          boolean leaf = false;
+          boolean folder = false;
+          for (String b : left) {
+            leaf |= b.equals(spelling);
+            folder |= b.startsWith(spelling + "/");
+          }
+          if (leaf) excludes.add("^" + HEADS + spelling);
+          if (folder) excludes.add("^" + HEADS + spelling + "/*");
+          left.removeIf(b -> b.equals(spelling) || b.startsWith(spelling + "/"));
+        }
+      }
+    }
+  }
+
+  /** 브랜치 이름의 앞 depth 단계(슬래시로 나눈 조각). 조각이 그보다 적으면 null. */
+  private static String namePrefix(String branch, int depth) {
+    int end = -1;
+    for (int i = 0; i < depth; i++) {
+      if (end == branch.length()) return null;
+      int slash = branch.indexOf('/', end + 1);
+      end = slash < 0 ? branch.length() : slash;
+    }
+    return branch.substring(0, end);
+  }
+
+  /** 소문자로 같은 철자 묶음에서 남길 철자: keep 가운데 앞쪽이 쓰는 철자, 없으면 브랜치가 가장 많은 철자(같으면 이름순 앞). */
+  private static String keptSpelling(Map<String, Integer> group, List<String> keep, int depth) {
+    for (String k : keep) {
+      String p = k == null ? null : namePrefix(k, depth);
+      if (p != null && group.containsKey(p)) return p;
+    }
+    String best = null;
+    for (Map.Entry<String, Integer> e : group.entrySet()) {
+      if (best == null || e.getValue() > group.get(best)) best = e.getKey();
+    }
+    return best;
+  }
+
+  /** git version 출력(「git version 2.47.1.windows.1」)이 음수 refspec(^…)을 아는 판(2.29 이상)이면 참. 읽지 못하면 거짓. */
+  static boolean negativeRefspecs(String versionOutput) {
+    java.util.regex.Matcher m = GIT_VERSION.matcher(versionOutput);
+    if (!m.find()) return false;
+    int major = Integer.parseInt(m.group(1));
+    int minor = Integer.parseInt(m.group(2));
+    return major > NEGATIVE_REFSPEC_MAJOR || major == NEGATIVE_REFSPEC_MAJOR && minor >= NEGATIVE_REFSPEC_MINOR;
+  }
+
+  /** 음수 refspec 목록(caseClashExcludes) 가운데 하나라도 refs/heads/<branch> 를 빼면 참. */
+  static boolean excluded(List<String> excludes, String branch) {
+    for (String ex : excludes) {
+      if (globPart(ex.substring(1), HEADS + branch) != null) return true;
+    }
+    return false;
+  }
+
+  /**
+   * 대소문자만 다른 서버 브랜치를 remote.<원격>.fetch 의 음수 refspec 으로 막는다. 설정에 남아 IntelliJ 의 fetch 에도 적용된다.
+   * 막은 철자로 보이는 원격 추적 참조는 지우고 원격을 다시 받는다(--prune 없이). 윈도우에서 그 참조는 남길 브랜치와 같은 파일일 수 있어,
+   * 지운 뒤 받아야 남길 철자의 폴더 · 파일로 다시 생긴다. 서버에 겹치는 이름이 없으면 아무것도 바꾸지 않고 false.
+   * 사용자가 부르지 않은 자동 확인에서 쓰므로 인증 실패에도 로그인 창을 띄우지 않는다.
+   */
+  static boolean blockCaseClashes(File root, Map<String, String> cfg, String remote, List<String> keep) throws IOException, InterruptedException {
+    List<String> excludes = caseClashExcludes(parseHeads(GitRemoteAuth.run(root, GIT_LONG_TIMEOUT_SEC, false, "ls-remote", "--heads", remote)), keep);
+    if (excludes.isEmpty()) return false;
+    // 음수 refspec 을 모르는 git 은 설정에 그 줄이 있으면 IntelliJ 의 fetch 까지 모두 실패한다.
+    if (!negativeRefspecs(git(root, "version"))) {
+      LOG.warn("대소문자만 다른 서버 브랜치가 있으나 git 이 음수 refspec 을 몰라(2.29 미만) 막지 못함 [" + root.getName() + "] " + excludes);
+      return false;
+    }
+    String key = "remote." + remote + FETCH_KEY_SUFFIX;
+    List<String> have = List.of(cfg.getOrDefault(key, "").split("\n"));
+    List<String> added = new ArrayList<>();
+    for (String ex : excludes) {
+      if (have.contains(ex)) continue;
+      git(root, "config", "--add", key, ex);
+      added.add(ex);
+    }
+    List<String> stale = new ArrayList<>();
+    for (String name : parseRefs(git(root, "for-each-ref", "--format=%(refname)", remoteRef(remote, "")), remote)) {
+      if (excluded(excludes, name)) stale.add(remote + "/" + name);
+    }
+    // 한 번에 다 넘기면 윈도우 명령 줄 길이(32K)를 넘을 수 있어 나눠 지운다.
+    for (int i = 0; i < stale.size(); i += DELETE_BATCH) {
+      List<String> args = new ArrayList<>(List.of("branch", "-d", "-r"));
+      args.addAll(stale.subList(i, Math.min(stale.size(), i + DELETE_BATCH)));
+      git(root, args.toArray(String[]::new));
+    }
+    GitRemoteAuth.run(root, GIT_LONG_TIMEOUT_SEC, false, "fetch", "--quiet", remote);
+    LOG.info("대소문자만 다른 서버 브랜치를 받지 않게 막음 [" + root.getName() + "] " + key + " 에 더함 " + added + ", 지운 원격 추적 참조 " + stale);
+    return true;
   }
 
   /** git refspec 의 별표 하나짜리 모양 pattern 이 ref 에 맞으면 별표 자리 글자(별표가 없으면 빈 글), 아니면 null. */
