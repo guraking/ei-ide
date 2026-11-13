@@ -52,9 +52,10 @@ import java.util.Map;
  * 탐색기 「주석 고치기」: 표 주석 한 줄과 칼럼 주석을 한 창에서 고쳐 COMMENT ON 문으로 한꺼번에 적용한다.
  * 열면 백그라운드에서 표 주석 · 칼럼을 DB 에서 새로 읽는다(캐시가 아니라). 고친 칸은 바탕색으로 표시하고, 아래에 바뀐 것만의 문장을 미리 보인다.
  * 「적용」은 SqlRunner.runAll 로 실행한다: 읽기 전용 거절 · 운영 확인 · Oracle 의 암묵 커밋 확인이 그대로 걸린다.
- * 성공한 문장만 기준 값을 새 값으로 바꾼다(실패한 것부터는 고친 표시가 남아 다시 적용할 수 있다).
+ * 모두 성공하면 기준 값을 새 값으로 바꾼다. 중간에 실패하거나 멈추면 어디까지 들어갔는지 가정하지 않고 DB 의 주석을 다시 읽어 기준 값을 맞춘다
+ * (못 넣은 고친 값은 화면에 남아 다시 적용할 수 있다). 다시 읽지 못하면 기준 값을 그대로 두고 알린다.
  * 표 · 칼럼 캐시(SchemaCache · Comments)는 DDL 실행 때 DbSessions 가 비운다. 탐색기 나무는 새로고침하면 새 주석이 보인다.
- * 「붙여 넣기」는 클립보드의 「이름<TAB>주석」 줄로 이름이 같은 칼럼을 채운다. MySQL 은 COMMENT ON 이 없어 창을 열지 않고 알린다.
+ * 「붙여 넣기」는 클립보드의 「이름<TAB>주석」 줄로 이름이 같은 칼럼을 채운다(주석 칸이 빈 줄은 건너뛴다). MySQL 은 COMMENT ON 이 없어 창을 열지 않고 알린다.
  * 창은 모달이 아니다.
  */
 final class CommentDialog extends DialogWrapper {
@@ -337,10 +338,11 @@ final class CommentDialog extends DialogWrapper {
     refresh();
   }
 
-  /** 앞에서부터 done 개가 DB 에 들어갔다. 그만큼만 기준 값을 바꾼다. 창이 그사이 닫혔어도 결과는 알린다. */
+  /** 모두 성공했으면 기준 값을 바꾸고, 멈췄으면 DB 에서 다시 읽어 맞춘다(rebase). 창이 그사이 닫혔어도 결과는 알린다. */
   private void applied(List<CommentSql.Change> changes, int done, String error) {
-    applying = false;
-    for (int i = 0; i < done; i++) {
+    // 멈췄으면 다시 읽기가 끝날 때까지 적용 단추를 꺼 둔다.
+    applying = error != null;
+    for (int i = 0; error == null && i < done; i++) {
       CommentSql.Change ch = changes.get(i);
       if (ch.column() == null) {
         tableBase = ch.comment();
@@ -362,6 +364,52 @@ final class CommentDialog extends DialogWrapper {
     if (isDisposed()) return;
     status(text, error != null);
     refresh();
+    if (error != null) rebase(text);
+  }
+
+  /** DB 의 주석을 다시 읽어 기준 값을 맞춘다. stopped 는 적용이 멈춘 까닭 글(다시 읽지 못하면 그 뒤에 덧붙여 보인다). */
+  private void rebase(String stopped) {
+    gauge.setVisible(true);
+    DbSessions sessions = DbSessions.get(project);
+    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+      try {
+        Loaded loaded = read(sessions.connection(c));
+        later(() -> rebased(loaded));
+      } catch (Exception e) {
+        String msg = e.getMessage() == null || e.getMessage().isBlank() ? e.getClass().getSimpleName() : e.getMessage();
+        later(() -> {
+          status(stopped + " " + EiDbBundle.message("comments.reload.failed", msg), true);
+          rebased(null);
+        });
+      } finally {
+        sessions.endReadTransaction(c);
+      }
+    });
+  }
+
+  /** 다시 읽은 주석을 기준 값으로 삼는다. 고치지 않은 칸은 새 값을 보이고 고친 칸은 화면 값을 둔다. loaded 가 null 이면 기준 값을 그대로 둔다. */
+  private void rebased(Loaded loaded) {
+    gauge.setVisible(false);
+    applying = false;
+    if (loaded != null && !loaded.columns().isEmpty()) {
+      Map<String, String> now = new java.util.HashMap<>();
+      for (Meta.ColumnRow r : loaded.columns()) now.put(r.column().name(), r.column().comment());
+      for (Row r : rows) {
+        String comment = now.get(r.name);
+        if (comment == null) continue;
+        if (!r.edited()) r.value = comment;
+        r.base = comment;
+      }
+      if (tableBase.equals(tableField.getText())) {
+        tableField.setText(loaded.tableComment());
+        tableBase = tableField.getText();
+      } else {
+        // 한 줄 글 칸이 줄바꿈을 공백으로 바꾸는 것과 같게 맞춘다.
+        tableBase = loaded.tableComment().replace('\n', ' ');
+      }
+      model.fireTableDataChanged();
+    }
+    refresh();
   }
 
   // ---- 붙여 넣기 ----
@@ -370,7 +418,8 @@ final class CommentDialog extends DialogWrapper {
     if (!stopEditing()) return;
     String text = CopyPasteManager.getInstance().getContents(DataFlavor.stringFlavor);
     Map<String, String> pasted = CommentSql.parsePaste(text);
-    if (pasted.isEmpty()) {
+    int skipped = CommentSql.blankComments(text);
+    if (pasted.isEmpty() && skipped == 0) {
       status(EiDbBundle.message("comments.paste.empty"), true);
       return;
     }
@@ -380,7 +429,7 @@ final class CommentDialog extends DialogWrapper {
     for (Map.Entry<Integer, String> e : m.columns().entrySet()) rows.get(e.getKey()).value = e.getValue();
     if (m.tableComment() != null) tableField.setText(m.tableComment());
     int filled = m.columns().size() + (m.tableComment() == null ? 0 : 1);
-    status(EiDbBundle.message("comments.paste.done", filled), false);
+    status(skipped > 0 ? EiDbBundle.message("comments.paste.done.skipped", filled, skipped) : EiDbBundle.message("comments.paste.done", filled), false);
     if (!m.unknown().isEmpty()) {
       List<String> shown = m.unknown().subList(0, Math.min(MAX_UNKNOWN_SHOWN, m.unknown().size()));
       String list = String.join(NAME_SEPARATOR, shown);
@@ -412,8 +461,9 @@ final class CommentDialog extends DialogWrapper {
       if (column != COL_COMMENT) return;
       Row r = rows.get(row);
       String text = value == null ? "" : value.toString();
-      // 칸 편집기는 줄바꿈을 공백으로 바꾼다. 그것 말고 바뀐 것이 없으면 여러 줄 주석을 그대로 둔다.
-      r.value = text.equals(r.base.replace('\n', ' ')) ? r.base : text;
+      // 칸 편집기는 줄바꿈을 공백으로 바꾼다. 그것 말고 바뀐 것이 없으면 여러 줄 주석(DB 값 · 붙여 넣은 값)을 그대로 둔다.
+      if (text.equals(r.base.replace('\n', ' '))) r.value = r.base;
+      else if (!text.equals(r.value.replace('\n', ' '))) r.value = text;
       refresh();
     }
   }

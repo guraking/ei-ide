@@ -36,14 +36,19 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * 매퍼 XML 의 SQL 에서 DB 에 없는 칼럼(경고)과 표(약한 경고)를 짚는다. 이름 뽑기는 {@link MapperSqlScan}.
  * 접속은 매퍼 기능들이 쓰는 것과 같다: 매퍼 실행 창에서 마지막에 고른 접속, 없으면 접속이 하나뿐일 때 그것. 스키마는 그 접속의 기본 스키마.
- * DB 를 부르지 않는다: 이미 읽어 둔 SchemaCache 만 보고(읽기를 걸지도 않는다), 표 목록이 없으면 아무것도 짚지 않으며
- * 칼럼은 칼럼 목록을 읽어 둔 표(탐색기에서 펼쳤거나 자동완성 · 작업대가 읽은 표)만 본다.
+ * 검사는 DB 를 부르지 않는다: 이미 읽어 둔 SchemaCache 만 보고, 표 목록이 없으면 아무것도 짚지 않으며 칼럼은 칼럼 목록을 읽어 둔 표만 본다.
+ * 편집기에 열린 파일이고 그 접속이 이미 열려 있으면, 아직 읽지 않은 표 목록 · 이 파일에 나온 표(MAX_PREFETCH_TABLES 개까지)의 칼럼을
+ * 뒤에서 읽어 두게 건다(SchemaCache.prefetch: 접속을 새로 열지 않고 메타 조회만). 다 읽히면 다시 검사된다.
  * 표 없음은 약한 경고다: 캐시에는 기본 스키마의 표 · 뷰만 있어 동의어 · 다른 스키마(search_path)의 표를 알 수 없다. 설정에서 끌 수 있다.
  * 캐시가 채워지거나 비워지면 열린 매퍼 파일을 다시 검사한다.
  */
 public final class MapperSqlInspection extends LocalInspectionTool {
   private static final String XML_EXTENSION = "xml";
   private static final AtomicBoolean RESTART_PENDING = new AtomicBoolean();
+  /** 다시 검사하는 까닭(IDE 진단 로그용). */
+  private static final String RESTART_REASON = "ei.db SchemaCache changed";
+  /** 파일 하나가 칼럼 읽기를 걸 수 있는 표 수(문서 차례로 앞의 것부터). 그 뒤 표는 다른 곳에서 읽어 둔 것만 검사한다. */
+  private static final int MAX_PREFETCH_TABLES = 40;
 
   static {
     SchemaCache.onChange(MapperSqlInspection::restartLater);
@@ -64,6 +69,7 @@ public final class MapperSqlInspection extends LocalInspectionTool {
     if (c == null) return null;
     String schema = Meta.schemaOf(c);
     List<Meta.Table> known = SchemaCache.cachedTables(c, schema);
+    if (known == null && isOnTheFly) SchemaCache.prefetch(file.getProject(), c, schema, null);
     if (known == null || known.isEmpty()) return null;
     CharSequence text = file.getViewProvider().getContents();
     MapperDoc doc = MapperDocs.of(file);
@@ -84,17 +90,24 @@ public final class MapperSqlInspection extends LocalInspectionTool {
       }
     }
     Map<String, Set<String>> columnsOf = new HashMap<>();
+    List<String> unread = new ArrayList<>();
     for (MapperSqlScan.Column col : found.columns()) {
       ProgressManager.checkCanceled();
       if (!inSchema(col.table(), schema)) continue;
       String meta = metaNames.get(MapperSqlScan.bare(col.table().name()).toUpperCase(Locale.ROOT));
       if (meta == null) continue;
-      Set<String> columns = columnsOf.computeIfAbsent(meta, m -> columnNames(c, schema, m));
+      Set<String> columns = columnsOf.get(meta);
+      if (columns == null) {
+        columns = columnNames(c, schema, meta);
+        columnsOf.put(meta, columns);
+        if (columns.isEmpty() && columnsOf.size() <= MAX_PREFETCH_TABLES) unread.add(meta);
+      }
       String name = MapperSqlScan.bare(col.name());
       if (columns.isEmpty() || columns.contains(name.toUpperCase(Locale.ROOT))) continue;
       out.add(manager.createProblemDescriptor(file, new TextRange(col.start(), col.end()),
           EiDbBundle.message("inspection.mapper.sql.no.column", name, meta), ProblemHighlightType.GENERIC_ERROR_OR_WARNING, isOnTheFly));
     }
+    if (isOnTheFly && !unread.isEmpty()) SchemaCache.prefetch(file.getProject(), c, schema, unread);
     return out.isEmpty() ? null : out.toArray(ProblemDescriptor.EMPTY_ARRAY);
   }
 
@@ -133,7 +146,7 @@ public final class MapperSqlInspection extends LocalInspectionTool {
             PsiFile p = PsiManager.getInstance(project).findFile(f);
             return p != null && MapperDocs.isMapper(p) ? p : null;
           });
-          if (psi != null) DaemonCodeAnalyzer.getInstance(project).restart(psi);
+          if (psi != null) DaemonCodeAnalyzer.getInstance(project).restart(psi, RESTART_REASON);
         }
       }
     });

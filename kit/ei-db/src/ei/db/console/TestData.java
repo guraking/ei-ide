@@ -24,7 +24,8 @@ public final class TestData {
   private TestData() {}
 
   public static final int DEFAULT_ROWS = 100;
-  public static final int MAX_ROWS = 100_000;
+  /** 한 번에 만드는 줄 수 한도. 만든 값은 모두 메모리에 두므로 넓은 표에서도 부담이 없을 만큼으로 둔다. */
+  public static final int MAX_ROWS = 10_000;
   public static final long DEFAULT_SEED = 20240101L;
   /** 미리보기에 보이는 행 수. */
   public static final int PREVIEW_ROWS = 5;

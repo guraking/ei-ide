@@ -89,7 +89,7 @@ final class CommentSql {
   /**
    * 엑셀 · 메모장에서 복사한 줄들을 이름 → 주석으로(나온 순서). 칸은 탭으로 나뉘고, 큰따옴표로 감싼 칸은 탭 · 줄바꿈을 품으며 안의 "" 는 " 하나다.
    * 첫 칸이 이름, 둘째 칸이 주석이고 셋째 칸부터는 버린다. 이름 · 주석의 앞뒤 공백은 뗀다.
-   * 탭이 없는 줄(주석 칸이 없음)과 이름이 빈 줄은 건너뛴다: 이름만 붙여 넣어 주석이 지워지지 않게.
+   * 탭이 없는 줄(주석 칸이 없음) · 주석 칸이 빈 줄 · 이름이 빈 줄은 건너뛴다: 붙여 넣기로 기존 주석이 지워지지 않게.
    * 같은 이름이 또 나오면 뒤의 것을 쓴다. null · 빈 글이면 빈 맵.
    */
   static Map<String, String> parsePaste(String text) {
@@ -98,9 +98,19 @@ final class CommentSql {
     for (List<String> row : rows(text.replace("\r\n", "\n").replace('\r', '\n'))) {
       if (row.size() < 2) continue;
       String name = row.get(0).strip();
-      if (!name.isEmpty()) out.put(name, row.get(1).strip());
+      if (!name.isEmpty() && !row.get(1).isBlank()) out.put(name, row.get(1).strip());
     }
     return out;
+  }
+
+  /** parsePaste 가 주석 칸이 비어 건너뛴 줄 수(이름은 있고 탭 뒤가 빈 줄). */
+  static int blankComments(String text) {
+    int n = 0;
+    if (text == null) return n;
+    for (List<String> row : rows(text.replace("\r\n", "\n").replace('\r', '\n'))) {
+      if (row.size() >= 2 && !row.get(0).isBlank() && row.get(1).isBlank()) n++;
+    }
+    return n;
   }
 
   private static final char QUOTE = '"';

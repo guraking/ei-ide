@@ -97,6 +97,28 @@ public class DdlBuildCheck {
            List.of(new DdlBuild.Column("a", "text", null, null, false, null)), List.of(), null, null, List.of(), null)),
        "CREATE FOREIGN TABLE PUBLIC.EXT (\n       A text\n);\n");
 
+    // 분할(자식) 표: 칼럼 목록 없이 PARTITION OF, 자식만의 인덱스 · 주석은 잇는다. 다시 나눈 분할은 PARTITION BY 도.
+    DdlBuild.Table child = new DdlBuild.Table(CommentSql.ObjectKind.TABLE, "public", "orders_2024",
+        List.of(new DdlBuild.Column("id", "bigint", null, null, true, "번호")), List.of(new DdlBuild.Constraint("orders_2024_pkey", "PRIMARY KEY (id)")),
+        "PARTITION BY HASH (id)", null, List.of("CREATE INDEX only_here ON public.orders_2024 USING btree (id)"), "2024 년");
+    eq(DdlBuild.createPartition(DbKind.POSTGRES, child, "public", "orders", "FOR VALUES FROM (1) TO (100)"), """
+        CREATE TABLE PUBLIC.ORDERS_2024 PARTITION OF PUBLIC.ORDERS
+        FOR VALUES FROM (1) TO (100)
+        PARTITION BY HASH (id);
+
+        CREATE INDEX only_here ON public.orders_2024 USING btree (id);
+
+        COMMENT ON TABLE PUBLIC.ORDERS_2024 IS '2024 년';
+        COMMENT ON COLUMN PUBLIC.ORDERS_2024.ID IS '번호';
+        """);
+
+    // PK 와 칼럼 구성이 같은 유일 인덱스(이름 · 순서가 달라도)는 PK 제약이 만든다. 유일이 아니거나 칼럼이 다르면 아니다.
+    eq(DdlBuild.backsPrimaryKey(true, List.of("B", "A"), List.of("A", "B")), true);
+    eq(DdlBuild.backsPrimaryKey(false, List.of("A", "B"), List.of("A", "B")), false);
+    eq(DdlBuild.backsPrimaryKey(true, List.of("A"), List.of("A", "B")), false);
+    eq(DdlBuild.backsPrimaryKey(true, List.of("A", "C"), List.of("A", "B")), false);
+    eq(DdlBuild.backsPrimaryKey(true, List.of(), List.of()), false);
+
     // 문장 끝: 공백 · ; 여러 개를 ; 하나로, null 은 빈 문장.
     eq(DdlBuild.statement("  CREATE INDEX a ON t (x) ;;\n"), "CREATE INDEX a ON t (x);");
     eq(DdlBuild.statement(null), ";");

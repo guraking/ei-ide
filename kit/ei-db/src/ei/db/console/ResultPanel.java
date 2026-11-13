@@ -151,6 +151,8 @@ final class ResultPanel extends SimpleToolWindowPanel {
   private final Set<List<Object>> deleted = Collections.newSetFromMap(new IdentityHashMap<>());
   /** 표의 칼럼 중 결과에 없는 칼럼 수. 0 이어야 행을 지울 수 있다(지우기 전 백업에 모든 칼럼이 필요). pkColumns 와 함께 채운다. */
   private int missingColumns;
+  /** 「적용」의 문장들이 실행되는 중. 끝날 때까지(성공 · 0행 · 오류 · 취소 · 거절) 다시 적용할 수 없다: 같은 UPDATE · DELETE 가 두 번 나가지 않게 한다. */
+  private boolean applying;
   /** 결과 칼럼마다 PK 여부. null 이면 아직 표 정의를 읽지 않았다. */
   private boolean[] pkColumns;
   /** 반영 문장에 쓸 표 · 칼럼(결과 칼럼 번호 순) 표기: 표 정의의 이름 그대로를 SqlText.ident 로. pkColumns 와 함께 채운다. */
@@ -329,7 +331,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
       }
     };
     actions = BarAction.toolbar(TOOLBAR_PLACE, this,
-        apply.visibleWhen(this::hasPending).withText(),
+        apply.visibleWhen(this::hasPending).enabledWhen(() -> !applying).withText(),
         new BarAction(EiDbBundle.message("result.revert"), EiDbBundle.message("backup.grid.revert.tooltip"), AllIcons.Actions.Rollback, this::revertEdits)
             .visibleWhen(this::hasPending).withText(),
         new BarAction(EiDbBundle.message("backup.grid.delete"), EiDbBundle.message("backup.grid.delete.tooltip"), AllIcons.General.Remove, this::deleteRows)
@@ -1003,7 +1005,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
    * 행은 번호가 아니라 행 객체로 기억한다(실행 중 다른 행이 빠져 번호가 밀려도 맞는 행을 고친다).
    */
   private void applyEdits() {
-    if (grid.isEditing() && !grid.getCellEditor().stopCellEditing()) return;
+    if (applying || (grid.isEditing() && !grid.getCellEditor().stopCellEditing())) return;
     if (!hasPending()) return;
     List<List<Object>> rows = new ArrayList<>();
     List<Map<Integer, Object>> values = new ArrayList<>();
@@ -1027,11 +1029,18 @@ final class ResultPanel extends SimpleToolWindowPanel {
     if (!confirmApply(all, !deletes.isEmpty())) return;
     List<Backups.Draft> drafts = backupDrafts(statements, undo, doomed, deletes);
     if (drafts == null) return;
+    applying = true;
+    updateEditButtons();
     Runnable thenDelete = () -> deleteNext(doomed, deletes, 0, statements.size());
     Backups.saveThen(project, config, drafts, () -> {
       if (statements.isEmpty()) thenDelete.run();
       else applyNext(rows, values, statements, 0, thenDelete);
-    });
+    }, this::endApply);
+  }
+
+  private void endApply() {
+    applying = false;
+    updateEditButtons();
   }
 
   /**
@@ -1069,6 +1078,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
       int row = indexOfRow(rows.get(i));
       if (done.updateCount() == 0) {
         Notify.error(project, EiDbBundle.message("result.apply.missed", row + 1, i, statements.size()));
+        endApply();
         return;
       }
       // 그 사이 표에서 빠진 행이면 화면에 고칠 것이 없다.
@@ -1084,7 +1094,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
       grid.repaint();
       if (i + 1 < statements.size()) applyNext(rows, values, statements, i + 1, then);
       else then.run();
-    }, null);
+    }, null, this::endApply);
   }
 
   /**
@@ -1095,6 +1105,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
     if (i >= deletes.size()) {
       Notify.info(project, deletes.isEmpty() ? EiDbBundle.message("result.apply.done", updated)
           : EiDbBundle.message("backup.grid.apply.done", updated + deletes.size(), updated, deletes.size()));
+      endApply();
       return;
     }
     SqlText.Update d = deletes.get(i);
@@ -1102,11 +1113,12 @@ final class ResultPanel extends SimpleToolWindowPanel {
       int row = indexOfRow(doomed.get(i));
       if (done.updateCount() == 0) {
         Notify.error(project, EiDbBundle.message("backup.grid.delete.missed", row + 1, updated + i, updated + deletes.size()));
+        endApply();
         return;
       }
       if (row >= 0) removeRow(row);
       deleteNext(doomed, deletes, i + 1, updated);
-    }, null);
+    }, null, this::endApply);
   }
 
   /** 고친 칸을 표가 들고 있는 처음 값으로 되돌리는 UPDATE 문(리터럴, 고치기 전 백업용). WHERE 는 PK 처음 값. */

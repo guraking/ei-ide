@@ -40,6 +40,25 @@ public class ValueFormatCheck {
     // DOCTYPE(외부 엔티티 · 엔티티 폭탄)은 받지 않는다.
     eq(ValueFormat.xml("<!DOCTYPE a [<!ENTITY x SYSTEM \"file:///etc/passwd\">]><a>&x;</a>"), null);
     eq(ValueFormat.xml("<!DOCTYPE a [<!ENTITY x \"y\">]><a>&x;</a>"), null);
+    // 줄 맞춤은 문자열 밖 공백만 바꾼다: 문자열 안 괄호 · 이스케이프 · 유니코드 · 긴 숫자가 그대로다.
+    String tricky = "{\"k{[\":\"a\\\\\",\"e\":\"\\\"}, ]\",\"u\":\"\\ud55c\\u0000한 글\",\"n\":12345678901234567890.123456789012345678901234567890,"
+        + "\"x\":[1.0,-0,1E+400,{\"\":[]}]}";
+    String pretty = ValueFormat.json(tricky);
+    eq(outsideBlanksRemoved(pretty), tricky);
+    eq(ValueFormat.json(pretty), pretty);
     System.out.println("ValueFormatCheck 통과");
+  }
+
+  /** 문자열 밖의 공백 · 줄바꿈만 지운 글. */
+  static String outsideBlanksRemoved(String json) {
+    StringBuilder out = new StringBuilder();
+    boolean inString = false;
+    for (int i = 0; i < json.length(); i++) {
+      char ch = json.charAt(i);
+      if (inString && ch == '\\') { out.append(ch).append(json.charAt(++i)); continue; }
+      if (ch == '"') inString = !inString;
+      if (inString || !Character.isWhitespace(ch)) out.append(ch);
+    }
+    return out.toString();
   }
 }

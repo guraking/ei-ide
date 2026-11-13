@@ -3,13 +3,16 @@ package ei.db;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
+import com.intellij.util.concurrency.AppExecutorUtil;
 
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -46,6 +49,10 @@ public final class SchemaCache {
   /** 접속마다 clear 할 때 오르는 번호. 읽기 시작 뒤 번호가 바뀌었으면 그 결과는 새로고침 전 것이라 버린다. */
   private static final Map<String, Integer> GENERATION = new ConcurrentHashMap<>();
   private static final String SEP = "|";
+  /** prefetch 가 읽기를 건 키. 실패해도 남아 clear 전까지 다시 걸지 않는다. */
+  private static final Set<String> PREFETCHED = ConcurrentHashMap.newKeySet();
+  /** prefetch 는 하나씩 차례로 읽는다(열린 매퍼 파일이 여럿이어도 한 접속에 메타 조회가 몰리지 않게). */
+  private static final ExecutorService PREFETCH_QUEUE = AppExecutorUtil.createBoundedApplicationPoolExecutor("ei.db.SchemaCache.prefetch", 1);
 
   // ---- 작업 스레드용: 없으면 읽어 넣는다 ----
 
@@ -144,6 +151,58 @@ public final class SchemaCache {
     return COLUMNS.get(key(c.id, schema, table));
   }
 
+  // ---- 매퍼 SQL 검사용: 이미 열린 접속에서만 뒤에서 읽어 둔다 ----
+
+  /**
+   * 캐시에 없는 표 목록(tables 가 null 일 때) 또는 그 표들(메타 이름 그대로)의 칼럼을 뒤에서 차례로 읽어 둔다. DB 를 부르지 않고 바로 돌아온다.
+   * 접속이 이미 열려 있을 때만 읽는다(새로 열지 않는다). 그 접속에서 문장이 실행 중이거나 읽기 실패 쿨다운 중이면 걸지 않는다(다음에 부를 때 다시 본다).
+   * 같은 것은 clear 전까지 한 번만 건다(읽기에 실패해도 다시 걸지 않는다). 읽는 도중 문장 실행이 시작되거나 접속이 바뀌면 멈추고 남은 것은 다음에 다시 걸 수 있게 둔다.
+   * 다 읽으면 onChange 를 한 번 부른다.
+   */
+  public static void prefetch(Project project, DbConfig c, String schema, List<String> tables) {
+    DbSessions sessions = DbSessions.get(project);
+    Connection open = sessions.openConnection(c.id);
+    if (open == null || sessions.isRunning(c.id) || coolingDown(c.id)) return;
+    Map<String, Reader> todo = new LinkedHashMap<>();
+    if (tables == null) {
+      String key = key(c.id, schema);
+      if (!TABLES.containsKey(key) && PREFETCHED.add(key)) {
+        todo.put(key, conn -> {
+          int gen = generation(c.id);
+          storeIfCurrent(TABLES, key, List.copyOf(Meta.tables(conn, c, schema, Meta.tableAndViewTypes(c))), c.id, gen);
+        });
+      }
+    } else {
+      for (String table : tables) {
+        String key = key(c.id, schema, table);
+        if (!COLUMNS.containsKey(key) && PREFETCHED.add(key)) {
+          todo.put(key, conn -> {
+            int gen = generation(c.id);
+            storeIfCurrent(COLUMNS, key, List.copyOf(Meta.columns(conn, c, schema, table)), c.id, gen);
+          });
+        }
+      }
+    }
+    if (todo.isEmpty()) return;
+    PREFETCH_QUEUE.execute(() -> {
+      try {
+        for (Map.Entry<String, Reader> e : todo.entrySet()) {
+          if (project.isDisposed() || sessions.isRunning(c.id) || sessions.openConnection(c.id) != open) {
+            // 이미 읽은 것은 캐시에 있어 다시 걸리지 않는다.
+            PREFETCHED.removeAll(todo.keySet());
+            break;
+          }
+          e.getValue().read(open);
+        }
+        if (!project.isDisposed()) sessions.endReadTransaction(c);
+      } catch (Exception e) {
+        FAILED.put(c.id, System.currentTimeMillis());
+        LOG.info("매퍼 SQL 검사용 목록을 읽지 못했습니다: " + e.getMessage());
+      }
+      changed();
+    });
+  }
+
   // ---- 자동완성용: 없으면 null, 열린 접속에서만 뒤에서 읽는다 ----
 
   /** 기본 스키마의 표 · 뷰. 아직 없으면 null. */
@@ -200,6 +259,7 @@ public final class SchemaCache {
       PKS.keySet().removeIf(k -> k.startsWith(prefix));
       FAILED.remove(configId);
       CONNECT_TRIED.remove(configId);
+      PREFETCHED.removeIf(k -> k.startsWith(prefix));
     }
     changed();
   }
@@ -218,10 +278,15 @@ public final class SchemaCache {
 
   /** 읽기 시작한 뒤 그 접속에 clear 가 없었을 때만 넣는다. clear 와 같은 잠금 안에서 확인하고 넣는다. */
   private static <T> void putIfCurrent(Map<String, T> cache, String key, T value, String configId, int gen) {
+    storeIfCurrent(cache, key, value, configId, gen);
+    changed();
+  }
+
+  /** putIfCurrent 와 같되 onChange 를 부르지 않는다(여럿을 넣고 한 번만 알릴 때). */
+  private static <T> void storeIfCurrent(Map<String, T> cache, String key, T value, String configId, int gen) {
     synchronized (GENERATION) {
       if (generation(configId) == gen) cache.put(key, value);
     }
-    changed();
   }
 
   /** 열린 접속에서 읽는 일. */

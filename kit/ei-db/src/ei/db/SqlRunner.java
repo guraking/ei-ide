@@ -54,21 +54,35 @@ public final class SqlRunner {
    * 백업이 실패했거나 행이 한도를 넘어 사용자가 실행을 취소하면 실행 취소와 같게 끝난다(onSuccess 는 불리지 않는다).
    */
   public static void run(Project project, DbConfig c, String sql, List<Object> binds, Consumer<QueryResult> onSuccess, BackupSql.Origin backup) {
+    run(project, c, sql, binds, onSuccess, backup, null);
+  }
+
+  /**
+   * onStopped 는 onSuccess 가 불리지 않고 끝났을 때(읽기 전용 거절 · 확인창 취소 · 실행 오류 · 실행 취소) 화면 스레드에서 한 번 불린다.
+   * 부르는 쪽이 「실행 중」 상태를 풀 때 쓴다. null 이면 부르지 않는다.
+   */
+  public static void run(Project project, DbConfig c, String sql, List<Object> binds, Consumer<QueryResult> onSuccess, BackupSql.Origin backup,
+                         Runnable onStopped) {
+    Runnable stopped = onStopped == null ? () -> {} : onStopped;
     boolean write = SqlGuard.isWrite(sql);
     if (write && c.readOnly) {
       Notify.error(project, EiDbBundle.message("runner.read.only", c.name));
+      stopped.run();
       return;
     }
     String danger = SqlGuard.danger(sql);
     if ((danger != null || (c.production && write)) && !GuardDialog.confirm(project, c, sql, danger, SqlGuard.table(sql))) {
+      stopped.run();
       return;
     }
     if (!ei.db.bench.LintGate.confirm(project, sql)) {
       ConsoleRun.stop(project, c, sql);
+      stopped.run();
       return;
     }
     if (!confirmImplicitCommit(project, c, sql)) {
       ConsoleRun.stop(project, c, sql);
+      stopped.run();
       return;
     }
     queue(project, c, sql, binds, DbSessions.get(project).maxRows(), EiDbBundle.message("runner.progress", c.name), backup, new Outcome() {
@@ -79,10 +93,16 @@ public final class SqlRunner {
       }
 
       @Override
-      public void cancelled() { ResultView.showCancelled(project, c, sql); }
+      public void cancelled() {
+        ResultView.showCancelled(project, c, sql);
+        stopped.run();
+      }
 
       @Override
-      public void failed(Exception e) { ResultView.showError(project, c, sql, e); }
+      public void failed(Exception e) {
+        ResultView.showError(project, c, sql, e);
+        stopped.run();
+      }
     });
   }
 

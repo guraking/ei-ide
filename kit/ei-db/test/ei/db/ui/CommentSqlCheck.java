@@ -58,10 +58,13 @@ public class CommentSqlCheck {
     String tricky = CommentSql.column(DbKind.ORACLE, "S", "T", "C", "a; DELETE FROM T -- x");
     if (!SqlGuard.isDdl(tricky) || SqlGuard.danger(tricky) != null) throw new AssertionError(tricky);
 
-    // 붙여 넣기: 탭 구분, CRLF, 앞뒤 공백, 셋째 칸 버림, 탭 없는 줄 · 빈 이름 건너뜀, 같은 이름은 뒤의 것.
-    Map<String, String> pasted = CommentSql.parsePaste("EMPNO\t사원 번호\r\n ENAME \t 이름 \t버림\r\nONLY_NAME\r\n\t주석만\r\nJOB\t\r\nEMPNO\t사번\r\n");
-    eq(pasted, Map.of("EMPNO", "사번", "ENAME", "이름", "JOB", ""));
-    eq(List.copyOf(pasted.keySet()), List.of("EMPNO", "ENAME", "JOB"));
+    // 붙여 넣기: 탭 구분, CRLF, 앞뒤 공백, 셋째 칸 버림, 탭 없는 줄 · 빈 이름 · 빈 주석 칸 건너뜀(건너뛴 빈 주석 줄은 센다), 같은 이름은 뒤의 것.
+    String paste = "EMPNO\t사원 번호\r\n ENAME \t 이름 \t버림\r\nONLY_NAME\r\n\t주석만\r\nJOB\t\r\nSAL\t  \t셋째\r\nEMPNO\t사번\r\n";
+    Map<String, String> pasted = CommentSql.parsePaste(paste);
+    eq(pasted, Map.of("EMPNO", "사번", "ENAME", "이름"));
+    eq(List.copyOf(pasted.keySet()), List.of("EMPNO", "ENAME"));
+    eq(CommentSql.blankComments(paste), 2);
+    eq(CommentSql.blankComments(null), 0);
     // 따옴표로 감싼 칸: 줄바꿈 · 탭을 품고 "" 는 " 하나.
     eq(CommentSql.parsePaste("MEMO\t\"첫 줄\n둘째\t줄 \"\"인용\"\"\"\nA\tb"), Map.of("MEMO", "첫 줄\n둘째\t줄 \"인용\"", "A", "b"));
     // 칸 중간의 따옴표는 글자다. 닫히지 않은 따옴표는 끝까지.

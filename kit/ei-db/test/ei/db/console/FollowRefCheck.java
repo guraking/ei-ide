@@ -101,6 +101,9 @@ public class FollowRefCheck {
     FollowRef.CellQuery q = FollowRef.cellQuery(DbKind.ORACLE, "DOC", defs, docColumns, types, Arrays.asList(5, 2, "x"), 2);
     eq(q.sql(), "SELECT\n       BODY\n  FROM DOC\n WHERE DOC_ID = ?\n   AND SEQ = ?");
     eq(q.binds(), List.of(5, 2));
+    // 문장에 스키마를 붙여 썼으면 다시 읽는 문장에도 붙인다.
+    eq(FollowRef.cellQuery(DbKind.ORACLE, "HR", "DOC", defs, docColumns, types, Arrays.asList(5, 2, "x"), 2).sql(),
+       "SELECT\n       BODY\n  FROM HR.DOC\n WHERE DOC_ID = ?\n   AND SEQ = ?");
     eq(FollowRef.cellQuery(DbKind.ORACLE, "DOC", defs, docColumns, types, Arrays.asList(5, null, "x"), 2), null);
     eq(FollowRef.cellQuery(DbKind.ORACLE, "DOC", defs, List.of("doc_id", "body"), List.of("NUMBER", "CLOB"), Arrays.asList(5, "x"), 1), null);
     eq(FollowRef.cellQuery(DbKind.ORACLE, "DOC", List.of(col("BODY", false)), List.of("body"), List.of("CLOB"), Arrays.asList("x"), 0), null);

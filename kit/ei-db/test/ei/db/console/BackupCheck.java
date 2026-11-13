@@ -37,6 +37,8 @@ public class BackupCheck {
 
   public static void main(String[] args) {
     parse();
+    safety();
+    blocks();
     binds();
     restore();
     names();
@@ -140,10 +142,58 @@ public class BackupCheck {
     none("WITH X AS (SELECT 1 FROM DUAL) SELECT * FROM X FOR UPDATE");
     none("INSERT INTO T (A) VALUES (1)");
     none("EXPLAIN PLAN FOR DELETE FROM T");
-    none("BEGIN UPDATE T SET A = 1; END;");
+    unsupported("BEGIN UPDATE T SET A = 1; END;", BackupSql.R_BLOCK);
     none("DROP TABLE T");
     none("UPDATES");
     none("");
+  }
+
+  /** 백업 SELECT 가 다른 행을 읽을 수 있는 문장은 거절하고, SET 이 값을 넣는 칼럼을 읽는다. */
+  static void safety() {
+    unsupported("UPDATE EMP SET SAL = 1 WHERE ROWNUM <= 10", BackupSql.R_VOLATILE);
+    unsupported("DELETE FROM EMP WHERE DEPTNO = 10 AND rownum < 100", BackupSql.R_VOLATILE);
+    unsupported("DELETE FROM EMP WHERE ID IN (SELECT ID FROM T WHERE DBMS_RANDOM.VALUE < 0.5)", BackupSql.R_VOLATILE);
+    unsupported("UPDATE emp SET sal = 1 WHERE random() < 0.1", 0, DbKind.POSTGRES, BackupSql.R_VOLATILE);
+    unsupported("UPDATE EMP SET SAL = 1 WHERE ID = SEQ.NEXTVAL", BackupSql.R_VOLATILE);
+    // SET 쪽 · 문자열 안의 낱말은 조건이 아니다.
+    ok("UPDATE EMP SET SAL = ROWNUM WHERE NAME = 'ROWNUM'");
+    unsupported("UPDATE emp SET sal = 1 /* a /* b */ WHERE id = 1 */", 0, DbKind.POSTGRES, BackupSql.R_PARSE);
+    ok("UPDATE EMP SET SAL = 1 /* a /* b */ WHERE ID = 1");
+
+    eq(ok("DELETE FROM EMP WHERE ID = 1").setColumns(), Set.of());
+    eq(ok("UPDATE EMP e SET e.SAL = SAL + ID, \"Name\" = f(a, b) WHERE ID = 1").setColumns(), Set.of("E", "SAL", "NAME"));
+    eq(ok("UPDATE EMP SET (ID, SAL) = (SELECT X, Y FROM T WHERE T.K = EMP.K), DEPT = 1").setColumns(), Set.of("ID", "SAL", "DEPT"));
+    eq(ok("UPDATE EMP SET SAL = (SELECT MAX(ID) FROM T), COMM = CASE WHEN ID >= 1 THEN 2 END").setColumns(), Set.of("SAL", "COMM"));
+  }
+
+  /** 안을 알 수 없는 실행 · TRUNCATE · MySQL 수식어는 알리고(지원 안 함), DDL · INSERT · 트랜잭션 시작은 대상이 아니다. */
+  static void blocks() {
+    unsupported("BEGIN UPDATE EMP SET SAL = 1; END;", BackupSql.R_BLOCK);
+    unsupported("declare n number; begin null; end;", BackupSql.R_BLOCK);
+    unsupported("CALL P_CLOSE(1)", BackupSql.R_BLOCK);
+    unsupported("EXEC P_CLOSE(1)", BackupSql.R_BLOCK);
+    unsupported("{call P_CLOSE(?)}", 1, DbKind.ORACLE, BackupSql.R_BLOCK);
+    unsupported("{? = call F(?)}", 2, DbKind.ORACLE, BackupSql.R_BLOCK);
+    unsupported("DO $$ BEGIN DELETE FROM emp; END $$", 0, DbKind.POSTGRES, BackupSql.R_BLOCK);
+    unsupported("TRUNCATE TABLE EMP", BackupSql.R_TRUNCATE);
+    none("BEGIN");
+    none("BEGIN TRANSACTION");
+    none("CREATE TABLE T (A NUMBER)");
+    none("DROP TABLE T");
+    none("COMMENT ON TABLE T IS 'x'");
+    none("GRANT SELECT ON T TO U");
+    none("INSERT INTO T VALUES (1)");
+    unsupported("UPDATE IGNORE t SET a = 1 WHERE id = 1", 0, DbKind.MYSQL, BackupSql.R_MODIFIER);
+    unsupported("UPDATE LOW_PRIORITY t SET a = 1", 0, DbKind.MYSQL, BackupSql.R_MODIFIER);
+    unsupported("DELETE QUICK FROM t WHERE id = 1", 0, DbKind.MYSQL, BackupSql.R_MODIFIER);
+    unsupported("DELETE LOW_PRIORITY IGNORE FROM t", 0, DbKind.MYSQL, BackupSql.R_MODIFIER);
+    eq(ok("UPDATE IGNORE SET A = 1").name(), "IGNORE");
+
+    eq(BackupSql.isOurs("20261113-101500_EMP.sql", "-- Moa IDE 고치기 전 백업"), true);
+    eq(BackupSql.isOurs("20261113-101500_EMP-2.sql", "-- Moa IDE 고치기 전 백업"), true);
+    eq(BackupSql.isOurs("내쿼리.sql", "-- Moa IDE 고치기 전 백업"), false);
+    eq(BackupSql.isOurs("20261113-101500_EMP.sql", "SELECT 1"), false);
+    eq(BackupSql.isOurs("20261113-101500_EMP.sql", null), false);
   }
 
   static void binds() {

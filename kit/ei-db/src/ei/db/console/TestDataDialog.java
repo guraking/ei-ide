@@ -1,6 +1,7 @@
 package ei.db.console;
 
 import com.intellij.openapi.editor.EditorFactory;
+import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.ComboBox;
 import com.intellij.openapi.ui.DialogWrapper;
@@ -295,10 +296,14 @@ public final class TestDataDialog extends DialogWrapper {
     });
   }
 
-  /** 지금 설정으로 모든 행을 만든다. 오류가 있으면 알리고 null. */
+  /** 지금 설정으로 모든 행을 만든다(행이 많을 수 있어 진행 창을 띄우고 뒤에서). 오류가 있으면 알리고 null. */
   private InsertRows.Batch generate() {
     stopEditing();
-    TestData.Output o = TestData.generate(target.c().kind, plans(), target.withDefault(), rows(), seedValue());
+    List<TestData.Plan> plans = plans();
+    int count = rows();
+    long seedNow = seedValue();
+    TestData.Output o = ProgressManager.getInstance().runProcessWithProgressSynchronously(
+        () -> TestData.generate(target.c().kind, plans, target.withDefault(), count, seedNow), getTitle(), false, project);
     if (!o.errors().isEmpty()) {
       Messages.showErrorDialog(project, String.join("\n", o.errors()), getTitle());
       return null;

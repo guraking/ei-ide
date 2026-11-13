@@ -50,6 +50,7 @@ import java.util.Locale;
 /**
  * 결과 칸의 값을 따로 창에 크게 보인다(읽기 전용, 줄바꿈 켬, 모달 아님). 창 크기는 DIMENSION_KEY 로 기억한다.
  * JSON · XML 이면 뒤에서 줄을 맞춰 그 색으로 보이고 「원문 / 정렬」 로 바꿔 볼 수 있다. FORMAT_LIMIT 자를 넘으면 원문만 보인다.
+ * 보이는 글이 WRAP_LIMIT 자를 넘으면 줄바꿈을 끄고 그렇다고 적는다.
  * 이진 값은 크기 안내만 보인다. 결과에 앞부분만 든 CLOB 은 그렇다고 적고, 표 하나를 조회한 결과면 「전체 읽기」로 그 칸을 PK 로 다시 읽는다
  * (FULL_READ_LIMIT 자까지). 다시 읽기에 실패하면 알리고 보이던 값을 그대로 둔다.
  */
@@ -61,7 +62,9 @@ final class BigValueDialog extends DialogWrapper {
   /** 이 글자 수를 넘는 값은 줄을 맞추지 않는다. */
   private static final int FORMAT_LIMIT = 5_000_000;
   /** 「전체 읽기」가 읽는 글자 수 한도. */
-  private static final int FULL_READ_LIMIT = 20_000_000;
+  private static final int FULL_READ_LIMIT = FORMAT_LIMIT;
+  /** 보이는 글이 이 글자 수를 넘으면 줄바꿈(소프트 랩)을 끈다: 줄바꿈 없는 큰 값의 줄 나누기 계산이 화면을 멈춘다. */
+  private static final int WRAP_LIMIT = 1_000_000;
   private static final int READ_BUFFER = 1 << 16;
   /** 안내 줄 · 아래 줄의 칸 사이 간격과 편집기와의 간격(px, 배율 전). */
   private static final int GAP = 8;
@@ -81,6 +84,9 @@ final class BigValueDialog extends DialogWrapper {
   private ValueFormat.Formatted formatted;
   private final EditorTextField editor;
   private final JBLabel notice = new JBLabel();
+  private final JBLabel wrapNote = new JBLabel(EiDbBundle.message("bigvalue.no.wrap", WRAP_LIMIT));
+  /** 지금 보이는 글에 줄바꿈을 켤지. 편집기를 새로 만들 때마다 읽는다. */
+  private boolean wrap = true;
   private final ActionLink readFull = new ActionLink(EiDbBundle.message("bigvalue.read.full"), e -> { readFull(); });
   private final JBRadioButton rawButton = new JBRadioButton(EiDbBundle.message("bigvalue.raw"), true);
   private final JBRadioButton prettyButton = new JBRadioButton(EiDbBundle.message("bigvalue.pretty"));
@@ -106,7 +112,7 @@ final class BigValueDialog extends DialogWrapper {
     binary = value instanceof QueryResult.BinaryValue;
     editor = new EditorTextField(EditorFactory.getInstance().createDocument(""), project, PlainTextFileType.INSTANCE, true, false);
     editor.addSettingsProvider(e -> {
-      e.getSettings().setUseSoftWraps(true);
+      e.getSettings().setUseSoftWraps(wrap);
       e.getSettings().setLineNumbersShown(true);
       e.setVerticalScrollbarVisible(true);
       e.setHorizontalScrollbarVisible(true);
@@ -152,6 +158,8 @@ final class BigValueDialog extends DialogWrapper {
     JPanel top = new JPanel(new BorderLayout(JBUI.scale(GAP), 0));
     top.add(notice, BorderLayout.CENTER);
     top.add(readFull, BorderLayout.EAST);
+    top.add(wrapNote, BorderLayout.SOUTH);
+    wrapNote.setForeground(com.intellij.util.ui.UIUtil.getContextHelpForeground());
     notice.setForeground(UiColors.WARNING);
     JPanel modes = new JPanel(new HorizontalLayout(JBUI.scale(GAP), SwingConstants.CENTER));
     modes.add(rawButton);
@@ -229,8 +237,11 @@ final class BigValueDialog extends DialogWrapper {
       FileType known = FileTypeManager.getInstance().getFileTypeByExtension(formatted.kind() == ValueFormat.Kind.JSON ? JSON_EXTENSION : XML_EXTENSION);
       if (!(known instanceof UnknownFileType)) type = known;
     }
+    String shown = shownText();
+    wrap = shown.length() <= WRAP_LIMIT;
+    wrapNote.setVisible(!wrap);
     // 편집기 문서는 줄 끝을 \n 만 받는다. 복사는 shownText 의 원래 글을 쓴다.
-    editor.setNewDocumentAndFileType(type, EditorFactory.getInstance().createDocument(StringUtil.convertLineSeparators(shownText())));
+    editor.setNewDocumentAndFileType(type, EditorFactory.getInstance().createDocument(StringUtil.convertLineSeparators(shown)));
   }
 
   /** 그 칸을 PK 로 다시 읽을 수 있는 결과인지(표 하나를 조회해 행마다 표의 한 행인 결과: 결과 칸 고치기와 같은 조건). PK 는 누를 때 읽어 확인한다. */
@@ -269,11 +280,15 @@ final class BigValueDialog extends DialogWrapper {
     try {
       String bare = ResultView.firstTable(result.sql());
       FollowRef.CellQuery query = null;
+      // 문장에 스키마를 붙여 썼으면 그 스키마의 표를 읽는다(접속 스키마의 같은 이름 표를 읽지 않게).
+      ei.db.bench.SqlParts.TableRef ref = FollowRef.singleTable(result.sql());
+      String written = ref != null && ref.schema() != null ? Meta.storedName(config, ref.schema()) : null;
+      String schema = written != null ? written : Meta.schemaOf(config);
       // Oracle 은 대문자, PostgreSQL 은 소문자로 저장되므로 쓴 그대로 · 대문자 · 소문자 순서로 찾는다(ResultPanel 의 표 정의 찾기와 같다).
       for (String candidate : new String[]{bare, bare.toUpperCase(Locale.ROOT), bare.toLowerCase(Locale.ROOT)}) {
-        List<Meta.Column> defs = SchemaCache.columns(conn, config, Meta.schemaOf(config), candidate);
+        List<Meta.Column> defs = SchemaCache.columns(conn, config, schema, candidate);
         if (defs.isEmpty()) continue;
-        query = FollowRef.cellQuery(config.kind, candidate, defs, result.columns(), result.columnTypes(), row, col);
+        query = FollowRef.cellQuery(config.kind, written, candidate, defs, result.columns(), result.columnTypes(), row, col);
         break;
       }
       if (query == null) throw new IllegalStateException(EiDbBundle.message("bigvalue.full.no.key"));

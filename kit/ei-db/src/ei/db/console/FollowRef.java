@@ -122,6 +122,12 @@ final class FollowRef {
    * PK 가 없거나, PK 칼럼이 결과에 없거나, 그 값이 조건으로 쓸 수 없거나(null · 이진 · LOB), 누른 칼럼이 표에 없으면 null.
    */
   static CellQuery cellQuery(DbKind kind, String table, List<Meta.Column> defs, List<String> columns, List<String> types, List<Object> row, int col) {
+    return cellQuery(kind, null, table, defs, columns, types, row, col);
+  }
+
+  /** schema 는 조회 문장에 스키마를 붙여 썼을 때 그 스키마(메타 이름), 아니면 null(접속의 이름 찾기 규칙에 맡긴다). */
+  static CellQuery cellQuery(DbKind kind, String schema, String table, List<Meta.Column> defs, List<String> columns, List<String> types, List<Object> row,
+                             int col) {
     String item = null;
     List<String> keys = new ArrayList<>();
     List<Object> binds = new ArrayList<>();
@@ -133,7 +139,7 @@ final class FollowRef {
       keys.add(d.name());
       binds.add(row.get(index));
     }
-    return item == null || keys.isEmpty() ? null : new CellQuery(select(kind, null, table, item, keys), binds);
+    return item == null || keys.isEmpty() ? null : new CellQuery(select(kind, schema, table, item, keys), binds);
   }
 
   /**

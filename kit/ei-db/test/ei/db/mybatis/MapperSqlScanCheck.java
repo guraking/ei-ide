@@ -219,6 +219,26 @@ public class MapperSqlScanCheck {
     eq(cols("SELECT A, BINARY B FROM T WHERE BINARY C = 'x'"), List.of("T.A"));
     eq(cols("UPDATE ${x} T SET A = 1"), List.of());
 
+    // ---- 표가 아닌 것을 표로 읽지 않는다
+    // DB 링크 이름 뒤의 별칭 · 다음 절은 링크 이름이 아니다.
+    eq(tabs("SELECT a.X FROM T@L a MINUS SELECT b.Y, b.Z FROM U b"), List.of("U"));
+    eq(cols("SELECT a.X FROM T@L a MINUS SELECT b.Y, b.Z FROM U b"), List.of("U.Y", "U.Z"));
+    // MySQL: ON DUPLICATE KEY UPDATE 칼럼 = …, DELETE 별칭 FROM 표 별칭.
+    eq(tabs("INSERT INTO T (A, B) VALUES (1, 2) ON DUPLICATE KEY UPDATE B = VALUES(B), C = C + 1"), List.of("T"));
+    eq(cols("INSERT INTO T (A, B) VALUES (1, 2) ON DUPLICATE KEY UPDATE B = VALUES(B), C = C + 1"), List.of("T.A", "T.B"));
+    eq(tabs("DELETE a FROM T a JOIN U b ON a.ID = b.ID WHERE b.X = 1"), List.of("T", "U"));
+    eq(cols("DELETE a, b FROM T a, U b WHERE a.ID = b.ID"), List.of("T.ID", "U.ID"));
+    eq(tabs("SELECT a.X FROM T a WHERE a.ID = 1 FOR NO KEY UPDATE"), List.of("T"));
+    eq(tabs("DELETE T a WHERE a.ID = 1"), List.of("T"));
+    // ON 조건의 CASE WHEN · 「별칭.LIMIT」 뒤의 JOIN 표도 읽는다(놓치면 안쪽 별칭 c 가 바깥 표 T 로 풀린다).
+    eq(cols("SELECT 1 FROM T c WHERE EXISTS (SELECT 1 FROM A a JOIN B b ON a.K = CASE WHEN b.Z = 1 THEN 1 ELSE 2 END JOIN V c ON c.K = a.K WHERE c.Q = 1)"),
+        List.of("A.K", "B.Z", "V.K", "A.K", "V.Q"));
+    eq(tabs("SELECT a.X FROM T a JOIN U b ON a.LIMIT = b.LIMIT JOIN V c ON c.K = a.K"), List.of("T", "U", "V"));
+    // MODEL 절의 MEASURES 이름은 표의 칼럼이 아니다. 칼럼 이름이 MODEL 인 문장은 나머지 칼럼을 그대로 본다.
+    eq(cols("SELECT C, s FROM T MODEL DIMENSION BY (C) MEASURES (V s) RULES (s[1] = 2)"), List.of());
+    eq(cols("SELECT MODEL, NAME FROM CAR WHERE NAME = 'x'"), List.of("CAR.NAME", "CAR.NAME"));
+
+    eq(MapperSqlScan.systemName("TAB"), true);
     eq(MapperSqlScan.systemName("user_tables"), true);
     eq(MapperSqlScan.systemName("V$SESSION"), true);
     eq(MapperSqlScan.systemName("TB_USER"), false);

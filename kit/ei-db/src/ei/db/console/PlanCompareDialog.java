@@ -12,6 +12,7 @@ import com.intellij.ui.components.JBList;
 import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
+import com.intellij.util.ui.WrapLayout;
 import ei.db.EiDbBundle;
 import ei.db.Notify;
 import ei.db.bench.SqlParts;
@@ -76,6 +77,8 @@ final class PlanCompareDialog extends DialogWrapper {
   /** 목록 · 요약에 보일 SQL 첫 줄의 가장 긴 길이. */
   private static final int SQL_PREVIEW_CHARS = 80;
   private static final String ELLIPSIS = "…";
+  /** 머리줄 단추 사이 · 줄 사이 틈. */
+  private static final int BUTTON_GAP = 6;
   private static final String UNKNOWN = "-";
   private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault());
   private static final Color ADDED_ROW = UiColors.SUCCESS_BG;
@@ -87,7 +90,7 @@ final class PlanCompareDialog extends DialogWrapper {
   private final PlanCompare.Result result;
 
   /**
-   * 계획 탭 머리줄에 둘 단추 둘: 「기준으로 삼기」 와 「앞 계획과 비교…」. 비교할 계획이 없으면 비교 단추는 꺼지고 풍선 도움말로 까닭을 알린다.
+   * 계획 탭 머리줄에 둘 단추 둘: 「기준으로 삼기」 와 「앞 계획과 비교…」(폭이 모자라면 줄을 바꾼다). 비교할 계획이 없으면 비교 단추는 꺼지고 풍선 도움말로 까닭을 알린다.
    * 다른 탭에서 기준을 찍었을 수 있어 화면에 보일 때마다 켜짐을 다시 정한다.
    */
   static JPanel buttons(Project project, PlanHistory.Entry current) {
@@ -108,7 +111,7 @@ final class PlanCompareDialog extends DialogWrapper {
       Notify.info(project, EiDbBundle.message("plan.compare.pin.done", label(current, false)));
     });
     compare.addActionListener(e -> choose(project, current, compare));
-    JPanel panel = new JPanel(new FlowLayout(FlowLayout.RIGHT, JBUI.scale(6), 0));
+    JPanel panel = new JPanel(new WrapLayout(FlowLayout.RIGHT, JBUI.scale(BUTTON_GAP), JBUI.scale(BUTTON_GAP)));
     panel.setOpaque(false);
     panel.add(pin);
     panel.add(compare);

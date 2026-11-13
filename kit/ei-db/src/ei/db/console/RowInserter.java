@@ -252,15 +252,18 @@ final class RowInserter {
     }.queue();
   }
 
-  /** 진행 막대가 취소되면 이 실행이 등록한 문장(mine)에 취소를 보낸다. 보내기에 실패하면 한 번 알리고 그만 보낸다. */
+  /**
+   * 진행 막대가 취소되면 이 실행이 등록한 문장(mine)에 취소를 한 번 보낸다(문장이 아직 등록되지 않았으면 등록될 때까지 살핀다).
+   * 되풀이해 보내지 않는다: 늦게 닿은 취소가 배치의 되돌리기 · 커밋을 끊지 않게 한다. 보내기에 실패하면 알린다.
+   */
   private static ScheduledFuture<?> watchCancel(Project project, DbConfig c, AtomicReference<Statement> mine, ProgressIndicator indicator) {
-    AtomicBoolean failed = new AtomicBoolean();
+    AtomicBoolean sent = new AtomicBoolean();
     return AppExecutorUtil.getAppScheduledExecutorService().scheduleWithFixedDelay(() -> {
-      if (!indicator.isCanceled() || failed.get()) return;
+      if (!indicator.isCanceled() || sent.get()) return;
       try {
-        DbSessions.get(project).cancel(c.id, mine.get());
+        if (DbSessions.get(project).cancel(c.id, mine.get())) sent.set(true);
       } catch (SQLException | RuntimeException e) {
-        failed.set(true);
+        sent.set(true);
         Notify.error(project, EiDbBundle.message("runner.cancel.failed", c.name, e.getMessage()));
       }
     }, CANCEL_POLL_MS, CANCEL_POLL_MS, TimeUnit.MILLISECONDS);

@@ -43,6 +43,23 @@ final class DdlBuild {
       case MATERIALIZED_VIEW -> sb.append("CREATE MATERIALIZED VIEW ").append(name).append(" AS\n").append(statement(t.query())).append('\n');
       default -> table(sb, db, t, name);
     }
+    return rest(sb, db, t);
+  }
+
+  /**
+   * 분할(자식) 표: 「CREATE TABLE 자식 PARTITION OF 부모 / FOR VALUES …」 + 인덱스 + 주석. 칼럼 · 제약은 부모에게서 받으므로 쓰지 않는다
+   * (t.columns 는 주석에만 쓴다). bound 는 DB 가 준 경계 글(FOR VALUES … · DEFAULT), t.tail 은 다시 나눌 때의 PARTITION BY 절.
+   */
+  static String createPartition(DbKind db, Table t, String parentSchema, String parent, String bound) {
+    StringBuilder sb = new StringBuilder("CREATE TABLE ").append(CommentSql.name(db, t.schema(), t.name()))
+        .append(" PARTITION OF ").append(CommentSql.name(db, parentSchema, parent)).append('\n').append(bound.strip());
+    if (!blank(t.tail())) sb.append('\n').append(t.tail().strip());
+    sb.append(STATEMENT_END).append('\n');
+    return rest(sb, db, t);
+  }
+
+  /** CREATE 문 뒤에 인덱스 · 주석 묶음을 잇는다. */
+  private static String rest(StringBuilder sb, DbKind db, Table t) {
     if (!t.indexes().isEmpty()) {
       sb.append('\n');
       for (String index : t.indexes()) sb.append(statement(index)).append('\n');
@@ -94,6 +111,11 @@ final class DdlBuild {
   static String index(DbKind db, String schema, String name, boolean unique, String table, List<String> columns) {
     return "CREATE " + (unique ? "UNIQUE " : "") + "INDEX " + CommentSql.name(db, schema, name) + " ON " + CommentSql.name(db, schema, table)
            + " (" + names(db, columns) + ")";
+  }
+
+  /** 유일 인덱스의 칼럼 구성이 PK 와 같으면(순서 무관) 참: PK 제약이 그 인덱스를 만들므로 따로 내지 않는다. PK 가 없으면 거짓. */
+  static boolean backsPrimaryKey(boolean unique, List<String> indexColumns, List<String> pkColumns) {
+    return unique && !pkColumns.isEmpty() && indexColumns.size() == pkColumns.size() && indexColumns.containsAll(pkColumns);
   }
 
   private static String names(DbKind db, List<String> columns) {

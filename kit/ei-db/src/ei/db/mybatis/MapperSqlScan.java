@@ -51,8 +51,8 @@ final class MapperSqlScan {
     try {
       flatten(text, node, buf, node.start);
       scanSql(new String(buf), node.start, fragment, out);
-    } catch (Skip skip) {
-      // 확실하지 않은 문장: 아무것도 내지 않는다.
+    } catch (Skip | StackOverflowError skip) {
+      // 확실하지 않은 문장 · 서브쿼리가 수천 겹인 문장: 아무것도 내지 않는다.
     }
   }
 
@@ -71,6 +71,7 @@ final class MapperSqlScan {
   /** Oracle 사전 뷰 · PostgreSQL 카탈로그처럼 어느 스키마에서나 보이는 이름(표 없음으로 짚지 않는다). */
   static boolean systemName(String bare) {
     String u = bare.toUpperCase(Locale.ROOT);
+    if (SYSTEM_NAMES.contains(u)) return true;
     for (String p : SYSTEM_PREFIXES) {
       if (u.startsWith(p)) return true;
     }
@@ -93,6 +94,10 @@ final class MapperSqlScan {
   /** 본문을 보지 않는 태그(다른 문장 · 값 정의). */
   private static final Set<String> IGNORED_TAGS = Set.of("selectKey", "bind", "property");
   private static final List<String> SYSTEM_PREFIXES = List.of("USER_", "ALL_", "DBA_", "V$", "GV$", "V_$", "PG_", "NLS_", "SESSION_");
+
+  /** Oracle 이 모든 스키마에 공개 동의어로 주는 사전 뷰 · 표. */
+  private static final Set<String> SYSTEM_NAMES = Set.of("TAB", "TABS", "COLS", "CAT", "DICT", "DICTIONARY", "IND", "OBJ", "SEQ", "SYN",
+      "GLOBAL_NAME", "PLAN_TABLE", "RECYCLEBIN");
 
   private static final class Skip extends RuntimeException {
     Skip() { super(null, null, false, false); }
@@ -242,6 +247,8 @@ final class MapperSqlScan {
       "CAST", "NEW", "OLD", "EXCLUDED", "CTID", "XMIN", "XMAX", "CMIN", "CMAX", "TABLEOID", "OID", "NEXTVAL", "CURRVAL", "OBJECT_ID", "OBJECT_VALUE",
       "COLUMN_VALUE", "ROW", "ARRAY", "BINARY", "SQLCODE", "SQLERRM", "NOCYCLE", "ASC", "DESC", "NULLS", "ESCAPE", "OVER", "ROWS", "RANGE", "TOP", "SYSDATETIME"),
       Set.of());
+  /** MODEL 절(칼럼 이름 MODEL 이 아닌)의 MODEL 바로 뒤에 오는 낱말. */
+  private static final Set<String> MODEL_NEXT = Set.of("DIMENSION", "PARTITION", "RETURN", "UNIQUE", "IGNORE", "KEEP", "REFERENCE", "MAIN");
   private static final String VERSIONS_PREFIX = "VERSIONS_";
   private static final String DUAL = "DUAL";
 
@@ -460,15 +467,16 @@ final class MapperSqlScan {
       for (int i = from; i < to; i++) {
         Tok t = toks[i];
         if (t.sym("(")) { i = match[i]; continue; }
-        if (t.type != Type.IDENT || t.quoted) continue;
+        // 「별칭.SET」 같은 칼럼 이름은 절 머리가 아니다. FROM 은 어디서나 예약어라 쓰다 만 「a. FROM」 으로 본다.
+        if (t.type != Type.IDENT || t.quoted || sym(i - 1, ".") && !t.word("FROM")) continue;
         switch (t.up) {
           case "FROM" -> {
             // IS DISTINCT FROM 값 은 절이 아니다.
             if (!word(i - 1, "DISTINCT")) i = sources(i + 1, to, sc, false, false) - 1;
           }
           case "UPDATE" -> {
-            // FOR UPDATE [OF ..] · MERGE/ON CONFLICT 의 UPDATE SET 은 표가 따르지 않는다.
-            if (!word(i - 1, "FOR") && !word(i + 1, "SET")) i = sources(i + 1, to, sc, true, false) - 1;
+            // FOR UPDATE [OF ..] · FOR NO KEY UPDATE · ON DUPLICATE KEY UPDATE 칼럼 = · MERGE/ON CONFLICT 의 UPDATE SET 은 표가 따르지 않는다.
+            if (!word(i - 1, "FOR") && !word(i - 1, "KEY") && !word(i + 1, "SET")) i = sources(i + 1, to, sc, true, false) - 1;
           }
           case "INTO" -> {
             boolean insert = word(i - 1, "INSERT");
@@ -483,7 +491,7 @@ final class MapperSqlScan {
             }
           }
           case "DELETE" -> {
-            if (ident(i + 1) && i + 1 < to && !word(i + 1, "FROM") && !word(i + 1, "WHERE")) i = sources(i + 1, to, sc, true, false) - 1;
+            if (ident(i + 1) && i + 1 < to && !word(i + 1, "FROM") && !word(i + 1, "WHERE") && !deleteAliases(i + 1, to)) i = sources(i + 1, to, sc, true, false) - 1;
           }
           case "INSERT" -> {
             // MERGE 의 WHEN NOT MATCHED THEN INSERT (칼럼들).
@@ -496,6 +504,16 @@ final class MapperSqlScan {
           default -> { }
         }
       }
+    }
+
+    /** 「DELETE 별칭[, 별칭] FROM 표 …」(MySQL 여러 표 지우기)면 true. DELETE 뒤의 이름은 표가 아니라 FROM 에서 정한 별칭이다. */
+    private boolean deleteAliases(int i, int to) {
+      for (int k = i; k < to; k++) {
+        Tok t = toks[k];
+        if (t.word("FROM")) return true;
+        if (t.in(CLAUSE) || t.type != Type.IDENT && !t.sym(",") && !t.sym(".") && !t.sym("*")) return false;
+      }
+      return false;
     }
 
     /**
@@ -529,8 +547,10 @@ final class MapperSqlScan {
           boolean plain = !taint && parts <= 2;
           if (sym(i, "@")) {
             plain = false;
+            // 링크 이름은 「이름[.이름…]」 까지다. 그 뒤 낱말은 별칭 · 다음 절이다.
             i++;
-            while (i < to && (ident(i) || sym(i, "."))) i++;
+            if (i < to && ident(i)) i++;
+            while (sym(i, ".") && i + 1 < to && ident(i + 1)) i += 2;
           }
           if (sym(i, ".")) plain = false;
           if (i < to && sym(i, "(") && !(insert && first)) {
@@ -588,8 +608,15 @@ final class MapperSqlScan {
             next = true;
           } else if (x.word("ON")) {
             i++;
-            while (i < to && !toks[i].sym(",") && !toks[i].sym(";") && !toks[i].in(CLAUSE) && !(toks[i].in(JOIN_WORDS) && !sym(i + 1, "("))) {
-              i = toks[i].sym("(") ? match[i] + 1 : i + 1;
+            // 조건 안의 「별칭.LIMIT」 같은 칼럼 이름과 CASE WHEN 은 다음 절 머리가 아니다(거기서 끊으면 뒤의 JOIN 표를 놓친다).
+            int cases = 0;
+            while (i < to && !toks[i].sym(",") && !toks[i].sym(";")) {
+              Tok y = toks[i];
+              boolean name = sym(i - 1, ".");
+              if (!name && y.word("CASE")) cases++;
+              else if (!name && y.word("END") && cases > 0) cases--;
+              else if (!name && cases == 0 && (y.in(CLAUSE) || y.in(JOIN_WORDS) && !sym(i + 1, "("))) break;
+              i = y.sym("(") ? match[i] + 1 : i + 1;
             }
           } else {
             // PARTITION · SAMPLE · PIVOT · AS OF · 뜻밖의 낱말: 이 문장의 원본을 다 안다고 할 수 없고, 방금 읽은 이름도 믿지 않는다.
@@ -636,7 +663,7 @@ final class MapperSqlScan {
         if (t.sym("(")) { i = match[i]; itemStart = false; continue; }
         if (t.word("CASE")) cases++;
         else if (t.word("END") && cases > 0) cases--;
-        else if (cases == 0 && (t.in(SET_END) || t.word("WHEN") || t.sym(";"))) return;
+        else if (cases == 0 && (t.in(SET_END) || t.word("WHEN") || t.word("SET") || t.sym(";"))) return;
         if (t.sym(",") && cases == 0) { itemStart = true; continue; }
         if (itemStart && t.type == Type.IDENT && sym(i + 1, "=") && !t.tainted && (t.quoted || !NOT_COLUMN.contains(t.up))) {
           out.columns().add(new Column(sc.target, t.raw, base + t.start, base + t.end));
@@ -686,6 +713,8 @@ final class MapperSqlScan {
       for (int i = from; i < to; i++) {
         Tok t = toks[i];
         if (t.sym("(")) { i = match[i]; continue; }
+        // MODEL 절이 있으면 SELECT 목록의 이름이 MEASURES 가 지은 이름일 수 있다.
+        if (t.word("MODEL") && i + 1 < to && toks[i + 1].in(MODEL_NEXT)) return;
         if (select < 0 && t.word("SELECT")) select = i;
         else if (select >= 0 && fromAt < 0 && t.word("FROM")) fromAt = i;
         else if (where < 0 && t.word("WHERE")) where = i;

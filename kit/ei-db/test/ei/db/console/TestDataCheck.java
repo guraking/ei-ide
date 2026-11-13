@@ -121,6 +121,7 @@ public class TestDataCheck {
     yes(!one(DbKind.ORACLE, NAME, Method.FIXED, "1234567890", 1).errors().isEmpty(), "고정값 길이 초과");
     yes(!one(DbKind.ORACLE, DAY, Method.RANDOM_DATE, "어제~오늘", 1).errors().isEmpty(), "날짜 범위 형식");
     yes(!one(DbKind.ORACLE, ID, Method.SEQUENCE, "1", TestData.MAX_ROWS + 1).errors().isEmpty(), "줄 수 한도");
+    eq(TestData.MAX_ROWS, 10_000);
     yes(!one(DbKind.ORACLE, ID, Method.KOREAN_NAME, "", 1).errors().isEmpty(), "숫자 칼럼에 글 방식");
     eq(one(DbKind.ORACLE, AMOUNT, Method.RANDOM_NUMBER, "0.5~0.5", 3).rows().get(2).get(0).sql(), "0.50");
 

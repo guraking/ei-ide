@@ -5,6 +5,7 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.options.Configurable;
+import com.intellij.openapi.options.ConfigurationException;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.ui.JBIntSpinner;
@@ -13,6 +14,7 @@ import com.intellij.ui.components.JBLabel;
 import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.UIUtil;
 import ei.db.DbConfig;
+import ei.db.DbKind;
 import ei.db.DbSessions;
 import ei.db.EiDbBundle;
 import ei.db.Meta;
@@ -22,6 +24,7 @@ import org.jetbrains.annotations.Nls;
 
 import javax.swing.JComponent;
 import javax.swing.JPanel;
+import javax.swing.JSpinner;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -32,11 +35,14 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.sql.Savepoint;
 import java.sql.Statement;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.text.ParseException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -111,17 +117,49 @@ public final class Backups {
     try {
       List<Object> whereBinds = bindCount == 0 ? List.of() : new ArrayList<>(binds.subList(t.bindsBefore(), t.bindsBefore() + t.whereBinds()));
       DbSessions sessions = DbSessions.get(project);
-      QueryResult rows = sessions.run(c, BackupSql.select(t), whereBinds, limit, stop, registered, null);
+      Connection conn = sessions.connection(c);
+      // PostgreSQL 은 트랜잭션 안의 문장 하나가 실패 · 취소되면 미반영 변경까지 쓸 수 없게 된다: 저장점 안에서 읽어 실패해도 사용자의 트랜잭션을 남긴다.
+      Savepoint guard = c.kind == DbKind.POSTGRES && !conn.getAutoCommit() ? conn.setSavepoint() : null;
+      QueryResult rows;
+      try {
+        rows = sessions.run(c, BackupSql.select(t), whereBinds, limit, stop, registered, null);
+      } catch (SQLException e) {
+        if (guard != null) rollbackTo(conn, guard);
+        throw e;
+      }
+      if (guard != null) release(conn, guard);
       if (rows.truncated()) return ask(project, EiDbBundle.message("backup.too.many", t.table(), limit));
       if (rows.rows().isEmpty()) return true;
       Set<String> pks = t.delete() ? Set.of() : primaryKeys(sessions, c, t);
-      BackupSql.Restore restore = BackupSql.restore(t.delete(), t.table(), rows.columns(), rows.columnTypes(), rows.rows(), pks, c.kind);
+      // PK 값을 바꾸는 UPDATE 는 실행 뒤 옛 PK 로 찾을 행이 없다: PK 로 되돌리는 문장 대신 처음 행을 INSERT 로 남긴다.
+      boolean pkChanged = !Collections.disjoint(pks, t.setColumns());
+      BackupSql.Restore restore = BackupSql.restore(t.delete(), t.table(), rows.columns(), rows.columnTypes(), rows.rows(),
+          pkChanged ? Set.of() : pks, c.kind);
+      if (pkChanged) restore = new BackupSql.Restore(restore.body(), restore.excluded(), BackupSql.Mode.INSERT_PK_CHANGED);
       write(c, origin, t.table(), sql, rows.rows().size(), restore);
+      warnExcluded(project, t.table(), restore);
       return true;
     } catch (DbSessions.CancelledException e) {
       return false;
     } catch (SQLException | IOException | RuntimeException e) {
       return ask(project, EiDbBundle.message("backup.failed.ask", reason(e)));
+    }
+  }
+
+  private static void rollbackTo(Connection conn, Savepoint guard) {
+    try {
+      conn.rollback(guard);
+    } catch (SQLException e) {
+      LOG.info("백업 조회 앞의 저장점으로 돌아가지 못했습니다: " + e.getMessage());
+    }
+  }
+
+  /** 읽기만 한 트랜잭션은 DbSessions 가 이미 닫았을 수 있다(저장점도 함께 사라진다): 실패는 기록만 한다. */
+  private static void release(Connection conn, Savepoint guard) {
+    try {
+      conn.releaseSavepoint(guard);
+    } catch (SQLException e) {
+      LOG.debug("백업 조회 앞의 저장점을 풀지 못했습니다: " + e.getMessage());
     }
   }
 
@@ -143,9 +181,9 @@ public final class Backups {
 
   /**
    * 결과 표의 「적용」: drafts 를 파일로 남긴 뒤 then 을 화면 스레드에서 부른다. 화면 스레드에서 부른다.
-   * 백업이 꺼져 있거나 남길 것이 없으면 바로 then. 쓰기에 실패하면 백업 없이 실행할지 묻고, 취소하면 then 을 부르지 않는다.
+   * 백업이 꺼져 있거나 남길 것이 없으면 바로 then. 쓰기에 실패하면 백업 없이 실행할지 묻고, 취소하면 then 대신 cancelled 를 화면 스레드에서 부른다.
    */
-  static void saveThen(Project project, DbConfig c, List<Draft> drafts, Runnable then) {
+  static void saveThen(Project project, DbConfig c, List<Draft> drafts, Runnable then, Runnable cancelled) {
     if (!enabled() || drafts.isEmpty()) {
       then.run();
       return;
@@ -153,13 +191,21 @@ public final class Backups {
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       boolean go;
       try {
-        for (Draft d : drafts) write(c, d.origin(), d.table(), gridSql(d.sqls()), d.rows(), d.restore());
+        for (Draft d : drafts) {
+          write(c, d.origin(), d.table(), gridSql(d.sqls()), d.rows(), d.restore());
+          warnExcluded(project, d.table(), d.restore());
+        }
         go = true;
       } catch (IOException | RuntimeException e) {
         go = ask(project, EiDbBundle.message("backup.failed.ask", reason(e)));
       }
-      if (go) ApplicationManager.getApplication().invokeLater(then, project.getDisposed());
+      ApplicationManager.getApplication().invokeLater(go ? then : cancelled, project.getDisposed());
     });
+  }
+
+  /** LOB · 이진 칼럼을 빼고 남긴 백업이면 그 칼럼 이름을 경고로 알린다(실행은 막지 않는다). */
+  private static void warnExcluded(Project project, String table, BackupSql.Restore restore) {
+    if (!restore.excluded().isEmpty()) Notify.warning(project, EiDbBundle.message("backup.lob.excluded", table, String.join(", ", restore.excluded())));
   }
 
   private static String gridSql(List<String> sqls) {
@@ -204,16 +250,25 @@ public final class Backups {
     throw new IOException(EiDbBundle.message("backup.name.exhausted", dir));
   }
 
-  /** 고친 시각이 days 일보다 오래된 .sql 파일을 지운다. 지우지 못한 파일은 다음 백업 때 다시 지우므로 기록만 남긴다. */
+  /** 고친 시각이 days 일보다 오래된 우리 백업 파일(BackupSql.isOurs)을 지운다. 사용자가 넣은 다른 파일은 두고, 지우지 못한 파일은 다음 백업 때 다시 지우므로 기록만 남긴다. */
   private static void prune(Path dir, int days) {
     if (days == KEEP_FOREVER) return;
     Instant cut = Instant.now().minus(Duration.ofDays(days));
     try (DirectoryStream<Path> files = Files.newDirectoryStream(dir, "*" + BackupSql.EXTENSION)) {
       for (Path f : files) {
-        if (Files.isRegularFile(f) && Files.getLastModifiedTime(f).toInstant().isBefore(cut)) Files.delete(f);
+        if (Files.isRegularFile(f) && Files.getLastModifiedTime(f).toInstant().isBefore(cut) && ours(f)) Files.delete(f);
       }
     } catch (IOException e) {
       LOG.info("오래된 백업 파일을 지우지 못했습니다: " + e.getMessage());
+    }
+  }
+
+  /** 첫 줄을 읽지 못한 파일(UTF-8 이 아닌 글 등)은 우리 파일이 아닌 것으로 본다. */
+  private static boolean ours(Path file) {
+    try (BufferedReader in = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+      return BackupSql.isOurs(file.getFileName().toString(), in.readLine());
+    } catch (IOException e) {
+      return false;
     }
   }
 
@@ -281,11 +336,31 @@ public final class Backups {
 
     @Override
     public boolean isModified() {
-      return on.isSelected() != enabled() || limit.getNumber() != rowLimit() || days.getNumber() != keepDays();
+      return on.isSelected() != enabled() || typed(limit) != rowLimit() || typed(days) != keepDays();
+    }
+
+    /** 숫자 칸에 지금 쓰여 있는 수(Enter · 포커스 이동 전이라도). 수가 아니면 칸이 들고 있는 값. */
+    private static int typed(JBIntSpinner spinner) {
+      try {
+        return Integer.parseInt(((JSpinner.DefaultEditor) spinner.getEditor()).getTextField().getText().strip().replace(",", ""));
+      } catch (NumberFormatException e) {
+        return spinner.getNumber();
+      }
+    }
+
+    /** 쓰던 글을 값으로 굳힌다. 수가 아니거나 범위(min ~ max) 밖이면 ConfigurationException. */
+    private static void commit(JBIntSpinner spinner, String label, int min, int max) throws ConfigurationException {
+      try {
+        spinner.commitEdit();
+      } catch (ParseException e) {
+        throw new ConfigurationException(EiDbBundle.message("backup.settings.invalid", label, min, max));
+      }
     }
 
     @Override
-    public void apply() {
+    public void apply() throws ConfigurationException {
+      commit(limit, EiDbBundle.message("backup.settings.limit"), 1, DbSessions.MAX_ROW_LIMIT);
+      commit(days, EiDbBundle.message("backup.settings.days"), KEEP_FOREVER, MAX_KEEP_DAYS);
       PropertiesComponent p = PropertiesComponent.getInstance();
       p.setValue(KEY_ENABLED, on.isSelected(), true);
       p.setValue(KEY_ROW_LIMIT, limit.getNumber(), DEFAULT_ROW_LIMIT);

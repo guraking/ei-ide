@@ -31,6 +31,7 @@ import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.JTable;
 import javax.swing.ListSelectionModel;
+import javax.swing.Timer;
 import javax.swing.event.DocumentEvent;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
@@ -49,7 +50,7 @@ import java.util.Map;
 
 /**
  * 탐색기 「엑셀 붙여 넣어 행 넣기」 창. 위에 붙여 넣은 글을 읽어 가운데 표에 미리 보이고(머리를 누르면 칸마다 칼럼을 바꿔 고른다),
- * 아래에 문제 목록을 보인다. 글 · 체크 · 칼럼 고르기가 바뀔 때마다 다시 읽는다(DB 는 건드리지 않는다).
+ * 아래에 문제 목록을 보인다. 글(잠깐 멈추면) · 체크 · 칼럼 고르기가 바뀔 때마다 다시 읽는다(DB 는 건드리지 않는다).
  * 막는 문제가 하나라도 있거나 행이 PasteRows.MAX_ROWS 를 넘으면 「바로 넣기」가 꺼진다. 다른 창을 막지 않는 창이라 넣는 동안 진행 막대를 볼 수 있다.
  */
 public final class PasteRowsDialog extends DialogWrapper {
@@ -65,6 +66,8 @@ public final class PasteRowsDialog extends DialogWrapper {
   private static final int PROBLEM_LIST_MAX = 300;
   private static final String PICK_MARK = " ▾";
   private static final String PART_SEPARATOR = " · ";
+  /** 글이 바뀐 뒤 다시 읽기까지 기다리는 밀리초(글쇠마다 전체를 다시 읽지 않게). */
+  private static final int REPARSE_DELAY_MS = 300;
 
   private final Project project;
   private final RowInserter.Table target;
@@ -90,6 +93,8 @@ public final class PasteRowsDialog extends DialogWrapper {
 
   /** 사용자가 「첫 줄은 칼럼 이름」을 직접 바꿨는지. 바꾸기 전까지는 붙여 넣은 글을 보고 저절로 켜고 끈다. */
   private boolean headerTouched;
+  /** 글 칸이 바뀌면 REPARSE_DELAY_MS 뒤에 한 번 다시 읽는다. 단추 · 머리 고르기는 기다리지 않고 먼저 다시 읽는다(readNow). */
+  private final Timer reparse = new Timer(REPARSE_DELAY_MS, e -> refresh());
   private boolean busy;
   private List<List<String>> data = List.of();
   private int[] mapping = new int[0];
@@ -117,12 +122,13 @@ public final class PasteRowsDialog extends DialogWrapper {
 
   @Override
   protected JComponent createCenterPanel() {
+    reparse.setRepeats(false);
     pasted.getEmptyText().setText(EiDbBundle.message("paste.text.empty"));
     pasted.getDocument().addDocumentListener(new DocumentAdapter() {
       @Override
       protected void textChanged(@NotNull DocumentEvent e) {
         if (pasted.getDocument().getLength() == 0) headerTouched = false;
-        refresh();
+        reparse.restart();
       }
     });
     JButton paste = new JButton(EiDbBundle.message("paste.from.clipboard"));
@@ -187,6 +193,7 @@ public final class PasteRowsDialog extends DialogWrapper {
 
   /** 붙여 넣은 글을 다시 읽어 표 · 문제 목록 · 단추를 맞춘다. */
   private void refresh() {
+    reparse.stop();
     List<Meta.Column> columns = target.columns();
     List<List<String>> all = PasteRows.parse(pasted.getText());
     if (!headerTouched) header.setSelected(!all.isEmpty() && PasteRows.looksLikeHeader(all.get(0), columns));
@@ -223,6 +230,17 @@ public final class PasteRowsDialog extends DialogWrapper {
     updateButtons();
   }
 
+  /** 글 칸의 바뀐 내용이 아직 반영되지 않았으면 지금 다시 읽는다. */
+  private void readNow() {
+    if (reparse.isRunning()) refresh();
+  }
+
+  @Override
+  protected void dispose() {
+    reparse.stop();
+    super.dispose();
+  }
+
   private static long markKey(int row, int cell) {
     return ((long) row << Integer.SIZE) | (cell & 0xFFFFFFFFL);
   }
@@ -250,6 +268,7 @@ public final class PasteRowsDialog extends DialogWrapper {
 
   /** 머리를 눌렀을 때: 그 칸에 넣을 칼럼(또는 「넣지 않음」)을 고르는 목록. */
   private void pickColumn(int cell, MouseEvent e) {
+    readNow();
     if (cell < 0 || cell >= mapping.length) return;
     List<Integer> choices = new ArrayList<>();
     choices.add(PasteRows.SKIP);
@@ -285,6 +304,7 @@ public final class PasteRowsDialog extends DialogWrapper {
   }
 
   private void toConsole() {
+    readNow();
     if (!sendable()) return;
     if (result.blocked() && Messages.showYesNoDialog(project, EiDbBundle.message("paste.console.with.problems"), getTitle(),
         Messages.getWarningIcon()) != Messages.YES) {
@@ -294,6 +314,7 @@ public final class PasteRowsDialog extends DialogWrapper {
   }
 
   private void insertNow() {
+    readNow();
     if (!sendable() || result.blocked()) return;
     busy = true;
     updateButtons();

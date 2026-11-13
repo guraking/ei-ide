@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -40,7 +41,8 @@ public final class BackupSql {
 
   /** 파일에 든 되돌리는 문장의 꼴. */
   public enum Mode {
-    UPDATE("UPDATE(PK 로 찾아 원래 값으로)"), INSERT("INSERT(지워진 행을 다시 넣음)"), INSERT_NO_PK("INSERT(PK 없음, 직접 확인)");
+    UPDATE("UPDATE(PK 로 찾아 원래 값으로)"), INSERT("INSERT(지워진 행을 다시 넣음)"), INSERT_NO_PK("INSERT(PK 없음, 직접 확인)"),
+    INSERT_PK_CHANGED("INSERT(PK 값을 바꾸는 UPDATE, 직접 확인)");
 
     private final String label;
 
@@ -59,8 +61,10 @@ public final class BackupSql {
   /**
    * 백업할 대상. table 은 문장에 쓴 그대로(스키마 · 따옴표 포함), schema · name 은 그 조각(쓴 그대로, MySQL 백틱만 뗌, schema 는 없으면 null).
    * where 는 WHERE 뒤 글 그대로(없으면 null = 모든 행). bindsBefore 는 WHERE 앞의 ? 수, whereBinds 는 WHERE 안의 ? 수.
+   * setColumns 는 UPDATE 의 SET 이 값을 넣는 칼럼 이름(대문자, 따옴표 뗌. 「(A, B) = (…)」 · 「별칭.칼럼」 은 넉넉하게 모두). DELETE 면 비어 있다.
    */
-  public record Target(boolean delete, String table, String schema, String name, String alias, String where, int bindsBefore, int whereBinds) {}
+  public record Target(boolean delete, String table, String schema, String name, String alias, String where, int bindsBefore, int whereBinds,
+                       Set<String> setColumns) {}
 
   /** target 과 unsupported 가 모두 null 이면 백업 대상 문장이 아니다(SELECT · INSERT · DDL 등). unsupported 는 백업하지 못하는 이유. */
   public record Parsed(Target target, String unsupported) {
@@ -74,6 +78,10 @@ public final class BackupSql {
   static final String R_SHAPE = "표 하나짜리 단순 UPDATE · DELETE 가 아닙니다(조인 · 서브쿼리 대상 · ONLY · DB 링크 · 파티션 지정 등)";
   static final String R_CLAUSE = "FROM · USING · RETURNING · ORDER BY · LIMIT · WHERE CURRENT OF 가 있는 문장은 백업하지 않습니다";
   static final String R_BINDS = "? 자리 수와 값 수가 달라 WHERE 쪽 값을 가를 수 없습니다";
+  static final String R_BLOCK = "PL/SQL 블록 · 프로시저 호출(BEGIN · DECLARE · DO · CALL · EXEC)은 안에서 무엇을 바꾸는지 알 수 없어 백업하지 않습니다";
+  static final String R_TRUNCATE = "TRUNCATE 는 백업하지 않습니다(되돌릴 수 없습니다)";
+  static final String R_MODIFIER = "IGNORE · LOW_PRIORITY · QUICK 이 붙은 UPDATE · DELETE 는 백업하지 않습니다";
+  static final String R_VOLATILE = "WHERE 에 실행할 때마다 값이 달라지는 것(ROWNUM · 난수 · 시퀀스)이 있어 같은 행을 읽는다고 보장할 수 없습니다";
   static final String R_PARSE = "문장을 끝까지 읽지 못했습니다(닫히지 않은 따옴표 · 주석 · 괄호, 문장 안의 ;)";
 
   private static final char WORD = 'w';
@@ -84,6 +92,13 @@ public final class BackupSql {
   /** 스키마.표 까지만 받는다(카탈로그.스키마.표 · DB 링크는 PK 를 정확히 찾지 못한다). */
   private static final int MAX_NAME_PARTS = 2;
   private static final Set<String> DML_WORDS = Set.of("UPDATE", "DELETE", "MERGE");
+  /** 안에서 무엇을 바꾸는지 알 수 없는 실행의 첫 낱말. BEGIN 은 트랜잭션 시작(BEGIN_TX_WORDS 가 뒤따르거나 혼자)이면 뺀다. */
+  private static final Set<String> BLOCK_WORDS = Set.of("BEGIN", "DECLARE", "DO", "CALL", "EXEC", "EXECUTE");
+  private static final Set<String> BEGIN_TX_WORDS = Set.of("TRANSACTION", "WORK", "ISOLATION", "READ", "NOT", "DEFERRABLE");
+  /** MySQL 이 UPDATE · DELETE 바로 뒤에 받는 수식어. 표 이름으로 읽지 않는다. */
+  private static final Set<String> MYSQL_MODIFIERS = Set.of("IGNORE", "LOW_PRIORITY", "QUICK");
+  /** WHERE 안에 있으면 백업 SELECT 와 실제 문장이 다른 행을 고를 수 있거나(ROWNUM · 난수), SELECT 가 값을 바꾸는(시퀀스) 낱말. */
+  private static final Set<String> VOLATILE_WORDS = Set.of("ROWNUM", "RANDOM", "RAND", "DBMS_RANDOM", "NEXTVAL", "SYS_GUID", "GEN_RANDOM_UUID");
 
   /** text 의 [start, end) 낱말 하나. text 는 WORD 면 대문자, 나머지는 쓴 그대로. depth 는 괄호 깊이(괄호 자신은 바깥 깊이). */
   private record Tok(char type, String text, int start, int end, int depth) {
@@ -106,6 +121,16 @@ public final class BackupSql {
     if (all.isEmpty()) return Parsed.NONE;
     Tok head = all.get(0);
     if (head.word("MERGE")) return new Parsed(null, R_MERGE);
+    if (head.word("TRUNCATE")) return new Parsed(null, R_TRUNCATE);
+    Tok second = all.size() > 1 ? all.get(1) : null;
+    boolean beginTx = head.word("BEGIN") && (second == null || (second.type() == WORD && BEGIN_TX_WORDS.contains(second.text())));
+    if (head.type() == WORD && BLOCK_WORDS.contains(head.text()) && !beginTx) return new Parsed(null, R_BLOCK);
+    // JDBC 호출 꼴 「{call …}」 · 「{? = call …}」.
+    if (head.symbol("{") && hasWord(all, "CALL")) return new Parsed(null, R_BLOCK);
+    if (kind == DbKind.MYSQL && second != null && second.type() == WORD && MYSQL_MODIFIERS.contains(second.text())
+        && (head.word("UPDATE") || head.word("DELETE"))) {
+      return new Parsed(null, R_MODIFIER);
+    }
     if (head.word("WITH") || (head.word("EXPLAIN") && hasWord(all, "ANALYZE"))) {
       return hasChange(all) ? new Parsed(null, R_WRAPPED) : Parsed.NONE;
     }
@@ -146,6 +171,7 @@ public final class BackupSql {
       if (i >= top.size() || !top.get(i).word("SET")) return new Parsed(null, R_SHAPE);
       i++;
     }
+    Tok set = delete ? null : top.get(i - 1);
     Tok where = null;
     for (int k = i; k < top.size(); k++) {
       Tok t = top.get(k);
@@ -166,6 +192,9 @@ public final class BackupSql {
     if (where != null) {
       condition = text.substring(where.end()).strip();
       if (condition.isEmpty()) return new Parsed(null, R_SHAPE);
+      for (Tok t : all) {
+        if (t.start() > where.start() && t.type() == WORD && VOLATILE_WORDS.contains(t.text())) return new Parsed(null, R_VOLATILE);
+      }
     }
     for (Tok t : all) {
       if (t.type() != BIND) continue;
@@ -180,7 +209,27 @@ public final class BackupSql {
     for (Tok p : parts) names.add(written(text, p));
     String schema = names.size() == MAX_NAME_PARTS ? unbacktick(names.get(0)) : null;
     String name = unbacktick(names.get(names.size() - 1));
-    return new Parsed(new Target(delete, String.join(".", names), schema, name, alias, condition, before, inWhere), null);
+    return new Parsed(new Target(delete, String.join(".", names), schema, name, alias, condition, before, inWhere, assigned(all, set, where)), null);
+  }
+
+  /** SET 과 WHERE 사이에서 값을 받는 쪽(SET 바로 뒤 · 깊이 0 의 쉼표 뒤부터 깊이 0 의 = 앞까지)의 이름들. set 이 null 이면 빈 집합. */
+  private static Set<String> assigned(List<Tok> all, Tok set, Tok where) {
+    Set<String> out = new HashSet<>();
+    if (set == null) return out;
+    boolean target = true;
+    for (Tok t : all) {
+      if (t.start() < set.end() || (where != null && t.start() >= where.start())) continue;
+      if (t.depth() == 0 && t.symbol(",")) {
+        target = true;
+      } else if (t.depth() == 0 && t.symbol("=")) {
+        target = false;
+      } else if (target && t.type() == WORD) {
+        out.add(t.text());
+      } else if (target && t.type() == QUOTED) {
+        out.add(t.text().substring(1, t.text().length() - 1).toUpperCase(Locale.ROOT));
+      }
+    }
+    return out;
   }
 
   /** 백업할 행을 읽는 문장: 같은 표 · 같은 별칭 · 같은 WHERE 의 SELECT *. Oracle 은 표 별칭에 AS 를 받지 않으므로 AS 없이 쓴다. */
@@ -292,6 +341,13 @@ public final class BackupSql {
     String bare = table.replace("\"", "").replace("`", "");
     bare = bare.substring(bare.lastIndexOf('.') + 1);
     return FILE_TIME.format(time) + "_" + safeName(bare) + (nth > 1 ? "-" + nth : "") + EXTENSION;
+  }
+
+  private static final java.util.regex.Pattern OUR_FILE = java.util.regex.Pattern.compile("\\d{8}-\\d{6}_.*\\.sql");
+
+  /** 우리가 쓴 백업 파일인지: 이름이 「yyyyMMdd-HHmmss_….sql」 꼴이고 첫 줄이 우리 머리. 보존 일수 정리는 이런 파일만 지운다. */
+  static boolean isOurs(String fileName, String firstLine) {
+    return fileName != null && OUR_FILE.matcher(fileName).matches() && TITLE.equals(firstLine);
   }
 
   /** 파일 머리에 적는 것. excluded 는 뺀 LOB · 이진 칼럼, sql 은 원래 문장(? 값은 적지 않는다). */
@@ -440,6 +496,8 @@ public final class BackupSql {
       } else if (ch == '/' && next == '*') {
         int k = s.indexOf("*/", i + 2);
         if (k < 0) return null;
+        // PostgreSQL 은 주석 안의 주석을 겹쳐 읽어 끝나는 곳이 다르다: 읽지 못한 문장으로 돌린다.
+        if (kind == DbKind.POSTGRES && s.substring(i + 2, k).contains("/*")) return null;
         i = k + 2;
       } else if (ch == '\'' || (ch == '"' && kind == DbKind.MYSQL)) {
         int end = stringEnd(s, i, kind);

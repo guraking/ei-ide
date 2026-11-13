@@ -43,6 +43,13 @@ public final class PasteRows {
   private static final Pattern COMPACT_DATE = Pattern.compile("(\\d{4})(\\d{2})(\\d{2})" + TIME_PART);
   /** 자릿수 · 소수 자릿수를 검사하는 숫자 형식 머리(FLOAT · 정수 형식의 COLUMN_SIZE 는 십진 자릿수가 아니거나 범위가 따로 있다). */
   private static final Pattern DECIMAL_TYPE = Pattern.compile("(?i)(NUMBER|NUMERIC|DECIMAL|DEC)");
+  /** 범위가 정해진 부호 있는 정수 형식(PostgreSQL · MySQL). UNSIGNED · TINYINT · MEDIUMINT 등 그 밖은 범위를 검사하지 않는다. */
+  private static final Pattern INT2_TYPE = Pattern.compile("(?i)(SMALLINT|INT2|SMALLSERIAL|SERIAL2)");
+  private static final Pattern INT4_TYPE = Pattern.compile("(?i)(INT|INTEGER|INT4|SERIAL|SERIAL4)");
+  private static final Pattern INT8_TYPE = Pattern.compile("(?i)(BIGINT|INT8|BIGSERIAL|SERIAL8)");
+  private static final String ORACLE_NUMBER = "NUMBER";
+  /** Oracle NUMBER 의 저장 바이트 수(자릿수 없는 NUMBER 의 COLUMN_SIZE 로 오기도 한다). */
+  private static final int ORACLE_NUMBER_BYTES = 22;
   /** Oracle 의 글 칼럼 크기가 바이트일 때 한글 한 글자가 차지하는 바이트(AL32UTF8). */
   public static final int ORACLE_BYTES_PER_HANGUL = 3;
 
@@ -51,6 +58,8 @@ public final class PasteRows {
   static final String TOO_LONG = "길이 초과";
   static final String MAYBE_TOO_LONG = "칼럼 크기가 바이트 기준이면 길이 초과";
   static final String TOO_MANY_DIGITS = "자릿수 초과";
+  static final String TOO_MANY_DECIMALS = "소수 자릿수 초과";
+  static final String OUT_OF_RANGE = "정수 범위 초과";
   static final String EMPTY_NOT_NULL = "NOT NULL 인데 빔";
   static final String WIDTH_DIFFERS = "칸 수가 다름";
   static final String NO_COLUMN = "맞는 칼럼이 없어 넣지 않음";
@@ -124,20 +133,21 @@ public final class PasteRows {
 
   /**
    * 머리 칸마다 칼럼 번호(못 맞추면 SKIP). 칼럼 이름(대소문자 무시)을 먼저, 없으면 칼럼 주석(한글 이름)과 같은 것을 찾는다.
-   * 이미 맞춘 칼럼은 다시 맞추지 않는다.
+   * 이미 맞춘 칼럼은 다시 맞추지 않는다. 주석이 같은 칼럼이 여럿이면 아직 맞추지 않은 앞 칼럼부터 차례로 맞춘다.
    */
   public static int[] match(List<String> header, List<Meta.Column> columns) {
     Map<String, Integer> byName = new HashMap<>();
-    Map<String, Integer> byComment = new HashMap<>();
-    for (int i = 0; i < columns.size(); i++) {
-      byName.putIfAbsent(key(columns.get(i).name()), i);
-      if (!columns.get(i).comment().isBlank()) byComment.putIfAbsent(key(columns.get(i).comment()), i);
-    }
+    for (int i = 0; i < columns.size(); i++) byName.putIfAbsent(key(columns.get(i).name()), i);
     int[] out = new int[header.size()];
     boolean[] used = new boolean[columns.size()];
     for (int i = 0; i < out.length; i++) {
       String k = key(header.get(i));
-      Integer found = byName.containsKey(k) ? byName.get(k) : byComment.get(k);
+      Integer found = byName.get(k);
+      if (found == null && !k.isEmpty()) {
+        for (int m = 0; m < columns.size() && found == null; m++) {
+          if (!used[m] && k.equals(key(columns.get(m).comment()))) found = m;
+        }
+      }
       out[i] = found == null || used[found] ? SKIP : found;
       if (out[i] != SKIP) used[found] = true;
     }
@@ -233,7 +243,8 @@ public final class PasteRows {
   }
 
   /**
-   * 칸 글 하나를 칼럼 형식에 맞는 값으로. 빈 칸은 NULL(NOT NULL 칼럼이면 문제), 숫자 칼럼은 천 단위 쉼표를 떼고 자릿수를 보며,
+   * 칸 글 하나를 칼럼 형식에 맞는 값으로. 빈 칸은 NULL(NOT NULL 칼럼이면 문제), 숫자 칼럼은 천 단위 쉼표를 떼고 자릿수를 보며
+   * (정수 자릿수 · 소수 자릿수(끝의 0 은 세지 않음) · int2/int4/int8 범위. 자릿수 · 범위를 확실히 모르는 형식은 검사하지 않는다),
    * 날짜 · 시각 칼럼은 parseDate 가 읽는 꼴만 받고, 글 칼럼은 길이를 본다(글자 수가 크기를 넘으면 문제,
    * Oracle 에서 글자 수는 맞지만 UTF-8 바이트가 넘으면 주의). 그 밖의 형식은 글 그대로 넘긴다.
    */
@@ -251,6 +262,16 @@ public final class PasteRows {
         int room = digitRoom(col);
         if (room >= 0 && n.signum() != 0 && n.precision() - n.scale() > room) {
           return new Cell(asText, TOO_MANY_DIGITS + "(정수 " + room + "자리까지): " + s, true);
+        }
+        int decimals = Math.max(n.stripTrailingZeros().scale(), 0);
+        long limit = integerLimit(col);
+        int scale = limit > 0 ? 0 : room >= 0 ? col.scale() : -1;
+        if (scale >= 0 && decimals > scale) {
+          return new Cell(asText, TOO_MANY_DECIMALS + "(소수 " + scale + "자리까지): " + s, true);
+        }
+        // 음수 쪽은 한 칸 더 넓다(-32768 · -2147483648 · Long.MIN_VALUE).
+        if (limit > 0 && (n.compareTo(BigDecimal.valueOf(limit)) > 0 || n.compareTo(BigDecimal.valueOf(-limit - 1)) < 0)) {
+          return new Cell(asText, OUT_OF_RANGE + "(" + col.type() + "): " + s, true);
         }
         return new Cell(InsertRows.number(n), null, false);
       }
@@ -281,10 +302,21 @@ public final class PasteRows {
     return col.size() > 0 && col.size() < Integer.MAX_VALUE / 2;
   }
 
+  /** 정수 형식의 가장 큰 값. 범위를 확실히 모르는 형식이면 0. */
+  static long integerLimit(Meta.Column col) {
+    String t = col.type().strip();
+    if (INT2_TYPE.matcher(t).matches()) return Short.MAX_VALUE;
+    if (INT4_TYPE.matcher(t).matches()) return Integer.MAX_VALUE;
+    if (INT8_TYPE.matcher(t).matches()) return Long.MAX_VALUE;
+    return 0;
+  }
+
   /** 정수 부분에 쓸 수 있는 자릿수. 자릿수를 정하지 않은 숫자 · 정밀도가 십진 자릿수가 아닌 형식이면 -1(검사하지 않음). */
   static int digitRoom(Meta.Column col) {
     if (!DECIMAL_TYPE.matcher(col.type().strip()).matches()) return -1;
     if (col.size() <= 0 || col.size() >= TypeMap.UNBOUNDED_PRECISION || col.scale() < 0) return -1;
+    // 옛 Oracle 드라이버는 자릿수 없는 NUMBER 를 (22, 0) 으로 알려 NUMBER(22) 와 구분할 수 없다.
+    if (ORACLE_NUMBER.equalsIgnoreCase(col.type().strip()) && col.size() == ORACLE_NUMBER_BYTES && col.scale() == 0) return -1;
     return Math.max(col.size() - col.scale(), 0);
   }
 

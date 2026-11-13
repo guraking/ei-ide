@@ -46,6 +46,8 @@ public class PasteRowsCheck {
     // 머리 맞추기: 이름(대소문자 무시) · 한글 주석 · 모르는 머리
     eq(List.of(0, 1, PasteRows.SKIP, 3), box(PasteRows.match(List.of("order_id", " 고객 이름 ", "비고", "주문일"), COLUMNS)));
     eq(List.of(0, PasteRows.SKIP), box(PasteRows.match(List.of("ORDER_ID", "주문번호"), COLUMNS)));
+    // 주석이 같은 두 칼럼은 머리 순서대로 하나씩 맞춘다(뒤 칸을 버리지 않는다).
+    eq(List.of(0, 1), box(PasteRows.match(List.of("비고", "비고"), List.of(col("MEMO1", "VARCHAR2", 10, 0, true, "비고"), col("MEMO2", "VARCHAR2", 10, 0, true, "비고")))));
     yes(PasteRows.looksLikeHeader(List.of("주문번호", "고객 이름", "비고"), COLUMNS), "한글 머리");
     yes(!PasteRows.looksLikeHeader(List.of("1001", "홍길동", "3,000"), COLUMNS), "데이터 줄은 머리가 아님");
     eq(List.of(0, 1, 2, 3, 4, PasteRows.SKIP), box(PasteRows.byOrder(6, COLUMNS.size())));
@@ -113,7 +115,34 @@ public class PasteRowsCheck {
     yes(p.blocking() && p.row() == 0 && p.cell() == 0 && p.column().equals("ORDER_ID") && p.reason().startsWith(PasteRows.NOT_NUMBER), "숫자 칼럼에 글");
     yes(only(convert("1", "a", "1,5", "")).reason().startsWith(PasteRows.NOT_NUMBER), "쉼표 자리가 틀린 숫자");
     yes(only(convert("1234567", "a", "", "")).reason().startsWith(PasteRows.TOO_MANY_DIGITS), "정수 자릿수");
-    eq(convert("1", "a", "1234567890.129", "").problems(), List.of());
+    p = only(convert("1", "a", "1234567890.129", ""));
+    yes(p.blocking() && p.reason().startsWith(PasteRows.TOO_MANY_DECIMALS), "소수 자릿수 초과");
+    eq(convert("1", "a", "1234567890.1200", "").problems(), List.of());
+    yes(only(convert("1.5", "a", "", "")).reason().startsWith(PasteRows.TOO_MANY_DECIMALS), "NUMBER(6) 에 소수");
+    eq(convert("100.0", "a", "", "").problems(), List.of());
+    // 정수 형 범위: int2 · int4 · int8 의 양 끝과 한 칸 밖, 소수. 범위를 모르는 형식(UNSIGNED · 자릿수 없는 NUMBER · numeric)은 통과.
+    eq(number("int2", 5, 0, "32767"), null);
+    eq(number("int2", 5, 0, "-32768"), null);
+    yes(number("int2", 5, 0, "32768").startsWith(PasteRows.OUT_OF_RANGE), "int2 위");
+    yes(number("smallint", 5, 0, "-32769").startsWith(PasteRows.OUT_OF_RANGE), "int2 아래");
+    eq(number("int4", 10, 0, "2147483647"), null);
+    yes(number("int4", 10, 0, "2,147,483,648").startsWith(PasteRows.OUT_OF_RANGE), "int4 위");
+    yes(number("serial", 10, 0, "-2147483649").startsWith(PasteRows.OUT_OF_RANGE), "int4 아래");
+    eq(number("int8", 19, 0, "-9223372036854775808"), null);
+    yes(number("BIGINT", 19, 0, "9223372036854775808").startsWith(PasteRows.OUT_OF_RANGE), "int8 위");
+    yes(number("int4", 10, 0, "1.5").startsWith(PasteRows.TOO_MANY_DECIMALS), "정수 칼럼에 소수");
+    eq(number("int4", 10, 0, "7.00"), null);
+    eq(number("INT UNSIGNED", 10, 0, "4000000000"), null);
+    eq(number("NUMBER", 0, -127, "123456789012345678901234567890.123456789"), null);
+    eq(number("NUMBER", 22, -127, "1.5"), null);
+    // Oracle NUMBER (22, 0): 옛 드라이버의 자릿수 없는 NUMBER 일 수 있어 자릿수 · 소수 자릿수를 검사하지 않는다.
+    eq(number("NUMBER", 22, 0, "1.5"), null);
+    eq(number("NUMBER", 22, 0, "12345678901234567890123.25"), null);
+    yes(number("NUMBER", 21, 0, "1.5").startsWith(PasteRows.TOO_MANY_DECIMALS), "NUMBER(21) 은 검사한다");
+    yes(number("numeric", 22, 0, "1.5").startsWith(PasteRows.TOO_MANY_DECIMALS), "PostgreSQL numeric(22) 은 검사한다");
+    eq(number("numeric", 131089, 0, "1.5"), null);
+    eq(number("float8", 17, 17, "1.123456789012345678901"), null);
+    yes(number("numeric", 5, 2, "1.234").startsWith(PasteRows.TOO_MANY_DECIMALS), "numeric(5,2)");
     yes(only(convert("1", "a", "12345678901", "")).reason().startsWith(PasteRows.TOO_MANY_DIGITS), "소수 칼럼의 정수 자릿수");
     eq(PasteRows.value(DbKind.ORACLE, col("RATE", "NUMBER", 2, 2, true, ""), "0", true).reason(), null);
     yes(only(convert("1", "a", "", "3월 5일")).reason().startsWith(PasteRows.BAD_DATE), "날짜");
@@ -163,6 +192,13 @@ public class PasteRowsCheck {
     eq(InsertRows.typeOf("bool"), InsertRows.Type.OTHER);
 
     System.out.println("PasteRowsCheck 통과");
+  }
+
+  /** 숫자 칼럼 하나에 넣어 본 문제 이유(없으면 null). 문제는 모두 막는 문제여야 한다. */
+  static String number(String type, int size, int scale, String text) {
+    PasteRows.Cell cell = PasteRows.value(DbKind.POSTGRES, col("N", type, size, scale, true, ""), text, true);
+    yes(cell.reason() == null || cell.blocking(), "숫자 문제는 막는 문제: " + text);
+    return cell.reason();
   }
 
   static PasteRows.Result convert(String... cells) {
