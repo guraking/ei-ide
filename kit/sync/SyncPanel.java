@@ -334,7 +334,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
   // 서버에서 지운 원격 추적 참조가 남아 대소문자만 다른 새 브랜치 폴더를 막을 때 git 이 내는 문구('…/Feature' exists; cannot create '…/feature/x'). 1번 묶음이 막는 참조.
   // git 이 DLL 을 읽지 못했을 때 내는 문구(윈도우 git: http.c · run-command). 보안 프로그램이 잠깐 막은 경우라 다시 실행한다(runBytes).
   private static final List<String> LIBRARY_LOAD_ERRORS = List.of("LoadLibraryExW() failed", "failed to load library");
-  private static final int LIBRARY_RETRIES = 2;
+  private static final int LIBRARY_RETRIES = 3;
+  private static final Semaphore LIBRARY_RETRY_SLOT = new Semaphore(1);
   private static final long LIBRARY_RETRY_DELAY_MS = 1000;
   private static final Pattern REF_BLOCKED = Pattern.compile("'(refs/remotes/[^']+)' exists; cannot create 'refs/remotes/[^']+'");
   // 터미널에서 아이디 · 비밀번호를 묻지 않고 곧바로 실패하게 한다(표준 입력이 닫혀 있어 물어도 답할 수 없다).
@@ -3936,7 +3937,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static byte[] runBytes(File dir, long timeoutSec, List<GitLogins.Login> logins, String exe, String... args) throws IOException, InterruptedException {
     // 서버에 닿는 git 은 git-remote-https 가 libcurl-4.dll 을 읽는다. 회사 PC 의 보안 프로그램(응용 프로그램 제어)이 여러 git 이 함께 뜰 때
     // 그 읽기를 가끔 막는다(LoadLibraryExW() failed). 서버에 닿기 전에 끝난 실패라 조금 쉬었다가 다시 해도 안전하다.
+    // 다시 하는 실행은 한 번에 하나씩 돌려(LIBRARY_RETRY_SLOT) 여럿이 함께 DLL 을 읽다 또 막히지 않게 한다.
     for (int attempt = 1; ; attempt++) {
+      boolean retry = attempt > 1;
+      if (retry) LIBRARY_RETRY_SLOT.acquire();
       try {
         return runOnce(dir, timeoutSec, logins, exe, args);
       }
@@ -3944,6 +3948,9 @@ final class SyncPanel extends SimpleToolWindowPanel {
         if (attempt > LIBRARY_RETRIES || e.getMessage() == null || !GIT.equals(exe) || !GIT_REMOTE_VERBS.contains(verb(args)) || !containsAny(e.getMessage(), LIBRARY_LOAD_ERRORS)) throw e;
         LOG.warn("git 이 라이브러리를 읽지 못해 다시 실행(" + attempt + "/" + LIBRARY_RETRIES + ") [" + dir.getName() + "] " + e.getMessage());
         Thread.sleep(LIBRARY_RETRY_DELAY_MS * attempt);
+      }
+      finally {
+        if (retry) LIBRARY_RETRY_SLOT.release();
       }
     }
   }
