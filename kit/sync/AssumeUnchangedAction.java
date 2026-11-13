@@ -23,9 +23,11 @@ import org.jetbrains.annotations.NotNull;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 커밋 창 · 변경 목록 · 프로젝트 트리 우클릭 메뉴의 「Assume Unchanged」. 고른 파일을 Git 저장소별로 묶어 git update-index --skip-worktree 를 돌린다.
@@ -37,6 +39,8 @@ public class AssumeUnchangedAction extends AnAction implements DumbAware {
 
   /** 알림 설정(Settings → Notifications)에서 이 알림을 가려 끌 수 있게 붙이는 표시 ID. */
   private static final String NOTIFICATION_ID = "kinggura.sync.assumeUnchanged";
+  // git ls-files -z 가 경로 사이에 넣는 글자.
+  private static final String NUL = "\0";
 
   /** 프로젝트 트리 우클릭의 「No Assume Unchanged」. */
   public static final class Undo extends AssumeUnchangedAction {
@@ -62,8 +66,9 @@ public class AssumeUnchangedAction extends AnAction implements DumbAware {
       int count = 0;
       List<String> failures = new ArrayList<>();
       for (Map.Entry<File, List<String>> entry : byRoot.entrySet()) {
-        List<String> paths = entry.getValue();
         try {
+          List<String> paths = tracked(entry.getKey(), entry.getValue());
+          if (paths.isEmpty()) continue;
           // 명령줄 한도에 맞게 나누는 것은 setHidden 이 한다.
           SyncPanel.setHidden(entry.getKey(), paths, on());
           count += paths.size();
@@ -97,6 +102,26 @@ public class AssumeUnchangedAction extends AnAction implements DumbAware {
         else VcsNotifier.getInstance(project).notifyInfo(NOTIFICATION_ID, title, m);
       }, project.getDisposed());
     });
+  }
+
+  /**
+   * paths(root 기준 상대 경로) 가운데 git 색인에 있는 파일만 고른 순서대로. 켜자마자처럼 변경 목록이 아직 읽지 않은 새 파일이 섞여도
+   * git update-index 가 통째로 실패하지 않게 git 에 직접 묻는다. 경로는 글자 그대로 맞춘다(--literal-pathspecs).
+   */
+  static List<String> tracked(File root, List<String> paths) throws IOException, InterruptedException {
+    Set<String> known = new HashSet<>();
+    for (List<String> part : SyncPanel.chunks(paths)) {
+      List<String> args = new ArrayList<>(List.of("--literal-pathspecs", "ls-files", "-z", "--"));
+      args.addAll(part);
+      for (String name : SyncPanel.git(root, args.toArray(String[]::new)).split(NUL)) {
+        if (!name.isEmpty()) known.add(name);
+      }
+    }
+    List<String> result = new ArrayList<>();
+    for (String path : paths) {
+      if (known.contains(path)) result.add(path);
+    }
+    return result;
   }
 
   /** 고른 파일 가운데 Git 이 추적하는 파일을 루트별로 묶는다. 경로는 루트 기준 상대 경로('/' 구분)다. */
