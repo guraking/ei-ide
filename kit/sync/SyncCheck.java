@@ -289,6 +289,7 @@ public class SyncCheck {
     checkGitLogins();
     checkGitUndo();
     checkStability1112();
+    checkPullFailures();
     System.out.println("SyncCheck 통과");
   }
 
@@ -784,6 +785,17 @@ public class SyncCheck {
     // 빈 저장소(추적 대상 없음)는 고를 것이 없다.
     sh(tmp.toFile(), "git init -q empty");
     eq(CloneBranch.remote(tmp.resolve("empty").toFile()), null);
+  }
+
+  /** 받기 실패 글 가르기: 갈라짐 · 덮어쓰기 · 충돌만 받기 창으로, 서버 연결 · 인증 실패는 이유를 보인다. 메시지 없는 예외는 예외 이름. */
+  private static void checkPullFailures() {
+    eq(SyncPanel.pullNeedsDialog("git merge 실패: fatal: Not possible to fast-forward, aborting."), true);
+    eq(SyncPanel.pullNeedsDialog("git merge 실패: error: Your local changes to the following files would be overwritten by merge:\n\ta.txt"), true);
+    eq(SyncPanel.pullNeedsDialog("git pull 실패: error: Pulling is not possible because you have unmerged files."), true);
+    eq(SyncPanel.pullNeedsDialog("git fetch 실패: fatal: unable to access 'https://git.example.com/a.git/': Could not resolve host: git.example.com"), false);
+    eq(SyncPanel.pullNeedsDialog("git fetch 실패: fatal: Authentication failed for 'https://git.example.com/a.git/'"), false);
+    eq(SyncPanel.messageOf(new IOException((String) null)), "java.io.IOException");
+    eq(SyncPanel.messageOf(new IOException("x")), "x");
   }
 
   /** 2026-11-12 안정화 전수조사: 저장소 찾기 · 참조 읽기 · 빈 저장소 · 받기 목록 · 이클립스 파일 찾기. */
