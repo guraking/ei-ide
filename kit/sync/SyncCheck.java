@@ -351,6 +351,13 @@ public class SyncCheck {
 
   /** 워크스페이스 판정과 그 안 저장소 폴더: .git · package.json · 빌드 파일이 있는 폴더, 없으면 묶음 폴더 한 단계 아래. 점 · 빌드 결과 · SVN 폴더는 빼고 이름순. */
   private static void checkWorkspaceRepos() throws IOException {
+    // 붙일 때 짓는 모듈 이름(freeModuleName)만 우리 모듈로 본다(dropShadowedModules).
+    eq(CloneIntoProject.attachedName("gpm-back-app", "gpm-back-app"), true);
+    eq(CloneIntoProject.attachedName("GPM-back-app-2", "gpm-back-app"), true);
+    eq(CloneIntoProject.attachedName("gpm-back-app-12", "gpm-back-app"), true);
+    eq(CloneIntoProject.attachedName("gpm-back-app-", "gpm-back-app"), false);
+    eq(CloneIntoProject.attachedName("gpm-back-app-core", "gpm-back-app"), false);
+    eq(CloneIntoProject.attachedName("serviceadapter", "axplm-back-serviceadapter"), false);
     java.nio.file.Path ws = java.nio.file.Files.createTempDirectory("ws");
     eq(CloneIntoProject.looseWorkspace(ws), true);
     eq(CloneIntoProject.repoDirs(ws), List.of());

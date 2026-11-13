@@ -104,8 +104,9 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
   private static final String KIND_OUTPUT = "(?s).*\\bkind=\"output\".*";
   // .classpath 에 적지 않아도 소스 · 웹 폴더로 보는 이클립스 기본 폴더(Dynamic Web Project · MyEclipse).
   private static final List<String> ECLIPSE_SOURCE_DIRS = List.of("src", "WebContent", "WebRoot");
-  // 자동으로 제외한 폴더 URL 목록(프로젝트 설정). 여기 있는 폴더는 켤 때 다시 제외하지 않는다(excludeDirs).
-  private static final String AUTO_EXCLUDED_KEY = "kinggura.sync.autoExcluded";
+  // 열 때 제외 상태를 확인한 폴더 URL 목록(프로젝트 설정). 여기 있는 폴더는 켤 때 다시 제외하지 않는다(excludeDirs).
+  // 옛 열쇠(kinggura.sync.autoExcluded)는 Maven 이 지운 제외까지 적혀 있어 쓰지 않는다. 새 열쇠로 바뀐 첫 실행에 한 번 다시 제외한다.
+  private static final String AUTO_EXCLUDED_KEY = "kinggura.sync.autoExcluded.v2";
 
   @Override
   public void runActivity(@NotNull Project project) {
@@ -116,11 +117,46 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
     DumbService.getInstance(project).smartInvokeLater(() -> tidyClosed(project));
   }
 
-  /** 켤 때 닫은 저장소 정리: 폴더가 없어진 것은 지우고(dropStaleClosed), 나머지는 Maven · 편집기를 맞춘다(CloseRepoAction.syncClosed). EDT. */
+  /**
+   * 켤 때 닫은 저장소 정리: 폴더가 없어진 것은 지우고(dropStaleClosed), 나머지는 Maven · 편집기를 맞춘다(CloseRepoAction.syncClosed).
+   * 같은 폴더를 Gradle 모듈과 함께 잡은 우리 모듈도 뺀다(dropShadowedModules). EDT.
+   */
   private static void tidyClosed(Project project) {
     if (project.isDisposed()) return;
     dropStaleClosed(project, null);
     CloseRepoAction.syncClosed(project);
+    dropShadowedModules(project);
+  }
+
+  /**
+   * 저장소를 붙일 때 만든 모듈(폴더 이름 · 「폴더이름-N」, 콘텐츠 루트는 그 폴더 하나, 소스 폴더 없음)과 같은 폴더를 다른 이름의 모듈이 잡으면 우리 모듈을 뺀다. EDT.
+   * Gradle 은 이름이 같은 모듈만 이어받아(IdeModelsProviderImpl.findIdeModule) rootProject.name 이 폴더 이름과 다르면 같은 폴더에 모듈이 둘 남는다.
+   * Gradle 의 맨 위 모듈은 소스 폴더가 없을 수 있어(소스 묶음마다 모듈) 소스 폴더로는 가르지 않는다.
+   * Maven 은 가져올 때 이런 모듈을 스스로 지운다(WorkspaceProjectImporter.removeNonMavenModulesWithClashingContentRoots).
+   */
+  static void dropShadowedModules(Project project) {
+    if (project.isDisposed()) return;
+    Module[] modules = ModuleManager.getInstance(project).getModules();
+    for (Module module : modules) {
+      ModuleRootManager rootManager = ModuleRootManager.getInstance(module);
+      VirtualFile[] roots = rootManager.getContentRoots();
+      if (roots.length != 1 || rootManager.getSourceRoots().length != 0 || !attachedName(module.getName(), roots[0].getName())) continue;
+      for (Module other : modules) {
+        if (other == module || other.isDisposed() || attachedName(other.getName(), roots[0].getName())) continue;
+        if (!List.of(ModuleRootManager.getInstance(other).getContentRoots()).contains(roots[0])) continue;
+        LOG.info("같은 폴더를 모듈 " + other.getName() + " 이 잡아 붙일 때 만든 모듈을 뺍니다: " + module.getName() + " " + roots[0].getPath());
+        disposeModule(project, module);
+        break;
+      }
+    }
+  }
+
+  /** 저장소를 붙일 때 폴더 이름으로 짓는 모듈 이름(freeModuleName: 이름, 이름-2, 이름-3 …)이면 true. 대소문자는 가리지 않는다. */
+  static boolean attachedName(String moduleName, String folderName) {
+    if (moduleName.equalsIgnoreCase(folderName)) return true;
+    String prefix = folderName + "-";
+    return moduleName.length() > prefix.length() && moduleName.regionMatches(true, 0, prefix, 0, prefix.length())
+           && moduleName.substring(prefix.length()).chars().allMatch(Character::isDigit);
   }
 
   /**
@@ -444,7 +480,7 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
 
   /**
    * 저장소 폴더를 Clone 과 같은 모듈(.idea/modules/폴더이름.iml, 프로젝트 SDK, 빌드 결과 제외, Git 매핑)로 붙인다. EDT 에서 부른다.
-   * 그 폴더나 그 위 · 아래 폴더가 이미 어느 모듈의 콘텐츠 루트이거나(프로젝트 폴더 모듈은 빼고), 같은 이름의 내린 모듈(닫은 저장소)이 있으면 붙이지 않는다.
+   * 그 폴더나 그 위 · 아래 폴더가 이미 어느 모듈의 콘텐츠 루트이거나(프로젝트 폴더 모듈은 빼고), 콘텐츠 루트를 모르는 같은 이름의 내린 모듈(닫은 저장소)이 있으면 붙이지 않는다.
    * 같은 이름의 올라온 모듈(Maven artifactId 등)이 있으면 「이름-2」 처럼 비는 이름으로 붙인다(freeModuleName).
    * 붙이다 실패하면 만든 모듈과 매핑을 되돌리고 기록만 남긴다.
    */
@@ -452,8 +488,9 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
     VirtualFile dir = found.dir();
     Path repo = found.path();
     if (!dir.isValid()) return;
+    // 닫은 저장소는 부르는 쪽이 경로로 걸렀다(LooseState.closed). 경로를 모르는 내린 모듈만 이름으로 본다.
     for (UnloadedModuleDescription description : ModuleManager.getInstance(project).getUnloadedModuleDescriptions()) {
-      if (description.getName().equalsIgnoreCase(dir.getName())) return;
+      if (description.getName().equalsIgnoreCase(dir.getName()) && CloseRepoAction.rootsOf(project, description).isEmpty()) return;
     }
     String base = project.getBasePath();
     for (Module module : ModuleManager.getInstance(project).getModules()) {
@@ -530,7 +567,13 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
   private static void excludeBuildOutput(Project project) {
     Map<Module, List<Path>> found = new LinkedHashMap<>();
     // 워크스페이스 폴더 자체 모듈은 removeWorkspaceModule 이 뺀다. 그 모듈에 저장소 안 폴더를 제외로 넣지 않는다.
+    // 아직 붙은 저장소가 없는 처음 열기도 거른다(looseWorkspace). 거르지 않으면 저장소 폴더들이 「확인함」으로 적혀,
+    // 붙인 모듈을 Maven 이 바꾸며 지운 제외를 다음에 켤 때 다시 넣지 못한다(excludeDirs).
     VirtualFile workspace = ReadAction.compute(() -> project.isDisposed() ? null : workspaceDir(project));
+    String basePath = project.isDefault() ? null : project.getBasePath();
+    if (workspace == null && basePath != null && looseWorkspace(Path.of(basePath))) {
+      workspace = LocalFileSystem.getInstance().findFileByNioFile(Path.of(basePath));
+    }
     for (Module module : ModuleManager.getInstance(project).getModules()) {
       VirtualFile[] roots = ReadAction.compute(() -> module.isDisposed() ? VirtualFile.EMPTY_ARRAY : ModuleRootManager.getInstance(module).getContentRoots());
       List<Path> dirs = new ArrayList<>();
@@ -548,8 +591,9 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
   /**
    * 아직 제외가 아닌 폴더를 그 폴더를 품은 콘텐츠 루트의 제외 폴더로 더한다. EDT 에서 부른다.
    * 소스 폴더이거나 소스 폴더를 품은 폴더는 건너뛴다(이클립스 출력 폴더를 소스 폴더와 같게 둔 프로젝트). 더할 것이 없으면 모듈을 고치지 않는다.
-   * 한 번 제외한(또는 이미 제외였던) 폴더는 AUTO_EXCLUDED_KEY 에 적고, 켤 때(fresh=false)는 적힌 폴더를 다시 제외하지 않는다.
-   * 사용자가 「Cancel Exclusion」으로 푼 것을 지키기 위해서다. 방금 받은 저장소(fresh=true)는 적힌 것이어도 제외한다(지우고 다시 받은 경우).
+   * 켤 때(fresh=false) 제외한(또는 이미 제외였던) 폴더는 AUTO_EXCLUDED_KEY 에 적고, 켤 때는 적힌 폴더를 다시 제외하지 않는다.
+   * 사용자가 「Cancel Exclusion」으로 푼 것을 지키기 위해서다. 방금 받은 저장소(fresh=true)는 적힌 것이어도 제외하고 적지 않는다(지우고 다시 받은 경우).
+   * 받은 직후 붙인 모듈은 Maven 이 가져오며 같은 폴더의 Maven 모듈로 바꾸고 그 제외도 지우므로, 다음에 켤 때 그 모듈에 다시 넣고 그때 적는다.
    */
   static void excludeDirs(Module module, List<Path> dirs, boolean fresh) {
     if (module.isDisposed()) return;
@@ -565,9 +609,9 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
     for (Path dir : dirs) {
       String url = VfsUtilCore.pathToUrl(FileUtil.toSystemIndependentName(dir.toString()));
       boolean recorded = done.contains(url);
-      if (!recorded) done.add(url);
-      if (have.contains(url) || add.contains(url) || coversAny(url, sources) || (recorded && !fresh)) continue;
-      add.add(url);
+      if (add.contains(url) || coversAny(url, sources) || (recorded && !fresh)) continue;
+      if (!fresh) done.add(url);
+      if (!have.contains(url)) add.add(url);
     }
     if (done.size() != doneBefore) properties.setList(AUTO_EXCLUDED_KEY, done);
     if (add.isEmpty()) return;

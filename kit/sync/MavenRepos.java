@@ -2,6 +2,7 @@ package kinggura.sync;
 
 import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.ModuleRootManager;
@@ -29,10 +30,13 @@ import java.util.function.Predicate;
  * Maven 플러그인이 켜져 있을 때만 이 클래스를 읽는다(CloseRepoAction.mavenEnabled). EDT 에서 부른다.
  */
 final class MavenRepos {
+  private static final Logger LOG = Logger.getInstance(MavenRepos.class);
   private static final String PACKAGING_POM = "pom";
   // IDE 를 켠 직후 Maven 목록이 읽히기를 기다리는 간격과 횟수(합쳐 5분).
   private static final int RETRY_SECONDS = 3;
   private static final int RETRY_LIMIT = 100;
+  // 처음 쓰는 Maven 의 첫 pom 연결(신뢰 확인 · pom 읽기 · 부모 pom 받기)을 기다리는 횟수(합쳐 30분). 느린 사내망 · 인터넷 없는 PC 를 덮는다.
+  private static final int LINK_RETRY_LIMIT = 600;
   // 닫을 때 우리가 Maven 무시 목록에 넣은 pom 경로(프로젝트 설정). 열 때 이것만 푼다(open).
   private static final String IGNORED_KEY = "kinggura.sync.mavenIgnored";
 
@@ -42,6 +46,7 @@ final class MavenRepos {
   /**
    * 이 폴더들 안의 pom 을 Maven 무시 목록에 넣거나(closed) 뺀다(open). 바뀐 것이 있으면 Maven 을 다시 읽는다(Reload All Maven Projects 와 같음).
    * IDE 를 켠 직후처럼 Maven 목록이 아직 안 읽혔으면 RETRY_SECONDS 마다 다시 해 본다(최대 RETRY_LIMIT 번). Maven 프로젝트가 아니면 하지 않는다.
+   * Maven 을 한 번도 쓰지 않은 프로젝트(맡은 pom 이 없음)는 「아직 안 읽힘」과 같아 보이므로(isMavenizedProject 는 isInitialized 와 같다) 기다리지 않는다.
    */
   static void setClosed(Project project, Collection<String> roots, boolean closed) {
     setClosed(project, List.copyOf(roots), closed, !closed, 0);
@@ -55,6 +60,7 @@ final class MavenRepos {
   private static void setClosed(Project project, List<String> roots, boolean closed, boolean notify, int attempt) {
     if (project.isDisposed()) return;
     MavenProjectsManager manager = MavenProjectsManager.getInstance(project);
+    if (!manager.isInitialized() && manager.getState().getOriginalFiles().isEmpty()) return;
     boolean loading = !manager.isInitialized() || (manager.isMavenizedProject() && manager.getProjects().isEmpty());
     if (loading) {
       if (attempt < RETRY_LIMIT) {
@@ -111,7 +117,7 @@ final class MavenRepos {
    * findProject 는 다중 모듈의 아래 pom(목록에는 맨 위 pom 만 있음)을 가른다. Maven 이 안 읽혔으면 null 이라 그때는 목록만 본다.
    * 하나면 link(「Add as Maven Project」)로 연결한다. 여럿이면 Maven 동기화가 pom 수만큼 돌지 않게 한 번에 맡긴다:
    * 이미 Maven 프로젝트면 모두 addManagedFilesOrUnignore 한 번, 아직 Maven 을 쓴 적 없으면 첫 pom 만 link 로 연결해(Maven 설정 · 신뢰 확인)
-   * 그것이 맡은 파일이 된 뒤 나머지를 한 번에 맡긴다. Maven 이 RETRY_LIMIT 번 안에 준비되지 않으면 나머지를 하나씩 link 한다.
+   * 그것이 맡은 파일이 된 뒤 나머지를 한 번에 맡긴다. Maven 이 LINK_RETRY_LIMIT 번 안에 준비되지 않으면 나머지는 이번에 연결하지 않는다(다음에 열 때 다시 함).
    */
   static void linkAll(Project project, List<VirtualFile> poms, Predicate<VirtualFile> link) {
     if (project.isDisposed()) return;
@@ -126,42 +132,42 @@ final class MavenRepos {
       return;
     }
     if (manager.isMavenizedProject()) {
-      addWhenReady(project, null, unknown, link, 0);
+      addWhenReady(project, null, unknown, 0);
       return;
     }
     // 첫 연결 동작이 보이지 않는 pom(다른 빌드 도구가 맡음 등)은 건너뛰고 다음 것으로 연결을 연다.
     for (int k = 0; k < unknown.size(); k++) {
       if (!link.test(unknown.get(k))) continue;
       List<VirtualFile> rest = new ArrayList<>(unknown.subList(k + 1, unknown.size()));
-      if (!rest.isEmpty()) addWhenReady(project, unknown.get(k), rest, link, 0);
+      if (!rest.isEmpty()) addWhenReady(project, unknown.get(k), rest, 0);
       return;
     }
   }
 
   /**
    * Maven 이 준비되면(읽기 끝 · first 가 있으면 그것이 맡은 파일이 됨) rest 를 한 번에 맡긴다(동기화 한 번). 아직이면 RETRY_SECONDS 뒤 다시 본다.
-   * RETRY_LIMIT 번을 넘기면(신뢰 확인 창을 닫지 않음 등) rest 를 하나씩 link 한다. EDT 에서 부른다.
+   * LINK_RETRY_LIMIT 번을 넘기면(신뢰 확인에서 연결 안 함 · 첫 pom 읽기가 끝나지 않음) 하나씩 연결하지 않고 그만둔다.
+   * 하나씩 연결하면 pom 마다 Maven 동기화와 신뢰 확인 창이 따로 뜬다. 남은 pom 은 다음에 열 때 다시 연결한다(linkOnOpen). EDT 에서 부른다.
    */
-  private static void addWhenReady(Project project, VirtualFile first, List<VirtualFile> rest, Predicate<VirtualFile> link, int attempt) {
+  private static void addWhenReady(Project project, VirtualFile first, List<VirtualFile> rest, int attempt) {
     if (project.isDisposed()) return;
     MavenProjectsManager manager = MavenProjectsManager.getInstance(project);
     boolean ready = manager.isInitialized() && (first == null || manager.isManagedFile(first));
-    if (!ready && attempt < RETRY_LIMIT) {
+    if (!ready && attempt < LINK_RETRY_LIMIT) {
       AppExecutorUtil.getAppScheduledExecutorService().schedule(
-        () -> ApplicationManager.getApplication().invokeLater(() -> addWhenReady(project, first, rest, link, attempt + 1), project.getDisposed()),
+        () -> ApplicationManager.getApplication().invokeLater(() -> addWhenReady(project, first, rest, attempt + 1), project.getDisposed()),
         RETRY_SECONDS, TimeUnit.SECONDS);
+      return;
+    }
+    if (!ready) {
+      LOG.warn("Maven 첫 연결이 끝나지 않아 나머지 pom 은 다음에 열 때 연결합니다: " + rest);
       return;
     }
     List<VirtualFile> still = new ArrayList<>();
     for (VirtualFile pom : rest) {
       if (pom.isValid() && !manager.isManagedFile(pom) && manager.findProject(pom) == null) still.add(pom);
     }
-    if (still.isEmpty()) return;
-    if (ready) {
-      manager.addManagedFilesOrUnignore(still);
-      return;
-    }
-    for (VirtualFile pom : still) link.test(pom);
+    if (!still.isEmpty()) manager.addManagedFilesOrUnignore(still);
   }
 
   /** 무시 경로(ignored) 중 열 폴더(roots) 안이고, 우리가 무시한 것(ours)이거나 그 폴더에 우리 기록이 없는 것. */
