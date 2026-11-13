@@ -27,7 +27,8 @@ public class JGitCheck {
     File origin = new File(tmp, "origin.git");
     File seed = new File(tmp, "seed");
     File mine = new File(tmp, "mine");
-    sh(tmp, "git init -q --bare -b develop origin.git && git init -q -b develop seed");
+    // 서버 쪽(origin · seed)은 대소문자를 가리는 리눅스 서버처럼 쓰려고 reftable 로 만든다. 윈도우에서 파일 ref 면 feature/ 와 Feature/ 가 한 폴더로 겹친다.
+    sh(tmp, "git init -q --bare --ref-format=reftable -b develop origin.git && git init -q --ref-format=reftable -b develop seed");
     sh(seed, "git config user.name t && git config user.email t@t && mkdir -p app/sub && printf 'a\\n' > app/A.java && printf '#!/bin/sh\\n' > run.sh && chmod +x run.sh"
              + " && ln -s app/A.java link && printf '한글\\n' > '한글.txt' && git add -A && git commit -qm one && git tag v1 && git tag -a -m t v1a"
              + " && git checkout -q -b feature/kim && printf 'b\\n' > app/sub/B.java && git add -A && git commit -qm two"
