@@ -26,14 +26,6 @@ if not exist "bundled-plugins\boot-servers\gradle\gradle-9.9.1\bin\gradle.bat" (
     echo 내장 Gradle 이 없습니다. 먼저 python kit\gradle\apply_gradle.py 를 실행하세요.
     exit /b 1
 )
-if not exist "bundled-plugins\fullLine\full-line-model-java.zip" (
-    echo Full Line Java 모델이 없습니다. 먼저 python kit\fullline\apply_fullline.py 를 실행하세요.
-    exit /b 1
-)
-if not exist "bundled-plugins\fullLine\full-line-model-html.zip" (
-    echo Full Line HTML 모델이 없습니다. 먼저 python kit\fullline\apply_fullline.py 를 실행하세요.
-    exit /b 1
-)
 findstr /c:"Moa IDE" "intellij-community\community-resources\resources\idea\IdeaApplicationInfo.xml" >nul || (
     echo 이름 바꾸기가 적용되지 않은 소스입니다. 먼저 이름 바꾸기를 적용해야 합니다.
     exit /b 1

@@ -348,7 +348,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
         <div class="n">1</div>
         <h4>설치 파일 실행</h4>
         <p>서버 창 · Synchronize · 데이터베이스 · Lombok · SVN 은 본체에 들어 있습니다.</p>
-        <p>Full Line · Rainbow Brackets Lite · POJO to JSON · Grep Console 도 본체에 들어 있습니다.</p>
+        <p>Rainbow Brackets Lite · POJO to JSON · Grep Console 도 본체에 들어 있습니다.</p>
         <div class="file">moaide-262.10968.N.exe</div>
       </div>
       <div class="step">
@@ -511,7 +511,6 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
       <tr><td><kbd>Alt</kbd>+<kbd>Enter</kbd> · <kbd>Ctrl</kbd>+<kbd>1</kbd></td><td>빈 catch · printStackTrace · System.out 을 로거로 바꾸기</td><td class="where">자바</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td><td>콘솔 출력 검색 (Find in Console)</td><td class="where">실행 · 서버 콘솔</td></tr>
       <tr><td><kbd>F5</kbd></td><td>고른 프로젝트 · 폴더 · 파일 디스크에서 다시 읽기 (Reload from Disk)</td><td class="where">프로젝트 창</td></tr>
-      <tr><td><kbd>Tab</kbd></td><td>회색 한 줄 제안 받기 (Full Line)</td><td class="where">편집기</td></tr>
     </table>
 
     <h3>이클립스 기본 단축키</h3>
@@ -603,7 +602,6 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
     <div class="notes">
       <div class="note warn"><b>커밋 · Update Project 키는 없음</b>Eclipse 키맵은 이 둘의 키를 지웁니다. <kbd>Ctrl</kbd>+<kbd>K</kbd> 는 다음 찾기, <kbd>Ctrl</kbd>+<kbd>T</kbd> 는 구현으로 이동입니다. 커밋은 Git 메뉴, 전체 받기는 Git 메뉴나 동기화 창 단추로 합니다.</div>
       <div class="note"><b>키를 바꾸려면</b>설정(<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd>) → Keymap 에서 Eclipse 를 복제한 뒤 동작 이름(예: Commit)에 키를 붙입니다.</div>
-      <div class="note ok"><b>Full Line 제안 받기</b>편집기에 회색으로 뜬 한 줄은 <kbd>Tab</kbd> 으로 받습니다.</div>
     </div>
   </div>
 </section>
@@ -2089,7 +2087,6 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
     <p class="lead">본체에 들어가는 외부 플러그인과, 설치 3번 bat 이 넣는 플러그인입니다.</p>
     <table class="keys">
       <tr><th>플러그인</th><th>쓰는 법 · 설정</th></tr>
-      <tr><td>Full Line Code Completion</td><td>치는 중에 한 줄 전체를 회색으로 제안하고 <kbd>Tab</kbd> 으로 받습니다. PC 안 모델이라 코드를 밖으로 보내지 않습니다. Java · HTML 모델이 설치본에 들어 있어 인터넷이 없어도 됩니다. 받은 Java 줄은 바로 서식에 맞춰 정렬되고, 자동 완성 목록이 떠 있을 때는 회색 제안이 목록 안 항목으로 함께 보입니다. 설정 → Editor → General → Code Completion ▸ 펼쳐 「Inline」(ML Completion).</td></tr>
       <tr><td>Rainbow Brackets Lite</td><td>짝 괄호를 깊이마다 다른 색으로 보여 줍니다(무료 공개판).</td></tr>
       <tr><td>POJO to JSON</td><td>클래스 이름 우클릭 → 「Copy JSON」 으로 필드 구조를 JSON 으로 복사합니다. API 테스트의 요청 본문 만들 때 씁니다.</td></tr>
       <tr><td>Grep Console</td><td>콘솔 줄을 글자 · 정규식으로 색칠하고 거릅니다. 우리 「Filter Log」와 함께 씁니다.</td></tr>
@@ -2125,7 +2122,6 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       <tr><td>svn 경로</td><td>Version Control → Subversion</td></tr>
       <tr><td>properties 한글</td><td>Editor → File Encodings 「Transparent native-to-ascii conversion」</td></tr>
       <tr><td>JDK 등록</td><td>File → Project Structure → SDKs (<code>~\.jdks</code> 의 Temurin 은 자동 등록)</td></tr>
-      <tr><td>Full Line 켜기 · 끄기</td><td>Editor → General → Code Completion ▸ 펼쳐 「Inline」(ML Completion)</td></tr>
       <tr><td>도구 창 배치 저장</td><td>Window → Layout → 현재 레이아웃에 변경 저장</td></tr>
     </table>
   </div>
@@ -2175,7 +2171,6 @@ python kit\defender\apply_defender.py intellij-community
 python kit\ko\apply_ko.py
 python kit\mingit\apply_mingit.py
 python kit\web\apply_web.py
-python kit\fullline\apply_fullline.py
 kit\brand\apply_brand.bat
 python kit\compile_plugins.py
 build-windows.bat
@@ -2191,7 +2186,6 @@ build-windows.bat
       <tr><td><code>kit\ko\apply_ko.py</code></td><td>한국어 팩에 우리 번역(kit\ko\override)을 덮어 본체에 넣습니다. 자리표시 · 태그 · 단축 글자 모양이 팩과 다르면 멈춥니다.</td></tr>
       <tr><td><code>kit\mingit\apply_mingit.py</code></td><td>PC 에 Git 이 없을 때 쓸 MinGit 을 받아 넣습니다(판 · SHA-256 고정).</td></tr>
       <tr><td><code>kit\web\apply_web.py</code></td><td>Node.js 와 JavaScript · TypeScript · Vue 언어 서버를 받아 넣습니다. 인터넷이 막힌 PC 에서도 언어 서버가 뜹니다.</td></tr>
-      <tr><td><code>kit\fullline\apply_fullline.py</code></td><td>Full Line 의 Java · HTML 모델을 받아 넣습니다(판 · SHA-256 고정). 인터넷이 막힌 PC 에서도 회색 한 줄 제안이 뜹니다.</td></tr>
       <tr><td><code>kit\brand\apply_brand.bat</code></td><td>Moa IDE 로고 · 설치 그림을 넣습니다.</td></tr>
       <tr><td><code>kit\compile_plugins.py</code></td><td>우리 플러그인 셋(서버 창 · 동기화 · 데이터베이스)을 함께 컴파일 · 점검해 본체 jar 를 바꿉니다. 하나라도 실패하면 아무것도 바꾸지 않습니다.</td></tr>
       <tr><td><code>build-windows.bat</code></td><td>설치 파일 <code>release\moaide-262.10968.N.exe</code> 를 만들고, gh 가 있으면 GitHub 릴리스로 올립니다(설명은 <code>수정내역.md</code> 맨 위 절).</td></tr>
