@@ -26,6 +26,7 @@
   31) IntelliJ 의 20분마다 원격 커밋 확인을 기본으로 끈다.
   32) 예전 도구로 묶은 jar(zip64 칸 검사에 걸리는 것)도 열도록 설치본 vmoptions 에 검사 끄기 속성을 넣는다.
   33) 옛 설정 폴더를 가져올 때 우리 플러그인 옛 시험본과 JetBrains AI 플러그인은 옮기지 않는다.
+  34) Maven 은 Maven Wrapper(mvnw) 대신 언제나 내장 Maven 3 을 쓰고, Wrapper 배포본을 받지 않는다.
 고치기 전 원본은 <intellij-community>/../backup/<시각>-before/ 에 같은 상대경로로 남긴다.
 모든 원문을 먼저 찾아 본 뒤에 쓴다. 하나라도 못 찾으면 아무 파일도 바꾸지 않는다. 줄끝(LF · CRLF)은 파일마다 원래대로 둔다.
 두 번 실행해도 같은 결과가 된다.
@@ -508,6 +509,22 @@ EDITS = [
      "    pluginsToMigrate.removeIf(descriptor -> moaNotMigrated.contains(descriptor.getPluginId().getIdString()));\n"
      "    pluginsToDownload.removeIf(descriptor -> moaNotMigrated.contains(descriptor.getPluginId().getIdString()));\n"
      "    pluginsToMigrate.removeIf(hasPendingUpdate);\n    if (!pluginsToMigrate.isEmpty()) {\n"),
+    # 34) 저장소에 .mvn/wrapper 가 있으면 IntelliJ 는 처음 연결할 때 프로젝트 전체 Maven 을 Wrapper 로 바꾸고 배포본을 인터넷에서 받는다.
+    #     사내망은 보안 프로그램이 막아 오류 알림 뒤 내장으로 돌아가고, 워크스페이스의 다른 저장소까지 그 판 Maven 으로 바뀐다.
+    #     Maven 설정의 모든 쓰기(연결 · 첫 가져오기 · 저장된 설정 읽기 · 설정 창 · 빠른 수정)가 이 한 곳을 지나므로 여기서 내장으로 바꾼다.
+    #     저장소(사내 넥서스 미러 등)는 settings.xml 을 그대로 따른다.
+    ("plugins/maven/src/main/java/org/jetbrains/idea/maven/project/MavenGeneralSettings.java",
+     "  private void setMavenHome(final @NotNull MavenHomeType mavenHome, boolean fireChanged) {\n"
+     "    MavenHomeType mavenHomeToSet = mavenHome;\n",
+     "  private void setMavenHome(final @NotNull MavenHomeType mavenHome, boolean fireChanged) {\n"
+     "    // Moa IDE: 사내망은 Wrapper 배포본 받기가 막히므로 언제나 내장 Maven 3 을 쓴다.\n"
+     "    MavenHomeType mavenHomeToSet = mavenHome instanceof MavenWrapper ? BundledMaven3.INSTANCE : mavenHome;\n"),
+    #  34-1) 처음 연결할 때는 Maven 설정과 상관없이 신뢰한 프로젝트면 Wrapper 배포본을 받는다. Wrapper 를 쓸 때만 받게 한다.
+    ("plugins/maven/src/main/java/org/jetbrains/idea/maven/wizards/MavenProjectAsyncBuilder.kt",
+     "    if (TrustedProjects.isProjectTrusted(project)) {\n"
+     "      withBackgroundProgress(project, MavenProjectBundle.message(\"maven.installing.wrapper\"), false) {\n",
+     "    if (TrustedProjects.isProjectTrusted(project) && MavenUtil.isWrapper(generalSettings)) {  // Moa IDE: 34-1\n"
+     "      withBackgroundProgress(project, MavenProjectBundle.message(\"maven.installing.wrapper\"), false) {\n"),
 ]
 
 

@@ -488,6 +488,7 @@ public class CloseRepoAction extends DumbAwareAction {
 
   /**
    * 모듈이 빠지거나 더해질 때 sync 를 부른다(우리 단추 · IntelliJ Load/Unload Modules · Remove Module · Maven 다시 읽기 모두).
+   * Gradle 이 같은 폴더에 모듈을 새로 만들었으면 우리 빈 모듈을 뺀다(CloneIntoProject.dropShadowedModules).
    * 빠지기 직전에 콘텐츠 루트를 모아 두고, 한 번에 여러 모듈이 바뀌어도 EDT 에서 한 번만 돈다.
    */
   public static final class ModuleSync implements ModuleListener {
@@ -512,6 +513,7 @@ public class CloseRepoAction extends DumbAwareAction {
         List<String> roots = new ArrayList<>(removed);
         removed.removeAll(roots);
         sync(project, roots, List.of(), false);
+        CloneIntoProject.dropShadowedModules(project);
       }, project.getDisposed());
     }
   }
