@@ -35,14 +35,18 @@ final class ReverseMerge {
   static final int MINE_DAYS = 30;
   static final String HEADS = "refs/heads/";
   private static final String FETCH_KEY_SUFFIX = ".fetch";
+  // git config --unset-all 이 맞는 값이 없을 때 내는 종료 코드(git-config(1): 5, 오류 글 없음)를 SyncPanel.runOnce 가 옮긴 글.
+  private static final String CONFIG_NO_MATCH = "종료 코드 5";
   private static final com.intellij.openapi.diagnostic.Logger LOG = com.intellij.openapi.diagnostic.Logger.getInstance(ReverseMerge.class);
   private static final char LOG_START = '\u0001';
   private static final char LOG_SEP = '\u001f';
   private static final String LOG_FORMAT = "--format=%x01%an%x1f%ad%x1f%s";
   private static final String LOG_DATE = "--date=format:%m-%d %H:%M";
   private static final String AUTHOR_FORMAT = "--format=%x01%an%x1f%ae";
+  private static final String REMOTE_KEY_PREFIX = "remote.";
+  private static final String URL_KEY_SUFFIX = ".url";
   /** configs 가 한 번에 읽는 설정 키(git config --get-regexp). */
-  private static final String CONFIG_KEYS = "^(user\\.(name|email)|branch\\..*\\.(remote|merge)|remote\\..*\\.fetch|core\\.ignorecase|ei\\.reverseMerge\\..*)$";
+  private static final String CONFIG_KEYS = "^(user\\.(name|email)|branch\\..*\\.(remote|merge)|remote\\..*\\.(fetch|url)|core\\.ignorecase|ei\\.reverseMerge\\..*)$";
 
   /** 들어올 파일 하나. author · when · subject 는 기준 브랜치에서 이 파일을 마지막으로 바꾼 커밋. */
   record Incoming(String path, String author, String when, String subject, boolean mine) {}
@@ -102,6 +106,8 @@ final class ReverseMerge {
   private static final String CASE_TMP_SUFFIX = ".moa-case-tmp";
   /** 합치기를 막는 추적 안 한 파일을 안내에 보이는 줄 수. 나머지는 개수로 알린다. */
   private static final int PATH_LIST_MAX = 10;
+  /** POSIX 확장 정규식의 특수 글자(git config 값 정규식). */
+  private static final String REGEX_SPECIAL = "\\.^$*+?()[]{}|";
   /** blockCaseClashes 가 git branch -d -r 한 번에 넘기는 원격 추적 참조 수. 윈도우 명령 줄 길이 한도 안에 들게 한다. */
   private static final int DELETE_BATCH = 100;
   private static final String BRANCH_KEY = "branch.";
@@ -350,19 +356,38 @@ final class ReverseMerge {
   /**
    * 대소문자만 다른 서버 브랜치를 remote.<원격>.fetch 의 음수 refspec 으로 막는다. 설정에 남아 IntelliJ 의 fetch 에도 적용된다.
    * 막은 철자로 보이는 원격 추적 참조는 지우고 원격을 다시 받는다(--prune 없이). 윈도우에서 그 참조는 남길 브랜치와 같은 파일일 수 있어,
-   * 지운 뒤 받아야 남길 철자의 폴더 · 파일로 다시 생긴다. 서버에 겹치는 이름이 없으면 아무것도 바꾸지 않고 false.
+   * 지운 뒤 받아야 남길 철자의 폴더 · 파일로 다시 생긴다. 앞서 더한 음수 줄이 지금 keep 의 브랜치를 막으면(브랜치를 옮김) 그 줄은 지운다.
+   * 서버에 겹치는 이름도 지울 줄도 없으면 아무것도 바꾸지 않고 false.
    * 사용자가 부르지 않은 자동 확인에서 쓰므로 인증 실패에도 로그인 창을 띄우지 않는다.
    */
   static boolean blockCaseClashes(File root, Map<String, String> cfg, String remote, List<String> keep) throws IOException, InterruptedException {
     List<String> excludes = caseClashExcludes(parseHeads(GitRemoteAuth.run(root, GIT_LONG_TIMEOUT_SEC, false, "ls-remote", "--heads", remote)), keep);
-    if (excludes.isEmpty()) return false;
+    String key = "remote." + remote + FETCH_KEY_SUFFIX;
+    List<String> have = new ArrayList<>(List.of(cfg.getOrDefault(key, "").split("\n")));
+    List<String> removed = new ArrayList<>();
+    for (String line : have) {
+      if (!line.startsWith("^") || excludes.contains(line) || removed.contains(line)) continue;
+      for (String branch : keep) {
+        if (branch == null || !excluded(List.of(line), branch)) continue;
+        // 값 정규식(POSIX 확장)으로 그 줄과 글자까지 같은 값만 지운다. 같은 줄이 여럿이면 모두.
+        try {
+          git(root, "config", "--unset-all", key, "^" + regexQuoted(line) + "$");
+        }
+        catch (IOException gone) {
+          // 종료 코드 5 는 맞는 값이 없음이다(그사이 다른 곳에서 지움). 바라던 상태라 넘어간다.
+          if (!SyncPanel.messageOf(gone).contains(CONFIG_NO_MATCH)) throw gone;
+        }
+        removed.add(line);
+        break;
+      }
+    }
+    have.removeAll(removed);
+    if (excludes.isEmpty() && removed.isEmpty()) return false;
     // 음수 refspec 을 모르는 git 은 설정에 그 줄이 있으면 IntelliJ 의 fetch 까지 모두 실패한다.
-    if (!negativeRefspecs(git(root, "version"))) {
+    if (!excludes.isEmpty() && !negativeRefspecs(git(root, "version"))) {
       LOG.warn("대소문자만 다른 서버 브랜치가 있으나 git 이 음수 refspec 을 몰라(2.29 미만) 막지 못함 [" + root.getName() + "] " + excludes);
       return false;
     }
-    String key = "remote." + remote + FETCH_KEY_SUFFIX;
-    List<String> have = List.of(cfg.getOrDefault(key, "").split("\n"));
     List<String> added = new ArrayList<>();
     for (String ex : excludes) {
       if (have.contains(ex)) continue;
@@ -380,8 +405,18 @@ final class ReverseMerge {
       git(root, args.toArray(String[]::new));
     }
     GitRemoteAuth.run(root, GIT_LONG_TIMEOUT_SEC, false, "fetch", "--quiet", remote);
-    LOG.info("대소문자만 다른 서버 브랜치를 받지 않게 막음 [" + root.getName() + "] " + key + " 에 더함 " + added + ", 지운 원격 추적 참조 " + stale);
+    LOG.info("대소문자만 다른 서버 브랜치를 받지 않게 막음 [" + root.getName() + "] " + key + " 에 더함 " + added + ", 지운 줄 " + removed + ", 지운 원격 추적 참조 " + stale);
     return true;
+  }
+
+  /** POSIX 확장 정규식에서 글자 그대로 읽히게 특수 글자 앞에 역슬래시를 붙인다. */
+  static String regexQuoted(String text) {
+    StringBuilder out = new StringBuilder();
+    for (char c : text.toCharArray()) {
+      if (REGEX_SPECIAL.indexOf(c) >= 0) out.append('\\');
+      out.append(c);
+    }
+    return out.toString();
   }
 
   /** git refspec 의 별표 하나짜리 모양 pattern 이 ref 에 맞으면 별표 자리 글자(별표가 없으면 빈 글), 아니면 null. */
@@ -401,10 +436,17 @@ final class ReverseMerge {
     return null;
   }
 
-  /** branch 가 쓰는 원격 이름(configs 로 읽어 둔 branch.<이름>.remote). 설정이 없으면 DEFAULT_REMOTE. */
+  /** branch 가 쓰는 원격 이름(configs 로 읽어 둔 branch.<이름>.remote). 설정이 없으면 원격이 하나뿐이면 그 원격, 아니면 DEFAULT_REMOTE. */
   static String remoteOf(Map<String, String> cfg, String branch) {
     String remote = branch == null ? null : cfg.get("branch." + branch + ".remote");
-    return remote == null ? DEFAULT_REMOTE : remote;
+    if (remote != null) return remote;
+    String only = null;
+    for (String key : cfg.keySet()) {
+      if (!key.startsWith(REMOTE_KEY_PREFIX) || !key.endsWith(URL_KEY_SUFFIX) || key.length() <= REMOTE_KEY_PREFIX.length() + URL_KEY_SUFFIX.length()) continue;
+      if (only != null) return DEFAULT_REMOTE;
+      only = key.substring(REMOTE_KEY_PREFIX.length(), key.length() - URL_KEY_SUFFIX.length());
+    }
+    return only == null ? DEFAULT_REMOTE : only;
   }
 
   /**
@@ -890,7 +932,7 @@ final class ReverseMerge {
 
   /**
    * 합치기가 실패한 뒤: into 로 옮겼으면 원래 브랜치(current)로 돌아가고, stashed 면 거기서 Stash 를 되살린다.
-   * 돌아가지 못했거나 되살리지 못하면 Stash 는 그대로 두고, 원래 브랜치에서 되살리라는 안내를 cause 메시지에 붙인 예외를 돌려준다.
+   * 돌아가지 못했거나 되살리지 못하면 Stash 는 그대로 두고, 원래 브랜치에서 되살리라는 안내를 cause 메시지에 붙인 예외(cause 가 PushRejectedException 이면 같은 종류)를 돌려준다.
    */
   private static IOException restore(File root, String current, boolean switched, boolean stashed, IOException cause) throws InterruptedException {
     boolean back = !switched || checkoutBack(root, current, cause);
@@ -904,7 +946,10 @@ final class ReverseMerge {
         cause.addSuppressed(e);
       }
     }
-    return new IOException(cause.getMessage() + "\n" + SyncBundle.message("rmerge.stash.left", current), cause);
+    String message = cause.getMessage() + "\n" + SyncBundle.message("rmerge.stash.left", current);
+    // 부른 쪽이 Push 거절을 알아보고 「다시 합치고 Push」를 묻게 종류를 지킨다.
+    // 원래 브랜치로 돌아가지 못했으면 다시 합치기가 지금 브랜치(Into)에서 돌게 되므로 묻지 않는다.
+    return cause instanceof PushRejectedException && back ? new PushRejectedException(message, cause) : new IOException(message, cause);
   }
 
   /** 아직 해결하지 않은 충돌 파일(저장소 기준 경로). */

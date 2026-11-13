@@ -290,6 +290,9 @@ final class SyncPanel extends SimpleToolWindowPanel {
   // git status -b 브랜치 줄 끝의 「[ahead 2, behind 3]」. 브랜치 이름에는 공백이 없어 이 꼴은 괄호 안에만 나온다.
   private static final Pattern TRACKING_COUNT = Pattern.compile("(ahead|behind) (\\d+)");
   private static final String TRACKING_AHEAD = "ahead";
+  // rev-parse --abbrev-ref 가 짧은 이름이 겹칠 때 붙이는 앞말(unambiguous).
+  static final String AMBIGUOUS_HEADS = "heads/";
+  static final String AMBIGUOUS_REMOTES = "remotes/";
   // 추적 브랜치가 없는 Git 저장소의 비교 기준과 detached HEAD 의 브랜치 이름(rev-parse --abbrev-ref).
   private static final String GIT_HEAD = "HEAD";
   static final String GIT_DIR = ".git";
@@ -344,9 +347,18 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static final Pattern REF_BLOCKED = Pattern.compile("'(refs/remotes/[^']+)' exists; cannot create 'refs/remotes/[^']+'");
   // 터미널에서 아이디 · 비밀번호를 묻지 않고 곧바로 실패하게 한다(표준 입력이 닫혀 있어 물어도 답할 수 없다).
   private static final String ENV_TERMINAL_PROMPT = "GIT_TERMINAL_PROMPT";
-  // 서버 명령의 오류 문구 언어를 영어로 고정해 인증 실패를 GIT_AUTH_ERRORS 로 알아보게 한다. 메시지 번역만 바꾸고 파일 이름 출력은 그대로다.
+  // git 오류 문구 언어를 영어로 고정해 인증 실패(GIT_AUTH_ERRORS) · 받기 창으로 넘길 실패(PULL_DIALOG_ERRORS)를 알아보고 글자가 깨지지 않게 한다.
+  // 메시지 번역만 바꾸고 파일 이름 출력은 그대로다. 모든 git 명령에 넘긴다.
   private static final String ENV_MESSAGE_LANGUAGE = "LANGUAGE";
   private static final String MESSAGE_LANGUAGE_UNTRANSLATED = "C";
+  // 서버 명령이 LOW_SPEED_TIME_SEC 초 동안 초당 LOW_SPEED_LIMIT_BYTES 바이트 미만으로 받으면 git 이 끊는다. 반쯤 끊긴 연결이 서버 자리(REMOTE_GIT_SLOTS)를
+  // 시간 제한(GIT_LONG_TIMEOUT_SEC)까지 붙잡지 않게 한다. 사용자가 환경 변수로 정해 두었으면 그 값을 쓴다.
+  private static final String ENV_LOW_SPEED_LIMIT = "GIT_HTTP_LOW_SPEED_LIMIT";
+  private static final String LOW_SPEED_LIMIT_BYTES = "1000";
+  private static final String ENV_LOW_SPEED_TIME = "GIT_HTTP_LOW_SPEED_TIME";
+  private static final String LOW_SPEED_TIME_SEC = "60";
+  // git 설정 이름 http.lowSpeedLimit · http.lowSpeedTime 의 공통 부분(소문자, git 설정 이름은 대소문자를 가리지 않는다).
+  private static final String LOW_SPEED_CONFIG = "lowspeed";
   // 한 번에 넘기는 경로 인자 글자 수 상한. 윈도우 명령줄 한도(32767자)에서 실행 파일 경로 · 앞 인자 몫을 넉넉히 남긴다.
   private static final int ARG_CHARS_MAX = 24_000;
   // 경로 인자 하나에 더해지는 글자: 앞 공백과 감싸는 따옴표 둘.
@@ -356,6 +368,14 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static final String GITIGNORE_LEADING = "#!";
   static final String VCS_NAME_SVN = "svn";
   private static final String ACTION_PULL = "Git.Pull";
+  // 받기(pullFastForward) 실패 가운데 IntelliJ 받기 창(ACTION_PULL)으로 넘길 것: 내 커밋과 갈라짐 · 저장 안 한 변경과 겹침 · 충돌 중(LANGUAGE=C 영어 문구).
+  private static final List<String> PULL_DIALOG_ERRORS = List.of("Not possible to fast-forward", "would be overwritten", "unmerged", "not concluded your merge", "unresolved conflict");
+  // git 이 남은 잠금 파일 때문에 참조를 바꾸지 못했을 때의 글(refs.c: Unable to create '…lock': File exists).
+  private static final String STALE_LOCK_ERROR = ".lock': File exists";
+  // 받으려는 브랜치가 서버에 없을 때 git fetch 가 내는 글(fetch-pack: couldn't find remote ref).
+  private static final String REMOTE_REF_GONE = "couldn't find remote ref";
+  /** 추적 브랜치가 서버에 없다고 알게 된 「저장소 경로\n원격/브랜치」. IDE 를 끌 때까지 둔다. */
+  private static final Set<String> GONE_UPSTREAMS = ConcurrentHashMap.newKeySet();
   private static final String ACTION_REVERSE_MERGE = "KingGura.ReverseMerge";
   private static final String ACTION_PUSH = "Vcs.Push";
   private static final String ACTION_COMMIT = "CheckinProject";
@@ -659,7 +679,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     }.installOn(tree);
     DumbAwareAction.create(e -> openSelectedFiles())
       .registerCustomShortcutSet(new CompositeShortcutSet(CommonShortcuts.getEditSource(), CommonShortcuts.ENTER), tree, parent);
-    DumbAwareAction.create(e -> { if (!busy) refreshSelected(); })
+    DumbAwareAction.create(e -> refreshSelected())
       .registerCustomShortcutSet(CustomShortcutSet.fromString(REFRESH_SHORTCUT), tree, parent);
     // 우클릭한 줄이 고른 줄이 아니면 그 줄을 고른 뒤 메뉴를 띄운다(메뉴 내용은 고른 줄로 정한다). 메뉴 키 · Shift+F10 도 같은 메뉴.
     tree.addMouseListener(new MouseAdapter() {
@@ -674,6 +694,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     // 한 동작에 알림이 여러 번 오므로 마지막 알림 뒤 잠깐 기다렸다가 한 번만 비교한다.
     debounce = new javax.swing.Timer(REPO_CHANGE_DELAY_MS, e -> recomparePending());
     debounce.setRepeats(false);
+    Disposer.register(parent, debounce::stop);
     project.getMessageBus().connect(parent).subscribe(GitRepository.GIT_REPO_CHANGE,
       (GitRepositoryChangeListener) repository -> {
         File root = new File(repository.getRoot().getPath());
@@ -993,7 +1014,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
         plan = GitUndo.read(repo.root());
       }
       catch (IOException e) {
-        reason = e.getMessage();
+        reason = messageOf(e);
       }
       catch (InterruptedException e) {
         Thread.currentThread().interrupt();
@@ -1033,7 +1054,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       }
       catch (IOException e) {
         message = null;
-        error = e.getMessage();
+        error = messageOf(e);
       }
       catch (InterruptedException e) {
         Thread.currentThread().interrupt();
@@ -1187,7 +1208,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
         message = SyncBundle.message("sync.ignore.done", String.join(", ", done));
       }
       catch (IOException ex) {
-        message = SyncBundle.message("sync.ignore.failed", ex.getMessage())
+        message = SyncBundle.message("sync.ignore.failed", messageOf(ex))
                   + (done.isEmpty() ? "" : " " + SyncBundle.message("sync.ignore.failed.partial", String.join(", ", done)));
       }
       catch (InterruptedException ex) {
@@ -1354,7 +1375,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
         message = success.apply(done);
       }
       catch (IOException ex) {
-        message = ex.getMessage();
+        message = messageOf(ex);
       }
       catch (InterruptedException ex) {
         Thread.currentThread().interrupt();
@@ -1424,7 +1445,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
         message = hideMessage(targets.size(), on);
       }
       catch (IOException ex) {
-        message = ex.getMessage();
+        message = messageOf(ex);
       }
       catch (InterruptedException ex) {
         Thread.currentThread().interrupt();
@@ -1505,6 +1526,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
    * 창이 숨어 있으면 비교하지 않고 stale 만 세운다(브랜치가 바뀐 저장소는 남겨 두어 창이 보일 때 정보부터 읽는다).
    */
   private void recomparePending() {
+    // 프로젝트를 닫은 뒤 늦게 온 알림(받기가 끝난 unlockFetch 등)은 무시한다.
+    if (project.isDisposed()) return;
     // 전체 새로고침이 끝날 때 그 결과로 목록을 덮으므로, 그 사이 비교는 덮여 옛 상태가 남는다. 끝난 뒤(endBusy) 한다.
     if (busy) return;
     if (hidden) {
@@ -1592,6 +1615,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       List<Change> result = new ArrayList<>();
       AtomicReference<String> error = new AtomicReference<>();
+      // 비교에 실패한 저장소. 그 저장소 줄은 지난 결과를 두고, 다른 저장소의 결과는 그대로 바꾼다.
+      Set<File> failedRoots = ConcurrentHashMap.newKeySet();
       try {
         for (List<Change> part : inParallel(targets, repo -> {
           REPO_SLOTS.acquire();
@@ -1602,10 +1627,16 @@ final class SyncPanel extends SimpleToolWindowPanel {
               return compareSvnRemote(repo);
             }
             catch (IOException offline) {
-              error.set(offline.getMessage());
+              error.set(messageOf(offline));
               svnIncoming.remove(repo.root());
               return compareSvn(repo, false);
             }
+          }
+          catch (IOException failed) {
+            LOG.warn("저장소 다시 비교 실패 [" + repo.root().getName() + "] " + failed.getMessage());
+            error.set(messageOf(failed));
+            failedRoots.add(repo.root());
+            return List.<Change>of();
           }
           finally {
             REPO_SLOTS.release();
@@ -1615,7 +1646,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
         }
       }
       catch (IOException ex) {
-        error.set(ex.getMessage());
+        error.set(messageOf(ex));
       }
       catch (InterruptedException ex) {
         Thread.currentThread().interrupt();
@@ -1623,11 +1654,11 @@ final class SyncPanel extends SimpleToolWindowPanel {
       }
       String message = error.get();
       SwingUtilities.invokeLater(() -> {
-        if (seq != compareSeq) return;
+        if (seq != compareSeq || project.isDisposed()) return;
         // 그사이 저장소 하나 새로고침이 저장소 정보(브랜치 · 추적 브랜치)를 바꿨으면 옛 정보로 한 그 저장소 비교는 버리고 지금 목록을 둔다.
         Set<File> roots = new HashSet<>();
         for (Repo repo : targets) {
-          if (repos.contains(repo)) roots.add(repo.root());
+          if (repos.contains(repo) && !failedRoots.contains(repo.root())) roots.add(repo.root());
         }
         List<Change> next = new ArrayList<>();
         for (Change c : changes) {
@@ -1906,11 +1937,13 @@ final class SyncPanel extends SimpleToolWindowPanel {
               work = beginWork(root);
             }
             catch (IOException running) {
-              busyRoots.put(root, running.getMessage());
+              busyRoots.put(root, messageOf(running));
               return null;
             }
-            lockFetch(root);
+            boolean locked = false;
             try {
+              lockFetch(root);
+              locked = true;
               // 받기 전 커밋은 .git 안 파일로 읽고, 못 읽는 저장소(worktree 등)만 git 으로 읽는다.
               String before = refHash(root, GIT_HEAD);
               if (before == null) before = git(root, "rev-parse", GIT_HEAD).trim();
@@ -1922,10 +1955,11 @@ final class SyncPanel extends SimpleToolWindowPanel {
               touchedFiles.put(root, pulledPaths(log));
             }
             catch (IOException e) {
-              failed.put(root, e.getMessage());
+              LOG.warn("받기 실패 [" + root.getName() + "] " + e.getMessage());
+              failed.put(root, messageOf(e));
             }
             finally {
-              unlockFetch(root);
+              if (locked) unlockFetch(root);
               endWork(work);
             }
             return null;
@@ -1958,14 +1992,26 @@ final class SyncPanel extends SimpleToolWindowPanel {
           Thread.currentThread().interrupt();
           for (File root : roots) refreshPulled(root, befores.get(root), touchedFiles.get(root));
         }
+        // 그냥 받지 못하는 저장소(갈라짐 · 덮어쓰기 · 충돌)만 받기 창으로 넘기고, 다른 실패(서버 연결 · 인증 등)는 이유를 보인다.
+        List<File> toDialog = new ArrayList<>();
         List<String> names = new ArrayList<>();
-        for (File root : failed.keySet()) names.add(root.getName());
-        for (File root : busyRoots.keySet()) names.add(root.getName());
+        List<String> reasons = new ArrayList<>();
+        for (Map.Entry<File, String> failure : failed.entrySet()) {
+          if (pullNeedsDialog(failure.getValue())) {
+            toDialog.add(failure.getKey());
+            names.add(failure.getKey().getName());
+          }
+          else {
+            reasons.add(failure.getKey().getName() + ": " + failure.getValue().lines().findFirst().orElse(""));
+          }
+        }
         int skipped = failed.size() + busyRoots.size();
-        String summary = skipped == 0
-                         ? SyncBundle.message("sync.git.pulled", text, roots.size())
-                         : SyncBundle.message("sync.git.pulled.partly", text, roots.size() - skipped, String.join(", ", names));
-        String message = busyRoots.isEmpty() ? summary : summary + "\n" + String.join("\n", busyRoots.values());
+        String summary = skipped == 0 ? SyncBundle.message("sync.git.pulled", text, roots.size())
+                         : !toDialog.isEmpty() ? SyncBundle.message("sync.git.pulled.partly", text, roots.size() - skipped, String.join(", ", names))
+                         : SyncBundle.message("sync.git.pulled.failed", text, roots.size() - skipped, skipped);
+        List<String> lines = new ArrayList<>(busyRoots.values());
+        lines.addAll(reasons);
+        String message = lines.isEmpty() ? summary : summary + "\n" + String.join("\n", lines);
         int repoCount = 0;
         int commits = 0;
         int files = 0;
@@ -1982,7 +2028,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
           showStatus(message);
           if (any) balloon(project, false, text, done, showCommitsAction(project));
           recompare(targets, true, true);
-          if (!failed.isEmpty()) runAction(text, ACTION_PULL, rootsContext(new ArrayList<>(failed.keySet())));
+          if (!reasons.isEmpty()) balloon(project, true, text, String.join("\n", reasons));
+          if (!toDialog.isEmpty()) runAction(text, ACTION_PULL, rootsContext(toDialog));
         }, ModalityState.nonModal(), project.getDisposed());
       }
       finally {
@@ -2207,7 +2254,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
             run(repo.root(), SVN_UPDATE_TIMEOUT_SEC, "svn", "update", SVN_NO_PROMPT);
           }
           catch (IOException ex) {
-            failures.add(repo.root().getName() + ": " + ex.getMessage());
+            failures.add(repo.root().getName() + ": " + messageOf(ex));
           }
           catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
@@ -2489,7 +2536,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
           }
           catch (IOException e) {
             LOG.warn("저장소 정보 읽기 실패 [" + entry.getKey().getName() + "] " + e.getMessage());
-            failures.put(entry.getKey(), e.getMessage());
+            failures.put(entry.getKey(), messageOf(e));
             return null;
           }
           finally {
@@ -2510,6 +2557,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
         repos = List.copyOf(found);
         List<Change> local = List.copyOf(result);
         SwingUtilities.invokeLater(() -> {
+          if (project.isDisposed()) return;
           showTitle(found);
           if (seq != compareSeq) return;
           changes = local;
@@ -2521,14 +2569,22 @@ final class SyncPanel extends SimpleToolWindowPanel {
         int total = scannedAll.size();
         int done = 0;
         for (Scanned scanned : scannedAll) {
-          fetched.addAll(await(scanned.remote()));
+          try {
+            fetched.addAll(await(scanned.remote()));
+          }
+          catch (IOException e) {
+            // 한 저장소의 원격 비교 실패는 그 저장소 실패로 적고 처음 비교 결과를 둔다. 다른 저장소의 결과는 그대로 쓴다.
+            LOG.warn("원격 비교 실패 [" + scanned.repo().root().getName() + "] " + e.getMessage());
+            failures.putIfAbsent(scanned.repo().root(), messageOf(e));
+            fetched.addAll(scanned.changes());
+          }
           int finished = ++done;
           SwingUtilities.invokeLater(() -> { if (busy) showGauge(SyncBundle.message("sync.fetching.gauge", finished, total), finished, total); });
         }
         result = fetched;
       }
       catch (IOException e) {
-        failures.put(new File(project.getBasePath() == null ? "" : project.getBasePath()), e.getMessage());
+        failures.put(new File(project.getBasePath() == null ? "" : project.getBasePath()), messageOf(e));
       }
       catch (RuntimeException e) {
         // 예상 못 한 오류도 새로고침을 끝낸다. 여기서 빠져나가면 busy 가 풀리지 않아 다시 새로고침할 수 없다.
@@ -2549,6 +2605,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
         TIME_LOG.debug("새로고침 전체 " + (System.currentTimeMillis() - refreshStarted) + " ms, 저장소 " + roots.size() + "개");
       }
       SwingUtilities.invokeLater(() -> {
+        if (project.isDisposed()) return;
         endBusy();
         showTitle(repos);
         if (stopped) {
@@ -2561,9 +2618,11 @@ final class SyncPanel extends SimpleToolWindowPanel {
         lastCheck = System.currentTimeMillis();
         unlisted = false;
         // 그사이 다시 비교(recompare)가 시작됐으면 목록 · 위쪽 숫자는 그쪽 결과를 따르고, 원격 확인 오류는 그대로 알린다.
+        Map<File, String> notify = new LinkedHashMap<>();
         for (Map.Entry<File, String> failure : failed.entrySet()) {
-          if (!auto || !failedBefore.contains(failure.getKey())) notifyRepoError(failure.getKey(), vcsOf.get(failure.getKey()), failure.getValue());
+          if (!auto || !failedBefore.contains(failure.getKey())) notify.put(failure.getKey(), failure.getValue());
         }
+        notifyRepoErrors(notify, vcsOf);
         if (seq != compareSeq) {
           showSummary(changes, null);
           tree.repaint();
@@ -2635,7 +2694,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
         updated = vcs == Vcs.GIT ? gitRepo(root) : svnRepo(root);
         if (updated.vcs() == Vcs.GIT) {
           if (fetch) updated = withUpstream(updated);
-          if (fetch && updated.upstream() != null) fetch(updated);
+          if (fetch && updated.upstream() != null) updated = fetch(updated);
           updateReverseNote(updated, fetch);
           fresh = compare(updated);
         }
@@ -2645,7 +2704,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       }
       catch (IOException e) {
         LOG.warn("저장소 새로고침 실패 [" + name + "] " + e.getMessage());
-        error = e.getMessage();
+        error = messageOf(e);
       }
       catch (RuntimeException e) {
         // 예상 못 한 오류도 그 저장소 실패로 보이고 busy 를 푼다. 빠져나가면 다시 새로고침할 수 없다.
@@ -2661,6 +2720,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       String finalError = error;
       boolean stopped = Thread.currentThread().isInterrupted();
       SwingUtilities.invokeLater(() -> {
+        if (project.isDisposed()) return;
         endBusy();
         if (stopped) {
           showStatus(name + ": " + finalError);
@@ -2703,16 +2763,42 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private void notifyRepoError(File root, Vcs vcs, String error) {
     String first = error.lines().findFirst().orElse(error);
     List<AnAction> actions = new ArrayList<>();
-    if (vcs != null) actions.add(NotificationAction.createSimpleExpiring(SyncBundle.message("sync.notify.retry"), () -> {
-      if (!busy) refreshRepo(root, vcs);
-    }));
+    if (vcs != null) actions.add(NotificationAction.createSimpleExpiring(SyncBundle.message("sync.notify.retry"), () -> refreshRepo(root, vcs)));
     actions.add(NotificationAction.createSimple(SyncBundle.message("sync.notify.details"),
                                                 () -> Messages.showErrorDialog(project, error, SyncBundle.message("sync.notify.failed.title", root.getName()))));
     balloon(project, true, SyncBundle.message("sync.notify.failed.title", root.getName()), first, actions.toArray(AnAction.EMPTY_ARRAY));
   }
 
+  /**
+   * 새로고침의 원격 확인 실패 알림. 하나면 notifyRepoError, 여럿이면(인터넷 · VPN 끊김 등) 풍선 하나에 저장소 이름과 오류 첫 줄을 모으고
+   * 「다시 시도」(실패한 저장소를 차례로 새로고침) · 「자세히」(오류 원문 창).
+   */
+  private void notifyRepoErrors(Map<File, String> failed, Map<File, Vcs> vcsOf) {
+    if (failed.isEmpty()) return;
+    if (failed.size() == 1) {
+      Map.Entry<File, String> only = failed.entrySet().iterator().next();
+      notifyRepoError(only.getKey(), vcsOf.get(only.getKey()), only.getValue());
+      return;
+    }
+    List<String> firsts = new ArrayList<>();
+    List<String> details = new ArrayList<>();
+    for (Map.Entry<File, String> failure : failed.entrySet()) {
+      String name = failure.getKey().getName();
+      firsts.add(name + ": " + failure.getValue().lines().findFirst().orElse(""));
+      details.add(name + "\n" + failure.getValue());
+    }
+    String title = SyncBundle.message("sync.remote.failed", failed.size());
+    String all = String.join("\n\n", details);
+    List<AnAction> actions = new ArrayList<>();
+    // 저장소마다 다시 하면 또 실패할 때 풍선이 저장소 수만큼 뜬다. 전체 새로고침은 실패를 이 풍선 하나로 모은다(도는 중이면 끝난 뒤 한다).
+    actions.add(NotificationAction.createSimpleExpiring(SyncBundle.message("sync.notify.retry"), this::refresh));
+    actions.add(NotificationAction.createSimple(SyncBundle.message("sync.notify.details"), () -> Messages.showErrorDialog(project, all, title)));
+    balloon(project, true, title, String.join("\n", firsts), actions.toArray(AnAction.EMPTY_ARRAY));
+  }
+
   /** 새로고침이 끝났다. 도는 동안 매핑이 바뀌었으면 이제 한 번 새로고침한다. EDT 에서 부른다. */
   private void endBusy() {
+    if (project.isDisposed()) return;
     busy = false;
     tree.setPaintBusy(false);
     gauge.setVisible(false);
@@ -2784,7 +2870,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
       if (repo.vcs() == Vcs.GIT) {
         repo = withUpstream(repo);
         // 추적 브랜치가 없으면 받아 와도 비교할 원격이 없다(원격이 아예 없는 저장소는 fetch 가 실패한다).
-        if (repo.upstream() != null) fetch(repo);
+        if (repo.upstream() != null) repo = fetch(repo);
+        else fetchGone(repo);
         // 방금 fetch 가 그 원격의 브랜치를 다 받았으면(fetchedAll) 역머지 안내는 기준 브랜치를 다시 받지 않는다.
         updateReverseNote(repo, true, repo.upstream() != null);
         return compareFetched(repo, localOf(local));
@@ -2793,8 +2880,17 @@ final class SyncPanel extends SimpleToolWindowPanel {
     }
     catch (IOException e) {
       LOG.warn("원격 확인 실패 [" + repo.root().getName() + "] " + e.getMessage());
-      failures.put(repo.root(), e.getMessage());
-      if (repo.vcs() == Vcs.GIT) return compareFetched(repo, localOf(local));
+      failures.put(repo.root(), messageOf(e));
+      if (repo.vcs() == Vcs.GIT) {
+        try {
+          return compareFetched(repo, localOf(local));
+        }
+        catch (IOException again) {
+          // 받아 둔 원격 추적 브랜치로도 비교하지 못하면(@{u} 실패 등) 원격 없이 작업본 변경만 보인다.
+          LOG.warn("받아 둔 원격과 비교 실패 [" + repo.root().getName() + "] " + again.getMessage());
+          return compareFetched(new Repo(repo.root(), repo.vcs(), repo.branch(), null), localOf(local));
+        }
+      }
       svnIncoming.remove(repo.root());
       return compareSvn(repo, false);
     }
@@ -2803,8 +2899,9 @@ final class SyncPanel extends SimpleToolWindowPanel {
   /**
    * git fetch. 도는 동안 그 루트를 fetching 에 두어 fetch 가 낸 저장소 알림으로 다시 비교하지 않게 한다.
    * 그 저장소에 다른 fetch · pull 이 돌고 있으면 끝나기를 기다린다(같은 참조를 동시에 바꾸면 cannot lock ref 로 실패한다).
+   * 비교에 쓸 저장소 정보를 돌려준다. 다시 받아도 추적 브랜치 사본이 없으면(서버에서 지운 브랜치) upstream 을 비워 @{u} 없이 비교하게 한다.
    */
-  private void fetch(Repo repo) throws IOException, InterruptedException {
+  private Repo fetch(Repo repo) throws IOException, InterruptedException {
     File root = repo.root();
     lockFetch(root);
     try {
@@ -2813,18 +2910,63 @@ final class SyncPanel extends SimpleToolWindowPanel {
         GitRemoteAuth.run(root, GIT_LONG_TIMEOUT_SEC, false, "fetch", "--quiet", "--prune");
       }
       catch (IOException e) {
-        // 참조를 잠그지 못한 오류(다시 해도 안 된 것)는 대개 대소문자만 다른 서버 브랜치 때문이다. 막을 것이 없으면 원래 오류를 낸다.
-        if (refRace(e.getMessage()) == null && !e.getMessage().contains(LOCK_REF_ERROR)) throw e;
+        // 참조를 잠그지 못한 오류(다시 해도 안 된 것)는 대개 대소문자만 다른 서버 브랜치 때문이다.
+        if (refRace(messageOf(e)) == null && !messageOf(e).contains(LOCK_REF_ERROR)) throw e;
         LOG.warn("원격 받기 실패, 대소문자만 다른 서버 브랜치를 확인 [" + root.getName() + "] " + e.getMessage());
-        if (!blockCaseClashes(repo)) throw e;
-        return;
+        // 막을 것이 없거나 막지 못하면(git 2.29 미만) 추적 브랜치만 받는다. 그것도 안 되면 원래 오류를 낸다.
+        // 남은 잠금 파일(.lock)이 막은 것이면 추적 브랜치만 받아 넘기지 않는다(다른 원격 브랜치가 말없이 옛것으로 남는다).
+        if (!blockCaseClashes(repo) && (messageOf(e).contains(STALE_LOCK_ERROR) || !fetchTracked(repo))) throw e;
       }
       // 받은 뒤 추적 브랜치 사본이 없으면 --prune 이 대소문자만 다른 철자로 보고 지운 것이다(윈도우).
-      if (refHash(root, REMOTES_PREFIX + repo.upstream()) == null) refetchUpstream(repo);
+      if (!upstreamMissing(root, repo.upstream())) return repo;
+      refetchUpstream(repo);
+      return upstreamMissing(root, repo.upstream()) ? new Repo(root, repo.vcs(), repo.branch(), null) : repo;
     }
     finally {
       unlockFetch(root);
     }
+  }
+
+  /**
+   * 추적 브랜치가 서버에서 지워진 저장소(goneUpstream)는 원격 전체를 받아 다른 원격 브랜치를 새로 둔다. 그 브랜치가 다시 생겨 받아 왔으면
+   * 지운 목록에서 빼 다음 새로고침이 추적 브랜치와 비교하게 한다.
+   */
+  private void fetchGone(Repo repo) throws IOException, InterruptedException {
+    String upstream = goneUpstream(repo);
+    if (upstream == null) return;
+    File root = repo.root();
+    lockFetch(root);
+    try {
+      GitRemoteAuth.run(root, GIT_LONG_TIMEOUT_SEC, false, "fetch", "--quiet", "--prune");
+      if (!upstreamMissing(root, upstream)) GONE_UPSTREAMS.remove(goneKey(root, upstream));
+    }
+    finally {
+      unlockFetch(root);
+    }
+  }
+
+  /** 추적 브랜치 하나만 받는다. 받았으면 true, 추적 브랜치 설정이 없거나 받지 못하면 로그만 남기고 false. */
+  private static boolean fetchTracked(Repo repo) throws InterruptedException {
+    File root = repo.root();
+    try {
+      Map<String, String> cfg = ReverseMerge.configs(root);
+      String branch = trackedBranch(cfg, repo.branch());
+      if (branch == null) return false;
+      ReverseMerge.fetchQuietly(root, ReverseMerge.remoteOf(cfg, repo.branch()), branch);
+      return true;
+    }
+    catch (IOException e) {
+      LOG.warn("추적 브랜치만 받기 실패 [" + root.getName() + "] " + e.getMessage());
+      return false;
+    }
+  }
+
+  /**
+   * 받아 둔 추적 브랜치(upstream, 원격/브랜치) 사본이 없으면 true. 로컬 브랜치를 추적하면(원격 「.」) 그 브랜치를 본다.
+   * .git 이 파일인 저장소(worktree · 하위 모듈)는 참조를 읽지 못해 있는 것으로 본다.
+   */
+  private static boolean upstreamMissing(File root, String upstream) {
+    return new File(root, ".git").isDirectory() && refHash(root, REMOTES_PREFIX + upstream) == null && refHash(root, ReverseMerge.HEADS + upstream) == null;
   }
 
   /**
@@ -2880,21 +3022,48 @@ final class SyncPanel extends SimpleToolWindowPanel {
     String remote = ReverseMerge.remoteOf(cfg, repo.branch());
     LOG.warn("추적 브랜치 사본이 없음 [" + root.getName() + "] " + remote + "/" + branch);
     try {
-      if (!ReverseMerge.blockCaseClashes(root, cfg, remote, Arrays.asList(branch, repo.branch(), cfg.get(ReverseMerge.CONFIG_FROM)))) {
+      // 막고 다시 받아도 사본이 없으면(남길 브랜치를 막는 규칙 등) 그 브랜치만 받는다.
+      if (!ReverseMerge.blockCaseClashes(root, cfg, remote, Arrays.asList(branch, repo.branch(), cfg.get(ReverseMerge.CONFIG_FROM)))
+          || upstreamMissing(root, remote + "/" + branch)) {
         ReverseMerge.fetchQuietly(root, remote, branch);
       }
       return true;
     }
     catch (IOException e) {
       LOG.warn("추적 브랜치를 다시 받지 못함 [" + root.getName() + "] " + e.getMessage());
+      // 서버에 그 브랜치가 없으면(머지 뒤 지움) 다음 새로고침부터 다시 받으려 하지 않는다(goneUpstream).
+      if (messageOf(e).contains(REMOTE_REF_GONE)) GONE_UPSTREAMS.add(goneKey(root, remote + "/" + branch));
       return false;
     }
   }
 
   /** upstream 이 null 인데 추적 브랜치 설정이 있으면(받아 둔 사본이 지워짐) refetchUpstream 뒤 저장소 정보를 다시 읽는다. detached HEAD 는 그대로. */
   private static Repo withUpstream(Repo repo) throws IOException, InterruptedException {
-    if (repo.upstream() != null || GIT_HEAD.equals(repo.branch())) return repo;
+    if (repo.upstream() != null || GIT_HEAD.equals(repo.branch()) || goneUpstream(repo) != null) return repo;
     return refetchUpstream(repo) ? gitRepo(repo.root()) : repo;
+  }
+
+  /**
+   * 추적 브랜치가 서버에 없다고 알게 된 저장소면 그 원격/브랜치, 아니면 null. 이 저장소는 추적 브랜치를 다시 받으려 하지 않고(서버 브랜치 목록 읽기 ·
+   * 실패하는 받기를 새로고침마다 하지 않게) remoteCompare 가 원격 전체를 받는다. 서버에 그 브랜치가 다시 생겨 받아 오면 목록에서 뺀다.
+   */
+  private static String goneUpstream(Repo repo) {
+    if (GONE_UPSTREAMS.isEmpty()) return null;
+    try {
+      Map<String, String> cfg = ReverseMerge.configs(repo.root());
+      String branch = trackedBranch(cfg, repo.branch());
+      if (branch == null) return null;
+      String upstream = ReverseMerge.remoteOf(cfg, repo.branch()) + "/" + branch;
+      return GONE_UPSTREAMS.contains(goneKey(repo.root(), upstream)) ? upstream : null;
+    }
+    catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      return null;
+    }
+  }
+
+  private static String goneKey(File root, String upstream) {
+    return root.getAbsolutePath() + "\n" + upstream;
   }
 
   /** root 를 fetching 에 넣는다. 이미 있으면(그 저장소에 fetch · pull 이 도는 중) 빠질 때까지 기다린다. 놓을 때는 unlockFetch. */
@@ -3021,7 +3190,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       noteCache.remove(root);
       // 세지 못한 이유를 숨기지 않는다: 줄 끝에 「기준 비교 실패」, 풍선 도움말에 git 오류 원문.
       LOG.warn("역머지 안내를 세지 못함 " + root + ": " + e.getMessage());
-      reverseNotes.put(root, new ReverseNote(SyncBundle.message("rmerge.note.failed", from == null ? "" : from), false, e.getMessage()));
+      reverseNotes.put(root, new ReverseNote(SyncBundle.message("rmerge.note.failed", from == null ? "" : from), false, messageOf(e)));
     }
     finally {
       if (fetch) unlockFetch(root);
@@ -3113,7 +3282,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
 
   /**
    * gitRepo 와 같고, IntelliJ 가 이 폴더를 저장소 맨 위로 알고 지금 브랜치와 그 추적 브랜치를 들고 있으면 git 을 띄우지 않고 그 값을 쓴다.
-   * IntelliJ 가 모르거나 그 값으로 가릴 수 없으면(아직 읽기 전 · detached HEAD · 추적 브랜치 없음 · 합치기 · rebase 중) gitRepo 로 읽는다.
+   * IntelliJ 가 모르거나 그 값으로 가릴 수 없으면(아직 읽기 전 · detached HEAD · 추적 브랜치 없음 · 받아 둔 추적 브랜치 사본 없음 · 합치기 · rebase 중)
+   * gitRepo 로 읽는다. 사본이 없는 추적 브랜치(서버에서 지운 브랜치)는 @{u} 를 쓰는 비교가 실패하므로 그대로 쓰지 않는다.
    */
   private Repo gitRepoQuick(File dir) throws IOException, InterruptedException {
     VirtualFile file = LocalFileSystem.getInstance().findFileByIoFile(dir);
@@ -3121,7 +3291,9 @@ final class SyncPanel extends SimpleToolWindowPanel {
     if (known != null && known.getState() == com.intellij.dvcs.repo.Repository.State.NORMAL) {
       git4idea.GitLocalBranch branch = known.getCurrentBranch();
       git4idea.repo.GitBranchTrackInfo track = branch == null ? null : known.getBranchTrackInfo(branch.getName());
-      if (track != null) return new Repo(dir, Vcs.GIT, branch.getName(), track.getRemoteBranch().getNameForLocalOperations());
+      if (track != null && known.getBranches().getHash(track.getRemoteBranch()) != null) {
+        return new Repo(dir, Vcs.GIT, branch.getName(), track.getRemoteBranch().getNameForLocalOperations());
+      }
     }
     return gitRepo(dir);
   }
@@ -3131,7 +3303,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
     // 보통은 한 번에 읽는다(최상위 폴더 · 브랜치 · 추적 브랜치 세 줄). 실패하면 어느 것이 없는지 가리려고 하나씩 읽는다.
     try {
       String[] lines = git(dir, "rev-parse", "--show-toplevel", "--abbrev-ref", "HEAD", "@{u}").trim().split("\n");
-      if (lines.length == 3) return new Repo(topLevel(dir, lines[0]), Vcs.GIT, lines[1].trim(), lines[2].trim());
+      if (lines.length == 3) {
+        File top = topLevel(dir, lines[0]);
+        return new Repo(top, Vcs.GIT, unambiguous(top, lines[1].trim(), AMBIGUOUS_HEADS), unambiguous(top, lines[2].trim(), AMBIGUOUS_REMOTES));
+      }
     }
     catch (IOException oneShotFailed) {
       // 아래에서 하나씩 다시 읽어 알맞은 오류를 낸다.
@@ -3139,7 +3314,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     File root = topLevel(dir, git(dir, "rev-parse", "--show-toplevel"));
     String branch;
     try {
-      branch = git(root, "rev-parse", "--abbrev-ref", "HEAD").trim();
+      branch = unambiguous(root, git(root, "rev-parse", "--abbrev-ref", "HEAD").trim(), AMBIGUOUS_HEADS);
     }
     catch (IOException noCommit) {
       // 아직 커밋이 없는 새 저장소는 HEAD 커밋이 없어 rev-parse 가 실패한다. 브랜치 이름은 기호 참조로 읽고 첫 커밋할 파일을 보인다.
@@ -3151,12 +3326,21 @@ final class SyncPanel extends SimpleToolWindowPanel {
       }
     }
     try {
-      return new Repo(root, Vcs.GIT, branch, git(root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}").trim());
+      return new Repo(root, Vcs.GIT, branch, unambiguous(root, git(root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}").trim(), AMBIGUOUS_REMOTES));
     }
     catch (IOException noUpstream) {
       // 아직 Push 하지 않은 새 브랜치 · detached HEAD 도 목록에 두고 작업본 변경을 보인다.
       return new Repo(root, Vcs.GIT, branch, null);
     }
+  }
+
+  /**
+   * rev-parse --abbrev-ref 의 짧은 이름을 브랜치 · 원격 브랜치 이름으로. 같은 짧은 이름의 태그 등이 있으면 git 은 「heads/이름」 · 「remotes/원격/이름」으로
+   * 낸다. kind 는 그 앞말(heads/ · remotes/)이고, 그 앞말까지 든 참조(refs/heads/heads/…)가 실제로 없을 때만 떼어 낸다.
+   */
+  static String unambiguous(File root, String name, String kind) {
+    if (!name.startsWith(kind) || refHash(root, "refs/" + kind + name) != null) return name;
+    return name.substring(kind.length());
   }
 
   /**
@@ -3199,7 +3383,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
   /** compare 와 같고, share 가 있으면 읽은 작업본 상태(status · ls-files 출력)를 거기에 넘긴다(compareFetched 가 다시 쓴다). */
   private List<Change> compare(Repo repo, boolean assumed, CompletableFuture<LocalOut> share) throws IOException, InterruptedException {
     File root = repo.root();
-    boolean tracked = repo.upstream() != null;
+    // 받아 둔 추적 브랜치 사본이 없으면(서버에서 지워 --prune 이 지움, IntelliJ 가 아직 옛 정보) @{u} 가 실패하므로 추적 브랜치가 없는 것처럼 비교한다.
+    boolean tracked = repo.upstream() != null && !upstreamMissing(root, repo.upstream());
     // 들어올 · 나갈 커밋 목록은 HEAD · @{u} 커밋이 지난번과 같으면 다시 읽지 않는다(파일 저장마다 오는 비교는 대개 커밋이 그대로다).
     String key = tracked ? remoteKey(repo) : null;
     CachedLists cached = key == null ? null : listCache.get(root);
@@ -3743,7 +3928,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
           diffSide.setVisible(true);
         }
         catch (IOException e) {
-          diffPanel.setRequest(new MessageDiffRequest(e.getMessage()));
+          diffPanel.setRequest(new MessageDiffRequest(messageOf(e)));
         }
       });
     });
@@ -3771,7 +3956,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       }
       catch (IOException e) {
         // 어긋난 원격 추적 참조 하나만 지우고 한 번 더 한다. 원격 추적 참조는 서버 브랜치의 사본이라 다음 fetch 가 다시 만든다.
-        String ref = refRace(e.getMessage());
+        String ref = refRace(messageOf(e));
         if (ref == null) throw e;
         LOG.info("어긋난 원격 추적 참조를 지우고 다시 실행: " + e.getMessage());
         runBytes(dir, CMD_TIMEOUT_SEC, List.of(), GIT, gitArgs("update-ref", "-d", ref));
@@ -3974,12 +4159,12 @@ final class SyncPanel extends SimpleToolWindowPanel {
     }
     // 서버에 닿는 git 은 git-remote-https 가 libcurl-4.dll 을 읽는다. 회사 PC 의 보안 프로그램(응용 프로그램 제어)이 여러 git 이 함께 뜰 때
     // 그 읽기를 가끔 막는다(LoadLibraryExW() failed). 서버에 닿기 전에 끝난 실패라 조금 쉬었다가 다시 해도 안전하다.
-    // 다시 하는 실행은 한 번에 하나씩 돌려(LIBRARY_RETRY_SLOT) 여럿이 함께 DLL 을 읽다 또 막히지 않게 한다.
+    // 다시 하는 실행은 한 번에 하나씩(LIBRARY_RETRY_SLOT), 서버 자리를 모두 잡고 혼자 돌려 여럿이 함께 DLL 을 읽다 또 막히지 않게 한다.
     for (int attempt = 1; ; attempt++) {
       boolean retry = attempt > 1;
       if (retry) LIBRARY_RETRY_SLOT.acquire();
       try {
-        return runOnce(dir, timeoutSec, logins, exe, args);
+        return runOnce(dir, timeoutSec, logins, retry, exe, args);
       }
       catch (IOException e) {
         if (attempt > LIBRARY_RETRIES || e.getMessage() == null || !GIT.equals(exe) || !GIT_REMOTE_VERBS.contains(verb(args)) || !containsAny(e.getMessage(), LIBRARY_LOAD_ERRORS)) throw e;
@@ -3992,16 +4177,18 @@ final class SyncPanel extends SimpleToolWindowPanel {
     }
   }
 
-  /** runBytes 의 한 번 실행. */
-  private static byte[] runOnce(File dir, long timeoutSec, List<GitLogins.Login> logins, String exe, String... args) throws IOException, InterruptedException {
+  /** runBytes 의 한 번 실행. alone 이면 서버 명령이 서버 자리(REMOTE_GIT_SLOTS)를 모두 잡아 다른 서버 명령과 함께 돌지 않는다. */
+  private static byte[] runOnce(File dir, long timeoutSec, List<GitLogins.Login> logins, boolean alone, String exe, String... args)
+    throws IOException, InterruptedException {
     List<String> command = new ArrayList<>(List.of(VCS_NAME_SVN.equals(exe) ? svnExecutable() : GIT.equals(exe) ? gitExecutable(dir) : exe));
     command.addAll(List.of(args));
     String label = exe + " " + verb(args);
     boolean limited = GIT.equals(exe) && !GIT_REMOTE_VERBS.contains(verb(args));
     long queued = System.currentTimeMillis();
     boolean remote = GIT.equals(exe) && GIT_REMOTE_VERBS.contains(verb(args));
+    int remoteSlots = alone ? MAX_REMOTE_GIT_PROCESSES : 1;
     if (limited) LOCAL_GIT_SLOTS.acquire();
-    if (remote) REMOTE_GIT_SLOTS.acquire();
+    if (remote) REMOTE_GIT_SLOTS.acquire(remoteSlots);
     long started = System.currentTimeMillis();
     long ran = -1;
     File outFile = null;
@@ -4013,9 +4200,13 @@ final class SyncPanel extends SimpleToolWindowPanel {
       ProcessBuilder builder = new ProcessBuilder(command).directory(dir).redirectOutput(outFile).redirectError(errFile);
       if (GIT.equals(exe)) {
         builder.environment().put(ENV_TERMINAL_PROMPT, "0");
+        builder.environment().put(ENV_MESSAGE_LANGUAGE, MESSAGE_LANGUAGE_UNTRANSLATED);
         // 설정 → Git 로그인에 넣은 서버는 git 이 비밀번호 도우미를 띄우지 않게 인증을 미리 넘긴다. 서버에 닿는 명령에만 넘긴다.
-        if (GIT_REMOTE_VERBS.contains(verb(args))) {
-          builder.environment().put(ENV_MESSAGE_LANGUAGE, MESSAGE_LANGUAGE_UNTRANSLATED);
+        if (remote) {
+          if (!lowSpeedConfigured(dir)) {
+            builder.environment().putIfAbsent(ENV_LOW_SPEED_LIMIT, LOW_SPEED_LIMIT_BYTES);
+            builder.environment().putIfAbsent(ENV_LOW_SPEED_TIME, LOW_SPEED_TIME_SEC);
+          }
           // GitRemoteAuth 가 이 저장소 서버의 값을 골라 넘겼으면 그것만, 아니면(저장소를 모를 때 · Clone) 이 명령이 닿는 서버의 등록 값만 넘긴다.
           // Git 로그인을 하나도 등록하지 않았으면 넘길 값이 없어 원격 주소를 읽지 않는다(git config 하나를 아낀다).
           if (logins != null) builder.environment().putAll(GitLogins.env(logins, builder.environment()));
@@ -4047,13 +4238,48 @@ final class SyncPanel extends SimpleToolWindowPanel {
       if (outFile != null && !outFile.delete()) outFile.deleteOnExit();
       if (errFile != null && !errFile.delete()) errFile.deleteOnExit();
       if (limited) LOCAL_GIT_SLOTS.release();
-      if (remote) REMOTE_GIT_SLOTS.release();
+      if (remote) REMOTE_GIT_SLOTS.release(remoteSlots);
       // 전체 = 임시 파일 만들기 · 실행 · 출력 읽기 · 지우기, 실행 = 프로세스만, 대기 = 로컬 git 자리 기다린 시간.
       if (TIME_LOG.isDebugEnabled()) {
         TIME_LOG.debug("[" + dir.getName() + "] " + label + " 전체 " + (System.currentTimeMillis() - started) + " ms, 실행 " + ran + " ms, 대기 "
                        + (started - queued) + " ms: " + String.join(" ", command));
       }
     }
+  }
+
+  /** 받기 실패 글(error)이 IntelliJ 받기 창으로 넘길 실패(PULL_DIALOG_ERRORS)면 true. */
+  static boolean pullNeedsDialog(String error) {
+    return containsAny(error, PULL_DIALOG_ERRORS);
+  }
+
+  /** 예외의 메시지. 메시지가 없으면(null) 예외 이름을 돌려 오류 표시 · 맵에 null 이 들어가지 않게 한다. */
+  static String messageOf(Throwable e) {
+    return e.getMessage() != null ? e.getMessage() : e.toString();
+  }
+
+  /**
+   * 사용자가 git 설정(http.lowSpeedLimit · http.lowSpeedTime)에 느린 연결 기준을 정해 두었는가. 환경값은 설정보다 앞서므로 정해 두었으면 넘기지 않는다.
+   * git 을 띄우지 않고 사용자 설정 파일(~/.gitconfig · XDG)과 dir 의 .git/config 글에서 찾는다. 읽지 못한 파일은 없는 것으로 본다.
+   */
+  static boolean lowSpeedConfigured(File dir) {
+    String home = System.getProperty("user.home");
+    String xdg = System.getenv("XDG_CONFIG_HOME");
+    List<File> files = new ArrayList<>();
+    if (home != null) {
+      files.add(new File(home, ".gitconfig"));
+      files.add(new File(home, ".config/git/config"));
+    }
+    if (xdg != null && !xdg.isEmpty()) files.add(new File(xdg, "git/config"));
+    files.add(new File(dir, ".git/config"));
+    for (File file : files) {
+      try {
+        if (file.isFile() && Files.readString(file.toPath(), StandardCharsets.UTF_8).toLowerCase(Locale.ROOT).contains(LOW_SPEED_CONFIG)) return true;
+      }
+      catch (IOException | RuntimeException unreadable) {
+        LOG.debug("git 설정 파일을 읽지 못함: " + file, unreadable);
+      }
+    }
+    return false;
   }
 
   private static boolean containsAny(String text, List<String> parts) {

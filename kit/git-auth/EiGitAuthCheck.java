@@ -33,11 +33,10 @@ public final class EiGitAuthCheck {
     Map<String, String> headers = new LinkedHashMap<>();
     headers.put("https://a.com", "H1");
     headers.put("https://b.com", "H2");
-    Map<String, String> env = EiGitAuthText.env(headers, Map.of("GIT_CONFIG_COUNT", "2"));
-    eq(env.get("GIT_CONFIG_KEY_2"), "http.https://a.com/.extraHeader");
-    eq(env.get("GIT_CONFIG_VALUE_3"), "H2");
-    eq(env.get("GIT_CONFIG_COUNT"), "4");
-    eq(EiGitAuthText.env(headers, Map.of("GIT_CONFIG_COUNT", "x")).get("GIT_CONFIG_COUNT"), "2");
+    eq(EiGitAuthText.env(headers, Map.of()), Map.of("GIT_CONFIG_PARAMETERS", "'http.https://a.com/.extraHeader=H1' 'http.https://b.com/.extraHeader=H2'"));
+    eq(EiGitAuthText.env(headers, Map.of("GIT_CONFIG_PARAMETERS", " 'a.b=1' ")).get("GIT_CONFIG_PARAMETERS"),
+       "'a.b=1' 'http.https://a.com/.extraHeader=H1' 'http.https://b.com/.extraHeader=H2'");
+    eq(EiGitAuthText.quoted("it's"), "'it'\\''s'");
     eq(EiGitAuthText.env(Map.of(), Map.of()), Map.of());
 
     eq(EiGitAuthText.isAuthFailure("fatal: Authentication failed for 'https://a.com/x.git/'"), true);
