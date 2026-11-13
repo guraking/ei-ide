@@ -14,7 +14,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /** 결과 행을 SQL 글로 바꾸는 순수 함수들(INSERT · UPDATE 복사, 결과 칸 고치기). 쉼표는 줄 앞에 둔다. */
-final class SqlText {
+public final class SqlText {
   private SqlText() {}
 
   private static final String FIRST = "       ";
@@ -60,7 +60,7 @@ final class SqlText {
    * 메타 · 결과에서 읽은 이름 그대로를 SQL 에 쓸 표기. kind 가 접는 대소문자(Oracle 대문자 · PostgreSQL 소문자)와 다르거나,
    * 보통 이름 꼴이 아니거나, 예약어면 따옴표("…", MySQL 은 `…`)로 감싸 대소문자를 지킨다. kind 가 null 이면 그대로.
    */
-  static String ident(DbKind kind, String name) {
+  public static String ident(DbKind kind, String name) {
     if (kind == null || name == null) return name;
     boolean plain = PLAIN_IDENT.matcher(name).matches() && !RESERVED_NAMES.contains(name.toUpperCase(Locale.ROOT));
     return switch (kind) {
@@ -77,7 +77,7 @@ final class SqlText {
   }
 
   /** kind 가 MYSQL 이면 \ 도 \\ 로 쓴다(MySQL 기본 모드는 \ 를 이스케이프 글자로 읽는다). kind 는 null 이어도 된다. */
-  static String literal(Object v, DbKind kind) {
+  public static String literal(Object v, DbKind kind) {
     if (v == null) return "NULL";
     if (v instanceof Number) return text(v);
     if (v instanceof Timestamp t) return "TIMESTAMP '" + t + "'";
@@ -217,6 +217,11 @@ final class SqlText {
   /** UPDATE 문 하나(값은 리터럴). key[i] 칼럼은 WHERE, 나머지는 SET. SET 할 칼럼이 없으면 null. */
   static String update(String table, List<String> columns, List<Object> row, boolean[] key) {
     return build(table, columns, row, key, null, null);
+  }
+
+  /** update 와 같되 값 리터럴을 kind 에 맞춘다(MySQL 의 \\ 이스케이프). kind 는 null 이어도 된다. */
+  static String update(String table, List<String> columns, List<Object> row, boolean[] key, DbKind kind) {
+    return build(table, columns, row, key, null, kind);
   }
 
   /** 같은 UPDATE 의 두 형태: preview 는 리터럴(보여 주기용), sql 은 ? 자리 + binds(실행용). null 값은 두 형태 모두 NULL · IS NULL 글자. */

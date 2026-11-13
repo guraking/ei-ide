@@ -78,8 +78,11 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Timestamp;
+import java.awt.font.TextAttribute;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -117,6 +120,8 @@ final class ResultPanel extends SimpleToolWindowPanel {
   private static final String TOOLBAR_PLACE = "EiDbResult";
   /** 고쳤지만 아직 반영하지 않은 칸의 바탕. */
   private static final Color EDITED_BACKGROUND = new JBColor(new Color(0xFFF1C2), new Color(0x4D4421));
+  /** 지움 표시했지만 아직 반영하지 않은 행의 바탕(글자에는 취소선). */
+  private static final Color DELETED_BACKGROUND = new JBColor(new Color(0xFFE0E0), new Color(0x4D2A2A));
   /** 결과 표 행 높이 · 건수 꼬리표와 실행 시간 사이 · 오류 아이콘과 문구 사이(px, 배율 전). */
   private static final int ROW_HEIGHT = 26;
   private static final int MILLIS_GAP = 6;
@@ -139,6 +144,15 @@ final class ResultPanel extends SimpleToolWindowPanel {
   private ActionToolbar actions;
   /** 고친 값: 모델 행 → (결과 칼럼 번호 → 새 값). 반영 전까지 화면에만 있다. */
   private final Map<Integer, Map<Integer, Object>> edits = new TreeMap<>();
+  /**
+   * 지움 표시한 행(결과 행 객체 자체로 견준다: 행이 빠져 행 번호가 밀려도 어긋나지 않는다). 반영 전까지 화면에만 있다.
+   * 지움 표시한 행에는 고친 값을 두지 않고 칸도 고칠 수 없다. 「되돌리기」가 고친 값과 함께 푼다.
+   */
+  private final Set<List<Object>> deleted = Collections.newSetFromMap(new IdentityHashMap<>());
+  /** 표의 칼럼 중 결과에 없는 칼럼 수. 0 이어야 행을 지울 수 있다(지우기 전 백업에 모든 칼럼이 필요). pkColumns 와 함께 채운다. */
+  private int missingColumns;
+  /** 「적용」의 문장들이 실행되는 중. 끝날 때까지(성공 · 0행 · 오류 · 취소 · 거절) 다시 적용할 수 없다: 같은 UPDATE · DELETE 가 두 번 나가지 않게 한다. */
+  private boolean applying;
   /** 결과 칼럼마다 PK 여부. null 이면 아직 표 정의를 읽지 않았다. */
   private boolean[] pkColumns;
   /** 반영 문장에 쓸 표 · 칼럼(결과 칼럼 번호 순) 표기: 표 정의의 이름 그대로를 SqlText.ident 로. pkColumns 와 함께 채운다. */
@@ -244,6 +258,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
         Component c = super.prepareRenderer(renderer, row, column);
         Color background = isCellSelected(row, column) ? null : cellBackground(this, row, column);
         if (background != null) c.setBackground(background);
+        if (isDeletedRow(convertRowIndexToModel(row))) c.setFont(struck(c.getFont()));
         return c;
       }
     };
@@ -272,6 +287,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
       @Override public void mouseReleased(MouseEvent e) { onCell(e); }
     });
     fitColumns(grid);
+    CellActions.installShortcut(grid, project, c, result);
 
     // 머리줄: 왼쪽 「결과 N · 표」(굵게) · 건수 꼬리표 · 실행 시간 · 더 읽기 · 찾기 칸, 오른쪽 반영 · 되돌리기 단추와 내보내기 링크.
     // 머리줄 아래 선은 SimpleToolWindowPanel 이 그린다(새 UI 는 표를 내렸을 때만). 칸 테두리를 따로 두면 선이 겹친다.
@@ -307,17 +323,19 @@ final class ResultPanel extends SimpleToolWindowPanel {
       bar.add(new JBLabel(EiDbBundle.message("result.rows.unit")));
       bar.add(button(EiDbBundle.message("result.fetch"), null, byInput));
     }
-    BarAction apply = new BarAction(EiDbBundle.message("result.apply"), EiDbBundle.message("result.apply.tooltip"), AllIcons.Actions.Commit, this::applyEdits) {
+    BarAction apply = new BarAction(EiDbBundle.message("result.apply"), EiDbBundle.message("backup.grid.apply.tooltip"), AllIcons.Actions.Commit, this::applyEdits) {
       @Override
       public void update(@NotNull AnActionEvent e) {
         super.update(e);
-        e.getPresentation().setText(EiDbBundle.message("result.apply.count", edits.size()));
+        e.getPresentation().setText(EiDbBundle.message("result.apply.count", edits.size() + deleted.size()));
       }
     };
     actions = BarAction.toolbar(TOOLBAR_PLACE, this,
-        apply.visibleWhen(() -> !edits.isEmpty()).withText(),
-        new BarAction(EiDbBundle.message("result.revert"), EiDbBundle.message("result.revert.tooltip"), AllIcons.Actions.Rollback, this::revertEdits)
-            .visibleWhen(() -> !edits.isEmpty()).withText());
+        apply.visibleWhen(this::hasPending).enabledWhen(() -> !applying).withText(),
+        new BarAction(EiDbBundle.message("result.revert"), EiDbBundle.message("backup.grid.revert.tooltip"), AllIcons.Actions.Rollback, this::revertEdits)
+            .visibleWhen(this::hasPending).withText(),
+        new BarAction(EiDbBundle.message("backup.grid.delete"), EiDbBundle.message("backup.grid.delete.tooltip"), AllIcons.General.Remove, this::deleteRows)
+            .visibleWhen(this::canOfferDelete).enabledWhen(() -> grid.getSelectedRowCount() > 0));
     // 내보내기 · 복사 · 생성은 흐린 글자 링크로, 「·」 로 나눈다.
     JPanel links = new JPanel(new HorizontalLayout(0, SwingConstants.CENTER));
     links.setBorder(JBUI.Borders.empty(0, BAR_INSET));
@@ -398,7 +416,8 @@ final class ResultPanel extends SimpleToolWindowPanel {
   private void readMore(DbConfig c, int limit) {
     if (grid.isEditing()) grid.getCellEditor().stopCellEditing();
     // 다시 읽으면 이 패널을 새 결과로 바꾸므로 반영하지 않은 고친 값은 사라진다.
-    if (!edits.isEmpty() && Messages.showYesNoDialog(project, EiDbBundle.message("result.more.discard", edits.size()),
+    if (hasPending() && Messages.showYesNoDialog(project,
+        EiDbBundle.message(deleted.isEmpty() ? "result.more.discard" : "backup.grid.more.discard", edits.size() + deleted.size()),
         EiDbBundle.message("result.more.discard.title"), Messages.getWarningIcon()) != Messages.YES) {
       return;
     }
@@ -521,9 +540,11 @@ final class ResultPanel extends SimpleToolWindowPanel {
     if (col > 0) {
       Object v = result.rows().get(grid.convertRowIndexToModel(row)).get(col - 1);
       menu.insert(item(EiDbBundle.message("result.menu.copy.value"), () -> copy(v == null ? "" : text(v), EiDbBundle.message("result.copied.value"))), 0);
+      CellActions.addTo(menu, 1, project, config, result, grid.convertRowIndexToModel(row), col - 1);
     }
     menu.addSeparator();
     menu.add(item(EiDbBundle.message("result.menu.copy.rows"), this::copyTsv));
+    if (canOfferDelete()) menu.add(item(EiDbBundle.message("backup.grid.delete"), this::deleteRows));
     menu.show(e.getComponent(), e.getX(), e.getY());
   }
 
@@ -757,10 +778,13 @@ final class ResultPanel extends SimpleToolWindowPanel {
       return;
     }
     if (pkColumns == null && editBlocked == null) {
-      loadEditInfo(viewRow, viewColumn);
+      loadEditInfo(() -> beginEdit(viewRow, viewColumn));
       return;
     }
     String reason = editBlocked != null ? editBlocked : cellBlocked(col);
+    if (reason == null && viewRow < grid.getRowCount() && isDeletedRow(grid.convertRowIndexToModel(viewRow))) {
+      reason = EiDbBundle.message("backup.grid.row.deleted");
+    }
     if (reason != null) {
       Notify.error(project, reason);
       return;
@@ -768,7 +792,8 @@ final class ResultPanel extends SimpleToolWindowPanel {
     if (viewRow < grid.getRowCount()) grid.editCellAt(viewRow, viewColumn);
   }
 
-  private void loadEditInfo(int viewRow, int viewColumn) {
+  /** 표 정의를 뒤에서 읽어 고칠 수 있는지(PK · 칼럼)를 채운 뒤 then 을 화면 스레드에서 부른다. 조회 문장부터 고칠 수 없거나 읽지 못하면 알리고 then 은 부르지 않는다. */
+  private void loadEditInfo(Runnable then) {
     String early = config.readOnly ? EiDbBundle.message("result.edit.read.only") : SqlText.notEditable(result.sql());
     if (early != null) {
       editBlocked = early;
@@ -788,7 +813,8 @@ final class ResultPanel extends SimpleToolWindowPanel {
           editTable = SqlText.ident(config.kind, def.name());
           editColumns = names;
           pkColumns = keys;
-          beginEdit(viewRow, viewColumn);
+          missingColumns = countMissing(def.columns());
+          then.run();
         }, project.getDisposed());
       } catch (Exception e) {
         // 다음 두 번 누름에서 다시 읽게 상태를 두지 않는다.
@@ -865,52 +891,265 @@ final class ResultPanel extends SimpleToolWindowPanel {
   private void revertEdits() {
     if (grid.isEditing()) grid.getCellEditor().cancelCellEditing();
     edits.clear();
+    deleted.clear();
     updateEditButtons();
     grid.repaint();
   }
 
-  /**
-   * 고친 행마다 UPDATE 문(SET 은 고친 칼럼, WHERE 는 PK 처음 값)을 만들어 미리보기로 확인받고 SqlRunner 로 차례로 실행한다.
-   * 실행은 ? 자리 + binds 로 하고(값 이스케이프를 드라이버에 맡김) 미리보기에만 리터럴 문장을 보인다.
-   * 운영 접속 확인 · 읽기 전용 거절은 SqlRunner 가 한다.
-   * 앞 문장이 행을 바꾼 뒤에만 다음 문장을 실행하고, 그 행만 화면 값을 고친 값으로 바꾸고 고친 표시를 지운다.
-   * 오류 · 취소 · 거절이면 그 행부터 고친 표시를 남겨 다시 반영할 수 있게 한다. 바뀐 행이 0 이면 알리고 멈춘다.
-   */
-  private void applyEdits() {
-    if (grid.isEditing() && !grid.getCellEditor().stopCellEditing()) return;
-    if (edits.isEmpty()) return;
-    List<Integer> rows = new ArrayList<>();
-    List<Map<Integer, Object>> values = new ArrayList<>();
-    List<SqlText.Update> statements = new ArrayList<>();
-    for (Map.Entry<Integer, Map<Integer, Object>> e : edits.entrySet()) {
-      rows.add(e.getKey());
-      values.add(new TreeMap<>(e.getValue()));
-      statements.add(updateStatement(e.getKey(), e.getValue()));
-    }
-    if (!confirmApply(statements)) return;
-    applyNext(rows, values, statements, 0);
+  private boolean hasPending() {
+    return !edits.isEmpty() || !deleted.isEmpty();
   }
 
-  /** applyEdits 의 i 번째 문장을 실행한다. 실행 중 사용자가 같은 칸을 다시 고쳤으면 그 칸의 고친 표시는 남긴다. */
-  private void applyNext(List<Integer> rows, List<Map<Integer, Object>> values, List<SqlText.Update> statements, int i) {
+  /** 「행 지우기」를 보일지: 표 하나를 조회한 결과이고 읽기 전용 접속이 아닐 때. 실제로 지울 수 있는지(PK · 모든 칼럼)는 누를 때 표 정의로 판정한다. */
+  private boolean canOfferDelete() {
+    return table != null && !config.readOnly;
+  }
+
+  private boolean isDeletedRow(int modelRow) {
+    return !deleted.isEmpty() && modelRow >= 0 && modelRow < result.rows().size() && deleted.contains(result.rows().get(modelRow));
+  }
+
+  private static Font struck(Font font) {
+    return font.deriveFont(Map.of(TextAttribute.STRIKETHROUGH, TextAttribute.STRIKETHROUGH_ON));
+  }
+
+  /** 표의 칼럼 중 결과 칼럼에 없는 것의 수(대소문자 무시). */
+  private int countMissing(List<Meta.Column> defs) {
+    Set<String> shown = new HashSet<>();
+    for (String name : result.columns()) shown.add(name.toUpperCase(Locale.ROOT));
+    int missing = 0;
+    for (Meta.Column d : defs) {
+      if (!shown.contains(d.name().toUpperCase(Locale.ROOT))) missing++;
+    }
+    return missing;
+  }
+
+  /** 지금 그 행 객체가 있는 모델 행 번호. 그 사이 표에서 빠졌으면 -1. */
+  private int indexOfRow(List<Object> row) {
+    List<List<Object>> rows = result.rows();
+    for (int i = 0; i < rows.size(); i++) {
+      if (rows.get(i) == row) return i;
+    }
+    return -1;
+  }
+
+  /** 고른 칸이 걸친 행들에 지움 표시를 한다. 실제 DELETE 는 「적용」 때 나간다. 고른 행이 없으면 알린다. */
+  private void deleteRows() {
+    if (grid.isEditing() && !grid.getCellEditor().stopCellEditing()) return;
+    int[] selected = grid.getSelectedRows();
+    if (selected.length == 0) {
+      Notify.error(project, EiDbBundle.message("backup.grid.delete.none"));
+      return;
+    }
+    Set<List<Object>> picked = Collections.newSetFromMap(new IdentityHashMap<>());
+    for (int view : selected) picked.add(result.rows().get(grid.convertRowIndexToModel(view)));
+    markDeleted(picked);
+  }
+
+  /**
+   * 고치기와 같은 조건(표 하나 조회 · PK 가 결과에 있음 · 읽기 전용 아님)에 더해 표의 모든 칼럼이 결과에 있을 때만 표시한다.
+   * 처음이면 표 정의를 뒤에서 읽은 뒤 이어서 한다. 표시한 행의 고친 값은 버린다.
+   */
+  private void markDeleted(Set<List<Object>> picked) {
+    if (table == null) {
+      Notify.error(project, EiDbBundle.message("result.edit.single.table"));
+      return;
+    }
+    if (pkColumns == null && editBlocked == null) {
+      loadEditInfo(() -> markDeleted(picked));
+      return;
+    }
+    if (editBlocked != null) {
+      Notify.error(project, editBlocked);
+      return;
+    }
+    if (missingColumns > 0) {
+      Notify.error(project, EiDbBundle.message("backup.grid.delete.partial", table, missingColumns));
+      return;
+    }
+    if (grid.isEditing()) grid.getCellEditor().cancelCellEditing();
+    List<List<Object>> rows = result.rows();
+    for (int i = 0; i < rows.size(); i++) {
+      if (!picked.contains(rows.get(i))) continue;
+      deleted.add(rows.get(i));
+      edits.remove(i);
+    }
+    updateEditButtons();
+    grid.repaint();
+  }
+
+  /** 반영된 DELETE 의 행을 화면 표에서 뺀다: 그 뒤 행들의 고친 값(edits)은 행 번호를 하나씩 당기고, 건수 꼬리표를 고친다. */
+  private void removeRow(int at) {
+    if (grid.isEditing()) grid.getCellEditor().cancelCellEditing();
+    deleted.remove(result.rows().remove(at));
+    Map<Integer, Map<Integer, Object>> moved = new TreeMap<>();
+    for (Map.Entry<Integer, Map<Integer, Object>> e : edits.entrySet()) {
+      if (e.getKey() != at) moved.put(e.getKey() > at ? e.getKey() - 1 : e.getKey(), e.getValue());
+    }
+    edits.clear();
+    edits.putAll(moved);
+    ((Model) grid.getModel()).fireTableRowsDeleted(at, at);
+    int total = result.rows().size();
+    showCount(searchBox.getText().isEmpty() ? EiDbBundle.message("common.rows", total) : EiDbBundle.message("result.filtered", grid.getRowCount(), total));
+    updateEditButtons();
+  }
+
+  /**
+   * 고친 행마다 UPDATE 문(SET 은 고친 칼럼, WHERE 는 PK 처음 값), 지움 표시한 행마다 DELETE 문(WHERE 는 PK)을 만들어 미리보기로 확인받고
+   * SqlRunner 로 차례로(UPDATE 먼저, 그다음 DELETE) 실행한다. 실행은 ? 자리 + binds 로 하고(값 이스케이프를 드라이버에 맡김) 미리보기에만 리터럴 문장을 보인다.
+   * 확인받은 뒤 첫 문장 전에 고치기 전 백업을 남긴다: 고친 칸은 표가 들고 있는 처음 값으로 되돌리는 UPDATE, 지울 행은 INSERT(다시 조회하지 않는다).
+   * 백업을 남기지 못하면 백업 없이 실행할지 묻고, 취소하면 아무것도 실행하지 않는다. SqlRunner 에는 백업을 맡기지 않는다(이중 백업 금지).
+   * 운영 접속 확인 · 읽기 전용 거절은 SqlRunner 가 한다.
+   * 앞 문장이 행을 바꾼 뒤에만 다음 문장을 실행하고, 그 행만 화면 값을 고친 값으로 바꾸고 고친 표시를 지운다(DELETE 는 그 행을 화면 표에서 뺀다).
+   * 오류 · 취소 · 거절이면 그 행부터 고친 표시 · 지움 표시를 남겨 다시 반영할 수 있게 한다. 바뀐 행이 0 이면 알리고 멈춘다.
+   * 행은 번호가 아니라 행 객체로 기억한다(실행 중 다른 행이 빠져 번호가 밀려도 맞는 행을 고친다).
+   */
+  private void applyEdits() {
+    if (applying || (grid.isEditing() && !grid.getCellEditor().stopCellEditing())) return;
+    if (!hasPending()) return;
+    List<List<Object>> rows = new ArrayList<>();
+    List<Map<Integer, Object>> values = new ArrayList<>();
+    List<SqlText.Update> statements = new ArrayList<>();
+    List<String> undo = new ArrayList<>();
+    for (Map.Entry<Integer, Map<Integer, Object>> e : edits.entrySet()) {
+      rows.add(result.rows().get(e.getKey()));
+      values.add(new TreeMap<>(e.getValue()));
+      statements.add(updateStatement(e.getKey(), e.getValue()));
+      undo.add(undoStatement(e.getKey(), e.getValue()));
+    }
+    List<List<Object>> doomed = new ArrayList<>();
+    List<SqlText.Update> deletes = new ArrayList<>();
+    for (List<Object> row : result.rows()) {
+      if (!deleted.contains(row)) continue;
+      doomed.add(row);
+      deletes.add(deleteStatement(row));
+    }
+    List<SqlText.Update> all = new ArrayList<>(statements);
+    all.addAll(deletes);
+    if (!confirmApply(all, !deletes.isEmpty())) return;
+    List<Backups.Draft> drafts = backupDrafts(statements, undo, doomed, deletes);
+    if (drafts == null) return;
+    applying = true;
+    updateEditButtons();
+    Runnable thenDelete = () -> deleteNext(doomed, deletes, 0, statements.size());
+    Backups.saveThen(project, config, drafts, () -> {
+      if (statements.isEmpty()) thenDelete.run();
+      else applyNext(rows, values, statements, 0, thenDelete);
+    }, this::endApply);
+  }
+
+  private void endApply() {
+    applying = false;
+    updateEditButtons();
+  }
+
+  /**
+   * 반영 전에 남길 고치기 전 백업. 백업이 꺼져 있으면 빈 목록.
+   * 지울 행의 INSERT 를 만들 수 없으면(LOB · 이진 칼럼뿐) 백업 없이 실행할지 묻고, 취소하면 null.
+   */
+  private List<Backups.Draft> backupDrafts(List<SqlText.Update> updates, List<String> undo, List<List<Object>> doomed, List<SqlText.Update> deletes) {
+    List<Backups.Draft> drafts = new ArrayList<>();
+    if (!Backups.enabled()) return drafts;
+    if (!undo.isEmpty()) {
+      drafts.add(new Backups.Draft(BackupSql.Origin.GRID_EDIT, editTable, previews(updates), undo.size(),
+          new BackupSql.Restore(String.join("\n", undo), List.of(), BackupSql.Mode.UPDATE)));
+    }
+    if (!doomed.isEmpty()) {
+      try {
+        drafts.add(new Backups.Draft(BackupSql.Origin.GRID_DELETE, editTable, previews(deletes), doomed.size(),
+            BackupSql.restore(true, editTable, result.columns(), result.columnTypes(), doomed, Set.of(), config.kind)));
+      } catch (IllegalArgumentException e) {
+        if (!Backups.ask(project, EiDbBundle.message("backup.failed.ask", e.getMessage()))) return null;
+      }
+    }
+    return drafts;
+  }
+
+  private static List<String> previews(List<SqlText.Update> statements) {
+    List<String> out = new ArrayList<>();
+    for (SqlText.Update u : statements) out.add(u.preview());
+    return out;
+  }
+
+  /** applyEdits 의 i 번째 UPDATE 를 실행한다. 실행 중 사용자가 같은 칸을 다시 고쳤으면 그 칸의 고친 표시는 남긴다. 모두 끝나면 then. */
+  private void applyNext(List<List<Object>> rows, List<Map<Integer, Object>> values, List<SqlText.Update> statements, int i, Runnable then) {
     SqlText.Update u = statements.get(i);
     SqlRunner.run(project, config, u.sql(), u.binds(), done -> {
-      int row = rows.get(i);
+      int row = indexOfRow(rows.get(i));
       if (done.updateCount() == 0) {
         Notify.error(project, EiDbBundle.message("result.apply.missed", row + 1, i, statements.size()));
+        endApply();
         return;
       }
-      Map<Integer, Object> changed = edits.get(row);
-      for (Map.Entry<Integer, Object> v : values.get(i).entrySet()) {
-        result.rows().get(row).set(v.getKey(), v.getValue());
-        if (changed != null && literal(v.getValue()).equals(literal(changed.get(v.getKey())))) changed.remove(v.getKey());
+      // 그 사이 표에서 빠진 행이면 화면에 고칠 것이 없다.
+      if (row >= 0) {
+        Map<Integer, Object> changed = edits.get(row);
+        for (Map.Entry<Integer, Object> v : values.get(i).entrySet()) {
+          result.rows().get(row).set(v.getKey(), v.getValue());
+          if (changed != null && literal(v.getValue()).equals(literal(changed.get(v.getKey())))) changed.remove(v.getKey());
+        }
+        if (changed != null && changed.isEmpty()) edits.remove(row);
       }
-      if (changed != null && changed.isEmpty()) edits.remove(row);
       updateEditButtons();
       grid.repaint();
-      if (i + 1 < statements.size()) applyNext(rows, values, statements, i + 1);
-      else Notify.info(project, EiDbBundle.message("result.apply.done", statements.size()));
-    });
+      if (i + 1 < statements.size()) applyNext(rows, values, statements, i + 1, then);
+      else then.run();
+    }, null, this::endApply);
+  }
+
+  /**
+   * applyEdits 의 i 번째 DELETE 를 실행하고, 지워졌으면 그 행을 화면 표에서 뺀다. 지운 행이 0 이면 알리고 멈춘다(지움 표시는 남는다).
+   * updated 는 앞서 반영한 UPDATE 문 수. 모두 끝나면 반영한 문장 수를 알린다.
+   */
+  private void deleteNext(List<List<Object>> doomed, List<SqlText.Update> deletes, int i, int updated) {
+    if (i >= deletes.size()) {
+      Notify.info(project, deletes.isEmpty() ? EiDbBundle.message("result.apply.done", updated)
+          : EiDbBundle.message("backup.grid.apply.done", updated + deletes.size(), updated, deletes.size()));
+      endApply();
+      return;
+    }
+    SqlText.Update d = deletes.get(i);
+    SqlRunner.run(project, config, d.sql(), d.binds(), done -> {
+      int row = indexOfRow(doomed.get(i));
+      if (done.updateCount() == 0) {
+        Notify.error(project, EiDbBundle.message("backup.grid.delete.missed", row + 1, updated + i, updated + deletes.size()));
+        endApply();
+        return;
+      }
+      if (row >= 0) removeRow(row);
+      deleteNext(doomed, deletes, i + 1, updated);
+    }, null, this::endApply);
+  }
+
+  /** 고친 칸을 표가 들고 있는 처음 값으로 되돌리는 UPDATE 문(리터럴, 고치기 전 백업용). WHERE 는 PK 처음 값. */
+  private String undoStatement(int row, Map<Integer, Object> changed) {
+    List<String> names = new ArrayList<>();
+    List<Object> values = new ArrayList<>();
+    for (Integer col : changed.keySet()) {
+      names.add(editColumns[col]);
+      values.add(result.rows().get(row).get(col));
+    }
+    int setCount = names.size();
+    for (int i = 0; i < pkColumns.length; i++) {
+      if (!pkColumns[i]) continue;
+      names.add(editColumns[i]);
+      values.add(result.rows().get(row).get(i));
+    }
+    boolean[] key = new boolean[names.size()];
+    Arrays.fill(key, setCount, key.length, true);
+    return SqlText.update(editTable, names, values, key, config.kind);
+  }
+
+  /** 그 행을 PK 로 찾아 지우는 DELETE 문. */
+  private SqlText.Update deleteStatement(List<Object> row) {
+    List<String> names = new ArrayList<>();
+    List<Object> values = new ArrayList<>();
+    for (int i = 0; i < pkColumns.length; i++) {
+      if (!pkColumns[i]) continue;
+      names.add(editColumns[i]);
+      values.add(row.get(i));
+    }
+    return BackupSql.delete(editTable, names, values, config.kind);
   }
 
   private SqlText.Update updateStatement(int row, Map<Integer, Object> changed) {
@@ -931,7 +1170,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
     return SqlText.updateWithBinds(editTable, names, values, key);
   }
 
-  private boolean confirmApply(List<SqlText.Update> statements) {
+  private boolean confirmApply(List<SqlText.Update> statements, boolean withDeletes) {
     List<String> previews = new ArrayList<>();
     for (SqlText.Update u : statements) previews.add(u.preview());
     JBTextArea text = new JBTextArea(String.join("\n", previews));
@@ -944,7 +1183,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
     note.setBorder(JBUI.Borders.emptyBottom(8));
     DialogBuilder dialog = new DialogBuilder(project);
     dialog.setDimensionServiceKey(PREVIEW_DIMENSION_KEY);
-    dialog.setTitle(EiDbBundle.message("result.apply.title", statements.size()));
+    dialog.setTitle(EiDbBundle.message(withDeletes ? "backup.grid.apply.title" : "result.apply.title", statements.size()));
     dialog.setNorthPanel(note);
     dialog.setCenterPanel(scroll);
     dialog.addOkAction().setText(EiDbBundle.message("common.run"));
@@ -988,7 +1227,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
     @Override public int getRowCount() { return result.rows().size(); }
     @Override public int getColumnCount() { return headers.length; }
     @Override public String getColumnName(int column) { return headers[column]; }
-    @Override public boolean isCellEditable(int row, int column) { return column > 0 && isEditable(column - 1); }
+    @Override public boolean isCellEditable(int row, int column) { return column > 0 && isEditable(column - 1) && !isDeletedRow(row); }
 
     @Override
     public Object getValueAt(int row, int column) {
@@ -1001,6 +1240,8 @@ final class ResultPanel extends SimpleToolWindowPanel {
       edit(row, column - 1, (String) value);
       fireTableRowsUpdated(row, row);
     }
+
+    boolean isDeleted(int row) { return isDeletedRow(row); }
 
     boolean isEdited(int row, int column) {
       Map<Integer, Object> changed = edits.get(row);
@@ -1025,6 +1266,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
   /** 고친 칸이면 고친 칸 바탕, 행 번호 칸이면 머리와 같은 바탕, 아니면 null(표 · 줄무늬 바탕). */
   private static Color cellBackground(JTable table, int row, int column) {
     int modelColumn = table.convertColumnIndexToModel(column);
+    if (table.getModel() instanceof Model m && m.isDeleted(table.convertRowIndexToModel(row))) return DELETED_BACKGROUND;
     if (table.getModel() instanceof Model m && m.isEdited(table.convertRowIndexToModel(row), modelColumn)) return EDITED_BACKGROUND;
     return modelColumn == 0 ? UIUtil.getPanelBackground() : null;
   }

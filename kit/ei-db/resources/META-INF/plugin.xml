@@ -55,11 +55,18 @@
     <localInspection language="JAVA" shortName="EiMapperMissingStatement" bundle="messages.EiDbBundle" key="inspection.EiMapperMissingStatement.display.name"
                      groupName="MyBatis" enabledByDefault="true" level="WEAK WARNING"
                      implementationClass="ei.db.mybatis.MapperPairInspection$Java"/>
+    <!-- MyBatis: 매퍼 XML 의 SQL 에서 DB 에 없는 칼럼(경고) · 표(약한 경고). 읽어 둔 표 · 칼럼 목록만 본다 -->
+    <localInspection language="XML" shortName="EiMapperSqlUnknownName" bundle="messages.EiDbBundle" key="inspection.EiMapperSqlUnknownName.display.name"
+                     groupName="MyBatis" enabledByDefault="true" level="WARNING"
+                     implementationClass="ei.db.mybatis.MapperSqlInspection"/>
     <!-- MyBatis: 매퍼 필드를 가진 클래스에서 서비스 메서드 자동 완성 -->
     <completion.contributor language="JAVA" implementationClass="ei.db.mybatis.ServiceMethodCompletion"/>
     <!-- 주석 만들기: 설정 → 도구 → 주석 만들기(작성자 · 날짜 · 사전) -->
     <applicationConfigurable parentId="tools" instance="ei.db.mybatis.DocCommentSettings$Page" id="ei.db.doccomment"
                              key="doccomment.settings.title" bundle="messages.EiDbBundle"/>
+    <!-- 고치기 전 백업: 설정 → 도구 → 고치기 전 백업(켬 · 행 한도 · 보존 일수) -->
+    <applicationConfigurable parentId="tools" instance="ei.db.console.Backups$Page" id="ei.db.backup"
+                             key="backup.settings.title" bundle="messages.EiDbBundle"/>
     <!-- ERD 도구 창은 ErdView 가 처음 열 때 등록한다. -->
   </extensions>
 

@@ -148,7 +148,7 @@ public final class LogActions {
     }
     chooseConsole(project, editor, t -> {
       t.append(project, SqlValues.inline(entry.sql, entry.values, t.config().kind));
-      if (run) SqlRunner.run(project, t.config(), entry.sql, new ArrayList<>(entry.values));
+      if (run) SqlRunner.run(project, t.config(), entry.sql, new ArrayList<>(entry.values), null, ei.db.console.BackupSql.Origin.MAPPER);
     });
   }
 

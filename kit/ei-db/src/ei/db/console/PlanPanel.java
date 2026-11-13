@@ -146,12 +146,16 @@ final class PlanPanel extends JPanel {
     JPanel head = new JPanel(new BorderLayout(JBUI.scale(10), 0));
     head.setBorder(JBUI.Borders.compound(JBUI.Borders.customLineBottom(JBColor.border()), JBUI.Borders.empty(6, 12)));
     head.add(lines, BorderLayout.CENTER);
+    // 이 계획을 「앞 계획과 비교」의 후보로 기억하고, 기준 찍기 · 비교 단추를 둔다.
+    // 단추는 요약 아래 줄에 둔다: 옆에 두면 좁은 창에서 요약 글이 잘린다. 단추 줄은 폭이 모자라면 줄을 바꾼다.
+    JPanel buttons = PlanCompareDialog.buttons(project, PlanHistory.get(project).add(c, plan));
+    head.add(buttons, BorderLayout.SOUTH);
     if (!plan.actual() && plan.kind() == DbKind.ORACLE && ExplainPlan.isQuery(plan.sql())) {
       JButton measure = new JButton(EiDbBundle.message("plan.measure"), AllIcons.Actions.Profile);
       measure.putClientProperty(DarculaButtonUI.DEFAULT_STYLE_KEY, true);
       measure.setToolTipText(EiDbBundle.message("plan.measure.tooltip"));
       measure.addActionListener(e -> ExplainPlan.measure(project, c, plan.sql(), plan.binds(), plan.source()));
-      head.add(measure, BorderLayout.EAST);
+      buttons.add(measure);
     }
     return head;
   }
