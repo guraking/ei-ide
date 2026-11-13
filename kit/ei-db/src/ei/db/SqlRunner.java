@@ -6,6 +6,8 @@ import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.util.concurrency.AppExecutorUtil;
+import ei.db.console.BackupSql;
+import ei.db.console.Backups;
 import ei.db.console.ConsoleRun;
 import ei.db.console.GuardDialog;
 import ei.db.console.ResultView;
@@ -25,7 +27,8 @@ import java.util.function.Consumer;
 /**
  * 실행의 공통 입구(콘솔 · MyBatis 실행 · 로그 변환 · 표 데이터 보기). 화면 스레드에서 부른다.
  * 순서: 읽기 전용 접속의 변경 거절 → 위험 문장(WHERE 없는 UPDATE · DELETE, DROP · TRUNCATE)과 운영 접속의 변경은 확인창
- * → 미반영 변경이 있는 접속(Oracle · MySQL)의 DDL 은 함께 커밋된다는 확인 → 백그라운드 실행 → 결과 창에 표시 → 실행 기록(RunHistory)에 남김.
+ * → 미반영 변경이 있는 접속(Oracle · MySQL)의 DDL 은 함께 커밋된다는 확인 → 백그라운드에서 고치기 전 백업(Backups, UPDATE · DELETE) → 실행
+ * → 결과 창에 표시 → 실행 기록(RunHistory)에 남김.
  * 진행 막대를 취소하면 DbSessions.cancel 로 드라이버에 취소를 보낸다.
  */
 public final class SqlRunner {
@@ -43,6 +46,14 @@ public final class SqlRunner {
    * 읽기 전용 거절 · 확인창 취소 · 실행 오류 · 실행 취소면 불리지 않는다. null 이면 부르지 않는다.
    */
   public static void run(Project project, DbConfig c, String sql, List<Object> binds, Consumer<QueryResult> onSuccess) {
+    run(project, c, sql, binds, onSuccess, BackupSql.Origin.CONSOLE);
+  }
+
+  /**
+   * backup 은 고치기 전 백업 파일에 적을 종류. null 이면 백업하지 않는다(부르는 쪽이 이미 백업한 결과 표 「적용」).
+   * 백업이 실패했거나 행이 한도를 넘어 사용자가 실행을 취소하면 실행 취소와 같게 끝난다(onSuccess 는 불리지 않는다).
+   */
+  public static void run(Project project, DbConfig c, String sql, List<Object> binds, Consumer<QueryResult> onSuccess, BackupSql.Origin backup) {
     boolean write = SqlGuard.isWrite(sql);
     if (write && c.readOnly) {
       Notify.error(project, EiDbBundle.message("runner.read.only", c.name));
@@ -60,7 +71,7 @@ public final class SqlRunner {
       ConsoleRun.stop(project, c, sql);
       return;
     }
-    queue(project, c, sql, binds, DbSessions.get(project).maxRows(), EiDbBundle.message("runner.progress", c.name), new Outcome() {
+    queue(project, c, sql, binds, DbSessions.get(project).maxRows(), EiDbBundle.message("runner.progress", c.name), backup, new Outcome() {
       @Override
       public void done(QueryResult result) {
         ResultView.show(project, c, result);
@@ -81,7 +92,7 @@ public final class SqlRunner {
    * 실패는 알림으로, 취소는 아무것도 바꾸지 않는다.
    */
   public static void reread(Project project, DbConfig c, String sql, List<Object> binds, int limit, Consumer<QueryResult> onResult) {
-    queue(project, c, sql, binds, limit, EiDbBundle.message("runner.reread.progress", c.name, limit), new Outcome() {
+    queue(project, c, sql, binds, limit, EiDbBundle.message("runner.reread.progress", c.name, limit), null, new Outcome() {
       @Override
       public void done(QueryResult result) { onResult.accept(result); }
 
@@ -93,6 +104,57 @@ public final class SqlRunner {
     });
   }
 
+  /** runAll 의 확인창에 보일 때 문장 사이에 넣는 글. */
+  private static final String STATEMENT_SEPARATOR = ";\n";
+
+  /**
+   * 바인드 없는 문장 여럿을 확인 한 번으로 차례로 실행한다(탐색기 「주석 고치기」). 화면 스레드에서 부른다. 결과 탭은 만들지 않고 문장마다 실행 기록에 남긴다.
+   * 확인은 run 과 같되 한 번씩만: 읽기 전용 접속의 변경 거절 → 위험 문장 · 운영 접속의 변경 확인(문장을 이어 붙여 보인다) → 실행 전 점검
+   * → 미반영 변경이 있는 접속(Oracle · MySQL)의 DDL 확인. 거절 · 취소면 아무것도 실행하지 않고 false(onDone 은 불리지 않는다).
+   * 앞 문장이 실패하거나 취소되면 멈춘다. onDone 은 화면 스레드에서 (성공한 문장 수, 멈춘 까닭 — 모두 성공이면 null)로 한 번 불린다.
+   */
+  public static boolean runAll(Project project, DbConfig c, List<String> sqls, java.util.function.BiConsumer<Integer, String> onDone) {
+    if (sqls.isEmpty()) return false;
+    boolean write = false;
+    String danger = null;
+    String ddl = null;
+    for (String sql : sqls) {
+      write |= SqlGuard.isWrite(sql);
+      if (danger == null) danger = SqlGuard.danger(sql);
+      if (ddl == null && SqlGuard.isDdl(sql)) ddl = sql;
+    }
+    if (write && c.readOnly) {
+      Notify.error(project, EiDbBundle.message("runner.read.only", c.name));
+      return false;
+    }
+    if ((danger != null || (c.production && write)) && !GuardDialog.confirm(project, c, String.join(STATEMENT_SEPARATOR, sqls), danger, null)) return false;
+    for (String sql : sqls) {
+      if (!ei.db.bench.LintGate.confirm(project, sql)) return false;
+    }
+    if (ddl != null && !confirmImplicitCommit(project, c, ddl)) return false;
+    runNext(project, c, List.copyOf(sqls), 0, onDone);
+    return true;
+  }
+
+  /** runAll 의 i 번째 문장. 끝까지 갔거나 멈추면 onDone. */
+  private static void runNext(Project project, DbConfig c, List<String> sqls, int i, java.util.function.BiConsumer<Integer, String> onDone) {
+    if (i == sqls.size()) {
+      onDone.accept(i, null);
+      return;
+    }
+    // 주석 문처럼 행을 바꾸지 않는 문장 묶음이라 고치기 전 백업은 하지 않는다(null).
+    queue(project, c, sqls.get(i), List.of(), DbSessions.get(project).maxRows(), EiDbBundle.message("runner.progress", c.name), null, new Outcome() {
+      @Override
+      public void done(QueryResult result) { runNext(project, c, sqls, i + 1, onDone); }
+
+      @Override
+      public void cancelled() { onDone.accept(i, EiDbBundle.message("sessions.cancelled")); }
+
+      @Override
+      public void failed(Exception e) { onDone.accept(i, ResultView.message(e)); }
+    });
+  }
+
   /** 실행 결과를 받는 곳. 모두 화면 스레드에서(프로젝트가 닫혔으면 부르지 않는다). */
   private interface Outcome {
     void done(QueryResult result);
@@ -100,8 +162,12 @@ public final class SqlRunner {
     void failed(Exception e);
   }
 
-  /** 백그라운드 실행(진행 막대 · 취소) → outcome → 실행 기록. limit 건까지 읽는다. */
-  private static void queue(Project project, DbConfig c, String sql, List<Object> binds, int limit, String title, Outcome outcome) {
+  /**
+   * 백그라운드 실행(진행 막대 · 취소) → outcome → 실행 기록. limit 건까지 읽는다.
+   * backup 이 null 이 아니면 실행 직전에 같은 작업 안에서 고치기 전 백업을 한다. 백업이 실행을 막으면 취소로 끝낸다.
+   */
+  private static void queue(Project project, DbConfig c, String sql, List<Object> binds, int limit, String title, BackupSql.Origin backup,
+                            Outcome outcome) {
     new Task.Backgroundable(project, title, true) {
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
@@ -111,6 +177,11 @@ public final class SqlRunner {
             () -> cancelIfAsked(project, c, mine, indicator, failed), CANCEL_POLL_MS, CANCEL_POLL_MS, TimeUnit.MILLISECONDS);
         long start = System.currentTimeMillis();
         try {
+          if (backup != null && !Backups.beforeRun(project, c, sql, binds, backup, indicator::isCanceled, mine)) {
+            ApplicationManager.getApplication().invokeLater(outcome::cancelled, project.getDisposed());
+            record(project, c, sql, binds, System.currentTimeMillis() - start, RunHistory.NO_COUNT, false);
+            return;
+          }
           QueryResult result = DbSessions.get(project).run(c, sql, binds, limit, indicator::isCanceled, mine,
               rows -> indicator.setText2(EiDbBundle.message("runner.rows.read", rows)));
           ApplicationManager.getApplication().invokeLater(() -> outcome.done(result), project.getDisposed());

@@ -157,6 +157,70 @@ public final class Meta {
     return out;
   }
 
+  /** 이 표를 가리키는 다른 표들의 외래 키(importedKeys 의 반대 방향). table 은 메타 이름 그대로. */
+  public static List<ForeignKey> exportedKeys(Connection conn, DbConfig c, String schema, String table) throws SQLException {
+    List<ForeignKey> out = new ArrayList<>();
+    try (ResultSet rs = conn.getMetaData().getExportedKeys(catalog(c, schema), schemaArg(c, schema), table)) {
+      while (rs.next()) {
+        out.add(new ForeignKey(nz(rs.getString("FK_NAME")), rs.getString("FKTABLE_NAME"), rs.getString("FKCOLUMN_NAME"),
+                               rs.getString("PKTABLE_NAME"), rs.getString("PKCOLUMN_NAME")));
+      }
+    }
+    return out;
+  }
+
+  /** PK 사전 쿼리. 바인드 1 = 스키마(MySQL 은 데이터베이스). 결과 칼럼: 표 이름, PK 칼럼 이름(PK 칼럼마다 한 줄). */
+  private static final String ORACLE_PK_SQL = """
+      SELECT cc.TABLE_NAME AS TABLE_NAME
+           , cc.COLUMN_NAME AS COLUMN_NAME
+        FROM ALL_CONSTRAINTS k, ALL_CONS_COLUMNS cc
+       WHERE k.OWNER = ?
+         AND k.CONSTRAINT_TYPE = 'P'
+         AND k.TABLE_NAME NOT LIKE 'BIN$%'
+         AND cc.OWNER = k.OWNER
+         AND cc.CONSTRAINT_NAME = k.CONSTRAINT_NAME
+         AND cc.TABLE_NAME = k.TABLE_NAME""";
+  /** information_schema.table_constraints 는 조회 권한만 있는 표를 보이지 않아 pg_catalog 를 읽는다. */
+  private static final String POSTGRES_PK_SQL = """
+      SELECT t.relname AS TABLE_NAME
+           , a.attname AS COLUMN_NAME
+        FROM pg_catalog.pg_constraint k, pg_catalog.pg_class t, pg_catalog.pg_namespace n, pg_catalog.pg_attribute a
+       WHERE n.nspname = ?
+         AND t.relnamespace = n.oid
+         AND k.conrelid = t.oid
+         AND k.contype = 'p'
+         AND a.attrelid = t.oid
+         AND a.attnum = ANY (k.conkey)""";
+  private static final String MYSQL_PK_SQL = """
+      SELECT ku.TABLE_NAME AS TABLE_NAME
+           , ku.COLUMN_NAME AS COLUMN_NAME
+        FROM information_schema.KEY_COLUMN_USAGE ku
+       WHERE ku.TABLE_SCHEMA = ?
+         AND ku.CONSTRAINT_NAME = 'PRIMARY'""";
+
+  public static String primaryKeySql(DbKind kind) {
+    return switch (kind) {
+      case ORACLE -> ORACLE_PK_SQL;
+      case POSTGRES -> POSTGRES_PK_SQL;
+      case MYSQL -> MYSQL_PK_SQL;
+    };
+  }
+
+  /**
+   * 스키마의 모든 표의 PK: 표 이름(메타 그대로) → PK 칼럼 이름들(순서는 정해져 있지 않다). PK 가 없는 표는 들어 있지 않다.
+   * 표마다 getPrimaryKeys 를 부르지 않도록 데이터 사전(primaryKeySql)을 한 번 읽는다.
+   */
+  public static Map<String, List<String>> schemaPrimaryKeys(Connection conn, DbConfig c, String schema) throws SQLException {
+    Map<String, List<String>> out = new java.util.TreeMap<>();
+    try (java.sql.PreparedStatement ps = conn.prepareStatement(primaryKeySql(c.kind))) {
+      ps.setString(1, schema);
+      try (ResultSet rs = ps.executeQuery()) {
+        while (rs.next()) out.computeIfAbsent(rs.getString(1), k -> new ArrayList<>()).add(rs.getString(2));
+      }
+    }
+    return out;
+  }
+
   /**
    * SQL 에 쓴 이름을 메타가 돌려주는 이름으로: 따옴표로 감쌌으면 따옴표만 뗀 그대로, 아니면 Oracle 은 대문자 · PostgreSQL 은 소문자
    * (따옴표 없는 이름을 DB 가 그렇게 저장한다), MySQL 은 쓴 그대로.

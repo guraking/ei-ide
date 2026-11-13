@@ -34,6 +34,10 @@ public final class SchemaCache {
   /** 키: 접속 id | 스키마 | 표 이름(메타 그대로). */
   private static final Map<String, List<Meta.Column>> COLUMNS = new ConcurrentHashMap<>();
   private static final Map<String, List<Meta.ForeignKey>> FKS = new ConcurrentHashMap<>();
+  /** 그 표를 가리키는 외래 키. 키는 FKS 와 같다. */
+  private static final Map<String, List<Meta.ForeignKey>> EXPORTED = new ConcurrentHashMap<>();
+  /** 스키마의 표 이름 → PK 칼럼. 키: 접속 id | 스키마. */
+  private static final Map<String, Map<String, List<String>>> PKS = new ConcurrentHashMap<>();
   private static final Set<String> LOADING = ConcurrentHashMap.newKeySet();
   /** 자동완성이 열기를 이미 시도한 접속 id. clear 에서 지운다. */
   private static final Set<String> CONNECT_TRIED = ConcurrentHashMap.newKeySet();
@@ -78,6 +82,28 @@ public final class SchemaCache {
     return read;
   }
 
+  /** 그 표를 가리키는 다른 표들의 외래 키. table 은 메타 이름 그대로. */
+  public static List<Meta.ForeignKey> exportedKeys(Connection conn, DbConfig c, String schema, String table) throws SQLException {
+    String key = key(c.id, schema, table);
+    List<Meta.ForeignKey> have = EXPORTED.get(key);
+    if (have != null) return have;
+    int gen = generation(c.id);
+    List<Meta.ForeignKey> read = List.copyOf(Meta.exportedKeys(conn, c, schema, table));
+    putIfCurrent(EXPORTED, key, read, c.id, gen);
+    return read;
+  }
+
+  /** 스키마의 표 이름(메타 그대로) → PK 칼럼 이름들(Meta.schemaPrimaryKeys). */
+  public static Map<String, List<String>> primaryKeys(Connection conn, DbConfig c, String schema) throws SQLException {
+    String key = key(c.id, schema);
+    Map<String, List<String>> have = PKS.get(key);
+    if (have != null) return have;
+    int gen = generation(c.id);
+    Map<String, List<String>> read = java.util.Collections.unmodifiableMap(Meta.schemaPrimaryKeys(conn, c, schema));
+    putIfCurrent(PKS, key, read, c.id, gen);
+    return read;
+  }
+
   /** 스키마의 표 · 뷰를 캐시와 관계없이 DB 에서 다시 읽어 넣는다. 탐색기에서 사용자가 펼칠 때 쓴다(IDE 밖에서 바뀐 표도 보이게). */
   public static List<Meta.Table> reloadTables(Connection conn, DbConfig c, String schema) throws SQLException {
     int gen = generation(c.id);
@@ -92,6 +118,25 @@ public final class SchemaCache {
     List<Meta.Column> read = List.copyOf(Meta.columns(conn, c, schema, table));
     putIfCurrent(COLUMNS, key(c.id, schema, table), read, c.id, gen);
     return read;
+  }
+
+  /** 이미 읽어 둔 표 · 뷰. 없으면 null(읽지 않는다). */
+  public static List<Meta.Table> cachedTables(DbConfig c, String schema) {
+    return TABLES.get(key(c.id, schema));
+  }
+
+  /**
+   * 목록이 채워지거나 비워질 때마다 부를 것(매퍼 SQL 검사를 다시 돌린다). 어느 스레드에서나 불리므로 빨리 끝나야 한다. 하나만 둔다.
+   */
+  public static void onChange(Runnable listener) {
+    onChange = listener;
+  }
+
+  private static volatile Runnable onChange;
+
+  private static void changed() {
+    Runnable r = onChange;
+    if (r != null) r.run();
   }
 
   /** 이미 읽어 둔 칼럼. 없으면 null(읽지 않는다). */
@@ -151,9 +196,12 @@ public final class SchemaCache {
       TABLES.keySet().removeIf(k -> k.startsWith(prefix));
       COLUMNS.keySet().removeIf(k -> k.startsWith(prefix));
       FKS.keySet().removeIf(k -> k.startsWith(prefix));
+      EXPORTED.keySet().removeIf(k -> k.startsWith(prefix));
+      PKS.keySet().removeIf(k -> k.startsWith(prefix));
       FAILED.remove(configId);
       CONNECT_TRIED.remove(configId);
     }
+    changed();
   }
 
   private static String key(String configId, String schema) {
@@ -173,6 +221,7 @@ public final class SchemaCache {
     synchronized (GENERATION) {
       if (generation(configId) == gen) cache.put(key, value);
     }
+    changed();
   }
 
   /** 열린 접속에서 읽는 일. */

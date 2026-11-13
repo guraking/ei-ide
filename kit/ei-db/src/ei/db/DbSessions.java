@@ -17,6 +17,7 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.SQLWarning;
+import java.sql.Savepoint;
 import java.sql.Statement;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -512,6 +513,120 @@ public final class DbSessions implements Disposable {
         cancelled.remove(ps);
         notifyChanged();
       }
+    }
+  }
+
+  /** insertBatch 가 한 번에 보내는 행 수. */
+  static final int BATCH_ROWS = 500;
+  /** BatchResult.failedRow: 실패가 없거나 어느 행에서 실패했는지 모름. */
+  public static final int NO_ROW = -1;
+
+  /**
+   * insertBatch 결과. inserted 는 DB 에 들어간 행 수(자동 커밋이 켜진 접속이면 커밋까지 끝난 수, 꺼진 접속이면 트랜잭션에 남은 수),
+   * failedRow 는 실패한 행(0 부터, 모르면 NO_ROW), error 는 실패 원인(없으면 null), cancelled 는 취소로 멈췄는지, autoCommit 은 그 접속의 자동 커밋.
+   */
+  public record BatchResult(int inserted, int failedRow, SQLException error, boolean cancelled, boolean autoCommit) {}
+
+  /**
+   * 같은 INSERT 문(sql, 값 자리는 ?)을 rows 의 행마다 바인드해 JDBC 배치로 넣는다. BATCH_ROWS 행씩 보내고, 묶음이 실패하면 그 묶음을 되돌린 뒤
+   * 한 행씩 다시 넣어 실패한 행을 찾아 거기서 멈춘다(앞 행은 남는다). 묶음 사이에 stop 을 보고 멈춘다.
+   * 자동 커밋이 꺼진 접속: 커밋하지 않고, 들어간 행 수를 미반영 건수에 더한다(실패 · 취소 때도 들어간 행은 트랜잭션에 남는다).
+   * 자동 커밋이 켜진 접속: 묶음마다 커밋한다. 도는 동안만 접속의 자동 커밋을 끄고 끝나면 되돌리며, 되돌리지 못하면 접속을 닫고 알린다.
+   * 그 접속에서 다른 문장이 실행 중이거나 접속 · 문장 준비에 실패하면 SQLException(아무것도 넣지 않았다). 화면 스레드에서 부르지 않는다.
+   * registered · cancel 은 run 과 같다. progress 는 묶음마다 들어간 행 수를 받는다(null 이면 알리지 않음).
+   * shortcut: 이 배치가 도는 동안 같은 접속에서 다른 콘솔이 실행한 변경은 이 배치의 커밋 · 되돌리기에 함께 묶인다. 접속별 실행 줄 세우기가 생기면 거기에 넣는다.
+   */
+  public BatchResult insertBatch(DbConfig c, String sql, List<List<Object>> rows, BooleanSupplier stop, AtomicReference<Statement> registered,
+                                 IntConsumer progress) throws SQLException {
+    Connection conn = connection(c);
+    boolean auto = conn.getAutoCommit();
+    PreparedStatement ps = conn.prepareStatement(sql);
+    boolean free;
+    synchronized (txLock(c.id)) {
+      free = running.putIfAbsent(c.id, ps) == null;
+    }
+    if (!free) {
+      ps.close();
+      throw new SQLException(EiDbBundle.message("sessions.batch.busy", c.name));
+    }
+    registered.set(ps);
+    notifyChanged();
+    int done = 0;
+    try (ps) {
+      if (auto) conn.setAutoCommit(false);
+      txTouched.add(c.id);
+      while (done < rows.size()) {
+        if (stop.getAsBoolean()) return new BatchResult(done, NO_ROW, null, true, auto);
+        int end = Math.min(done + BATCH_ROWS, rows.size());
+        Savepoint mark = auto ? null : conn.setSavepoint();
+        try {
+          for (int r = done; r < end; r++) {
+            bindRow(ps, rows.get(r));
+            ps.addBatch();
+          }
+          ps.executeBatch();
+        } catch (SQLException batchFailure) {
+          ps.clearBatch();
+          if (mark != null) conn.rollback(mark); else conn.rollback();
+          if (cancelled.contains(ps)) return new BatchResult(done, NO_ROW, null, true, auto);
+          for (int r = done; r < end; r++) {
+            try {
+              bindRow(ps, rows.get(r));
+              ps.executeUpdate();
+            } catch (SQLException rowFailure) {
+              if (auto) conn.rollback();
+              boolean stopped = cancelled.contains(ps);
+              return new BatchResult(done, stopped ? NO_ROW : r, stopped ? null : rowFailure, stopped, auto);
+            }
+            keepBatchRows(c, conn, auto, 1);
+            done = r + 1;
+          }
+          // 묶음으로는 실패했지만 한 행씩은 모두 들어갔다(다음 묶음으로).
+          if (progress != null) progress.accept(done);
+          continue;
+        }
+        keepBatchRows(c, conn, auto, end - done);
+        done = end;
+        if (progress != null) progress.accept(done);
+      }
+      return new BatchResult(done, NO_ROW, null, false, auto);
+    } catch (SQLException e) {
+      // 접속이 끊겨 되돌리기 · 커밋이 실패한 경우. done 은 그 전까지 확실히 들어간 행이다.
+      return new BatchResult(done, NO_ROW, e, cancelled.contains(ps), auto);
+    } finally {
+      if (auto) restoreAutoCommit(c, conn);
+      running.remove(c.id, ps);
+      cancelled.remove(ps);
+      notifyChanged();
+    }
+  }
+
+  /** null 은 형을 정하지 않은 NULL 로 넣어 서버가 칼럼 형에 맞추게 한다. */
+  private static void bindRow(PreparedStatement ps, List<Object> binds) throws SQLException {
+    for (int i = 0; i < binds.size(); i++) {
+      Object v = binds.get(i);
+      if (v == null) ps.setNull(i + 1, java.sql.Types.NULL); else ps.setObject(i + 1, v);
+    }
+  }
+
+  /** 방금 넣은 n 행을 확정한다: 자동 커밋이 켜진 접속이면 커밋, 꺼진 접속이면 미반영 건수에 더한다. */
+  private void keepBatchRows(DbConfig c, Connection conn, boolean auto, int n) throws SQLException {
+    if (auto) conn.commit(); else pending.merge(c.id, n, Integer::sum);
+  }
+
+  /**
+   * insertBatch 가 끈 자동 커밋을 지금 설정 값(도는 사이에 사용자가 바꿨을 수 있다)으로 되돌린다. 커밋하지 못한 행은 롤백한다.
+   * 실패하면 접속 상태를 알 수 없으므로 접속을 닫고(다음 실행 때 새로 접속) 알린다.
+   */
+  private void restoreAutoCommit(DbConfig c, Connection conn) {
+    try {
+      conn.rollback();
+      conn.setAutoCommit(autoCommit(c));
+      pending.put(c.id, 0);
+      txTouched.remove(c.id);
+    } catch (SQLException e) {
+      close(c.id);
+      Notify.error(project, EiDbBundle.message("sessions.batch.restore.failed", c.name, e.getMessage()));
     }
   }
 

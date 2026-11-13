@@ -364,7 +364,7 @@ public final class MyBatisRunDialog extends DialogWrapper {
     DynamicSql.Result r = result;
     super.doOKAction();
     if (findSlow) ExplainPlan.analyze(project, c, r.sql, new ArrayList<>(r.binds), r.inlined());
-    else SqlRunner.run(project, c, r.sql, new ArrayList<>(r.binds));
+    else SqlRunner.run(project, c, r.sql, new ArrayList<>(r.binds), null, ei.db.console.BackupSql.Origin.MAPPER);
   }
 
   /** 어떤 단추로 닫든 넣은 값과 고른 접속을 기억한다. */

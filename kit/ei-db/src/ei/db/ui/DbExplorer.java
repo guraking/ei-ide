@@ -356,6 +356,7 @@ final class DbExplorer extends SimpleToolWindowPanel {
     g.add(new Act(EiDbBundle.message("explorer.new.console"), AllIcons.Nodes.Console, () -> true, () -> ConsoleOpener.openNew(project, targetConfig())));
     g.add(new Act(EiDbBundle.message("explorer.sessions"), null, () -> true, () -> SqlRunner.run(project, targetConfig(), SessionSql.sessions(targetConfig().kind), List.of())));
     g.add(new Act(EiDbBundle.message("explorer.locks"), null, () -> true, () -> SqlRunner.run(project, targetConfig(), SessionSql.locks(targetConfig().kind), List.of())));
+    g.add(new Act(EiDbBundle.message("backup.menu.view"), null, () -> true, () -> ei.db.console.BackupDialog.open(project, targetConfig())));
     g.addSeparator();
     g.add(new Act(EiDbBundle.message("connect.title.add"), AllIcons.General.Add, () -> true, this::addConnection));
     g.add(new Act(EiDbBundle.message("explorer.edit"), AllIcons.Actions.Edit, () -> true, () -> edit(targetConfig())));
@@ -687,9 +688,13 @@ final class DbExplorer extends SimpleToolWindowPanel {
           cols -> ConsoleOpener.open(project, t.c, SelectSql.insert(t.c.kind, t.schema, t.table.name(), cols)))));
       g.add(new Act(EiDbBundle.message("explorer.update"), null, () -> true, () -> withColumns(n, t,
           cols -> ConsoleOpener.open(project, t.c, SelectSql.update(t.c.kind, t.schema, t.table.name(), cols)))));
+      g.add(new Act(EiDbBundle.message("explorer.paste.rows"), null, () -> true, () -> ei.db.console.PasteRowsDialog.open(project, t.c, t.schema, t.table.name())));
+      g.add(new Act(EiDbBundle.message("explorer.test.data"), null, () -> true, () -> ei.db.console.TestDataDialog.open(project, t.c, t.schema, t.table.name())));
       g.add(new Act(EiDbBundle.message("mapper.command"), null, () -> true, () -> MapperDialog.show(project, t.c, t.schema, t.table.name())));
       g.add(new Act(EiDbBundle.message("action.ei.db.gen.Feature.text"), null, () -> true, () -> FeatureDialog.show(project, t.c, t.schema, t.table.name())));
       g.addSeparator();
+      g.add(new Act(EiDbBundle.message("explorer.ddl"), null, () -> true, () -> DdlDialog.show(project, t.c, t.schema, picked)));
+      g.add(new Act(EiDbBundle.message("explorer.comments"), null, () -> true, () -> CommentDialog.show(project, t.c, t.schema, t.table.name())));
       g.add(new Act(EiDbBundle.message("explorer.erd"), null, () -> true, () -> ErdView.open(project, t.c, t.schema, picked)));
       g.add(new Act(EiDbBundle.message("explorer.spec"), AllIcons.ToolbarDecorator.Export, () -> true, () -> exportSpec(t.c, t.schema, picked)));
       return g;
