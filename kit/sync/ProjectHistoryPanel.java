@@ -1149,7 +1149,7 @@ final class ProjectHistoryPanel extends JPanel {
       FontMetrics fm = getFontMetrics(getFont());
       int w = 0;
       for (String ref : refs) {
-        boolean isHead = ref.equals(head);
+        boolean isHead = sameRef(ref, head);
         w += pillWidth(fm, ref, pillIcon(isHead, refColor(ref, isHead, List.of()))) + JBUI.scale(GAP) / 2;
       }
       return new Dimension(w + 1, JBUI.scale(PILL_H) + 1);
@@ -1163,7 +1163,7 @@ final class ProjectHistoryPanel extends JPanel {
       g2.setFont(getFont());
       int x = 0;
       for (String ref : refs) {
-        boolean isHead = ref.equals(head);
+        boolean isHead = sameRef(ref, head);
         Color color = refColor(ref, isHead, List.of());
         x += paintPill(this, g2, ref, color, pillIcon(isHead, color), x, 0) + JBUI.scale(GAP) / 2;
       }
@@ -1297,7 +1297,7 @@ final class ProjectHistoryPanel extends JPanel {
       int pillX = x + fm.stringWidth(fitted) + gap;
       String head = loaded == null ? null : loaded.branch();
       for (String ref : entry.refs()) {
-        boolean isHead = ref.equals(head);
+        boolean isHead = sameRef(ref, head);
         Color color = refColor(ref, isHead, loaded == null ? List.of() : loaded.remotes());
         Icon icon = pillIcon(isHead, color);
         if (pillX + pillWidth(fm, ref, icon) > w - gap) break;
@@ -1365,5 +1365,10 @@ final class ProjectHistoryPanel extends JPanel {
     public void createToolWindowContent(@NotNull Project project, @NotNull ToolWindow toolWindow) {
       toolWindow.getContentManager().addContent(ContentFactory.getInstance().createContent(new ProjectHistoryPanel(project, toolWindow.getDisposable()), "", false));
     }
+  }
+
+  /** 커밋 옆 참조 이름이 지금 브랜치인가. 대소문자를 가리지 않는 파일 시스템(윈도우)에서 git 은 낱개 참조를 디스크 폴더 철자로 내 대소문자만 다를 수 있다. */
+  private static boolean sameRef(String ref, String head) {
+    return ref.equals(head) || !com.intellij.openapi.util.SystemInfo.isFileSystemCaseSensitive && ref.equalsIgnoreCase(head);
   }
 }
