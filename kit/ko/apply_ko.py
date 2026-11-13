@@ -3,7 +3,7 @@
 
 사용법: python kit\\ko\\apply_ko.py [팩]
   팩  한국어 언어 팩(localization-ko) zip 또는 풀린 폴더. 없으면 PACK_SOURCES 를 차례로 찾는다.
-      262 판 팩은 마켓에 없어 예전에 릴리스로 따로 받아 둔 것을 쓴다(플러그인설치.bat 이 release\\localization-ko 로 옮겨 둠).
+      우리 판에 맞는 팩이 마켓에 없으면 예전에 릴리스로 따로 받아 둔 것을 쓴다(플러그인설치.bat 이 release\\localization-ko 로 옮겨 둠).
 
 kit/ko/override/<jar 안 경로> 에 같은 이름의 .properties 가 있으면 그 줄이 팩 번역을 덮어쓴다(우리 번역, 기준은 kit/ko/용어집.md).
 덮어쓸 줄은 팩 줄과 모양(자리표시 {n} · HTML 태그 · 단독 따옴표 · 단축 글자)이 같아야 하고, 다르면 아무것도 바꾸지 않고 끝낸다.
@@ -23,7 +23,7 @@ sys.path.insert(0, str(KIT))
 from check_update import ROOT, config_version, current_build, prefix  # noqa: E402
 
 PACK_DIR = "localization-ko"
-# 설정 폴더 이름 앞부분: 지금 이름, 이름을 Moa IDE 로 바꾸기 전 이름(새 설정 폴더가 아직 없는 PC). 뒤에 get-source.bat 의 판(2026.2 꼴)이 붙는다.
+# 설정 폴더 이름 앞부분: 지금 이름, 이름을 Moa IDE 로 바꾸기 전 이름(새 설정 폴더가 아직 없는 PC). 뒤에 get-source.bat 의 판(2026.3 꼴)이 붙는다.
 CONFIG_PREFIXES = ("MoaIDE", "EIIDE")
 JETBRAINS_CONFIG = Path(os.environ.get("APPDATA", "")) / "JetBrains"
 # 팩을 찾는 곳. 앞의 것이 먼저다.
@@ -109,7 +109,7 @@ def overlay_jar(data, used=None):
         for info in src.infolist():
             body = src.read(info)
             if info.filename == "META-INF/plugin.xml":
-                # 팩은 받은 판(262.10968.63)까지로 묶여 있다. 우리 판 번호는 262.10968.N 이라 끝을 앞자리.* 로 넓힌다.
+                # 팩은 받은 판까지로 묶여 있다. 우리 판 번호(get-source.bat 판의 앞자리.N)가 들어가게 끝을 앞자리.* 로 넓힌다.
                 body = UNTIL_BUILD.sub(f'until-build="{prefix(current_build())}.*"', body.decode("utf-8")).encode("utf-8")
             elif info.filename.endswith(".properties"):
                 if used is not None:

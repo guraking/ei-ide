@@ -6,7 +6,7 @@
 brand: 이름 · 설치 폴더 이름 · 설정 폴더 이름만 바꾼다. 첫 빌드는 이것만으로 한다.
 slim : 번들 플러그인에서 안 쓰는 것을 뺀다. brand 빌드가 성공한 뒤에 따로 적용한다.
 
-대상 태그: idea/262.10968.63 (2026.2.3). 다른 태그에서 고칠 줄을 못 찾으면
+대상 태그: idea/263.7307.200 (2026.3). 다른 태그에서 고칠 줄을 못 찾으면
 어느 파일의 어느 문구인지 알리고 아무 파일도 바꾸지 않은 채 멈춘다.
 같은 단계를 두 번 실행해도 이미 바뀐 파일은 건너뛴다.
 """
@@ -32,15 +32,14 @@ SLIM_REMOVE = [
     '"intellij.performanceTesting"',
     '"intellij.keymap.visualStudio"',
     '"intellij.keymap.netbeans"',
-    '"intellij.mcpserver"',
+    '"intellij.mcpserver.plugin"',
     '"intellij.grazie"',
     '"intellij.toml"',
     '"intellij.webp"',
     '"intellij.mermaid"',
     '"intellij.testng"',
     '"intellij.java.i18n"',
-    # AI 에이전트 연결(Agent Client Protocol)과 플러그인 개발용 실행 도구는 쓰지 않는다.
-    '"intellij.platform.acp.plugin"',
+    # 플러그인 개발용 실행 도구는 쓰지 않는다.
     '"intellij.dev"',
 ]
 
@@ -75,9 +74,11 @@ def slim_edits():
     removal = ",\n      ".join(SLIM_REMOVE)
     return [
         (PROPS,
-         'productLayout.bundledPluginModules = IDEA_BUNDLED_PLUGINS + sequenceOf(\n      "intellij.javaFX.community"\n    )',
-         'productLayout.bundledPluginModules = IDEA_BUNDLED_PLUGINS.removeAll(listOf(\n      ' + removal + ',\n    ))'),
-        (PROPS, '      CommunityRepositoryModules.androidPlugin(allPlatforms = true),\n', ''),
+         'productLayout.bundledPluginModules = IDEA_BUNDLED_PLUGINS + sequenceOf(\n'
+         '      "intellij.idea.customization.plugin",\n      "intellij.javaFX.community"\n    )',
+         'productLayout.bundledPluginModules = IDEA_BUNDLED_PLUGINS.add("intellij.idea.customization.plugin").removeAll(listOf(\n      '
+         + removal + ',\n    ))'),
+        (PROPS, '        groovyPlugin()\n      ) + androidPlugin()\n', '        groovyPlugin()\n      )\n'),
         (PROPS, 'import org.jetbrains.intellij.build.kotlin.KotlinBinaries\n',
          'import org.jetbrains.intellij.build.kotlin.KotlinBinaries\n'
          'import org.jetbrains.intellij.build.kotlin.KotlinPluginBuilder\n'),

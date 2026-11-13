@@ -8,6 +8,7 @@
   0. kit 손질 대본 점검(KIT_CHECKS · KIT_JAVA_CHECKS)을 먼저 돌린다. 하나라도 실패하면 컴파일하지 않고 멈춘다.
   플러그인마다 따로 동시에
   1. kit 소스를 지난 빌드 결과(intellij-community\\out\\idea-ce\\dist.all · dist.win.x64)의 jar 로 컴파일한다.
+     지난 빌드가 없거나 get-source.bat 의 판과 앞자리가 다르면 그 판의 플랫폼 jar 묶음을 tmpjars 에 받아 쓴다.
   2. 그 플러그인의 *Check.java 를 컴파일해 모두 돌린다(점검마다 JVM 하나, CHECK_WORKERS 개씩 동시에).
   3. 컴파일 결과 + 리소스 + BUNDLED_LIBS(판 · SHA-256 고정, Maven Central 에서 받아 tmpjars\\libs 에 둠)를 tmpjars\\compile\\<이름>.jar 로 묶는다.
 모든 플러그인이 통과했을 때만 bundled-plugins\\<이름>\\lib\\<이름>.jar 를 바꾼다. 하나라도 실패하면 아무 jar 도 바꾸지 않는다.
@@ -28,9 +29,12 @@ import zipfile
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 
-from check_update import KIT, ROOT, JAVA_RELEASE, PLUGIN_SOURCES, MIXED_CHECK_SOURCES, argfile_line, find_javac
+from check_update import (KIT, ROOT, JAVA_RELEASE, PLUGIN_SOURCES, MIXED_CHECK_SOURCES, argfile_line, current_build, find_javac,
+                          platform_jars, prefix)
 
 DIST_DIRS = [ROOT / "intellij-community/out/idea-ce/dist.all", ROOT / "intellij-community/out/idea-ce/dist.win.x64"]
+# 지난 빌드의 판 번호가 적힌 파일(「IC-263.7307.N」 꼴).
+DIST_BUILD_FILE = DIST_DIRS[0] / "build.txt"
 WORK = ROOT / "tmpjars" / "compile"
 # 플러그인 → jar 에 그대로 넣을 리소스 폴더.
 RESOURCES = {
@@ -70,7 +74,7 @@ CLASS_ATTRS = ("implementation", "class", "instance", "serviceImplementation", "
 OUR_CLASS = re.compile(r"(?:local|ei|kinggura)\.[\w.$]+")
 ICON_ATTR = "icon"
 # jar 의 plugin.xml 에 넣는 판(묶은 때 「년.월일.시분」). 같은 id 가 본체와 설정 폴더 plugins 에 함께 있으면 IntelliJ 는 판이 높은 쪽을 띄우고,
-# 판이 없으면 IDE 판(262.10968.N)으로 보아 같을 때 먼저 찾은 설정 폴더 쪽을 띄운다. 묶은 때를 판으로 쓰면 언제나 나중에 묶은 jar 가 뜬다.
+# 판이 없으면 IDE 판(263.7307.N)으로 보아 같을 때 먼저 찾은 설정 폴더 쪽을 띄운다. 묶은 때를 판으로 쓰면 언제나 나중에 묶은 jar 가 뜬다.
 VERSION_STAMP = time.strftime("%Y.%m%d.%H%M")
 ID_END = "</id>"
 # 플러그인 하나의 점검을 동시에 돌릴 JVM 수. 플러그인 셋이 함께 돌므로 코어 수를 나눠 쓴다.
@@ -78,7 +82,7 @@ CHECK_WORKERS = max(2, (os.cpu_count() or 1) // len(PLUGIN_SOURCES))
 # 컴파일 전에 돌리는 kit 손질 대본 점검(파이썬). 각 파일 폴더에서 돌린다(같은 폴더의 대본을 import 한다).
 KIT_CHECKS = [KIT / "customize_check.py", KIT / "patchlib_check.py", KIT / "check_kit_check.py",
               KIT / "defaults" / "apply_defaults_check.py", KIT / "ko" / "apply_ko_check.py",
-              KIT / "textmate" / "apply_textmate_check.py", KIT / "defender" / "apply_defender_check.py",
+              KIT / "defender" / "apply_defender_check.py",
               KIT / "git-retry" / "apply_git_retry_check.py"]
 # 순수 자바 점검: (소스 폴더, 점검 클래스, 함께 컴파일할 파일). IntelliJ 클래스 없이 JDK 만으로 컴파일 · 실행한다.
 KIT_JAVA_CHECKS = [(KIT / "git-auth", "git4idea.commands.EiGitAuthCheck", ["EiGitAuthCheck.java", "EiGitAuthText.java"])]
@@ -87,8 +91,21 @@ FONT_SOURCE = KIT / "boot-servers" / "src" / "main" / "resources" / "fonts"
 FONT_TARGET = ROOT / "bundled-plugins" / "boot-servers" / "fonts"
 
 
+def dist_is_other_line(build_file, build):
+    """build_file(지난 빌드의 build.txt)에 적힌 판이 build(get-source.bat 의 판)와 앞자리가 다른지. 파일이 없거나 못 읽으면 False."""
+    try:
+        return prefix(build) + "." not in build_file.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+
+
 def platform_classpath():
-    """지난 빌드 결과의 jar 중 우리 플러그인 것을 뺀 목록. 우리 것은 지금 컴파일하는 소스가 대신한다."""
+    """지난 빌드 결과의 jar 중 우리 플러그인 것을 뺀 목록. 우리 것은 지금 컴파일하는 소스가 대신한다.
+    지난 빌드가 없거나 다른 판(커뮤니티 판을 올린 뒤 첫 빌드)이면 지금 판의 플랫폼 jar 묶음을 받아 쓴다."""
+    build = current_build()
+    if not all(d.is_dir() for d in DIST_DIRS) or dist_is_other_line(DIST_BUILD_FILE, build):
+        print(f"지난 빌드 결과가 {build} 판이 아니어서 플랫폼 jar 묶음을 받아 컴파일합니다.")
+        return [str(jar) for jar in sorted(platform_jars(build).rglob("*.jar")) if not PLUGIN_SOURCES.keys() & set(jar.parts)]
     jars = []
     for d in DIST_DIRS:
         if not d.is_dir():

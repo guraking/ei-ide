@@ -308,7 +308,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
     <p>인텔리제이 커뮤니티를 바탕으로 이클립스 흐름을 얹은 가벼운 자바 개발 도구입니다. 설치 순서와 직접 만든 기능(서버 창 · Git · 데이터베이스 · MyBatis · 코드 도구)을 기능별로 나누고, 어느 메뉴에 무엇이 있는지와 단축키를 앞쪽에 모았습니다.</p>
     <div class="chips">
       <a class="chip" id="ver" href="https://github.com/guraking/ei-ide/releases/latest">판 <b>최신</b></a>
-      <span class="chip">바탕 <b>IntelliJ Community 2026.2.3</b></span>
+      <span class="chip">바탕 <b>IntelliJ Community 2026.3</b></span>
       <a class="chip" href="https://github.com/guraking/ei-ide/releases/latest">최신 설치 파일 받기 →</a>
       <a class="chip" href="https://github.com/guraking/ei-ide">저장소</a>
     </div>
@@ -341,7 +341,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
 <section id="install">
   <div class="wrap">
     <h2><span class="no">01</span>설치</h2>
-    <p class="lead">처음 설치와 판 올리기 모두 같은 네 단계입니다. 설정(단축키 · 실행 설정 · 플러그인)은 <code>%APPDATA%\JetBrains\MoaIDE2026.2</code> 에 있어 다시 설치해도 남습니다.</p>
+    <p class="lead">처음 설치와 판 올리기 모두 같은 네 단계입니다. 설정(단축키 · 실행 설정 · 플러그인)은 <code>%APPDATA%\JetBrains\MoaIDE2026.3</code> 에 있어 다시 설치해도 남습니다.</p>
 
     <div class="steps">
       <div class="step">
@@ -349,13 +349,13 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
         <h4>설치 파일 실행</h4>
         <p>서버 창 · Synchronize · 데이터베이스 · Lombok · SVN 은 본체에 들어 있습니다.</p>
         <p>Rainbow Brackets Lite · POJO to JSON · Grep Console 도 본체에 들어 있습니다.</p>
-        <div class="file">moaide-262.10968.N.exe</div>
+        <div class="file">moaide-263.7307.N.exe</div>
       </div>
       <div class="step">
         <div class="n">2</div>
         <h4>한 번 켰다가 끄기</h4>
         <p>설정 폴더가 만들어집니다. 플러그인을 넣을 자리가 생기는 단계입니다.</p>
-        <div class="file">%APPDATA%\JetBrains\MoaIDE2026.2</div>
+        <div class="file">%APPDATA%\JetBrains\MoaIDE2026.3</div>
       </div>
       <div class="step">
         <div class="n">3</div>
@@ -379,7 +379,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
 
     <h3>release 폴더</h3>
     <div class="tree">release\
-├─ <span class="hl">moaide-262.10968.N.exe</span>        <span class="c">설치 파일</span>
+├─ <span class="hl">moaide-263.7307.N.exe</span>        <span class="c">설치 파일</span>
 ├─ <span class="hl">플러그인설치.bat</span>               <span class="c">3번 단계</span>
 ├─ plugins\
 │  ├─ localization-ko\              <span class="c">한국어 팩 원본 (빌드 때 kit\ko\apply_ko.py 가 우리 번역을 덮어 본체에 넣음)</span>
@@ -2104,7 +2104,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
 <section id="settings">
   <div class="wrap">
     <h2><span class="no">13</span>설정 바꾸는 곳</h2>
-    <p class="lead">설정 창은 <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd>. 설정 창 검색칸에 이름을 치면 바로 찾아갑니다. 설정 파일은 <code>%APPDATA%\JetBrains\MoaIDE2026.2</code> 에 있어 다시 설치해도 남습니다.</p>
+    <p class="lead">설정 창은 <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd>. 설정 창 검색칸에 이름을 치면 바로 찾아갑니다. 설정 파일은 <code>%APPDATA%\JetBrains\MoaIDE2026.3</code> 에 있어 다시 설치해도 남습니다.</p>
     <table class="keys">
       <tr><th>바꾸고 싶은 것</th><th>위치</th></tr>
       <tr><td>단축키</td><td>Keymap (Eclipse 를 복제한 뒤 고치기)</td></tr>
@@ -2152,13 +2152,13 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
     <h2><span class="no">15</span>직접 빌드하기</h2>
     <p class="lead">Windows cmd 기준입니다. 처음은 30분 안팎, 그 뒤 바뀐 부분만 다시 컴파일할 때는 10분 안팎 걸립니다. 소스를 고치는 대본은 두 번 돌려도 결과가 같고, 고치기 전 원본을 <code>backup\</code> 에 남깁니다.</p>
     <div class="flow" style="margin-bottom:14px">
-      <div class="box"><b>소스 받기</b><span>태그 <code>idea/262.10968.63</code></span></div>
+      <div class="box"><b>소스 받기</b><span>태그 <code>idea/263.7307.200</code></span></div>
       <div class="arrow">→</div>
       <div class="box"><b>이름 · 덜어 내기</b><span>제품 이름, 번들 플러그인 정리</span></div>
       <div class="arrow">→</div>
       <div class="box"><b>메뉴 · 기본값</b><span>이클립스식 메뉴, 02 의 기본값</span></div>
       <div class="arrow">→</div>
-      <div class="box"><b>빌드</b><span><code>moaide-262.10968.N.exe</code></span></div>
+      <div class="box"><b>빌드</b><span><code>moaide-263.7307.N.exe</code></span></div>
     </div>
 <pre class="cmd">get-source.bat
 python kit\customize.py intellij-community "Moa IDE" brand
@@ -2166,7 +2166,6 @@ python kit\customize.py intellij-community "Moa IDE" slim
 python kit\menu\apply_menu.py intellij-community
 python kit\defaults\apply_defaults.py intellij-community
 python kit\git-auth\apply_git_auth.py intellij-community
-python kit\textmate\apply_textmate.py intellij-community
 python kit\defender\apply_defender.py intellij-community
 python kit\ko\apply_ko.py
 python kit\mingit\apply_mingit.py
@@ -2174,25 +2173,24 @@ python kit\web\apply_web.py
 kit\brand\apply_brand.bat
 python kit\compile_plugins.py
 build-windows.bat
-<span class="cm">rem 결과: intellij-community\out\idea-ce\artifacts\moaide-262.10968.N.exe</span></pre>
+<span class="cm">rem 결과: intellij-community\out\idea-ce\artifacts\moaide-263.7307.N.exe</span></pre>
     <table class="keys" style="margin-top:14px">
       <tr><th>대본</th><th>하는 일</th></tr>
-      <tr><td><code>get-source.bat</code></td><td>intellij-community 소스를 태그 <code>idea/262.10968.63</code> 로 받습니다.</td></tr>
-      <tr><td><code>kit\customize.py … brand · slim</code></td><td>제품 이름 · 설정 폴더 이름(<code>MoaIDE2026.2</code>)을 바꾸고, 쓰지 않는 번들 플러그인을 덜어 냅니다.</td></tr>
+      <tr><td><code>get-source.bat</code></td><td>intellij-community 소스를 태그 <code>idea/263.7307.200</code> 로 받습니다.</td></tr>
+      <tr><td><code>kit\customize.py … brand · slim</code></td><td>제품 이름 · 설정 폴더 이름(<code>MoaIDE2026.3</code>)을 바꾸고, 쓰지 않는 번들 플러그인을 덜어 냅니다.</td></tr>
       <tr><td><code>kit\menu\apply_menu.py</code> · <code>kit\defaults\apply_defaults.py</code></td><td>이클립스식 메뉴와 <a href="#defaults">02</a> 의 기본값을 넣습니다.</td></tr>
       <tr><td><code>kit\git-auth\apply_git_auth.py</code></td><td>IntelliJ Git 이 https 원격에 <a href="#sync">Git 로그인</a> 값을 넘기게 손질합니다.</td></tr>
-      <tr><td><code>kit\textmate\apply_textmate.py</code></td><td>여러 줄 주석(<code>&lt;!-- --&gt;</code> 등)이 닫힌 뒤 색이 어긋나던 TextMate 색칠을 고칩니다.</td></tr>
       <tr><td><code>kit\defender\apply_defender.py</code></td><td>Microsoft Defender 알림의 「제외」 단추가 실제로 폴더를 제외하게 합니다(직접 빌드한 판은 도우미 대본에 서명이 없어 멈추던 것).</td></tr>
       <tr><td><code>kit\ko\apply_ko.py</code></td><td>한국어 팩에 우리 번역(kit\ko\override)을 덮어 본체에 넣습니다. 자리표시 · 태그 · 단축 글자 모양이 팩과 다르면 멈춥니다.</td></tr>
       <tr><td><code>kit\mingit\apply_mingit.py</code></td><td>PC 에 Git 이 없을 때 쓸 MinGit 을 받아 넣습니다(판 · SHA-256 고정).</td></tr>
       <tr><td><code>kit\web\apply_web.py</code></td><td>Node.js 와 JavaScript · TypeScript · Vue 언어 서버를 받아 넣습니다. 인터넷이 막힌 PC 에서도 언어 서버가 뜹니다.</td></tr>
       <tr><td><code>kit\brand\apply_brand.bat</code></td><td>Moa IDE 로고 · 설치 그림을 넣습니다.</td></tr>
       <tr><td><code>kit\compile_plugins.py</code></td><td>우리 플러그인 셋(서버 창 · 동기화 · 데이터베이스)을 함께 컴파일 · 점검해 본체 jar 를 바꿉니다. 하나라도 실패하면 아무것도 바꾸지 않습니다.</td></tr>
-      <tr><td><code>build-windows.bat</code></td><td>설치 파일 <code>release\moaide-262.10968.N.exe</code> 를 만들고, gh 가 있으면 GitHub 릴리스로 올립니다(설명은 <code>수정내역.md</code> 맨 위 절).</td></tr>
+      <tr><td><code>build-windows.bat</code></td><td>설치 파일 <code>release\moaide-263.7307.N.exe</code> 를 만들고, gh 가 있으면 GitHub 릴리스로 올립니다(설명은 <code>수정내역.md</code> 맨 위 절).</td></tr>
     </table>
     <div class="notes">
       <div class="note"><b>판 번호 N</b>GitHub 마지막 릴리스 번호 다음 번호입니다(이 PC 의 <code>build-number.txt</code> 가 더 크면 그 다음). 데스크탑 · 노트북 어디서 빌드해도 이어집니다.</div>
-      <div class="note warn"><b>N 은 1000 부터</b>바탕 판(.63)보다 작으면 JetBrains 마켓의 Java · Gradle 등 번들 플러그인을 새 판으로 보고 내려받아 본체를 덮어 버립니다.</div>
+      <div class="note warn"><b>N 은 1000 부터</b>바탕 판(.200)보다 작으면 JetBrains 마켓의 Java · Gradle 등 번들 플러그인을 새 판으로 보고 내려받아 본체를 덮어 버립니다.</div>
       <div class="note ok"><b>플러그인만 고쳤을 때</b>빌드 없이 jar 를 <code>release\plugins</code> 에 넣고 설치 3번만 다시 돌리면 됩니다.</div>
     </div>
   </div>
@@ -2219,7 +2217,7 @@ build-windows.bat
       links.forEach(function(a){ a.classList.toggle("on", a.getAttribute("href")==="#"+en.target.id); }); });
   },{rootMargin:"-40% 0px -55% 0px"});
   document.querySelectorAll("section[id]").forEach(function(s){ obs.observe(s); });
-  // 판 번호는 GitHub 마지막 릴리스 태그(v262.10968.N)를 따른다. 못 읽으면 「최신」 링크로 둔다.
+  // 판 번호는 GitHub 마지막 릴리스 태그(v263.7307.N)를 따른다. 못 읽으면 「최신」 링크로 둔다.
   fetch("https://api.github.com/repos/guraking/ei-ide/releases/latest")
     .then(function(r){ return r.ok ? r.json() : null; })
     .then(function(rel){ if(rel && /^v?\d+(\.\d+)+$/.test(rel.tag_name||"")) document.querySelector("#ver b").textContent=rel.tag_name.replace(/^v/,""); })

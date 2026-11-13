@@ -40,7 +40,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from customize import SLIM_REMOVE  # noqa: E402
 from patchlib import apply_edits  # noqa: E402
 
-# (파일, 바꿀 원문, 바꿀 내용). 원문은 2026.2.3 소스에서 정확히 한 번 나오는 것만 쓴다.
+# (파일, 바꿀 원문, 바꿀 내용). 원문은 2026.3(263.7307.200) 소스에서 정확히 한 번 나오는 것만 쓴다.
 BUTTON_UI_FILE = "platform/platform-impl/src/com/intellij/ide/ui/laf/darcula/ui/DarculaButtonUI.java"
 DEFAULT_LAF_FILE = "community-resources/resources/idea/IdeaApplicationInfo.xml"
 DEFAULT_LAF_LINE = '  <default-laf dark="Moa Graphite"/>\n'
@@ -62,7 +62,7 @@ AUTOLINK_DEPTH2 = (
     "          val parents = eiParents\n"
     "          val childPaths = readAction {\n"
     "            parents.flatMap { parentPath ->\n"
-    "              LocalFileSystem.getInstance().findFileByPath(parentPath)?.children.orEmpty()\n"
+    "              StandardFileSystems.local().findFileByPath(parentPath)?.children.orEmpty()\n"
     "                .filter { it.isDirectory && !it.name.startsWith(\".\") }\n"
     "                .map { it.path }\n"
     "            }\n"
@@ -195,7 +195,7 @@ EDITS = [
     ("java/execution/impl/src/com/intellij/execution/ui/CommonJavaFragments.java",
      "configuration -> StringUtil.isNotEmpty(configuration.getVMParameters()));",
      "configuration -> true);"),
-    ("platform/platform-resources/src/idea/PlatformActions.xml",
+    ("platform/platform-impl/resources/idea/PlatformActions.xml",
      '<group id="EditorTabsToolbarActions" searchable="false"/>',
      '<group id="EditorTabsToolbarActions" searchable="false">\n'
      '      <reference ref="SplitVertically"/>\n'
@@ -255,10 +255,10 @@ EDITS = [
      "import java.nio.file.Path\n",
      "import java.nio.file.Files\nimport java.nio.file.Path\n"),
     ("build/src/org/jetbrains/intellij/build/IdeaCommunityProperties.kt",
-     "  protected open suspend fun bundleExternalPlugins(context: BuildContext, targetDirectory: Path) {}\n",
-     "  protected open suspend fun bundleExternalPlugins(context: BuildContext, targetDirectory: Path) {}\n\n"
+     "  protected open fun bundleExternalPlugins(context: BuildContext, targetDirectory: Path) {}\n",
+     "  protected open fun bundleExternalPlugins(context: BuildContext, targetDirectory: Path) {}\n\n"
      "  // KingGura: 폴더가 없으면 아무것도 넣지 않는다. 각 하위 폴더는 lib/*.jar 를 가져야 한다(빌드가 검사함).\n"
-     "  override suspend fun getAdditionalPluginPaths(context: BuildContext): List<Path> {\n"
+     "  override fun getAdditionalPluginPaths(context: BuildContext): List<Path> {\n"
      "    val dir = communityHomeDir.parent.resolve(\"bundled-plugins\")\n"
      "    if (!Files.isDirectory(dir)) return emptyList()\n"
      "    return Files.list(dir).use { paths -> paths.filter { Files.isDirectory(it) }.sorted().toList() }\n"
@@ -327,7 +327,7 @@ EDITS = [
     ("platform/ide-core/src/com/intellij/ide/GeneralSettings.kt",
      "    fun defaultConfirmNewProject(): Int = OPEN_PROJECT_ASK\n",
      "    fun defaultConfirmNewProject(): Int = OPEN_PROJECT_NEW_WINDOW  // EI IDE: 다른 프로젝트는 새 창에 연다\n"),
-    # 19) 2026.2 의 SVN 기능은 svn 명령줄 도구를 불러 쓴다. 설치본 plugins/kinggura-sync/svn 에 같이 넣은
+    # 19) SVN 기능은 svn 명령줄 도구를 불러 쓴다. 설치본 plugins/kinggura-sync/svn 에 같이 넣은
     #     VisualSVN 명령줄 도구가 있으면 그 svn.exe 를 기본 경로로 한다. 없으면 원래대로 PATH 의 svn 이다.
     #     설정 → Version Control → Subversion 에서 고른 경로가 other.xml 에 남아 있으면 그 값을 따른다.
     ("plugins/svn4idea/src/org/jetbrains/idea/svn/SvnApplicationSettings.java",
@@ -389,7 +389,7 @@ EDITS = [
      "  val ovalCenterX = width * 0.2f",
      "  val ovalCenterX = width * (if (mirrored) 0.8f else 0.2f)"),
     #  23-3) 트리 선택 줄 테두리: Tree.Selection.borderColor. 하나만 선택된 줄(위아래로 이어진 선택이 아닌 줄)에만 그린다. 마우스만 올린 줄은 그리지 않는다.
-    ("platform/platform-impl/src/com/intellij/ui/tree/ui/DefaultTreeUI.java",
+    ("platform/ui.tree/src/com/intellij/ui/tree/ui/DefaultTreeUI.java",
      "                int arc = JBUI.CurrentTheme.Tree.ARC.get();\n"
      "                FILL.paint((Graphics2D)g, left, bounds.y, right - left, bounds.height, arc);\n",
      "                int arc = JBUI.CurrentTheme.Tree.ARC.get();\n"
@@ -427,7 +427,7 @@ EDITS = [
      "  override fun paintComponent(g: Graphics) {\n"
      "    val rect = Rectangle(size).also { JBInsets.removeFrom(it, insets) }\n"
      "    val arc = JBUI.CurrentTheme.MainToolbar.Dropdown.hoverArc().float\n"
-     '    javax.swing.UIManager.getColor("MainToolbar.Dropdown.pillBackground")?.let { com.intellij.ide.ui.laf.darcula.DarculaNewUIUtil.fillRoundedRectangle(g, rect, it, arc) }\n'
+     '    javax.swing.UIManager.getColor("MainToolbar.Dropdown.pillBackground")?.let { com.intellij.ui.DrawUtil.fillRoundedRectangle(g, rect, it, arc) }\n'
      '    javax.swing.UIManager.getColor("MainToolbar.Dropdown.pillBorderColor")?.let { com.intellij.ide.ui.laf.darcula.DarculaNewUIUtil.drawRoundedRectangle(g, rect, it, arc, JBUIScale.scale(1f)) }\n'
      "    super.paintComponent(g)\n"
      "  }"),
@@ -507,12 +507,12 @@ EDITS = [
     # 33) 옛 설정 폴더(EIIDE 등)를 가져올 때 플러그인 폴더에서 옮기지 않을 것: 본체에 든 우리 플러그인 셋의 옛 시험본(본체 판을 가린다)과
     #     JetBrains AI(com.intellij.ml.llm, 라이선스 없이 켜 두면 30초마다 JetBrains 서버에 묻고 실패한다).
     ("platform/platform-impl/initial-config-import/src/com/intellij/openapi/application/ConfigImportHelper.java",
-     "    pluginsToMigrate.removeIf(hasPendingUpdate);\n    if (!pluginsToMigrate.isEmpty()) {\n",
+     "    pluginsToMigrate.removeIf(filter);\n    if (!pluginsToMigrate.isEmpty()) {\n",
      "    // Moa IDE: 우리 플러그인 옛 시험본과 JetBrains AI 는 옮기지 않는다.\n"
      "    var moaNotMigrated = java.util.Set.of(\"local.bootservers\", \"ei.database\", \"kinggura.sync\", \"com.intellij.ml.llm\");\n"
      "    pluginsToMigrate.removeIf(descriptor -> moaNotMigrated.contains(descriptor.getPluginId().getIdString()));\n"
      "    pluginsToDownload.removeIf(descriptor -> moaNotMigrated.contains(descriptor.getPluginId().getIdString()));\n"
-     "    pluginsToMigrate.removeIf(hasPendingUpdate);\n    if (!pluginsToMigrate.isEmpty()) {\n"),
+     "    pluginsToMigrate.removeIf(filter);\n    if (!pluginsToMigrate.isEmpty()) {\n"),
     # 34) 저장소에 .mvn/wrapper 가 있으면 IntelliJ 는 처음 연결할 때 프로젝트 전체 Maven 을 Wrapper 로 바꾸고 배포본을 인터넷에서 받는다.
     #     사내망은 보안 프로그램이 막아 오류 알림 뒤 내장으로 돌아가고, 워크스페이스의 다른 저장소까지 그 판 Maven 으로 바뀐다.
     #     Maven 설정의 모든 쓰기(연결 · 첫 가져오기 · 저장된 설정 읽기 · 설정 창 · 빠른 수정)가 이 한 곳을 지나므로 여기서 내장으로 바꾼다.
@@ -551,6 +551,12 @@ EDITS = [
      "  public @Nullable DistributionType getDistributionType() {\n"
      "    return moaGradleHome() != null ? DistributionType.LOCAL : myDistributionType;  // Moa IDE: 35\n"
      "  }\n"),
+    # 36) 2026.3 부터 프로젝트를 열지 않고 켜면 시작 화면 대신 「시작 프로젝트」가 든 IDE 창이 뜬다(도구 창은 프로젝트 · 터미널 · 알림만).
+    #     Moa 는 폴더를 여는 것이 곧 워크스페이스이고 우리 창(서버 · 동기화 · 데이터베이스)은 연 폴더를 기준으로 돌므로, 예전 시작 화면을 기본으로 둔다.
+    #     레지스트리 idea.welcome.screen.non.modal.enabled 를 켜면 새 화면을 쓴다.
+    ("java/ide-customization/backend/resources/intellij.java.ide.customization.backend.xml",
+     '    <registryKey key="idea.welcome.screen.non.modal.enabled" defaultValue="true" restartRequired="true"\n',
+     '    <registryKey key="idea.welcome.screen.non.modal.enabled" defaultValue="false" restartRequired="true"\n'),
 ]
 
 

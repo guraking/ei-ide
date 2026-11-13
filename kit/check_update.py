@@ -36,8 +36,9 @@ ANDROID_GIT = "https://github.com/JetBrains/android.git"
 GIT_CLONE_CONFIG = ["-c", "core.autocrlf=input", "-c", "core.longpaths=true"]
 # 2025.3 부터 커뮤니티 판 배포가 통합판(IIU)으로 합쳐져, 정식판 판 번호는 IIU 목록에서 읽는다.
 RELEASES_URL = "https://data.services.jetbrains.com/products/releases?code=IIU&type=release&latest=true"
-PLATFORM_ZIP_URL = ("https://www.jetbrains.com/intellij-repository/releases/"
-                    "com/jetbrains/intellij/idea/ideaIC/{build}/ideaIC-{build}.zip")
+# 플랫폼 jar 묶음. 커뮤니티 묶음(ideaIC)이 그 판에 없으면 통합판 묶음(ideaIU)을 받는다(우리 플러그인이 쓰는 클래스는 둘에 똑같이 있다).
+PLATFORM_ZIP_URLS = [("https://www.jetbrains.com/intellij-repository/releases/"
+                      f"com/jetbrains/intellij/idea/{name}/{{build}}/{name}-{{build}}.zip") for name in ("ideaIC", "ideaIU")]
 BUILD_RE = re.compile(r"^\d+\.\d+\.\d+$")
 TAG_IN_GET_SOURCE = re.compile(r'set "TAG=idea/([0-9.]+)"')
 JAVA_RELEASE = "21"
@@ -116,8 +117,8 @@ def apply_kit():
         ("메뉴", [KIT / "menu" / "apply_menu.py", NEW_SRC]),
         ("기본값", [KIT / "defaults" / "apply_defaults.py", NEW_SRC]),
         ("Git 인증", [KIT / "git-auth" / "apply_git_auth.py", NEW_SRC]),
-        ("TextMate 엔진", [KIT / "textmate" / "apply_textmate.py", NEW_SRC]),
         ("Defender 제외", [KIT / "defender" / "apply_defender.py", NEW_SRC]),
+        ("Git 다시 하기", [KIT / "git-retry" / "apply_git_retry.py", NEW_SRC]),
     ]
     results = []
     for name, args in steps:
@@ -132,7 +133,7 @@ def apply_kit():
 
 
 def platform_jars(build):
-    """ideaIC-<판>.zip 을 tmpjars 에 받아 lib · plugins 아래 jar 만 푼 폴더를 돌려준다(이미 풀었으면 그대로)."""
+    """플랫폼 jar 묶음(PLATFORM_ZIP_URLS 중 처음 받아지는 것)을 tmpjars 에 받아 lib · plugins 아래 jar 만 푼 폴더를 돌려준다(이미 풀었으면 그대로)."""
     out = ROOT / "tmpjars" / f"ideaIC-{build}"
     if (out / ".done").is_file():
         return out
@@ -140,10 +141,19 @@ def platform_jars(build):
     zip_path.parent.mkdir(parents=True, exist_ok=True)
     if not zip_path.is_file():
         part = zip_path.with_suffix(".zip.part")
-        print(f"플랫폼 jar 받는 중(수백 MB): ideaIC-{build}.zip")
-        with urllib.request.urlopen(PLATFORM_ZIP_URL.format(build=build), timeout=60) as r, open(part, "wb") as f:
-            shutil.copyfileobj(r, f, 1 << 20)
-        part.replace(zip_path)
+        errors = []
+        for url in (u.format(build=build) for u in PLATFORM_ZIP_URLS):
+            print(f"플랫폼 jar 받는 중(수백 MB 이상): {url}")
+            try:
+                with urllib.request.urlopen(url, timeout=60) as r, open(part, "wb") as f:
+                    shutil.copyfileobj(r, f, 1 << 20)
+            except OSError as e:
+                errors.append(f"{url}: {e}")
+                continue
+            part.replace(zip_path)
+            break
+        else:
+            raise SystemExit("플랫폼 jar 묶음을 받지 못했습니다.\n  " + "\n  ".join(errors))
     with zipfile.ZipFile(zip_path) as z:
         for name in z.namelist():
             if name.endswith(".jar") and (name.startswith("lib/") or name.startswith("plugins/")):
