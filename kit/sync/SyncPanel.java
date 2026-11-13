@@ -251,7 +251,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static final int MAX_REMOTE_GIT_PROCESSES = 2;
   private static final Semaphore REMOTE_GIT_SLOTS = new Semaphore(MAX_REMOTE_GIT_PROCESSES);
   // 우리가 띄운 git · svn 명령마다 걸린 시간을 적는다. Help › Diagnostic Tools › Debug Log Settings 에 「#kinggura.sync.time」을 넣으면 idea.log 에 보인다.
-  private static final Logger TIME_LOG = Logger.getInstance("#kinggura.sync.time");
+  static final Logger TIME_LOG = Logger.getInstance("#kinggura.sync.time");
   private static final String TOOLBAR_PLACE = "KingGuraSynchronizeToolbar";
   // 기본(강조색) 단추 위에 놓는 흰 받기 아이콘. 테마마다 기본 단추 바탕이 강조색이고 글자가 흰색이다.
   private static final String PULL_SELECTED_ICON = "/icons/ei/pullSelected.svg";
@@ -1915,7 +1915,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
               String before = refHash(root, GIT_HEAD);
               if (before == null) before = git(root, "rev-parse", GIT_HEAD).trim();
               befores.put(root, before);
-              GitRemoteAuth.run(root, GIT_LONG_TIMEOUT_SEC, true, "pull", "--ff-only", "--quiet");
+              pullFastForward(root);
               // 받은 커밋 수 · 파일 수(알림)와 새로 읽을 파일을 git log 한 번으로 얻는다(PULLED_FORMAT).
               String log = git(root, "log", PULLED_FORMAT, "--name-only", "--no-renames", "-m", before + "..HEAD");
               pulled.add(countPulled(log));
@@ -2825,6 +2825,34 @@ final class SyncPanel extends SimpleToolWindowPanel {
     finally {
       unlockFetch(root);
     }
+  }
+
+  /**
+   * git pull --ff-only --quiet 과 같은 받기. 서버에서 받는 것은 추적 브랜치 하나를 fetch(JGitRead 가 맡을 수 있어 git 의 libcurl 을 읽지 않는다)로,
+   * 합치기는 git merge --ff-only 로 한다. merge 에 원격/브랜치 이름을 넘겨 reflog 가 「merge 원격/브랜치: Fast-forward」가 되게 한다(GitUndo.fromUpstream).
+   * 떨어진 HEAD · 추적 브랜치 없음 · 로컬 원격 · 설정의 fetch refspec 이 그 브랜치를 refs/remotes/원격/브랜치 로 받지 않는 저장소(single-branch 등) ·
+   * 하위 모듈이 있는 저장소는 git pull 그대로 한다.
+   */
+  static void pullFastForward(File root) throws IOException, InterruptedException {
+    String branch;
+    try {
+      branch = git(root, "symbolic-ref", "--short", "-q", GIT_HEAD).trim();
+    }
+    catch (IOException detached) {
+      branch = null;
+    }
+    Map<String, String> cfg = branch == null ? Map.of() : ReverseMerge.configs(root);
+    String remote = cfg.get("branch." + branch + ".remote");
+    String tracked = trackedBranch(cfg, branch);
+    String upstream = remote + "/" + tracked;
+    // 같은 이름의 태그 · 로컬 브랜치가 있으면 merge 가 그쪽을 먼저 읽는다(git 이름 풀기 차례).
+    boolean shadowed = refHash(root, "refs/" + upstream) != null || refHash(root, "refs/tags/" + upstream) != null || refHash(root, ReverseMerge.HEADS + upstream) != null;
+    if (remote == null || tracked == null || remote.equals(".") || shadowed || !ReverseMerge.fetches(cfg, remote, tracked) || new File(root, ".gitmodules").exists()) {
+      GitRemoteAuth.run(root, GIT_LONG_TIMEOUT_SEC, true, "pull", "--ff-only", "--quiet");
+      return;
+    }
+    ReverseMerge.fetch(root, remote, tracked);
+    git(root, GIT_LONG_TIMEOUT_SEC, "merge", "--ff-only", "--quiet", upstream);
   }
 
   /** ReverseMerge.blockCaseClashes 를 이 저장소의 원격 · 남길 브랜치(추적 브랜치 · 지금 브랜치 · 역머지 From 순)로 부른다. */
@@ -3939,6 +3967,11 @@ final class SyncPanel extends SimpleToolWindowPanel {
    * null 이 아니면 부른 쪽이 이미 고른 것이라 그대로 쓴다(빈 목록이면 넘길 값이 없다). 회사 PC 는 git 하나에 0.4초 안팎이라 같은 읽기를 두 번 하지 않는다.
    */
   private static byte[] runBytes(File dir, long timeoutSec, List<GitLogins.Login> logins, String exe, String... args) throws IOException, InterruptedException {
+    // 읽기 · 조회는 JGit 으로 먼저 한다(git 을 띄우지 않아 보안 프로그램 검사 · libcurl 읽기가 없다). 맡지 않거나 실패하면 null 이라 아래 git 으로 간다.
+    if (GIT.equals(exe)) {
+      byte[] out = JGitRead.run(dir, timeoutSec, logins, args);
+      if (out != null) return out;
+    }
     // 서버에 닿는 git 은 git-remote-https 가 libcurl-4.dll 을 읽는다. 회사 PC 의 보안 프로그램(응용 프로그램 제어)이 여러 git 이 함께 뜰 때
     // 그 읽기를 가끔 막는다(LoadLibraryExW() failed). 서버에 닿기 전에 끝난 실패라 조금 쉬었다가 다시 해도 안전하다.
     // 다시 하는 실행은 한 번에 하나씩 돌려(LIBRARY_RETRY_SLOT) 여럿이 함께 DLL 을 읽다 또 막히지 않게 한다.
