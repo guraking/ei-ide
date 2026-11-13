@@ -289,7 +289,34 @@ public class SyncCheck {
     checkGitLogins();
     checkGitUndo();
     checkStability1112();
+    checkStability1113();
     System.out.println("SyncCheck 통과");
+  }
+
+  /** 대소문자 막기 줄 정리(남길 브랜치를 막는 옛 음수 줄은 지움) · 추적 원격이 없을 때 하나뿐인 원격. 진짜 git 저장소로. */
+  private static void checkStability1113() throws Exception {
+    eq(ReverseMerge.regexQuoted("^refs/heads/a.b/*"), "\\^refs/heads/a\\.b/\\*");
+    File tmp = java.nio.file.Files.createTempDirectory("stab1113").toFile();
+    sh(tmp, "git init -q --bare srv.git && git init -q -b main seed && cd seed && git config user.name t && git config user.email t@t"
+            + " && git commit -q --allow-empty -m one && git branch Feature/a && git branch feature/b && git branch fix/a.b"
+            + " && git push -q ../srv.git main Feature/a feature/b fix/a.b && cd .. && git clone -q srv.git mine");
+    File mine = new File(tmp, "mine");
+    // 옛 줄: 소문자 쪽을 막아 두었는데 지금 브랜치가 feature/b 로 바뀜. 글자 그대로 같은 줄만 지우고(fix/aXb 줄은 남김) 대문자 쪽을 막는다.
+    sh(mine, "git config --add remote.origin.fetch '^refs/heads/feature/*' && git config --add remote.origin.fetch '^refs/heads/feature/*'"
+             + " && git config --add remote.origin.fetch '^refs/heads/fix/aXb' && git update-ref -d refs/remotes/origin/feature/b");
+    eq(ReverseMerge.blockCaseClashes(mine, ReverseMerge.configs(mine), "origin", java.util.Arrays.asList("feature/b", null)), true);
+    eq(SyncPanel.git(mine, "config", "--get-all", "remote.origin.fetch"), "+refs/heads/*:refs/remotes/origin/*\n^refs/heads/fix/aXb\n^refs/heads/Feature/*\n");
+    eq(SyncPanel.git(mine, "rev-parse", "--verify", "-q", "refs/remotes/origin/feature/b").isBlank(), false);
+    // 두 번째: 줄이 그대로다.
+    ReverseMerge.blockCaseClashes(mine, ReverseMerge.configs(mine), "origin", java.util.Arrays.asList("feature/b", null));
+    eq(SyncPanel.git(mine, "config", "--get-all", "remote.origin.fetch"), "+refs/heads/*:refs/remotes/origin/*\n^refs/heads/fix/aXb\n^refs/heads/Feature/*\n");
+    // 추적 브랜치 없는 브랜치: 원격이 하나뿐이면 그 원격, 여럿이면 origin.
+    sh(mine, "git remote rename origin corp");
+    eq(ReverseMerge.remoteOf(ReverseMerge.configs(mine), "local-only"), "corp");
+    eq(ReverseMerge.remoteOf(ReverseMerge.configs(mine), "main"), "corp");
+    sh(mine, "git remote add other ../srv.git");
+    eq(ReverseMerge.remoteOf(ReverseMerge.configs(mine), "local-only"), ReverseMerge.DEFAULT_REMOTE);
+    eq(ReverseMerge.remoteOf(java.util.Map.of(), null), ReverseMerge.DEFAULT_REMOTE);
   }
 
   private static SyncPanel.Change out(String status, SyncPanel.Repo repo) {
@@ -911,15 +938,13 @@ public class SyncCheck {
     eq(GitLogins.header(token), "Authorization: Basic " + java.util.Base64.getEncoder().encodeToString("oauth2:glpat-1".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
 
     java.util.Map<String, String> env = GitLogins.env(List.of(pw, empty, token), java.util.Map.of());
-    eq(env.get("GIT_CONFIG_COUNT"), "2");
-    eq(env.get("GIT_CONFIG_KEY_0"), "http.https://a.com/.extraHeader");
-    eq(env.get("GIT_CONFIG_KEY_1"), "http.https://b.com:8443/.extraHeader");
-    eq(env.get("GIT_CONFIG_VALUE_1"), GitLogins.header(token));
-    // IDE 에 이미 GIT_CONFIG_COUNT 가 있으면 그 뒤에 잇는다.
-    java.util.Map<String, String> after = GitLogins.env(List.of(pw), java.util.Map.of("GIT_CONFIG_COUNT", "2"));
-    eq(after.get("GIT_CONFIG_KEY_2"), "http.https://a.com/.extraHeader");
-    eq(after.get("GIT_CONFIG_COUNT"), "3");
+    eq(env, java.util.Map.of("GIT_CONFIG_PARAMETERS", "'http.https://a.com/.extraHeader=" + GitLogins.header(pw) + "' 'http.https://b.com:8443/.extraHeader="
+                                                      + GitLogins.header(token) + "'"));
+    // IDE 에 이미 GIT_CONFIG_PARAMETERS 가 있으면 그 뒤에 잇는다.
+    eq(GitLogins.env(List.of(pw), java.util.Map.of("GIT_CONFIG_PARAMETERS", "'a.b=1' ")).get("GIT_CONFIG_PARAMETERS"),
+       "'a.b=1' 'http.https://a.com/.extraHeader=" + GitLogins.header(pw) + "'");
     eq(GitLogins.env(List.of(empty), java.util.Map.of()), java.util.Map.of());
+    eq(GitLogins.quoted("it's"), "'it'\\''s'");
 
     List<GitLogins.Login> parsed = GitLogins.parse(GitLogins.format(List.of(pw, token)) + "\nbroken\nhttps://d.com\tWHAT\tx");
     eq(parsed.size(), 2);

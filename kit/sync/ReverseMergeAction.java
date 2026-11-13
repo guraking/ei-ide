@@ -225,6 +225,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
     private final ExecutorService worker = AppExecutorUtil.createBoundedApplicationPoolExecutor("EI Merge Branches", 1);
     // 서버 브랜치 목록 받기(addServerBranches). 창을 닫으면 끊는다.
     private Future<?> serverList;
+    // worker 에 넣은 미리 보기 계산(받기 · 비교). 창을 닫으면 끊어 로그인 창이 뒤늦게 뜨지 않게 한다. EDT 에서만 쓴다.
+    private final List<Future<?>> compares = new ArrayList<>();
     private final RowModel model = new RowModel();
     // 미리 보기 표. 비교 전 · 받는 중 · 실패 · 합칠 것 없음은 표의 빈 글(StatusText)로 보인다.
     private final JBTable table = new JBTable(model);
@@ -331,6 +333,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
     @Override
     protected void dispose() {
       if (serverList != null) serverList.cancel(true);
+      for (Future<?> compare : compares) compare.cancel(true);
       super.dispose();
     }
 
@@ -597,7 +600,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
       status("");
       gauge.setVisible(true);
       table.setPaintBusy(true);
-      worker.execute(() -> {
+      compares.removeIf(Future::isDone);
+      compares.add(worker.submit(() -> {
         if (mySeq != seq || isDisposed()) return;  // 그사이 다른 브랜치를 골랐거나 창을 닫았다. 새 계산만 돌린다.
         ReverseMerge.Preview preview = null;
         String error = null;
@@ -652,7 +656,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
           ready = true;
           setOKActionEnabled(true);
         });
-      });
+      }));
     }
 
     /** 개인 브랜치 쪽 파일(왼쪽) ↔ 기준 브랜치 쪽 파일(오른쪽). 한쪽에 없으면 빈 글. */
