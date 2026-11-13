@@ -7,13 +7,19 @@ import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
+import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.actionSystem.LangDataKeys;
 import com.intellij.openapi.module.Module;
+import com.intellij.openapi.module.ModuleManager;
+import com.intellij.openapi.project.Project;
+import com.intellij.openapi.roots.ModuleRootManager;
+import com.intellij.openapi.vfs.VirtualFile;
 import org.jetbrains.annotations.NotNull;
 
 /**
  * 프로젝트 트리 우클릭 메뉴 「스프링 부트 서버」와 그 하위 동작.
- * 모듈 최상위 폴더를 우클릭했을 때만 보인다(LangDataKeys.MODULE_CONTEXT).
+ * 모듈 최상위 폴더를 우클릭했을 때 보인다(LangDataKeys.MODULE_CONTEXT).
+ * 모듈 폴더가 아닌 폴더 줄도 바로 아래 폴더가 모듈 폴더인 모듈이 하나뿐이면(빌드 파일이 한 단계 아래인 저장소 폴더, 저장소\하위\pom.xml) 그 모듈로 보인다.
  */
 final class ServerActions {
 
@@ -21,7 +27,25 @@ final class ServerActions {
     }
 
     private static Module module(AnActionEvent e) {
-        return e.getData(LangDataKeys.MODULE_CONTEXT);
+        Module context = e.getData(LangDataKeys.MODULE_CONTEXT);
+        Project project = e.getProject();
+        VirtualFile dir = e.getData(CommonDataKeys.VIRTUAL_FILE);
+        if (context != null || project == null || dir == null || !dir.isDirectory()) {
+            return context;
+        }
+        Module below = null;
+        for (Module module : ModuleManager.getInstance(project).getModules()) {
+            for (VirtualFile root : ModuleRootManager.getInstance(module).getContentRoots()) {
+                if (!dir.equals(root.getParent())) {
+                    continue;
+                }
+                if (below != null && below != module) {
+                    return null;
+                }
+                below = module;
+            }
+        }
+        return below;
     }
 
     /** 하위 메뉴. 모듈 노드가 아니면 메뉴째 숨긴다. */

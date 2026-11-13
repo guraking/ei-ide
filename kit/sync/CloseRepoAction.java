@@ -202,11 +202,13 @@ public class CloseRepoAction extends DumbAwareAction {
   }
 
   /**
-   * roots 가운데 하나를 품은(같은 폴더는 빼고) VCS 매핑 폴더 중, 올라온 모듈의 콘텐츠 루트(loaded)를 하나도 품지 않은 것. 기본 매핑은 뺀다.
+   * roots 가운데 하나를 품은(같은 폴더는 빼고) VCS 매핑 폴더 중, 올라온 모듈의 콘텐츠 루트(loaded)를 하나도 품지 않고 그 안에 들어 있지도 않은 것. 기본 매핑은 뺀다.
+   * 올라온 모듈 폴더 안에 든 저장소(모듈 안의 중첩 저장소)는 그 모듈의 파일이 아직 열려 있으므로 떼지 않는다.
    * 빌드 파일이 한 단계 아래에 있는 저장소(저장소\하위\pom.xml)는 매핑이 모듈 폴더가 아니라 그 위 저장소 폴더에 걸려 있어, 안의 모듈이 모두 닫히면 이것으로 찾아 뗀다.
    */
   private static List<String> mappingsAbove(Project project, List<String> roots, List<String> loaded) {
     List<String> found = new ArrayList<>();
+    String base = project.getBasePath();
     for (VcsDirectoryMapping mapping : ProjectLevelVcsManager.getInstance(project).getDirectoryMappings()) {
       if (mapping.isDefaultMapping()) continue;
       String dir = mapping.getDirectory();
@@ -215,7 +217,9 @@ public class CloseRepoAction extends DumbAwareAction {
         if (FileUtil.isAncestor(dir, root, true)) above = true;
       }
       for (String root : loaded) {
-        if (FileUtil.isAncestor(dir, root, false)) above = false;
+        // 프로젝트 폴더 자체 모듈(Maven 다시 읽기 사이 잠깐 다시 등록됨)은 모든 저장소를 품으므로 세지 않는다.
+        if (base != null && FileUtil.pathsEqual(root, base)) continue;
+        if (FileUtil.isAncestor(dir, root, false) || FileUtil.isAncestor(root, dir, false)) above = false;
       }
       if (above) found.add(dir);
     }
@@ -255,9 +259,9 @@ public class CloseRepoAction extends DumbAwareAction {
   }
 
   /**
-   * 트리에 닫힌 줄로 보일 폴더. 닫은 루트(closedRoots)마다, 그 위에 저장소 폴더(repoFolder, 프로젝트 폴더와 그 위는 빼고)가 있고
-   * 그 안에 올라온 모듈의 콘텐츠 루트가 하나도 없으면 루트 대신 그 저장소 폴더를 넣는다(빌드 파일이 한 단계 아래인 저장소를 닫으면 저장소 줄이 닫힌 줄이 된다).
-   * 안의 모듈이 일부만 닫혔으면 닫은 루트 그대로다.
+   * 트리에 닫힌 줄로 보일 폴더. 프로젝트 폴더 안의 닫은 루트(closedRoots)마다, 그 위에 저장소 폴더(repoFolder, 프로젝트 폴더보다 아래)가 있고
+   * 그 폴더가 올라온 모듈의 콘텐츠 루트를 품지도 그 안에 들지도 않으면 루트 대신 그 저장소 폴더를 넣는다(빌드 파일이 한 단계 아래인 저장소를 닫으면 저장소 줄이 닫힌 줄이 된다).
+   * 안의 모듈이 일부만 닫혔거나 프로젝트 폴더 밖에 붙인 저장소면 닫은 루트 그대로다(밖에서는 위로 어디까지가 저장소인지 정할 기준이 없다).
    */
   static List<VirtualFile> closedRows(Project project) {
     List<VirtualFile> roots = closedRoots(project);
@@ -268,11 +272,14 @@ public class CloseRepoAction extends DumbAwareAction {
     List<VirtualFile> rows = new ArrayList<>();
     for (VirtualFile root : roots) {
       VirtualFile row = root;
-      for (VirtualFile up = root.getParent(); up != null && (base == null || !FileUtil.pathsEqual(up.getPath(), base)); up = up.getParent()) {
+      boolean inside = base != null && FileUtil.isAncestor(base, root.getPath(), true);
+      for (VirtualFile up = root.getParent(); inside && up != null && !FileUtil.pathsEqual(up.getPath(), base); up = up.getParent()) {
         if (!repoFolder(up)) continue;
         boolean open = false;
         for (VirtualFile other : loaded) {
-          if (VfsUtilCore.isAncestor(up, other, false)) open = true;
+          // 프로젝트 폴더 자체 모듈(Maven 다시 읽기 사이 잠깐 다시 등록됨)은 세지 않는다. 세면 그사이 닫힌 줄이 열린 폴더 줄로 바뀐다.
+          if (FileUtil.pathsEqual(other.getPath(), base)) continue;
+          if (VfsUtilCore.isAncestor(up, other, false) || VfsUtilCore.isAncestor(other, up, false)) open = true;
         }
         if (!open) row = up;
         break;

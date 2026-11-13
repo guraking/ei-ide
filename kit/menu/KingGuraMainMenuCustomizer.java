@@ -33,6 +33,8 @@ final class KingGuraMainMenuCustomizer implements ActionConfigurationCustomizer,
     "FileMenu", "EditMenu", "KG.SourceMenu", "RefactoringMenu", "GoToMenu", "KG.SearchMenu", "KG.ProjectMenu", "RunMenu");
   private static final Set<String> HIDDEN = Set.of("ViewMenu", "CodeMenu", "BuildMenu", "ToolsMenu");
   private static final List<String> TAIL = List.of("WindowMenu", "HelpMenu");
+  /** 저장소 폴더를 알아보는 VCS 관리 폴더 이름(Git · SVN). */
+  private static final List<String> REPO_DIRS = List.of(".git", ".svn");
 
   @Override
   public void customize(ActionManager actionManager) {
@@ -94,7 +96,8 @@ final class KingGuraMainMenuCustomizer implements ActionConfigurationCustomizer,
   }
 
   /**
-   * 고른 폴더 하나가 Maven 프로젝트 폴더가 아니고(pom.xml 없음) 바로 아래 폴더들에 pom.xml 이 있으면, 그 pom 들을 고른 것으로 바꿔 넘긴다.
+   * 고른 폴더 하나가 저장소 폴더(REPO_DIRS 가 바로 아래에 있음)이고 Maven 프로젝트 폴더가 아니며(pom.xml 없음) 바로 아래 폴더들에 pom.xml 이 있으면,
+   * 그 pom 들을 고른 것으로 바꿔 넘긴다. 저장소 폴더만 보는 것은 메뉴를 열 때마다 큰 폴더(node_modules 등)의 아래를 훑지 않기 위해서다.
    * 빌드 파일이 한 단계 아래에 있는 저장소 폴더 줄(저장소\하위\pom.xml)에서도 Maven 다시 읽기가 보이고 그 안 프로젝트를 다시 읽는다.
    * Maven 이 모르는 pom 이면 원래 동작이 스스로 숨는다. 그 밖의 선택은 그대로 넘긴다.
    */
@@ -117,7 +120,8 @@ final class KingGuraMainMenuCustomizer implements ActionConfigurationCustomizer,
 
     private static AnActionEvent below(AnActionEvent e) {
       VirtualFile[] files = e.getData(CommonDataKeys.VIRTUAL_FILE_ARRAY);
-      if (files == null || files.length != 1 || !files[0].isValid() || !files[0].isDirectory() || files[0].findChild(POM) != null) {
+      if (files == null || files.length != 1 || !files[0].isValid() || !files[0].isDirectory() || files[0].findChild(POM) != null
+          || !isRepoDir(files[0])) {
         return e;
       }
       List<VirtualFile> poms = new ArrayList<>();
@@ -173,7 +177,7 @@ final class KingGuraMainMenuCustomizer implements ActionConfigurationCustomizer,
       }
     }
 
-    /** 고른 파일의 폴더나 그 위 폴더(projectDir 까지, projectDir 밖이면 맨 위까지)에 Gradle 파일이 있거나, 그 폴더 바로 아래 폴더에 있으면 true. */
+    /** 고른 파일의 폴더나 그 위 폴더(projectDir 까지, projectDir 밖이면 맨 위까지)에 Gradle 파일이 있거나, 그 폴더가 저장소 폴더이고 바로 아래 폴더에 있으면 true. */
     private static boolean nearGradleFile(VirtualFile selected, VirtualFile projectDir) {
       VirtualFile dir = selected.isDirectory() ? selected : selected.getParent();
       for (VirtualFile up = dir; up != null; up = up.getParent()) {
@@ -184,7 +188,8 @@ final class KingGuraMainMenuCustomizer implements ActionConfigurationCustomizer,
           break;
         }
       }
-      return hasGradleFile(dir, GRADLE_DEPTH - 1);
+      // 아래쪽은 저장소 폴더일 때만 본다(메뉴를 열 때마다 큰 폴더의 아래를 훑지 않게).
+      return isRepoDir(dir) && hasGradleFile(dir, GRADLE_DEPTH - 1);
     }
 
     private boolean hasGradleFileCached(VirtualFile dir) {
@@ -220,6 +225,16 @@ final class KingGuraMainMenuCustomizer implements ActionConfigurationCustomizer,
       }
       return false;
     }
+  }
+
+  /** 폴더 바로 아래에 VCS 관리 폴더(.git · .svn)가 있으면 true. */
+  private static boolean isRepoDir(VirtualFile dir) {
+    for (String name : REPO_DIRS) {
+      if (dir.findChild(name) != null) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private static void addById(DefaultActionGroup group, List<String> ids, ActionManager actionManager) {
