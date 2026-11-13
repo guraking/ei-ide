@@ -13,7 +13,7 @@
   - `kit/ko/apply_ko.py` 한국어 팩에 우리 번역 `kit/ko/override/<jar 안 경로>` 를 덮어 `bundled-plugins/localization-ko` 에 넣음(모양이 팩과 다르면 멈춤), 점검 `apply_ko_check.py`. 번역 기준은 `kit/ko/용어집.md`. 메뉴 · 단추도 한국어(2026-11-09부터, 우리 플러그인 `_ko` 도 같음)
   - `kit/mingit/apply_mingit.py` 설치본에 넣을 MinGit 을 받아 `bundled-plugins/kinggura-sync/git` 에 푼다(판 · SHA-256 고정, 저장소에는 안 올림). PC 에 Git 이 없을 때만 쓰인다
   - `kit/web/apply_web.py` 설치본에 넣을 Node.js 와 웹 언어 서버(vtsls · Vue · typescript 5)를 받아 `bundled-plugins/boot-servers/web` 에 넣는다(판 · SHA-256 고정, 저장소에는 안 올림). 인터넷이 막힌 PC 에서도 .js · .ts · .vue 언어 서버가 뜬다
-  - `kit/gradle/apply_gradle.py` 설치본에 넣을 Gradle 배포본(판 · SHA-256 고정)을 받아 `bundled-plugins/boot-servers/gradle` 에 푼다(저장소에는 안 올림). IntelliJ 는 모든 Gradle 프로젝트를 이 Gradle 로 돌린다(apply_defaults 35)
+  - `kit/gradle/apply_gradle.py` 설치본에 넣을 Gradle 배포본 둘(9 대 · 8 대, 판 · SHA-256 고정)을 받아 `bundled-plugins/boot-servers/gradle` 에 푼다(저장소에는 안 올림). IntelliJ 는 모든 Gradle 프로젝트를 이 Gradle 로 돌린다(wrapper 가 9 보다 낮은 판이면 8 대, apply_defaults 35)
   - `kit/git-auth` IntelliJ Git 이 https 원격에 인증을 환경값으로 넘기는 손질(`apply_git_auth.py`), 점검 `EiGitAuthCheck.java`
   - `kit/defender` Microsoft Defender 알림의 「제외」 단추가 서명 없는 도우미 대본(`bin\defender-exclusions.ps1`)도 돌리게 하는 손질(`apply_defender.py`), 점검 `apply_defender_check.py`
   - `kit/git-retry` IntelliJ Git 의 서버 명령(Clone · Push · Fetch)이 보안 프로그램에 막혀 libcurl-4.dll 을 못 읽으면 1 · 2 · 3초 쉬고 세 번까지 다시 하는 손질(`apply_git_retry.py`), 점검 `apply_git_retry_check.py`
