@@ -13,7 +13,6 @@
   - `kit/ko/apply_ko.py` 한국어 팩에 우리 번역 `kit/ko/override/<jar 안 경로>` 를 덮어 `bundled-plugins/localization-ko` 에 넣음(모양이 팩과 다르면 멈춤), 점검 `apply_ko_check.py`. 번역 기준은 `kit/ko/용어집.md`. 메뉴 · 단추도 한국어(2026-11-09부터, 우리 플러그인 `_ko` 도 같음)
   - `kit/mingit/apply_mingit.py` 설치본에 넣을 MinGit 을 받아 `bundled-plugins/kinggura-sync/git` 에 푼다(판 · SHA-256 고정, 저장소에는 안 올림). PC 에 Git 이 없을 때만 쓰인다
   - `kit/web/apply_web.py` 설치본에 넣을 Node.js 와 웹 언어 서버(vtsls · Vue · typescript 5)를 받아 `bundled-plugins/boot-servers/web` 에 넣는다(판 · SHA-256 고정, 저장소에는 안 올림). 인터넷이 막힌 PC 에서도 .js · .ts · .vue 언어 서버가 뜬다
-  - `kit/fullline/apply_fullline.py` 설치본에 넣을 Full Line 언어 모델(Java · HTML)을 받아 `bundled-plugins/fullLine/full-line-model-<태그>.zip` 으로 넣는다(판 · SHA-256 고정, 저장소에는 안 올림). 인터넷이 막힌 PC 에서도 한 줄 제안이 뜬다. 점검 `apply_fullline_check.py`
   - `kit/git-auth` IntelliJ Git 이 https 원격에 인증을 환경값으로 넘기는 손질(`apply_git_auth.py`), 점검 `EiGitAuthCheck.java`
   - `kit/textmate` IntelliJ TextMate 색칠 엔진이 여러 줄 구역(`<!-- -->` 등)이 닫힌 뒤 윗줄 칸 위치를 \G 로 잘못 쓰던 것을 고치는 손질(`apply_textmate.py`), 점검 `apply_textmate_check.py`
   - `kit/defender` Microsoft Defender 알림의 「제외」 단추가 서명 없는 도우미 대본(`bin\defender-exclusions.ps1`)도 돌리게 하는 손질(`apply_defender.py`), 점검 `apply_defender_check.py`
@@ -69,7 +68,6 @@ python kit\git-retry\apply_git_retry.py intellij-community
 python kit\ko\apply_ko.py
 python kit\mingit\apply_mingit.py
 python kit\web\apply_web.py
-python kit\fullline\apply_fullline.py
 kit\brand\apply_brand.bat
 python kit\compile_plugins.py
 build-windows.bat
