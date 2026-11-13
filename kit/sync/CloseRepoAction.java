@@ -255,6 +255,34 @@ public class CloseRepoAction extends DumbAwareAction {
   }
 
   /**
+   * 트리에 닫힌 줄로 보일 폴더. 닫은 루트(closedRoots)마다, 그 위에 저장소 폴더(repoFolder, 프로젝트 폴더와 그 위는 빼고)가 있고
+   * 그 안에 올라온 모듈의 콘텐츠 루트가 하나도 없으면 루트 대신 그 저장소 폴더를 넣는다(빌드 파일이 한 단계 아래인 저장소를 닫으면 저장소 줄이 닫힌 줄이 된다).
+   * 안의 모듈이 일부만 닫혔으면 닫은 루트 그대로다.
+   */
+  static List<VirtualFile> closedRows(Project project) {
+    List<VirtualFile> roots = closedRoots(project);
+    if (roots.isEmpty()) return roots;
+    List<VirtualFile> loaded = new ArrayList<>();
+    for (Module module : ModuleManager.getInstance(project).getModules()) loaded.addAll(List.of(ModuleRootManager.getInstance(module).getContentRoots()));
+    String base = project.getBasePath();
+    List<VirtualFile> rows = new ArrayList<>();
+    for (VirtualFile root : roots) {
+      VirtualFile row = root;
+      for (VirtualFile up = root.getParent(); up != null && (base == null || !FileUtil.pathsEqual(up.getPath(), base)); up = up.getParent()) {
+        if (!repoFolder(up)) continue;
+        boolean open = false;
+        for (VirtualFile other : loaded) {
+          if (VfsUtilCore.isAncestor(up, other, false)) open = true;
+        }
+        if (!open) row = up;
+        break;
+      }
+      if (!rows.contains(row)) rows.add(row);
+    }
+    return rows;
+  }
+
+  /**
    * 내린 모듈의 콘텐츠 루트 경로('/' 구분).
    * Maven 으로 읽은 모듈(모듈 정보를 .idea 밖 IDE 시스템 폴더에 두는 모듈)이나 저장 전에 내린 모듈은 IDE 를 다시 켜면 IntelliJ 가 루트를 잃는다(설명의 콘텐츠 루트가 빈다).
    * 그래서 내릴 때 적어 둔 경로(ROOTS_KEY + 이름, rememberRoots)를 쓰고, 그것도 없으면(이 판 전에 닫음) 워크스페이스 폴더 바로 아래 같은 이름 폴더를 쓴다.
@@ -296,12 +324,12 @@ public class CloseRepoAction extends DumbAwareAction {
   }
 
   /**
-   * 폴더 dir 의 아래 줄 목록(shown)에서 닫은 저장소 폴더 줄을 ClosedRepoNode 로 바꾸고, dir 바로 아래인데 목록에 없는 닫은 저장소는 닫힌 줄로 더한다.
+   * 폴더 dir 의 아래 줄 목록(shown)에서 닫은 저장소 폴더 줄(closedRows)을 ClosedRepoNode 로 바꾸고, dir 바로 아래인데 목록에 없는 닫은 저장소는 닫힌 줄로 더한다.
    * dir 은 워크스페이스 폴더(맨 위 줄)이거나 트리의 어느 폴더 줄이다(중간 폴더 · 저장소 안 하위 모듈 자리).
    */
   static List<AbstractTreeNode<?>> withClosedRepos(Project project, AbstractTreeNode<?> parent, List<AbstractTreeNode<?>> shown,
                                                    VirtualFile dir, ViewSettings settings) {
-    List<VirtualFile> closed = closedRoots(project);
+    List<VirtualFile> closed = closedRows(project);
     if (closed.isEmpty()) return new ArrayList<>(shown);
     PsiManager psi = PsiManager.getInstance(project);
     Set<VirtualFile> placed = new LinkedHashSet<>();
