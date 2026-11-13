@@ -246,6 +246,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
   // 서버 명령(fetch · push 등)은 오래 걸려 이 자리를 붙잡으면 로컬 비교가 서버를 기다리게 되므로 세지 않는다.
   private static final int MAX_LOCAL_GIT_PROCESSES = 6;
   private static final Semaphore LOCAL_GIT_SLOTS = new Semaphore(MAX_LOCAL_GIT_PROCESSES);
+  // 서버에 닿는 git(fetch · pull · push · ls-remote · clone)을 함께 띄우는 수. 회사 PC 보안 프로그램이 여럿이 함께 libcurl-4.dll 을 읽으면
+  // 가끔 막는다(8개를 함께 받을 때 2개 실패). 회사 PC 에서 혼자 도는 fetch 는 1.8~2초라 저장소 8개는 둘씩이면 약 8초, 하나씩이면 약 15초다.
+  private static final int MAX_REMOTE_GIT_PROCESSES = 2;
+  private static final Semaphore REMOTE_GIT_SLOTS = new Semaphore(MAX_REMOTE_GIT_PROCESSES);
   // 우리가 띄운 git · svn 명령마다 걸린 시간을 적는다. Help › Diagnostic Tools › Debug Log Settings 에 「#kinggura.sync.time」을 넣으면 idea.log 에 보인다.
   private static final Logger TIME_LOG = Logger.getInstance("#kinggura.sync.time");
   private static final String TOOLBAR_PLACE = "KingGuraSynchronizeToolbar";
@@ -3962,7 +3966,9 @@ final class SyncPanel extends SimpleToolWindowPanel {
     String label = exe + " " + verb(args);
     boolean limited = GIT.equals(exe) && !GIT_REMOTE_VERBS.contains(verb(args));
     long queued = System.currentTimeMillis();
+    boolean remote = GIT.equals(exe) && GIT_REMOTE_VERBS.contains(verb(args));
     if (limited) LOCAL_GIT_SLOTS.acquire();
+    if (remote) REMOTE_GIT_SLOTS.acquire();
     long started = System.currentTimeMillis();
     long ran = -1;
     File outFile = null;
@@ -4008,6 +4014,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       if (outFile != null && !outFile.delete()) outFile.deleteOnExit();
       if (errFile != null && !errFile.delete()) errFile.deleteOnExit();
       if (limited) LOCAL_GIT_SLOTS.release();
+      if (remote) REMOTE_GIT_SLOTS.release();
       // 전체 = 임시 파일 만들기 · 실행 · 출력 읽기 · 지우기, 실행 = 프로세스만, 대기 = 로컬 git 자리 기다린 시간.
       if (TIME_LOG.isDebugEnabled()) {
         TIME_LOG.debug("[" + dir.getName() + "] " + label + " 전체 " + (System.currentTimeMillis() - started) + " ms, 실행 " + ran + " ms, 대기 "
