@@ -42,7 +42,7 @@ final class ReverseMerge {
   private static final String LOG_DATE = "--date=format:%m-%d %H:%M";
   private static final String AUTHOR_FORMAT = "--format=%x01%an%x1f%ae";
   /** configs 가 한 번에 읽는 설정 키(git config --get-regexp). */
-  private static final String CONFIG_KEYS = "^(user\\.(name|email)|branch\\..*\\.(remote|merge)|remote\\..*\\.fetch|ei\\.reverseMerge\\..*)$";
+  private static final String CONFIG_KEYS = "^(user\\.(name|email)|branch\\..*\\.(remote|merge)|remote\\..*\\.fetch|core\\.ignorecase|ei\\.reverseMerge\\..*)$";
 
   /** 들어올 파일 하나. author · when · subject 는 기준 브랜치에서 이 파일을 마지막으로 바꾼 커밋. */
   record Incoming(String path, String author, String when, String subject, boolean mine) {}
@@ -104,6 +104,8 @@ final class ReverseMerge {
   private static final int PATH_LIST_MAX = 10;
   /** blockCaseClashes 가 git branch -d -r 한 번에 넘기는 원격 추적 참조 수. 윈도우 명령 줄 길이 한도 안에 들게 한다. */
   private static final int DELETE_BATCH = 100;
+  private static final String BRANCH_KEY = "branch.";
+  private static final String REMOTE_KEY_SUFFIX = ".remote";
   /** 음수 refspec 이 들어온 git 판 2.29(릴리스 노트 2.29.0 「negative refspecs」). */
   private static final int NEGATIVE_REFSPEC_MAJOR = 2;
   private static final int NEGATIVE_REFSPEC_MINOR = 29;
@@ -433,6 +435,16 @@ final class ReverseMerge {
     return tips;
   }
 
+  /** parseRefTips 에서 ref 의 커밋. folded 면 대소문자만 다른 이름도 찾는다(for-each-ref 는 윈도우에서 디스크 폴더 철자를 낸다). 없으면 null. */
+  static String tipOf(Map<String, String> tips, String ref, boolean folded) {
+    String tip = tips.get(ref);
+    if (tip != null || !folded) return tip;
+    for (Map.Entry<String, String> e : tips.entrySet()) {
+      if (e.getKey().equalsIgnoreCase(ref)) return e.getValue();
+    }
+    return null;
+  }
+
   /** for-each-ref 가 낸 refs/remotes/<원격>/<이름> 줄에서 이름만. <원격>/HEAD 는 브랜치가 아니라 뺀다. */
   static List<String> parseRefs(String output, String remote) {
     String prefix = remoteRef(remote, "");
@@ -462,9 +474,14 @@ final class ReverseMerge {
     GitRemoteAuth.run(root, GIT_LONG_TIMEOUT_SEC, ask, args.toArray(String[]::new));
   }
 
-  /** 개인 브랜치의 기준점: into 가 지금 브랜치면 HEAD(커밋 안 한 것 포함), 아니면 받아 온 서버 개인 브랜치. */
-  static String intoTip(String remote, String into, String current) {
-    return into.equals(current) ? "HEAD" : remoteRef(remote, into);
+  /** 개인 브랜치의 기준점: into 가 지금 브랜치면 HEAD(커밋 안 한 것 포함), 아니면 받아 온 서버 개인 브랜치. folded 는 rememberedFor 와 같다. */
+  static String intoTip(String remote, String into, String current, boolean folded) {
+    return rememberedFor(into, current, folded) ? "HEAD" : remoteRef(remote, into);
+  }
+
+  /** configs 로 읽은 core.ignorecase. 대소문자만 다른 브랜치 이름을 한 브랜치로 보는 저장소(윈도우)면 참. */
+  static boolean folded(Map<String, String> cfg) {
+    return Boolean.parseBoolean(cfg.get("core.ignorecase"));
   }
 
   /** from 을 into 에 합치면 들어올 것. 두 브랜치를 미리 fetch 해 두어야 한다. */
@@ -476,7 +493,7 @@ final class ReverseMerge {
   static Preview preview(File root, Map<String, String> cfg, String remote, String from, String into, String current)
     throws IOException, InterruptedException {
     String f = remoteRef(remote, from);
-    String i = intoTip(remote, into, current);
+    String i = intoTip(remote, into, current, folded(cfg));
     String email = cfg.get("user.email");
     // shortcut: rev-parse 를 다른 명령과 동시에 돌려, 그 사이 자동 fetch 가 From 을 바꾸면 목록과 fromTip 이 어긋날 수 있다. 어긋남이 보이면 먼저 rev-parse 만 따로 돌린다.
     List<String[]> first = new ArrayList<>(List.of(
@@ -485,7 +502,7 @@ final class ReverseMerge {
       new String[]{"diff", "--name-only", f + "..." + i},
       new String[]{"rev-parse", f}));
     // --no-optional-locks: 작업본과 비교하는 diff 가 index.lock 을 잡아 IntelliJ 의 커밋 · 체크아웃을 막지 않게 한다.
-    if (into.equals(current)) first.add(new String[]{"--no-optional-locks", "diff", "--name-only", "HEAD"});
+    if (i.equals("HEAD")) first.add(new String[]{"--no-optional-locks", "diff", "--name-only", "HEAD"});
     if (email != null) first.add(new String[]{"log", "--author=" + email, "--since=" + MINE_DAYS + ".days", "--format=", "--name-only", f, i});
     List<String> out = gitAll(root, first);
     int commits = Integer.parseInt(out.get(0).trim());
@@ -579,7 +596,8 @@ final class ReverseMerge {
     }
     try {
       if (switched) {
-        if (hasRef(root, HEADS + into)) git(root, GIT_LONG_TIMEOUT_SEC, "checkout", into);
+        // 윈도우에서 대소문자만 다른 내 브랜치가 있으면 그 이름으로 옮긴다. 서버 철자로 옮기면 HEAD 가 다른 철자를 가리켜 추적 설정을 잃는다.
+        if (hasRef(root, HEADS + into)) git(root, GIT_LONG_TIMEOUT_SEC, "checkout", localSpelling(root, into, folded));
         else {
           // --track 은 fetch 설정이 그 브랜치를 받지 않으면(개인 브랜치만 받는 clone) 실패해서, 추적 설정을 직접 적는다.
           git(root, GIT_LONG_TIMEOUT_SEC, "checkout", "-b", into, intoRemote);
@@ -1006,6 +1024,22 @@ final class ReverseMerge {
   /** unpushed 커밋 가운데 맨 위 커밋의 제목. 없으면 빈 글. */
   static String lastUnpushed(File root, String remote, String branch) throws IOException, InterruptedException {
     return git(root, "log", "-1", "--format=%s", remoteRef(remote, branch) + ".." + HEADS + branch).trim();
+  }
+
+  /**
+   * 내 브랜치 가운데 name 과 대소문자만 다른 것의 이름(folded 일 때). 추적 설정(branch.<이름>.remote)에 적힌 철자로 찾는다.
+   * for-each-ref 는 윈도우에서 디스크 폴더 철자를 내므로 쓰지 않는다. 대소문자까지 같은 설정이 있거나 찾지 못하면 name 그대로.
+   */
+  static String localSpelling(File root, String name, boolean folded) throws InterruptedException {
+    if (!folded) return name;
+    Map<String, String> cfg = configs(root);
+    if (cfg.containsKey(BRANCH_KEY + name + REMOTE_KEY_SUFFIX)) return name;
+    for (String key : cfg.keySet()) {
+      if (!key.startsWith(BRANCH_KEY) || !key.endsWith(REMOTE_KEY_SUFFIX)) continue;
+      String branch = key.substring(BRANCH_KEY.length(), key.length() - REMOTE_KEY_SUFFIX.length());
+      if (branch.equalsIgnoreCase(name)) return branch;
+    }
+    return name;
   }
 
   private static boolean hasRef(File root, String ref) throws InterruptedException {

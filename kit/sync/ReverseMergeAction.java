@@ -138,6 +138,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
       // git config 에 지금 적혀 있는 From · Into(지금 브랜치 것이 아니어도 그대로). 병합 때 같은 값이면 다시 적지 않는다.
       private String storedFrom;
       private String storedInto;
+      private boolean folded;
 
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
@@ -155,7 +156,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
           storedFrom = savedFrom;
           storedInto = savedInto;
           // 지금 브랜치에 합친 기억만 쓴다. 다른 브랜치나 반대 방향(지금 브랜치 → develop)의 기억은 버린다.
-          if (!ReverseMerge.rememberedFor(savedInto, current, Boolean.parseBoolean(local.get(0).trim()))) {
+          folded = Boolean.parseBoolean(local.get(0).trim());
+          if (!ReverseMerge.rememberedFor(savedInto, current, folded)) {
             savedFrom = null;
             savedInto = null;
           }
@@ -196,7 +198,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
         String into = ReverseMerge.pick(names, savedInto, List.of(current));
         // 같은 브랜치로 열지 않는다(지금 브랜치가 develop 일 때). Into 를 비워 고르라는 안내가 보이게 한다.
         if (into != null && into.equals(from)) into = null;
-        new PreviewDialog(project, repo, root, remote, current, names, from, into, storedFrom, storedInto).show();
+        new PreviewDialog(project, repo, root, remote, current, folded, names, from, into, storedFrom, storedInto).show();
       }
 
       @Override
@@ -213,6 +215,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
     private final File root;
     private final String remote;
     private final String current;
+    // 저장소가 대소문자만 다른 브랜치 이름을 한 브랜치로 보는가(core.ignorecase, 윈도우).
+    private final boolean folded;
     private final ComboBox<String> fromBox;
     private final ComboBox<String> intoBox;
     private final JBLabel unpushed = new JBLabel();
@@ -240,9 +244,10 @@ public final class ReverseMergeAction extends DumbAwareAction {
     private volatile String storedFrom;
     private volatile String storedInto;
 
-    PreviewDialog(Project project, GitRepository repo, File root, String remote, String current, List<String> names, String from, String into,
-                  String storedFrom, String storedInto) {
+    PreviewDialog(Project project, GitRepository repo, File root, String remote, String current, boolean folded, List<String> names, String from,
+                  String into, String storedFrom, String storedInto) {
       super(project, true);
+      this.folded = folded;
       this.storedFrom = storedFrom;
       this.storedInto = storedInto;
       this.project = project;
@@ -654,7 +659,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
     private void showDiff(ReverseMerge.Incoming item) {
       String from = from();
       String into = into();
-      String intoTip = ReverseMerge.intoTip(remote, into, current);
+      String intoTip = ReverseMerge.intoTip(remote, into, current, folded);
       ApplicationManager.getApplication().executeOnPooledThread(() -> {
         byte[] left;
         byte[] right;

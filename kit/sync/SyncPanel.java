@@ -2935,17 +2935,20 @@ final class SyncPanel extends SimpleToolWindowPanel {
       String savedInto = cfg.get(ReverseMerge.CONFIG_INTO);
       // 기억된 합치기가 지금 브랜치와 관련 있을 때만 그 기준을 쓴다: develop → 내 브랜치였으면 From, 내 브랜치 → develop 이었으면 Into.
       // 다른 개인 브랜치의 기억(featureA → develop)이면 featureA 를 기준으로 삼지 않고 아래 기본(develop 등)을 쓴다.
-      from = repo.branch().equals(savedInto) ? savedFrom : repo.branch().equals(savedFrom) ? savedInto : null;
+      // 윈도우는 대소문자만 다른 이름을 같은 브랜치로 본다(Merge Branches 는 서버 철자를 기억한다).
+      boolean folded = ReverseMerge.folded(cfg);
+      from = ReverseMerge.rememberedFor(savedInto, repo.branch(), folded) ? savedFrom
+             : ReverseMerge.rememberedFor(savedFrom, repo.branch(), folded) ? savedInto : null;
       String remote = ReverseMerge.remoteOf(cfg, repo.branch());
       // Merge Branches 로 합친 적이 없어 기억된 기준이 없으면 Merge Branches 창과 같은 기본(develop 등 받아 둔 첫 후보)을 쓴다.
       if (from == null) from = ReverseMerge.pick(ReverseMerge.parseRefs(String.join("\n", tips.keySet()), remote), null, ReverseMerge.FROM_CANDIDATES);
-      if (from == null || from.equals(repo.branch())) {
+      if (from == null || ReverseMerge.rememberedFor(from, repo.branch(), folded)) {
         reverseNotes.remove(root);
         noteCache.remove(root);
         return;
       }
       String fromRef = ReverseMerge.remoteRef(remote, from);
-      String tip = tips.get(fromRef);
+      String tip = ReverseMerge.tipOf(tips, fromRef, folded);
       if (fetch && !(fetchedAll && ReverseMerge.fetches(cfg, remote, from))) {
         // 받기 설정이 기준 브랜치를 받지 않아 서버에 한 번 더 묻는다. 조회가 느릴 때 idea.log 에서 까닭(설정 줄)을 볼 수 있게 남긴다.
         if (fetchedAll) LOG.info("역머지 기준 " + from + " 을(를) 따로 받음 [" + root.getName() + "] remote." + remote + ".fetch=" + cfg.get("remote." + remote + ".fetch"));

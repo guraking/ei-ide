@@ -153,6 +153,14 @@ public class SyncCheck {
     eq(ReverseMerge.negativeRefspecs("git version 2.28.0"), false);
     eq(ReverseMerge.negativeRefspecs("git version 3.0.0"), true);
     eq(ReverseMerge.negativeRefspecs(""), false);
+    // 윈도우: for-each-ref 가 디스크 폴더 철자로 낸 참조도 찾고, 서버 철자 Into 가 지금 브랜치면 HEAD 와 비교한다.
+    java.util.Map<String, String> tips = java.util.Map.of("refs/remotes/origin/Feature/gpm/develop", "abc");
+    eq(ReverseMerge.tipOf(tips, "refs/remotes/origin/feature/gpm/develop", true), "abc");
+    eq(ReverseMerge.tipOf(tips, "refs/remotes/origin/feature/gpm/develop", false), null);
+    eq(ReverseMerge.intoTip("origin", "Feature/x", "feature/x", true), "HEAD");
+    eq(ReverseMerge.intoTip("origin", "Feature/x", "feature/x", false), "refs/remotes/origin/Feature/x");
+    eq(ReverseMerge.folded(java.util.Map.of("core.ignorecase", "true")), true);
+    eq(ReverseMerge.folded(java.util.Map.of()), false);
   }
 
   static void eq(Object a, Object b) { if (!java.util.Objects.equals(a, b)) throw new AssertionError(a + " != " + b); }
