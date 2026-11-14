@@ -587,6 +587,9 @@ final class CodeFlow {
       return false;
     }
 
+    /** 마디마다 그 아래에 이미 단 호출(클래스#메서드). */
+    private final Map<Item, Set<String>> shown = new java.util.IdentityHashMap<>();
+
     Item add(Item parent, Item kid) {
       nodes++;
       parent.kids.add(kid);
@@ -693,7 +696,8 @@ final class CodeFlow {
     void down(PsiMethod method, Item parent, int depth) {
       if (depth >= MAX_DOWN_DEPTH || method.getBody() == null) return;
       PsiClass self = method.getContainingClass();
-      Set<String> here = new HashSet<>();
+      // 같은 마디 아래 같은 이름의 호출은 한 줄만 둔다(같은 클래스 도우미를 펼친 것 · 인자 수만 다른 것 포함).
+      Set<String> here = shown.computeIfAbsent(parent, k -> new HashSet<>());
       for (PsiMethodCallExpression call : PsiTreeUtil.findChildrenOfType(method.getBody(), PsiMethodCallExpression.class)) {
         ProgressManager.checkCanceled();
         if (!room()) return;
@@ -703,7 +707,7 @@ final class CodeFlow {
         // 공통 매퍼(BaseMapper 의 selectList 등)는 선언한 인터페이스가 아니라 부른 쪽 형식(UserMapper)의 XML 에 문장이 있다.
         PsiClass via = qualifierClass(call);
         PsiClass mapper = via != null && isMapper(via, called) ? via : isMapper(owner, called) ? owner : null;
-        if (!here.add((mapper == null ? owner : mapper).getQualifiedName() + "#" + called.getName() + called.getParameterList().getParametersCount())) continue;
+        if (!here.add((mapper == null ? owner : mapper).getQualifiedName() + "#" + called.getName())) continue;
         if (mapper != null) {
           Item mi = add(parent, methodItem(called, nav(call)));
           if (mapper != owner) mi.note += " · " + mapper.getName();

@@ -7,7 +7,7 @@ import com.intellij.openapi.ui.ComboBox;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.ui.DocumentAdapter;
-import com.intellij.ui.OnePixelSplitter;
+import com.intellij.ui.JBSplitter;
 import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.SimpleListCellRenderer;
 import com.intellij.ui.components.JBCheckBox;
@@ -120,7 +120,7 @@ public final class QueryBenchDialog extends DialogWrapper {
   };
   private final JBLabel resultTitle = new JBLabel();
   private final JPanel resultPanel = new JPanel(new BorderLayout());
-  private final OnePixelSplitter sqlAndResult = new OnePixelSplitter(true, RESULT_SPLIT);
+  private final JBSplitter sqlAndResult = new JBSplitter(true, RESULT_SPLIT);
   /** SQL · 결과 칸 둘레 여백(스케일 전 px). */
   private static final int PREVIEW_GAP = 8;
   private final JPanel preview = new JPanel(new BorderLayout());
@@ -549,7 +549,7 @@ public final class QueryBenchDialog extends DialogWrapper {
 
   /** 위아래로 나눈 칸. 나눈 비율은 key 로 기억한다. */
   private static JComponent split(float proportion, String key, JComponent first, JComponent second) {
-    OnePixelSplitter s = new OnePixelSplitter(true, proportion);
+    JBSplitter s = new JBSplitter(true, proportion);
     s.setSplitterProportionKey(KEY + key);
     s.setHonorComponentsMinimumSize(false);
     s.setFirstComponent(first);

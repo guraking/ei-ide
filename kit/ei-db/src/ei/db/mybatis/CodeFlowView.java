@@ -21,13 +21,14 @@ import com.intellij.ui.ColoredListCellRenderer;
 import com.intellij.ui.ColoredTreeCellRenderer;
 import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.DoubleClickListener;
-import com.intellij.ui.JBSplitter;
+import com.intellij.ui.JBColor;
+import com.intellij.ui.OnePixelSplitter;
+import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.SearchTextField;
 import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.TreeSpeedSearch;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBList;
-import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.components.JBTextField;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentFactory;
@@ -273,6 +274,15 @@ public final class CodeFlowView {
     public void dispose() {}
   }
 
+  /** 테두리 없는 스크롤 칸. 도구 창 안에서는 선을 겹치지 않게 칸에 테두리를 두지 않는다. */
+  private static JComponent scroll(JComponent c) { return ScrollPaneFactory.createScrollPane(c, true); }
+
+  /** 탭 위 줄(단추 · 입력). 아래 결과와는 선 하나로 나눈다. */
+  private static <T extends JComponent> T topRow(T row) {
+    row.setBorder(JBUI.Borders.compound(JBUI.Borders.customLineBottom(JBColor.border()), JBUI.Borders.empty(4, 6)));
+    return row;
+  }
+
   private static JButton button(String text, Runnable run) {
     JButton b = new JButton(text, AllIcons.Actions.Find);
     b.addActionListener(e -> run.run());
@@ -320,13 +330,11 @@ public final class CodeFlowView {
       JPanel top = new JPanel(new BorderLayout(JBUI.scale(6), 0));
       top.add(button(EiDbBundle.message("codeflow.query"), this::load), BorderLayout.WEST);
       top.add(filter, BorderLayout.CENTER);
-      JPanel left = new JPanel(new BorderLayout());
-      left.add(top, BorderLayout.NORTH);
-      left.add(new JBScrollPane(list), BorderLayout.CENTER);
-      JBSplitter split = new JBSplitter(false, SPLIT_KEY, SPLIT_PROPORTION);
+      add(topRow(top), BorderLayout.NORTH);
+      OnePixelSplitter split = new OnePixelSplitter(false, SPLIT_KEY, SPLIT_PROPORTION);
       split.setHonorComponentsMinimumSize(false);
-      split.setFirstComponent(left);
-      split.setSecondComponent(new JBScrollPane(tree));
+      split.setFirstComponent(scroll(list));
+      split.setSecondComponent(scroll(tree));
       add(split, BorderLayout.CENTER);
     }
 
@@ -376,7 +384,7 @@ public final class CodeFlowView {
   static final class ImpactTab extends Tab {
     ImpactTab(Project project) {
       super(project, EiDbBundle.message("codeflow.impact.empty"));
-      add(new JBScrollPane(tree), BorderLayout.CENTER);
+      add(scroll(tree), BorderLayout.CENTER);
     }
 
     void show(SmartPsiElementPointer<? extends PsiElement> target) {
@@ -407,9 +415,8 @@ public final class CodeFlowView {
           .addLabeledComponent(EiDbBundle.message("codeflow.column.label"), column)
           .addComponent(buttons)
           .getPanel();
-      form.setBorder(JBUI.Borders.empty(4, 6));
-      add(form, BorderLayout.NORTH);
-      add(new JBScrollPane(tree), BorderLayout.CENTER);
+      add(topRow(form), BorderLayout.NORTH);
+      add(scroll(tree), BorderLayout.CENTER);
     }
 
     void find(String tableName, String columnName) {
@@ -436,13 +443,13 @@ public final class CodeFlowView {
     UnusedTab(Project project) {
       super(project, EiDbBundle.message("codeflow.unused.empty"));
       JPanel top = new JPanel(new BorderLayout(JBUI.scale(8), 0));
-      top.setBorder(JBUI.Borders.empty(4, 6));
+      topRow(top);
       top.add(button(EiDbBundle.message("codeflow.query"), this::find), BorderLayout.WEST);
       JBLabel note = new JBLabel(EiDbBundle.message("codeflow.unused.note"));
       note.setForeground(SimpleTextAttributes.GRAYED_ATTRIBUTES.getFgColor());
       top.add(note, BorderLayout.CENTER);
       add(top, BorderLayout.NORTH);
-      add(new JBScrollPane(tree), BorderLayout.CENTER);
+      add(scroll(tree), BorderLayout.CENTER);
     }
 
     private void find() {

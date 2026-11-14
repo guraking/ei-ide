@@ -4,7 +4,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.openapi.ui.ValidationInfo;
 import com.intellij.ui.CollectionListModel;
-import com.intellij.ui.OnePixelSplitter;
+import com.intellij.ui.JBSplitter;
 import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.SimpleListCellRenderer;
 import com.intellij.ui.ToolbarDecorator;
@@ -108,7 +108,7 @@ final class ServerGroupDialog extends DialogWrapper {
                 .addComponentFillVertically(order, 0)
                 .getPanel();
         right.setBorder(JBUI.Borders.emptyLeft(LIST_GAP / 2));
-        OnePixelSplitter lists = new OnePixelSplitter(false, LIST_PROPORTION);
+        JBSplitter lists = new JBSplitter(false, LIST_PROPORTION);
         lists.setSplitterProportionKey(LIST_SPLIT_KEY);
         lists.setHonorComponentsMinimumSize(false);
         lists.setFirstComponent(left);

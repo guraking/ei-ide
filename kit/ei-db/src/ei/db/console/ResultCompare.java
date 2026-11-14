@@ -8,7 +8,7 @@ import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowContextMenuActionBase;
 import com.intellij.ui.CheckBoxList;
 import com.intellij.ui.JBColor;
-import com.intellij.ui.OnePixelSplitter;
+import com.intellij.ui.JBSplitter;
 import com.intellij.ui.components.JBCheckBox;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBScrollPane;
@@ -208,7 +208,7 @@ final class ResultCompare extends DialogWrapper {
 
     JPanel panel = new JPanel(new BorderLayout());
     panel.add(top, BorderLayout.NORTH);
-    OnePixelSplitter split = new OnePixelSplitter(false, KEY_SPLIT);
+    JBSplitter split = new JBSplitter(false, KEY_SPLIT);
     split.setSplitterProportionKey(KEY_SPLIT_KEY);
     split.setHonorComponentsMinimumSize(false);
     split.setFirstComponent(keys);
