@@ -1,0 +1,11 @@
+<html>
+<body>
+매퍼 XML SQL 의 ${} 를 알려 줍니다. ${} 는 값을 따옴표 없이 SQL 에 그대로 넣어 SQL 주입이 생길 수 있습니다.
+<!-- tooltip end -->
+<pre><code>WHERE USER_ID = ${userId}     ← 표시. #{userId} 로 바꾸세요
+ORDER BY ${sortColumn}        ← 표시. 정해 둔 칼럼만 쓰세요</code></pre>
+<p>select · insert · update · delete 문장과 sql 조각의 글만 봅니다. XML 주석과 태그 속성(test 등)은 보지 않습니다.
+값 자리는 #{} 로 바꾸라고, 정렬 · 표 · 칼럼 이름 자리는 정해 둔 목록에서만 고르라고 알립니다.
+일부러 쓴 ${} 는 이 검사를 그 문장에서만 끄면 됩니다(Alt+Enter → 검사 끄기).</p>
+</body>
+</html>

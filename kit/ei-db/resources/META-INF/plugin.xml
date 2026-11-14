@@ -62,6 +62,19 @@
     <localInspection language="XML" shortName="EiMapperSqlUnknownName" bundle="messages.EiDbBundle" key="inspection.EiMapperSqlUnknownName.display.name"
                      groupName="MyBatis" enabledByDefault="true" level="WARNING"
                      implementationClass="ei.db.mybatis.MapperSqlInspection"/>
+    <!-- 위험 구간 검사: 설정 → 편집기 → 검사 → Moa 위험 구간. 트랜잭션 누락 · SQL 이어 붙이기 · 매퍼 ${} · 민감정보 하드코딩 -->
+    <localInspection language="JAVA" shortName="EiRiskTransaction" bundle="messages.EiDbBundle" key="inspection.EiRiskTransaction.display.name"
+                     groupBundle="messages.EiDbBundle" groupKey="inspection.group.risk" enabledByDefault="true" level="WARNING"
+                     implementationClass="ei.db.mybatis.RiskTxInspection"/>
+    <localInspection language="JAVA" shortName="EiRiskSqlConcat" bundle="messages.EiDbBundle" key="inspection.EiRiskSqlConcat.display.name"
+                     groupBundle="messages.EiDbBundle" groupKey="inspection.group.risk" enabledByDefault="true" level="WARNING"
+                     implementationClass="ei.db.mybatis.RiskSqlInspection"/>
+    <localInspection language="XML" shortName="EiRiskMapperDollar" bundle="messages.EiDbBundle" key="inspection.EiRiskMapperDollar.display.name"
+                     groupBundle="messages.EiDbBundle" groupKey="inspection.group.risk" enabledByDefault="true" level="WARNING"
+                     implementationClass="ei.db.mybatis.RiskDollarInspection"/>
+    <localInspection language="JAVA" shortName="EiRiskHardSecret" bundle="messages.EiDbBundle" key="inspection.EiRiskHardSecret.display.name"
+                     groupBundle="messages.EiDbBundle" groupKey="inspection.group.risk" enabledByDefault="true" level="WARNING"
+                     implementationClass="ei.db.mybatis.RiskSecretInspection"/>
     <!-- MyBatis: 매퍼 필드를 가진 클래스에서 서비스 메서드 자동 완성 -->
     <completion.contributor language="JAVA" implementationClass="ei.db.mybatis.ServiceMethodCompletion"/>
     <!-- 주석 만들기: 설정 → 도구 → 주석 만들기(작성자 · 날짜 · 사전) -->
