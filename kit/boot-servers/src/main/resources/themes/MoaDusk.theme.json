@@ -1,0 +1,31 @@
+{
+  "name": "Moa Dusk",
+  "dark": true,
+  "author": "Moa IDE",
+  "parentTheme": "Islands Dark",
+  "editorScheme": "Moa Dusk",
+  "colors": {
+    "main-window-bg": "#191628",
+    "layer-0-bg": "#1B1829",
+    "layer-0-bg-inline": "#1E1B2E",
+    "layer-0-border": "#312E41",
+    "layer-0-border-inline": "#312E41",
+    "layer-1-bg": "#242134",
+    "layer-1-border": "#434053",
+    "layer-1-bg-inline": "#2A273A",
+    "layer-1-border-inline": "#494659",
+    "layer-2-bg": "#2A273A",
+    "layer-2-border": "#494659",
+    "selection-bg-active": "#312E41",
+    "selection-bg-active-muted": "#282538",
+    "selection-bg-inactive": "#282538",
+    "toolbar-selected-bg": "#312E41",
+    "toolbar-selected-bg-hovered": "#383548",
+    "tab-selected-bg-active": "#1E1B2E",
+    "tab-selected-border-active": "#B39DFF",
+    "tab-selected-bg-inactive": "#1B1829",
+    "tab-selected-border-inactive": "#545164",
+    "control-brand-border": "#B39DFF",
+    "popup-completion-match-text": "#B39DFF"
+  }
+}
