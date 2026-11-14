@@ -9,6 +9,7 @@ import com.intellij.execution.ExecutionBundle;
 import com.intellij.execution.Executor;
 import com.intellij.execution.executors.DefaultRunExecutor;
 import com.intellij.execution.filters.TextConsoleBuilderFactory;
+import com.intellij.execution.impl.ConsoleViewImpl;
 import com.intellij.execution.ui.ConsoleView;
 import com.intellij.execution.ui.RunContentDescriptor;
 import com.intellij.execution.ui.RunContentManager;
@@ -124,6 +125,8 @@ public final class WasRunner {
             + "-Djboss.modules.system.pkgs=org.jboss.byteman -Djava.awt.headless=true";
 
     private final Project project;
+    // 콘솔 · 「오류」 칸 사이 비율을 기억할 열쇠(WAS 서버 모두 같이 쓴다).
+    private static final String ERRORS_SPLIT_KEY = "Moa.WasConsole.errors.split";
     private final Map<String, ProcessHandler> running = new ConcurrentHashMap<>();
     private final Map<String, Boolean> debugMode = new ConcurrentHashMap<>();
     // 살아 있는 프로세스를 띄울 때 쓴 설정(서버 id → 설정). 실행 중에 설정을 고쳐도 중지는 띄운 포트 · 명령으로 보낸다.
@@ -408,10 +411,16 @@ public final class WasRunner {
         ConsoleView console = TextConsoleBuilderFactory.getInstance().createBuilder(project).getConsole();
         Executor executor = DefaultRunExecutor.getRunExecutorInstance();
         DefaultActionGroup actions = new DefaultActionGroup();
-        JPanel panel = ConsolePanel.create(console, actions);
+        // 콘솔 오른쪽 「오류」 칸. 출력 읽기는 실행 창과 함께 끝난다.
+        ErrorWatcher watcher = new ErrorWatcher(handler);
+        ErrorPanel errors = new ErrorPanel(project, watcher,
+                () -> console instanceof ConsoleViewImpl impl ? impl.getEditor() : null, () -> {},
+                ServerRegistry.getInstance(project).get(registryKey(server)), count -> {});
+        JPanel panel = ConsolePanel.create(console, actions, errors, ERRORS_SPLIT_KEY);
         RunContentDescriptor descriptor = new RunContentDescriptor(console, handler, panel, server.name);
         descriptor.setActivateToolWindowWhenAdded(true);
         Disposer.register(descriptor, console);
+        Disposer.register(descriptor, watcher);
 
         AnAction rerun = DumbAwareAction.create(CommonBundle.message("action.text.rerun"), AllIcons.Actions.Restart, e -> restart(server));
         rerun.registerCustomShortcutSet(CommonShortcuts.getRerun(), panel);
