@@ -1,0 +1,32 @@
+{
+  "name": "Moa Slate",
+  "dark": false,
+  "author": "Moa IDE",
+  "parentTheme": "Islands Light",
+  "editorScheme": "Moa Slate",
+  "colors": {
+    "main-window-bg": "#E1E6ED",
+    "layer-0-bg": "#E6EAF0",
+    "layer-0-bg-inline": "#EEF1F5",
+    "layer-0-border": "#CACED4",
+    "layer-0-border-inline": "#CACED4",
+    "layer-1-bg": "#EEF1F5",
+    "layer-1-border": "#BEC2C8",
+    "layer-1-bg-inline": "#EEF1F5",
+    "layer-1-border-inline": "#BEC2C8",
+    "layer-2-bg": "#EEF1F5",
+    "layer-2-border": "#BEC2C8",
+    "selection-bg-active": "#CED2D7",
+    "selection-bg-active-muted": "#D8DCE1",
+    "toolbar-selected-bg": "#CED2D7",
+    "toolbar-selected-bg-hovered": "#C5C9CF",
+    "tab-selected-bg-active": "#EEF1F5",
+    "tab-selected-border-active": "#1F5FBF",
+    "tab-selected-bg-inactive": "#E6EAF0",
+    "tab-selected-border-inactive": "#A9AEB5",
+    "control-brand-border": "#1F5FBF",
+    "popup-completion-match-text": "#1F5FBF",
+    "tool-window-bg": "#E6EAF0",
+    "tool-window-bg-inline": "#EEF1F5"
+  }
+}
