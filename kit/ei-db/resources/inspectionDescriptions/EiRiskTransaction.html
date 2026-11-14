@@ -1,0 +1,15 @@
+<html>
+<body>
+@Transactional 없이 DB 를 두 번 이상 고치는 메서드를 알려 줍니다. 중간에 실패하면 앞에서 고친 것만 DB 에 남습니다.
+<!-- tooltip end -->
+<pre><code>public void save(UserVO vo) {      // ← 표시
+    userMapper.insertUser(vo);
+    userMapper.insertUserRole(vo);  // 여기서 실패하면 사용자만 들어간다
+}</code></pre>
+<p>「고침」은 매퍼 XML 문장이 insert · update · delete 인 매퍼 메서드, @Insert · @Update · @Delete 매퍼 메서드,
+SqlSession · 전자정부 DAO 의 insert · update · delete, JdbcTemplate 의 update · batchUpdate 입니다. 반복문 안에서 한 번 고치면 두 번으로 셉니다.</p>
+<p>메서드 · 클래스 · 상위 클래스 · 인터페이스에 @Transactional 이 있거나, 메서드 안에서 TransactionTemplate 를 쓰면 표시하지 않습니다.
+프로젝트에 XML 트랜잭션 설정(tx:advice)이나 TransactionInterceptor 설정이 있으면 이 검사는 아무것도 표시하지 않습니다.
+private · static 메서드와 테스트 소스는 보지 않습니다.</p>
+</body>
+</html>

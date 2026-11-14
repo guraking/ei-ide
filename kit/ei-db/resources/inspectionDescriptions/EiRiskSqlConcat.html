@@ -1,0 +1,12 @@
+<html>
+<body>
+SQL 에 문자열 값을 바로 이어 붙인 곳을 알려 줍니다. 값에 따옴표가 들어가면 SQL 이 바뀝니다(SQL 주입).
+<!-- tooltip end -->
+<pre><code>String sql = "SELECT * FROM TB_USER WHERE USER_ID = '" + userId + "'";   // ← userId 표시
+// 고친 모양
+String sql = "SELECT * FROM TB_USER WHERE USER_ID = ?";                  // 값은 바인드로</code></pre>
+<p>+ 로 이은 문자열과 StringBuilder · StringBuffer 의 append 를 봅니다. 값 바로 앞 글이 「WHERE · AND · SET 칼럼 =」, 「LIKE '%」, 「IN (」, 「VALUES (」,
+「ORDER BY」 일 때만, 값이 String 일 때만 표시합니다(숫자는 따옴표를 깰 수 없습니다). 이름에 escape · quote · sanitize 가 들어간 메서드를 거친 값은 건너뜁니다.</p>
+<p>MyBatis @Select · @Insert · @Update · @Delete 어노테이션 SQL 의 ${} 도 함께 표시합니다.</p>
+</body>
+</html>
