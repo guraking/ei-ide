@@ -96,6 +96,7 @@ final class CodeFlow {
   private static final String ATTR_TYPE = "type";
   /** association · collection 이 부르는 다른 문장. */
   private static final String ATTR_SELECT = "select";
+  private static final String ATTR_REFID = "refid";
   /** 매퍼 문장 · resultMap 에서 형식을 적는 속성. */
   private static final List<String> TYPE_ATTRS = List.of("parameterType", "resultType", "type", "ofType", "javaType");
   private static final String MINIFIED_SUFFIX = ".min.js";
@@ -143,8 +144,11 @@ final class CodeFlow {
     String key() { return label() + " " + where; }
   }
 
-  /** 화면 파일 하나의 글. */
-  record Front(VirtualFile file, CharSequence text) {}
+  /** 화면 파일 하나의 글과 그 낱말 조각(FlowRules.tokens, 정규식을 돌리기 전에 거르는 데 쓴다). */
+  record Front(VirtualFile file, CharSequence text, Set<String> tokens) {
+    /** url 을 부를 수 있는 파일이면(조각이 모두 들어 있으면) true. */
+    boolean mayCall(Api api) { return tokens.containsAll(FlowRules.literalTokens(api.url())); }
+  }
 
   /** 매퍼 XML 하나를 읽은 것. text 와 doc 은 같은 글이다. */
   record Xml(VirtualFile file, CharSequence text, MapperDoc doc, MapperSqlScan.Result sql) {}
@@ -191,7 +195,8 @@ final class CodeFlow {
         VirtualFile root = index.getContentRootForFile(f);
         String relative = root == null ? null : VfsUtilCore.getRelativePath(f, root);
         if (FlowRules.skippedFront(relative == null ? f.getPath() : relative)) continue;
-        out.add(new Front(f, textOf(f)));
+        CharSequence text = textOf(f);
+        out.add(new Front(f, text, FlowRules.tokens(text)));
       }
     }
     return out;
@@ -210,8 +215,10 @@ final class CodeFlow {
     List<Item> out = new ArrayList<>();
     for (Front f : fronts) {
       ProgressManager.checkCanceled();
+      if (out.size() >= MAX_FRONT_HITS) break;
+      if (!f.mayCall(api)) continue;
       Matcher m = p.matcher(f.text());
-      while (m.find() && out.size() < MAX_FRONT_HITS) {
+      while (out.size() < MAX_FRONT_HITS && m.find()) {
         int line = StringUtil.offsetToLineNumber(f.text(), m.start()) + 1;
         out.add(new Item(f.file().getName() + ":" + line, f.file().getParent() == null ? "" : f.file().getParent().getPath(),
             f.file().getFileType().getIcon(), new OpenFileDescriptor(project, f.file(), m.start())));
@@ -248,7 +255,7 @@ final class CodeFlow {
     Item g = new Item(EiDbBundle.message("codeflow.group.screens"), "", AllIcons.FileTypes.Html, null);
     if (apis.isEmpty()) g.note = EiDbBundle.message("codeflow.note.none");
     else run.addScreens(g, apis, fronts(project));
-    return g;
+    return run.finish(g);
   }
 
   // ---------------------------------------------------------------- 2 바꾸면 영향
@@ -350,7 +357,8 @@ final class CodeFlow {
     List<Statement> out = new ArrayList<>();
     for (MapperIndex.Entry e : run.sourceEntries()) {
       Xml x = run.xml(e.file());
-      if (x == null) continue;
+      // 열린 문서에서 namespace 를 지운 참이면(색인과 글이 다름) 매퍼가 아니다.
+      if (x == null || x.doc().namespace == null) continue;
       for (MapperDoc.Node st : x.doc().statements) {
         out.add(new Statement(e.file(), x.doc().namespace, st.attr(ATTR_ID), st.name, st.start));
       }
@@ -502,27 +510,18 @@ final class CodeFlow {
     return out;
   }
 
-  private static void addIncludes(MapperDoc doc, MapperDoc.Node n, List<int[]> out, Set<String> seen) {
+  private static void addIncludes(MapperDoc doc, MapperDoc.Node n, List<int[]> out, Set<MapperDoc.Node> seen) {
     for (MapperDoc.Node k : n.children) {
       if (k.name == null) continue;
       if (!INCLUDE_TAG.equals(k.name)) {
         addIncludes(doc, k, out, seen);
         continue;
       }
-      String id = localId(k.attr("refid"), doc.namespace);
-      MapperDoc.Node frag = id == null ? null : doc.fragments.get(id);
-      if (frag == null || !seen.add(id)) continue;
+      MapperDoc.Node frag = doc.fragment(k.attr(ATTR_REFID));
+      if (frag == null || !seen.add(frag)) continue;
       out.add(new int[]{frag.start, frag.end});
       addIncludes(doc, frag, out, seen);
     }
-  }
-
-  /** include refid 가 이 파일의 조각을 가리키면 그 id(「네임스페이스.id」 꼴은 네임스페이스가 같을 때만). 아니면 null. */
-  static @Nullable String localId(@Nullable String refid, @Nullable String namespace) {
-    if (refid == null || refid.isBlank()) return null;
-    int dot = refid.lastIndexOf('.');
-    if (dot < 0) return refid;
-    return refid.substring(0, dot).equals(namespace) ? refid.substring(dot + 1) : null;
   }
 
   private static boolean inside(List<int[]> ranges, int at) {
@@ -532,24 +531,11 @@ final class CodeFlow {
     return false;
   }
 
+  /** ranges 의 글을 이은 것(범위 사이는 줄바꿈). */
   private static String textOf(CharSequence text, List<int[]> ranges) {
-    return textOf(text, ranges, false);
-  }
-
-  /**
-   * ranges 의 글을 이은 것. withoutHead 면 범위마다 첫 여는 태그(id · parameterType 같은 속성)는 뺀다.
-   * 낱말 찾기가 문장 자신의 속성(id="…")에 걸리지 않게 할 때 쓴다.
-   */
-  private static String textOf(CharSequence text, List<int[]> ranges, boolean withoutHead) {
     StringBuilder out = new StringBuilder();
     for (int[] r : ranges) {
-      if (r[1] > text.length()) continue;
-      int from = r[0];
-      if (withoutHead) {
-        int close = StringUtil.indexOf(text, '>', r[0], r[1]);
-        if (close >= 0) from = close + 1;
-      }
-      out.append(text, from, r[1]).append('\n');
+      if (r[1] <= text.length()) out.append(text, r[0], r[1]).append('\n');
     }
     return out.toString();
   }
@@ -579,6 +565,8 @@ final class CodeFlow {
     final Project project;
     final GlobalSearchScope scope;
     final Set<PsiMethod> expanded = new HashSet<>();
+    /** 지금 펼치는 길에 있는 같은 클래스 도우미(되부르기 막기). */
+    final Set<PsiMethod> inlining = new HashSet<>();
     final Map<VirtualFile, Xml> xmls = new HashMap<>();
     final Map<String, Api> apis = new LinkedHashMap<>();
     /** 형식 글 → 클래스(찾지 못하면 null 도 기억). */
@@ -721,7 +709,11 @@ final class CodeFlow {
           if (mapper != owner) mi.note += " · " + mapper.getName();
           addStatements(mi, mapper, called.getName());
         } else if (self != null && called.getBody() != null && inProject(owner) && (owner == self || self.isInheritor(owner, true))) {
-          if (expanded.add(called)) down(called, parent, depth + 1);
+          // 같은 클래스의 도우미는 부르는 곳마다 펼친다(여러 서비스 메서드가 같은 도우미를 쓴다). 되부르기는 지금 길에서만 막는다.
+          if (inlining.add(called)) {
+            down(called, parent, depth + 1);
+            inlining.remove(called);
+          }
         } else if (inProject(owner) && LayerRules.isBean(owner.isInterface(), LayerNav.annotationNames(owner))) {
           for (PsiMethod impl : implementations(called)) {
             Item si = add(parent, methodItem(impl, nav(call)));
@@ -826,10 +818,13 @@ final class CodeFlow {
       query.forEach((Processor<PsiReference>) ref -> {
         ProgressManager.checkCanceled();
         PsiElement el = ref.getElement();
-        if (isCode(el)) out.add(el);
-        if (out.size() < MAX_REFS) return true;
-        refsCut = true;
-        return false;
+        if (!isCode(el)) return true;
+        if (out.size() >= MAX_REFS) {
+          refsCut = true;
+          return false;
+        }
+        out.add(el);
+        return true;
       });
       return out;
     }
@@ -964,7 +959,7 @@ final class CodeFlow {
 
     /**
      * dto(형식)와 이어진 매퍼 문장 · resultMap 을 parent 아래 단다. field 가 null 이면 이어진 것 모두,
-     * 아니면 그 글에 필드 이름이 나오는 것(칼럼 이름 USER_NAME 으로만 나오면 「추정」).
+     * 아니면 그 글에서 필드를 쓴 것(FlowRules.usesField: #{} · property · test), SQL 에 칼럼 이름 USER_NAME 으로만 나오면 「추정」.
      * 이어짐: 형식 속성(parameterType · resultType)이나 resultMap 의 type 이 dto, 또는 매퍼 메서드의 매개변수 · 돌려주는 형식에 dto 가 있음.
      */
     void mapperUses(PsiClass dto, @Nullable String field, Item parent) {
@@ -973,20 +968,21 @@ final class CodeFlow {
         if (x == null) continue;
         MapperDoc.Node mapper = mapperNode(x.doc());
         if (mapper == null) continue;
+        Set<MapperDoc.Node> statements = new HashSet<>(x.doc().statements);
         for (MapperDoc.Node n : mapper.children) {
           ProgressManager.checkCanceled();
           if (!room()) return;
-          boolean statement = x.doc().statements.contains(n);
+          boolean statement = statements.contains(n);
           boolean resultMap = RESULT_MAP_TAG.equals(n.name);
           if (!statement && !resultMap) continue;
           if (!related(x, n, statement, dto)) continue;
           String note = statement ? kindLabel(n.name) : RESULT_MAP_TAG;
           if (field != null) {
             List<int[]> ranges = statement ? ranges(x.doc(), n) : List.of(new int[]{n.start, n.end});
-            String text = textOf(x.text(), ranges, true);
+            String text = textOf(x.text(), ranges);
             String snake = FlowRules.snake(field);
-            if (FlowRules.hasWord(text, field)) note += " · " + EiDbBundle.message("codeflow.note.field");
-            else if (!snake.equals(field) && FlowRules.hasWord(text, snake)) note += " · " + EiDbBundle.message("codeflow.note.column.guess");
+            if (FlowRules.usesField(text, field)) note += " · " + EiDbBundle.message("codeflow.note.field");
+            else if (!snake.equals(field) && FlowRules.hasWord(FlowRules.withoutTags(text), snake)) note += " · " + EiDbBundle.message("codeflow.note.column.guess");
             else continue;
           }
           Item si = add(parent, new Item(x.file().getName() + " · " + n.attr(ATTR_ID), note, AllIcons.FileTypes.Xml,
@@ -1078,14 +1074,15 @@ final class CodeFlow {
       }
       int total = 0;
       for (Api a : list) {
+        if (!room()) break;
         List<Item> hits = screens(project, a, fronts);
         if (hits == null || hits.isEmpty()) continue;
         Item ai = add(parent, new Item(a.label(), a.where(), AllIcons.Nodes.PpWeb, null));
         for (Item h : hits) {
-          if (!room()) return;
+          if (!room()) break;
           add(ai, h);
+          total++;
         }
-        total += hits.size();
       }
       parent.note = total == 0 ? EiDbBundle.message("codeflow.note.none") : EiDbBundle.message("codeflow.note.count", total);
     }

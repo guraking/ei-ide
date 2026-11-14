@@ -52,7 +52,11 @@ public abstract class CodeFlowAction extends AnAction {
     Editor editor = e.getData(CommonDataKeys.EDITOR);
     PsiFile file = e.getData(CommonDataKeys.PSI_FILE);
     if (editor == null || !(file instanceof PsiJavaFile)) return null;
-    return file.findElementAt(editor.getCaretModel().getOffset());
+    int offset = editor.getCaretModel().getOffset();
+    PsiElement at = file.findElementAt(offset);
+    // 글자 위치가 이름 바로 뒤(「userName|」)면 그 이름을 본다.
+    if (!(at instanceof PsiIdentifier) && offset > 0 && file.findElementAt(offset - 1) instanceof PsiIdentifier before) return before;
+    return at;
   }
 
   /** 글자 위치를 담은 메서드의 호출 흐름. */

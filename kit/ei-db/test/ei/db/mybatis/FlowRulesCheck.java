@@ -33,6 +33,15 @@ public class FlowRulesCheck {
     eq(found("/user/list", "axios.get('/user/listAll')"), false);
     eq(found("/user/list", "axios.get('/user/list-all')"), false);
     eq(found("/user/list", "axios.get('/user/list.json')"), false);
+    // 더 긴 URL 은 다른 API
+    eq(found("/api/user", "axios.get('/api/user/list')"), false);
+    eq(found("/api/user", "axios.get('/api/user?id=1')"), true);
+    // 와일드카드 · 정규식 변수
+    eq(found("/files/**", "get('/files/a/b.png')"), true);
+    eq(found("/user/*/detail", "get(`/user/${id}/detail`)"), true);
+    eq(found("/item/{id:[0-9]{3}}", "get('/item/' + id)"), true);
+    eq(found("/item/{id:[0-9]{3}}/x", "get('/item/123/x')"), true);
+    eq(FlowRules.literalTokens("/files/**"), List.of("files"));
     // 따옴표 · 빗금 앞이 아니면(다른 낱말의 끝) 아님
     eq(found("/user/list", "const xuser = 'abc'; 'user/list'.length"), true);
     eq(found("/user/list", "superuser/list"), false);
@@ -95,6 +104,19 @@ public class FlowRulesCheck {
     eq(FlowRules.snake("userName"), "user_name");
     eq(FlowRules.snake("id"), "id");
     eq(FlowRules.snake("regDt2"), "reg_dt2");
+    eq(FlowRules.snake("userID"), "user_id");
+    eq(FlowRules.snake("XMLParser"), "xml_parser");
+
+    // 매퍼 XML 의 필드 쓰임: 태그 이름 · SQL 낱말 · 다른 속성은 세지 않는다
+    eq(FlowRules.usesField("<id property=\"userId\" column=\"USER_ID\"/>", "id"), false);
+    eq(FlowRules.usesField("<id property=\"id\" column=\"ID\"/>", "id"), true);
+    eq(FlowRules.usesField("SELECT * FROM T ORDER BY A <bind name=\"x\" value=\"1\"/>", "order"), false);
+    eq(FlowRules.usesField("<bind name=\"x\"/>", "name"), false);
+    eq(FlowRules.usesField("WHERE A = #{ dto.userName , jdbcType=VARCHAR}", "userName"), true);
+    eq(FlowRules.usesField("WHERE A = #{userNameX}", "userName"), false);
+    eq(FlowRules.usesField("<if test=\"userName != null and userName != ''\">", "userName"), true);
+    eq(FlowRules.usesField("<insert id=\"ins\" useGeneratedKeys=\"true\" keyProperty=\"seq\">", "seq"), true);
+    eq(FlowRules.usesField("<insert id=\"seq\">", "seq"), false);
 
     eq(FlowRules.hasWord("SELECT USER_NAME FROM T", "user_name"), true);
     eq(FlowRules.hasWord("SELECT USER_NAME_X FROM T", "user_name"), false);

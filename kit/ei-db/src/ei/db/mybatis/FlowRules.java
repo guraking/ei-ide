@@ -22,14 +22,16 @@ final class FlowRules {
   /** DTO 로 보는 클래스 이름 끝. */
   private static final List<String> DTO_SUFFIXES = List.of("Dto", "DTO", "Vo", "VO");
 
-  /** URL 의 {변수} 자리와 스프링 설정값 자리 ${이름}. */
-  private static final Pattern VARIABLE = Pattern.compile("\\$?\\{[^}]*}");
+  /** URL 의 {변수} 자리({id:[0-9]{3}} 처럼 안에 한 겹 괄호가 든 정규식 변수 포함)와 스프링 설정값 자리 ${이름}. */
+  private static final Pattern VARIABLE = Pattern.compile("\\$?\\{(?:[^{}]|\\{[^{}]*})*}");
+  /** 와일드카드(* · **)가 든 마디는 통째로 변수로 본다. */
+  private static final String WILDCARD = "*";
   /** 화면 글에서 변수 자리에 올 수 있는 글(따옴표 · 공백 · 빗금 · 물음표 없음). */
   private static final String VARIABLE_TEXT = "[^/'\"`\\s?]+";
   /** URL 앞에 올 수 있는 글자: 따옴표 · 빗금(앞에 다른 경로가 붙음) · 템플릿 끝(} 는 ${base}/… 꼴). */
   private static final String URL_BEFORE = "(?<=['\"`/}])";
-  /** URL 뒤에 오면 안 되는 글자(이름 · 확장자가 더 이어짐). */
-  private static final String URL_AFTER = "(?![A-Za-z0-9_.\\-])";
+  /** URL 뒤에 오면 안 되는 글자(이름 · 확장자 · 더 긴 경로가 이어짐). */
+  private static final String URL_AFTER = "(?![A-Za-z0-9_.\\-/])";
 
   /** XML 주석과 태그(이름으로 시작하는 &lt;…&gt;). 「a &lt; b」 처럼 띄어 쓴 부등호는 태그가 아니다. */
   private static final Pattern TAG = Pattern.compile("<!--.*?-->|<!\\[CDATA\\[|]]>|</?[A-Za-z][^<>]*>", Pattern.DOTALL);
@@ -118,11 +120,12 @@ final class FlowRules {
   }
 
   private static boolean isVariable(String part) {
-    return VARIABLE.matcher(part).matches();
+    return part.contains(WILDCARD) || VARIABLE.matcher(part).matches();
   }
 
-  /** 마디 하나: 글자는 그대로, {변수} 는 변수 자리 글. */
+  /** 마디 하나: 글자는 그대로, {변수} 는 변수 자리 글, 와일드카드가 든 마디는 통째로 변수 자리 글. */
   private static String segment(String part) {
+    if (part.contains(WILDCARD)) return VARIABLE_TEXT;
     StringBuilder out = new StringBuilder();
     Matcher m = VARIABLE.matcher(part);
     int at = 0;
@@ -148,15 +151,48 @@ final class FlowRules {
     return false;
   }
 
-  /** 낙타 표기 → 밑줄 표기(userName → user_name). */
+  /** 낙타 표기 → 밑줄 표기(userName → user_name, userID → user_id, XMLParser → xml_parser). */
   static String snake(String camel) {
     StringBuilder out = new StringBuilder();
     for (int i = 0; i < camel.length(); i++) {
       char c = camel.charAt(i);
-      if (Character.isUpperCase(c) && i > 0) out.append('_');
+      if (i > 0 && Character.isUpperCase(c)) {
+        char prev = camel.charAt(i - 1);
+        boolean nextLower = i + 1 < camel.length() && Character.isLowerCase(camel.charAt(i + 1));
+        if (Character.isLowerCase(prev) || Character.isDigit(prev) || (Character.isUpperCase(prev) && nextLower)) out.append('_');
+      }
       out.append(Character.toLowerCase(c));
     }
     return out.toString();
+  }
+
+  /** #{…} · ${…} 매개변수 자리(쉼표 앞 이름 부분). */
+  private static final Pattern PARAM = Pattern.compile("[#$]\\{\\s*([^},]+)");
+  /** 필드 이름이 들어가는 MyBatis 속성 값: 조건식(test · when) · 필드 이름(property · keyProperty). */
+  private static final Pattern FIELD_ATTR = Pattern.compile("\\b(test|property|keyProperty)\\s*=\\s*\"([^\"]*)\"");
+  private static final String TEST_ATTR = "test";
+
+  /**
+   * 매퍼 XML 글에서 field 를 쓴 곳이 있으면 true: #{…} · ${…} 이름의 마지막 마디, property · keyProperty 값의 마지막 마디,
+   * test 조건식의 낱말. 태그 이름 · 다른 속성 · SQL 낱말은 보지 않는다.
+   */
+  static boolean usesField(CharSequence xml, String field) {
+    Matcher m = PARAM.matcher(xml);
+    while (m.find()) {
+      if (lastPart(m.group(1)).equals(field)) return true;
+    }
+    Matcher a = FIELD_ATTR.matcher(xml);
+    while (a.find()) {
+      String v = a.group(2);
+      if (TEST_ATTR.equals(a.group(1)) ? hasWord(v, field) : lastPart(v).equals(field)) return true;
+    }
+    return false;
+  }
+
+  /** 「a.b.c」 의 「c」(앞뒤 공백 뺌). */
+  private static String lastPart(String name) {
+    String t = name.trim();
+    return t.substring(t.lastIndexOf('.') + 1);
   }
 
   /** text 에 word 가 이름 하나로(앞뒤가 글자 · 숫자 · _ · $ 가 아님) 대소문자 무시하고 나오면 true. 빈 word 는 false. */

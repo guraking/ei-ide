@@ -461,15 +461,10 @@ public final class CodeFlowView {
       if (fronts.isEmpty()) {
         api.note = EiDbBundle.message("codeflow.note.no.front");
       } else {
-        List<Set<String>> tokens = new ArrayList<>();
-        for (CodeFlow.Front f : fronts) {
-          indicator.checkCanceled();
-          tokens.add(FlowRules.tokens(f.text()));
-        }
         for (CodeFlow.Api a : apis) {
           indicator.checkCanceled();
           Pattern p = FlowRules.frontPattern(a.url());
-          if (p == null || called(p, FlowRules.literalTokens(a.url()), fronts, tokens)) continue;
+          if (p == null || called(p, a, fronts)) continue;
           api.kids.add(new CodeFlow.Item(a.label(), a.where(), AllIcons.Nodes.Method, new CodeFlow.PsiNav(a.method())));
         }
         api.note = EiDbBundle.message("codeflow.note.count", api.kids.size());
@@ -508,9 +503,9 @@ public final class CodeFlowView {
     }
 
     /** 낱말 조각이 모두 든 화면 파일에서만 정규식을 돌린다(파일 수 × URL 수만큼 글 전체를 훑지 않게). */
-    private static boolean called(Pattern p, List<String> need, List<CodeFlow.Front> fronts, List<Set<String>> tokens) {
-      for (int i = 0; i < fronts.size(); i++) {
-        if (tokens.get(i).containsAll(need) && FlowRules.find(p, fronts.get(i).text()) >= 0) return true;
+    private static boolean called(Pattern p, CodeFlow.Api api, List<CodeFlow.Front> fronts) {
+      for (CodeFlow.Front f : fronts) {
+        if (f.mayCall(api) && FlowRules.find(p, f.text()) >= 0) return true;
       }
       return false;
     }
