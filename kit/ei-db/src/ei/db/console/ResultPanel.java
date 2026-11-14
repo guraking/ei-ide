@@ -734,18 +734,36 @@ final class ResultPanel extends SimpleToolWindowPanel {
   private void exportCsv() {
     Path path = askSavePath(EiDbBundle.message("result.csv.export"), EiDbBundle.message("result.csv.export.description"), "csv");
     if (path == null) return;
-    StringBuilder sb = new StringBuilder(BOM);
-    appendCsvLine(sb, List.copyOf(result.columns()));
-    for (List<Object> row : visibleRows()) appendCsvLine(sb, row);
-    String csv = sb.toString();
-    ApplicationManager.getApplication().executeOnPooledThread(() -> {
-      try {
-        Files.writeString(path, csv, StandardCharsets.UTF_8);
-        Notify.info(project, EiDbBundle.message("result.csv.saved", path));
-      } catch (IOException e) {
-        Notify.error(project, EiDbBundle.message("result.csv.failed", e.getMessage()));
-      }
+    wholeResultThen(rows -> {
+      StringBuilder sb = new StringBuilder(BOM);
+      appendCsvLine(sb, List.copyOf(result.columns()));
+      for (List<Object> row : rows) appendCsvLine(sb, row);
+      String csv = sb.toString();
+      ApplicationManager.getApplication().executeOnPooledThread(() -> {
+        try {
+          Files.writeString(path, csv, StandardCharsets.UTF_8);
+          Notify.info(project, EiDbBundle.message("result.csv.saved", path));
+        } catch (IOException e) {
+          Notify.error(project, EiDbBundle.message("result.csv.failed", e.getMessage()));
+        }
+      });
     });
+  }
+
+  /**
+   * 내보낼 행을 정해 use 에 넘긴다(화면 스레드). 화면에 일부만 읽힌 결과(「더 보기」가 남은 결과)이고 찾기 칸으로 거르지 않았으면
+   * 같은 문장을 MAX_ROW_LIMIT 건까지 다시 읽은 조회 결과 전체를(화면의 표는 그대로 둔다), 아니면 화면에 보이는 행을 넘긴다.
+   * 다시 읽고도 남으면 넘긴 건수를 알린다. 다시 읽기가 실패 · 취소되면 use 를 부르지 않는다.
+   */
+  private void wholeResultThen(java.util.function.Consumer<List<List<Object>>> use) {
+    if (result.truncated() && rereadable && result.rows().size() < DbSessions.MAX_ROW_LIMIT && searchBox.getText().isBlank()) {
+      SqlRunner.reread(project, config, result.sql(), result.binds(), DbSessions.MAX_ROW_LIMIT, more -> {
+        if (more.truncated()) Notify.warning(project, EiDbBundle.message("result.export.cut", more.rows().size()));
+        use.accept(more.rows());
+      });
+      return;
+    }
+    use.accept(visibleRows());
   }
 
   /**
@@ -857,16 +875,15 @@ final class ResultPanel extends SimpleToolWindowPanel {
   private void exportXlsx() {
     Path path = askSavePath(EiDbBundle.message("result.excel.export"), EiDbBundle.message("result.excel.export.description"), "xlsx");
     if (path == null) return;
-    List<List<Object>> rows = visibleRows();
     List<String> comments = commentRow();
-    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+    wholeResultThen(rows -> ApplicationManager.getApplication().executeOnPooledThread(() -> {
       try {
         XlsxExport.write(path, result.columns(), comments, rows);
         Notify.info(project, EiDbBundle.message("result.excel.saved", path));
       } catch (IOException e) {
         Notify.error(project, EiDbBundle.message("result.excel.failed", e.getMessage()));
       }
-    });
+    }));
   }
 
   /** 칼럼 순서대로 한글 주석(없으면 빈 글자). 주석이 하나도 없으면 null. */
