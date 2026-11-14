@@ -70,7 +70,12 @@ final class ErdCanvas extends JComponent {
   private static final int GAP_X = 90;
   private static final int GAP_Y = 30;
   private static final int MARGIN = 30;
-  private static final int MAX_PER_COLUMN = 8;
+  /** 한 줄에 쌓는 카드 수의 최소. 표가 이보다 많으면 √(표 수)개까지 늘려 그림이 옆으로만 길어지지 않게 한다. */
+  private static final int MIN_PER_COLUMN = 8;
+  /** 다섯 토막 길에서 해 보는 가로 줄 후보 수(가까운 순). 표가 많을 때 선 하나 찾는 데 드는 일을 묶는다. 다 막히면 맨 아래 빈 줄로 간다. */
+  private static final int MAX_CHANNELS = 24;
+  /** 선을 그릴지 볼 때 꺾은선 상자에 더하는 여유(관계 이름표가 선 밖으로 나오는 폭). */
+  private static final int LABEL_SLACK = MAX_CARD_W / 2;
   private static final int DETOUR = 24;
   private static final int ARROW = 7;
   private static final int TRACK = 8;       // 같은 틈을 지나는 세로 선끼리의 간격
@@ -95,6 +100,11 @@ final class ErdCanvas extends JComponent {
   private final List<Card> cards = new ArrayList<>();
   private final Map<String, Card> byName = new HashMap<>();
   private final List<Meta.ForeignKey> fks;
+  /** 그리는 관계(FK 이름으로 묶은 선). 카드 · FK 가 바뀌지 않으므로 한 번만 묶는다. */
+  private final List<List<Meta.ForeignKey>> groups;
+  /** groups 와 같은 순서의 꺾은선. 배치가 바뀌면 null 로 두고 다음 그리기에서 한 번 다시 찾는다. */
+  private List<List<Point>> routes;
+  private boolean dragged;
   private final Consumer<String> onOpenTable;
   private boolean keysOnly;
   private double zoom = 1.0;
@@ -106,13 +116,23 @@ final class ErdCanvas extends JComponent {
     this.cards.addAll(cards);
     for (Card c : cards) byName.put(c.table.name(), c);
     this.fks = fks;
+    this.groups = new ArrayList<>(groupedFks().values());
     this.onOpenTable = onOpenTable;
     setToolTipText("");
     setOpaque(true);
     MouseAdapter mouse = new MouseAdapter() {
       @Override public void mousePressed(MouseEvent e) { press(e); }
       @Override public void mouseDragged(MouseEvent e) { drag(e); }
-      @Override public void mouseReleased(MouseEvent e) { dragOffset = null; panStart = null; }
+      @Override public void mouseReleased(MouseEvent e) {
+        dragOffset = null;
+        panStart = null;
+        // 끄는 동안에는 그 카드의 선만 다시 찾았으므로, 놓으면 다른 선이 새 자리를 피하도록 전부 다시 찾는다.
+        if (dragged) {
+          dragged = false;
+          routes = null;
+          repaint();
+        }
+      }
       @Override public void mouseClicked(MouseEvent e) {
         Card c = cardAt(logical(e.getPoint()));
         if (c != null && e.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(e)) onOpenTable.accept(c.table.name());
@@ -147,7 +167,8 @@ final class ErdCanvas extends JComponent {
     List<String[]> edges = new ArrayList<>();
     for (Meta.ForeignKey fk : fks) edges.add(new String[] {fk.fkTable(), fk.pkTable()});
     int x = MARGIN;
-    for (List<String> column : ErdLayout.columns(names, edges, MAX_PER_COLUMN)) {
+    int perColumn = Math.max(MIN_PER_COLUMN, (int) Math.ceil(Math.sqrt(cards.size())));
+    for (List<String> column : ErdLayout.columns(names, edges, perColumn)) {
       int y = MARGIN;
       int width = 0;
       for (String n : column) {
@@ -159,6 +180,7 @@ final class ErdCanvas extends JComponent {
       }
       x += width + GAP_X;
     }
+    routes = null;
     resize();
   }
 
@@ -206,7 +228,7 @@ final class ErdCanvas extends JComponent {
   int tableCount() { return cards.size(); }
 
   /** 그려지는 관계(선) 수. 복합키는 하나로 센다. */
-  int relationCount() { return groupedFks().size(); }
+  int relationCount() { return groups.size(); }
 
   // ---- 마우스 ----
 
@@ -238,6 +260,8 @@ final class ErdCanvas extends JComponent {
       Point p = logical(e.getPoint());
       selected.x = Math.max(0, p.x - dragOffset.x);
       selected.y = Math.max(0, p.y - dragOffset.y);
+      dragged = true;
+      rerouteSelected();
       resize();
     } else if (panStart != null && getParent() instanceof JViewport vp) {
       Point now = e.getLocationOnScreen();
@@ -301,9 +325,45 @@ final class ErdCanvas extends JComponent {
   private void paintDiagram(Graphics2D g) {
     g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
     g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+    if (routes == null) routes = allRoutes();
+    Rectangle area = g.getClipBounds();
+    for (int i = 0; i < groups.size(); i++) {
+      List<Point> path = routes.get(i);
+      if (area == null || area.intersects(pathBounds(path))) paintFk(g, groups.get(i), path);
+    }
+    for (Card c : cards) if (area == null || area.intersects(c.bounds())) paintCard(g, c);
+  }
+
+  /** 모든 관계의 꺾은선. 같은 틈을 지나는 세로 토막은 tracks 로 비켜 놓는다. */
+  private List<List<Point>> allRoutes() {
     Map<Integer, Integer> tracks = new HashMap<>();
-    for (List<Meta.ForeignKey> group : groupedFks().values()) paintFk(g, group, tracks);
-    for (Card c : cards) paintCard(g, c);
+    List<List<Point>> out = new ArrayList<>();
+    for (List<Meta.ForeignKey> group : groups) out.add(route(group, tracks));
+    return out;
+  }
+
+  /** 끄는 카드에 붙은 선만 다시 찾는다. 비키기(tracks)는 놓을 때 전부 다시 찾으면서 맞춘다. */
+  private void rerouteSelected() {
+    if (routes == null) return;
+    for (int i = 0; i < groups.size(); i++) {
+      Meta.ForeignKey fk = groups.get(i).get(0);
+      if (byName.get(fk.fkTable()) == selected || byName.get(fk.pkTable()) == selected) routes.set(i, route(groups.get(i), new HashMap<>()));
+    }
+  }
+
+  private List<Point> route(List<Meta.ForeignKey> group, Map<Integer, Integer> tracks) {
+    Meta.ForeignKey fk = group.get(0);
+    Card child = byName.get(fk.fkTable());
+    Card parent = byName.get(fk.pkTable());
+    return route(child, parent, rowY(child, fk.fkColumn()), rowY(parent, fk.pkColumn()), tracks);
+  }
+
+  /** 꺾은선을 감싸는 상자에 관계 이름표 · 화살촉 여유를 더한 것(보이는 곳만 그릴 때 쓴다). */
+  private static Rectangle pathBounds(List<Point> path) {
+    Rectangle r = new Rectangle(path.get(0));
+    for (Point p : path) r.add(p);
+    r.grow(LABEL_SLACK, ROW);
+    return r;
   }
 
   /** FK 이름(없으면 자식 · 부모 · 칼럼)으로 묶는다. */
@@ -324,14 +384,13 @@ final class ErdCanvas extends JComponent {
     return c.y + HEAD / 2;
   }
 
-  private void paintFk(Graphics2D g, List<Meta.ForeignKey> group, Map<Integer, Integer> tracks) {
+  private void paintFk(Graphics2D g, List<Meta.ForeignKey> group, List<Point> path) {
     Meta.ForeignKey fk = group.get(0);
     Card child = byName.get(fk.fkTable());
     Card parent = byName.get(fk.pkTable());
     boolean hot = selected != null && (selected == child || selected == parent);
     g.setColor(hot ? Ui.SELECTION : Ui.muted());
     g.setStroke(new BasicStroke(hot ? 2f : 1.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-    List<Point> path = route(child, parent, rowY(child, fk.fkColumn()), rowY(parent, fk.pkColumn()), tracks);
     g.draw(rounded(path));
 
     Point end = path.get(path.size() - 1);
@@ -439,8 +498,9 @@ final class ErdCanvas extends JComponent {
     }
     int mid = (sy + ey) / 2;
     ys.sort(Comparator.comparingInt(y -> Math.abs(y - mid)));
-    ys.add(bottom + GAP_Y / 2);
-    return ys;
+    List<Integer> out = new ArrayList<>(ys.subList(0, Math.min(ys.size(), MAX_CHANNELS)));
+    out.add(bottom + GAP_Y / 2);
+    return out;
   }
 
   /**

@@ -653,6 +653,19 @@ final class DbExplorer extends SimpleToolWindowPanel {
     return out;
   }
 
+  /** 스키마 마디 아래 묶음에 지금 보이는(찾기 칸으로 걸러 남은) 표 이름. 나무 순서, 같은 이름은 한 번만. */
+  private static List<String> shownTables(DefaultMutableTreeNode schema) {
+    java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
+    for (int k = 0; k < schema.getChildCount(); k++) {
+      DefaultMutableTreeNode group = node(schema.getChildAt(k));
+      if (!(group.getUserObject() instanceof Group)) continue;
+      for (int i = 0; i < group.getChildCount(); i++) {
+        if (node(group.getChildAt(i)).getUserObject() instanceof TableItem t) out.add(t.table.name());
+      }
+    }
+    return new ArrayList<>(out);
+  }
+
   // ---- 메뉴 ----
 
   /** 나무 마디의 우클릭 메뉴. 접속 메뉴는 탭(connectionMenu)에 있다. */
@@ -661,6 +674,10 @@ final class DbExplorer extends SimpleToolWindowPanel {
     Object o = n.getUserObject();
     if (o instanceof Schema s) {
       g.add(new Act(EiDbBundle.message("explorer.erd.all"), null, () -> true, () -> ErdView.open(project, s.c(), s.name(), null)));
+      List<String> shown = query().isEmpty() ? List.of() : shownTables(n);
+      if (!shown.isEmpty()) {
+        g.add(new Act(EiDbBundle.message("explorer.erd.filtered", shown.size()), null, () -> true, () -> ErdView.open(project, s.c(), s.name(), shown)));
+      }
       g.add(new Act(EiDbBundle.message("explorer.spec"), AllIcons.ToolbarDecorator.Export, () -> true, () -> exportSpec(s.c(), s.name(), null)));
       return g;
     }
