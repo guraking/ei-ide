@@ -8,5 +8,9 @@
     <reference ref="ei.db.DocComment">
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="KingGura.Workbenches"/>
     </reference>
+    <!-- 편집기 우클릭 「Swagger 주석 만들기」를 「주석 만들기」 아래에 둔다. -->
+    <reference ref="ei.db.SwaggerDoc">
+      <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="ei.db.DocComment"/>
+    </reference>
   </actions>
 </idea-plugin>

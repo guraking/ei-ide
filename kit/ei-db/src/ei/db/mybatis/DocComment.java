@@ -141,6 +141,20 @@ public final class DocComment {
     return w.isEmpty() ? null : d.verbs().get(w.get(0));
   }
 
+  /** 메서드 이름 → 「명사 동사」 제목(「사용자 목록 조회」). 동사를 모르면 명사만, 명사가 없으면 동사만. */
+  static String title(String methodName, Dict d) {
+    String verb = verbOf(methodName, d);
+    String n = subject(methodName, d);
+    if (verb == null) return n;
+    return n.isEmpty() ? verb : n + " " + verb;
+  }
+
+  /** 메서드 이름 첫 낱말의 동사 한 낱말(「건수 조회」는 「조회」). 모르면 null. */
+  static String verbWord(String methodName, Dict d) {
+    String verb = verbOf(methodName, d);
+    return verb == null ? null : verb.substring(verb.lastIndexOf(' ') + 1);
+  }
+
   /** 제네릭을 뗀 단순 형식 이름(List&lt;UserVo&gt; → List, String[] → String[]). */
   static String rawType(String type) {
     int lt = type.indexOf('<');
