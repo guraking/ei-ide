@@ -160,6 +160,10 @@ final class ResultPanel extends SimpleToolWindowPanel {
   private String editTable;
   /** 마지막 왼쪽 누름이 행 번호 칸이었는지(끌어서 여러 행을 고르는 중인지). */
   private boolean rowPick;
+  /** 찾기 칸 조건으로 거른 결과일 때 거르기 전의 조회 문장. 거르지 않았으면 null. */
+  private final String filterBase;
+  /** filterBase 에 붙인 조건 글(찾기 칸에 그대로 보인다). 거르지 않았으면 null. */
+  private final String filterText;
   /** 이 결과의 문장을 다시 실행해도 되는지(조회 문장). 「새로 고침」 단추를 보일지 정한다. */
   private boolean rereadable;
   private String[] editColumns;
@@ -168,7 +172,14 @@ final class ResultPanel extends SimpleToolWindowPanel {
   private boolean loadingEdit;
 
   ResultPanel(Project project, DbConfig c, QueryResult result, String table, String title) {
+    this(project, c, result, table, title, null, null);
+  }
+
+  /** filterBase · filterText: 찾기 칸 조건으로 거른 결과면 거르기 전 문장과 그 조건 글, 아니면 둘 다 null. */
+  ResultPanel(Project project, DbConfig c, QueryResult result, String table, String title, String filterBase, String filterText) {
     super(true, true);
+    this.filterBase = filterBase;
+    this.filterText = filterText;
     this.project = project;
     this.config = c;
     this.result = result;
@@ -413,6 +424,8 @@ final class ResultPanel extends SimpleToolWindowPanel {
     searchBox = new SearchTextField(false);
     searchBox.getTextEditor().getEmptyText().setText(EiDbBundle.message("result.search.hint"));
     searchBox.setToolTipText(EiDbBundle.message("result.search.tooltip"));
+    if (filterText != null) searchBox.setText(filterText);
+    searchBox.getTextEditor().addActionListener(e -> filterByCondition());
     searchBox.addDocumentListener(new DocumentAdapter() {
       @Override protected void textChanged(@NotNull DocumentEvent e) { filter(searchBox.getText()); }
     });
@@ -420,7 +433,8 @@ final class ResultPanel extends SimpleToolWindowPanel {
   }
 
   private void filter(String text) {
-    String needle = text.toLowerCase(Locale.ROOT);
+    // 조건 모양의 글은 Enter 로 DB 에서 거르므로(filterByCondition) 읽어 온 행에서는 찾지 않는다.
+    String needle = ResultFilter.isCondition(text) ? "" : text.toLowerCase(Locale.ROOT);
     sorter.setRowFilter(needle.isEmpty() ? null : new Contains(needle));
     int total = result.rows().size();
     showCount(needle.isEmpty() ? EiDbBundle.message("common.rows", total) : EiDbBundle.message("result.filtered", grid.getRowCount(), total));
@@ -460,7 +474,32 @@ final class ResultPanel extends SimpleToolWindowPanel {
       return;
     }
     SqlRunner.reread(project, c, result.sql(), result.binds(), Math.min(limit, DbSessions.MAX_ROW_LIMIT),
-        more -> replaceWith(new ResultPanel(project, c, more, table, title)));
+        more -> replaceWith(new ResultPanel(project, c, more, table, title, filterBase, filterText)));
+  }
+
+  /**
+   * 찾기 칸에서 Enter: 조건 모양의 글이면 거르기 전 문장에 그 조건을 붙여 DB 에서 다시 읽어 이 탭을 바꾼다.
+   * 칸을 비우고 Enter 면(거른 결과일 때) 거르기 전 문장으로 돌아간다. 글자 찾기 글이면 아무것도 하지 않는다.
+   * 만든 문장이 조회 문장이 아니면(변경 낱말 · 「;」) 실행하지 않고 알린다. 조건의 문법 오류는 DB 오류로 알린다.
+   */
+  private void filterByCondition() {
+    String text = searchBox.getText().strip();
+    String base = filterBase == null ? result.sql() : filterBase;
+    boolean clear = text.isEmpty() && filterBase != null;
+    if (!clear && !ResultFilter.isCondition(text)) return;
+    String sql = clear ? base : ResultFilter.apply(base, text);
+    if (text.contains(";") || !SqlText.isRereadable(sql)) {
+      Notify.error(project, EiDbBundle.message("result.filter.refused"));
+      return;
+    }
+    if (grid.isEditing()) grid.getCellEditor().stopCellEditing();
+    if (hasPending() && Messages.showYesNoDialog(project,
+        EiDbBundle.message(deleted.isEmpty() ? "result.more.discard" : "backup.grid.more.discard", edits.size() + deleted.size()),
+        EiDbBundle.message("result.more.discard.title"), Messages.getWarningIcon()) != Messages.YES) {
+      return;
+    }
+    SqlRunner.reread(project, config, sql, result.binds(), Math.max(result.rows().size(), DbSessions.MAX_ROWS),
+        found -> replaceWith(new ResultPanel(project, config, found, table, title, clear ? null : base, clear ? null : text)));
   }
 
   /** 건수 칸에 쓴 수로 다시 읽는다. 1 ~ MAX_ROW_LIMIT 의 수가 아니면 알리고 읽지 않는다. */
@@ -1032,18 +1071,29 @@ final class ResultPanel extends SimpleToolWindowPanel {
     grid.repaint();
   }
 
-  /** 반영된 DELETE 의 행을 화면 표에서 뺀다: 그 뒤 행들의 고친 값(edits)은 행 번호를 하나씩 당기고, 건수 꼬리표를 고친다. */
-  private void removeRow(int at) {
+  /**
+   * 반영된 DELETE 의 행들을 화면 표에서 뺀다: 남은 행의 고친 값(edits)은 새 행 번호로 옮기고, 건수 꼬리표를 고친다.
+   * 행마다 표를 다시 그리지 않도록 한 번에 빼고 한 번만 알린다.
+   */
+  private void removeRows(List<List<Object>> gone) {
     if (grid.isEditing()) grid.getCellEditor().cancelCellEditing();
-    deleted.remove(result.rows().remove(at));
+    Set<List<Object>> out = Collections.newSetFromMap(new IdentityHashMap<>());
+    out.addAll(gone);
+    List<List<Object>> rows = result.rows();
+    List<List<Object>> kept = new ArrayList<>();
     Map<Integer, Map<Integer, Object>> moved = new TreeMap<>();
-    for (Map.Entry<Integer, Map<Integer, Object>> e : edits.entrySet()) {
-      if (e.getKey() != at) moved.put(e.getKey() > at ? e.getKey() - 1 : e.getKey(), e.getValue());
+    for (int i = 0; i < rows.size(); i++) {
+      if (out.contains(rows.get(i))) continue;
+      if (edits.containsKey(i)) moved.put(kept.size(), edits.get(i));
+      kept.add(rows.get(i));
     }
+    rows.clear();
+    rows.addAll(kept);
+    deleted.removeAll(out);
     edits.clear();
     edits.putAll(moved);
-    ((Model) grid.getModel()).fireTableRowsDeleted(at, at);
-    int total = result.rows().size();
+    ((Model) grid.getModel()).fireTableDataChanged();
+    int total = rows.size();
     showCount(searchBox.getText().isEmpty() ? EiDbBundle.message("common.rows", total) : EiDbBundle.message("result.filtered", grid.getRowCount(), total));
     updateEditButtons();
   }
@@ -1151,27 +1201,43 @@ final class ResultPanel extends SimpleToolWindowPanel {
     }, null, this::endApply);
   }
 
+  /** 「적용」이 DELETE 한 문장에 묶어 보내는 행 수. 행마다 한 문장씩 보내면 행 수만큼 DB 왕복 · 결과 표시가 생겨 느리다. */
+  private static final int DELETE_CHUNK = 200;
+
   /**
-   * applyEdits 의 i 번째 DELETE 를 실행하고, 지워졌으면 그 행을 화면 표에서 뺀다. 지운 행이 0 이면 알리고 멈춘다(지움 표시는 남는다).
-   * updated 는 앞서 반영한 UPDATE 문 수. 모두 끝나면 반영한 문장 수를 알린다.
+   * applyEdits 의 지울 행을 i 번째부터 DELETE_CHUNK 개씩 한 문장으로 지우고, 지워졌으면 그 행들을 화면 표에서 뺀다.
+   * 지운 행 수가 보낸 행 수와 다르면(그 사이 다른 곳에서 지워졌거나 PK 가 바뀜) 알리고 멈춘다: 어느 행이 남았는지 모르므로 지움 표시는 남긴다.
+   * deletes 는 확인창 · 백업에 보인 행별 문장(끝 알림의 건수에만 쓴다). updated 는 앞서 반영한 UPDATE 문 수.
    */
   private void deleteNext(List<List<Object>> doomed, List<SqlText.Update> deletes, int i, int updated) {
-    if (i >= deletes.size()) {
+    if (i >= doomed.size()) {
       Notify.info(project, deletes.isEmpty() ? EiDbBundle.message("result.apply.done", updated)
           : EiDbBundle.message("backup.grid.apply.done", updated + deletes.size(), updated, deletes.size()));
       endApply();
       return;
     }
-    SqlText.Update d = deletes.get(i);
+    List<List<Object>> chunk = doomed.subList(i, Math.min(i + DELETE_CHUNK, doomed.size()));
+    List<String> names = new ArrayList<>();
+    for (int c = 0; c < pkColumns.length; c++) {
+      if (pkColumns[c]) names.add(editColumns[c]);
+    }
+    List<List<Object>> keys = new ArrayList<>();
+    for (List<Object> row : chunk) {
+      List<Object> key = new ArrayList<>();
+      for (int c = 0; c < pkColumns.length; c++) {
+        if (pkColumns[c]) key.add(row.get(c));
+      }
+      keys.add(key);
+    }
+    SqlText.Update d = BackupSql.deleteMany(editTable, names, keys, config.kind);
     SqlRunner.run(project, config, d.sql(), d.binds(), done -> {
-      int row = indexOfRow(doomed.get(i));
-      if (done.updateCount() == 0) {
-        Notify.error(project, EiDbBundle.message("backup.grid.delete.missed", row + 1, updated + i, updated + deletes.size()));
+      if (done.updateCount() != chunk.size()) {
+        Notify.error(project, EiDbBundle.message("backup.grid.delete.mismatch", chunk.size(), Math.max(done.updateCount(), 0)));
         endApply();
         return;
       }
-      if (row >= 0) removeRow(row);
-      deleteNext(doomed, deletes, i + 1, updated);
+      removeRows(chunk);
+      deleteNext(doomed, deletes, i + chunk.size(), updated);
     }, null, this::endApply);
   }
 

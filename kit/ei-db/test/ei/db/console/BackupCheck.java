@@ -279,6 +279,9 @@ public class BackupCheck {
     eq(d.preview(), "DELETE FROM EMP\n WHERE 1 = 1\n   AND ID = 7\n   AND \"Seq\" = 'a''b';\n");
     eq(d.sql(), "DELETE FROM EMP\n WHERE 1 = 1\n   AND ID = ?\n   AND \"Seq\" = ?\n");
     eq(d.binds(), Arrays.asList(new BigDecimal("7"), "a'b"));
+    SqlText.Update many = BackupSql.deleteMany("EMP", List.of("ID", "SUB"), List.of(Arrays.asList(1, "a"), Arrays.asList(2, null)), DbKind.ORACLE);
+    eq(many.sql(), "DELETE FROM EMP\n WHERE (ID = ? AND SUB = ?)\n    OR (ID = ? AND SUB IS NULL)\n");
+    eq(many.binds(), Arrays.asList(1, "a", 2));
     d = BackupSql.delete("EMP", List.of("ID", "SUB"), Arrays.asList(1, null), DbKind.ORACLE);
     eq(d.sql(), "DELETE FROM EMP\n WHERE 1 = 1\n   AND ID = ?\n   AND SUB IS NULL\n");
     eq(d.binds(), List.of(1));
