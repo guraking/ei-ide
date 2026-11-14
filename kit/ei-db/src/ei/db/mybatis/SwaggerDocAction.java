@@ -93,9 +93,10 @@ public final class SwaggerDocAction extends AnAction {
 
   /**
    * 넣을 자리와 재료. method 가 false 면 클래스 @Tag. start ~ end 는 바꿀 범위(새로 넣으면 같은 값), stamp 는 그때의 문서 판.
-   * library 가 false 면 이 모듈에 swagger 어노테이션이 없다.
+   * library 가 false 면 이 모듈에 swagger 어노테이션이 없다. oldFirst · oldDescription 은 바꿀 어노테이션에 적혀 있던
+   * summary(@Tag 는 name) · description 글자 상수(없으면 null)로, 확인 창에 먼저 채운다.
    */
-  private record Target(boolean method, String name, String docLine, List<ParamInfo> params, DocComment.Param body, String bodyType,
+  private record Target(boolean method, String name, String docLine, String oldFirst, String oldDescription, List<ParamInfo> params, DocComment.Param body, String bodyType,
                         String responseType, int start, int end, String indent, boolean replace, long stamp, boolean library) {}
 
   @Override
@@ -186,8 +187,8 @@ public final class SwaggerDocAction extends AnAction {
   /** 확인 창을 띄워 @Operation 글을 만든다. 취소하면 null. */
   private static @Nullable String askOperation(Project project, String title, Target t, DocComment.Dict d) {
     List<SwaggerDocDialog.Row> rows = new ArrayList<>();
-    rows.add(new SwaggerDocDialog.Row(EiDbBundle.message("swaggerdoc.row.summary"), SwaggerDoc.summary(t.docLine(), t.name(), d), true));
-    rows.add(new SwaggerDocDialog.Row(EiDbBundle.message("swaggerdoc.row.description"), SwaggerDoc.description(t.docLine(), t.name(), d), false));
+    rows.add(new SwaggerDocDialog.Row(EiDbBundle.message("swaggerdoc.row.summary"), orElse(t.oldFirst(), SwaggerDoc.summary(t.docLine(), t.name(), d)), true));
+    rows.add(new SwaggerDocDialog.Row(EiDbBundle.message("swaggerdoc.row.description"), orElse(t.oldDescription(), SwaggerDoc.description(t.docLine(), t.name(), d)), false));
     for (ParamInfo p : t.params()) {
       rows.add(new SwaggerDocDialog.Row(EiDbBundle.message("swaggerdoc.row.param", p.name()), DocComment.paramText(p.param(), Map.of(), Map.of(), d), false));
       rows.add(new SwaggerDocDialog.Row(EiDbBundle.message("swaggerdoc.row.example", p.name()), "", false));
@@ -212,10 +213,10 @@ public final class SwaggerDocAction extends AnAction {
 
   /** 확인 창을 띄워 @Tag 글을 만든다. 취소하면 null. */
   private static @Nullable String askTag(Project project, String title, Target t, DocComment.Dict d) {
-    String name = SwaggerDoc.tagName(t.docLine(), t.name(), d);
+    String name = orElse(t.oldFirst(), SwaggerDoc.tagName(t.docLine(), t.name(), d));
     SwaggerDocDialog dialog = new SwaggerDocDialog(project, title, List.of(
         new SwaggerDocDialog.Row(EiDbBundle.message("swaggerdoc.row.tag.name"), name, true),
-        new SwaggerDocDialog.Row(EiDbBundle.message("swaggerdoc.row.description"), SwaggerDoc.tagDescription(name), false)));
+        new SwaggerDocDialog.Row(EiDbBundle.message("swaggerdoc.row.description"), orElse(t.oldDescription(), SwaggerDoc.tagDescription(name)), false)));
     if (!dialog.showAndGet()) return null;
     return SwaggerDoc.tag(dialog.values().get(0), dialog.values().get(1));
   }
@@ -281,7 +282,7 @@ public final class SwaggerDocAction extends AnAction {
       PsiType rt = m.getReturnType();
       responseType = rt == null ? null : schemaClass(rt);
     }
-    return new Target(method, owner.getName(), docLine(owner.getDocComment()), params, body, bodyType, responseType,
+    return new Target(method, owner.getName(), docLine(owner.getDocComment()), literal(old, method ? "summary" : "name"), literal(old, "description"), params, body, bodyType, responseType,
         start, end, indent, old != null, document.getModificationStamp(), library);
   }
 
@@ -290,6 +291,16 @@ public final class SwaggerDocAction extends AnAction {
       if (shortName.equals(shortName(a))) return a;
     }
     return null;
+  }
+
+  /** 어노테이션 속성의 글자 상수. 어노테이션 · 속성이 없거나 상수가 아니거나 비었으면 null. */
+  private static @Nullable String literal(@Nullable PsiAnnotation a, String attribute) {
+    PsiAnnotationMemberValue v = a == null ? null : a.findDeclaredAttributeValue(attribute);
+    return v instanceof PsiLiteralExpression lit && lit.getValue() instanceof String s && !s.isBlank() ? s : null;
+  }
+
+  private static String orElse(@Nullable String first, String second) {
+    return first != null ? first : second;
   }
 
   private static @Nullable PsiAnnotation paramAnnotation(PsiAnnotation[] annotations) {
