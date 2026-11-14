@@ -38,6 +38,7 @@ import com.intellij.openapi.fileEditor.OpenFileDescriptor;
 import com.intellij.openapi.ide.CopyPasteManager;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.JavaPsiFacade;
@@ -72,9 +73,11 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.datatransfer.StringSelection;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.IntConsumer;
 import java.util.function.Supplier;
@@ -141,6 +144,8 @@ final class ErrorPanel extends JPanel {
     private boolean updating;
     // 지금 설명에 그린 오류. 없으면 null.
     private ErrorScan.Item shownItem;
+    // 프로젝트 소스의 클래스로 확인된 로거 이름. 이 로거의 오류에만 「로그를 찍은 곳」 줄을 보인다.
+    private final Set<String> projectLoggers = new HashSet<>();
 
     /**
      * @param consoleEditor 콘솔 편집기(닫혔으면 null)
@@ -366,8 +371,41 @@ final class ErrorPanel extends JPanel {
             return;
         }
         shownItem = item;
+        drawDetail();
+        resolveLogger(item);
+    }
+
+    private void drawDetail() {
+        ErrorScan.Item item = shownItem;
         detail.setText(item == null ? html(esc(BootServersBundle.message(model.isEmpty() ? "errors.empty" : "errors.pick"))) : detailHtml(item));
         detail.setCaretPosition(0);
+    }
+
+    /**
+     * 스택 없는 오류의 로거가 프로젝트 소스의 클래스인지 뒤에서 확인하고, 맞으면 「로그를 찍은 곳」 줄을 넣어 다시 그린다.
+     * 클래스가 아닌 로거 이름(「audit」) · 라이브러리 로거(줄여 찍힌 「o.s.w.s.DispatcherServlet」 포함)는 줄이 나오지 않는다.
+     */
+    private void resolveLogger(ErrorScan.Item item) {
+        String logger = item == null || item.last().frame() != null ? null : item.last().logger();
+        if (logger == null || projectLoggers.contains(logger) || ErrorRules.isFramework(logger)) {
+            return;
+        }
+        ReadAction.nonBlocking(() -> loggerFile(logger) != null)
+                .inSmartMode(project)
+                .expireWith(project)
+                .finishOnUiThread(ModalityState.defaultModalityState(), (Boolean found) -> {
+                    if (found && shownItem == item) {
+                        projectLoggers.add(logger);
+                        drawDetail();
+                    }
+                })
+                .submit(AppExecutorUtil.getAppExecutorService());
+    }
+
+    /** 로거 이름의 클래스가 프로젝트 소스에 있으면 그 파일, 아니면 null. 읽기 동작 안에서 부른다. */
+    private VirtualFile loggerFile(String logger) {
+        VirtualFile file = classFile(logger, true);
+        return file != null && ProjectFileIndex.getInstance(project).isInSourceContent(file) ? file : null;
     }
 
     /**
@@ -397,7 +435,7 @@ final class ErrorPanel extends JPanel {
         if (r.frame() != null) {
             section(b, "errors.our.code", link(LINK_CODE, r.frame().text()));
         }
-        else if (r.logger() != null && !ErrorRules.isFramework(r.logger())) {
+        else if (r.logger() != null && projectLoggers.contains(r.logger())) {
             section(b, "errors.logged.at", link(LINK_LOGGER, r.logger()));
         }
         if (r.mapperId() != null) {
@@ -543,7 +581,7 @@ final class ErrorPanel extends JPanel {
         String logger = r.logger();
         String message = r.rootMessage();
         ReadAction.nonBlocking(() -> {
-                    VirtualFile file = classFile(logger, true);
+                    VirtualFile file = loggerFile(logger);
                     Document doc = file == null ? null : FileDocumentManager.getInstance().getDocument(file);
                     return file == null ? null : new OpenFileDescriptor(project, file,
                             Math.max(0, doc == null ? 0 : SourceFind.logLine(doc.getText(), message)), 0);
