@@ -37,7 +37,6 @@ public final class SqlText {
   private static final Pattern SELECT_FROM = Pattern.compile("SELECT (.+?) FROM (.+)");
   private static final Pattern SELECT_LIST = Pattern.compile(
       "\\*|(" + IDENT + "\\.)?" + IDENT + "( ?, ?(" + IDENT + "\\.)?" + IDENT + ")*");
-  private static final Pattern SCHEMA_TABLE = Pattern.compile(IDENT + "\\.");
   /** 다시 읽어도 되는 문장 안의 변경 낱말(FOR UPDATE 는 조회 잠금이라 뺀다). */
   private static final Pattern DML = Pattern.compile("\\b(INSERT|DELETE|MERGE)\\b|(?<!FOR )\\bUPDATE\\b");
   private static final Pattern READ_START = Pattern.compile("(SELECT|WITH)\\b.*");
@@ -46,7 +45,7 @@ public final class SqlText {
   private static final String TRUNCATED_MARK = "…";
   static final String LOB_EXCLUDED = "-- LOB 칼럼 제외: ";
   private static final Pattern FROM_REST = Pattern.compile(
-      IDENT + "( (?!(WHERE|ORDER|FOR|FETCH|OFFSET|LIMIT)\\b)(AS )?" + IDENT + ")?"
+      "(" + IDENT + "\\.)?" + IDENT + "( (?!(WHERE|ORDER|FOR|FETCH|OFFSET|LIMIT)\\b)(AS )?" + IDENT + ")?"
       + "( (WHERE|ORDER BY|FOR UPDATE|FETCH|OFFSET|LIMIT)\\b.*)?");
 
   /** 따옴표 없이 쓸 수 있는 이름 꼴(대소문자는 따로 본다). */
@@ -307,7 +306,7 @@ public final class SqlText {
 
   /**
    * 조회 문장이 결과 칸 고치기에 맞지 않는 이유. 괜찮으면 null. 주석 · 문자열은 지우고 본다.
-   * 허용: SELECT 하나 · FROM 표 하나(별칭 가능, 스키마 없이)이고 SELECT 목록이 * 이거나 별칭 없는 칼럼 이름(표.칼럼 포함)들.
+   * 허용: SELECT 하나 · FROM 표 하나(별칭 가능, 「스키마.표」 가능)이고 SELECT 목록이 * 이거나 별칭 없는 칼럼 이름(표.칼럼 포함)들.
    * 뒤에는 WHERE · ORDER BY · FOR UPDATE · FETCH · OFFSET · LIMIT 만. 집합 연산 · 하위 조회 · 묶기 · 계층 조회는 막는다.
    */
   static String notEditable(String sql) {
@@ -319,7 +318,6 @@ public final class SqlText {
     Matcher m = SELECT_FROM.matcher(s);
     if (!m.matches()) return "표 하나를 조회한 SELECT 결과만 고칠 수 있습니다.";
     if (!SELECT_LIST.matcher(m.group(1)).matches()) return "SELECT 목록이 * 이거나 별칭 없는 칼럼 이름일 때만 고칠 수 있습니다.";
-    if (SCHEMA_TABLE.matcher(m.group(2)).lookingAt()) return "스키마를 붙인 표는 고칠 수 없습니다(지금 접속 스키마의 표만).";
     if (!FROM_REST.matcher(m.group(2)).matches()) return "여러 표를 조인한 결과는 고칠 수 없습니다(표 하나만).";
     return null;
   }

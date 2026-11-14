@@ -81,7 +81,11 @@ public class SqlTextCheck {
     eq(SqlText.notEditable("SELECT * FROM TB_PART p WHERE p.A = ','"), null);
     eq(SqlText.notEditable("select p.id, name\n  from tb_part p\n where p.a = 'UNION SELECT' order by id;"), null);
     eq(SqlText.notEditable("SELECT * FROM TB_PART -- , TB_ITEM\nWHERE 1 = 1"), null);
-    eq(SqlText.notEditable("SELECT * FROM GPM.TB_PART") != null, true);
+    eq(SqlText.notEditable("SELECT * FROM GPM.TB_PART"), null);
+    eq(SqlText.notEditable("select p.id from gpm.tb_part p where p.a = 1 order by id"), null);
+    eq(SqlText.notEditable("SELECT * FROM GPM.TB_PART, GPM.TB_ITEM") != null, true);
+    eq(SqlText.notEditable("SELECT * FROM DB.GPM.TB_PART") != null, true);
+    eq(SqlText.notEditable("SELECT * FROM GPM.TB_PART@LINK") != null, true);
     eq(SqlText.notEditable("SELECT * FROM TB_PART a, TB_ITEM b WHERE a.X = b.X") != null, true);
     eq(SqlText.notEditable("SELECT * FROM TB_PART a JOIN TB_ITEM b ON a.X = b.X") != null, true);
     eq(SqlText.notEditable("SELECT id,name FROM emp_2023 UNION ALL SELECT id,name FROM emp_2024") != null, true);

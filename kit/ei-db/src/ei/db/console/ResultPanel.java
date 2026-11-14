@@ -27,6 +27,7 @@ import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
 import ei.db.DbConfig;
+import ei.db.DbKind;
 import ei.db.DbSessions;
 import ei.db.EiDbBundle;
 import ei.db.Notify;
@@ -522,8 +523,18 @@ final class ResultPanel extends SimpleToolWindowPanel {
     grid.setRowSelectionInterval(0, grid.getRowCount() - 1);
   }
 
-  /** 칸 오른쪽 누름: 값 · 칼럼 · 행 복사 메뉴. 누른 칸이 골라져 있지 않으면 그 칸만 고른다. */
+  /**
+   * 칸 오른쪽 누름: 값 · 칼럼 · 행 복사 메뉴. 누른 칸이 골라져 있지 않으면 그 칸만 고른다.
+   * 행 번호 칸 왼쪽 누름: 그 행 전체를 고른다(Ctrl · Shift 로 행을 더하는 것은 JTable 이 먼저 처리한다). 행 번호 칸 자신은 복사에 섞이지 않게 뺀다.
+   */
   private void onCell(MouseEvent e) {
+    if (e.getID() == MouseEvent.MOUSE_PRESSED && SwingUtilities.isLeftMouseButton(e) && e.getClickCount() == 1) {
+      int view = grid.columnAtPoint(e.getPoint());
+      if (view >= 0 && grid.rowAtPoint(e.getPoint()) >= 0 && grid.convertColumnIndexToModel(view) == 0 && grid.getColumnCount() > 1) {
+        grid.setColumnSelectionInterval(1, grid.getColumnCount() - 1);
+      }
+      return;
+    }
     if (e.getID() == MouseEvent.MOUSE_PRESSED && SwingUtilities.isLeftMouseButton(e) && e.getClickCount() == 2) {
       int row = grid.rowAtPoint(e.getPoint());
       int view = grid.columnAtPoint(e.getPoint());
@@ -745,26 +756,33 @@ final class ResultPanel extends SimpleToolWindowPanel {
   }
 
   /**
-   * 표 정의 칼럼(스키마 · 따옴표를 뗀 이름으로, 접속 스키마에서). Oracle 은 대문자, PostgreSQL 은 소문자로 저장되므로
-   * 쓴 그대로 · 대문자 · 소문자 순서로 찾는다. 못 찾으면 빈 목록. 화면 스레드에서 부르지 않는다.
+   * 표 정의 칼럼(따옴표를 뗀 이름으로). 조회 문장에 「스키마.표」 로 썼으면 그 스키마에서, 아니면 접속 스키마에서 찾는다.
+   * Oracle 은 대문자, PostgreSQL 은 소문자로 저장되므로 쓴 그대로 · 대문자 · 소문자 순서로 찾는다. 못 찾으면 빈 목록. 화면 스레드에서 부르지 않는다.
    */
   private TableDef tableColumns(DbConfig c, String name) throws Exception {
     String bare = name.substring(name.lastIndexOf('.') + 1).replace("\"", "");
+    ei.db.bench.SqlParts.TableRef ref = FollowRef.singleTable(result.sql());
+    String written = ref != null && ref.schema() != null ? Meta.storedName(c, ref.schema()) : null;
     DbSessions sessions = DbSessions.get(project);
     Connection conn = sessions.connection(c);
     try {
       for (String candidate : new String[]{bare, bare.toUpperCase(Locale.ROOT), bare.toLowerCase(Locale.ROOT)}) {
-        List<Meta.Column> columns = SchemaCache.columns(conn, c, Meta.schemaOf(c), candidate);
-        if (!columns.isEmpty()) return new TableDef(candidate, columns);
+        List<Meta.Column> columns = SchemaCache.columns(conn, c, written != null ? written : Meta.schemaOf(c), candidate);
+        if (!columns.isEmpty()) return new TableDef(written, candidate, columns);
       }
-      return new TableDef(bare, List.of());
+      return new TableDef(written, bare, List.of());
     } finally {
       sessions.endReadTransaction(c);
     }
   }
 
-  /** 찾은 표 이름(저장된 대소문자 그대로)과 그 칼럼. 못 찾으면 칼럼이 빈 목록. */
-  private record TableDef(String name, List<Meta.Column> columns) {}
+  /** 찾은 표 이름(저장된 대소문자 그대로)과 그 칼럼. 못 찾으면 칼럼이 빈 목록. schema 는 문장에 쓴 스키마(저장된 이름), 안 썼으면 null. */
+  private record TableDef(String schema, String name, List<Meta.Column> columns) {
+    /** UPDATE · DELETE · 백업에 쓸 표 표기. 문장에 스키마를 썼으면 「스키마.표」(접속 스키마의 같은 이름 표를 고치지 않게). */
+    String sqlName(DbKind kind) {
+      return (schema == null ? "" : SqlText.ident(kind, schema) + ".") + SqlText.ident(kind, name);
+    }
+  }
 
   /**
    * 칸 두 번 누름: 고치기 시작. 처음엔 표 정의를 뒤에서 읽어 PK 를 찾고, 고칠 수 없으면 이유를 알린다.
@@ -810,7 +828,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
           boolean[] keys = new boolean[result.columns().size()];
           String[] names = new String[keys.length];
           editBlocked = editBlockReason(def.columns(), keys, names);
-          editTable = SqlText.ident(config.kind, def.name());
+          editTable = def.sqlName(config.kind);
           editColumns = names;
           pkColumns = keys;
           missingColumns = countMissing(def.columns());
