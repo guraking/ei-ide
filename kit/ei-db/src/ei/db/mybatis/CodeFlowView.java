@@ -82,6 +82,9 @@ public final class CodeFlowView {
   private static final Logger LOG = Logger.getInstance(CodeFlowView.class);
   private static final String SPLIT_KEY = "ei.db.codeflow.flow.split";
   private static final float SPLIT_PROPORTION = 0.35f;
+  /** 결과 마디가 이 수를 넘으면 처음에 모두 펼치지 않고 EXPAND_LEVELS 깊이만 펼친다(큰 결과에서 화면이 멈추지 않게). */
+  private static final int EXPAND_ALL_MAX = 1000;
+  private static final int EXPAND_LEVELS = 3;
   /** 「전체 펼치기 · 전체 접기」 단추 줄의 자리 이름. */
   private static final String TOOLBAR_PLACE = "EiDbCodeFlow";
 
@@ -230,8 +233,20 @@ public final class CodeFlowView {
     void show(@Nullable CodeFlow.Item root, String empty) {
       getEmptyText().setText(empty);
       setModel(new DefaultTreeModel(root == null ? null : node(root)));
-      // 표 · 영향에서 서비스 → 컨트롤러 → URL 까지 이어진 줄이 바로 보이게 모두 펼친다(마디 수는 CodeFlow 의 한도 안).
-      if (root != null) TreeUtil.expandAll(this);
+      if (root == null) return;
+      // 표 · 영향에서 서비스 → 컨트롤러 → URL 까지 이어진 줄이 바로 보이게 모두 펼친다.
+      if (count(root, 0) <= EXPAND_ALL_MAX) TreeUtil.expandAll(this);
+      else TreeUtil.expand(this, EXPAND_LEVELS);
+    }
+
+    /** item 과 그 아래 마디 수를 seen 에 더해 돌려준다. EXPAND_ALL_MAX 를 넘으면 세기를 멈춘다. */
+    private static int count(CodeFlow.Item item, int seen) {
+      seen++;
+      for (CodeFlow.Item k : item.kids) {
+        if (seen > EXPAND_ALL_MAX) break;
+        seen = count(k, seen);
+      }
+      return seen;
     }
 
     private static DefaultMutableTreeNode node(CodeFlow.Item item) {

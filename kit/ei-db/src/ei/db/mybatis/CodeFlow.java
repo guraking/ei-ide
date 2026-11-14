@@ -111,6 +111,8 @@ final class CodeFlow {
   private static final int MAX_UP_DEPTH = 8;
   /** 인터페이스 메서드 하나에서 찾는 구현 수. */
   private static final int MAX_IMPLS = 5;
+  /** 「위에 나옴」 줄 옆에 적는 URL 수. 넘으면 「외 N개」 로 줄인다. */
+  private static final int MAX_SEEN_LABELS = 3;
   /** 메서드 · 필드 · 클래스 하나에서 모으는 참조 수. */
   private static final int MAX_REFS = 300;
   /** 화면 파일 하나의 크기 상한(묶어 만든 큰 파일은 화면 소스가 아니다). */
@@ -901,7 +903,11 @@ final class CodeFlow {
     /** 다시 나온 메서드 마디: 다시 올라가지 않고 「위에 나옴」 과 먼저 올라가 닿은 URL 을 적는다. 그 URL 들을 돌려준다. */
     private List<Api> seen(Item mi, PsiMethod m) {
       List<Api> found = reached.getOrDefault(m, List.of());
-      mi.note = EiDbBundle.message("codeflow.note.seen") + (found.isEmpty() ? "" : " · " + labels(found));
+      mi.note = EiDbBundle.message("codeflow.note.seen");
+      if (found.isEmpty()) return found;
+      int more = found.size() - MAX_SEEN_LABELS;
+      String shown = labels(more > 0 ? found.subList(0, MAX_SEEN_LABELS) : found);
+      mi.note += " · " + (more > 0 ? EiDbBundle.message("codeflow.note.more", shown, more) : shown);
       return found;
     }
 
