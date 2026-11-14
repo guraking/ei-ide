@@ -58,9 +58,7 @@
         <!-- Moa White: 같은 키 구조로 Islands Light 위에 흰 편집기 · 연회색 창 · 회색 선택 줄을 얹은 테마와 그 에디터 색(부모 Default) -->
         <themeProvider id="Moa White" path="/themes/EIWhite.theme.json" targetUi="islands"/>
         <bundledColorScheme id="Moa White" path="/themes/EIWhite.xml"/>
-        <!-- Moa Forest · Dusk · Steel · Ember · Ink(어둡게, Moa Graphite 와 같은 키 구조) · Moa Slate(밝게, Moa White 와 같은 키 구조): 판 색과 구문 색만 다른 테마와 그 에디터 색 -->
-        <themeProvider id="Moa Forest" path="/themes/MoaForest.theme.json" targetUi="islands"/>
-        <bundledColorScheme id="Moa Forest" path="/themes/MoaForest.xml"/>
+        <!-- Moa Dusk · Steel · Ember · Ink(어둡게, Moa Graphite 와 같은 키 구조) · Moa Slate(밝게, Moa White 와 같은 키 구조): 판 색과 구문 색만 다른 테마와 그 에디터 색 -->
         <themeProvider id="Moa Dusk" path="/themes/MoaDusk.theme.json" targetUi="islands"/>
         <bundledColorScheme id="Moa Dusk" path="/themes/MoaDusk.xml"/>
         <themeProvider id="Moa Slate" path="/themes/MoaSlate.theme.json" targetUi="islands"/>
