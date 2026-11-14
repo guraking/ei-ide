@@ -79,7 +79,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Timestamp;
-import java.awt.font.TextAttribute;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -287,8 +286,26 @@ final class ResultPanel extends SimpleToolWindowPanel {
         Component c = super.prepareRenderer(renderer, row, column);
         Color background = isCellSelected(row, column) ? null : cellBackground(this, row, column);
         if (background != null) c.setBackground(background);
-        if (isDeletedRow(convertRowIndexToModel(row))) c.setFont(struck(c.getFont()));
         return c;
+      }
+
+      // 지움 표시한 행의 취소선은 행 가운데에 선 하나로 긋는다. 칸마다 취소선 글꼴을 만들면
+      // 글꼴 생성과 느린 글자 그리기 경로 때문에 표시한 행이 많을수록 칠하기가 느려진다.
+      @Override
+      protected void paintComponent(@NotNull java.awt.Graphics g) {
+        super.paintComponent(g);
+        if (deleted.isEmpty() || getRowCount() == 0) return;
+        java.awt.Rectangle clip = g.getClipBounds();
+        int first = Math.max(rowAtPoint(clip.getLocation()), 0);
+        int last = rowAtPoint(new java.awt.Point(clip.x, clip.y + clip.height - 1));
+        if (last < 0) last = getRowCount() - 1;
+        int right = Math.min(clip.x + clip.width, getColumnModel().getTotalColumnWidth());
+        g.setColor(getForeground());
+        for (int row = first; row <= last; row++) {
+          if (!isDeletedRow(convertRowIndexToModel(row))) continue;
+          java.awt.Rectangle cell = getCellRect(row, 0, true);
+          g.drawLine(clip.x, cell.y + cell.height / 2, right, cell.y + cell.height / 2);
+        }
       }
     };
     grid.setAutoResizeMode(JTable.AUTO_RESIZE_SUBSEQUENT_COLUMNS);
@@ -1000,10 +1017,6 @@ final class ResultPanel extends SimpleToolWindowPanel {
 
   private boolean isDeletedRow(int modelRow) {
     return !deleted.isEmpty() && modelRow >= 0 && modelRow < result.rows().size() && deleted.contains(result.rows().get(modelRow));
-  }
-
-  private static Font struck(Font font) {
-    return font.deriveFont(Map.of(TextAttribute.STRIKETHROUGH, TextAttribute.STRIKETHROUGH_ON));
   }
 
   /** 표의 칼럼 중 결과 칼럼에 없는 것의 수(대소문자 무시). */
