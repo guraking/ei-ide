@@ -5,6 +5,9 @@ import com.intellij.openapi.actionSystem.ActionManager;
 import com.intellij.openapi.actionSystem.ActionToolbar;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
 
+import com.intellij.ui.OnePixelSplitter;
+
+import javax.swing.JComponent;
 import javax.swing.JPanel;
 import java.awt.BorderLayout;
 
@@ -16,6 +19,8 @@ final class ConsolePanel {
 
     // 도구줄 위치 이름(동작 사용 기록용). IntelliJ RunContentExecutor 와 같은 값.
     private static final String PLACE = "RunContentExecutor";
+    // 옆 칸이 있을 때 콘솔이 처음 차지할 비율. 그 뒤에는 사용자가 끈 비율을 기억한다.
+    private static final float SIDE_PROPORTION = 0.7f;
 
     private ConsolePanel() {
     }
@@ -27,6 +32,20 @@ final class ConsolePanel {
         ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar(PLACE, actions, false);
         toolbar.setTargetComponent(panel);
         panel.add(toolbar.getComponent(), BorderLayout.WEST);
+        return panel;
+    }
+
+    /**
+     * create 와 같되 콘솔 오른쪽에 side 를 둔다. 둘 사이는 끌 수 있고 비율을 splitKey 로 기억한다. 화면 스레드에서 부른다.
+     */
+    static JPanel create(ConsoleView console, DefaultActionGroup actions, JComponent side, String splitKey) {
+        JPanel panel = create(console, actions);
+        panel.remove(console.getComponent());
+        OnePixelSplitter split = new OnePixelSplitter(false, splitKey, SIDE_PROPORTION);
+        split.setHonorComponentsMinimumSize(false);
+        split.setFirstComponent(console.getComponent());
+        split.setSecondComponent(side);
+        panel.add(split, BorderLayout.CENTER);
         return panel;
     }
 

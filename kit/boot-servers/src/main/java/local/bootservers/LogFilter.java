@@ -29,6 +29,21 @@ public final class LogFilter {
         public static final Resume START = new Resume(0, 0, null);
     }
 
+    /** 묶음 머리 줄의 칸({@link LogFields}). */
+    public enum Field { THREAD, LOGGER, REQUEST }
+
+    /** 칸 거르기 하나: include 면 그 칸이 value 인 묶음만, 아니면 그 칸이 value 인 묶음을 뺀다. 같은 칸의 include 가 여럿이면 그 가운데 하나면 된다. */
+    public record FieldRule(Field field, String value, boolean include) {
+        /** 묶음 머리 칸에서 이 규칙의 칸 값. */
+        static String valueOf(Field field, LogFields fields) {
+            return switch (field) {
+                case THREAD -> fields.thread();
+                case LOGGER -> fields.logger();
+                case REQUEST -> fields.requestId();
+            };
+        }
+    }
+
     /** 거른 줄과 다음 이어 거르기 지점. */
     public record Result(List<Line> lines, Resume resume) {}
 
@@ -95,6 +110,16 @@ public final class LogFilter {
      * @throws java.util.regex.PatternSyntaxException regex 가 참이고 query 가 잘못된 정규식일 때
      */
     public static Result filterFrom(CharSequence text, Resume from, Set<Level> levels, String query, boolean regex) {
+        return filterFrom(text, from, levels, query, regex, List.of());
+    }
+
+    /**
+     * 칸 거르기(rules)까지 더해 거른다. 칸은 묶음 첫 줄에서 읽는다. 규칙이 비면 위 filterFrom 과 같다.
+     *
+     * @throws java.util.regex.PatternSyntaxException regex 가 참이고 query 가 잘못된 정규식일 때
+     */
+    public static Result filterFrom(CharSequence text, Resume from, Set<Level> levels, String query, boolean regex,
+                                    List<FieldRule> rules) {
         Pattern pattern = query.isEmpty() || !regex ? null : Pattern.compile(query, Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
         String needle = query.toLowerCase(Locale.ROOT);
         List<Line> out = new ArrayList<>();
@@ -108,7 +133,7 @@ public final class LogFilter {
             Level own = levelOf(line);
             Level next = own != null ? own : continuationLevel(line, groupLevel);
             if (own != null || next != groupLevel) {
-                emit(group, groupLevel, levels, needle, pattern, out);
+                emit(group, groupLevel, levels, needle, pattern, rules, out);
                 group.clear();
                 if (i < lines.length - 1) {
                     resume = new Resume(from.line() + i, offset, groupLevel);
@@ -118,7 +143,7 @@ public final class LogFilter {
             group.add(new Line(from.line() + i, line, groupLevel));
             offset += line.length() + 1;
         }
-        emit(group, groupLevel, levels, needle, pattern, out);
+        emit(group, groupLevel, levels, needle, pattern, rules, out);
         return new Result(out, resume);
     }
 
@@ -140,14 +165,45 @@ public final class LogFilter {
         return groupLevel;
     }
 
-    private static void emit(List<Line> group, Level level, Set<Level> levels, String needle, Pattern pattern, List<Line> out) {
+    private static void emit(List<Line> group, Level level, Set<Level> levels, String needle, Pattern pattern,
+                             List<FieldRule> rules, List<Line> out) {
         if (group.isEmpty()) {
             return;
         }
         boolean levelOk = level == null ? levels.size() == Level.values().length : levels.contains(level);
-        if (levelOk && anyMatch(group, needle, pattern)) {
+        if (levelOk && fieldsMatch(group.get(0).text(), rules) && anyMatch(group, needle, pattern)) {
             out.addAll(group);
         }
+    }
+
+    /** 같은 칸의 include 가운데 하나에 맞고, exclude 어느 것에도 걸리지 않는가. 칸을 못 읽은 묶음은 include 가 있는 칸에서 빠진다. */
+    static boolean fieldsMatch(String head, List<FieldRule> rules) {
+        if (rules.isEmpty()) {
+            return true;
+        }
+        LogFields fields = LogFields.of(head);
+        for (Field field : Field.values()) {
+            String value = FieldRule.valueOf(field, fields);
+            boolean anyInclude = false;
+            boolean included = false;
+            for (FieldRule rule : rules) {
+                if (rule.field() != field) {
+                    continue;
+                }
+                boolean same = rule.value().equals(value);
+                if (rule.include()) {
+                    anyInclude = true;
+                    included |= same;
+                }
+                else if (same) {
+                    return false;
+                }
+            }
+            if (anyInclude && !included) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static boolean anyMatch(List<Line> group, String needle, Pattern pattern) {

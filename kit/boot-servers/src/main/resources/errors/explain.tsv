@@ -1,0 +1,158 @@
+# 오류 탭 한국어 설명. 한 줄 = 정규식 \t 제목 \t 설명 \t 짧은 예. 위 줄이 먼저다(구체적인 것을 위에). 설명 · 예의 $1~$9 는 정규식 묶음 값.
+# 먼저 가장 안쪽 원인(시작 실패면 Description)에 맞추고, 없으면 오류 묶음 전체 글에 맞춘다.
+(?:Web server failed to start\. )?Port (\d+) was already in use	포트 사용 중	포트 $1 을 다른 프로그램이 이미 쓰고 있어요. 먼저 켠 서버를 끄거나 server.port 를 바꾸세요.	서버 창에서 같은 서버가 이미 실행 중인지 보세요. 아니면 server.port: 8081
+Address already in use	포트 사용 중	쓰려는 포트를 다른 프로그램이 이미 쓰고 있어요. 먼저 켠 서버를 끄거나 포트를 바꾸세요.	server.port: 8081
+Failed to configure a DataSource: '(\w+)' attribute is not specified	DB 접속 설정 없음	DB 접속 설정($1)이 없어요. application.yml 의 spring.datasource 를 보거나, 켜진 프로필(spring.profiles.active)이 맞는지 확인하세요.	spring.datasource.url: jdbc:oracle:thin:@host:1521/SVC
+Failed to determine a suitable driver class|Cannot determine embedded database driver class	DB 드라이버 없음	DB 드라이버를 정하지 못했어요. url 이 비었거나 드라이버 의존성(ojdbc · postgresql)이 빠졌어요.	pom.xml 에 com.oracle.database.jdbc:ojdbc11
+required a bean of type '([^']+)' that could not be found	빈(Bean) 없음	$1 형의 빈을 찾지 못했어요. 클래스에 @Service · @Repository · @Mapper 가 붙었는지, 패키지가 @SpringBootApplication 아래에 있는지 보세요.	com.x.App 아래 com.x.user.UserService 에 @Service
+No qualifying bean of type '([^']+)' available: expected single matching bean but found (\d+)	같은 형 빈 여러 개	$1 형 빈이 $2 개라 어느 것을 쓸지 몰라요. 하나에 @Primary 를 붙이거나 받는 쪽에 @Qualifier 를 쓰세요.	@Qualifier("mainDataSource")
+required a single bean, but (\d+) were found	같은 형 빈 여러 개	같은 형 빈이 $1 개라 어느 것을 쓸지 몰라요. 하나에 @Primary 를 붙이거나 @Qualifier 를 쓰세요.	@Primary @Bean DataSource mainDataSource()
+No qualifying bean of type '([^']+)'	빈(Bean) 없음	$1 형의 빈을 찾지 못했어요. 어노테이션(@Service 등)과 스캔 범위를 보세요.	@Service public class UserService
+dependencies of some of the beans in the application context form a cycle|circular reference|Requested bean is currently in creation	빈 순환 참조	빈끼리 서로를 물고 있어요(A 가 B 를, B 가 A 를 필요로 함). 한쪽을 @Lazy 로 받거나 구조를 나누세요.	A(B b) 와 B(A a) 가 서로 생성자로 받음
+Could not resolve placeholder '([^']+)'	설정값 없음	설정값 $1 이 없어요. application.yml 이나 지금 켠 프로필 설정에 넣으세요.	$1: 값
+Failed to bind properties under '([^']+)'	설정값 형 틀림	설정값 $1 을 읽지 못했어요. 값의 형(숫자 · 시간)이나 yml 들여쓰기를 보세요.	server.port: 80a0 → 8080
+mapping values are not allowed here|while parsing a block mapping|while scanning a simple key|found character '\\t'	yml 문법 오류	application.yml 의 들여쓰기나 콜론이 틀렸어요. 탭 대신 공백을 쓰고, 「이름: 값」 사이에 공백 하나를 두세요.	port:8080 → port: 8080
+Config data resource '([^']+)' .*does not exist|ConfigDataResourceNotFoundException	설정 파일 없음	설정 파일을 찾지 못했어요. spring.config.import 나 프로필 이름을 보세요.	application-local.yml 이 resources 아래에 있는지
+Ambiguous mapping\. Cannot map '([^']+)' method	URL 겹침	같은 URL 을 두 메서드가 맡고 있어요($1). 한쪽 @RequestMapping 주소를 바꾸세요.	@GetMapping("/user") 가 두 컨트롤러에 있음
+ConflictingBeanDefinitionException: Annotation-specified bean name '([^']+)'	빈 이름 겹침	빈 이름 $1 이 겹쳐요. 같은 이름의 클래스가 두 패키지에 있어요. 한쪽에 @Service("다른이름") 을 주세요.	a.UserService · b.UserService
+BeanDefinitionOverrideException|bean with that name has already been defined	빈 이름 겹침	같은 이름의 빈이 두 번 정의됐어요. 하나를 지우거나 이름을 바꾸세요.	@Bean 메서드 이름이 두 설정 클래스에서 같음
+Unable to start web server	웹 서버 시작 실패	웹 서버(톰캣)를 켜지 못했어요. 아래 원인을 보세요.	포트 사용 중 · 서블릿 설정 오류
+Invalid bound statement \(not found\): ([\w$.]+)	매퍼 문장 없음	매퍼 XML 에 이 문장이 없어요: $1. XML 의 namespace · id 가 인터페이스 · 메서드 이름과 같은지, XML 이 mapper-locations 에 들어가는지 보세요.	<mapper namespace="com.x.UserMapper"> <select id="selectUser">
+There is no getter for property named '([^']+)' in '([^']+)'	파라미터 이름 틀림	#{$1} 을 $2 에서 찾지 못했어요. 파라미터 이름이나 VO 필드 이름을 확인하세요.	인자가 여럿이면 @Param("$1")
+Parameter '([^']+)' not found\. Available parameters are \[([^\]]*)\]	파라미터 이름 틀림	#{$1} 이라는 파라미터가 없어요. 쓸 수 있는 이름은 $2 예요. 인터페이스 인자에 @Param("$1") 을 붙이세요.	select(@Param("$1") String $1)
+Expected one result \(or null\) to be returned by selectOne\(\), but found: (\d+)	결과가 여러 행	한 행을 기대했는데 $1 행이 나왔어요. 조건을 좁히거나 List 로 받으세요.	UserVo select → List<UserVo> select
+Mapped Statements collection already contains value for ([\w$.]+)	매퍼 id 겹침	같은 id 의 문장이 두 번 있어요: $1. XML 두 곳에 같은 id 가 있는지 보세요.	<select id="selectUser"> 가 두 번
+Mapped Statements collection does not contain value for ([\w$.]+)	매퍼 문장 없음	매퍼 XML 에 이 문장이 없어요: $1.	namespace · id 확인
+Result Maps collection does not contain value for ([\w$.]+)	resultMap 없음	resultMap $1 이 없어요. id 오타나 다른 XML 의 것이면 namespace 를 앞에 붙이세요.	resultMap="com.x.UserMapper.userMap"
+Could not resolve type alias '([^']+)'	형 별칭 모름	형 별칭 $1 을 모르겠어요. 클래스 전체 이름을 쓰거나 type-aliases-package 를 확인하세요.	resultType="com.x.UserVo"
+invalid comparison: ([\w.]+) and ([\w.]+)	동적 SQL 비교 오류	동적 SQL 조건에서 $1 와 $2 를 비교했어요. 날짜 · 숫자를 '' 와 비교하면 나요.	<if test="regDt != null and regDt != ''"> 에서 날짜면 != '' 를 빼세요
+Error setting null for parameter|Invalid column type|부적합한 열 유형|jdbcType=OTHER	null 값 형 모름	null 값을 넘길 때 DB 가 형을 몰라서 나요. #{값,jdbcType=VARCHAR} 처럼 jdbcType 을 적으세요.	#{userNm,jdbcType=VARCHAR}
+No constructor found in ([\w$.]+)	결과 담을 생성자 없음	결과를 담을 $1 에 맞는 생성자가 없어요. 기본 생성자를 넣거나 칼럼 수에 맞추세요.	@NoArgsConstructor
+Error parsing Mapper XML|Error creating document instance|XML document structures must start and end	매퍼 XML 문법 오류	매퍼 XML 에 문법 오류가 있어요. 닫히지 않은 태그나 < > 를 보세요. 부등호는 CDATA 로 감싸세요.	<![CDATA[ A < B ]]>
+Error evaluating expression '([^']+)'	동적 SQL 식 오류	동적 SQL 식 $1 을 계산하지 못했어요. 필드 이름 오타나 null 인 값의 메서드를 불렀는지 보세요.	<if test="list != null and list.size() > 0">
+ORA-00942	표 없음	표(또는 뷰)가 없거나 볼 권한이 없어요. 표 이름 · 스키마(OWNER.TABLE) · 권한을 확인하세요.	SELECT * FROM TB_USER → 다른 스키마면 HR.TB_USER
+ORA-00904: ?([^\r\n]*)	칼럼 이름 틀림	칼럼 이름이 틀렸어요: $1. 표에 없는 칼럼이거나 오타, 별칭을 잘못 붙였어요.	USER_NM → 실제 칼럼이 USER_NAME 인지
+ORA-00001	중복 키	같은 키 값이 이미 있어요. 기본 키나 UNIQUE 칼럼에 같은 값을 또 넣었어요.	INSERT 전에 같은 ID 가 있는지 보거나 시퀀스 값을 확인
+ORA-01400: [^(\r\n]*\(([^)]*)\)	빈 값 넣음(NOT NULL)	꼭 넣어야 하는 칼럼 $1 에 값이 비어 있어요.	#{userNm} 이 null 로 넘어갔는지
+ORA-01407: [^(\r\n]*\(([^)]*)\)	빈 값으로 바꿈(NOT NULL)	꼭 있어야 하는 칼럼 $1 을 null 로 바꾸려 했어요.	UPDATE ... SET USER_NM = NULL
+ORA-12899	값이 너무 김	칼럼에 넣는 값이 칼럼 길이보다 길어요. 한글은 한 글자를 2~3 바이트로 셀 수 있어요.	VARCHAR2(10 BYTE) 칼럼에 한글 4글자 이상
+ORA-01722	숫자가 아님	숫자 칼럼에 숫자가 아닌 글자를 넣거나 비교했어요.	WHERE NUM_COL = 'A01' 또는 '1,000'
+ORA-01438	숫자 자리 넘침	숫자 칼럼의 자리수보다 큰 값을 넣었어요.	NUMBER(5,2) 에 1000
+ORA-0(?:1861|1858|1843|1847|1830|1839|1841)	날짜 형식 틀림	날짜 글자가 형식과 맞지 않아요. TO_DATE 의 형식을 값에 맞추세요.	TO_DATE('2026-11-14', 'YYYY-MM-DD')
+ORA-02291	부모 값 없음(외래 키)	참조하는 부모 표에 없는 값을 넣었어요. 부모 행을 먼저 넣으세요.	DEPT 에 없는 DEPT_ID 로 EMP INSERT
+ORA-02292	자식 행 있음(외래 키)	이 행을 참조하는 자식 행이 있어 지울 수 없어요. 자식 행을 먼저 지우세요.	EMP 가 남은 DEPT 를 DELETE
+ORA-00933	SQL 끝이 이상함	SQL 문장 끝이 이상해요. 쉼표 · 괄호, 동적 SQL 로 붙은 AND · ORDER BY 자리를 보세요. MyBatis SQL 끝의 ; 도 이 오류를 내요.	SELECT ... ORDER BY A; ← ; 빼기
+ORA-00936	식 빠짐	식이 빠졌어요. 쉼표가 겹쳤거나 WHERE · AND 뒤가 비었어요(동적 SQL 조건이 다 빠짐).	SELECT A, , B · WHERE AND
+ORA-00907	괄호 안 닫힘	괄호가 안 닫혔거나 괄호 안 문법이 틀렸어요.	IN ('A', 'B'
+ORA-00911	쓸 수 없는 글자	SQL 에 쓸 수 없는 글자가 있어요. 끝의 ; 이나 전각 기호(，　)를 보세요.	SELECT * FROM A;
+ORA-00918	칼럼이 어느 표 것인지 모름	두 표에 같은 이름의 칼럼이 있어 어느 것인지 몰라요. 별칭을 붙이세요.	SELECT a.USER_ID FROM TB_A a, TB_B b
+ORA-00979	GROUP BY 빠짐	GROUP BY 에 없는 칼럼을 SELECT 했어요.	SELECT DEPT, NAME, COUNT(*) ... GROUP BY DEPT → NAME 도 GROUP BY 에
+ORA-00937	집계 섞임	집계 함수와 보통 칼럼을 GROUP BY 없이 같이 썼어요.	SELECT DEPT, COUNT(*) FROM EMP → GROUP BY DEPT
+ORA-01427	서브쿼리가 여러 행	한 행만 나와야 하는 서브쿼리가 여러 행을 돌려줬어요.	= (SELECT ...) → IN (SELECT ...)
+ORA-01476	0 으로 나눔	0 으로 나눴어요.	A / NULLIF(B, 0)
+ORA-00932	형 맞지 않음	형이 맞지 않는 값을 비교하거나 넣었어요.	CLOB 칼럼을 = 로 비교 → DBMS_LOB.COMPARE
+ORA-01008	? 값 모자람	? 자리 값이 다 넘어가지 않았어요.	#{} 수와 넘긴 값 수
+ORA-01017	DB 아이디 · 비밀번호 틀림	DB 아이디나 비밀번호가 틀렸어요.	spring.datasource.username · password
+ORA-28000	DB 계정 잠김	DB 계정이 잠겼어요. 비밀번호를 여러 번 틀렸을 수 있어요. DBA 에게 풀어 달라고 하세요.	ALTER USER 계정 ACCOUNT UNLOCK
+ORA-28001	DB 비밀번호 만료	DB 비밀번호가 만료됐어요. DBA 에게 바꿔 달라고 하세요.	
+ORA-12541	DB 리스너 없음	DB 서버 주소 · 포트에서 받는 곳(리스너)이 없어요. 주소와 포트(보통 1521)를 확인하세요.	jdbc:oracle:thin:@host:1521/SVC
+ORA-12514	DB 서비스 이름 틀림	DB 서비스 이름이 틀렸어요. SID 와 서비스 이름을 헷갈리지 않았는지 보세요.	@host:1521/서비스 · @host:1521:SID
+ORA-12505	DB SID 틀림	DB SID 가 틀렸어요.	@host:1521:ORCL
+ORA-12170|ORA-12541|IO Error: The Network Adapter could not establish the connection|IO 오류: The Network Adapter	DB 연결 안 됨	DB 까지 연결이 안 돼요. 주소 · 포트 · VPN · 방화벽을 보세요.	사내망이면 VPN 연결 확인
+ORA-00060	교착(데드락)	두 작업이 서로의 잠금을 기다리다 멈췄어요. 같은 표를 다른 순서로 고치는 곳을 보세요.	A→B 와 B→A 순서로 UPDATE
+ORA-00054	잠겨 있음	다른 세션이 이 행 · 표를 잠그고 있어요. 커밋 안 한 세션(DB 콘솔 포함)이 있는지 보세요.	DB 콘솔에서 UPDATE 뒤 커밋 안 함
+ORA-01013	쿼리 시간 넘김	쿼리가 제한 시간을 넘겨 취소됐어요. 실행 계획을 보거나 시간 한도를 늘리세요.	@Transactional(timeout = 30)
+ORA-01031	권한 없음	DB 권한이 없어요. DBA 에게 권한(GRANT)을 받으세요.	GRANT SELECT ON HR.TB_USER TO APP
+ORA-01000	커서 너무 많음	열린 커서가 한도를 넘었어요. 닫지 않은 ResultSet · Statement 가 있어요.	try-with-resources 로 닫기
+ORA-01555	스냅샷 너무 오래됨	오래 도는 조회 중에 데이터가 많이 바뀌어 옛 값을 읽지 못했어요. 쿼리를 짧게 나누세요.	
+ORA-04091	트리거가 자기 표를 읽음	트리거가 지금 바뀌는 자기 표를 읽거나 고치려 했어요.	
+ORA-06502	PL/SQL 값 오류	PL/SQL 변수 크기보다 큰 값이거나 형이 맞지 않아요.	VARCHAR2(10) 변수에 긴 글
+ORA-06550	PL/SQL 문법 오류	PL/SQL 블록이나 프로시저를 부르는 문장이 틀렸어요(이름 · 인자 수 · 형).	{call PKG.PROC(#{a}, #{b})}
+ORA-01652	임시 공간 모자람	정렬 · 조인에 쓰는 임시 공간이 모자라요. 조건을 좁히거나 DBA 에게 알리세요.	
+ORA-01653|ORA-01654|ORA-01688	표 공간 모자람	표를 늘릴 공간이 모자라요. DBA 에게 알리세요.	
+(ORA-\d{5}): ?([^\r\n]*)	Oracle 오류	Oracle 오류 $1 이에요: $2	오류 번호로 찾아보면 원인이 나와요
+relation \"([^\"]+)\" does not exist	표 없음	표 $1 이 없어요. 스키마(search_path) · 이름 · 따옴표 대소문자를 확인하세요.	SELECT * FROM app.tb_user
+column \"([^\"]+)\"(?: of relation \"[^\"]+\")? does not exist	칼럼 이름 틀림	칼럼 $1 이 없어요. 오타나 대소문자(따옴표로 만든 칼럼)를 보세요.	"userNm" 은 따옴표 없이 쓰면 usernm
+duplicate key value violates unique constraint \"([^\"]+)\"	중복 키	같은 키 값이 이미 있어요(제약 $1).	INSERT 전에 같은 값이 있는지
+null value in column \"([^\"]+)\"	빈 값 넣음(NOT NULL)	꼭 넣어야 하는 칼럼 $1 에 값이 비어 있어요.	#{$1} 이 null 로 넘어갔는지
+violates foreign key constraint \"([^\"]+)\"	외래 키 위반	외래 키 $1 에 걸렸어요. 부모 행이 없거나, 지우려는 행을 자식이 참조하고 있어요.	
+invalid input syntax for (?:type )?(\w+(?: \w+)?)	형 맞지 않음	$1 형 칼럼에 맞지 않는 값을 넣거나 비교했어요.	숫자 칼럼에 '' 또는 'abc'
+operator does not exist: ([^\r\n]+)	형이 다른 값 비교	형이 다른 값끼리 비교했어요: $1. 한쪽을 형 변환하세요.	WHERE user_id = CAST(#{id} AS INTEGER)
+syntax error at or near \"([^\"]*)\"	SQL 문법 틀림	SQL 문법이 틀렸어요. "$1" 근처를 보세요.	Oracle 문법((+) · ROWNUM)을 PG 에서 씀
+value too long for type ([^\r\n]+)	값이 너무 김	칼럼 길이($1)보다 긴 값을 넣었어요.	varchar(10) 에 11 글자
+deadlock detected	교착(데드락)	두 작업이 서로의 잠금을 기다리다 멈췄어요. 같은 표를 다른 순서로 고치는 곳을 보세요.	
+canceling statement due to statement timeout	쿼리 시간 넘김	쿼리가 제한 시간을 넘겨 취소됐어요.	
+password authentication failed for user \"([^\"]+)\"	DB 비밀번호 틀림	DB 사용자 $1 의 비밀번호가 틀렸어요.	
+database \"([^\"]+)\" does not exist	DB 이름 틀림	DB $1 이 없어요. 접속 url 의 DB 이름을 보세요.	jdbc:postgresql://host:5432/appdb
+permission denied for (?:table|relation|schema|sequence) (\S+)	권한 없음	$1 에 권한이 없어요.	GRANT SELECT ON $1 TO app
+current transaction is aborted	트랜잭션 멈춤	앞에서 쿼리 하나가 실패해서 트랜잭션이 멈췄어요. 그 위쪽의 첫 오류가 진짜 원인이에요.	
+division by zero	0 으로 나눔	0 으로 나눴어요.	a / NULLIF(b, 0)
+more than one row returned by a subquery	서브쿼리가 여러 행	한 행만 나와야 하는 서브쿼리가 여러 행을 돌려줬어요.	= (SELECT ...) → IN (SELECT ...)
+could not serialize access	동시 수정 충돌	다른 트랜잭션이 같은 행을 먼저 바꿨어요. 다시 시도하세요.	
+Table '([^']+)' doesn't exist	표 없음	표 $1 이 없어요.	
+Unknown column '([^']+)'	칼럼 이름 틀림	칼럼 $1 이 없어요.	
+Duplicate entry '([^']*)'	중복 키	같은 값 '$1' 이 이미 있어요.	
+Connection is not available, request timed out after (\d+)ms	DB 연결 모자람	DB 연결 풀이 모자라요. $1ms 동안 빈 연결이 없었어요. 연결을 오래 잡는 쿼리나 닫지 않는 곳을 보세요.	spring.datasource.hikari.maximum-pool-size
+Failed to obtain JDBC Connection|CannotGetJdbcConnectionException|CannotCreateTransactionException	DB 연결 실패	DB 에 붙지 못했어요. 주소 · 계정 · 네트워크(VPN)를 확인하세요.	
+Communications link failure	DB 연결 끊김	DB 와의 연결이 끊겼거나 붙지 못했어요.	
+Closed Connection|SQLRecoverableException|An I/O error occurred while sending to the backend|This connection has been closed	DB 연결 끊김	DB 연결이 끊겼어요. 오래 쉬던 연결이면 풀의 유효성 검사 설정을 보세요.	spring.datasource.hikari.max-lifetime
+UnknownHostException: ?(\S+)	주소 못 찾음	주소 $1 을 찾지 못했어요. 이름 오타 · 사내 DNS · VPN 을 보세요.	
+Connection refused	연결 거절	상대 서버가 그 주소 · 포트에서 받지 않아요. 꺼져 있거나 주소가 틀렸어요.	localhost:8081 의 다른 서버가 켜져 있는지
+SocketTimeoutException|Read timed out|connect timed out	응답 시간 넘김	상대 서버가 시간 안에 답하지 않았어요.	
+PKIX path building failed|SSLHandshakeException	인증서 못 믿음	HTTPS 인증서를 믿지 못해요. 사내 인증서를 실행 JDK 의 cacerts 에 넣어야 해요.	keytool -importcert -cacerts -file 사내.cer
+ResourceAccessException: I/O error on (\w+) request for \"([^\"]+)\"	다른 서버 호출 실패	$1 $2 를 부르다 연결이 안 됐어요.	
+HttpClientErrorException\$?\w*: (\d{3})	다른 서버가 4xx	다른 서버를 불렀더니 $1 오류를 돌려줬어요(보낸 값 · 권한 확인).	
+HttpServerErrorException\$?\w*: (\d{3})	다른 서버가 5xx	다른 서버를 불렀더니 $1 오류를 돌려줬어요(그 서버 쪽 오류).	
+Required (?:request )?parameter '([^']+)'(?: for method parameter type \S+)? is not present	필수 파라미터 없음	요청에 $1 파라미터가 없어요.	?$1=값 을 붙이거나 @RequestParam(required = false)
+Required request body is missing	요청 본문 없음	요청 본문(JSON)이 비어 있어요.	POST 에 {"a": 1} 본문
+Failed to convert value of type '([^']+)' to required type '([^']+)'	요청 값 형 틀림	요청 값을 $2 로 바꾸지 못했어요.	숫자 자리에 'abc' 가 왔거나 날짜 형식이 다름
+JSON parse error|HttpMessageNotReadableException	요청 JSON 오류	요청 본문(JSON)을 읽지 못했어요. JSON 문법이나 필드 형을 보세요.	"age": "열" → 숫자 자리에 글자
+Request method '(\w+)' (?:is )?not supported	요청 방식 틀림	이 주소는 $1 방식을 받지 않아요. GET · POST 를 확인하세요.	@GetMapping 인데 POST 로 보냄
+Content-Type '([^']+)' is not supported|HttpMediaTypeNotSupportedException	요청 형식 틀림	요청 Content-Type 을 받지 않아요. 보통 application/json 이어야 해요.	Content-Type: application/json
+No static resource (\S+)|NoHandlerFoundException|No mapping for (\w+ \S+)	주소 없음(404)	그 주소를 맡는 컨트롤러나 파일이 없어요: $1$2	@RequestMapping 주소 · context-path 확인
+MaxUploadSizeExceededException|SizeLimitExceededException|FileSizeLimitExceededException	업로드 크기 넘침	올린 파일이 크기 한도를 넘었어요.	spring.servlet.multipart.max-file-size: 50MB
+MethodArgumentNotValidException|BindException	입력 검증 걸림	입력 검증(@Valid)에 걸렸어요. 메시지에 걸린 칸과 이유가 나와요.	@NotBlank userNm 이 비어 있음
+ClientAbortException|Broken pipe|connection was aborted|연결은 사용자의 호스트 시스템의 소프트웨어의 의해 중단되었습니다|현재 연결은 원격 호스트에 의해 강제로 끊겼습니다	브라우저가 끊음	브라우저가 응답을 다 받기 전에 연결을 끊었어요. 대개 무시해도 돼요.	새로고침 · 창 닫기
+AccessDeniedException: Access (?:is )?[Dd]enied|org\.springframework\.security\.access\.AccessDeniedException	권한 없음(시큐리티)	스프링 시큐리티가 권한이 없다고 막았어요.	@PreAuthorize 조건 · 로그인 사용자 권한
+UnexpectedRollbackException|Transaction silently rolled back	트랜잭션 되돌림 표시	안쪽에서 난 오류로 트랜잭션이 이미 되돌림 표시가 됐어요. 안쪽 catch 가 오류를 삼켰는지 보세요.	안쪽 @Transactional 메서드의 예외를 바깥에서 catch
+LazyInitializationException	지연 로딩 실패	DB 세션이 닫힌 뒤 지연 로딩 값을 읽었어요. 서비스 안에서 읽거나 fetch join 하세요.	
+EmptyResultDataAccessException	결과 없음	한 행을 기대했는데 0 행이 나왔어요.	queryForObject → query 로 받고 비었는지 확인
+IncorrectResultSizeDataAccessException|TooManyResultsException|NonUniqueResultException	결과 행 수 틀림	기대한 행 수와 실제 결과 수가 달라요.	selectOne 인데 여러 행
+DuplicateKeyException|SQLIntegrityConstraintViolationException.*[Dd]uplicate	중복 키	같은 키 값이 이미 있어요.	
+DataIntegrityViolationException|SQLIntegrityConstraintViolationException|org\.hibernate\.exception\.ConstraintViolationException	DB 제약 걸림	DB 제약(중복 · NOT NULL · 길이 · 외래 키)에 걸렸어요. 아래 원인에 어느 칼럼인지 나와요.	
+BadSqlGrammarException|SQLSyntaxErrorException	SQL 문법 틀림	SQL 문법이나 표 · 칼럼 이름이 틀렸어요. 아래 SQL 을 DB 콘솔에서 돌려 보세요.	
+QueryTimeoutException|SQLTimeoutException	쿼리 시간 넘김	쿼리가 제한 시간을 넘겼어요.	
+Cannot invoke \"([^\"]+)\" because \"([^\"]+)\" is null	빈 값(null) 사용	$2 이(가) null 이라서 $1 을 부를 수 없어요.	if ($2 != null) 로 먼저 보거나 값이 왜 비었는지 보세요
+Cannot invoke \"([^\"]+)\" because the return value of \"([^\"]+)\" is null	빈 값(null) 사용	$2 가 null 을 돌려줘서 $1 을 부를 수 없어요.	
+Cannot [^\"\r\n]*?because \"([^\"]+)\" is null	빈 값(null) 사용	$1 이(가) null 이에요.	
+NullPointerException	빈 값(null) 사용	비어 있는(null) 값을 썼어요. 우리 코드 줄에서 어느 값이 비었는지 보세요.	user.getName() 에서 user 가 null
+ArrayIndexOutOfBoundsException: Index (-?\d+) out of bounds for length (\d+)	배열 범위 넘음	길이 $2 인 배열에서 $1 번째를 찾았어요.	split 결과가 생각보다 짧음
+IndexOutOfBoundsException: Index:? (-?\d+),? (?:out of bounds for length|Size:) ?(\d+)	목록 범위 넘음	크기 $2 인 목록에서 $1 번째를 꺼냈어요.	빈 목록에서 list.get(0)
+StringIndexOutOfBoundsException	글자 범위 넘음	글자 길이를 넘어 잘랐어요(substring · charAt).	"ab".substring(0, 5)
+NumberFormatException: For input string: \"([^\"]*)\"	숫자로 못 바꿈	"$1" 은 숫자로 바꿀 수 없어요.	Integer.parseInt("$1")
+NumberFormatException	숫자로 못 바꿈	숫자로 바꿀 수 없는 글을 숫자로 바꾸려 했어요.	Integer.parseInt("")
+ClassCastException: (?:class )?([\w$.]+) cannot be cast to (?:class )?([\w$.]+)	형 변환 실패	$1 을 $2 로 바꿀 수 없어요.	Map 결과의 BigDecimal 을 Integer 로 받음 → ((Number) v).intValue()
+ConcurrentModificationException	도는 중에 목록 바꿈	목록을 도는 중에 그 목록을 바꿨어요.	for 안에서 list.remove → removeIf
+UnsupportedOperationException	바꿀 수 없는 목록	바꿀 수 없는 목록(List.of · Arrays.asList · 읽기 전용)을 바꾸려 했어요.	new ArrayList<>(List.of(...)) 로 복사해 쓰기
+DateTimeParseException: Text '([^']*)' could not be parsed	날짜 읽기 실패	"$1" 을 날짜로 읽지 못했어요. 형식을 맞추세요.	LocalDate.parse("20261114", DateTimeFormatter.BASIC_ISO_DATE)
+Unparseable date: \"([^\"]*)\"	날짜 읽기 실패	"$1" 을 날짜로 읽지 못했어요.	new SimpleDateFormat("yyyyMMdd")
+ArithmeticException: / by zero	0 으로 나눔	0 으로 나눴어요.	b == 0 이면 먼저 걸러내기
+Non-terminating decimal expansion	나누기가 안 끝남	BigDecimal 나누기가 끝나지 않아요. 자리수와 반올림을 주세요.	a.divide(b, 2, RoundingMode.HALF_UP)
+OutOfMemoryError: Java heap space|OutOfMemoryError: GC overhead	메모리 모자람	메모리가 모자라요. 한 번에 너무 많은 행을 읽거나 큰 목록을 쌓고 있어요. 나눠 읽거나 -Xmx 를 올리세요.	전체 조회 → 페이지로 나눠 조회
+OutOfMemoryError: Metaspace	클래스 메모리 모자람	클래스를 담는 메모리(Metaspace)가 모자라요. 재시작을 여러 번 했다면 서버를 껐다 켜세요.	-XX:MaxMetaspaceSize=512m
+StackOverflowError	끝없는 호출	함수가 끝없이 자기를 부르고 있어요. 서로 부르는 toString · equals · JSON 순환 참조를 보세요.	양쪽 엔티티의 @ToString
+ClassNotFoundException: ([\w$.]+)	클래스 없음	클래스 $1 을 찾지 못했어요. 의존성이 빠졌거나 Maven · Gradle 다시 읽기가 필요해요.	
+NoClassDefFoundError: ([\w$/.]+)	실행 때 클래스 없음	컴파일 때 있던 클래스 $1 이 실행 때 없어요. 의존성 범위(provided)나 판 충돌을 보세요.	
+NoSuchMethodError: ([^\r\n]+)	라이브러리 판 안 맞음	라이브러리 판이 서로 맞지 않아요: $1. 같은 라이브러리 두 판이 섞였는지 보세요.	mvn dependency:tree
+UnsupportedClassVersionError.*class file version (\d+)	JDK 판 낮음	더 새 JDK 로 만든 클래스예요(클래스 판 $1). 실행 JDK 판을 올리세요.	65 = JDK 21, 61 = JDK 17
+No serializer found for class ([\w$.]+)	JSON 으로 못 바꿈	$1 을 JSON 으로 바꾸지 못했어요. getter 가 없거나 지연 로딩 객체예요.	@Getter
+Unrecognized field \"([^\"]+)\"	모르는 JSON 칸	JSON 에 받을 곳 없는 칸 "$1" 이 있어요.	@JsonIgnoreProperties(ignoreUnknown = true)
+MismatchedInputException|InvalidFormatException	JSON 값 형 틀림	JSON 값의 형이 받을 필드 형과 달라요.	"id": "abc" → 숫자 필드
+FileNotFoundException: ([^\r\n(]+)	파일 없음	파일 $1 을 찾지 못했어요(경로 · 권한).	
+NoSuchFileException: (\S+)	파일 없음	파일 $1 이 없어요.	
+java\.nio\.file\.AccessDeniedException: (\S+)	파일 권한 없음	파일 $1 에 쓰거나 읽을 권한이 없어요. 다른 프로그램이 열고 있을 수도 있어요.	
+NoSuchElementException	꺼낼 값 없음	값이 없는데 꺼냈어요(Optional.get · iterator.next).	optional.orElse(null)
+IllegalArgumentException: ([^\r\n]+)	맞지 않는 값	넘긴 값이 맞지 않아요: $1	
+IllegalStateException: ([^\r\n]+)	할 수 없는 상태	지금 상태에서는 할 수 없는 일이에요: $1	
+TimeoutException	시간 넘김	시간 안에 끝나지 않았어요.	
+Error creating bean with name '([^']+)'	빈 만들기 실패	빈 $1 을 만들다 실패했어요. 아래 가장 안쪽 원인을 보세요.	

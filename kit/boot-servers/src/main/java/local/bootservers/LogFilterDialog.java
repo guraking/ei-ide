@@ -1,6 +1,13 @@
 package local.bootservers;
 
 import com.intellij.icons.AllIcons;
+import com.intellij.openapi.actionSystem.ActionManager;
+import com.intellij.openapi.actionSystem.ActionPlaces;
+import com.intellij.openapi.actionSystem.DefaultActionGroup;
+import com.intellij.openapi.project.DumbAwareAction;
+import com.intellij.openapi.ui.popup.JBPopupFactory;
+import com.intellij.ui.PopupHandler;
+import com.intellij.ui.components.ActionLink;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.editor.Document;
@@ -35,6 +42,7 @@ import javax.swing.Icon;
 import javax.swing.JComponent;
 import javax.swing.JList;
 import javax.swing.JPanel;
+import javax.swing.JScrollBar;
 import javax.swing.ListCellRenderer;
 import javax.swing.SwingConstants;
 import javax.swing.Timer;
@@ -44,6 +52,7 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.awt.Point;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
@@ -66,6 +75,8 @@ import java.util.regex.PatternSyntaxException;
 final class LogFilterDialog extends DialogWrapper {
 
     private static final int FOLLOW_INTERVAL_MS = 1000;
+    /** 「앞뒤 줄 보기」 가 보일 위 · 아래 줄 수. */
+    private static final int AROUND_LINES = 30;
     /** 한 줄에 보이는 최대 글자 수. 넘으면 줄임표. */
     private static final int MAX_SHOWN_CHARS = 1000;
     private static final String TAB_SHOWN = "    ";
@@ -92,6 +103,9 @@ final class LogFilterDialog extends DialogWrapper {
     private final JBLabel statusHint = new JBLabel();
     private final JBList<LogFilter.Line> list = new JBList<>();
     private final Timer timer;
+    // 칸 거르기(스레드 · 로거 · 요청 ID 의 「이것만 · 이것 빼고」)와 그것을 보이고 지우는 줄.
+    private final List<LogFilter.FieldRule> rules = new ArrayList<>();
+    private final JPanel rulesRow = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(UIUtil.DEFAULT_HGAP), 0));
 
     private long shownStamp = -1;
     private boolean running;
@@ -155,7 +169,12 @@ final class LogFilterDialog extends DialogWrapper {
             }
         });
         regexBox.addActionListener(e -> refresh());
-        followBox.addActionListener(e -> updateHint());
+        followBox.addActionListener(e -> {
+            updateHint();
+            if (followBox.isSelected()) {
+                refresh(true);
+            }
+        });
         // 검색 칸은 레벨 단추 · 정규식 · 따라가기 사이 남는 폭을 다 채운다.
         JPanel options = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(UIUtil.DEFAULT_HGAP), 0));
         options.add(regexBox);
@@ -168,6 +187,8 @@ final class LogFilterDialog extends DialogWrapper {
         JPanel north = new JPanel();
         north.setLayout(new BoxLayout(north, BoxLayout.Y_AXIS));
         north.add(queryRow);
+        rulesRow.setVisible(false);
+        north.add(rulesRow);
         JPanel statusRow = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(UIUtil.DEFAULT_HGAP), JBUI.scale(UIUtil.DEFAULT_VGAP)));
         statusHint.setForeground(NamedColorUtil.getInactiveTextColor());
         statusRow.add(status);
@@ -178,6 +199,16 @@ final class LogFilterDialog extends DialogWrapper {
         list.setFixedCellHeight(JBUI.scale(ROW_HEIGHT));
         list.setCellRenderer(new LineRenderer());
         list.getEmptyText().setText(BootServersBundle.message("log.filter.empty"));
+        list.addMouseListener(new PopupHandler() {
+            @Override
+            public void invokePopup(Component comp, int x, int y) {
+                int index = list.locationToIndex(new Point(x, y));
+                if (index >= 0) {
+                    list.setSelectedIndex(index);
+                    showLineMenu(comp, x, y, index);
+                }
+            }
+        });
         list.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
@@ -189,7 +220,21 @@ final class LogFilterDialog extends DialogWrapper {
 
         JPanel panel = new JPanel(new BorderLayout());
         panel.add(north, BorderLayout.NORTH);
-        panel.add(new JBScrollPane(list), BorderLayout.CENTER);
+        JBScrollPane scroll = new JBScrollPane(list);
+        // 사용자가 위로 올리면 따라가기를 멈춘다(그라파나처럼). 「따라가기」 를 다시 켜면 이어서 따라간다.
+        // 바퀴를 위로 굴리거나 막대를 끌어 끝이 아닌 곳에 두면 멈춘다. 결과가 붙으며 생기는 스크롤은 사용자 것이 아니라 보지 않는다.
+        scroll.getVerticalScrollBar().addAdjustmentListener(e -> {
+            JScrollBar bar = (JScrollBar) e.getAdjustable();
+            if (e.getValueIsAdjusting() && bar.getValue() + bar.getVisibleAmount() < bar.getMaximum()) {
+                pauseFollow();
+            }
+        });
+        scroll.addMouseWheelListener(e -> {
+            if (e.getWheelRotation() < 0) {
+                pauseFollow();
+            }
+        });
+        panel.add(scroll, BorderLayout.CENTER);
         panel.setPreferredSize(DialogSize.ofScreen(SCREEN_WIDTH_SHARE, SCREEN_HEIGHT_SHARE));
         return panel;
     }
@@ -256,12 +301,15 @@ final class LogFilterDialog extends DialogWrapper {
         Set<LogFilter.Level> levels = selectedLevels();
         String query = queryField.getText();
         boolean regex = regexBox.isSelected();
-        ApplicationManager.getApplication().executeOnPooledThread(() -> filterInBackground(text, from, head, levels, query, regex, stamp));
+        List<LogFilter.FieldRule> fieldRules = List.copyOf(rules);
+        ApplicationManager.getApplication().executeOnPooledThread(
+                () -> filterInBackground(text, from, head, levels, query, regex, fieldRules, stamp));
     }
 
     /** head(from 앞의 거른 줄) 뒤에 from 부터 거른 줄을 잇는다. */
     private void filterInBackground(CharSequence text, LogFilter.Resume from, List<LogFilter.Line> head,
-                                    Set<LogFilter.Level> levels, String query, boolean regex, long stamp) {
+                                    Set<LogFilter.Level> levels, String query, boolean regex,
+                                    List<LogFilter.FieldRule> fieldRules, long stamp) {
         LogFilter.Result result = null;
         Pattern found = null;
         String error = null;
@@ -269,7 +317,7 @@ final class LogFilterDialog extends DialogWrapper {
             if (regex && !query.isEmpty()) {
                 checkRegexFinishes(text, from, Pattern.compile(query, MATCH_FLAGS));
             }
-            result = LogFilter.filterFrom(text, from, levels, query, regex);
+            result = LogFilter.filterFrom(text, from, levels, query, regex, fieldRules);
             head.addAll(result.lines());
             found = query.isEmpty() ? null : Pattern.compile(regex ? query : Pattern.quote(query), MATCH_FLAGS);
         } catch (PatternSyntaxException ex) {
@@ -359,6 +407,149 @@ final class LogFilterDialog extends DialogWrapper {
         if (pending) {
             refresh(true);
         }
+    }
+
+    /** 사용자가 위로 스크롤하면 따라가기를 끄고 알린다. 「따라가기」 를 다시 켜면 이어서 따라간다. */
+    private void pauseFollow() {
+        if (followBox.isSelected()) {
+            followBox.setSelected(false);
+            statusHint.setText(BootServersBundle.message("log.filter.hint.paused"));
+        }
+    }
+
+    /**
+     * 거른 줄 우클릭 메뉴: 같은 요청 따라가기 · 스레드 · 로거 「이것만 · 이것 빼고」 · 앞뒤 줄 보기 · 콘솔에서 보기.
+     * 칸은 그 줄이 속한 묶음 머리 줄에서 읽는다(스택 줄을 눌러도 같은 칸).
+     */
+    private void showLineMenu(Component comp, int x, int y, int index) {
+        LogFilter.Line line = list.getModel().getElementAt(index);
+        LogFields fields = headFields(index);
+        DefaultActionGroup group = new DefaultActionGroup();
+        if (fields.requestId() != null || fields.thread() != null) {
+            LogFilter.Field follow = fields.requestId() != null ? LogFilter.Field.REQUEST : LogFilter.Field.THREAD;
+            String value = fields.requestId() != null ? fields.requestId() : fields.thread();
+            group.add(DumbAwareAction.create(BootServersBundle.message("log.filter.follow.request", value),
+                    e -> addRule(new LogFilter.FieldRule(follow, value, true))));
+            group.addSeparator();
+        }
+        addFieldActions(group, LogFilter.Field.THREAD, fields.thread());
+        addFieldActions(group, LogFilter.Field.LOGGER, fields.logger());
+        if (fields.requestId() != null) {
+            addFieldActions(group, LogFilter.Field.REQUEST, fields.requestId());
+        }
+        group.addSeparator();
+        group.add(DumbAwareAction.create(BootServersBundle.message("log.filter.around", AROUND_LINES), e -> showAround(line)));
+        group.add(DumbAwareAction.create(BootServersBundle.message("log.filter.jump"), e -> jumpTo(line)));
+        ActionManager.getInstance().createActionPopupMenu(ActionPlaces.POPUP, group).getComponent().show(comp, x, y);
+    }
+
+    private void addFieldActions(DefaultActionGroup group, LogFilter.Field field, String value) {
+        if (value == null) {
+            return;
+        }
+        String name = fieldName(field);
+        group.add(DumbAwareAction.create(BootServersBundle.message("log.filter.field.only", name, value),
+                e -> addRule(new LogFilter.FieldRule(field, value, true))));
+        group.add(DumbAwareAction.create(BootServersBundle.message("log.filter.field.except", name, value),
+                e -> addRule(new LogFilter.FieldRule(field, value, false))));
+    }
+
+    private static String fieldName(LogFilter.Field field) {
+        return BootServersBundle.message(switch (field) {
+            case THREAD -> "log.filter.field.thread";
+            case LOGGER -> "log.filter.field.logger";
+            case REQUEST -> "log.filter.field.request";
+        });
+    }
+
+    /** index 줄이 속한 묶음 머리 줄의 칸. 위로 올라가며 칸을 읽을 수 있는 첫 줄을 찾는다. */
+    private LogFields headFields(int index) {
+        for (int i = index; i >= 0; i--) {
+            LogFilter.Line l = list.getModel().getElementAt(i);
+            LogFields f = LogFields.of(l.text());
+            if (f != LogFields.NONE && (f.thread() != null || f.logger() != null || f.requestId() != null)) {
+                return f;
+            }
+            if (i < index && l.level() != list.getModel().getElementAt(index).level()) {
+                break;
+            }
+        }
+        return LogFields.NONE;
+    }
+
+    private void addRule(LogFilter.FieldRule rule) {
+        if (!rules.contains(rule)) {
+            rules.add(rule);
+            rebuildRulesRow();
+            refresh();
+        }
+    }
+
+    /** 걸린 칸 거르기를 「스레드 = main ×」 꼴 링크로 보인다. 누르면 그 거르기를 뺀다. */
+    private void rebuildRulesRow() {
+        rulesRow.removeAll();
+        for (LogFilter.FieldRule rule : List.copyOf(rules)) {
+            String key = rule.include() ? "log.filter.rule.only" : "log.filter.rule.except";
+            ActionLink link = new ActionLink(BootServersBundle.message(key, fieldName(rule.field()), rule.value()), e -> {
+                rules.remove(rule);
+                rebuildRulesRow();
+                refresh();
+            });
+            link.setToolTipText(BootServersBundle.message("log.filter.rule.remove"));
+            rulesRow.add(link);
+        }
+        rulesRow.setVisible(!rules.isEmpty());
+        rulesRow.revalidate();
+        rulesRow.repaint();
+    }
+
+    /** 콘솔에서 그 줄 앞뒤 AROUND_LINES 줄을 떠 작은 창에 보인다. 가운데 줄을 골라 두고, 두 번 누르면 콘솔의 그 줄로 간다. */
+    private void showAround(LogFilter.Line line) {
+        if (editor.isDisposed()) {
+            return;
+        }
+        Document doc = editor.getDocument();
+        int n = line.number();
+        if (n >= doc.getLineCount()) {
+            status.setText(BootServersBundle.message("log.filter.line.gone"));
+            return;
+        }
+        CharSequence text = doc.getImmutableCharSequence();
+        int from = Math.max(0, n - AROUND_LINES);
+        int to = Math.min(doc.getLineCount() - 1, n + AROUND_LINES);
+        List<LogFilter.Line> around = new ArrayList<>();
+        LogFilter.Level groupLevel = null;
+        for (int i = from; i <= to; i++) {
+            String t = text.subSequence(doc.getLineStartOffset(i), doc.getLineEndOffset(i)).toString();
+            LogFilter.Level own = LogFilter.levelOf(t);
+            if (own != null && !LogFields.isTraceLine(t)) {
+                groupLevel = own;
+            }
+            around.add(new LogFilter.Line(i, t, groupLevel));
+        }
+        JBList<LogFilter.Line> aroundList = new JBList<>(around);
+        aroundList.setFont(list.getFont());
+        aroundList.setFixedCellHeight(list.getFixedCellHeight());
+        aroundList.setCellRenderer(new LineRenderer());
+        aroundList.setSelectedIndex(n - from);
+        aroundList.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    jumpTo(aroundList.getSelectedValue());
+                }
+            }
+        });
+        JBScrollPane pane = new JBScrollPane(aroundList);
+        pane.setPreferredSize(new Dimension(list.getVisibleRect().width, list.getVisibleRect().height * 2 / 3));
+        JBPopupFactory.getInstance().createComponentPopupBuilder(pane, aroundList)
+                .setTitle(BootServersBundle.message("log.filter.around.title", n + 1))
+                .setResizable(true)
+                .setMovable(true)
+                .setRequestFocus(true)
+                .createPopup()
+                .showInCenterOf(list);
+        aroundList.ensureIndexIsVisible(Math.min(around.size() - 1, n - from + AROUND_LINES / 2));
     }
 
     private void updateHint() {
