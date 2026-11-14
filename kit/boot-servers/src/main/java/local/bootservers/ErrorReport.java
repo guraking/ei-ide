@@ -9,11 +9,13 @@ import java.util.regex.Pattern;
  * 오류 묶음 하나를 읽은 결과. IntelliJ 에 기대지 않는다.
  * 가장 안쪽 원인(마지막 「Caused by:」), 우리 코드 첫 줄(프레임워크 패키지가 아닌 첫 스택 줄), 한국어 설명({@link ErrorRules}),
  * 실패한 SQL(MyBatis 「### SQL:」 · 「bad SQL grammar [..]」 · 앞 로그의 「==>  Preparing:」 와 「==> Parameters:」),
- * 오류 앞 로그의 요청(메서드 · 경로 · 파라미터), 스프링 부트 시작 실패 보고(Description · Action)를 담는다. 못 찾은 칸은 null.
+ * 오류 앞 로그의 요청(메서드 · 경로 · 파라미터), 스프링 부트 시작 실패 보고(Description · Action),
+ * 첫 줄을 찍은 로거(스택이 없을 때 찍은 곳을 찾는 데 쓴다), MyBatis 매퍼 문장 id 를 담는다. 못 찾은 칸은 null.
  */
 record ErrorReport(String key, List<String> lines, String time, String thread, String rootClass, String rootMessage,
                    Frame frame, ErrorRules.Explain explain, String sql, String sqlParams,
-                   String method, String path, String params, boolean startup, String description, String action) {
+                   String method, String path, String params, boolean startup, String description, String action,
+                   String logger, String mapperId) {
 
     /** 스택 줄 하나. className 은 패키지까지, line 은 없으면 -1. */
     record Frame(String className, String method, String file, int line) {
@@ -127,7 +129,7 @@ record ErrorReport(String key, List<String> lines, String time, String thread, S
                 : rootClass + "|" + ErrorScan.normalize(rootMessage) + "|" + (frame == null ? "" : frame.className() + "." + frame.method());
         return new ErrorReport(key, List.copyOf(lines), time, thread, rootClass, rootMessage, frame, explain, sql, sqlParams,
                 request == null ? null : request[0], request == null ? null : request[1], request == null ? null : request[2],
-                startup, description, action);
+                startup, description, action, LogFields.of(head).logger(), SourceFind.mapperId(all));
     }
 
     /** 원인 줄 아래 스택에서 먼저, 없으면 묶음 전체에서 프레임워크 아닌 첫 줄. */

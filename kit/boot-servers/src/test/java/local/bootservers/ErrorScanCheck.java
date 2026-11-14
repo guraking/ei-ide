@@ -18,7 +18,43 @@ public final class ErrorScanCheck {
         limits();
         chunks();
         fieldFilter();
+        sourceFind();
         System.out.println("ErrorScanCheck 통과 (설명 규칙 " + ErrorRules.size() + "개)");
+    }
+
+    private static void sourceFind() {
+        // 스택 없는 log.error 한 줄: 찍은 로거 · 「파일 없음」 설명 · 스택 줄 없음.
+        String line = "2026-11-14 18:42:23.213 ERROR --- com.sk.supp.SuppApplication              : [] "
+                + "\"C:/dev/supp_ktnet/config/tradesign_local.properties\" 설정파일을 찾을 수가 없습니다.";
+        ErrorScan scan = new ErrorScan();
+        scan.feed(line + "\n2026-11-14 18:42:23.300 INFO --- com.sk.supp.SuppApplication : 다음\n");
+        scan.flush();
+        check(scan.items().size() == 1, "한 줄 오류 하나: " + scan.items().size());
+        ErrorReport r = scan.items().get(0).last();
+        check("com.sk.supp.SuppApplication".equals(r.logger()) && r.frame() == null && r.lines().size() == 1, "찍은 로거: " + r.logger());
+        check(r.explain() != null && r.explain().title().equals("파일 없음")
+                && r.explain().text().contains("C:/dev/supp_ktnet/config/tradesign_local.properties"), "파일 없음 설명: " + r.explain());
+        check(r.mapperId() == null, "매퍼 id 없음");
+
+        String source = "class A {\n  void a() {\n    log.info(\"시작: {}\", x);\n"
+                + "    log.error(\"\\\"{}\\\" 설정파일을 찾을 수가 없습니다.\", path);\n    log.error(\": \");\n  }\n}\n";
+        check(SourceFind.logLine(source, r.rootMessage()) == 3, "찍은 줄: " + SourceFind.logLine(source, r.rootMessage()));
+        check(SourceFind.logLine(source, "전혀 다른 글") == -1, "맞는 문자열 없음");
+        check(SourceFind.logLine("String s = String.format(\"주문 %d 건 실패: %s\", n, why);", "주문 3 건 실패: 재고 없음") == 0, "format 자리");
+
+        check("com.x.UserMapper.selectUser".equals(SourceFind.mapperId(
+                "### Error querying database.\n### The error may involve com.x.UserMapper.selectUser-Inline\n### SQL: SELECT 1")), "involve");
+        check("com.x.UserMapper.selectUser".equals(SourceFind.mapperId(
+                "org.apache.ibatis.binding.BindingException: Invalid bound statement (not found): com.x.UserMapper.selectUser")), "not found");
+        check("com.x.UserMapper.selectUser".equals(SourceFind.mapperId(
+                "Mapped Statements collection does not contain value for com.x.UserMapper.selectUser")), "collection");
+        check(SourceFind.mapperId("java.lang.NullPointerException: x") == null, "매퍼 오류 아님");
+
+        String xml = "<?xml version=\"1.0\"?>\n<mapper namespace=\"com.x.UserMapper\">\n  <select id=\"selectUserList\" resultType=\"map\">SELECT 1</select>\n"
+                + "  <select id=\"selectUser\"\n          resultType=\"map\">SELECT 2</select>\n</mapper>";
+        check(SourceFind.isMapperOf(xml, "com.x.UserMapper") && !SourceFind.isMapperOf(xml, "com.x.User"), "namespace");
+        check(SourceFind.statementOffset(xml, "selectUser") == xml.indexOf("<select id=\"selectUser\""), "문장 자리");
+        check(SourceFind.statementOffset(xml, "none") == -1, "없는 문장");
     }
 
     private static void rules() {
