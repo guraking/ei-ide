@@ -1911,6 +1911,23 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       </div>
     </div>
     <p class="lead" style="margin-top:18px">먼저 옛 칼럼 이름 · 새 칼럼 이름 · 표 이름(비우면 모든 매퍼)을 넣고, 「DTO 필드도 바꾸기」를 끄면 XML 만 바꿉니다. 미리보기에서 체크를 푼 줄은 그대로 둡니다.</p>
+
+    <h3 id="codeflow">코드 흐름 · 바꾸면 영향 · 표에서 찾기 · 안 쓰는 것</h3>
+    <p class="lead">아래쪽 「코드 흐름」 창에 탭 넷이 있습니다. 창을 열기만 해서는 아무것도 찾지 않고, 「조회」 · URL 고르기 · 우클릭 메뉴를 눌렀을 때만 뒤에서 찾습니다(진행 표시 · 취소 가능, 색인 중이면 끝난 뒤 시작). 줄을 두 번 누르거나 <kbd>Enter</kbd> 를 치면 그 코드로 갑니다.</p>
+    <table class="keys">
+      <tr><th>탭 · 여는 곳</th><th>하는 일</th></tr>
+      <tr><td>호출 흐름<br>「조회」 · 자바 메서드 우클릭 「호출 흐름 보기」</td><td>왼쪽에 이 프로젝트의 컨트롤러 URL 목록(찾기 칸으로 거름)이 나오고, 하나를 고르면 오른쪽에 컨트롤러 → 서비스(인터페이스면 구현) → 매퍼 메서드 → 매퍼 XML 문장 → 쓰는 표, 그리고 이 URL 을 부르는 화면(.vue · .js 등)이 나무로 나옵니다. 같은 클래스 안 메서드 호출은 따로 줄을 만들지 않고 그 안을 따라갑니다.</td></tr>
+      <tr><td>바꾸면 영향<br>자바 메서드 · 필드 · 클래스 우클릭 「바꾸면 영향 보기」</td><td>부르는 곳을 거꾸로 따라 URL 까지 올라가고, 「매퍼 SQL」(그 DTO 를 형식으로 쓰고 필드 이름이 나오는 문장, 칼럼 이름 <code>USER_NM</code> 으로만 나오면 「추정」) · 「API」 · 「화면」 묶음을 보여 줍니다. 부모 VO 의 필드도 자식 VO 를 쓰는 문장까지 찾습니다.</td></tr>
+      <tr><td>표에서 찾기<br>표 · 칼럼 이름 넣고 「조회」 · DB 창 표 우클릭 「코드에서 쓰는 곳」</td><td>그 표(<code>스키마.표</code> 도 됨) · 칼럼을 쓰는 매퍼 문장(조회 · 넣기 · 고치기 · 지우기) → 매퍼 메서드 → 서비스 → URL · 화면을 보여 줍니다. SQL 을 확실히 읽지 못한 문장(<code>${}</code> 등)은 글자로 찾아 「글자로 찾음」 으로 적습니다.</td></tr>
+      <tr><td>안 쓰는 것<br>「조회」</td><td>화면에서 안 부르는 API, 부르는 곳을 못 찾은 매퍼 SQL(인터페이스 · 메서드가 없으면 그렇게 적음), 아무도 안 쓰는 DTO(이름이 Dto · Vo 로 끝나는 클래스)를 모읍니다. 다른 시스템 · 문자열 · 리플렉션으로 부르는 것도 나올 수 있으니 지우기 전에 확인하세요.</td></tr>
+    </table>
+    <div class="scroll">
+      <div class="ide" style="min-width:560px">
+        <div class="title"><span class="dots"><i></i><i></i><i></i></span>코드 흐름 — 호출 흐름</div>
+        <pre class="sql nolig"><span class="ln">UserController.list  <span style="color:var(--muted)">컨트롤러 · GET /user/list</span></span><span class="ln">  UserServiceImpl.selectUserList  <span style="color:var(--muted)">서비스</span></span><span class="ln">    UserMapper.selectUserList  <span style="color:var(--muted)">매퍼</span></span><span class="ln">      UserMapper.xml · selectUserList  <span style="color:var(--muted)">조회</span></span><span class="ln">        TB_USER  <span style="color:var(--muted)">표</span></span><span class="ln">  화면  <span style="color:var(--muted)">1개</span></span><span class="ln">    GET /user/list</span><span class="ln">      UserList.vue:42</span></pre>
+      </div>
+    </div>
+    <p class="lead" style="margin-top:18px">못 잡는 것: 리플렉션 · 문자열로 부르는 코드, <code>${}</code> 로 바뀌는 표 이름, 화면이 주소를 글자 조각으로 이어 붙여 부르는 경우(<code>'/user/' + id + '/detail'</code>). 화면 찾기는 node_modules · dist · bin · build · out · target 폴더와 1MB 넘는 파일을 건너뜁니다. 찾는 데 걸린 시간은 idea.log 에 「코드 흐름」으로 남습니다.</p>
   </div>
 </section>
 
