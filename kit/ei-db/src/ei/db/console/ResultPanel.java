@@ -160,6 +160,8 @@ final class ResultPanel extends SimpleToolWindowPanel {
   private String editTable;
   /** 마지막 왼쪽 누름이 행 번호 칸이었는지(끌어서 여러 행을 고르는 중인지). */
   private boolean rowPick;
+  /** 이 결과의 문장을 다시 실행해도 되는지(조회 문장). 「새로 고침」 단추를 보일지 정한다. */
+  private boolean rereadable;
   private String[] editColumns;
   /** 고치기를 막는 이유. null 이면 막지 않거나 아직 모른다. */
   private String editBlocked;
@@ -332,6 +334,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
       bar.add(new JBLabel(EiDbBundle.message("result.rows.unit")));
       bar.add(button(EiDbBundle.message("result.fetch"), null, byInput));
     }
+    rereadable = SqlText.isRereadable(result.sql());
     BarAction apply = new BarAction(EiDbBundle.message("result.apply"), EiDbBundle.message("backup.grid.apply.tooltip"), AllIcons.Actions.Commit, this::applyEdits) {
       @Override
       public void update(@NotNull AnActionEvent e) {
@@ -344,7 +347,11 @@ final class ResultPanel extends SimpleToolWindowPanel {
         new BarAction(EiDbBundle.message("result.revert"), EiDbBundle.message("backup.grid.revert.tooltip"), AllIcons.Actions.Rollback, this::revertEdits)
             .visibleWhen(this::hasPending).withText(),
         new BarAction(EiDbBundle.message("backup.grid.delete"), EiDbBundle.message("backup.grid.delete.tooltip"), AllIcons.General.Remove, this::deleteRows)
-            .visibleWhen(this::canOfferDelete).enabledWhen(() -> grid.getSelectedRowCount() > 0));
+            .visibleWhen(this::canOfferDelete).enabledWhen(() -> grid.getSelectedRowCount() > 0),
+        // 같은 문장을 지금 읽은 건수(적어도 기본 건수)로 다시 실행한다. 변경이 섞인 문장에는 두지 않는다(readMore 와 같은 조건).
+        new BarAction(EiDbBundle.message("result.refresh"), EiDbBundle.message("result.refresh.tooltip"), AllIcons.Actions.Refresh,
+            () -> readMore(c, Math.max(result.rows().size(), DbSessions.MAX_ROWS)))
+            .visibleWhen(() -> rereadable).enabledWhen(() -> !applying));
     // 내보내기 · 복사 · 생성은 흐린 글자 링크로, 「·」 로 나눈다.
     JPanel links = new JPanel(new HorizontalLayout(0, SwingConstants.CENTER));
     links.setBorder(JBUI.Borders.empty(0, BAR_INSET));
