@@ -7,6 +7,12 @@ import com.intellij.execution.ui.RunContentDescriptor;
 import com.intellij.execution.ui.RunContentManager;
 import com.intellij.execution.ui.RunnerLayoutUi;
 import com.intellij.icons.AllIcons;
+import com.intellij.notification.Notification;
+import com.intellij.notification.NotificationAction;
+import com.intellij.notification.NotificationGroupManager;
+import com.intellij.notification.NotificationType;
+import com.intellij.openapi.wm.ToolWindow;
+import com.intellij.ui.JBColor;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.util.Disposer;
@@ -32,13 +38,18 @@ import com.intellij.openapi.fileEditor.OpenFileDescriptor;
 import com.intellij.openapi.ide.CopyPasteManager;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.JavaPsiFacade;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
+import com.intellij.psi.search.FilenameIndex;
 import com.intellij.psi.search.GlobalSearchScope;
+import com.intellij.psi.search.PsiShortNamesCache;
+import com.intellij.openapi.fileEditor.FileDocumentManager;
+import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.ui.ColoredListCellRenderer;
 import com.intellij.ui.HyperlinkAdapter;
 import com.intellij.ui.OnePixelSplitter;
@@ -62,9 +73,11 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.datatransfer.StringSelection;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.IntConsumer;
 import java.util.function.Supplier;
@@ -92,8 +105,17 @@ final class ErrorPanel extends JPanel {
     private static final int MAX_CAUSE_CHARS = 200;
     /** 복사할 때 붙일 스택 줄 수. */
     private static final int COPY_STACK_LINES = 40;
+    /** plugin.xml 의 notificationGroup id. 설정 → 알림에서 끌 수 있다. */
+    private static final String NOTIFICATION_GROUP = "서버 오류";
+    /** 오류 알림 사이의 최소 간격. 오류가 쏟아져도 이 사이에는 알림을 하나만 띄운다. */
+    private static final long NOTIFY_GAP_MILLIS = 30_000;
     private static final String LINK_CODE = "code";
     private static final String LINK_FRAME = "frame:";
+    private static final String LINK_LOGGER = "logger";
+    private static final String LINK_MAPPER = "mapper";
+    private static final String XML_EXTENSION = "xml";
+    /** 매퍼를 찾을 때 이보다 큰 XML 은 읽지 않는다(자료 파일). */
+    private static final long MAX_MAPPER_XML_BYTES = 2_000_000;
     private static final String LINK_API = "api";
     private static final String LINK_SQL_CONSOLE = "sqlConsole";
     private static final String LINK_SQL_COPY = "sqlCopy";
@@ -108,6 +130,12 @@ final class ErrorPanel extends JPanel {
     private final Runnable showConsole;
     private final ServerRegistry.Run run;
     private final IntConsumer countShown;
+    private final String serverName;
+    private final Runnable reveal;
+    // 지난 목록의 오류 횟수 합. 늘었으면 새 오류가 난 것이다.
+    private int lastTotal;
+    private long lastNotifiedMillis;
+    private Notification lastNotification;
     private final DefaultListModel<ErrorScan.Item> model = new DefaultListModel<>();
     private final JBList<ErrorScan.Item> list = new JBList<>(model);
     private final JEditorPane detail = new JEditorPane();
@@ -116,15 +144,19 @@ final class ErrorPanel extends JPanel {
     private boolean updating;
     // 지금 설명에 그린 오류. 없으면 null.
     private ErrorScan.Item shownItem;
+    // 프로젝트 소스의 클래스로 확인된 로거 이름. 이 로거의 오류에만 「로그를 찍은 곳」 줄을 보인다.
+    private final Set<String> projectLoggers = new HashSet<>();
 
     /**
      * @param consoleEditor 콘솔 편집기(닫혔으면 null)
      * @param showConsole   콘솔을 앞에 보이게 한다(부트 실행 창은 콘솔 탭을 고른다). 콘솔이 옆에 있으면 아무것도 안 한다
      * @param run           포트를 읽을 실행 기록. 없으면 null(API 다시 보내기를 못 한다)
      * @param countShown    오류 종류 수가 바뀌면 불린다(탭 이름 등)
+     * @param serverName    알림 제목에 쓸 서버 이름
+     * @param reveal        이 칸을 화면 앞에 보이게 한다(알림의 「오류 보기」)
      */
     ErrorPanel(Project project, ErrorWatcher watcher, Supplier<Editor> consoleEditor, Runnable showConsole,
-               ServerRegistry.Run run, IntConsumer countShown) {
+               ServerRegistry.Run run, IntConsumer countShown, String serverName, Runnable reveal) {
         super(new BorderLayout());
         this.project = project;
         this.watcher = watcher;
@@ -132,6 +164,8 @@ final class ErrorPanel extends JPanel {
         this.showConsole = showConsole;
         this.run = run;
         this.countShown = countShown;
+        this.serverName = serverName;
+        this.reveal = reveal;
 
         list.getEmptyText().setText(BootServersBundle.message("errors.empty"));
         list.setCellRenderer(new ItemRenderer());
@@ -163,6 +197,7 @@ final class ErrorPanel extends JPanel {
         ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar(TOOLBAR_PLACE, actions, true);
         toolbar.setTargetComponent(this);
         JPanel top = new JPanel(new BorderLayout());
+        top.setBorder(JBUI.Borders.customLineBottom(JBColor.border()));
         top.add(toolbar.getComponent(), BorderLayout.WEST);
         status.setForeground(NamedColorUtil.getInactiveTextColor());
         status.setBorder(JBUI.Borders.emptyRight(UIUtil.DEFAULT_HGAP));
@@ -177,12 +212,13 @@ final class ErrorPanel extends JPanel {
      * 애플리케이션 실행(스프링 부트) 창의 콘솔 탭 옆에 「오류」 탭을 붙인다. 출력은 지금부터 읽고, 실행 창은 화면 스레드에서 찾는다.
      * 실행 창(RunnerLayoutUi)을 못 찾으면 탭 없이 읽기만 멈춘다. 탭은 실행 창과 함께 닫힌다.
      */
-    static void attachToRun(Project project, ProcessHandler handler, ServerRegistry.Run run) {
-        attachLater(project, handler, run, new ErrorWatcher(handler), FIND_TRIES);
+    static void attachToRun(Project project, ProcessHandler handler, ServerRegistry.Run run, String serverName) {
+        attachLater(project, handler, run, serverName, new ErrorWatcher(handler), FIND_TRIES);
     }
 
     /** 실행 창이 아직 실행 창 목록에 없을 수 있어 FIND_DELAY_MS 간격으로 tries 번까지 찾는다. 끝내 없으면 읽기를 멈춘다. */
-    private static void attachLater(Project project, ProcessHandler handler, ServerRegistry.Run run, ErrorWatcher watcher, int tries) {
+    private static void attachLater(Project project, ProcessHandler handler, ServerRegistry.Run run, String serverName,
+                                    ErrorWatcher watcher, int tries) {
         ApplicationManager.getApplication().invokeLater(() -> {
             RunContentDescriptor descriptor = null;
             for (RunContentDescriptor d : RunContentManager.getInstance(project).getAllDescriptors()) {
@@ -192,9 +228,10 @@ final class ErrorPanel extends JPanel {
             }
             if (descriptor == null && tries > 1) {
                 AppExecutorUtil.getAppScheduledExecutorService().schedule(
-                        () -> attachLater(project, handler, run, watcher, tries - 1), FIND_DELAY_MS, TimeUnit.MILLISECONDS);
+                        () -> attachLater(project, handler, run, serverName, watcher, tries - 1), FIND_DELAY_MS, TimeUnit.MILLISECONDS);
                 return;
             }
+            RunContentDescriptor shown = descriptor;
             RunnerLayoutUi ui = descriptor == null ? null : descriptor.getRunnerLayoutUi();
             if (ui == null || Disposer.isDisposed(descriptor)) {
                 LOG.info("오류 탭을 붙일 실행 창을 찾지 못함: " + (descriptor == null ? "없음" : descriptor.getDisplayName()));
@@ -214,11 +251,63 @@ final class ErrorPanel extends JPanel {
                         }
                     },
                     run,
-                    count -> tab[0].setDisplayName(count == 0 ? title : BootServersBundle.message("errors.tab.count", count)));
+                    count -> tab[0].setDisplayName(count == 0 ? title : BootServersBundle.message("errors.tab.count", count)),
+                    serverName,
+                    () -> {
+                        if (revealRun(project, shown)) {
+                            ui.selectAndFocus(tab[0], true, false);
+                        }
+                    });
             tab[0] = ui.createContent(TAB_ID, panel, title, null, panel.list);
             tab[0].setCloseable(false);
             ui.addContent(tab[0]);
         }, ModalityState.nonModal(), o -> project.isDisposed() && disposeWatcher(watcher));
+    }
+
+    /**
+     * 실행 창(실행 · 디버그 도구 창)을 열고 그 실행의 탭을 고른다. 화면 스레드에서 부른다.
+     * @return 열었으면 참. 이미 닫힌 실행이면 아무것도 안 하고 거짓
+     */
+    static boolean revealRun(Project project, RunContentDescriptor descriptor) {
+        if (project.isDisposed() || descriptor == null || Disposer.isDisposed(descriptor)) {
+            return false;
+        }
+        RunContentManager manager = RunContentManager.getInstance(project);
+        ToolWindow window = manager.getToolWindowByDescriptor(descriptor);
+        if (window == null) {
+            return false;
+        }
+        window.activate(null);
+        manager.selectRunContent(descriptor);
+        return true;
+    }
+
+    /**
+     * 이 칸이 화면에 안 보일 때 새 오류가 나면 알림을 띄운다(제목 = 서버 이름 · 오류 횟수 합, 글 = 가장 새 오류, 「오류 보기」 로 이 칸을 연다).
+     * 알림은 NOTIFY_GAP_MILLIS 에 하나만 띄우고 앞 알림은 지운다.
+     */
+    private void notifyNew(List<ErrorScan.Item> items) {
+        int total = 0;
+        for (ErrorScan.Item item : items) {
+            total += item.count();
+        }
+        boolean more = total > lastTotal;
+        lastTotal = total;
+        long now = System.currentTimeMillis();
+        if (!more || isShowing() || now - lastNotifiedMillis < NOTIFY_GAP_MILLIS || project.isDisposed()) {
+            return;
+        }
+        lastNotifiedMillis = now;
+        if (lastNotification != null) {
+            lastNotification.expire();
+        }
+        ErrorReport newest = items.get(items.size() - 1).last();
+        String title = newest.explain() != null ? newest.explain().title() + " · " : "";
+        lastNotification = NotificationGroupManager.getInstance().getNotificationGroup(NOTIFICATION_GROUP)
+                .createNotification(BootServersBundle.message("errors.notify.title", esc(serverName), total),
+                        esc(title + StringUtil.first(newest.cause().replace('\n', ' '), MAX_CAUSE_CHARS, true)), NotificationType.ERROR)
+                .addAction(NotificationAction.createSimpleExpiring(BootServersBundle.message("errors.notify.show"), reveal));
+        lastNotification.notify(project);
     }
 
     /** 프로젝트가 닫혀 실행 창을 찾지 않게 되면 읽기도 멈춘다(invokeLater 의 그만두기 조건으로 쓴다). */
@@ -272,6 +361,7 @@ final class ErrorPanel extends JPanel {
         }
         showDetail();
         countShown.accept(items.size());
+        notifyNew(items);
     }
 
     /** 고른 오류의 설명을 그린다. 같은 오류가 그대로면(새로 나지 않았으면) 다시 그리지 않아 읽던 자리를 지킨다. */
@@ -281,10 +371,46 @@ final class ErrorPanel extends JPanel {
             return;
         }
         shownItem = item;
+        drawDetail();
+        resolveLogger(item);
+    }
+
+    private void drawDetail() {
+        ErrorScan.Item item = shownItem;
         detail.setText(item == null ? html(esc(BootServersBundle.message(model.isEmpty() ? "errors.empty" : "errors.pick"))) : detailHtml(item));
         detail.setCaretPosition(0);
     }
 
+    /**
+     * 스택 없는 오류의 로거가 프로젝트 소스의 클래스인지 뒤에서 확인하고, 맞으면 「로그를 찍은 곳」 줄을 넣어 다시 그린다.
+     * 클래스가 아닌 로거 이름(「audit」) · 라이브러리 로거(줄여 찍힌 「o.s.w.s.DispatcherServlet」 포함)는 줄이 나오지 않는다.
+     */
+    private void resolveLogger(ErrorScan.Item item) {
+        String logger = item == null || item.last().frame() != null ? null : item.last().logger();
+        if (logger == null || projectLoggers.contains(logger) || ErrorRules.isFramework(logger)) {
+            return;
+        }
+        ReadAction.nonBlocking(() -> loggerFile(logger) != null)
+                .inSmartMode(project)
+                .expireWith(project)
+                .finishOnUiThread(ModalityState.defaultModalityState(), (Boolean found) -> {
+                    if (found && shownItem == item) {
+                        projectLoggers.add(logger);
+                        drawDetail();
+                    }
+                })
+                .submit(AppExecutorUtil.getAppExecutorService());
+    }
+
+    /** 로거 이름의 클래스가 프로젝트 소스에 있으면 그 파일, 아니면 null. 읽기 동작 안에서 부른다. */
+    private VirtualFile loggerFile(String logger) {
+        VirtualFile file = classFile(logger, true);
+        return file != null && ProjectFileIndex.getInstance(project).isInSourceContent(file) ? file : null;
+    }
+
+    /**
+     * 제목 줄 아래에 「이름 칸 · 내용 칸」 두 칸 표로 그린다(이름 칸은 회색, 내용 칸 왼쪽이 한 줄로 맞는다). 내용이 없는 줄은 넣지 않는다.
+     */
     private String detailHtml(ErrorScan.Item item) {
         ErrorReport r = item.last();
         StringBuilder b = new StringBuilder();
@@ -296,19 +422,25 @@ final class ErrorPanel extends JPanel {
             b.append(gray("  " + BootServersBundle.message("errors.count", item.count(), StringUtil.notNullize(item.firstTime()),
                     StringUtil.notNullize(r.time()))));
         }
-        b.append("</p>");
+        b.append("</p><table cellpadding='0' cellspacing='0'>");
         if (r.explain() != null) {
-            b.append("<p>").append(esc(r.explain().text())).append("</p>");
-            if (!r.explain().example().isEmpty()) {
-                b.append("<p>").append(gray(BootServersBundle.message("errors.example"))).append(' ').append(code(r.explain().example())).append("</p>");
-            }
+            String example = r.explain().example().isEmpty() ? ""
+                    : "<br>" + gray(BootServersBundle.message("errors.example")) + ' ' + code(r.explain().example());
+            section(b, "errors.explain", esc(r.explain().text()) + example);
         }
         section(b, "errors.cause", esc(r.cause()));
         if (r.startup() && r.action() != null) {
             section(b, "errors.spring.action", esc(r.action()));
         }
-        section(b, "errors.our.code", r.frame() == null ? gray(BootServersBundle.message("errors.our.code.none"))
-                : link(LINK_CODE, r.frame().text()));
+        if (r.frame() != null) {
+            section(b, "errors.our.code", link(LINK_CODE, r.frame().text()));
+        }
+        else if (r.logger() != null && projectLoggers.contains(r.logger())) {
+            section(b, "errors.logged.at", link(LINK_LOGGER, r.logger()));
+        }
+        if (r.mapperId() != null) {
+            section(b, "errors.mapper", link(LINK_MAPPER, r.mapperId()));
+        }
         if (r.path() != null) {
             String request = (r.method() == null ? "" : r.method() + " ") + r.path() + (r.params() == null ? "" : "  " + r.params());
             String send = run == null || run.port == null ? gray(BootServersBundle.message("errors.api.no.port"))
@@ -328,10 +460,11 @@ final class ErrorPanel extends JPanel {
             sql.append(link(LINK_SQL_COPY, BootServersBundle.message("errors.sql.copy")));
             section(b, filled != null ? "errors.sql.filled" : "errors.sql", sql.toString());
         }
-        b.append("<p>").append(gray(BootServersBundle.message("errors.stack"))).append(" &nbsp; ")
-                .append(link(LINK_CONSOLE, BootServersBundle.message("errors.action.console"))).append("<br>");
-        b.append(stackHtml(r)).append("</p>");
-        return html(b.toString());
+        // 한 줄뿐인 오류(스택 없음)는 위 「원인」 과 같은 글이라 스택 줄을 넣지 않는다.
+        if (r.lines().size() > 1) {
+            section(b, "errors.stack", stackHtml(r));
+        }
+        return html(b.append("</table>").append(link(LINK_CONSOLE, BootServersBundle.message("errors.action.console"))).toString());
     }
 
     /** 예외 · 원인 줄과 우리 코드 줄만 남기고, 이어진 라이브러리 줄은 「… 라이브러리 n줄」 로 접는다. 우리 코드 줄은 누르면 간다. */
@@ -358,8 +491,10 @@ final class ErrorPanel extends JPanel {
         return b.append("</pre>").toString();
     }
 
+    /** 표 한 줄: 왼쪽 회색 이름(줄 바꿈 없음), 오른쪽 내용. */
     private static void section(StringBuilder b, String key, String body) {
-        b.append("<p>").append(gray(BootServersBundle.message(key))).append("<br>").append(body).append("</p>");
+        b.append("<tr><td valign='top' nowrap>").append(gray(BootServersBundle.message(key))).append("&nbsp;&nbsp;&nbsp;</td><td valign='top'>")
+                .append(body).append("<br>&nbsp;</td></tr>");
     }
 
     private void linkClicked(String href) {
@@ -370,6 +505,12 @@ final class ErrorPanel extends JPanel {
         ErrorReport r = item.last();
         if (href.equals(LINK_CODE) && r.frame() != null) {
             openFrame(r.frame());
+        }
+        else if (href.equals(LINK_LOGGER) && r.logger() != null) {
+            openLogLine(r);
+        }
+        else if (href.equals(LINK_MAPPER) && r.mapperId() != null) {
+            openMapper(r.mapperId());
         }
         else if (href.startsWith(LINK_FRAME)) {
             int index = StringUtil.parseInt(href.substring(LINK_FRAME.length()), -1);
@@ -399,26 +540,98 @@ final class ErrorPanel extends JPanel {
 
     /** 스택 줄의 클래스를 프로젝트(없으면 라이브러리 소스)에서 찾아 그 줄을 연다. 색인 중이면 끝난 뒤에 찾는다. */
     private void openFrame(ErrorReport.Frame frame) {
-        int inner = frame.className().indexOf('$');
-        String name = inner < 0 ? frame.className() : frame.className().substring(0, inner);
-        ReadAction.nonBlocking(() -> {
-                    JavaPsiFacade psi = JavaPsiFacade.getInstance(project);
-                    PsiClass found = psi.findClass(name, GlobalSearchScope.projectScope(project));
-                    if (found == null) {
-                        found = psi.findClass(name, GlobalSearchScope.allScope(project));
-                    }
-                    PsiElement nav = found == null ? null : found.getNavigationElement();
-                    PsiFile file = nav == null ? null : nav.getContainingFile();
-                    return file == null ? null : file.getVirtualFile();
-                })
+        ReadAction.nonBlocking(() -> classFile(frame.className(), false))
                 .inSmartMode(project)
                 .expireWith(project)
                 .finishOnUiThread(ModalityState.defaultModalityState(), (VirtualFile file) -> {
                     if (file == null) {
-                        status.setText(BootServersBundle.message("errors.class.not.found", name));
+                        status.setText(BootServersBundle.message("errors.class.not.found", frame.className()));
                         return;
                     }
                     new OpenFileDescriptor(project, file, Math.max(0, frame.line() - 1), 0).navigate(true);
+                })
+                .submit(AppExecutorUtil.getAppExecutorService());
+    }
+
+    /**
+     * 클래스 이름(안쪽 클래스 포함)의 소스 파일. 읽기 동작 안에서 부른다. 못 찾으면 null.
+     * @param abbreviated 참이면 이름이 「c.s.s.SuppApplication」 처럼 줄여 찍힌 로거 이름일 수 있다:
+     *                    온 이름으로 못 찾으면 프로젝트에 그 짧은 이름의 클래스가 하나뿐일 때 그것을 쓴다
+     */
+    private VirtualFile classFile(String className, boolean abbreviated) {
+        int inner = className.indexOf('$');
+        String name = inner < 0 ? className : className.substring(0, inner);
+        JavaPsiFacade psi = JavaPsiFacade.getInstance(project);
+        PsiClass found = psi.findClass(name, GlobalSearchScope.projectScope(project));
+        if (found == null) {
+            found = psi.findClass(name, GlobalSearchScope.allScope(project));
+        }
+        if (found == null && abbreviated) {
+            PsiClass[] byName = PsiShortNamesCache.getInstance(project)
+                    .getClassesByName(name.substring(name.lastIndexOf('.') + 1), GlobalSearchScope.projectScope(project));
+            found = byName.length == 1 ? byName[0] : null;
+        }
+        PsiElement nav = found == null ? null : found.getNavigationElement();
+        PsiFile file = nav == null ? null : nav.getContainingFile();
+        return file == null ? null : file.getVirtualFile();
+    }
+
+    /** 스택 없는 오류: 로그를 찍은 클래스에서 그 글을 찍는 줄을 찾아 연다. 줄을 못 찾으면 클래스 맨 위를 연다. */
+    private void openLogLine(ErrorReport r) {
+        String logger = r.logger();
+        String message = r.rootMessage();
+        ReadAction.nonBlocking(() -> {
+                    VirtualFile file = loggerFile(logger);
+                    Document doc = file == null ? null : FileDocumentManager.getInstance().getDocument(file);
+                    return file == null ? null : new OpenFileDescriptor(project, file,
+                            Math.max(0, doc == null ? 0 : SourceFind.logLine(doc.getText(), message)), 0);
+                })
+                .inSmartMode(project)
+                .expireWith(project)
+                .finishOnUiThread(ModalityState.defaultModalityState(), (OpenFileDescriptor at) -> {
+                    if (at == null) {
+                        status.setText(BootServersBundle.message("errors.class.not.found", logger));
+                        return;
+                    }
+                    at.navigate(true);
+                })
+                .submit(AppExecutorUtil.getAppExecutorService());
+    }
+
+    /**
+     * 매퍼 문장 id(「com.x.UserMapper.selectUser」)의 XML 문장을 연다. namespace 가 맞는 XML 을 이름이 같은 파일에서 먼저,
+     * 없으면 프로젝트의 모든 XML 에서 찾는다. 문장이 없으면(Invalid bound statement) 그 XML 맨 위, XML 도 없으면 매퍼 인터페이스를 연다.
+     */
+    private void openMapper(String mapperId) {
+        int dot = mapperId.lastIndexOf('.');
+        String namespace = mapperId.substring(0, dot);
+        String statement = mapperId.substring(dot + 1);
+        ReadAction.nonBlocking(() -> {
+                    GlobalSearchScope scope = GlobalSearchScope.projectScope(project);
+                    List<VirtualFile> candidates = new ArrayList<>(FilenameIndex.getVirtualFilesByName(
+                            namespace.substring(namespace.lastIndexOf('.') + 1) + "." + XML_EXTENSION, scope));
+                    candidates.addAll(FilenameIndex.getAllFilesByExt(project, XML_EXTENSION, scope));
+                    for (VirtualFile file : candidates) {
+                        ProgressManager.checkCanceled();
+                        if (file.getLength() > MAX_MAPPER_XML_BYTES) {
+                            continue;
+                        }
+                        Document doc = FileDocumentManager.getInstance().getDocument(file);
+                        if (doc != null && SourceFind.isMapperOf(doc.getText(), namespace)) {
+                            return new OpenFileDescriptor(project, file, Math.max(0, SourceFind.statementOffset(doc.getText(), statement)));
+                        }
+                    }
+                    VirtualFile mapper = classFile(namespace, false);
+                    return mapper == null ? null : new OpenFileDescriptor(project, mapper);
+                })
+                .inSmartMode(project)
+                .expireWith(project)
+                .finishOnUiThread(ModalityState.defaultModalityState(), (OpenFileDescriptor at) -> {
+                    if (at == null) {
+                        status.setText(BootServersBundle.message("errors.mapper.not.found", namespace));
+                        return;
+                    }
+                    at.navigate(true);
                 })
                 .submit(AppExecutorUtil.getAppExecutorService());
     }

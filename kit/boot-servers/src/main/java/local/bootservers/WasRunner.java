@@ -413,11 +413,14 @@ public final class WasRunner {
         DefaultActionGroup actions = new DefaultActionGroup();
         // 콘솔 오른쪽 「오류」 칸. 출력 읽기는 실행 창과 함께 끝난다.
         ErrorWatcher watcher = new ErrorWatcher(handler);
+        RunContentDescriptor[] shown = new RunContentDescriptor[1];
         ErrorPanel errors = new ErrorPanel(project, watcher,
                 () -> console instanceof ConsoleViewImpl impl ? impl.getEditor() : null, () -> {},
-                ServerRegistry.getInstance(project).get(registryKey(server)), count -> {});
+                ServerRegistry.getInstance(project).get(registryKey(server)), count -> {}, server.name,
+                () -> ErrorPanel.revealRun(project, shown[0]));
         JPanel panel = ConsolePanel.create(console, actions, errors, ERRORS_SPLIT_KEY);
         RunContentDescriptor descriptor = new RunContentDescriptor(console, handler, panel, server.name);
+        shown[0] = descriptor;
         descriptor.setActivateToolWindowWhenAdded(true);
         Disposer.register(descriptor, console);
         Disposer.register(descriptor, watcher);

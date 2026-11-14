@@ -47,7 +47,7 @@ public final class ServerStatusRefresher implements ExecutionListener {
         ServerRegistry registry = ServerRegistry.getInstance(project);
         registry.track(settings.getName(), handler);
         ServerRegistry.Run run = registry.get(settings.getName());
-        ErrorPanel.attachToRun(project, handler, run);
+        ErrorPanel.attachToRun(project, handler, run, settings.getName());
         // 기록기의 출력 감시가 먼저 붙어 있으므로, 같은 출력에서 시작 완료(run.started)가 이미 반영된 뒤에 아래가 불린다.
         // 서버 창이 닫혀 있어도 트리의 「시작 중」 이 「실행 중 :포트」 로 바뀌게 한다.
         handler.addProcessListener(new ProcessListener() {
