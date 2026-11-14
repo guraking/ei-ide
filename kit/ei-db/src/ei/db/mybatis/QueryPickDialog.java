@@ -14,7 +14,7 @@ import com.intellij.ui.ColoredListCellRenderer;
 import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.DoubleClickListener;
 import com.intellij.ui.EditorTextField;
-import com.intellij.ui.OnePixelSplitter;
+import com.intellij.ui.JBSplitter;
 import com.intellij.ui.SearchTextField;
 import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.components.JBLabel;
@@ -61,8 +61,6 @@ final class QueryPickDialog extends DialogWrapper {
   private static final String DIMENSION_KEY = "ei.db.mybatis.QueryPickDialog";
   private static final String SPLIT_KEY = "ei.db.mybatis.QueryPickDialog.split";
   private static final float SPLIT = 0.37f;
-  /** 칸막이 양쪽 안쪽 여백(px, 배율 전). */
-  private static final int SPLIT_PADDING = 8;
   /** 이름(주석 · 로거)이 없는 쿼리를 목록 한 줄에 보일 SQL 글자 수. */
   private static final int LABEL_SQL_LENGTH = 60;
 
@@ -148,10 +146,7 @@ final class QueryPickDialog extends DialogWrapper {
     JPanel left = new JPanel(new BorderLayout(0, JBUI.scale(4)));
     left.add(filter, BorderLayout.NORTH);
     left.add(new JBScrollPane(list), BorderLayout.CENTER);
-    // 얇은 한 줄 칸막이를 쓰고, 양쪽 내용이 선에 붙지 않게 안쪽 여백을 둔다.
-    left.setBorder(JBUI.Borders.emptyRight(SPLIT_PADDING));
-    right.setBorder(JBUI.Borders.emptyLeft(SPLIT_PADDING));
-    OnePixelSplitter split = new OnePixelSplitter(false, SPLIT);
+    JBSplitter split = new JBSplitter(false, SPLIT);
     split.setSplitterProportionKey(SPLIT_KEY);
     split.setHonorComponentsMinimumSize(false);
     split.setFirstComponent(left);

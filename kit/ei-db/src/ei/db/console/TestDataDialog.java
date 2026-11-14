@@ -8,7 +8,7 @@ import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.ui.CollectionComboBoxModel;
 import com.intellij.ui.EditorTextField;
-import com.intellij.ui.OnePixelSplitter;
+import com.intellij.ui.JBSplitter;
 import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.SimpleListCellRenderer;
 import com.intellij.ui.components.JBLabel;
@@ -166,7 +166,7 @@ public final class TestDataDialog extends DialogWrapper {
     plan.add(ScrollPaneFactory.createScrollPane(table), BorderLayout.CENTER);
     plan.add(tools, BorderLayout.SOUTH);
 
-    OnePixelSplitter split = new OnePixelSplitter(true, PLAN_PROPORTION);
+    JBSplitter split = new JBSplitter(true, PLAN_PROPORTION);
     split.setSplitterProportionKey(SPLIT_KEY);
     split.setHonorComponentsMinimumSize(false);
     split.setFirstComponent(plan);
