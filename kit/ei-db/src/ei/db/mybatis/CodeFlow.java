@@ -874,6 +874,7 @@ final class CodeFlow {
         if (!room()) break;
         PsiMethod m = e.getKey();
         Item mi = add(parent, methodItem(m, nav(e.getValue())));
+        climbed.add(m);
         PsiClass c = m.getContainingClass();
         if (c != null && isMapper(c, m)) addStatements(mi, c, m.getName());
         List<Api> found = apisOf(m);
@@ -922,6 +923,7 @@ final class CodeFlow {
       for (PsiMethod m : ms) {
         if (!room()) return;
         Item mi = add(parent, methodItem(m, nav(m)));
+        climbed.add(m);
         if (expanded.add(m)) reached.put(m, usedBy(refsTo(m), mi, 1));
         else seen(mi, m);
       }
@@ -1082,8 +1084,24 @@ final class CodeFlow {
 
     // ---- API · 화면
 
-    /** 찾는 동안 만난 URL 들을 root 아래 묶음으로 달고, 화면 묶음은 뒤에서 붙이게 넘긴다. */
+    /** 거꾸로 올라가며 만난 메서드들(만난 차례). 매퍼 · 서비스 묶음을 만든다. */
+    private final Set<PsiMethod> climbed = new LinkedHashSet<>();
+
+    /** 올라가며 만난 메서드 가운데 종류가 kind 인 것을 root 아래 묶음으로 단다. 없으면 「없음」 을 적는다. */
+    private void addJavaGroup(Item root, String groupKey, String kind, Icon icon) {
+      List<PsiMethod> same = new ArrayList<>();
+      for (PsiMethod m : climbed) {
+        if (kind.equals(kindOf(m.getContainingClass(), m))) same.add(m);
+      }
+      Item g = group(root, EiDbBundle.message(groupKey, same.size()), icon);
+      for (PsiMethod m : same) add(g, methodItem(m, null));
+      if (same.isEmpty()) g.note = EiDbBundle.message("codeflow.note.none");
+    }
+
+    /** 찾는 동안 만난 매퍼 · 서비스 · URL 을 root 아래 묶음으로 달고, 화면 묶음은 뒤에서 붙이게 넘긴다. */
     Found withApis(Item root) {
+      addJavaGroup(root, "codeflow.group.mappers", EiDbBundle.message("codeflow.kind.mapper"), AllIcons.Nodes.Interface);
+      addJavaGroup(root, "codeflow.group.services", EiDbBundle.message("codeflow.kind.service"), AllIcons.Nodes.Class);
       List<Api> list = new ArrayList<>(apis.values());
       Item api = group(root, EiDbBundle.message("codeflow.group.apis", list.size()), AllIcons.Nodes.PpWeb);
       for (Api a : list) add(api, new Item(a.label(), a.where(), AllIcons.Nodes.Method, new PsiNav(a.method())));

@@ -249,6 +249,11 @@ public final class CodeFlowView {
       return seen;
     }
 
+    /** 맨 위 마디만 펼친다. 그 아래는 건드리지 않는다. */
+    void expandList() {
+      if (getModel().getRoot() instanceof DefaultMutableTreeNode root) expandPath(new TreePath(root.getPath()));
+    }
+
     private static DefaultMutableTreeNode node(CodeFlow.Item item) {
       DefaultMutableTreeNode n = new DefaultMutableTreeNode(item);
       for (CodeFlow.Item k : item.kids) n.add(node(k));
@@ -307,7 +312,14 @@ public final class CodeFlowView {
   /** 나무의 스톡 「전체 펼치기 · 전체 접기」 단추 줄. */
   private static JComponent treeButtons(ResultTree tree) {
     CommonActionsManager actions = CommonActionsManager.getInstance();
-    DefaultTreeExpander expander = new DefaultTreeExpander(tree);
+    // 전체 접기는 결과 목록이 보이는 데까지만 접는다: 맨 위 마디만 펼쳐 문장 · 묶음 줄이 접힌 채 보인다.
+    DefaultTreeExpander expander = new DefaultTreeExpander(tree) {
+      @Override
+      public void collapseAll() {
+        super.collapseAll();
+        tree.expandList();
+      }
+    };
     DefaultActionGroup group = new DefaultActionGroup(actions.createExpandAllAction(expander, tree), actions.createCollapseAllAction(expander, tree));
     ActionToolbar bar = ActionManager.getInstance().createActionToolbar(TOOLBAR_PLACE, group, true);
     bar.setTargetComponent(tree);
