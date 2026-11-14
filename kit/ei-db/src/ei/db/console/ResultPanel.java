@@ -158,6 +158,8 @@ final class ResultPanel extends SimpleToolWindowPanel {
   private boolean[] pkColumns;
   /** 반영 문장에 쓸 표 · 칼럼(결과 칼럼 번호 순) 표기: 표 정의의 이름 그대로를 SqlText.ident 로. pkColumns 와 함께 채운다. */
   private String editTable;
+  /** 마지막 왼쪽 누름이 행 번호 칸이었는지(끌어서 여러 행을 고르는 중인지). */
+  private boolean rowPick;
   private String[] editColumns;
   /** 고치기를 막는 이유. null 이면 막지 않거나 아직 모른다. */
   private String editBlocked;
@@ -286,6 +288,12 @@ final class ResultPanel extends SimpleToolWindowPanel {
     grid.addMouseListener(new MouseAdapter() {
       @Override public void mousePressed(MouseEvent e) { onCell(e); }
       @Override public void mouseReleased(MouseEvent e) { onCell(e); }
+    });
+    // 행 번호 칸에서 끌면 JTable 이 칼럼 선택을 끈 자리까지로 줄이므로, 끄는 동안 행 전체 선택을 유지한다.
+    grid.addMouseMotionListener(new MouseAdapter() {
+      @Override public void mouseDragged(MouseEvent e) {
+        if (rowPick && grid.getColumnCount() > 1) grid.setColumnSelectionInterval(1, grid.getColumnCount() - 1);
+      }
     });
     fitColumns(grid);
     CellActions.installShortcut(grid, project, c, result);
@@ -525,14 +533,13 @@ final class ResultPanel extends SimpleToolWindowPanel {
 
   /**
    * 칸 오른쪽 누름: 값 · 칼럼 · 행 복사 메뉴. 누른 칸이 골라져 있지 않으면 그 칸만 고른다.
-   * 행 번호 칸 왼쪽 누름: 그 행 전체를 고른다(Ctrl · Shift 로 행을 더하는 것은 JTable 이 먼저 처리한다). 행 번호 칸 자신은 복사에 섞이지 않게 뺀다.
+   * 행 번호 칸 왼쪽 누름: 그 행 전체를 고른다(Ctrl · Shift 로 행을 더하거나 끌어서 여러 행을 고르는 것은 JTable 이 먼저 처리한다). 행 번호 칸 자신은 복사에 섞이지 않게 뺀다.
    */
   private void onCell(MouseEvent e) {
     if (e.getID() == MouseEvent.MOUSE_PRESSED && SwingUtilities.isLeftMouseButton(e) && e.getClickCount() == 1) {
       int view = grid.columnAtPoint(e.getPoint());
-      if (view >= 0 && grid.rowAtPoint(e.getPoint()) >= 0 && grid.convertColumnIndexToModel(view) == 0 && grid.getColumnCount() > 1) {
-        grid.setColumnSelectionInterval(1, grid.getColumnCount() - 1);
-      }
+      rowPick = view >= 0 && grid.rowAtPoint(e.getPoint()) >= 0 && grid.convertColumnIndexToModel(view) == 0 && grid.getColumnCount() > 1;
+      if (rowPick) grid.setColumnSelectionInterval(1, grid.getColumnCount() - 1);
       return;
     }
     if (e.getID() == MouseEvent.MOUSE_PRESSED && SwingUtilities.isLeftMouseButton(e) && e.getClickCount() == 2) {
