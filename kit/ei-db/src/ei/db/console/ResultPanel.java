@@ -298,9 +298,16 @@ final class ResultPanel extends SimpleToolWindowPanel {
       }
     });
     fitColumns(grid);
-    // 행 번호 칸은 번호 글자 폭까지만. 칸이 적어 표가 창 폭으로 늘 때 이 칸까지 함께 늘지 않게 한다.
+    // 행 번호 칸의 폭은 가장 큰 번호(마지막 행)의 글자 폭을 따른다: 행이 많아 자릿수가 늘면 칸도 넓어진다.
+    // fitColumns 는 앞쪽 FIT_ROWS 행만 재므로 마지막 행을 따로 잰다. 표가 창 폭으로 늘 때 이 칸은 함께 늘지 않는다.
     TableColumn numbers = grid.getColumnModel().getColumn(0);
-    numbers.setMaxWidth(numbers.getPreferredWidth());
+    int numberWidth = numbers.getPreferredWidth();
+    if (grid.getRowCount() > 0) {
+      int last = grid.getRowCount() - 1;
+      numberWidth = Math.max(numberWidth, grid.prepareRenderer(grid.getCellRenderer(last, 0), last, 0).getPreferredSize().width + JBUI.scale(CELL_PADDING));
+    }
+    numbers.setPreferredWidth(numberWidth);
+    numbers.setMaxWidth(numberWidth);
     CellActions.installShortcut(grid, project, c, result);
 
     // 머리줄: 왼쪽 「결과 N · 표」(굵게) · 건수 꼬리표 · 실행 시간 · 더 읽기 · 찾기 칸, 오른쪽 반영 · 되돌리기 단추와 내보내기 링크.
