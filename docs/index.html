@@ -53,7 +53,7 @@ a.chip:hover{border-color:var(--accent); color:var(--fg)}
 
 /* 목차 */
 nav.toc{position:sticky; top:0; z-index:5; background:color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter:blur(8px); border-bottom:1px solid var(--line)}
-nav.toc .wrap{display:flex; align-items:center; gap:4px; overflow-x:auto; scrollbar-width:none; height:52px}
+nav.toc .wrap{display:flex; flex-wrap:wrap; align-items:center; gap:4px; min-height:52px}
 nav.toc .wrap::-webkit-scrollbar{display:none}
 nav.toc a{flex:none; color:var(--muted); text-decoration:none; padding:6px 12px; border-radius:8px; font-size:14px}
 nav.toc a:hover,nav.toc a.on{color:var(--fg); background:var(--panel-2)}
@@ -282,7 +282,7 @@ h2 .no::before{content:""; width:9px; height:9px; border-radius:50%; background:
 .chip,#theme,.btn,.combo{border-radius:999px}
 .chip{background:var(--panel); border-color:var(--line)}
 nav.toc{top:10px; margin:0 auto; max-width:1180px; background:transparent; border:0; backdrop-filter:none}
-nav.toc .wrap{height:48px; margin:0 16px; padding:0 6px; border:1px solid var(--line); border-radius:999px; background:var(--panel); -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur); box-shadow:var(--shadow)}
+nav.toc .wrap{min-height:48px; margin:0 16px; padding:6px; border:1px solid var(--line); border-radius:24px; background:var(--panel); -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur); box-shadow:var(--shadow)}
 nav.toc a{border-radius:999px; padding:5px 12px}
 nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
 #theme{background:var(--panel-2); border-color:transparent}
@@ -306,6 +306,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
 .subtoc a{font-size:13px; color:var(--muted); text-decoration:none; border:1px solid var(--line); border-radius:999px; padding:3px 10px; background:var(--panel)}
 .subtoc a:hover{color:var(--fg); border-color:var(--accent)}
 h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
+@media (max-width:900px){nav.toc{position:static}}
 </style>
 </head>
 <body>
