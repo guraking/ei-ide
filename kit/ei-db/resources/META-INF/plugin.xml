@@ -49,6 +49,9 @@
     <gotoDeclarationHandler implementation="ei.db.mybatis.ParamNav"/>
     <!-- MyBatis: 컨트롤러 · 서비스 메서드 → 서비스 → 매퍼 → XML 계층 이동, 매퍼 인터페이스 ↔ XML 빠진 짝 -->
     <codeInsight.lineMarkerProvider language="JAVA" implementationClass="ei.db.mybatis.LayerNav"/>
+    <!-- 코드 흐름: URL → 컨트롤러 → 서비스 → 매퍼 → XML → 표, 바꾸면 영향, 표에서 찾기, 안 쓰는 것. 창을 열어도 찾지 않는다 -->
+    <toolWindow id="ei.db.CodeFlow" anchor="bottom" icon="AllIcons.Hierarchy.Subtypes" doNotActivateOnStart="true"
+                factoryClass="ei.db.mybatis.CodeFlowView$Factory"/>
     <localInspection language="XML" shortName="EiMapperXmlMissingMethod" bundle="messages.EiDbBundle" key="inspection.EiMapperXmlMissingMethod.display.name"
                      groupName="MyBatis" enabledByDefault="true" level="WEAK WARNING"
                      implementationClass="ei.db.mybatis.MapperPairInspection$Xml"/>
@@ -59,6 +62,19 @@
     <localInspection language="XML" shortName="EiMapperSqlUnknownName" bundle="messages.EiDbBundle" key="inspection.EiMapperSqlUnknownName.display.name"
                      groupName="MyBatis" enabledByDefault="true" level="WARNING"
                      implementationClass="ei.db.mybatis.MapperSqlInspection"/>
+    <!-- 위험 구간 검사: 설정 → 편집기 → 검사 → Moa 위험 구간. 트랜잭션 누락 · SQL 이어 붙이기 · 매퍼 ${} · 민감정보 하드코딩 -->
+    <localInspection language="JAVA" shortName="EiRiskTransaction" bundle="messages.EiDbBundle" key="inspection.EiRiskTransaction.display.name"
+                     groupBundle="messages.EiDbBundle" groupKey="inspection.group.risk" enabledByDefault="true" level="WARNING"
+                     implementationClass="ei.db.mybatis.RiskTxInspection"/>
+    <localInspection language="JAVA" shortName="EiRiskSqlConcat" bundle="messages.EiDbBundle" key="inspection.EiRiskSqlConcat.display.name"
+                     groupBundle="messages.EiDbBundle" groupKey="inspection.group.risk" enabledByDefault="true" level="WARNING"
+                     implementationClass="ei.db.mybatis.RiskSqlInspection"/>
+    <localInspection language="XML" shortName="EiRiskMapperDollar" bundle="messages.EiDbBundle" key="inspection.EiRiskMapperDollar.display.name"
+                     groupBundle="messages.EiDbBundle" groupKey="inspection.group.risk" enabledByDefault="true" level="WARNING"
+                     implementationClass="ei.db.mybatis.RiskDollarInspection"/>
+    <localInspection language="JAVA" shortName="EiRiskHardSecret" bundle="messages.EiDbBundle" key="inspection.EiRiskHardSecret.display.name"
+                     groupBundle="messages.EiDbBundle" groupKey="inspection.group.risk" enabledByDefault="true" level="WARNING"
+                     implementationClass="ei.db.mybatis.RiskSecretInspection"/>
     <!-- MyBatis: 매퍼 필드를 가진 클래스에서 서비스 메서드 자동 완성 -->
     <completion.contributor language="JAVA" implementationClass="ei.db.mybatis.ServiceMethodCompletion"/>
     <!-- 주석 만들기: 설정 → 도구 → 주석 만들기(작성자 · 날짜 · 사전) -->
@@ -172,6 +188,13 @@
     <action id="ei.db.DocComment" class="ei.db.mybatis.DocCommentAction" icon="AllIcons.Actions.InlayRenameInComments"/>
     <action id="ei.db.gen.EnumSync" class="ei.db.gen.EnumSyncAction" icon="/icons/ei/enumSync.svg">
       <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+    </action>
+    <!-- 자바 편집기 우클릭: 호출 흐름 보기 · 바꾸면 영향 보기(결과는 코드 흐름 창) -->
+    <action id="ei.db.CodeFlow.Flow" class="ei.db.mybatis.CodeFlowAction$Flow" icon="AllIcons.Hierarchy.Subtypes">
+      <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EiDb.MyBatis.LayerCode"/>
+    </action>
+    <action id="ei.db.CodeFlow.Impact" class="ei.db.mybatis.CodeFlowAction$Impact" icon="AllIcons.Hierarchy.Supertypes">
+      <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="ei.db.CodeFlow.Flow"/>
     </action>
   </actions>
 </idea-plugin>

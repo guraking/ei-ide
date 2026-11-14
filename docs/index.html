@@ -1755,6 +1755,15 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
     <p class="lead">「Send to Query Console」는 실행하지 않고 콘솔에 붙입니다. 로그가 아닌 선택 글도 보냅니다. 붙는 SQL 은 콘솔 「정렬」과 같은 모양으로 정렬됩니다. MyBatis 로그와 log4jdbc(<code>jdbc.sqltiming</code>) 로그를 모두 읽고, 같은 쿼리는 가장 최근 것 하나만 목록에 보입니다. 쿼리가 여럿이면 「보낼 쿼리」 창이 뜹니다. 왼쪽 거르기 칸 · 목록에서 고르면 오른쪽에 값을 채우고 정렬한 쿼리가 보이고, 「복사」 · 「실행」(Ctrl+Enter) · 「콘솔로 보내기」(Enter)로 끝냅니다.</p>
     <p class="lead">로그에 쿼리가 여럿이면 보낼 쿼리를 목록에서 고르고, 이어서 보낼 콘솔 탭(또는 「새 콘솔…」)을 고릅니다. 실행도 고른 콘솔에서 합니다.</p>
 
+    <h3 id="risk">위험 구간 검사 · 설정 → 편집기 → 검사 → 「Moa 위험 구간」</h3>
+    <p class="lead">문법 오류는 아니지만 실무에서 자주 놓치는 곳에 노란 줄을 긋습니다. 줄 위에 마우스를 올리면 무엇이 위험한지와 고친 모양을 짧게 보여 줍니다. 네 가지 모두 기본으로 켜져 있고, 설정에서 하나씩 끌 수 있습니다.</p>
+    <div class="cards">
+      <div class="card"><h4>@Transactional 없이 여러 번 고침</h4><p>한 메서드에서 매퍼 insert · update · delete 를 두 번 넘게(반복문 안이면 한 번이라도) 부르는데 <code>@Transactional</code> 이 없을 때. 중간에 실패하면 앞의 것만 남습니다. 클래스 · 인터페이스에 붙인 것, TransactionTemplate 도 봅니다. 프로젝트에 XML 트랜잭션 설정(<code>tx:advice</code>)이 있으면 표시하지 않습니다.</p></div>
+      <div class="card"><h4>SQL 에 값을 바로 이어 붙임</h4><p><code>"WHERE USER_ID = '" + userId + "'"</code> 처럼 문자열 값을 SQL 값 자리 · ORDER BY 에 붙인 곳. StringBuilder 의 append 도 봅니다. 숫자 값은 건너뜁니다. 고친 모양: <code>"WHERE USER_ID = ?"</code> + 바인드.</p></div>
+      <div class="card"><h4>매퍼 SQL 의 ${}</h4><p>매퍼 XML 과 <code>@Select</code> 같은 어노테이션 SQL 의 <code>${}</code>. 값 자리면 <code>#{}</code> 로 바꾸라고, 정렬 · 표 이름 자리면 정해 둔 목록에서만 고르라고 알립니다.</p></div>
+      <div class="card"><h4>코드에 박힌 비밀번호 · 키 · DB 주소</h4><p><code>dbPassword = "tiger123"</code>, <code>setPassword("…")</code>, <code>"jdbc:oracle:thin:@10.1.2.3:1521:ORCL"</code>, 아이디 · 비밀번호가 든 URL, 개인 키. 설정 키(<code>db.password</code>) · 상수 이름 · 문구 · 테스트 소스는 건너뜁니다. 설정 파일(application.yml)은 보지 않습니다.</p></div>
+    </div>
+
     <h3>매퍼 뼈대 · DTO · ERD</h3>
     <div class="cards">
       <div class="card"><h4>매퍼 뼈대 만들기</h4><p>표 우클릭 → select · insert · update · delete · MERGE(있으면 수정 · 없으면 등록, 기본 꺼짐) · 인터페이스. select 는 <code>resultType</code> DTO 에 <code>AS 필드</code> 별칭으로 바로 담고, resultMap(기본 꺼짐)을 켜면 resultMap 으로 잇습니다. UPDATE 의 null 건너뛰기 <code>&lt;if&gt;</code> 는 끌 수 있습니다. 구식 조인, 부등호 CDATA, <code>WHERE 1 = 1</code>, 표 · 칼럼 이름 대문자 · 별칭 소문자. 있는 파일은 덮어쓰지 않고 덧붙입니다.</p></div>
@@ -1903,6 +1912,23 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       </div>
     </div>
     <p class="lead" style="margin-top:18px">먼저 옛 칼럼 이름 · 새 칼럼 이름 · 표 이름(비우면 모든 매퍼)을 넣고, 「DTO 필드도 바꾸기」를 끄면 XML 만 바꿉니다. 미리보기에서 체크를 푼 줄은 그대로 둡니다.</p>
+
+    <h3 id="codeflow">코드 흐름 · 바꾸면 영향 · 표에서 찾기 · 안 쓰는 것</h3>
+    <p class="lead">아래쪽 「코드 흐름」 창에 탭 넷이 있습니다. 창을 열기만 해서는 아무것도 찾지 않고, 「조회」 · URL 고르기 · 우클릭 메뉴를 눌렀을 때만 뒤에서 찾습니다(진행 표시 · 취소 가능, 색인 중이면 끝난 뒤 시작). 줄을 두 번 누르거나 <kbd>Enter</kbd> 를 치면 그 코드로 갑니다.</p>
+    <table class="keys">
+      <tr><th>탭 · 여는 곳</th><th>하는 일</th></tr>
+      <tr><td>호출 흐름<br>「조회」 · 자바 메서드 우클릭 「호출 흐름 보기」</td><td>왼쪽에 이 프로젝트의 컨트롤러 URL 목록(찾기 칸으로 거름)이 나오고, 하나를 고르면 오른쪽에 컨트롤러 → 서비스(인터페이스면 구현) → 매퍼 메서드 → 매퍼 XML 문장 → 쓰는 표, 그리고 이 URL 을 부르는 화면(.vue · .js 등)이 나무로 나옵니다. 같은 클래스 안 메서드 호출은 따로 줄을 만들지 않고 그 안을 따라갑니다.</td></tr>
+      <tr><td>바꾸면 영향<br>자바 메서드 · 필드 · 클래스 우클릭 「바꾸면 영향 보기」</td><td>부르는 곳을 거꾸로 따라 URL 까지 올라가고, 「매퍼 SQL」(그 DTO 를 형식으로 쓰고 필드 이름이 나오는 문장, 칼럼 이름 <code>USER_NM</code> 으로만 나오면 「추정」) · 「API」 · 「화면」 묶음을 보여 줍니다. 부모 VO 의 필드도 자식 VO 를 쓰는 문장까지 찾습니다.</td></tr>
+      <tr><td>표에서 찾기<br>표 · 칼럼 이름 넣고 「조회」 · DB 창 표 우클릭 「코드에서 쓰는 곳」</td><td>그 표(<code>스키마.표</code> 도 됨) · 칼럼을 쓰는 매퍼 문장(조회 · 넣기 · 고치기 · 지우기) → 매퍼 메서드 → 서비스 → URL · 화면을 보여 줍니다. SQL 을 확실히 읽지 못한 문장(<code>${}</code> 등)은 글자로 찾아 「글자로 찾음」 으로 적습니다.</td></tr>
+      <tr><td>안 쓰는 것<br>「조회」</td><td>화면에서 안 부르는 API, 부르는 곳을 못 찾은 매퍼 SQL(인터페이스 · 메서드가 없으면 그렇게 적음), 아무도 안 쓰는 DTO(이름이 Dto · Vo 로 끝나는 클래스)를 모읍니다. 다른 시스템 · 문자열 · 리플렉션으로 부르는 것도 나올 수 있으니 지우기 전에 확인하세요.</td></tr>
+    </table>
+    <div class="scroll">
+      <div class="ide" style="min-width:560px">
+        <div class="title"><span class="dots"><i></i><i></i><i></i></span>코드 흐름 — 호출 흐름</div>
+        <pre class="sql nolig"><span class="ln">UserController.list  <span style="color:var(--muted)">컨트롤러 · GET /user/list</span></span><span class="ln">  UserServiceImpl.selectUserList  <span style="color:var(--muted)">서비스</span></span><span class="ln">    UserMapper.selectUserList  <span style="color:var(--muted)">매퍼</span></span><span class="ln">      UserMapper.xml · selectUserList  <span style="color:var(--muted)">조회</span></span><span class="ln">        TB_USER  <span style="color:var(--muted)">표</span></span><span class="ln">  화면  <span style="color:var(--muted)">1개</span></span><span class="ln">    GET /user/list</span><span class="ln">      UserList.vue:42</span></pre>
+      </div>
+    </div>
+    <p class="lead" style="margin-top:18px">못 잡는 것: 리플렉션 · 문자열로 부르는 코드, <code>${}</code> 로 바뀌는 표 이름, 화면이 주소를 글자 조각으로 이어 붙여 부르는 경우(<code>'/user/' + id + '/detail'</code>). 화면 찾기는 node_modules · dist · bin · build · out · target 폴더와 1MB 넘는 파일을 건너뜁니다. 찾는 데 걸린 시간은 idea.log 에 「코드 흐름」으로 남습니다.</p>
   </div>
 </section>
 
