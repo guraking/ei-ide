@@ -46,6 +46,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -61,7 +62,6 @@ public final class ErdView {
   static final String TOOL_WINDOW_ID = "EI ERD";
   private static final String STRIPE_TITLE = "ERD";
   private static final String TOOLBAR_PLACE = "EiDbErd";
-  private static final int MAX_TABLES = 60;
   /** DB 에서 찾지 못한 표 카드의 종류. */
   private static final String DEFAULT_TABLE_TYPE = "TABLE";
   /** 배율을 백분율 글로 바꿀 때 곱하는 수 · 실제 크기 배율. */
@@ -103,42 +103,31 @@ public final class ErdView {
       public void run(@NotNull ProgressIndicator indicator) {
         try {
           Connection conn = DbSessions.get(project).connection(c);
-          Map<String, Meta.Table> all = new HashMap<>();
-          List<String> names = new ArrayList<>();
-          if (tables == null) {
-            for (Meta.Table t : Meta.tables(conn, c, schema, Meta.tableTypes(c))) {
-              all.put(t.name(), t);
-              names.add(t.name());
-            }
-          } else {
-            names.addAll(tables);
-          }
-          int total = names.size();
-          if (total > MAX_TABLES) names = new ArrayList<>(names.subList(0, MAX_TABLES));
           List<ErdCanvas.Card> cards = new ArrayList<>();
           List<Meta.ForeignKey> fks = new ArrayList<>();
-          indicator.setIndeterminate(false);
-          for (int i = 0; i < names.size(); i++) {
-            indicator.checkCanceled();
-            String n = names.get(i);
-            indicator.setText2(n);
-            indicator.setFraction((double) i / names.size());
-            Meta.Table t = all.containsKey(n) ? all.get(n) : table(conn, c, schema, n);
-            ErdCanvas.Card card = new ErdCanvas.Card(t, Meta.columns(conn, c, schema, n));
-            card.unlinked = unlinked.contains(n.toUpperCase(java.util.Locale.ROOT));
-            cards.add(card);
-            if (links == null) fks.addAll(Meta.importedKeys(conn, c, schema, n));
+          if (tables == null) {
+            readSchema(conn, c, schema, indicator, cards, fks);
+          } else {
+            indicator.setIndeterminate(false);
+            for (int i = 0; i < tables.size(); i++) {
+              indicator.checkCanceled();
+              String n = tables.get(i);
+              indicator.setText2(n);
+              indicator.setFraction((double) i / tables.size());
+              ErdCanvas.Card card = new ErdCanvas.Card(table(conn, c, schema, n), Meta.columns(conn, c, schema, n));
+              card.unlinked = unlinked.contains(n.toUpperCase(java.util.Locale.ROOT));
+              cards.add(card);
+              if (links == null) fks.addAll(Meta.importedKeys(conn, c, schema, n));
+            }
           }
           if (links != null) fks.addAll(links);
           if (cards.isEmpty()) {
             Notify.error(project, EiDbBundle.message("erd.no.tables", schema));
             return;
           }
-          int shown = names.size();
           ApplicationManager.getApplication().invokeLater(() -> {
             if (project.isDisposed()) return;
             show(project, c, schema, cards, fks, title);
-            if (total > shown) Notify.info(project, EiDbBundle.message("erd.truncated", total, shown));
           });
         } catch (ProcessCanceledException e) {
           throw e;
@@ -147,6 +136,40 @@ public final class ErdView {
         }
       }
     }.queue();
+  }
+
+  /**
+   * 스키마의 모든 표를 cards · fks 에 담는다. 칼럼과 PK 는 스키마 전체를 한 번씩 읽고(표가 많아도 DB 왕복이 늘지 않게),
+   * FK 만 표마다 한 번 읽어 선과 칼럼의 FK 꼬리표에 함께 쓴다. 칼럼이 하나도 안 읽힌 표는 빈 카드로 그린다.
+   */
+  private static void readSchema(Connection conn, DbConfig c, String schema, ProgressIndicator indicator,
+                                 List<ErdCanvas.Card> cards, List<Meta.ForeignKey> fks) throws SQLException {
+    List<Meta.Table> list = Meta.tables(conn, c, schema, Meta.tableTypes(c));
+    indicator.checkCanceled();
+    Map<String, List<Meta.ColumnRow>> rows = new HashMap<>();
+    for (Meta.ColumnRow r : Meta.columnRows(conn, c, schema, null, false)) rows.computeIfAbsent(r.table(), k -> new ArrayList<>()).add(r);
+    indicator.checkCanceled();
+    // 스키마 이름을 모르면(드라이버가 스키마 없이 쓰는 경우) 데이터 사전을 물을 수 없어 표마다 getPrimaryKeys 로 읽는다.
+    boolean bulkPk = schema != null && !schema.isEmpty();
+    Map<String, List<String>> pks = bulkPk ? Meta.schemaPrimaryKeys(conn, c, schema) : Map.of();
+    indicator.setIndeterminate(false);
+    for (int i = 0; i < list.size(); i++) {
+      indicator.checkCanceled();
+      Meta.Table t = list.get(i);
+      indicator.setText2(t.name());
+      indicator.setFraction((double) i / list.size());
+      List<Meta.ForeignKey> imported = Meta.importedKeys(conn, c, schema, t.name());
+      fks.addAll(imported);
+      Set<String> fkCols = new HashSet<>();
+      for (Meta.ForeignKey fk : imported) fkCols.add(fk.fkColumn());
+      java.util.Collection<String> pk = bulkPk ? pks.getOrDefault(t.name(), List.of()) : Meta.primaryKeys(conn, c, schema, t.name());
+      List<Meta.Column> cols = new ArrayList<>();
+      for (Meta.ColumnRow r : rows.getOrDefault(t.name(), List.of())) {
+        Meta.Column col = r.column();
+        cols.add(new Meta.Column(col.name(), col.type(), col.size(), col.scale(), pk.contains(col.name()), fkCols.contains(col.name()), col.nullable(), col.comment()));
+      }
+      cards.add(new ErdCanvas.Card(t, cols));
+    }
   }
 
   private static void show(Project project, DbConfig c, String schema, List<ErdCanvas.Card> cards, List<Meta.ForeignKey> fks, String title) {
