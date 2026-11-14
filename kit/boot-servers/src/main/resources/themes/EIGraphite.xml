@@ -494,8 +494,8 @@
         </option>
         <option name="INFO_ATTRIBUTES">
             <value>
-                <option name="EFFECT_COLOR" value="857042" deuteranopia="737355" protanopia="737355" />
-                <option name="EFFECT_TYPE" value="2" />
+                <option name="BACKGROUND" value="5C4A1E" deuteranopia="4A4A2E" protanopia="4A4A2E" />
+                <option name="ERROR_STRIPE_COLOR" value="756D56" deuteranopia="666666" protanopia="666666" />
             </value>
         </option>
         <option name="INJECTED_LANGUAGE_FRAGMENT">
