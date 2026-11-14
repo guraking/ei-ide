@@ -4,7 +4,7 @@ import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.editor.colors.EditorColorsManager;
 import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.JBColor;
-import com.intellij.ui.OnePixelSplitter;
+import com.intellij.ui.JBSplitter;
 import com.intellij.ui.components.JBCheckBox;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
@@ -74,7 +74,7 @@ public final class Ui {
 
   /** 좌우 칸을 끌 수 있는 분할선으로 나눈다. 칸 폭은 비율로만 정하고(끌어 바꾼 비율은 key 로 기억), 안쪽 최소 폭이 비율을 이기지 않게 한다. */
   public static JComponent split(String key, float proportion, JComponent left, JComponent right) {
-    OnePixelSplitter s = new OnePixelSplitter(false, proportion);
+    JBSplitter s = new JBSplitter(false, proportion);
     s.setSplitterProportionKey(SPLIT_KEY + key);
     s.setHonorComponentsMinimumSize(false);
     s.setFirstComponent(left);

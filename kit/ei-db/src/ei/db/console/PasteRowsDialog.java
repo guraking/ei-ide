@@ -7,7 +7,7 @@ import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.ui.popup.JBPopupFactory;
 import com.intellij.ui.CollectionListModel;
 import com.intellij.ui.DocumentAdapter;
-import com.intellij.ui.OnePixelSplitter;
+import com.intellij.ui.JBSplitter;
 import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.SimpleListCellRenderer;
 import com.intellij.ui.awt.RelativePoint;
@@ -168,13 +168,13 @@ public final class PasteRowsDialog extends DialogWrapper {
     problems.add(status, BorderLayout.NORTH);
     problems.add(ScrollPaneFactory.createScrollPane(problemList), BorderLayout.CENTER);
 
-    OnePixelSplitter lower = splitter(PREVIEW_PROPORTION, PREVIEW_SPLIT_KEY, ScrollPaneFactory.createScrollPane(table), problems);
+    JBSplitter lower = splitter(PREVIEW_PROPORTION, PREVIEW_SPLIT_KEY, ScrollPaneFactory.createScrollPane(table), problems);
     return splitter(PASTE_PROPORTION, PASTE_SPLIT_KEY, top, lower);
   }
 
   /** 위아래 칸을 비율로 나누고 끌어 바꾼 비율을 기억한다. */
-  private static OnePixelSplitter splitter(float proportion, String key, JComponent first, JComponent second) {
-    OnePixelSplitter s = new OnePixelSplitter(true, proportion);
+  private static JBSplitter splitter(float proportion, String key, JComponent first, JComponent second) {
+    JBSplitter s = new JBSplitter(true, proportion);
     s.setSplitterProportionKey(key);
     s.setHonorComponentsMinimumSize(false);
     s.setFirstComponent(first);

@@ -5,7 +5,7 @@ import com.intellij.openapi.ui.popup.JBPopupFactory;
 import com.intellij.ui.CollectionListModel;
 import com.intellij.ui.ColoredListCellRenderer;
 import com.intellij.ui.DocumentAdapter;
-import com.intellij.ui.OnePixelSplitter;
+import com.intellij.ui.JBSplitter;
 import com.intellij.ui.JBIntSpinner;
 import com.intellij.ui.SimpleListCellRenderer;
 import com.intellij.ui.SimpleTextAttributes;
@@ -301,7 +301,7 @@ final class RegexComposer {
         detail.setBorder(JBUI.Borders.emptyLeft(UIUtil.DEFAULT_HGAP));
 
         // 목록 · 설정 사이는 끌 수 있는 분할선이고 비율을 기억한다. 안쪽 글의 최소 폭이 비율을 이기지 않게 한다.
-        OnePixelSplitter master = new OnePixelSplitter(false, SPLIT_KEY, SPLIT_DEFAULT);
+        JBSplitter master = new JBSplitter(false, SPLIT_KEY, SPLIT_DEFAULT);
         master.setHonorComponentsMinimumSize(false);
         master.setFirstComponent(list);
         master.setSecondComponent(detail);

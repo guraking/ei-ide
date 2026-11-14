@@ -11,7 +11,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.util.Disposer;
-import com.intellij.ui.OnePixelSplitter;
+import com.intellij.ui.JBSplitter;
 import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.JBUI;
@@ -124,7 +124,7 @@ public final class BackupDialog extends DialogWrapper {
 
   @Override
   protected JComponent createCenterPanel() {
-    OnePixelSplitter split = new OnePixelSplitter(true, SPLIT_KEY, SPLIT_DEFAULT);
+    JBSplitter split = new JBSplitter(true, SPLIT_KEY, SPLIT_DEFAULT);
     split.setHonorComponentsMinimumSize(false);
     split.setFirstComponent(ScrollPaneFactory.createScrollPane(table));
     split.setSecondComponent(preview.getComponent());

@@ -21,7 +21,7 @@ import com.intellij.openapi.ui.popup.Balloon;
 import com.intellij.openapi.ui.popup.JBPopupFactory;
 import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.JBColor;
-import com.intellij.ui.OnePixelSplitter;
+import com.intellij.ui.JBSplitter;
 import com.intellij.ui.SimpleListCellRenderer;
 import com.intellij.ui.awt.RelativePoint;
 import com.intellij.ui.components.JBCheckBox;
@@ -252,7 +252,7 @@ final class RegexBenchDialog extends DialogWrapper {
         tabs.addTab(BootServersBundle.message("regex.tab.replace"), replacePanel);
 
         // 시험 글 · 결과 탭 사이는 끌 수 있는 분할선이고 비율을 기억한다
-        OnePixelSplitter split = new OnePixelSplitter(true, SPLIT_KEY, TEXT_TABS_SPLIT);
+        JBSplitter split = new JBSplitter(true, SPLIT_KEY, TEXT_TABS_SPLIT);
         split.setFirstComponent(samplePanel);
         split.setSecondComponent(tabs);
 
