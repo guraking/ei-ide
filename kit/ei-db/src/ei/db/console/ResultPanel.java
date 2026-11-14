@@ -298,6 +298,9 @@ final class ResultPanel extends SimpleToolWindowPanel {
       }
     });
     fitColumns(grid);
+    // 행 번호 칸은 번호 글자 폭까지만. 칸이 적어 표가 창 폭으로 늘 때 이 칸까지 함께 늘지 않게 한다.
+    TableColumn numbers = grid.getColumnModel().getColumn(0);
+    numbers.setMaxWidth(numbers.getPreferredWidth());
     CellActions.installShortcut(grid, project, c, result);
 
     // 머리줄: 왼쪽 「결과 N · 표」(굵게) · 건수 꼬리표 · 실행 시간 · 더 읽기 · 찾기 칸, 오른쪽 반영 · 되돌리기 단추와 내보내기 링크.
