@@ -1928,6 +1928,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
         <pre class="sql nolig"><span class="ln">UserController.list  <span style="color:var(--muted)">컨트롤러 · GET /user/list</span></span><span class="ln">  UserServiceImpl.selectUserList  <span style="color:var(--muted)">서비스</span></span><span class="ln">    UserMapper.selectUserList  <span style="color:var(--muted)">매퍼</span></span><span class="ln">      UserMapper.xml · selectUserList  <span style="color:var(--muted)">조회</span></span><span class="ln">        TB_USER  <span style="color:var(--muted)">표</span></span><span class="ln">  화면  <span style="color:var(--muted)">1개</span></span><span class="ln">    GET /user/list</span><span class="ln">      UserList.vue:42</span></pre>
       </div>
     </div>
+    <p class="lead" style="margin-top:18px">결과는 처음부터 모두 펼쳐 나와 문장 → 매퍼 → 서비스 → 컨트롤러(URL)가 한 줄로 이어져 보입니다. 탭마다 「전체 펼치기 · 전체 접기」 단추가 있습니다. 앞에서 이미 나온 메서드는 「위에 나옴」 옆에 그 메서드가 닿는 URL 만 적습니다.</p>
     <p class="lead" style="margin-top:18px">못 잡는 것: 리플렉션 · 문자열로 부르는 코드, <code>${}</code> 로 바뀌는 표 이름, 화면이 주소를 글자 조각으로 이어 붙여 부르는 경우(<code>'/user/' + id + '/detail'</code>). 화면 찾기는 node_modules · dist · bin · build · out · target 폴더와 1MB 넘는 파일을 건너뜁니다. 찾는 데 걸린 시간은 idea.log 에 「코드 흐름」으로 남습니다.</p>
   </div>
 </section>

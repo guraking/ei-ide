@@ -853,7 +853,8 @@ final class CodeFlow {
      * 참조들을 담은 메서드마다 parent 아래 마디를 달고(이동은 참조 자리로), 컨트롤러 매핑 메서드면 URL 을 적고 멈춘다.
      * 아니면 그 메서드를 부르는 곳을 이어 올라간다. 매퍼 메서드면 그 XML 문장도 단다. 메서드 밖(필드 · 선언)은 클래스 마디로.
      */
-    void usedBy(List<PsiElement> refs, Item parent, int depth) {
+    List<Api> usedBy(List<PsiElement> refs, Item parent, int depth) {
+      Map<String, Api> all = new LinkedHashMap<>();
       Map<PsiMethod, PsiElement> methods = new LinkedHashMap<>();
       Map<PsiClass, PsiElement> outside = new LinkedHashMap<>();
       for (PsiElement el : refs) {
@@ -868,7 +869,7 @@ final class CodeFlow {
       }
       for (Map.Entry<PsiMethod, PsiElement> e : methods.entrySet()) {
         ProgressManager.checkCanceled();
-        if (!room()) return;
+        if (!room()) break;
         PsiMethod m = e.getKey();
         Item mi = add(parent, methodItem(m, nav(e.getValue())));
         PsiClass c = m.getContainingClass();
@@ -878,17 +879,30 @@ final class CodeFlow {
           mi.note = labels(found);
           for (Api a : found) apis.putIfAbsent(a.key(), a);
         } else if (!expanded.add(m)) {
-          mi.note = EiDbBundle.message("codeflow.note.seen");
+          found = seen(mi, m);
         } else if (depth + 1 >= MAX_UP_DEPTH) {
           mi.note = EiDbBundle.message("codeflow.note.deep");
         } else {
-          usedBy(refsTo(m), mi, depth + 1);
+          found = usedBy(refsTo(m), mi, depth + 1);
+          reached.put(m, found);
         }
+        for (Api a : found) all.putIfAbsent(a.key(), a);
       }
       for (Map.Entry<PsiClass, PsiElement> e : outside.entrySet()) {
-        if (!room()) return;
+        if (!room()) break;
         add(parent, new Item(String.valueOf(e.getKey().getName()), EiDbBundle.message("codeflow.note.outside"), AllIcons.Nodes.Class, nav(e.getValue())));
       }
+      return new ArrayList<>(all.values());
+    }
+
+    /** 이미 올라가 본 메서드가 닿은 URL(아직 올라가는 중이면 없음). */
+    private final Map<PsiMethod, List<Api>> reached = new HashMap<>();
+
+    /** 다시 나온 메서드 마디: 다시 올라가지 않고 「위에 나옴」 과 먼저 올라가 닿은 URL 을 적는다. 그 URL 들을 돌려준다. */
+    private List<Api> seen(Item mi, PsiMethod m) {
+      List<Api> found = reached.getOrDefault(m, List.of());
+      mi.note = EiDbBundle.message("codeflow.note.seen") + (found.isEmpty() ? "" : " · " + labels(found));
+      return found;
     }
 
     /** namespace.id 문장의 매퍼 메서드를 parent 아래 달고 그 메서드를 부르는 곳을 올라간다. 인터페이스 · 메서드가 없으면 그렇게 적는다. */
@@ -902,8 +916,8 @@ final class CodeFlow {
       for (PsiMethod m : ms) {
         if (!room()) return;
         Item mi = add(parent, methodItem(m, nav(m)));
-        if (expanded.add(m)) usedBy(refsTo(m), mi, 1);
-        else mi.note = EiDbBundle.message("codeflow.note.seen");
+        if (expanded.add(m)) reached.put(m, usedBy(refsTo(m), mi, 1));
+        else seen(mi, m);
       }
     }
 
