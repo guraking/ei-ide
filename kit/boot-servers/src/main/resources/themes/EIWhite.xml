@@ -398,8 +398,7 @@
         </option>
         <option name="INFO_ATTRIBUTES">
             <value>
-                <option name="EFFECT_COLOR" value="9C7A1E" />
-                <option name="EFFECT_TYPE" value="2" />
+                <option name="BACKGROUND" value="F7E7A6" />
                 <option name="ERROR_STRIPE_COLOR" value="d9cfad" deuteranopia="cccccc" protanopia="cccccc" />
             </value>
         </option>
