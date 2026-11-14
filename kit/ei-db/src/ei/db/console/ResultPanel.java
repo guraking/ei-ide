@@ -453,6 +453,12 @@ final class ResultPanel extends SimpleToolWindowPanel {
     return searchBox;
   }
 
+  /** 찾기 칸의 글로 읽어 온 행을 거르고 있는지. 조건 모양의 글은 DB 에서 거르는 것이라 해당하지 않는다. */
+  private boolean clientFiltered() {
+    String text = searchBox.getText();
+    return !text.isBlank() && !ResultFilter.isCondition(text);
+  }
+
   private void filter(String text) {
     // 조건 모양의 글은 Enter 로 DB 에서 거르므로(filterByCondition) 읽어 온 행에서는 찾지 않는다.
     String needle = ResultFilter.isCondition(text) ? "" : text.toLowerCase(Locale.ROOT);
@@ -756,7 +762,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
    * 다시 읽고도 남으면 넘긴 건수를 알린다. 다시 읽기가 실패 · 취소되면 use 를 부르지 않는다.
    */
   private void wholeResultThen(java.util.function.Consumer<List<List<Object>>> use) {
-    if (result.truncated() && rereadable && result.rows().size() < DbSessions.MAX_ROW_LIMIT && searchBox.getText().isBlank()) {
+    if (result.truncated() && rereadable && result.rows().size() < DbSessions.MAX_ROW_LIMIT && !clientFiltered()) {
       SqlRunner.reread(project, config, result.sql(), result.binds(), DbSessions.MAX_ROW_LIMIT, more -> {
         if (more.truncated()) Notify.warning(project, EiDbBundle.message("result.export.cut", more.rows().size()));
         use.accept(more.rows());
@@ -1237,7 +1243,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
     edits.putAll(moved);
     ((Model) grid.getModel()).fireTableDataChanged();
     int total = rows.size();
-    showCount(searchBox.getText().isEmpty() ? EiDbBundle.message("common.rows", total) : EiDbBundle.message("result.filtered", grid.getRowCount(), total));
+    showCount(clientFiltered() ? EiDbBundle.message("result.filtered", grid.getRowCount(), total) : EiDbBundle.message("common.rows", total));
     updateEditButtons();
   }
 

@@ -93,7 +93,7 @@ final class ResultQueryDialog extends DialogWrapper {
           .addLabeledComponentFillVertically(EiDbBundle.message("result.query.partition"), list);
       case PIVOT -> form
           .addLabeledComponent(EiDbBundle.message("result.query.pivot"), first)
-          .addLabeledComponent(EiDbBundle.message("result.query.value"), second)
+          .addLabeledComponent(EiDbBundle.message("result.query.pivot.value"), second)
           .addLabeledComponent(EiDbBundle.message("result.query.aggregate"), aggregate)
           .addLabeledComponentFillVertically(EiDbBundle.message("result.query.rows"), list);
       case TREE -> form
