@@ -409,10 +409,14 @@ final class ResultPanel extends SimpleToolWindowPanel {
     addLink(links, EiDbBundle.message("common.copy"), null, this::copyTsv);
     addLink(links, "CSV", EiDbBundle.message("result.csv.tooltip"), this::exportCsv);
     addLink(links, EiDbBundle.message("result.excel"), EiDbBundle.message("result.excel.tooltip"), this::exportXlsx);
-    addLink(links, "INSERT", EiDbBundle.message("result.insert.tooltip"), this::copyInserts);
-    addLink(links, "UPDATE", EiDbBundle.message("result.update.tooltip"), () -> copyUpdates(c));
+    addLink(links, "JSON", EiDbBundle.message("result.json.tooltip"), this::exportJson);
     addLink(links, "DTO", EiDbBundle.message("dto.command"), () -> DtoDialog.show(project, c, result));
-    addLink(links, "enum", EiDbBundle.message("result.enum.tooltip"), () -> EnumDialog.show(project, c, result));
+    // 결과에서 고른 칼럼 · 행으로 쿼리를 만들어 새 콘솔에 연다. 원래 문장을 감싸므로 조회 문장일 때만 둔다.
+    if (rereadable) {
+      for (ResultQueryDialog.Kind kind : ResultQueryDialog.Kind.values()) {
+        addLink(links, EiDbBundle.message("result.query.link." + kind.name()), EiDbBundle.message("result.query.tooltip." + kind.name()), () -> makeQuery(kind));
+      }
+    }
     // 찾기 칸은 머리줄 왼쪽 묶음과 오른쪽 링크 사이를 다 채운다.
     JPanel head = new JPanel(new BorderLayout(JBUI.scale(BAR_INSET), 0));
     head.add(bar, BorderLayout.WEST);
@@ -647,6 +651,9 @@ final class ResultPanel extends SimpleToolWindowPanel {
     }
     menu.addSeparator();
     menu.add(item(EiDbBundle.message("result.menu.copy.rows"), this::copyTsv));
+    menu.add(item(EiDbBundle.message("result.menu.copy.insert"), this::copyInserts));
+    menu.add(item(EiDbBundle.message("result.menu.copy.update"), () -> copyUpdates(config)));
+    menu.add(item(EiDbBundle.message("result.menu.enum"), () -> EnumDialog.show(project, config, result)));
     if (canOfferDelete()) menu.add(item(EiDbBundle.message("backup.grid.delete"), this::deleteRows));
     menu.show(e.getComponent(), e.getX(), e.getY());
   }
@@ -739,6 +746,98 @@ final class ResultPanel extends SimpleToolWindowPanel {
         Notify.error(project, EiDbBundle.message("result.csv.failed", e.getMessage()));
       }
     });
+  }
+
+  /** 고른 행(없으면 보이는 모든 행)을 칼럼 이름을 키로 한 JSON 배열 파일(UTF-8)로 저장한다. */
+  private void exportJson() {
+    Path path = askSavePath(EiDbBundle.message("result.json.export"), EiDbBundle.message("result.json.export.description"), "json");
+    if (path == null) return;
+    List<List<Object>> rows = new ArrayList<>();
+    for (int model : chosenRows()) rows.add(result.rows().get(model));
+    String json = ResultQueries.json(result.columns(), rows, ResultPanel::text);
+    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+      try {
+        Files.writeString(path, json, StandardCharsets.UTF_8);
+        Notify.info(project, EiDbBundle.message("result.json.saved", rows.size(), path));
+      } catch (IOException e) {
+        Notify.error(project, EiDbBundle.message("result.csv.failed", e.getMessage()));
+      }
+    });
+  }
+
+  /**
+   * 머리줄의 「건수 · 중복 · 분석 · 피벗 · 트리」: 고르기 창을 띄우고, 이 결과의 조회 문장을 감싼 쿼리를 만들어 새 콘솔에 연다(실행은 사용자가 한다).
+   * 바인드 값이 있는 조회(매퍼 실행 등)는 문장만으로 다시 돌릴 수 없어 만들지 않는다.
+   * 피벗의 펼칠 값은 고른 행(없으면 보이는 모든 행)에 있는 값, 트리의 시작 행은 고른 행(없으면 부모가 NULL 인 행)이다.
+   */
+  private void makeQuery(ResultQueryDialog.Kind kind) {
+    if (!result.binds().isEmpty()) {
+      Notify.error(project, EiDbBundle.message("result.query.binds"));
+      return;
+    }
+    List<String> columns = result.columns();
+    if (columns.isEmpty()) return;
+    List<String> preselected = new ArrayList<>();
+    int[] viewColumns = grid.getSelectedColumns();
+    // 행 번호 칸으로 행 전체를 골랐으면(모든 칼럼) 칼럼을 고른 것이 아니다.
+    if (viewColumns.length < columns.size()) {
+      for (int view : viewColumns) {
+        int model = grid.convertColumnIndexToModel(view);
+        if (model > 0) preselected.add(columns.get(model - 1));
+      }
+    }
+    ResultQueryDialog dialog = new ResultQueryDialog(project, kind, columns, preselected);
+    if (!dialog.showAndGet()) return;
+    DbKind db = config.kind;
+    String base = result.sql();
+    String first = SqlText.ident(db, dialog.first());
+    String second = SqlText.ident(db, dialog.second());
+    List<String> picked = new ArrayList<>();
+    for (String name : dialog.picked()) picked.add(SqlText.ident(db, name));
+    boolean rowsChosen = grid.getSelectedRowCount() > 0;
+    String sql;
+    switch (kind) {
+      case COUNTS -> sql = ResultQueries.counts(base, picked);
+      case DUPLICATES -> sql = ResultQueries.duplicates(base, picked);
+      case WINDOW -> {
+        String type = result.columnTypes().get(columns.indexOf(dialog.second()));
+        sql = ResultQueries.window(base, dialog.function(), picked, first, dialog.direction(), second, SqlText.isNumericType(type), dialog.top());
+      }
+      case PIVOT -> {
+        List<Object> values = distinctValues(columns.indexOf(dialog.first()), true);
+        if (values.isEmpty() || values.size() > ResultQueries.MAX_PIVOT_VALUES) {
+          Notify.error(project, EiDbBundle.message("result.query.pivot.values", dialog.first(), values.size(), ResultQueries.MAX_PIVOT_VALUES));
+          return;
+        }
+        sql = ResultQueries.pivot(base, picked, first, second, dialog.aggregate(), values, db);
+      }
+      case TREE -> {
+        List<Object> starts = rowsChosen ? distinctValues(columns.indexOf(dialog.first()), false) : null;
+        if (starts != null && (starts.isEmpty() || starts.size() > ResultQueries.MAX_TREE_STARTS)) {
+          Notify.error(project, EiDbBundle.message("result.query.tree.starts", dialog.first(), starts.size(), ResultQueries.MAX_TREE_STARTS));
+          return;
+        }
+        if (starts == null && !dialog.direction()) {
+          Notify.error(project, EiDbBundle.message("result.query.tree.up.needs.rows"));
+          return;
+        }
+        sql = ResultQueries.tree(base, first, second, SqlText.ident(db, dialog.third()), starts, dialog.direction(), db);
+      }
+      default -> throw new IllegalStateException(kind.name());
+    }
+    ConsoleOpener.openNew(project, config);
+    ConsoleOpener.open(project, config, sql);
+  }
+
+  /** 고른 행(없으면 보이는 모든 행)에서 그 칼럼의 서로 다른 값을 처음 나온 순서대로. withNull 이 아니면 null 은 뺀다. 이진 값 칸은 뺀다. */
+  private List<Object> distinctValues(int column, boolean withNull) {
+    Set<Object> seen = new java.util.LinkedHashSet<>();
+    for (int model : chosenRows()) {
+      Object v = result.rows().get(model).get(column);
+      if (v instanceof QueryResult.BinaryValue || (v == null && !withNull)) continue;
+      seen.add(v);
+    }
+    return new ArrayList<>(seen);
   }
 
   private void exportXlsx() {
