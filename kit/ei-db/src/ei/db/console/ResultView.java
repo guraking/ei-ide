@@ -41,6 +41,7 @@ public final class ResultView {
   private static final Key<String> SAME = Key.create("ei.db.console.resultSame");
   static final String RUN = "run";
   static final String PLAN = "plan";
+  private static final String CHANGE = "change";
   private static final Pattern BLANKS = Pattern.compile("\\s+");
   private static final Pattern TRAILING = Pattern.compile("[\\s;]+$");
 
@@ -58,11 +59,39 @@ public final class ResultView {
   }
 
   public static void show(Project project, DbConfig c, QueryResult result) {
+    if (!result.isQuery()) {
+      showChange(project, c, result);
+      ConsoleRun.finished(project, c, result.sql(), true);
+      return;
+    }
     String title = result.isQuery() ? firstTable(result.sql()) : EiDbBundle.message("result.tab.update");
     Icon icon = result.isQuery() ? AllIcons.Nodes.DataTables : AllIcons.Actions.Commit;
     String tabTitle = tabTitle(project, title == null ? EiDbBundle.message("result.tab.query") : title);
     addTab(project, sameKey(RUN, c.id, result.sql()), tabTitle, icon, new ResultPanel(project, c, result, firstTable(result.sql()), tabTitle));
     ConsoleRun.finished(project, c, result.sql(), true);
+  }
+
+  /**
+   * 변경 문장의 결과는 접속마다 「변경」 탭 하나에 줄로 쌓는다(문장 100개를 실행해도 탭은 하나).
+   * 그 탭을 닫았거나 MAX_TABS 로 밀려났으면 새로 만든다.
+   */
+  private static void showChange(Project project, DbConfig c, QueryResult result) {
+    boolean pending = !ei.db.DbSessions.get(project).autoCommit(c);
+    String same = sameKey(CHANGE, c.id, null);
+    ToolWindow window = ToolWindowManager.getInstance(project).getToolWindow(TOOL_WINDOW_ID);
+    if (window != null) {
+      for (Content old : window.getContentManager().getContents()) {
+        if (same.equals(old.getUserData(SAME)) && old.getComponent() instanceof ChangeLog log) {
+          log.add(result, pending);
+          window.getContentManager().setSelectedContent(old);
+          window.show();
+          return;
+        }
+      }
+    }
+    ChangeLog log = new ChangeLog();
+    log.add(result, pending);
+    addTab(project, same, tabTitle(project, EiDbBundle.message("result.tab.update")), AllIcons.Actions.Commit, log);
   }
 
   public static void showError(Project project, DbConfig c, String sql, Exception error) {
