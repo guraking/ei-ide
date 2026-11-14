@@ -297,6 +297,15 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
 .menu{border-radius:14px; -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur)}
 .ide .title{background:transparent}
 .tag{border-radius:999px; padding:0 7px}
+/* 글 찾기 칸 · 절 안 소제목 목록 */
+#q{flex:0 1 14em; min-width:10em; border:1px solid var(--line); background:var(--panel-2); color:var(--fg); border-radius:999px; padding:5px 12px; font:inherit; font-size:13px; outline:none}
+#q:focus{border-color:var(--accent)}
+#qn{flex:none; font-size:12px; color:var(--muted); padding:0 6px; white-space:nowrap}
+.hit{outline:2px solid var(--accent); outline-offset:3px; border-radius:6px}
+.subtoc{display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 22px}
+.subtoc a{font-size:13px; color:var(--muted); text-decoration:none; border:1px solid var(--line); border-radius:999px; padding:3px 10px; background:var(--panel)}
+.subtoc a:hover{color:var(--fg); border-color:var(--accent)}
+h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
 </style>
 </head>
 <body>
@@ -317,6 +326,8 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
 
 <nav class="toc" aria-label="목차">
   <div class="wrap">
+    <input id="q" type="search" placeholder="설명서 찾기" aria-label="설명서에서 찾기 · Enter 다음 · Shift+Enter 앞">
+    <span id="qn" aria-live="polite"></span>
     <a href="#install">설치</a>
     <a href="#defaults">기본값</a>
     <a href="#find">기능 찾기</a>
@@ -360,7 +371,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
       <div class="step">
         <div class="n">3</div>
         <h4>플러그인설치.bat</h4>
-        <p>IDE 가 꺼진 상태에서 두 번 누릅니다. Claude Code · One Dark 를 넣고, JDK · Gradle · DB 드라이버를 사용자 폴더에 풀어 둡니다. 시험용 본체 플러그인 사본은 치웁니다.</p>
+        <p>IDE 가 꺼진 상태에서 두 번 누릅니다. Claude Code · One Dark 를 넣고, JDK · DB 드라이버를 사용자 폴더에 풀어 둡니다. 시험용 본체 플러그인 사본은 치웁니다.</p>
         <div class="file">release\플러그인설치.bat</div>
       </div>
       <div class="step">
@@ -386,9 +397,8 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
 │  ├─ claude-code-jetbrains-plugin\ <span class="c">Claude Code</span>
 │  └─ one-dark-theme\               <span class="c">VS Code 색감 테마 + 편집기 색</span>
 ├─ jdk\                             <span class="c">Temurin JDK 17 · 21 · 27 zip → %USERPROFILE%\.jdks 에 풀고, IDE 를 켜면 SDK 목록에 자동 등록</span>
-├─ gradle\                          <span class="c">Gradle 8.14.6 → wrapper 가 같은 판을 찾는 자리에 (인터넷 없이 빌드)</span>
 └─ drivers\                         <span class="c">ojdbc11 · mysql-connector-j · postgresql → ~/.m2/repository (데이터베이스 창이 바로 씀)</span></div>
-    <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note ok"><b>이클립스처럼 JDK 까지 한 번에</b>사내망처럼 인터넷이 막힌 곳에서도 3번 bat 하나로 JDK · Gradle · DB 드라이버가 준비됩니다. 이미 풀어 둔 것은 다시 풀지 않습니다. Maven 은 본체에 들어 있어(번들 Maven 3) 따로 넣지 않습니다.</div></div>
+    <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note ok"><b>이클립스처럼 JDK 까지 한 번에</b>사내망처럼 인터넷이 막힌 곳에서도 3번 bat 하나로 JDK · DB 드라이버가 준비됩니다. 이미 풀어 둔 것은 다시 풀지 않습니다. Maven(번들 Maven 3)과 Gradle(9.9.1 · 8.14.7)은 설치본에 들어 있어 따로 넣지 않습니다.</div></div>
   </div>
 </section>
 
@@ -434,6 +444,9 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
       <tr><td>Project → Export Program List to Excel…</td><td>파일 목록 · URL 목록 엑셀 (<a href="#servers">서버 창</a>)</td></tr>
       <tr><td>Git → Synchronize Workspace (맨 위)</td><td>Synchronize 창 열기 (<a href="#sync">Git · SVN</a>)</td></tr>
       <tr><td>Git → Merge Branches… (그 아래)</td><td>develop · main 같은 서버 브랜치를 내 개인 브랜치에 합치기, 합치기 전 미리 보기 (<a href="#sync">Git · SVN</a>)</td></tr>
+      <tr><td>Search → Regex Workbench…</td><td>정규식 만들기 · 시험 (<a href="#regex">코드 도구</a>)</td></tr>
+      <tr><td>Tools → Query Workbench… · JavaScript Workbench…</td><td>고르기만으로 쿼리 만들기 · 자바스크립트 예제 돌려 보기 (<a href="#db">데이터베이스</a> · <a href="#code">코드 도구</a>)</td></tr>
+      <tr><td>Tools → 고치기 전 백업 보기…</td><td>UPDATE · DELETE 전에 남긴 백업으로 되살리기 (<a href="#backup">데이터베이스</a>)</td></tr>
       <tr><td>Window → Show View</td><td>아래 「도구 창」 표의 창을 다시 열기</td></tr>
     </table>
 
@@ -481,9 +494,8 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
       <tr><td>Servers (아래)</td><td>Start · Start in Debug · Restart · Stop · Stop All · Add WAS… · Server Groups(New Group… · Start Group · Stop Group) · ⋯ More(Duplicate Server · Publish (Rebuild) · Remove WAS · Show Log Files…) · Refresh Server List. 줄 우클릭에 Open in Browser · Show Console · Edit Settings… (<a href="#servers">서버 창</a>)</td></tr>
       <tr><td>Synchronize (아래)</td><td>Show All · Incoming · Outgoing · Conflicts · Refresh All · Selected Repository Only, 아래 Pull All · Pull Selected · Push · Commit and Push… · Resolve Conflicts · Merge Branches. 목록 우클릭 Pull · Update Only These Files · Commit… · Push · Resolve Conflicts · Undo Last Git Action…, 저장소 줄 우클릭 Pull · Push · Refresh This Repository · Merge Branches… · Undo Last Git Action… · Show in Git Log · 탐색기에서 열기, 파일 우클릭 Add to .gitignore · Replace with HEAD · Unstage Only, Keep Files · Assume Unchanged · Jump to Source · Show History · Copy Absolute Path · Select in Project View, 도구줄 모두 펼치기 · 모두 접기 · 폴더별로 묶기 · 이전 · 다음 파일 (<a href="#sync">Git · SVN</a>)</td></tr>
       <tr><td>Git Log (아래)</td><td>왼쪽 저장소 목록 · Refresh · 「?」 · 소스 건드린 커밋만 · 찾기 칸 (<a href="#sync">Git · SVN</a>)</td></tr>
-      <tr><td>Database (오른쪽)</td><td>Refresh · New Console · Connect · Disconnect · Edit · Delete · Find · More(Export · Import Connections). 표 우클릭 View Data · Generate SELECT · INSERT · UPDATE Statement · Generate Mapper Skeleton · Generate Feature Set… · Open ERD · Table Specification Excel…, 접속 우클릭 View Sessions · View Locks · Open ERD (All), 프로그램 우클릭 Open Source · View Compilation Errors (<a href="#db">데이터베이스</a>)</td></tr>
-      <tr><td>Result (아래)</td><td>Fetch · Apply · Revert · 새로 고침 · CSV · Excel · JSON · DTO · 건수 · 중복 · 분석 · 피벗 · 트리 · 찾기(<kbd>Ctrl</kbd>+<kbd>F</kbd>, 조건 + <kbd>Enter</kbd>). 칸 우클릭 Copy Value · Copy Selected Rows · Copy as INSERT · Copy as UPDATE · Generate enum · Copy Column Values as IN List · Sort (<a href="#db">데이터베이스</a>)</td></tr>
-      <tr><td>API (아래)</td><td>Reload · Save as openapi.yaml… (<a href="#servers">서버 창</a>)</td></tr>
+      <tr><td>Database (오른쪽)</td><td>Refresh · New Console · Connect · Disconnect · Edit · Delete · Find · More(Export · Import Connections). 표 우클릭 View Data · Generate SELECT · INSERT · UPDATE Statement · Generate Mapper Skeleton · Generate Feature Set… · Open ERD · Table Specification Excel… · DDL 보기 · 주석 고치기 · 엑셀 붙여 넣어 행 넣기… · 테스트 데이터 만들기…, 접속 우클릭 View Sessions · View Locks · Open ERD (All) · 고치기 전 백업 보기, 위 단추 줄 시계 단추(고치기 전 백업 보기), 프로그램 우클릭 Open Source · View Compilation Errors (<a href="#db">데이터베이스</a>)</td></tr>
+      <tr><td>Result (아래)</td><td>Fetch · Apply · Revert · 새로 고침 · CSV · Excel · JSON · DTO · 건수 · 중복 · 분석 · 피벗 · 트리 · 찾기(<kbd>Ctrl</kbd>+<kbd>F</kbd>, 조건 + <kbd>Enter</kbd>). 칸 우클릭 Copy Value · Copy Selected Rows · Copy as INSERT · Copy as UPDATE · Generate enum · Copy Column Values as IN List · Sort · 참조 따라가기 · 값 크게 보기(<kbd>F4</kbd>) · 행 지우기 (<a href="#db">데이터베이스</a>)</td></tr>
       <tr><td>Secure Memo (오른쪽)</td><td>Set New Password… · Lock · Change Password… · Preview · Reset… (<a href="#extras">메모 · 테마</a>)</td></tr>
     </table>
   </div>
@@ -501,6 +513,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
       <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd></td><td>실행 계획 · 느린 곳 · 고칠 법, 실행하지 않음 (Explain Plan)</td><td class="where">SQL 콘솔</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></td><td>SQL 정렬 (Format SQL). 콘솔 밖에서는 원래 서식 맞추기</td><td class="where">SQL 콘솔</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> · <kbd>Y</kbd></td><td>대문자 · 소문자 (문자열 · 주석은 그대로)</td><td class="where">SQL 콘솔</td></tr>
+      <tr><td><kbd>F4</kbd></td><td>긴 값을 따로 창에서 크게 보기 (값 크게 보기)</td><td class="where">Result 창</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td><td>결과 안에서 찾기</td><td class="where">Result 창</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Enter</kbd></td><td>커서가 있는 MyBatis 문장 실행 (Run MyBatis Query)</td><td class="where">매퍼 XML</td></tr>
       <tr><td><kbd>Ctrl</kbd>+클릭 · <kbd>F3</kbd></td><td>매퍼 메서드 ↔ XML 문장, <code>include</code> → <code>sql</code>, <code>resultMap</code> → <code>resultMap</code>, <code>#{이름}</code> → DTO 필드 · 매개변수</td><td class="where">자바 매퍼 · 매퍼 XML</td></tr>
@@ -1169,17 +1182,6 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
     </table>
     <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note"><b>Synchronize 창 위쪽 줄</b>한 번 역머지하면 그 뒤로는 Synchronize 창을 새로 고칠 때 From 브랜치도 받아 와서 「develop 보다 3개 뒤 · 내 파일 2개 겹침」을 보여 줍니다(겹치면 주황). 그 글을 누르면 Merge Branches 창이 열립니다.</div></div>
 
-    <h3>스테이징 · 커밋 창 Staged · Unstaged</h3>
-    <p class="lead">스테이징은 「이번 커밋에 넣을 것」을 미리 골라 담아 두는 칸입니다. 고친 파일이 열 개여도 담아 둔 것만 커밋되고, 나머지는 고친 그대로 작업본에 남습니다. 한 파일 안에서도 바뀐 덩어리(줄)별로 골라 담을 수 있어, 버그 수정과 실험 코드를 따로 커밋할 수 있습니다. 기본은 꺼져 있어 커밋 창에서 파일 체크 상자를 고르고 바로 커밋합니다. 1054 판에서 켜진 설치도 새 판을 처음 열 때 한 번 꺼집니다. 쓰려면 설정 → Version Control → Git → Enable staging area 를 켭니다. 아래는 켰을 때의 사용법입니다.</p>
-    <table class="keys map" style="margin-bottom:18px">
-      <tr><th>하려는 일</th><th>하는 법</th></tr>
-      <tr><td>파일 담기 · 빼기</td><td>커밋 창(Alt+0) Unstaged 의 파일에 마우스를 올려 「+」(Stage), Staged 에서 「−」(Unstage). 끌어서 옮기거나 우클릭 Stage · Unstage 도 됩니다. 묶음 이름 줄의 「+」 「−」 는 전부 담기 · 빼기입니다. 우클릭 Rollback 은 고친 것을 버립니다.</td></tr>
-      <tr><td>줄만 담기</td><td>편집기 왼쪽 여백의 변경 표시(색 막대)를 누르면 뜨는 작은 창에서 Stage. 또는 커밋 창에서 파일을 두 번 눌러 비교 창(왼쪽 Staged · 오른쪽 Local)을 열고 덩어리마다 「&gt;&gt;」 화살표로 옮깁니다.</td></tr>
-      <tr><td>커밋</td><td>Staged 에 담긴 것만 커밋됩니다. 메시지를 쓰고 Commit(또는 Commit and Push…). 고른 것 없이 전부 커밋하려면 Commit All.</td></tr>
-      <tr><td>새 파일</td><td>Untracked 에 있는 새 파일도 「+」로 담으면 함께 커밋됩니다.</td></tr>
-    </table>
-    <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note"><b>Stash 와 다른 점</b>스테이징은 「이번 커밋에 넣을 것」을 고르는 칸이고, 작업본은 그대로입니다. Stash(Git → Uncommitted Changes → Stash Changes)는 고친 것을 통째로 치워 작업본을 깨끗하게 만들어 두었다가 나중에 Unstash 로 꺼내는 것입니다. 급한 다른 일을 먼저 할 때는 Stash, 고친 것 중 일부만 커밋할 때는 스테이징을 씁니다.</div><div class="note warn"><b>변경 목록(changelist)</b>스테이징을 켜면 Git 저장소에서는 변경 목록 대신 Staged · Unstaged 로 나뉩니다. SVN 저장소는 그대로 변경 목록을 씁니다. 파일 우클릭 Assume Unchanged 는 Staged · Unstaged 목록에서도 됩니다.</div></div>
-
     <h3>Git Log · 아래쪽 「Git Log」 창</h3>
     <p class="lead">왼쪽 저장소 목록에서 프로젝트(모듈)를 누르면 그 폴더를 바꾼 커밋을 IntelliJ 기본 Log 탭처럼 보여 줍니다. Git · SVN(한 줄) 모두 되고, 기존 Git 로그 창은 그대로입니다. 다른 사람이 내 소스를(또는 내가 남의 소스를) 되돌리거나 · 합치며 버리거나 · 이어 고친 커밋에는 빨강 · 주황 · 보라 꼬리표가 붙습니다.</p>
     <div class="figure">
@@ -1432,7 +1434,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
               <span class="mark">2</span><span class="btn">500건 더</span><span class="input">1000</span><span>건</span><span class="btn">조회</span>
               <span class="gap"></span>
               <span class="mark">6</span><span class="input" style="text-align:left; min-width:90px">⌕ 키보</span><span class="m">1 / 500건</span>
-              <span class="mark">3</span><span class="btn">복사</span><span class="btn">CSV</span><span class="btn">엑셀</span><span class="btn">JSON</span><span class="btn">DTO</span><span class="btn">피벗</span>
+              <span class="mark">R</span><span class="btn">⟳ 새로 고침</span><span class="mark">3</span><span class="btn">복사</span><span class="btn">CSV</span><span class="btn">엑셀</span><span class="btn">JSON</span><span class="btn">DTO</span><span class="mark">Q</span><span class="btn">건수</span><span class="btn">중복</span><span class="btn">분석</span><span class="btn">피벗</span><span class="btn">트리</span>
             </div>
             <table class="grid">
               <tr><th>PRODUCT_ID<small>상품 ID</small></th><th>PRODUCT_NM <span class="mark">4</span><small>상품명</small></th><th>UNIT_PRICE<small>단가</small></th><th>USE_YN<small>사용 여부</small></th><th>CREATED_AT<small>등록일시</small></th></tr>
@@ -1458,13 +1460,16 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
         <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
       </div>
       <ol class="legend" style="grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:14px">
-        <li><span class="mark">1</span><div><b>결과 탭</b> <span class="t">실행마다 하나씩, 10개가 넘으면 오래된 것부터 닫힙니다. 같은 접속에서 같은 쿼리를 다시 실행하면 새 탭 대신 그 탭이 새 결과로 바뀝니다. 탭의 ✕, 가운데 단추, 우클릭 「Close Other Tabs · Close All Tabs」.</span></div></li>
+        <li><span class="mark">1</span><div><b>결과 탭</b> <span class="t">조회할 때마다 하나씩, 10개가 넘으면 오래된 것부터 닫힙니다. 같은 접속에서 같은 쿼리를 다시 실행하면 그 탭이 새 결과로 바뀝니다. INSERT · UPDATE · DELETE · DDL 의 결과는 탭을 새로 만들지 않고 접속마다 「변경」 탭 하나에 한 줄씩 쌓입니다(INSERT 100개를 돌려도 조회 결과 탭이 밀려나지 않습니다). 탭의 ✕, 가운데 단추, 우클릭 「Close Other Tabs · Close All Tabs」.</span></div></li>
         <li><span class="mark">2</span><div><b>더 보기</b> <span class="t">잘렸을 때만 나옵니다. 「500건 더」 또는 건수를 쓰고 「조회」(Enter). 같은 문장을 처음부터 다시 읽어 이 탭을 바꿉니다.</span></div></li>
-        <li><span class="mark">3</span><div><b>꺼내 쓰기</b> <span class="t">탭 구분 복사 · CSV · 엑셀(.xlsx, 머리 굵게 · 틀 고정 · 한글 주석 행) · JSON 파일 · DTO. INSERT · UPDATE(앞 쉼표, PK 로 WHERE) · enum 은 칸 우클릭. 「건수 · 중복 · 분석 · 피벗 · 트리」 는 칼럼을 고르면 그 쿼리를 새 콘솔에 만듭니다. 찾기 칸에 조건(<code>USERID = 'A'</code>)을 쓰고 Enter 면 그 조건으로 다시 읽습니다.</span></div></li>
+        <li><span class="mark">3</span><div><b>꺼내 쓰기</b> <span class="t">복사(탭으로 나눔) · CSV · 엑셀(.xlsx, 머리 굵게 · 틀 고정 · 한글 주석 줄) · JSON · DTO. 행을 고르면 고른 행만, 안 고르면 조회 결과 전체를 내보냅니다. 화면에 500건만 읽혀 있어도 DB 에서 다시 읽어 전부(10만 건까지) 담습니다. INSERT · UPDATE 로 복사 · enum 만들기는 칸 우클릭에 있습니다.</span></div></li>
+        <li><span class="mark">R</span><div><b>새로 고침</b> <span class="t">같은 조회를 한 번 더 실행해 이 탭을 바꿉니다. 백업으로 되살린 뒤나 다른 사람이 고친 뒤 결과를 다시 볼 때 씁니다. 고치고 반영하지 않은 칸이 있으면 먼저 묻습니다.</span></div></li>
+        <li><span class="mark">Q</span><div><b>쿼리 만들기</b> <span class="t">칼럼을 고르면 지금 결과를 감싼 쿼리를 새 콘솔에 만들어 줍니다. 실행은 직접 합니다.<br>「건수」 값마다 몇 건인지와 비율 (예: <code>USE_YN</code> 을 고르면 Y 120건 · N 3건) · 「중복」 값이 똑같은 행이 둘 이상인 것만 · 「분석」 순번 · 등수 · 누적 합계 · 앞뒤 행 값 (분석 함수, <code>ROW_NUMBER</code> · <code>LAG</code> 등) · 「피벗」 세로로 늘어선 값을 옆 칼럼으로 펼치기 (예: 월별 금액을 1월 · 2월 · 3월 칼럼으로) · 「트리」 부모 · 자식 칼럼을 따라 위아래로 (Oracle <code>CONNECT BY</code>, PostgreSQL <code>WITH RECURSIVE</code>).</span></div></li>
         <li><span class="mark">4</span><div><b>칼럼 단위로</b> <span class="t">머리를 누르면 칼럼 전체 선택(Ctrl 로 더하기), 머리 아래 한글 주석. 우클릭으로 칼럼 값 · IN 목록 · 칼럼 이름 복사.</span></div></li>
         <li><span class="mark">5</span><div><b>정렬</b> <span class="t">머리를 두 번 누르면 오름 · 내림차순이 번갈아 바뀝니다. 우클릭 「오름차순 · 내림차순 정렬 · 정렬 풀기」. 복사 · CSV 는 정렬된 순서로.</span></div></li>
-        <li><span class="mark">6</span><div><b>찾기 · 거르기</b> <span class="t">검색칸(결과 창에서 <kbd>Ctrl</kbd>+<kbd>F</kbd>)에 글자를 넣으면 그 글자가 든 행만 보입니다. 복사 · 내보내기도 보이는 행만.</span></div></li>
-        <li><span class="mark">E</span><div><b>칸 바로 고치기</b> <span class="t">표 하나만 읽은 단순 조회에서 칸을 두 번 눌러 고치면 노란색 → 「반영 (N)」 → 문장 미리보기 확인 → PK 조건 UPDATE 실행(운영 보호 그대로). 별칭 · 조인 · UNION · 하위 조회 결과는 고칠 수 없습니다.</span></div></li>
+        <li><span class="mark">6</span><div><b>찾기 · 조건으로 다시 읽기</b> <span class="t">찾기 칸(결과 창에서 <kbd>Ctrl</kbd>+<kbd>F</kbd>)에 글자를 넣으면 그 글자가 든 행만 보입니다. 조건을 쓰고 <kbd>Enter</kbd> 를 치면 DB 에서 다시 읽습니다. 예: <code>USE_YN = 'Y' AND DEPT_CD = 'A01'</code>. 원래 조회에 이 조건을 붙여 읽으므로 화면에 안 읽힌 행까지 찾고, 표 하나를 읽은 결과면 고치기 · 행 지우기도 그대로 됩니다. 칸을 비우고 <kbd>Enter</kbd> 면 처음 결과로 돌아갑니다.</span></div></li>
+        <li><span class="mark">#</span><div><b>행 고르기</b> <span class="t">맨 왼쪽 행 번호 칸을 누르면 그 행 전체가 골라집니다. 끌거나 <kbd>Ctrl</kbd> · <kbd>Shift</kbd> 로 여러 행. 행 복사 · 행 지우기 · JSON 내보내기에 씁니다.</span></div></li>
+        <li><span class="mark">E</span><div><b>칸 바로 고치기</b> <span class="t">표 하나만 읽은 조회(<code>SELECT * FROM 스키마.표</code> 처럼 스키마를 붙여도 됨)에서 칸을 두 번 눌러 고치면 노란색 → 「반영 (N)」 → 나갈 문장 확인 → PK 로 찾는 UPDATE 실행(운영 보호 그대로). 고치기 전 값은 <a href="#backup">자동 백업</a>에 남습니다. 조인 · UNION · 하위 조회 결과는 고칠 수 없습니다.</span></div></li>
         <li><span class="mark">C</span><div><b>결과 비교</b> <span class="t">탭 우클릭 「Compare with Another Result…」 → 다른 탭 고르기. 기준 칼럼으로 행을 맞춰 같음 · 다름 · 왼쪽에만 · 오른쪽에만을 세고, 다른 칸은 <code>a → b</code> 로 색칠합니다. 불러온 행만 비교합니다.</span></div></li>
       </ol>
     </div>
@@ -1533,19 +1538,35 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
     </div>
 
     <h3 id="dbtools">표 · 데이터 도구 · DB 탐색기 우클릭 · 결과 표 우클릭</h3>
-    <p class="lead">표 구조를 옮기고, 데이터를 넣고, 잘못 고친 데이터를 되살리는 도구입니다. Oracle · PostgreSQL 에서 되고, 읽기 전용 · 운영 접속 확인은 콘솔과 같습니다.</p>
+    <p class="lead">표 구조를 보고, 주석을 고치고, 데이터를 넣고 지우는 도구입니다. Oracle · PostgreSQL 에서 됩니다. 읽기 전용 · 운영 접속 확인은 콘솔과 같습니다.</p>
     <div class="cards two">
-      <div class="card"><h4>DDL 보기</h4><p>표 · 뷰 우클릭 「DDL 보기」. CREATE 문(칼럼 · 제약 · 인덱스 · 주석)을 보고 「복사」 · 「콘솔로 보내기」. 여러 표를 고르면 이어서 보입니다. Oracle 은 「저장 옵션 포함」 을 켜면 테이블스페이스 · 저장 옵션까지 나오고, 권한이 없으면 메타데이터로 조립했다고 창 머리에 알립니다.</p></div>
-      <div class="card"><h4>주석 고치기</h4><p>표 · 뷰 우클릭 「주석 고치기」. 테이블 주석과 칼럼 주석을 표에서 고치면 바뀐 것만 <code>COMMENT ON</code> 문으로 아래에 보입니다. 엑셀에서 「칼럼 이름 · 주석」 두 칸을 복사해 「붙여 넣기」 로 한꺼번에 채울 수 있습니다. 「적용」 또는 「콘솔로 보내기」.</p></div>
-      <div class="card"><h4>엑셀 붙여 넣어 행 넣기</h4><p>표 우클릭 「엑셀 붙여 넣어 행 넣기…」. 엑셀에서 복사한 칸을 붙이면 첫 줄의 칼럼 이름이나 한글 주석으로 칼럼을 맞춥니다(머리를 눌러 바꿈). 숫자 · 날짜 · 길이 · 빈 필수 칸 문제는 줄 · 칼럼과 함께 아래에 나옵니다. 「INSERT 문을 콘솔로」 또는 「바로 넣기」(문제가 없을 때만).</p></div>
-      <div class="card"><h4>테스트 데이터 만들기</h4><p>표 우클릭 「테스트 데이터 만들기…」. 줄 수와 칼럼마다 만드는 방식(순번 · 시퀀스 · 고정값 · 목록 돌려 쓰기 · 범위 · 날짜 · NULL)을 고르면 형식과 길이에 맞는 INSERT 를 만듭니다. 「현재 최댓값 다음부터」 · 「참조 표에서 실제 값 가져오기」 는 누를 때만 DB 를 읽습니다.</p></div>
-      <div class="card"><h4>참조 따라가기 · 값 크게 보기</h4><p>결과 표의 칸 우클릭. 「참조 따라가기」 는 그 값이 가리키는 표의 행을 새 결과 탭으로 엽니다(FK 가 없으면 이름으로 추정하고 그렇게 알림). 「값 크게 보기」(<kbd>F4</kbd>)는 긴 값을 따로 창에 열고 JSON · XML 은 줄을 맞춰 색을 입힙니다.</p></div>
-      <div class="card"><h4>결과 표 행 지우기</h4><p>결과 표에서 행을 골라(행 번호 칸을 누르면 그 행 전체) 우클릭 「행 지우기」. 붉은 바탕 · 취소선으로 표시만 되고, 「적용」 을 눌러 미리보기를 확인해야 실제로 지웁니다. 「되돌리기」 로 표시를 풉니다. 표의 모든 칼럼을 조회한 결과(PK 포함)에서만 됩니다.</p></div>
-      <div class="card"><h4>고치기 전 자동 백업</h4><p>콘솔 · 매퍼 「실행」 · 결과 표 「적용」 에서 UPDATE · DELETE 가 나가기 직전에 바뀔 행을 읽어 되돌리는 SQL 을 PC 의 설정 폴더(<code>ei-db\backup\접속 이름</code>)에 남깁니다. 표 하나짜리 문장만 되고, 안 되는 문장은 「백업 안 됨」 을 알립니다. 1만 행을 넘으면 먼저 묻습니다. 설정 → 도구 → 「고치기 전 백업」 에서 켜고 끄며, 30일 뒤 지웁니다.</p></div>
-      <div class="card"><h4>복구</h4><p>Tools → 「고치기 전 백업 보기…」(또는 백업할 때 뜨는 알림의 「고치기 전 백업 보기」, DB 창 접속 우클릭). 시각 · 표 · 행 수 목록에서 하나를 골라 내용을 보고 「콘솔에서 열기」 를 누르면 되돌리는 SQL 이 새 콘솔에 열립니다. 눈으로 확인하고 직접 실행합니다. 트리거 · 시퀀스로 따라 바뀐 것과 LOB 칼럼은 되돌리지 않습니다.</p></div>
-      <div class="card"><h4>매퍼 SQL 없는 표 · 칼럼 표시</h4><p>매퍼 XML 의 SQL 에서 접속의 표에 없는 칼럼에 노란 줄이 그어집니다. 표 목록에 없는 표는 약하게 표시합니다(동의어 · 다른 스키마일 수 있음). 접속은 매퍼 실행 창에서 마지막에 고른 접속이고, 접속해 둔 동안만 봅니다. <code>${}</code> · include 로 불확실한 문장은 건너뜁니다.</p></div>
-      <div class="card"><h4>실행 계획 전후 비교</h4><p>「느린 곳」 탭의 「기준으로 삼기」 · 「앞 계획과 비교…」. 인덱스를 만들거나 SQL 을 고친 뒤의 계획을 앞 계획과 나란히 놓고 비용 · 예상 건수와 바뀐 단계(전체 읽기 → 인덱스 읽기, 조인 방식)를 보입니다.</p></div>
+      <div class="card"><h4>DDL 보기 · 표 · 뷰 우클릭</h4><p>표를 만드는 문장(<code>CREATE TABLE</code>)을 칼럼 · 제약 · 인덱스 · 주석까지 보여 줍니다. 「복사」 하거나 「콘솔로 보내기」. 개발 DB 표를 다른 DB 에 똑같이 만들 때 씁니다. 여러 표를 고르면 이어서 나옵니다. Oracle 은 「저장 옵션 포함」 을 켜면 테이블스페이스까지 나옵니다. 권한이 없어 DB 가 문장을 못 주면 칼럼 정보로 직접 만들고 창 위에 그렇다고 적습니다.</p></div>
+      <div class="card"><h4>주석 고치기 · 표 · 뷰 우클릭</h4><p>표 주석과 칼럼 주석을 표 칸에서 고칩니다. 바꾼 것만 아래에 문장(<code>COMMENT ON</code>)으로 미리 보이고 「적용」 하면 DB 에 들어갑니다. 엑셀에서 「칼럼 이름 · 주석」 두 칸을 복사해 「붙여 넣기」 하면 한꺼번에 채웁니다. 예: <code>USER_NM&nbsp;&nbsp;사용자 이름</code>.</p></div>
+      <div class="card"><h4>엑셀 붙여 넣어 행 넣기 · 표 우클릭</h4><p>엑셀에서 복사한 칸을 붙이면 첫 줄의 칼럼 이름이나 한글 주석(예: 「사용자 이름」)으로 칼럼을 맞춥니다. 맞지 않으면 머리를 눌러 바꿉니다. 숫자 칸에 글자, 너무 긴 글, 빈 필수 칸 같은 문제는 몇째 줄 · 어느 칼럼인지 아래에 나옵니다. 「INSERT 문을 콘솔로」 또는 「바로 넣기」(문제가 없을 때만, 실패한 줄 번호와 DB 오류를 알림).</p></div>
+      <div class="card"><h4>테스트 데이터 만들기 · 표 우클릭</h4><p>줄 수(1만 줄까지)와 칼럼마다 값 만드는 법을 고르면 형식 · 길이에 맞는 INSERT 문을 만듭니다. 고르는 법: 순번(1, 2, 3…) · 시퀀스 · 이름_순번(USER_1, USER_2…) · 고정값 · 목록 돌려 쓰기(Y, N, Y…) · 범위 안 아무 값 · 날짜 범위 · NULL · 기본값 쓰기. 「현재 최댓값 다음부터」 · 「참조 표에서 실제 값 가져오기」 는 누를 때만 DB 를 읽습니다.</p></div>
+      <div class="card"><h4>참조 따라가기 · 결과 칸 우클릭</h4><p>그 값이 가리키는 표의 행을 새 결과 탭으로 엽니다. 예: 주문 결과의 <code>CUST_ID = C001</code> 칸에서 누르면 고객 표의 C001 행. PK 칸이면 반대로 이 값을 쓰는 표의 행을 엽니다. 표 사이 관계(FK)가 없으면 칼럼 이름으로 짐작하고 알림에 「추정」 이라고 적습니다. 후보가 여럿이면 고릅니다.</p></div>
+      <div class="card"><h4>값 크게 보기 · 결과 칸 우클릭 · <kbd>F4</kbd></h4><p>긴 값을 따로 창에서 봅니다. JSON · XML 은 줄을 맞추고 색을 입히며 「원문 / 정렬」 로 바꿔 봅니다. 잘려 읽힌 긴 글(CLOB)은 표 하나를 읽은 결과면 「전체 읽기」 로 그 칸만 다시 읽습니다.</p></div>
+      <div class="card"><h4>결과 표 행 지우기</h4><p>행 번호 칸을 눌러 행을 고르고 우클릭(또는 머리줄) 「행 지우기」. 붉은 바탕 · 취소선으로 표시만 됩니다. 「적용」 을 눌러 나갈 문장을 확인해야 실제로 지웁니다(PK 로 찾는 DELETE, 200행씩 묶어 보냄). 「되돌리기」 로 표시를 풉니다. 표의 칼럼을 모두 조회한 결과에서만 됩니다. 지우기 전 그 행이 <a href="#backup">자동 백업</a>에 남습니다.</p></div>
+      <div class="card"><h4>매퍼 SQL 없는 표 · 칼럼 표시</h4><p>매퍼 XML 의 SQL 에 접속한 DB 에 없는 칼럼이 있으면 노란 줄을 긋습니다(오타 · 지운 칼럼 찾기). 표 목록에 없는 표는 약하게만 칠합니다(동의어 · 다른 스키마일 수 있음). 접속은 매퍼 실행 창에서 마지막에 고른 것이고, 그 접속이 열려 있을 때만 봅니다. <code>${}</code> · include 처럼 확실하지 않은 문장은 건너뜁니다.</p></div>
+      <div class="card"><h4>실행 계획 전후 비교</h4><p>「느린 곳」 탭의 「기준으로 삼기」 → 인덱스를 만들거나 SQL 을 고친 뒤 다시 「계획」 → 「앞 계획과 비교…」. 비용 · 예상 건수와 바뀐 단계(전체 읽기 → 인덱스 읽기, 조인 방식)를 나란히 보입니다. 접속마다 최근 10개를 기억합니다.</p></div>
     </div>
+
+    <h3 id="backup">고치기 전 백업 · 되살리기</h3>
+    <p class="lead">UPDATE · DELETE 를 잘못 돌려도 되살릴 수 있게, 실행 바로 전에 바뀔 행을 읽어 「되돌리는 SQL」 파일로 남깁니다. 따로 켤 것 없이 처음부터 켜져 있습니다.</p>
+    <div class="steps">
+      <div class="step"><div class="n">1</div><h4>평소처럼 실행</h4><p>콘솔 · 실행 기록 · 쿼리 작업대 · 매퍼 「실행」 · 결과 표 「적용」 에서 UPDATE · DELETE 를 돌립니다. 확인창을 지나면 바뀔 행을 먼저 읽어 둡니다.</p></div>
+      <div class="step"><div class="n">2</div><h4>알림 확인</h4><p>오른쪽 아래에 「ORDERS 3행을 고치기 전에 백업했습니다」 알림이 뜹니다. 지운 행은 INSERT 문, 고친 행은 PK 로 찾아 옛 값으로 돌리는 UPDATE 문으로 남습니다.</p></div>
+      <div class="step"><div class="n">3</div><h4>백업 목록 열기</h4><p>알림의 「고치기 전 백업 보기」, Tools → 「고치기 전 백업 보기…」, DB 창 위 단추 줄의 시계 단추, 접속 우클릭 가운데 하나. 시각 · 종류 · 표 · 행 수 목록에서 고르면 내용이 보입니다.</p></div>
+      <div class="step"><div class="n">4</div><h4>콘솔에서 되살리기</h4><p>「콘솔에서 열기」 를 누르면 되돌리는 SQL 이 새 콘솔에 들어갑니다. 바로 실행하지 않으니 눈으로 보고 직접 실행 · 커밋합니다.</p></div>
+    </div>
+    <table class="keys map">
+      <tr><th>알아 둘 것</th><th>내용</th></tr>
+      <tr><td>남는 곳</td><td><code>설정 폴더\ei-db\backup\접속 이름\날짜시각_표.sql</code> (내 PC, 밖으로 나가지 않음)</td></tr>
+      <tr><td>백업 안 되는 문장</td><td>표 하나만 고치는 문장만 백업합니다. 여러 표를 잇는 UPDATE · MERGE · 프로시저 호출(CALL · PL/SQL 블록) · TRUNCATE, WHERE 에 ROWNUM · 난수 · 시퀀스가 든 문장은 「백업 안 됨」 을 알리고 그대로 실행합니다.</td></tr>
+      <tr><td>큰 변경</td><td>1만 행을 넘거나 백업 읽기에 실패하면 실행 전에 묻습니다.</td></tr>
+      <tr><td>되살리지 못하는 것</td><td>긴 글 · 파일 칼럼(LOB)은 빼고 파일 머리에 적습니다. 트리거 · 시퀀스로 따라 바뀐 값은 되돌리지 않습니다.</td></tr>
+      <tr><td>설정</td><td>설정(<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd>) → 도구 → 「고치기 전 백업」: 켜고 끄기 · 행 한도(기본 1만) · 보존 일수(기본 30일, 지나면 지움).</td></tr>
+    </table>
 
     <h3 id="slow">느린 곳 찾기 · 콘솔 「계획」 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd></h3>
     <p class="lead">쿼리를 실행하지 않고 DB 의 실행 계획을 읽어, 느려질 단계와 그 이유 · 고칠 법을 한국어로 보여 줍니다. SQL 콘솔에서 커서를 문장에 두고 「계획」, 매퍼 XML 에서는 문장 우클릭 「Find Slow Spots」(매개변수 값은 Run MyBatis Query 와 같은 창에서 받음). Oracle · MySQL · PostgreSQL 모두 되고, 분석 내용은 밖(AI · 클라우드)으로 보내지 않습니다.</p>
@@ -2151,7 +2172,6 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       <tr><th>이런 글 · 증상</th><th>먼저 볼 것</th></tr>
       <tr><td>Lombok 오류로 컴파일 실패</td><td>프로젝트 JDK 를 17 · 21 로 둡니다(Lombok 1.18.30 은 24 이상에서 깨짐).</td></tr>
       <tr><td>SVN 이 「svn cleanup 하라」</td><td>트리 우클릭 Subversion → Cleanup 뒤 다시 받습니다.</td></tr>
-      <tr><td>SVN 프로젝트인데 동기화 창에 「git rev-parse 실패」</td><td>디렉터리 매핑이 비어 Git 으로 본 것. 다음 빌드부터는 .svn 을 찾아 SVN 으로 봄. 그 전 빌드는 설정 → 버전 관리 → 디렉터리 매핑에 프로젝트 폴더를 Subversion 으로 추가.</td></tr>
       <tr><td>받기가 Assume Unchanged 파일 때문에 멈춤</td><td>동기화 창에서 그 파일을 No Assume Unchanged → 받기 → 다시 Assume Unchanged.</td></tr>
       <tr><td>API 요청이 「연결할 수 없습니다」</td><td>서버 창에서 서버가 떠 있는지, 요청 화면 주소의 포트 · 컨텍스트 경로가 맞는지 봅니다.</td></tr>
       <tr><td>JS · Vue 자동 완성이 없음</td><td>설치 폴더 <code>plugins\boot-servers\web</code> 가 있는지 봅니다. 없으면 다시 설치하거나 알림의 받기 단추를 누릅니다.</td></tr>
@@ -2182,9 +2202,11 @@ python kit\menu\apply_menu.py intellij-community
 python kit\defaults\apply_defaults.py intellij-community
 python kit\git-auth\apply_git_auth.py intellij-community
 python kit\defender\apply_defender.py intellij-community
+python kit\git-retry\apply_git_retry.py intellij-community
 python kit\ko\apply_ko.py
 python kit\mingit\apply_mingit.py
 python kit\web\apply_web.py
+python kit\gradle\apply_gradle.py
 kit\brand\apply_brand.bat
 python kit\compile_plugins.py
 build-windows.bat
@@ -2196,9 +2218,11 @@ build-windows.bat
       <tr><td><code>kit\menu\apply_menu.py</code> · <code>kit\defaults\apply_defaults.py</code></td><td>이클립스식 메뉴와 <a href="#defaults">02</a> 의 기본값을 넣습니다.</td></tr>
       <tr><td><code>kit\git-auth\apply_git_auth.py</code></td><td>IntelliJ Git 이 https 원격에 <a href="#sync">Git 로그인</a> 값을 넘기게 손질합니다.</td></tr>
       <tr><td><code>kit\defender\apply_defender.py</code></td><td>Microsoft Defender 알림의 「제외」 단추가 실제로 폴더를 제외하게 합니다(직접 빌드한 판은 도우미 대본에 서명이 없어 멈추던 것).</td></tr>
+      <tr><td><code>kit\git-retry\apply_git_retry.py</code></td><td>보안 프로그램이 Git 을 잠깐 막아 Clone · Push · Fetch 가 실패하면 1 · 2 · 3초 쉬고 세 번까지 다시 하게 손질합니다.</td></tr>
       <tr><td><code>kit\ko\apply_ko.py</code></td><td>한국어 팩에 우리 번역(kit\ko\override)을 덮어 본체에 넣습니다. 자리표시 · 태그 · 단축 글자 모양이 팩과 다르면 멈춥니다.</td></tr>
       <tr><td><code>kit\mingit\apply_mingit.py</code></td><td>PC 에 Git 이 없을 때 쓸 MinGit 을 받아 넣습니다(판 · SHA-256 고정).</td></tr>
       <tr><td><code>kit\web\apply_web.py</code></td><td>Node.js 와 JavaScript · TypeScript · Vue 언어 서버를 받아 넣습니다. 인터넷이 막힌 PC 에서도 언어 서버가 뜹니다.</td></tr>
+      <tr><td><code>kit\gradle\apply_gradle.py</code></td><td>설치본에 넣을 Gradle 9.9.1 · 8.14.7 을 받아 넣습니다(판 · SHA-256 고정). 인터넷이 막힌 PC 에서도 Gradle 프로젝트가 돕니다.</td></tr>
       <tr><td><code>kit\brand\apply_brand.bat</code></td><td>Moa IDE 로고 · 설치 그림을 넣습니다.</td></tr>
       <tr><td><code>kit\compile_plugins.py</code></td><td>우리 플러그인 셋(서버 창 · 동기화 · 데이터베이스)을 함께 컴파일 · 점검해 본체 jar 를 바꿉니다. 하나라도 실패하면 아무것도 바꾸지 않습니다.</td></tr>
       <tr><td><code>build-windows.bat</code></td><td>설치 파일 <code>release\moaide-263.7307.N.exe</code> 를 만들고, gh 가 있으면 GitHub 릴리스로 올립니다(설명은 <code>수정내역.md</code> 맨 위 절).</td></tr>
@@ -2225,6 +2249,37 @@ build-windows.bat
     root.dataset.theme = dark ? "light" : "dark";
     try{ localStorage.setItem(key, root.dataset.theme); }catch(e){}
   });
+  // 절 머리에 그 안 소제목(h3) 목록을 붙인다. 이름 없는 h3 에는 절 이름 뒤에 번호를 붙인 id 를 준다.
+  document.querySelectorAll("section[id]").forEach(function(s){
+    var hs=[].slice.call(s.querySelectorAll("h3"));
+    if(hs.length<3) return;
+    var box=document.createElement("nav"); box.className="subtoc"; box.setAttribute("aria-label","이 절의 소제목");
+    hs.forEach(function(h,i){
+      if(!h.id) h.id=s.id+"-"+(i+1);
+      var a=document.createElement("a"); a.href="#"+h.id; a.textContent=h.textContent.split(" · ")[0].trim(); box.appendChild(a);
+    });
+    var lead=s.querySelector(".wrap > p.lead"), spot=lead||s.querySelector(".wrap > h2");
+    if(spot) spot.insertAdjacentElement("afterend",box);
+  });
+  // 글 찾기: 낱말이 든 칸(제목 · 설명 줄 · 표 줄 · 카드)을 차례로 보여 준다. Enter 다음, Shift+Enter 앞.
+  var q=document.getElementById("q"), qn=document.getElementById("qn"), hits=[], at=-1, last="";
+  function find(){
+    var w=q.value.trim().toLowerCase();
+    if(w===last) return; last=w; at=-1;
+    hits.forEach(function(el){ el.classList.remove("hit"); });
+    hits = w ? [].slice.call(document.querySelectorAll("section h3, section .legend li, section table tr, section .card, section .step, section .note, section p.lead"))
+      .filter(function(el){ return el.textContent.toLowerCase().indexOf(w)>=0 && !el.querySelector(".card, .legend li, tr, .note"); }) : [];
+    qn.textContent = w ? (hits.length ? "0 / "+hits.length : "없음") : "";
+  }
+  function go(step){
+    find(); if(!hits.length) return;
+    if(at>=0) hits[at].classList.remove("hit");
+    at=(at+step+hits.length)%hits.length;
+    var el=hits[at]; el.classList.add("hit"); el.scrollIntoView({block:"center"});
+    qn.textContent=(at+1)+" / "+hits.length;
+  }
+  q.addEventListener("input",find);
+  q.addEventListener("keydown",function(e){ if(e.key==="Enter"){ e.preventDefault(); go(e.shiftKey?-1:1); } });
   // 목차에서 지금 보고 있는 절을 표시한다.
   var links=[].slice.call(document.querySelectorAll("nav.toc a"));
   var obs=new IntersectionObserver(function(es){

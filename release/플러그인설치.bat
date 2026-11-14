@@ -4,9 +4,8 @@ rem Moa IDE 를 새로 설치하거나 판을 올린 뒤 한 번 실행한다.
 rem 본체에 들어 있지 않은 플러그인(Claude Code · One Dark 테마)을 사용자 플러그인 폴더에 넣고,
 rem 예전에 사용자 폴더에 따로 넣었던 플러그인(서버 창 · Synchronize · 롬복 · 화면 묶음 · 한국어 언어 팩)은 본체와 겹치지 않게 치운다.
 rem 옆의 plugins 폴더에 없는 것은 JetBrains 마켓에서 내려받는다. 한국어 언어 팩은 우리 번역을 덮은 판이 본체에 들어 있다(kit\ko\apply_ko.py).
-rem 옆의 jdk · gradle · drivers 폴더에 있는 것은 사용자 폴더에 풀어 둔다(인터넷 없이). 이미 있으면 건너뛴다.
+rem 옆의 jdk · drivers 폴더에 있는 것은 사용자 폴더에 풀어 둔다(인터넷 없이). 이미 있으면 건너뛴다.
 rem   jdk\*.zip      → %USERPROFILE%\.jdks\<압축 속 폴더>  (Moa IDE 가 켤 때 SDK 목록에 자동 등록)
-rem   gradle\*.zip   → Gradle wrapper 가 같은 판을 찾는 자리 (%USERPROFILE%\.gradle\wrapper\dists)
 rem   drivers\*.jar  → %USERPROFILE%\.m2\repository (데이터베이스 창이 여기서 드라이버를 찾는다)
 rem 내려받기 · 풀기는 옆의 임시 폴더(.partial)에서 하고, 다 됐을 때만 제자리로 옮긴다. 도중에 실패하면 다음 실행에서 처음부터 다시 한다.
 rem 경로는 괄호 · & 가 들어 있어도 되게 늘 따옴표로 감싼다. 지연 확장은 쓰지 않는다.
@@ -15,9 +14,6 @@ set "HERE=%~dp0"
 set "DEST=%APPDATA%\JetBrains\MoaIDE2026.3\plugins"
 set "SRC=%HERE%plugins"
 set "CC_ZIP=https://plugins.jetbrains.com/pluginManager?action=download&id=com.anthropic.code.plugin&build=IC-263.7307.200"
-rem Gradle wrapper 의 배포판 폴더 이름은 distributionUrl 의 MD5 를 36진수로 쓴 값이다. 판을 바꾸면 함께 바꾼다.
-set "GRADLE_VER=8.14.6"
-set "GRADLE_HASH=aynuqaj6iwevsbr5c5qdwq08s"
 set "OD_ZIP=https://plugins.jetbrains.com/pluginManager?action=download&id=com.markskelton.one-dark-theme&build=IC-263.7307.200"
 
 tasklist /fi "imagename eq idea64.exe" | find /i "idea64.exe" >nul && (
@@ -27,7 +23,7 @@ tasklist /fi "imagename eq idea64.exe" | find /i "idea64.exe" >nul && (
 )
 if not exist "%SRC%" mkdir "%SRC%"
 
-rem 인터넷이 막힌 PC 에서도 옛 플러그인 치우기 · JDK · Gradle · 드라이버 설치는 이어서 한다.
+rem 인터넷이 막힌 PC 에서도 옛 플러그인 치우기 · JDK · 드라이버 설치는 이어서 한다.
 call :fetch claude-code-jetbrains-plugin "%CC_ZIP%" "Claude Code 플러그인" || echo Claude Code 플러그인은 받지 못해 건너뜁니다. 인터넷 연결을 확인하세요.
 call :fetch one-dark-theme "%OD_ZIP%" "One Dark 테마" || echo One Dark 테마는 건너뜁니다.
 
@@ -47,8 +43,6 @@ echo 플러그인 설치 완료: "%DEST%"
 set "JDKS=%USERPROFILE%\.jdks"
 if not exist "%JDKS%" mkdir "%JDKS%"
 for %%z in ("%HERE%jdk\*.zip") do call :jdk "%%~fz"
-
-call :gradle
 
 set "M2=%USERPROFILE%\.m2\repository"
 call :driver com\oracle\database\jdbc ojdbc11
@@ -126,34 +120,6 @@ goto :eof
 :jdkfail
 echo JDK 를 풀지 못했습니다: "%~nx1"
 if exist "%JP%" rmdir /s /q "%JP%"
-goto :eof
-
-rem gradle 폴더의 배포판 zip 을 wrapper 자리에 푼다. wrapper 는 zip 옆의 .ok 표시가 있어야 다 풀린 것으로 보므로 .ok 는 맨 마지막에 만든다.
-rem 임시 폴더는 배포판 폴더 밖(옆)에 둔다. wrapper 는 배포판 폴더 안에 폴더가 하나뿐이어야 한다.
-:gradle
-set "GZ=%HERE%gradle\gradle-%GRADLE_VER%-bin.zip"
-set "GW=%USERPROFILE%\.gradle\wrapper\dists\gradle-%GRADLE_VER%-bin\%GRADLE_HASH%"
-set "GP=%GW%.partial"
-if not exist "%GZ%" goto :eof
-if exist "%GW%\gradle-%GRADLE_VER%-bin.zip.ok" goto :gradlehave
-if exist "%GP%" rmdir /s /q "%GP%"
-mkdir "%GP%" || goto :gradlefail
-tar -xf "%GZ%" -C "%GP%" || goto :gradlefail
-if not exist "%GP%\gradle-%GRADLE_VER%\bin\" goto :gradlefail
-if not exist "%GW%" mkdir "%GW%"
-if exist "%GW%\gradle-%GRADLE_VER%" rmdir /s /q "%GW%\gradle-%GRADLE_VER%"
-move "%GP%\gradle-%GRADLE_VER%" "%GW%\" >nul || goto :gradlefail
-copy /y "%GZ%" "%GW%\" >nul || goto :gradlefail
-rmdir /s /q "%GP%"
-type nul > "%GW%\gradle-%GRADLE_VER%-bin.zip.ok"
-echo Gradle %GRADLE_VER% 설치: "%GW%\gradle-%GRADLE_VER%"
-goto :eof
-:gradlehave
-echo Gradle %GRADLE_VER% 있음
-goto :eof
-:gradlefail
-echo Gradle 을 풀지 못했습니다.
-if exist "%GP%" rmdir /s /q "%GP%"
 goto :eof
 
 rem drivers 폴더의 <artifact>-<판>.jar 를 ~/.m2/repository/<group>/<artifact>/<판>/ 에 둔다. %1 group(\ 구분) %2 artifact
