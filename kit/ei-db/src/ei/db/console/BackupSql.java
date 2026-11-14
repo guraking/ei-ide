@@ -305,6 +305,26 @@ public final class BackupSql {
     return new SqlText.Update(preview.append(";\n").toString(), sql.append('\n').toString(), binds);
   }
 
+  /**
+   * 여러 행을 한 번에 지우는 DELETE(실행용, ? 자리 + binds): 행마다 delete 와 같은 PK 조건을 괄호로 묶어 OR 로 잇는다.
+   * 행 수만큼 왕복하지 않으려고 쓴다. rows 는 행마다의 PK 값(pkNames 순서)이고 비어 있지 않아야 한다.
+   */
+  static SqlText.Update deleteMany(String table, List<String> pkNames, List<List<Object>> rows, DbKind kind) {
+    StringBuilder sql = new StringBuilder("DELETE FROM ").append(table).append("\n WHERE ");
+    List<Object> binds = new ArrayList<>();
+    for (int r = 0; r < rows.size(); r++) {
+      sql.append(r == 0 ? "(" : "\n    OR (");
+      for (int i = 0; i < pkNames.size(); i++) {
+        Object v = rows.get(r).get(i);
+        if (i > 0) sql.append(" AND ");
+        sql.append(pkNames.get(i)).append(v == null ? " IS NULL" : " = ?");
+        if (v != null) binds.add(v);
+      }
+      sql.append(')');
+    }
+    return new SqlText.Update(sql + ";\n", sql.append('\n').toString(), binds);
+  }
+
   // ---- 파일 이름 · 머리 ----
 
   private static final DateTimeFormatter FILE_TIME = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");

@@ -27,6 +27,7 @@ import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
 import ei.db.DbConfig;
+import ei.db.DbKind;
 import ei.db.DbSessions;
 import ei.db.EiDbBundle;
 import ei.db.Notify;
@@ -78,7 +79,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Timestamp;
-import java.awt.font.TextAttribute;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -157,13 +157,28 @@ final class ResultPanel extends SimpleToolWindowPanel {
   private boolean[] pkColumns;
   /** 반영 문장에 쓸 표 · 칼럼(결과 칼럼 번호 순) 표기: 표 정의의 이름 그대로를 SqlText.ident 로. pkColumns 와 함께 채운다. */
   private String editTable;
+  /** 마지막 왼쪽 누름이 행 번호 칸이었는지(끌어서 여러 행을 고르는 중인지). */
+  private boolean rowPick;
+  /** 찾기 칸 조건으로 거른 결과일 때 거르기 전의 조회 문장. 거르지 않았으면 null. */
+  private final String filterBase;
+  /** filterBase 에 붙인 조건 글(찾기 칸에 그대로 보인다). 거르지 않았으면 null. */
+  private final String filterText;
+  /** 이 결과의 문장을 다시 실행해도 되는지(조회 문장). 「새로 고침」 단추를 보일지 정한다. */
+  private boolean rereadable;
   private String[] editColumns;
   /** 고치기를 막는 이유. null 이면 막지 않거나 아직 모른다. */
   private String editBlocked;
   private boolean loadingEdit;
 
   ResultPanel(Project project, DbConfig c, QueryResult result, String table, String title) {
+    this(project, c, result, table, title, null, null);
+  }
+
+  /** filterBase · filterText: 찾기 칸 조건으로 거른 결과면 거르기 전 문장과 그 조건 글, 아니면 둘 다 null. */
+  ResultPanel(Project project, DbConfig c, QueryResult result, String table, String title, String filterBase, String filterText) {
     super(true, true);
+    this.filterBase = filterBase;
+    this.filterText = filterText;
     this.project = project;
     this.config = c;
     this.result = result;
@@ -239,6 +254,19 @@ final class ResultPanel extends SimpleToolWindowPanel {
         return getParent() instanceof JViewport v && getPreferredSize().width < v.getWidth();
       }
 
+      // 창 폭이 바뀌어 남는 폭을 칸에 나눌 때 행 번호 칸은 지금 폭을 지킨다(나머지 칸만 늘고 준다).
+      // 사용자가 칸 경계를 끄는 동안에는 막지 않으므로 행 번호 칸도 끌어서 바꿀 수 있다.
+      @Override
+      public void doLayout() {
+        TableColumn numbers = getColumnCount() > 1 && getTableHeader().getResizingColumn() == null ? getColumnModel().getColumn(0) : null;
+        if (numbers != null) numbers.setMaxWidth(numbers.getPreferredWidth());
+        try {
+          super.doLayout();
+        } finally {
+          if (numbers != null) numbers.setMaxWidth(Integer.MAX_VALUE);
+        }
+      }
+
       @Override
       protected JTableHeader createDefaultTableHeader() {
         return new JBTableHeader() {
@@ -258,8 +286,26 @@ final class ResultPanel extends SimpleToolWindowPanel {
         Component c = super.prepareRenderer(renderer, row, column);
         Color background = isCellSelected(row, column) ? null : cellBackground(this, row, column);
         if (background != null) c.setBackground(background);
-        if (isDeletedRow(convertRowIndexToModel(row))) c.setFont(struck(c.getFont()));
         return c;
+      }
+
+      // 지움 표시한 행의 취소선은 행 가운데에 선 하나로 긋는다. 칸마다 취소선 글꼴을 만들면
+      // 글꼴 생성과 느린 글자 그리기 경로 때문에 표시한 행이 많을수록 칠하기가 느려진다.
+      @Override
+      protected void paintComponent(@NotNull java.awt.Graphics g) {
+        super.paintComponent(g);
+        if (deleted.isEmpty() || getRowCount() == 0) return;
+        java.awt.Rectangle clip = g.getClipBounds();
+        int first = Math.max(rowAtPoint(clip.getLocation()), 0);
+        int last = rowAtPoint(new java.awt.Point(clip.x, clip.y + clip.height - 1));
+        if (last < 0) last = getRowCount() - 1;
+        int right = Math.min(clip.x + clip.width, getColumnModel().getTotalColumnWidth());
+        g.setColor(getForeground());
+        for (int row = first; row <= last; row++) {
+          if (!isDeletedRow(convertRowIndexToModel(row))) continue;
+          java.awt.Rectangle cell = getCellRect(row, 0, true);
+          g.drawLine(clip.x, cell.y + cell.height / 2, right, cell.y + cell.height / 2);
+        }
       }
     };
     grid.setAutoResizeMode(JTable.AUTO_RESIZE_SUBSEQUENT_COLUMNS);
@@ -286,7 +332,22 @@ final class ResultPanel extends SimpleToolWindowPanel {
       @Override public void mousePressed(MouseEvent e) { onCell(e); }
       @Override public void mouseReleased(MouseEvent e) { onCell(e); }
     });
+    // 행 번호 칸에서 끌면 JTable 이 칼럼 선택을 끈 자리까지로 줄이므로, 끄는 동안 행 전체 선택을 유지한다.
+    grid.addMouseMotionListener(new MouseAdapter() {
+      @Override public void mouseDragged(MouseEvent e) {
+        if (rowPick && grid.getColumnCount() > 1) grid.setColumnSelectionInterval(1, grid.getColumnCount() - 1);
+      }
+    });
     fitColumns(grid);
+    // 행 번호 칸의 폭은 가장 큰 번호(마지막 행)의 글자 폭을 따른다: 행이 많아 자릿수가 늘면 칸도 넓어진다.
+    // fitColumns 는 앞쪽 FIT_ROWS 행만 재므로 마지막 행을 따로 잰다. 표가 창 폭으로 늘 때 이 칸은 함께 늘지 않는다(doLayout). 사용자는 끌어서 넓히거나 좁힐 수 있다.
+    TableColumn numbers = grid.getColumnModel().getColumn(0);
+    int numberWidth = numbers.getPreferredWidth();
+    if (grid.getRowCount() > 0) {
+      int last = grid.getRowCount() - 1;
+      numberWidth = Math.max(numberWidth, grid.prepareRenderer(grid.getCellRenderer(last, 0), last, 0).getPreferredSize().width + JBUI.scale(CELL_PADDING));
+    }
+    numbers.setPreferredWidth(numberWidth);
     CellActions.installShortcut(grid, project, c, result);
 
     // 머리줄: 왼쪽 「결과 N · 표」(굵게) · 건수 꼬리표 · 실행 시간 · 더 읽기 · 찾기 칸, 오른쪽 반영 · 되돌리기 단추와 내보내기 링크.
@@ -323,6 +384,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
       bar.add(new JBLabel(EiDbBundle.message("result.rows.unit")));
       bar.add(button(EiDbBundle.message("result.fetch"), null, byInput));
     }
+    rereadable = SqlText.isRereadable(result.sql());
     BarAction apply = new BarAction(EiDbBundle.message("result.apply"), EiDbBundle.message("backup.grid.apply.tooltip"), AllIcons.Actions.Commit, this::applyEdits) {
       @Override
       public void update(@NotNull AnActionEvent e) {
@@ -335,7 +397,11 @@ final class ResultPanel extends SimpleToolWindowPanel {
         new BarAction(EiDbBundle.message("result.revert"), EiDbBundle.message("backup.grid.revert.tooltip"), AllIcons.Actions.Rollback, this::revertEdits)
             .visibleWhen(this::hasPending).withText(),
         new BarAction(EiDbBundle.message("backup.grid.delete"), EiDbBundle.message("backup.grid.delete.tooltip"), AllIcons.General.Remove, this::deleteRows)
-            .visibleWhen(this::canOfferDelete).enabledWhen(() -> grid.getSelectedRowCount() > 0));
+            .visibleWhen(this::canOfferDelete).enabledWhen(() -> grid.getSelectedRowCount() > 0),
+        // 같은 문장을 지금 읽은 건수(적어도 기본 건수)로 다시 실행한다. 변경이 섞인 문장에는 두지 않는다(readMore 와 같은 조건).
+        new BarAction(EiDbBundle.message("result.refresh"), EiDbBundle.message("result.refresh.tooltip"), AllIcons.Actions.Refresh,
+            () -> readMore(c, Math.max(result.rows().size(), DbSessions.MAX_ROWS)))
+            .visibleWhen(() -> rereadable).enabledWhen(() -> !applying));
     // 내보내기 · 복사 · 생성은 흐린 글자 링크로, 「·」 로 나눈다.
     JPanel links = new JPanel(new HorizontalLayout(0, SwingConstants.CENTER));
     links.setBorder(JBUI.Borders.empty(0, BAR_INSET));
@@ -343,10 +409,14 @@ final class ResultPanel extends SimpleToolWindowPanel {
     addLink(links, EiDbBundle.message("common.copy"), null, this::copyTsv);
     addLink(links, "CSV", EiDbBundle.message("result.csv.tooltip"), this::exportCsv);
     addLink(links, EiDbBundle.message("result.excel"), EiDbBundle.message("result.excel.tooltip"), this::exportXlsx);
-    addLink(links, "INSERT", EiDbBundle.message("result.insert.tooltip"), this::copyInserts);
-    addLink(links, "UPDATE", EiDbBundle.message("result.update.tooltip"), () -> copyUpdates(c));
+    addLink(links, "JSON", EiDbBundle.message("result.json.tooltip"), this::exportJson);
     addLink(links, "DTO", EiDbBundle.message("dto.command"), () -> DtoDialog.show(project, c, result));
-    addLink(links, "enum", EiDbBundle.message("result.enum.tooltip"), () -> EnumDialog.show(project, c, result));
+    // 결과에서 고른 칼럼 · 행으로 쿼리를 만들어 새 콘솔에 연다. 원래 문장을 감싸므로 조회 문장일 때만 둔다.
+    if (rereadable) {
+      for (ResultQueryDialog.Kind kind : ResultQueryDialog.Kind.values()) {
+        addLink(links, EiDbBundle.message("result.query.link." + kind.name()), EiDbBundle.message("result.query.tooltip." + kind.name()), () -> makeQuery(kind));
+      }
+    }
     // 찾기 칸은 머리줄 왼쪽 묶음과 오른쪽 링크 사이를 다 채운다.
     JPanel head = new JPanel(new BorderLayout(JBUI.scale(BAR_INSET), 0));
     head.add(bar, BorderLayout.WEST);
@@ -375,14 +445,23 @@ final class ResultPanel extends SimpleToolWindowPanel {
     searchBox = new SearchTextField(false);
     searchBox.getTextEditor().getEmptyText().setText(EiDbBundle.message("result.search.hint"));
     searchBox.setToolTipText(EiDbBundle.message("result.search.tooltip"));
+    if (filterText != null) searchBox.setText(filterText);
+    searchBox.getTextEditor().addActionListener(e -> filterByCondition());
     searchBox.addDocumentListener(new DocumentAdapter() {
       @Override protected void textChanged(@NotNull DocumentEvent e) { filter(searchBox.getText()); }
     });
     return searchBox;
   }
 
+  /** 찾기 칸의 글로 읽어 온 행을 거르고 있는지. 조건 모양의 글은 DB 에서 거르는 것이라 해당하지 않는다. */
+  private boolean clientFiltered() {
+    String text = searchBox.getText();
+    return !text.isBlank() && !ResultFilter.isCondition(text);
+  }
+
   private void filter(String text) {
-    String needle = text.toLowerCase(Locale.ROOT);
+    // 조건 모양의 글은 Enter 로 DB 에서 거르므로(filterByCondition) 읽어 온 행에서는 찾지 않는다.
+    String needle = ResultFilter.isCondition(text) ? "" : text.toLowerCase(Locale.ROOT);
     sorter.setRowFilter(needle.isEmpty() ? null : new Contains(needle));
     int total = result.rows().size();
     showCount(needle.isEmpty() ? EiDbBundle.message("common.rows", total) : EiDbBundle.message("result.filtered", grid.getRowCount(), total));
@@ -422,7 +501,32 @@ final class ResultPanel extends SimpleToolWindowPanel {
       return;
     }
     SqlRunner.reread(project, c, result.sql(), result.binds(), Math.min(limit, DbSessions.MAX_ROW_LIMIT),
-        more -> replaceWith(new ResultPanel(project, c, more, table, title)));
+        more -> replaceWith(new ResultPanel(project, c, more, table, title, filterBase, filterText)));
+  }
+
+  /**
+   * 찾기 칸에서 Enter: 조건 모양의 글이면 거르기 전 문장에 그 조건을 붙여 DB 에서 다시 읽어 이 탭을 바꾼다.
+   * 칸을 비우고 Enter 면(거른 결과일 때) 거르기 전 문장으로 돌아간다. 글자 찾기 글이면 아무것도 하지 않는다.
+   * 만든 문장이 조회 문장이 아니면(변경 낱말 · 「;」) 실행하지 않고 알린다. 조건의 문법 오류는 DB 오류로 알린다.
+   */
+  private void filterByCondition() {
+    String text = searchBox.getText().strip();
+    String base = filterBase == null ? result.sql() : filterBase;
+    boolean clear = text.isEmpty() && filterBase != null;
+    if (!clear && !ResultFilter.isCondition(text)) return;
+    String sql = clear ? base : ResultFilter.apply(base, text);
+    if (text.contains(";") || !SqlText.isRereadable(sql)) {
+      Notify.error(project, EiDbBundle.message("result.filter.refused"));
+      return;
+    }
+    if (grid.isEditing()) grid.getCellEditor().stopCellEditing();
+    if (hasPending() && Messages.showYesNoDialog(project,
+        EiDbBundle.message(deleted.isEmpty() ? "result.more.discard" : "backup.grid.more.discard", edits.size() + deleted.size()),
+        EiDbBundle.message("result.more.discard.title"), Messages.getWarningIcon()) != Messages.YES) {
+      return;
+    }
+    SqlRunner.reread(project, config, sql, result.binds(), Math.max(result.rows().size(), DbSessions.MAX_ROWS),
+        found -> replaceWith(new ResultPanel(project, config, found, table, title, clear ? null : base, clear ? null : text)));
   }
 
   /** 건수 칸에 쓴 수로 다시 읽는다. 1 ~ MAX_ROW_LIMIT 의 수가 아니면 알리고 읽지 않는다. */
@@ -522,8 +626,17 @@ final class ResultPanel extends SimpleToolWindowPanel {
     grid.setRowSelectionInterval(0, grid.getRowCount() - 1);
   }
 
-  /** 칸 오른쪽 누름: 값 · 칼럼 · 행 복사 메뉴. 누른 칸이 골라져 있지 않으면 그 칸만 고른다. */
+  /**
+   * 칸 오른쪽 누름: 값 · 칼럼 · 행 복사 메뉴. 누른 칸이 골라져 있지 않으면 그 칸만 고른다.
+   * 행 번호 칸 왼쪽 누름: 그 행 전체를 고른다(Ctrl · Shift 로 행을 더하거나 끌어서 여러 행을 고르는 것은 JTable 이 먼저 처리한다). 행 번호 칸 자신은 복사에 섞이지 않게 뺀다.
+   */
   private void onCell(MouseEvent e) {
+    if (e.getID() == MouseEvent.MOUSE_PRESSED && SwingUtilities.isLeftMouseButton(e) && e.getClickCount() == 1) {
+      int view = grid.columnAtPoint(e.getPoint());
+      rowPick = view >= 0 && grid.rowAtPoint(e.getPoint()) >= 0 && grid.convertColumnIndexToModel(view) == 0 && grid.getColumnCount() > 1;
+      if (rowPick) grid.setColumnSelectionInterval(1, grid.getColumnCount() - 1);
+      return;
+    }
     if (e.getID() == MouseEvent.MOUSE_PRESSED && SwingUtilities.isLeftMouseButton(e) && e.getClickCount() == 2) {
       int row = grid.rowAtPoint(e.getPoint());
       int view = grid.columnAtPoint(e.getPoint());
@@ -544,6 +657,9 @@ final class ResultPanel extends SimpleToolWindowPanel {
     }
     menu.addSeparator();
     menu.add(item(EiDbBundle.message("result.menu.copy.rows"), this::copyTsv));
+    menu.add(item(EiDbBundle.message("result.menu.copy.insert"), this::copyInserts));
+    menu.add(item(EiDbBundle.message("result.menu.copy.update"), () -> copyUpdates(config)));
+    menu.add(item(EiDbBundle.message("result.menu.enum"), () -> EnumDialog.show(project, config, result)));
     if (canOfferDelete()) menu.add(item(EiDbBundle.message("backup.grid.delete"), this::deleteRows));
     menu.show(e.getComponent(), e.getX(), e.getY());
   }
@@ -624,33 +740,156 @@ final class ResultPanel extends SimpleToolWindowPanel {
   private void exportCsv() {
     Path path = askSavePath(EiDbBundle.message("result.csv.export"), EiDbBundle.message("result.csv.export.description"), "csv");
     if (path == null) return;
-    StringBuilder sb = new StringBuilder(BOM);
-    appendCsvLine(sb, List.copyOf(result.columns()));
-    for (List<Object> row : visibleRows()) appendCsvLine(sb, row);
-    String csv = sb.toString();
+    wholeResultThen(rows -> {
+      StringBuilder sb = new StringBuilder(BOM);
+      appendCsvLine(sb, List.copyOf(result.columns()));
+      for (List<Object> row : rows) appendCsvLine(sb, row);
+      String csv = sb.toString();
+      ApplicationManager.getApplication().executeOnPooledThread(() -> {
+        try {
+          Files.writeString(path, csv, StandardCharsets.UTF_8);
+          Notify.info(project, EiDbBundle.message("result.csv.saved", path));
+        } catch (IOException e) {
+          Notify.error(project, EiDbBundle.message("result.csv.failed", e.getMessage()));
+        }
+      });
+    });
+  }
+
+  /**
+   * 내보낼 행을 정해 use 에 넘긴다(화면 스레드). 화면에 일부만 읽힌 결과(「더 보기」가 남은 결과)이고 찾기 칸으로 거르지 않았으면
+   * 같은 문장을 MAX_ROW_LIMIT 건까지 다시 읽은 조회 결과 전체를(화면의 표는 그대로 둔다), 아니면 화면에 보이는 행을 넘긴다.
+   * 다시 읽고도 남으면 넘긴 건수를 알린다. 다시 읽기가 실패 · 취소되면 use 를 부르지 않는다.
+   */
+  private void wholeResultThen(java.util.function.Consumer<List<List<Object>>> use) {
+    if (result.truncated() && rereadable && result.rows().size() < DbSessions.MAX_ROW_LIMIT && !clientFiltered()) {
+      SqlRunner.reread(project, config, result.sql(), result.binds(), DbSessions.MAX_ROW_LIMIT, more -> {
+        if (more.truncated()) Notify.warning(project, EiDbBundle.message("result.export.cut", more.rows().size()));
+        use.accept(more.rows());
+      });
+      return;
+    }
+    use.accept(visibleRows());
+  }
+
+  /**
+   * 칼럼 이름을 키로 한 JSON 배열 파일(UTF-8)로 저장한다. 행을 골랐으면 고른 행만.
+   * 고르지 않았으면 조회 결과 전체: 화면에 일부만 읽힌 결과(「더 보기」가 남은 결과)는 같은 문장을 MAX_ROW_LIMIT 건까지 다시 읽어 저장하고
+   * (화면의 표는 그대로 둔다), 그래도 남으면 저장한 건수와 함께 알린다. 찾기 칸으로 거른 것은 따지지 않는다.
+   */
+  private void exportJson() {
+    Path path = askSavePath(EiDbBundle.message("result.json.export"), EiDbBundle.message("result.json.export.description"), "json");
+    if (path == null) return;
+    boolean all = grid.getSelectedRowCount() == 0;
+    if (all && result.truncated() && rereadable && result.rows().size() < DbSessions.MAX_ROW_LIMIT) {
+      SqlRunner.reread(project, config, result.sql(), result.binds(), DbSessions.MAX_ROW_LIMIT, more -> writeJson(path, more.rows(), more.truncated()));
+      return;
+    }
+    List<List<Object>> rows = new ArrayList<>();
+    if (all) rows.addAll(result.rows());
+    else for (int model : chosenRows()) rows.add(result.rows().get(model));
+    writeJson(path, rows, all && result.truncated());
+  }
+
+  private void writeJson(Path path, List<List<Object>> rows, boolean cut) {
+    List<String> columns = result.columns();
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       try {
-        Files.writeString(path, csv, StandardCharsets.UTF_8);
-        Notify.info(project, EiDbBundle.message("result.csv.saved", path));
+        Files.writeString(path, ResultQueries.json(columns, rows, ResultPanel::text), StandardCharsets.UTF_8);
+        Notify.info(project, EiDbBundle.message(cut ? "result.json.saved.cut" : "result.json.saved", rows.size(), path));
       } catch (IOException e) {
         Notify.error(project, EiDbBundle.message("result.csv.failed", e.getMessage()));
       }
     });
   }
 
+  /**
+   * 머리줄의 「건수 · 중복 · 분석 · 피벗 · 트리」: 고르기 창을 띄우고, 이 결과의 조회 문장을 감싼 쿼리를 만들어 새 콘솔에 연다(실행은 사용자가 한다).
+   * 바인드 값이 있는 조회(매퍼 실행 등)는 문장만으로 다시 돌릴 수 없어 만들지 않는다.
+   * 피벗의 펼칠 값은 고른 행(없으면 보이는 모든 행)에 있는 값, 트리의 시작 행은 고른 행(없으면 부모가 NULL 인 행)이다.
+   */
+  private void makeQuery(ResultQueryDialog.Kind kind) {
+    if (!result.binds().isEmpty()) {
+      Notify.error(project, EiDbBundle.message("result.query.binds"));
+      return;
+    }
+    List<String> columns = result.columns();
+    if (columns.isEmpty()) return;
+    List<String> preselected = new ArrayList<>();
+    int[] viewColumns = grid.getSelectedColumns();
+    // 행 번호 칸으로 행 전체를 골랐으면(모든 칼럼) 칼럼을 고른 것이 아니다.
+    if (viewColumns.length < columns.size()) {
+      for (int view : viewColumns) {
+        int model = grid.convertColumnIndexToModel(view);
+        if (model > 0) preselected.add(columns.get(model - 1));
+      }
+    }
+    ResultQueryDialog dialog = new ResultQueryDialog(project, kind, columns, preselected);
+    if (!dialog.showAndGet()) return;
+    DbKind db = config.kind;
+    String base = result.sql();
+    String first = SqlText.ident(db, dialog.first());
+    String second = SqlText.ident(db, dialog.second());
+    List<String> picked = new ArrayList<>();
+    for (String name : dialog.picked()) picked.add(SqlText.ident(db, name));
+    boolean rowsChosen = grid.getSelectedRowCount() > 0;
+    String sql;
+    switch (kind) {
+      case COUNTS -> sql = ResultQueries.counts(base, picked);
+      case DUPLICATES -> sql = ResultQueries.duplicates(base, picked);
+      case WINDOW -> {
+        String type = result.columnTypes().get(columns.indexOf(dialog.second()));
+        sql = ResultQueries.window(base, dialog.function(), picked, first, dialog.direction(), second, SqlText.isNumericType(type), dialog.top());
+      }
+      case PIVOT -> {
+        List<Object> values = distinctValues(columns.indexOf(dialog.first()), true);
+        if (values.isEmpty() || values.size() > ResultQueries.MAX_PIVOT_VALUES) {
+          Notify.error(project, EiDbBundle.message("result.query.pivot.values", dialog.first(), values.size(), ResultQueries.MAX_PIVOT_VALUES));
+          return;
+        }
+        sql = ResultQueries.pivot(base, picked, first, second, dialog.aggregate(), values, db);
+      }
+      case TREE -> {
+        List<Object> starts = rowsChosen ? distinctValues(columns.indexOf(dialog.first()), false) : null;
+        if (starts != null && (starts.isEmpty() || starts.size() > ResultQueries.MAX_TREE_STARTS)) {
+          Notify.error(project, EiDbBundle.message("result.query.tree.starts", dialog.first(), starts.size(), ResultQueries.MAX_TREE_STARTS));
+          return;
+        }
+        if (starts == null && !dialog.direction()) {
+          Notify.error(project, EiDbBundle.message("result.query.tree.up.needs.rows"));
+          return;
+        }
+        sql = ResultQueries.tree(base, first, second, SqlText.ident(db, dialog.third()), starts, dialog.direction(), db);
+      }
+      default -> throw new IllegalStateException(kind.name());
+    }
+    ConsoleOpener.openNew(project, config);
+    ConsoleOpener.open(project, config, sql);
+  }
+
+  /** 고른 행(없으면 보이는 모든 행)에서 그 칼럼의 서로 다른 값을 처음 나온 순서대로. withNull 이 아니면 null 은 뺀다. 이진 값 칸은 뺀다. */
+  private List<Object> distinctValues(int column, boolean withNull) {
+    Set<Object> seen = new java.util.LinkedHashSet<>();
+    for (int model : chosenRows()) {
+      Object v = result.rows().get(model).get(column);
+      if (v instanceof QueryResult.BinaryValue || (v == null && !withNull)) continue;
+      seen.add(v);
+    }
+    return new ArrayList<>(seen);
+  }
+
   private void exportXlsx() {
     Path path = askSavePath(EiDbBundle.message("result.excel.export"), EiDbBundle.message("result.excel.export.description"), "xlsx");
     if (path == null) return;
-    List<List<Object>> rows = visibleRows();
     List<String> comments = commentRow();
-    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+    wholeResultThen(rows -> ApplicationManager.getApplication().executeOnPooledThread(() -> {
       try {
         XlsxExport.write(path, result.columns(), comments, rows);
         Notify.info(project, EiDbBundle.message("result.excel.saved", path));
       } catch (IOException e) {
         Notify.error(project, EiDbBundle.message("result.excel.failed", e.getMessage()));
       }
-    });
+    }));
   }
 
   /** 칼럼 순서대로 한글 주석(없으면 빈 글자). 주석이 하나도 없으면 null. */
@@ -745,26 +984,33 @@ final class ResultPanel extends SimpleToolWindowPanel {
   }
 
   /**
-   * 표 정의 칼럼(스키마 · 따옴표를 뗀 이름으로, 접속 스키마에서). Oracle 은 대문자, PostgreSQL 은 소문자로 저장되므로
-   * 쓴 그대로 · 대문자 · 소문자 순서로 찾는다. 못 찾으면 빈 목록. 화면 스레드에서 부르지 않는다.
+   * 표 정의 칼럼(따옴표를 뗀 이름으로). 조회 문장에 「스키마.표」 로 썼으면 그 스키마에서, 아니면 접속 스키마에서 찾는다.
+   * Oracle 은 대문자, PostgreSQL 은 소문자로 저장되므로 쓴 그대로 · 대문자 · 소문자 순서로 찾는다. 못 찾으면 빈 목록. 화면 스레드에서 부르지 않는다.
    */
   private TableDef tableColumns(DbConfig c, String name) throws Exception {
     String bare = name.substring(name.lastIndexOf('.') + 1).replace("\"", "");
+    ei.db.bench.SqlParts.TableRef ref = FollowRef.singleTable(result.sql());
+    String written = ref != null && ref.schema() != null ? Meta.storedName(c, ref.schema()) : null;
     DbSessions sessions = DbSessions.get(project);
     Connection conn = sessions.connection(c);
     try {
       for (String candidate : new String[]{bare, bare.toUpperCase(Locale.ROOT), bare.toLowerCase(Locale.ROOT)}) {
-        List<Meta.Column> columns = SchemaCache.columns(conn, c, Meta.schemaOf(c), candidate);
-        if (!columns.isEmpty()) return new TableDef(candidate, columns);
+        List<Meta.Column> columns = SchemaCache.columns(conn, c, written != null ? written : Meta.schemaOf(c), candidate);
+        if (!columns.isEmpty()) return new TableDef(written, candidate, columns);
       }
-      return new TableDef(bare, List.of());
+      return new TableDef(written, bare, List.of());
     } finally {
       sessions.endReadTransaction(c);
     }
   }
 
-  /** 찾은 표 이름(저장된 대소문자 그대로)과 그 칼럼. 못 찾으면 칼럼이 빈 목록. */
-  private record TableDef(String name, List<Meta.Column> columns) {}
+  /** 찾은 표 이름(저장된 대소문자 그대로)과 그 칼럼. 못 찾으면 칼럼이 빈 목록. schema 는 문장에 쓴 스키마(저장된 이름), 안 썼으면 null. */
+  private record TableDef(String schema, String name, List<Meta.Column> columns) {
+    /** UPDATE · DELETE · 백업에 쓸 표 표기. 문장에 스키마를 썼으면 「스키마.표」(접속 스키마의 같은 이름 표를 고치지 않게). */
+    String sqlName(DbKind kind) {
+      return (schema == null ? "" : SqlText.ident(kind, schema) + ".") + SqlText.ident(kind, name);
+    }
+  }
 
   /**
    * 칸 두 번 누름: 고치기 시작. 처음엔 표 정의를 뒤에서 읽어 PK 를 찾고, 고칠 수 없으면 이유를 알린다.
@@ -810,7 +1056,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
           boolean[] keys = new boolean[result.columns().size()];
           String[] names = new String[keys.length];
           editBlocked = editBlockReason(def.columns(), keys, names);
-          editTable = SqlText.ident(config.kind, def.name());
+          editTable = def.sqlName(config.kind);
           editColumns = names;
           pkColumns = keys;
           missingColumns = countMissing(def.columns());
@@ -909,10 +1155,6 @@ final class ResultPanel extends SimpleToolWindowPanel {
     return !deleted.isEmpty() && modelRow >= 0 && modelRow < result.rows().size() && deleted.contains(result.rows().get(modelRow));
   }
 
-  private static Font struck(Font font) {
-    return font.deriveFont(Map.of(TextAttribute.STRIKETHROUGH, TextAttribute.STRIKETHROUGH_ON));
-  }
-
   /** 표의 칼럼 중 결과 칼럼에 없는 것의 수(대소문자 무시). */
   private int countMissing(List<Meta.Column> defs) {
     Set<String> shown = new HashSet<>();
@@ -978,19 +1220,30 @@ final class ResultPanel extends SimpleToolWindowPanel {
     grid.repaint();
   }
 
-  /** 반영된 DELETE 의 행을 화면 표에서 뺀다: 그 뒤 행들의 고친 값(edits)은 행 번호를 하나씩 당기고, 건수 꼬리표를 고친다. */
-  private void removeRow(int at) {
+  /**
+   * 반영된 DELETE 의 행들을 화면 표에서 뺀다: 남은 행의 고친 값(edits)은 새 행 번호로 옮기고, 건수 꼬리표를 고친다.
+   * 행마다 표를 다시 그리지 않도록 한 번에 빼고 한 번만 알린다.
+   */
+  private void removeRows(List<List<Object>> gone) {
     if (grid.isEditing()) grid.getCellEditor().cancelCellEditing();
-    deleted.remove(result.rows().remove(at));
+    Set<List<Object>> out = Collections.newSetFromMap(new IdentityHashMap<>());
+    out.addAll(gone);
+    List<List<Object>> rows = result.rows();
+    List<List<Object>> kept = new ArrayList<>();
     Map<Integer, Map<Integer, Object>> moved = new TreeMap<>();
-    for (Map.Entry<Integer, Map<Integer, Object>> e : edits.entrySet()) {
-      if (e.getKey() != at) moved.put(e.getKey() > at ? e.getKey() - 1 : e.getKey(), e.getValue());
+    for (int i = 0; i < rows.size(); i++) {
+      if (out.contains(rows.get(i))) continue;
+      if (edits.containsKey(i)) moved.put(kept.size(), edits.get(i));
+      kept.add(rows.get(i));
     }
+    rows.clear();
+    rows.addAll(kept);
+    deleted.removeAll(out);
     edits.clear();
     edits.putAll(moved);
-    ((Model) grid.getModel()).fireTableRowsDeleted(at, at);
-    int total = result.rows().size();
-    showCount(searchBox.getText().isEmpty() ? EiDbBundle.message("common.rows", total) : EiDbBundle.message("result.filtered", grid.getRowCount(), total));
+    ((Model) grid.getModel()).fireTableDataChanged();
+    int total = rows.size();
+    showCount(clientFiltered() ? EiDbBundle.message("result.filtered", grid.getRowCount(), total) : EiDbBundle.message("common.rows", total));
     updateEditButtons();
   }
 
@@ -1097,27 +1350,43 @@ final class ResultPanel extends SimpleToolWindowPanel {
     }, null, this::endApply);
   }
 
+  /** 「적용」이 DELETE 한 문장에 묶어 보내는 행 수. 행마다 한 문장씩 보내면 행 수만큼 DB 왕복 · 결과 표시가 생겨 느리다. */
+  private static final int DELETE_CHUNK = 200;
+
   /**
-   * applyEdits 의 i 번째 DELETE 를 실행하고, 지워졌으면 그 행을 화면 표에서 뺀다. 지운 행이 0 이면 알리고 멈춘다(지움 표시는 남는다).
-   * updated 는 앞서 반영한 UPDATE 문 수. 모두 끝나면 반영한 문장 수를 알린다.
+   * applyEdits 의 지울 행을 i 번째부터 DELETE_CHUNK 개씩 한 문장으로 지우고, 지워졌으면 그 행들을 화면 표에서 뺀다.
+   * 지운 행 수가 보낸 행 수와 다르면(그 사이 다른 곳에서 지워졌거나 PK 가 바뀜) 알리고 멈춘다: 어느 행이 남았는지 모르므로 지움 표시는 남긴다.
+   * deletes 는 확인창 · 백업에 보인 행별 문장(끝 알림의 건수에만 쓴다). updated 는 앞서 반영한 UPDATE 문 수.
    */
   private void deleteNext(List<List<Object>> doomed, List<SqlText.Update> deletes, int i, int updated) {
-    if (i >= deletes.size()) {
+    if (i >= doomed.size()) {
       Notify.info(project, deletes.isEmpty() ? EiDbBundle.message("result.apply.done", updated)
           : EiDbBundle.message("backup.grid.apply.done", updated + deletes.size(), updated, deletes.size()));
       endApply();
       return;
     }
-    SqlText.Update d = deletes.get(i);
+    List<List<Object>> chunk = doomed.subList(i, Math.min(i + DELETE_CHUNK, doomed.size()));
+    List<String> names = new ArrayList<>();
+    for (int c = 0; c < pkColumns.length; c++) {
+      if (pkColumns[c]) names.add(editColumns[c]);
+    }
+    List<List<Object>> keys = new ArrayList<>();
+    for (List<Object> row : chunk) {
+      List<Object> key = new ArrayList<>();
+      for (int c = 0; c < pkColumns.length; c++) {
+        if (pkColumns[c]) key.add(row.get(c));
+      }
+      keys.add(key);
+    }
+    SqlText.Update d = BackupSql.deleteMany(editTable, names, keys, config.kind);
     SqlRunner.run(project, config, d.sql(), d.binds(), done -> {
-      int row = indexOfRow(doomed.get(i));
-      if (done.updateCount() == 0) {
-        Notify.error(project, EiDbBundle.message("backup.grid.delete.missed", row + 1, updated + i, updated + deletes.size()));
+      if (done.updateCount() != chunk.size()) {
+        Notify.error(project, EiDbBundle.message("backup.grid.delete.mismatch", chunk.size(), Math.max(done.updateCount(), 0)));
         endApply();
         return;
       }
-      if (row >= 0) removeRow(row);
-      deleteNext(doomed, deletes, i + 1, updated);
+      removeRows(chunk);
+      deleteNext(doomed, deletes, i + chunk.size(), updated);
     }, null, this::endApply);
   }
 

@@ -112,6 +112,9 @@
     <action id="ei.db.QueryBench" class="ei.db.console.QueryBenchAction">
       <add-to-group group-id="ToolsMenu" anchor="last"/>
     </action>
+    <action id="ei.db.BackupView" class="ei.db.console.BackupViewAction">
+      <add-to-group group-id="ToolsMenu" anchor="after" relative-to-action="ei.db.QueryBench"/>
+    </action>
     <action id="EiDb.MyBatis.Run" class="ei.db.mybatis.RunStatementAction" icon="AllIcons.Actions.Execute">
       <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt ENTER"/>
       <add-to-group group-id="EditorPopupMenu" anchor="first"/>

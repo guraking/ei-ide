@@ -58,6 +58,8 @@ import java.util.function.BooleanSupplier;
  * 보존 일수가 지난 파일은 그 접속 폴더에 새 백업을 쓸 때 지운다.
  */
 public final class Backups {
+  /** plugin.xml 에 등록한 알림 묶음(Notify 와 같다). */
+  private static final String NOTIFICATION_GROUP = "EI Database";
   private Backups() {}
 
   private static final Logger LOG = Logger.getInstance(Backups.class);
@@ -137,7 +139,7 @@ public final class Backups {
           pkChanged ? Set.of() : pks, c.kind);
       if (pkChanged) restore = new BackupSql.Restore(restore.body(), restore.excluded(), BackupSql.Mode.INSERT_PK_CHANGED);
       write(c, origin, t.table(), sql, rows.rows().size(), restore);
-      warnExcluded(project, t.table(), restore);
+      announce(project, c, t.table(), rows.rows().size(), restore);
       return true;
     } catch (DbSessions.CancelledException e) {
       return false;
@@ -193,7 +195,7 @@ public final class Backups {
       try {
         for (Draft d : drafts) {
           write(c, d.origin(), d.table(), gridSql(d.sqls()), d.rows(), d.restore());
-          warnExcluded(project, d.table(), d.restore());
+          announce(project, c, d.table(), d.rows(), d.restore());
         }
         go = true;
       } catch (IOException | RuntimeException e) {
@@ -203,8 +205,15 @@ public final class Backups {
     });
   }
 
-  /** LOB · 이진 칼럼을 빼고 남긴 백업이면 그 칼럼 이름을 경고로 알린다(실행은 막지 않는다). */
-  private static void warnExcluded(Project project, String table, BackupSql.Restore restore) {
+  /**
+   * 백업을 쓴 뒤: 「백업 보기」 로 목록 창을 여는 알림을 띄운다(어디서 되살리는지 알 수 있게).
+   * LOB · 이진 칼럼을 빼고 남겼으면 그 칼럼 이름도 경고로 알린다. 실행은 막지 않는다.
+   */
+  private static void announce(Project project, DbConfig c, String table, int rows, BackupSql.Restore restore) {
+    com.intellij.notification.NotificationGroupManager.getInstance().getNotificationGroup(NOTIFICATION_GROUP)
+        .createNotification(EiDbBundle.message("backup.saved", table, rows), com.intellij.notification.NotificationType.INFORMATION)
+        .addAction(com.intellij.notification.NotificationAction.createSimpleExpiring(EiDbBundle.message("backup.menu.view"), () -> BackupDialog.open(project, c)))
+        .notify(project);
     if (!restore.excluded().isEmpty()) Notify.warning(project, EiDbBundle.message("backup.lob.excluded", table, String.join(", ", restore.excluded())));
   }
 

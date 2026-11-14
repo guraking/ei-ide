@@ -482,7 +482,7 @@ nav.toc a.on{background:var(--accent-soft); color:var(--fg)}
       <tr><td>Synchronize (아래)</td><td>Show All · Incoming · Outgoing · Conflicts · Refresh All · Selected Repository Only, 아래 Pull All · Pull Selected · Push · Commit and Push… · Resolve Conflicts · Merge Branches. 목록 우클릭 Pull · Update Only These Files · Commit… · Push · Resolve Conflicts · Undo Last Git Action…, 저장소 줄 우클릭 Pull · Push · Refresh This Repository · Merge Branches… · Undo Last Git Action… · Show in Git Log · 탐색기에서 열기, 파일 우클릭 Add to .gitignore · Replace with HEAD · Unstage Only, Keep Files · Assume Unchanged · Jump to Source · Show History · Copy Absolute Path · Select in Project View, 도구줄 모두 펼치기 · 모두 접기 · 폴더별로 묶기 · 이전 · 다음 파일 (<a href="#sync">Git · SVN</a>)</td></tr>
       <tr><td>Git Log (아래)</td><td>왼쪽 저장소 목록 · Refresh · 「?」 · 소스 건드린 커밋만 · 찾기 칸 (<a href="#sync">Git · SVN</a>)</td></tr>
       <tr><td>Database (오른쪽)</td><td>Refresh · New Console · Connect · Disconnect · Edit · Delete · Find · More(Export · Import Connections). 표 우클릭 View Data · Generate SELECT · INSERT · UPDATE Statement · Generate Mapper Skeleton · Generate Feature Set… · Open ERD · Table Specification Excel…, 접속 우클릭 View Sessions · View Locks · Open ERD (All), 프로그램 우클릭 Open Source · View Compilation Errors (<a href="#db">데이터베이스</a>)</td></tr>
-      <tr><td>Result (아래)</td><td>Fetch · Apply · Revert · CSV · Excel · INSERT · UPDATE · DTO · enum · 찾기(<kbd>Ctrl</kbd>+<kbd>F</kbd>). 칸 우클릭 Copy Value · Copy Selected Rows · Copy Column Values as IN List · Sort (<a href="#db">데이터베이스</a>)</td></tr>
+      <tr><td>Result (아래)</td><td>Fetch · Apply · Revert · 새로 고침 · CSV · Excel · JSON · DTO · 건수 · 중복 · 분석 · 피벗 · 트리 · 찾기(<kbd>Ctrl</kbd>+<kbd>F</kbd>, 조건 + <kbd>Enter</kbd>). 칸 우클릭 Copy Value · Copy Selected Rows · Copy as INSERT · Copy as UPDATE · Generate enum · Copy Column Values as IN List · Sort (<a href="#db">데이터베이스</a>)</td></tr>
       <tr><td>API (아래)</td><td>Reload · Save as openapi.yaml… (<a href="#servers">서버 창</a>)</td></tr>
       <tr><td>Secure Memo (오른쪽)</td><td>Set New Password… · Lock · Change Password… · Preview · Reset… (<a href="#extras">메모 · 테마</a>)</td></tr>
     </table>
@@ -1432,7 +1432,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
               <span class="mark">2</span><span class="btn">500건 더</span><span class="input">1000</span><span>건</span><span class="btn">조회</span>
               <span class="gap"></span>
               <span class="mark">6</span><span class="input" style="text-align:left; min-width:90px">⌕ 키보</span><span class="m">1 / 500건</span>
-              <span class="mark">3</span><span class="btn">복사</span><span class="btn">CSV</span><span class="btn">엑셀</span><span class="btn">INSERT</span><span class="btn">UPDATE</span><span class="btn">DTO</span>
+              <span class="mark">3</span><span class="btn">복사</span><span class="btn">CSV</span><span class="btn">엑셀</span><span class="btn">JSON</span><span class="btn">DTO</span><span class="btn">피벗</span>
             </div>
             <table class="grid">
               <tr><th>PRODUCT_ID<small>상품 ID</small></th><th>PRODUCT_NM <span class="mark">4</span><small>상품명</small></th><th>UNIT_PRICE<small>단가</small></th><th>USE_YN<small>사용 여부</small></th><th>CREATED_AT<small>등록일시</small></th></tr>
@@ -1460,7 +1460,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       <ol class="legend" style="grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:14px">
         <li><span class="mark">1</span><div><b>결과 탭</b> <span class="t">실행마다 하나씩, 10개가 넘으면 오래된 것부터 닫힙니다. 같은 접속에서 같은 쿼리를 다시 실행하면 새 탭 대신 그 탭이 새 결과로 바뀝니다. 탭의 ✕, 가운데 단추, 우클릭 「Close Other Tabs · Close All Tabs」.</span></div></li>
         <li><span class="mark">2</span><div><b>더 보기</b> <span class="t">잘렸을 때만 나옵니다. 「500건 더」 또는 건수를 쓰고 「조회」(Enter). 같은 문장을 처음부터 다시 읽어 이 탭을 바꿉니다.</span></div></li>
-        <li><span class="mark">3</span><div><b>꺼내 쓰기</b> <span class="t">탭 구분 복사 · CSV · 엑셀(.xlsx, 머리 굵게 · 틀 고정 · 한글 주석 행) · INSERT · UPDATE(앞 쉼표, PK 로 WHERE) · DTO.</span></div></li>
+        <li><span class="mark">3</span><div><b>꺼내 쓰기</b> <span class="t">탭 구분 복사 · CSV · 엑셀(.xlsx, 머리 굵게 · 틀 고정 · 한글 주석 행) · JSON 파일 · DTO. INSERT · UPDATE(앞 쉼표, PK 로 WHERE) · enum 은 칸 우클릭. 「건수 · 중복 · 분석 · 피벗 · 트리」 는 칼럼을 고르면 그 쿼리를 새 콘솔에 만듭니다. 찾기 칸에 조건(<code>USERID = 'A'</code>)을 쓰고 Enter 면 그 조건으로 다시 읽습니다.</span></div></li>
         <li><span class="mark">4</span><div><b>칼럼 단위로</b> <span class="t">머리를 누르면 칼럼 전체 선택(Ctrl 로 더하기), 머리 아래 한글 주석. 우클릭으로 칼럼 값 · IN 목록 · 칼럼 이름 복사.</span></div></li>
         <li><span class="mark">5</span><div><b>정렬</b> <span class="t">머리를 두 번 누르면 오름 · 내림차순이 번갈아 바뀝니다. 우클릭 「오름차순 · 내림차순 정렬 · 정렬 풀기」. 복사 · CSV 는 정렬된 순서로.</span></div></li>
         <li><span class="mark">6</span><div><b>찾기 · 거르기</b> <span class="t">검색칸(결과 창에서 <kbd>Ctrl</kbd>+<kbd>F</kbd>)에 글자를 넣으면 그 글자가 든 행만 보입니다. 복사 · 내보내기도 보이는 행만.</span></div></li>
@@ -1540,9 +1540,9 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       <div class="card"><h4>엑셀 붙여 넣어 행 넣기</h4><p>표 우클릭 「엑셀 붙여 넣어 행 넣기…」. 엑셀에서 복사한 칸을 붙이면 첫 줄의 칼럼 이름이나 한글 주석으로 칼럼을 맞춥니다(머리를 눌러 바꿈). 숫자 · 날짜 · 길이 · 빈 필수 칸 문제는 줄 · 칼럼과 함께 아래에 나옵니다. 「INSERT 문을 콘솔로」 또는 「바로 넣기」(문제가 없을 때만).</p></div>
       <div class="card"><h4>테스트 데이터 만들기</h4><p>표 우클릭 「테스트 데이터 만들기…」. 줄 수와 칼럼마다 만드는 방식(순번 · 시퀀스 · 고정값 · 목록 돌려 쓰기 · 범위 · 날짜 · NULL)을 고르면 형식과 길이에 맞는 INSERT 를 만듭니다. 「현재 최댓값 다음부터」 · 「참조 표에서 실제 값 가져오기」 는 누를 때만 DB 를 읽습니다.</p></div>
       <div class="card"><h4>참조 따라가기 · 값 크게 보기</h4><p>결과 표의 칸 우클릭. 「참조 따라가기」 는 그 값이 가리키는 표의 행을 새 결과 탭으로 엽니다(FK 가 없으면 이름으로 추정하고 그렇게 알림). 「값 크게 보기」(<kbd>F4</kbd>)는 긴 값을 따로 창에 열고 JSON · XML 은 줄을 맞춰 색을 입힙니다.</p></div>
-      <div class="card"><h4>결과 표 행 지우기</h4><p>결과 표에서 행을 골라 우클릭 「행 지우기」. 붉은 바탕 · 취소선으로 표시만 되고, 「적용」 을 눌러 미리보기를 확인해야 실제로 지웁니다. 「되돌리기」 로 표시를 풉니다. 표의 모든 칼럼을 조회한 결과(PK 포함)에서만 됩니다.</p></div>
+      <div class="card"><h4>결과 표 행 지우기</h4><p>결과 표에서 행을 골라(행 번호 칸을 누르면 그 행 전체) 우클릭 「행 지우기」. 붉은 바탕 · 취소선으로 표시만 되고, 「적용」 을 눌러 미리보기를 확인해야 실제로 지웁니다. 「되돌리기」 로 표시를 풉니다. 표의 모든 칼럼을 조회한 결과(PK 포함)에서만 됩니다.</p></div>
       <div class="card"><h4>고치기 전 자동 백업</h4><p>콘솔 · 매퍼 「실행」 · 결과 표 「적용」 에서 UPDATE · DELETE 가 나가기 직전에 바뀔 행을 읽어 되돌리는 SQL 을 PC 의 설정 폴더(<code>ei-db\backup\접속 이름</code>)에 남깁니다. 표 하나짜리 문장만 되고, 안 되는 문장은 「백업 안 됨」 을 알립니다. 1만 행을 넘으면 먼저 묻습니다. 설정 → 도구 → 「고치기 전 백업」 에서 켜고 끄며, 30일 뒤 지웁니다.</p></div>
-      <div class="card"><h4>복구</h4><p>접속 우클릭 「고치기 전 백업 보기」. 시각 · 표 · 행 수 목록에서 하나를 골라 내용을 보고 「콘솔에서 열기」 를 누르면 되돌리는 SQL 이 새 콘솔에 열립니다. 눈으로 확인하고 직접 실행합니다. 트리거 · 시퀀스로 따라 바뀐 것과 LOB 칼럼은 되돌리지 않습니다.</p></div>
+      <div class="card"><h4>복구</h4><p>Tools → 「고치기 전 백업 보기…」(또는 백업할 때 뜨는 알림의 「고치기 전 백업 보기」, DB 창 접속 우클릭). 시각 · 표 · 행 수 목록에서 하나를 골라 내용을 보고 「콘솔에서 열기」 를 누르면 되돌리는 SQL 이 새 콘솔에 열립니다. 눈으로 확인하고 직접 실행합니다. 트리거 · 시퀀스로 따라 바뀐 것과 LOB 칼럼은 되돌리지 않습니다.</p></div>
       <div class="card"><h4>매퍼 SQL 없는 표 · 칼럼 표시</h4><p>매퍼 XML 의 SQL 에서 접속의 표에 없는 칼럼에 노란 줄이 그어집니다. 표 목록에 없는 표는 약하게 표시합니다(동의어 · 다른 스키마일 수 있음). 접속은 매퍼 실행 창에서 마지막에 고른 접속이고, 접속해 둔 동안만 봅니다. <code>${}</code> · include 로 불확실한 문장은 건너뜁니다.</p></div>
       <div class="card"><h4>실행 계획 전후 비교</h4><p>「느린 곳」 탭의 「기준으로 삼기」 · 「앞 계획과 비교…」. 인덱스를 만들거나 SQL 을 고친 뒤의 계획을 앞 계획과 나란히 놓고 비용 · 예상 건수와 바뀐 단계(전체 읽기 → 인덱스 읽기, 조인 방식)를 보입니다.</p></div>
     </div>

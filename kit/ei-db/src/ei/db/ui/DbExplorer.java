@@ -237,13 +237,14 @@ final class DbExplorer extends SimpleToolWindowPanel {
       if (selectedConfig() != null) openSearch(selectedConfig());
     });
 
-    // 창 위 도구줄(1065 전 배치). 묶음: 추가 · 새로고침 │ 콘솔 · 찾기 │ 끊기 · 편집 · 삭제 │ 더 보기(내보내기 · 가져오기).
+    // 창 위 도구줄(1065 전 배치). 묶음: 추가 · 새로고침 │ 콘솔 · 찾기 · 고치기 전 백업 │ 끊기 · 편집 · 삭제 │ 더 보기(내보내기 · 가져오기).
     DefaultActionGroup bar = new DefaultActionGroup();
     bar.add(new Act(EiDbBundle.message("connect.title.add"), AllIcons.General.Add, () -> true, this::addConnection));
     bar.add(new Act(EiDbBundle.message("explorer.refresh"), AllIcons.Actions.Refresh, () -> true, this::refreshSelected));
     bar.addSeparator();
     bar.add(new Act(EiDbBundle.message("explorer.new.console"), AllIcons.Nodes.Console, () -> selectedConfig() != null, () -> ConsoleOpener.openNew(project, selectedConfig())));
     bar.add(new Act(EiDbBundle.message("explorer.find"), AllIcons.Actions.Search, () -> selectedConfig() != null, () -> openSearch(selectedConfig())));
+    bar.add(new Act(EiDbBundle.message("backup.menu.view"), AllIcons.Vcs.History, () -> selectedConfig() != null, () -> ei.db.console.BackupDialog.open(project, selectedConfig())));
     bar.addSeparator();
     bar.add(new Act(EiDbBundle.message("explorer.disconnect"), AllIcons.Actions.Suspend, this::selectedIsOpen, () -> disconnect(selectedConfig())));
     bar.add(new Act(EiDbBundle.message("explorer.edit"), AllIcons.Actions.Edit, () -> selectedConfig() != null, () -> edit(selectedConfig())));
