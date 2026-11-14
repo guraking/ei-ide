@@ -244,6 +244,19 @@ final class ResultPanel extends SimpleToolWindowPanel {
         return getParent() instanceof JViewport v && getPreferredSize().width < v.getWidth();
       }
 
+      // 창 폭이 바뀌어 남는 폭을 칸에 나눌 때 행 번호 칸은 지금 폭을 지킨다(나머지 칸만 늘고 준다).
+      // 사용자가 칸 경계를 끄는 동안에는 막지 않으므로 행 번호 칸도 끌어서 바꿀 수 있다.
+      @Override
+      public void doLayout() {
+        TableColumn numbers = getColumnCount() > 1 && getTableHeader().getResizingColumn() == null ? getColumnModel().getColumn(0) : null;
+        if (numbers != null) numbers.setMaxWidth(numbers.getPreferredWidth());
+        try {
+          super.doLayout();
+        } finally {
+          if (numbers != null) numbers.setMaxWidth(Integer.MAX_VALUE);
+        }
+      }
+
       @Override
       protected JTableHeader createDefaultTableHeader() {
         return new JBTableHeader() {
@@ -299,7 +312,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
     });
     fitColumns(grid);
     // 행 번호 칸의 폭은 가장 큰 번호(마지막 행)의 글자 폭을 따른다: 행이 많아 자릿수가 늘면 칸도 넓어진다.
-    // fitColumns 는 앞쪽 FIT_ROWS 행만 재므로 마지막 행을 따로 잰다. 표가 창 폭으로 늘 때 이 칸은 함께 늘지 않는다.
+    // fitColumns 는 앞쪽 FIT_ROWS 행만 재므로 마지막 행을 따로 잰다. 표가 창 폭으로 늘 때 이 칸은 함께 늘지 않는다(doLayout). 사용자는 끌어서 넓히거나 좁힐 수 있다.
     TableColumn numbers = grid.getColumnModel().getColumn(0);
     int numberWidth = numbers.getPreferredWidth();
     if (grid.getRowCount() > 0) {
@@ -307,7 +320,6 @@ final class ResultPanel extends SimpleToolWindowPanel {
       numberWidth = Math.max(numberWidth, grid.prepareRenderer(grid.getCellRenderer(last, 0), last, 0).getPreferredSize().width + JBUI.scale(CELL_PADDING));
     }
     numbers.setPreferredWidth(numberWidth);
-    numbers.setMaxWidth(numberWidth);
     CellActions.installShortcut(grid, project, c, result);
 
     // 머리줄: 왼쪽 「결과 N · 표」(굵게) · 건수 꼬리표 · 실행 시간 · 더 읽기 · 찾기 칸, 오른쪽 반영 · 되돌리기 단추와 내보내기 링크.
