@@ -105,7 +105,7 @@ final class RiskRules {
   /** 마지막 낱말이 이것이면 비밀번호 자체가 아니라 그 이름 · 설명 · 규칙이다(PASSWORD_PARAM, tokenHeader 등). */
   private static final Set<String> NOT_VALUE = Set.of("param", "parameter", "params", "field", "label", "msg", "message", "prop",
       "property", "properties", "name", "names", "path", "file", "column", "col", "header", "attr", "attribute", "type", "policy",
-      "length", "len", "rule", "rules", "hint", "placeholder", "encoder", "regex", "pattern", "id", "yn", "flag", "count", "cnt",
+      "length", "len", "rule", "rules", "hint", "placeholder", "encoder", "regex", "regexp", "exp", "pattern", "id", "yn", "flag", "count", "cnt",
       "expire", "expired", "expiry", "date", "dt", "time", "mode", "check", "valid", "validator", "error", "err", "title", "text",
       "txt", "input", "form", "tag", "prefix", "suffix", "format", "url", "uri", "endpoint", "timeout", "size", "min", "max",
       "enabled", "required", "change", "reset", "confirm", "history", "hash", "template", "view", "page", "button", "btn", "query",

@@ -67,7 +67,7 @@ public class RiskRulesCheck {
       ok(RiskRules.secretName(n), "비밀 이름: " + n);
     }
     for (String n : List.of("passwordParam", "PASSWORD_KEY", "passwordField", "tokenHeader", "TOKEN_PREFIX", "passwordPolicy",
-        "pwdChangeDate", "userName", "url", "tokenizer", "bypass", "passYn", "PASSWORD_PATTERN", "tokenKey", "")) {
+        "pwdChangeDate", "userName", "url", "tokenizer", "bypass", "passYn", "PASSWORD_PATTERN", "tokenKey", "passwordRegExp", "PWD_REGEXP", "passport", "passengerName", "pwdErrCnt", "")) {
       ok(!RiskRules.secretName(n), "비밀 이름 아님: " + n);
     }
     // 값
