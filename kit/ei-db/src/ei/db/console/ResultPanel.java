@@ -748,17 +748,31 @@ final class ResultPanel extends SimpleToolWindowPanel {
     });
   }
 
-  /** 고른 행(없으면 보이는 모든 행)을 칼럼 이름을 키로 한 JSON 배열 파일(UTF-8)로 저장한다. */
+  /**
+   * 칼럼 이름을 키로 한 JSON 배열 파일(UTF-8)로 저장한다. 행을 골랐으면 고른 행만.
+   * 고르지 않았으면 조회 결과 전체: 화면에 일부만 읽힌 결과(「더 보기」가 남은 결과)는 같은 문장을 MAX_ROW_LIMIT 건까지 다시 읽어 저장하고
+   * (화면의 표는 그대로 둔다), 그래도 남으면 저장한 건수와 함께 알린다. 찾기 칸으로 거른 것은 따지지 않는다.
+   */
   private void exportJson() {
     Path path = askSavePath(EiDbBundle.message("result.json.export"), EiDbBundle.message("result.json.export.description"), "json");
     if (path == null) return;
+    boolean all = grid.getSelectedRowCount() == 0;
+    if (all && result.truncated() && rereadable && result.rows().size() < DbSessions.MAX_ROW_LIMIT) {
+      SqlRunner.reread(project, config, result.sql(), result.binds(), DbSessions.MAX_ROW_LIMIT, more -> writeJson(path, more.rows(), more.truncated()));
+      return;
+    }
     List<List<Object>> rows = new ArrayList<>();
-    for (int model : chosenRows()) rows.add(result.rows().get(model));
-    String json = ResultQueries.json(result.columns(), rows, ResultPanel::text);
+    if (all) rows.addAll(result.rows());
+    else for (int model : chosenRows()) rows.add(result.rows().get(model));
+    writeJson(path, rows, all && result.truncated());
+  }
+
+  private void writeJson(Path path, List<List<Object>> rows, boolean cut) {
+    List<String> columns = result.columns();
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       try {
-        Files.writeString(path, json, StandardCharsets.UTF_8);
-        Notify.info(project, EiDbBundle.message("result.json.saved", rows.size(), path));
+        Files.writeString(path, ResultQueries.json(columns, rows, ResultPanel::text), StandardCharsets.UTF_8);
+        Notify.info(project, EiDbBundle.message(cut ? "result.json.saved.cut" : "result.json.saved", rows.size(), path));
       } catch (IOException e) {
         Notify.error(project, EiDbBundle.message("result.csv.failed", e.getMessage()));
       }
