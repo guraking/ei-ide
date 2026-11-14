@@ -396,6 +396,13 @@
                 <option name="EFFECT_TYPE" value="1" />
             </value>
         </option>
+        <option name="INFO_ATTRIBUTES">
+            <value>
+                <option name="EFFECT_COLOR" value="9C7A1E" />
+                <option name="EFFECT_TYPE" value="2" />
+                <option name="ERROR_STRIPE_COLOR" value="d9cfad" deuteranopia="cccccc" protanopia="cccccc" />
+            </value>
+        </option>
         <option name="INSTANCE_FIELD_ATTRIBUTES" baseAttributes="DEFAULT_INSTANCE_FIELD" />
         <option name="JS.GLOBAL_VARIABLE">
             <value>
