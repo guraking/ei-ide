@@ -1,6 +1,11 @@
 package ei.db.mybatis;
 
 import com.intellij.icons.AllIcons;
+import com.intellij.ide.CommonActionsManager;
+import com.intellij.ide.DefaultTreeExpander;
+import com.intellij.openapi.actionSystem.ActionManager;
+import com.intellij.openapi.actionSystem.ActionToolbar;
+import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.progress.ProgressIndicator;
@@ -77,8 +82,11 @@ public final class CodeFlowView {
   private static final Logger LOG = Logger.getInstance(CodeFlowView.class);
   private static final String SPLIT_KEY = "ei.db.codeflow.flow.split";
   private static final float SPLIT_PROPORTION = 0.35f;
-  /** 처음 펼쳐 둘 나무 깊이. */
+  /** 결과 마디가 이 수를 넘으면 처음에 모두 펼치지 않고 EXPAND_LEVELS 깊이만 펼친다(큰 결과에서 화면이 멈추지 않게). */
+  private static final int EXPAND_ALL_MAX = 1000;
   private static final int EXPAND_LEVELS = 3;
+  /** 「전체 펼치기 · 전체 접기」 단추 줄의 자리 이름. */
+  private static final String TOOLBAR_PLACE = "EiDbCodeFlow";
 
   /** 도구 창을 만든다. */
   public static final class Factory implements ToolWindowFactory, DumbAware {
@@ -225,7 +233,20 @@ public final class CodeFlowView {
     void show(@Nullable CodeFlow.Item root, String empty) {
       getEmptyText().setText(empty);
       setModel(new DefaultTreeModel(root == null ? null : node(root)));
-      if (root != null) TreeUtil.expand(this, EXPAND_LEVELS);
+      if (root == null) return;
+      // 표 · 영향에서 서비스 → 컨트롤러 → URL 까지 이어진 줄이 바로 보이게 모두 펼친다.
+      if (count(root, 0) <= EXPAND_ALL_MAX) TreeUtil.expandAll(this);
+      else TreeUtil.expand(this, EXPAND_LEVELS);
+    }
+
+    /** item 과 그 아래 마디 수를 seen 에 더해 돌려준다. EXPAND_ALL_MAX 를 넘으면 세기를 멈춘다. */
+    private static int count(CodeFlow.Item item, int seen) {
+      seen++;
+      for (CodeFlow.Item k : item.kids) {
+        if (seen > EXPAND_ALL_MAX) break;
+        seen = count(k, seen);
+      }
+      return seen;
     }
 
     private static DefaultMutableTreeNode node(CodeFlow.Item item) {
@@ -283,6 +304,16 @@ public final class CodeFlowView {
     return row;
   }
 
+  /** 나무의 스톡 「전체 펼치기 · 전체 접기」 단추 줄. */
+  private static JComponent treeButtons(ResultTree tree) {
+    CommonActionsManager actions = CommonActionsManager.getInstance();
+    DefaultTreeExpander expander = new DefaultTreeExpander(tree);
+    DefaultActionGroup group = new DefaultActionGroup(actions.createExpandAllAction(expander, tree), actions.createCollapseAllAction(expander, tree));
+    ActionToolbar bar = ActionManager.getInstance().createActionToolbar(TOOLBAR_PLACE, group, true);
+    bar.setTargetComponent(tree);
+    return bar.getComponent();
+  }
+
   private static JButton button(String text, Runnable run) {
     JButton b = new JButton(text, AllIcons.Actions.Find);
     b.addActionListener(e -> run.run());
@@ -330,6 +361,7 @@ public final class CodeFlowView {
       JPanel top = new JPanel(new BorderLayout(JBUI.scale(6), 0));
       top.add(button(EiDbBundle.message("codeflow.query"), this::load), BorderLayout.WEST);
       top.add(filter, BorderLayout.CENTER);
+      top.add(treeButtons(tree), BorderLayout.EAST);
       add(topRow(top), BorderLayout.NORTH);
       OnePixelSplitter split = new OnePixelSplitter(false, SPLIT_KEY, SPLIT_PROPORTION);
       split.setHonorComponentsMinimumSize(false);
@@ -384,6 +416,9 @@ public final class CodeFlowView {
   static final class ImpactTab extends Tab {
     ImpactTab(Project project) {
       super(project, EiDbBundle.message("codeflow.impact.empty"));
+      JPanel top = new JPanel(new BorderLayout());
+      top.add(treeButtons(tree), BorderLayout.WEST);
+      add(topRow(top), BorderLayout.NORTH);
       add(scroll(tree), BorderLayout.CENTER);
     }
 
@@ -410,6 +445,7 @@ public final class CodeFlowView {
       column.addActionListener(e -> find());
       JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
       buttons.add(button(EiDbBundle.message("codeflow.query"), this::find));
+      buttons.add(treeButtons(tree));
       JPanel form = FormBuilder.createFormBuilder()
           .addLabeledComponent(EiDbBundle.message("codeflow.table.label"), table)
           .addLabeledComponent(EiDbBundle.message("codeflow.column.label"), column)
@@ -448,6 +484,7 @@ public final class CodeFlowView {
       JBLabel note = new JBLabel(EiDbBundle.message("codeflow.unused.note"));
       note.setForeground(SimpleTextAttributes.GRAYED_ATTRIBUTES.getFgColor());
       top.add(note, BorderLayout.CENTER);
+      top.add(treeButtons(tree), BorderLayout.EAST);
       add(top, BorderLayout.NORTH);
       add(scroll(tree), BorderLayout.CENTER);
     }
