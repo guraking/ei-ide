@@ -4,6 +4,7 @@ import ei.db.DbKind;
 
 import java.math.BigDecimal;
 import java.sql.Timestamp;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -18,6 +19,8 @@ public final class SqlText {
   private SqlText() {}
 
   private static final String FIRST = "       ";
+  /** ZoneOffset.UTC 의 id 는 「Z」 라 DB 가 읽는 꼴로 쓴다. */
+  private static final String UTC_OFFSET = "+00:00";
   private static final String NEXT = "     , ";
   /** 값과 값 뒤 칼럼 주석 사이 최소 간격. */
   private static final int COMMENT_GAP = 2;
@@ -29,7 +32,8 @@ public final class SqlText {
   private static final Pattern PLAIN_NUMBER = Pattern.compile("-?\\d+(\\.\\d+)?");
   private static final int GROUP = 3;
   private static final char GROUP_SEPARATOR = ',';
-  private static final String IDENT = "[A-Z_][\\w$#]*";
+  /** 이름 한 낱말: 따옴표 이름("MyTable") 또는 글자(한글 포함) · _ 로 시작하는 이름. */
+  private static final String IDENT = "(?:\"[^\"]+\"|[\\p{L}_][\\p{L}\\p{N}_$#]*)";
   private static final Pattern SET_OPERATION = Pattern.compile("\\b(UNION|INTERSECT|MINUS|EXCEPT)\\b");
   private static final Pattern SELECT = Pattern.compile("\\bSELECT\\b");
   private static final Pattern GROUPED = Pattern.compile("\\b(GROUP BY|HAVING|DISTINCT|UNIQUE|CONNECT BY|START WITH)\\b");
@@ -81,9 +85,22 @@ public final class SqlText {
     if (v instanceof Number) return text(v);
     if (v instanceof Timestamp t) return "TIMESTAMP '" + t + "'";
     if (v instanceof java.sql.Date d) return "DATE '" + d + "'";
+    if (v instanceof OffsetDateTime o) return offsetLiteral(o, kind);
     String s = text(v).replace("'", "''");
     if (kind == DbKind.MYSQL) s = s.replace("\\", "\\\\");
     return "'" + s + "'";
+  }
+
+  /**
+   * 시간대가 붙은 시각. Oracle 은 TIMESTAMP '… +09:00' 을 시간대 포함 값으로 읽고, PostgreSQL 은 TIMESTAMP '…' 의 시간대를 버리므로
+   * TIMESTAMP WITH TIME ZONE '…' 로 쓴다. MySQL 은 시간대를 띄우지 않고 붙인다. kind 가 null 이면 Oracle 꼴.
+   */
+  private static String offsetLiteral(OffsetDateTime o, DbKind kind) {
+    String local = Timestamp.valueOf(o.toLocalDateTime()).toString();
+    String offset = o.getOffset().getTotalSeconds() == 0 ? UTC_OFFSET : o.getOffset().getId();
+    if (kind == DbKind.POSTGRES) return "TIMESTAMP WITH TIME ZONE '" + local + " " + offset + "'";
+    if (kind == DbKind.MYSQL) return "TIMESTAMP '" + local + offset + "'";
+    return "TIMESTAMP '" + local + " " + offset + "'";
   }
 
   static String text(Object v) {
@@ -149,9 +166,24 @@ public final class SqlText {
    * PK 칼럼 일부가 결과에 없거나 PK 칼럼이 LOB · 이진 형식이면 IllegalArgumentException(한국어 문구).
    */
   static String updates(String table, List<String> columns, List<String> types, List<List<Object>> rows, Set<String> pkUpper, DbKind kind) {
+    return updates(table, columns, types, rows, pkUpper, null, kind);
+  }
+
+  /**
+   * updates 와 같되 SET 에는 setUpper(대문자 칼럼 이름)에 든 칼럼만 둔다. setUpper 가 null 이면 PK 아닌 모든 칼럼.
+   * 남는 SET 칼럼이 없는 행은 문장을 만들지 않는다.
+   */
+  static String updates(String table, List<String> columns, List<String> types, List<List<Object>> rows, Set<String> pkUpper,
+                        Set<String> setUpper, DbKind kind) {
     boolean[] lob = lobColumns(columns, types, rows);
     boolean[] key = new boolean[columns.size()];
-    StringBuilder sb = new StringBuilder(lobNote(columns, lob));
+    boolean[] noted = lob;
+    if (setUpper != null) {
+      // 고른 칼럼만 바꾸면 그 밖의 LOB 은 빠진 게 아니므로 고른 것 가운데 LOB 만 적는다.
+      noted = new boolean[lob.length];
+      for (int i = 0; i < lob.length; i++) noted[i] = lob[i] && setUpper.contains(columns.get(i).toUpperCase(Locale.ROOT));
+    }
+    StringBuilder sb = new StringBuilder(lobNote(columns, noted));
     if (pkUpper.isEmpty()) {
       int first = 0;
       while (first < columns.size() && lob[first]) first++;
@@ -175,7 +207,7 @@ public final class SqlText {
       List<Object> values = new ArrayList<>();
       List<Boolean> keys = new ArrayList<>();
       for (int i = 0; i < columns.size(); i++) {
-        if (lob[i]) continue;
+        if (lob[i] || !key[i] && setUpper != null && !setUpper.contains(columns.get(i).toUpperCase(Locale.ROOT))) continue;
         names.add(ident(kind, columns.get(i)));
         values.add(row.get(i));
         keys.add(key[i]);
@@ -277,6 +309,7 @@ public final class SqlText {
   /**
    * 결과 칸에 고쳐 쓴 글을 칼럼 형식에 맞는 값으로. 빈 칸(공백만 있어도)은 null, 숫자 형식은 BigDecimal,
    * DATE · TIMESTAMP 형식은 「yyyy-mm-dd hh:mm:ss」 이면 Timestamp, 「yyyy-mm-dd」 이면 Date, 나머지는 글자 그대로.
+   * 시간대가 있는 형식(TIME ZONE · TZ)은 결과 칸에 보이는 꼴(2026-11-15T10:00+09:00)도 받아 OffsetDateTime 으로 둔다.
    * 형식에 맞지 않으면 IllegalArgumentException(한국어 문구).
    */
   static Object parseEdit(String text, String type) {
@@ -297,6 +330,13 @@ public final class SqlText {
         try {
           return java.sql.Date.valueOf(t);
         } catch (IllegalArgumentException notDate) {
+          if (upper.contains("TIME ZONE") || upper.contains("TZ")) {
+            try {
+              return OffsetDateTime.parse(t);
+            } catch (java.time.format.DateTimeParseException notOffset) {
+              throw new IllegalArgumentException("날짜는 yyyy-mm-dd 또는 yyyy-mm-dd hh:mm:ss 로 써 주세요: " + text, notOffset);
+            }
+          }
           throw new IllegalArgumentException("날짜는 yyyy-mm-dd 또는 yyyy-mm-dd hh:mm:ss 로 써 주세요: " + text);
         }
       }

@@ -225,7 +225,8 @@ public final class TestDataDialog extends DialogWrapper {
     int row = table.getSelectedRow();
     boolean picked = row >= 0 && row < methods.size();
     Meta.Column col = picked ? target.columns().get(row) : null;
-    maxButton.setEnabled(picked && methods.get(row) == TestData.Method.SEQUENCE);
+    // 글 칼럼의 MAX 는 글자 순이라('9' > '10') 다음 값이 이미 있는 값과 겹칠 수 있다: 숫자 칼럼만.
+    maxButton.setEnabled(picked && methods.get(row) == TestData.Method.SEQUENCE && InsertRows.typeOf(col.type()) == InsertRows.Type.NUMBER);
     fkButton.setEnabled(picked && col.fk() && TestData.methods(col, hasDefault(col)).contains(TestData.Method.LIST));
     hint.setText(picked ? EiDbBundle.message("testdata.hint." + methods.get(row).name()) : "");
   }
@@ -277,6 +278,7 @@ public final class TestDataDialog extends DialogWrapper {
     }
     if (fk == null) return;
     String parent = fk.pkTable();
+    // shortcut: 참조 표를 이 표와 같은 스키마로 본다(Meta.ForeignKey 에 참조 스키마가 없음), 다른 스키마 표를 참조하는 FK 가 쓰이면 ForeignKey 에 참조 스키마를 더한다.
     String sql = "SELECT\n       t." + Names.sql(c.kind, fk.pkColumn()) + "\n  FROM " + Names.sql(c.kind, target.schema(), parent) + " t";
     RowInserter.query(project, c, EiDbBundle.message("testdata.fk.values"), sql, TestData.FK_SAMPLE_MAX, result -> {
       if (isDisposed()) return;

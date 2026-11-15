@@ -21,7 +21,8 @@ public final class DialectConvert {
   public record Result(String sql, List<String> notes) {}
 
   private static final int MAX_PASSES = 500;
-  private static final Pattern INT = Pattern.compile("-?\\d+");
+  /** int 로 읽을 수 있는 정수(아홉 자리까지). 더 길면 맞지 않는다. */
+  private static final Pattern INT = Pattern.compile("-?\\d{1,9}(?!\\d)");
 
   public static Result convert(String sql, DbKind from, DbKind to) {
     if (from == to) throw new IllegalArgumentException("바꿀 DB 가 같습니다.");
@@ -182,9 +183,10 @@ public final class DialectConvert {
     return out;
   }
 
-  /** 작업대 · 흔한 꼴의 ROWNUM 페이징(SELECT * FROM (SELECT q.*, ROWNUM RN FROM (안쪽) q WHERE ROWNUM <= 끝) WHERE RN > 시작) → 안쪽 + LIMIT · OFFSET. */
+  /** 작업대 · 흔한 꼴의 ROWNUM 페이징(SELECT * FROM (SELECT q.*, ROWNUM RN FROM (안쪽) q WHERE ROWNUM <= 끝) WHERE RN > 시작) → 안쪽 + LIMIT · OFFSET.
+   * 숫자는 아홉 자리까지만 본다(int 로 읽는다). 그보다 길면 바꾸지 않는다. */
   private static final Pattern PAGED = Pattern.compile(
-      "(?is)^\\s*SELECT\\s+\\*\\s+FROM\\s*\\(\\s*SELECT\\s+(\\w+)\\s*\\.\\s*\\*\\s*,\\s*ROWNUM\\s+(?:AS\\s+)?(\\w+)\\s+FROM\\s*\\((.*)\\)\\s*\\1\\s+WHERE\\s+ROWNUM\\s*(<=|<)\\s*(\\d+)\\s*\\)\\s*(?:\\w+\\s+)?WHERE\\s+\\2\\s*(>=|>)\\s*(\\d+)\\s*;?\\s*$");
+      "(?is)^\\s*SELECT\\s+\\*\\s+FROM\\s*\\(\\s*SELECT\\s+(\\w+)\\s*\\.\\s*\\*\\s*,\\s*ROWNUM\\s+(?:AS\\s+)?(\\w+)\\s+FROM\\s*\\((.*)\\)\\s*\\1\\s+WHERE\\s+ROWNUM\\s*(<=|<)\\s*(\\d{1,9})\\s*\\)\\s*(?:\\w+\\s+)?WHERE\\s+\\2\\s*(>=|>)\\s*(\\d{1,9})\\s*;?\\s*$");
 
   private static String pagedRownum(String sql, List<String> notes) {
     Matcher m = PAGED.matcher(sql);
@@ -233,7 +235,7 @@ public final class DialectConvert {
     List<String> conds = SqlParts.splitAnd(where.body());
     Integer limit = null;
     List<String> keep = new ArrayList<>();
-    Pattern p = Pattern.compile("(?i)ROWNUM\\s*(<=|<)\\s*(\\d+)");
+    Pattern p = Pattern.compile("(?i)ROWNUM\\s*(<=|<)\\s*(\\d{1,9})");
     for (String c : conds) {
       Matcher m = p.matcher(c.strip());
       if (limit == null && m.matches()) {
@@ -259,14 +261,18 @@ public final class DialectConvert {
     if (lim == null) return sql;
     Matcher n = INT.matcher(lim.body());
     if (!n.lookingAt()) {
-      notes.add("직접 확인: LIMIT 값이 숫자가 아니라 바꾸지 않았습니다.");
+      notes.add("직접 확인: LIMIT 값이 숫자가 아니거나 너무 커서 바꾸지 않았습니다.");
       return sql;
     }
     SqlParts.Part off = SqlParts.find(parts, "OFFSET");
     int offset = 0;
     if (off != null) {
       Matcher o = INT.matcher(off.body());
-      if (o.lookingAt()) offset = Integer.parseInt(o.group());
+      if (!o.lookingAt()) {
+        notes.add("직접 확인: OFFSET 값이 숫자가 아니거나 너무 커서 바꾸지 않았습니다.");
+        return sql;
+      }
+      offset = Integer.parseInt(o.group());
     }
     int cut = Math.min(lim.start(), off == null ? lim.start() : off.start());
     String inner = sql.substring(0, cut).strip();

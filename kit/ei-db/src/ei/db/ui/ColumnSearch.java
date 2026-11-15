@@ -145,7 +145,6 @@ final class ColumnSearch extends DialogWrapper {
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       try {
         List<Hit> hits = find(sessions.connection(c), q);
-        sessions.endReadTransaction(c);
         later(gen, () -> showHits(hits));
       } catch (Exception e) {
         String msg = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
@@ -153,6 +152,9 @@ final class ColumnSearch extends DialogWrapper {
           gauge.setVisible(false);
           status.setText(EiDbBundle.message("columnsearch.status.failed", msg));
         });
+      } finally {
+        // 읽다 실패해도 PostgreSQL 읽기 트랜잭션을 닫는다(「idle in transaction」 으로 남지 않게).
+        sessions.endReadTransaction(c);
       }
     });
   }

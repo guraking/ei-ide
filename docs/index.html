@@ -1523,7 +1523,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
         <li><span class="mark">!</span><div><b>운영 접속 띠</b> <span class="t">운영으로 표시한 접속의 콘솔은 위에 붉은 띠 「운영 접속 · 변경은 매번 확인합니다」가 붙습니다.</span></div></li>
         <li><span class="mark">!</span><div><b>읽기 전용 접속</b> <span class="t">변경 문장은 실행하지 않고 알림만 띄웁니다. <code>WITH … DELETE</code> · <code>REPLACE INTO</code> · 프로시저 호출도 변경으로 봅니다.</span></div></li>
         <li><span class="mark">!</span><div><b>이름 안의 WHERE 는 조건이 아님</b> <span class="t"><code>UPDATE t SET "WHERE" = 1</code> · MySQL <code>`WHERE`</code> 처럼 따옴표 · 백틱으로 감싼 이름 안의 WHERE 는 조건절로 보지 않아, 이런 문장도 「WHERE 없는 UPDATE」 로 막습니다.</span></div></li>
-        <li><span class="mark">!</span><div><b>DDL 은 앞 변경까지 커밋</b> <span class="t">자동 커밋이 꺼진 Oracle · MySQL 에서 CREATE · DROP 같은 DDL 은 미반영 변경을 함께 커밋하므로 먼저 묻습니다. 접속을 끊거나 닫을 때 커밋하지 않은 변경은 롤백합니다.</span></div></li>
+        <li><span class="mark">!</span><div><b>DDL 은 앞 변경까지 커밋</b> <span class="t">자동 커밋이 꺼진 Oracle · MySQL 에서 CREATE · DROP 같은 DDL 은 미반영 변경을 함께 커밋하므로 먼저 묻습니다. 접속을 끊을 때 커밋하지 않은 변경이 있으면 묻고 롤백합니다. 프로젝트를 닫거나 IDE 를 끌 때도 「커밋 · 롤백 · 닫기 취소」 를 묻습니다. 콘솔에서 직접 친 <code>COMMIT</code> · <code>ROLLBACK</code> 도 「미반영」 건수를 0 으로 돌립니다.</span></div></li>
       </ul>
     </div>
 
@@ -1564,7 +1564,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
     </div>
     <table class="keys map">
       <tr><th>알아 둘 것</th><th>내용</th></tr>
-      <tr><td>남는 곳</td><td><code>설정 폴더\ei-db\backup\접속 이름\날짜시각_표.sql</code> (내 PC, 밖으로 나가지 않음)</td></tr>
+      <tr><td>남는 곳</td><td><code>설정 폴더\ei-db\backup\접속 번호\날짜시각_표.sql</code> (접속 이름을 바꾸거나 같은 이름 접속이 있어도 섞이지 않습니다. 예전 판이 접속 이름 폴더에 남긴 백업도 목록에 함께 보입니다) (내 PC, 밖으로 나가지 않음)</td></tr>
       <tr><td>백업 안 되는 문장</td><td>표 하나만 고치는 문장만 백업합니다. 여러 표를 잇는 UPDATE · MERGE · 프로시저 호출(CALL · PL/SQL 블록) · TRUNCATE, WHERE 에 ROWNUM · 난수 · 시퀀스가 든 문장은 「백업 안 됨」 을 알리고 그대로 실행합니다.</td></tr>
       <tr><td>큰 변경</td><td>1만 행을 넘거나 백업 읽기에 실패하면 실행 전에 묻습니다.</td></tr>
       <tr><td>되살리지 못하는 것</td><td>긴 글 · 파일 칼럼(LOB)은 빼고 파일 머리에 적습니다. 트리거 · 시퀀스로 따라 바뀐 값은 되돌리지 않습니다.</td></tr>

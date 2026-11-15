@@ -284,6 +284,7 @@ public final class DtoDialog extends DialogWrapper {
     if (!IDENT.matcher(cls()).matches()) return new ValidationInfo(EiDbBundle.message("common.class.name.invalid"), classField);
     if (!PACKAGE.matcher(pkg()).matches()) return new ValidationInfo(EiDbBundle.message("common.package.invalid"), packageField);
     if (locationField.getText().isBlank()) return new ValidationInfo(EiDbBundle.message("common.location.empty"), locationField);
+    if (!roots.valid(locationField.getText())) return new ValidationInfo(EiDbBundle.message("mapper.bad.path.sentence"), locationField);
     Set<String> seen = new HashSet<>();
     for (DtoGen.Field f : fields()) {
       if (!IDENT.matcher(f.name()).matches()) return new ValidationInfo(EiDbBundle.message("dto.field.invalid", f.column()));
@@ -293,6 +294,7 @@ public final class DtoDialog extends DialogWrapper {
     if (makeResultMap.isSelected() && !xmlField.getText().strip().endsWith(".xml")) {
       return new ValidationInfo(EiDbBundle.message("dto.xml.empty"), xmlField);
     }
+    if (makeResultMap.isSelected() && !roots.valid(xmlField.getText())) return new ValidationInfo(EiDbBundle.message("mapper.bad.path.sentence"), xmlField);
     return null;
   }
 

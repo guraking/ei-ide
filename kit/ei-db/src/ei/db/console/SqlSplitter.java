@@ -22,7 +22,8 @@ import java.util.Set;
  * 본문 겹(BEGIN · DECLARE · IS/AS)을 하나도 열지 않은 CREATE 블록(PostgreSQL EXECUTE FUNCTION 트리거 · RETURN 식 함수, MySQL 한 문장 트리거)과
  * IS/AS 바로 뒤가 글자열 · LANGUAGE · EXTERNAL 인 것(PostgreSQL 따옴표 본문, Oracle 호출 명세)은 첫 ; 에서 끝난다. 복합 트리거는 예외.
  * BEGIN 뒤가 TRANSACTION · WORK · ISOLATION 등이면 트랜잭션 시작 문장이다.
- * 문장 앞의 공백 · 주석은 문장에 넣지 않는다.
+ * Oracle 의 WITH FUNCTION · PROCEDURE … END; SELECT … 는 안의 END; 에서 끊지 않고 겹이 모두 닫힌 뒤 본문 문장의 ; 에서 끝난다.
+ * 문장 앞의 공백 · 주석은 문장에 넣지 않는다. hashComment 면(MySQL) 따옴표 밖의 # 부터 줄 끝까지도 주석이다.
  */
 public final class SqlSplitter {
   private SqlSplitter() {}
@@ -50,7 +51,16 @@ public final class SqlSplitter {
   /** 하위 프로그램 머리의 IS/AS 바로 뒤에 오면 PL/SQL 본문이 아닌 호출 명세다. */
   private static final Set<String> CALL_SPEC = Set.of("LANGUAGE", "EXTERNAL");
 
+  /** WITH 뒤에 오면 PL/SQL 선언(Oracle WITH FUNCTION · PROCEDURE)이다. */
+  private static final Set<String> WITH_PLSQL = Set.of("FUNCTION", "PROCEDURE");
+  private static final char HASH = '#';
+
   public static List<Stmt> split(String text) {
+    return split(text, false);
+  }
+
+  /** hashComment 가 참이면(MySQL 접속) # 줄 주석도 본다. */
+  public static List<Stmt> split(String text, boolean hashComment) {
     List<Stmt> out = new ArrayList<>();
     Seg seg = new Seg();
     int n = text.length();
@@ -58,7 +68,7 @@ public final class SqlSplitter {
     while (i < n) {
       char ch = text.charAt(i);
       char next = i + 1 < n ? text.charAt(i + 1) : 0;
-      if (ch == '-' && next == '-') {
+      if (ch == '-' && next == '-' || hashComment && ch == HASH) {
         i = indexOrEnd(text, "\n", i);
         continue;
       }
@@ -70,7 +80,7 @@ public final class SqlSplitter {
       if (ch == '\n') {
         int lineStart = text.lastIndexOf('\n', i - 1) + 1;
         String line = text.substring(lineStart, i).strip();
-        if (line.equals("/") || (line.isEmpty() && !seg.block && seg.depth == 0 && !continues(seg, text, i + 1))) {
+        if (line.equals("/") || (line.isEmpty() && !seg.block && seg.depth == 0 && !continues(seg, text, i + 1, hashComment))) {
           seg.flush(text, out, lineStart);
           seg = new Seg();
         }
@@ -104,7 +114,7 @@ public final class SqlSplitter {
       }
       if (Character.isLetter(ch) || ch == '_') {
         int j = i + 1;
-        while (j < n && isIdent(text.charAt(j))) j++;
+        while (j < n && isIdent(text.charAt(j)) && !(hashComment && text.charAt(j) == HASH)) j++;
         seg.word(text.substring(i, j).toUpperCase(Locale.ROOT), j < n && text.charAt(j) == '.');
         seg.lastCode = j;
         i = j;
@@ -126,7 +136,12 @@ public final class SqlSplitter {
    * 아니면 뒤 문장, 뒤가 없으면 마지막 문장. 문장이 없으면 null.
    */
   public static Stmt at(String text, int caret) {
-    List<Stmt> all = split(text);
+    return at(text, caret, false);
+  }
+
+  /** at 과 같되 hashComment 는 split 과 같다. */
+  public static Stmt at(String text, int caret, boolean hashComment) {
+    List<Stmt> all = split(text, hashComment);
     Stmt before = null;
     for (Stmt s : all) {
       if (caret >= s.start && caret <= s.end) return s;
@@ -141,7 +156,7 @@ public final class SqlSplitter {
   }
 
   /** 빈 줄에서 문장을 이어 갈지: seg 의 마지막 글, from 부터 공백 · 주석을 건너뛴 첫 글로 정한다. */
-  private static boolean continues(Seg seg, String text, int from) {
+  private static boolean continues(Seg seg, String text, int from, boolean hashComment) {
     if (seg.last != null && OPEN_ENDS.contains(seg.last)) return true;
     int n = text.length();
     int i = from;
@@ -149,7 +164,7 @@ public final class SqlSplitter {
       char ch = text.charAt(i);
       char next = i + 1 < n ? text.charAt(i + 1) : 0;
       if (Character.isWhitespace(ch)) i++;
-      else if (ch == '-' && next == '-') i = indexOrEnd(text, "\n", i);
+      else if (ch == '-' && next == '-' || hashComment && ch == HASH) i = indexOrEnd(text, "\n", i);
       else if (ch == '/' && next == '*') {
         int close = text.indexOf("*/", i + 2);
         i = close < 0 ? n : close + 2;
@@ -237,6 +252,9 @@ public final class SqlSplitter {
     final List<String> words = new ArrayList<>();
     /** 열린 겹: BEGIN · CASE · DECL. */
     final Deque<String> open = new ArrayDeque<>();
+    /** WITH FUNCTION · PROCEDURE 문장. withMain 은 선언 겹 밖에서 본문 문장(MAIN_WORDS)이 나왔다. */
+    boolean withPlsql;
+    boolean withMain;
     /** 하위 프로그램 머리(FUNCTION · PROCEDURE · CREATE 머리)를 지나 IS/AS 를 기다리는 중. ; 에서 풀린다(앞선 선언). */
     boolean header;
     /** CREATE 객체 이름을 기다리는 중과 그 이름(스키마를 뗀 대문자). 따옴표 이름이면 null 로 남는다. */
@@ -258,6 +276,7 @@ public final class SqlSplitter {
       if (depth == 0) top.add(w);
       if (!decided && decide()) return;
       if (!block) return;
+      if (withPlsql && open.isEmpty() && !pendingEnd && MAIN_WORDS.contains(w)) withMain = true;
       if (afterAs) {
         afterAs = false;
         if (CALL_SPEC.contains(w)) callSpec = true;
@@ -330,6 +349,13 @@ public final class SqlSplitter {
         decided = true;
         return false;
       }
+      if (first.equals("WITH")) {
+        if (words.size() == 1) return true;
+        decided = true;
+        // WITH FUNCTION f … : FUNCTION 낱말은 아래 switch 가 하위 프로그램 머리로 받는다.
+        block = withPlsql = WITH_PLSQL.contains(words.get(1));
+        return !block;
+      }
       decided = true;
       if (!first.equals("CREATE")) return true;
       String last = words.get(words.size() - 1);
@@ -350,6 +376,7 @@ public final class SqlSplitter {
       if (!block) return true;
       boolean tx = words.get(0).equals("BEGIN") && (words.size() == 1 || TX_WORDS.contains(words.get(1))) && !words.contains(";");
       if (tx) return true;
+      if (withPlsql) return withMain && open.isEmpty();
       if (dollar || callSpec) return true;
       if (!opened && open.isEmpty() && !words.contains("COMPOUND")) return true;
       return closed && (name == null || endLabel == null || endLabel.equals(name));

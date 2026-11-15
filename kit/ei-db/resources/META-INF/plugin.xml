@@ -16,6 +16,8 @@
   <extensions defaultExtensionNs="com.intellij">
     <!-- 지난번에 열려 있던 SQL 콘솔 탭을 다시 연다. -->
     <postStartupActivity implementation="ei.db.console.ConsoleOpener$Restore"/>
+    <!-- 프로젝트 닫기 · IDE 끄기 때 미반영 변경이 있으면 커밋 / 롤백 / 닫기 취소를 묻는다. -->
+    <projectCloseHandler implementation="ei.db.PendingCloseHandler"/>
     <notificationGroup id="EI Database" displayType="BALLOON" key="notification.group.ei.database"/>
     <!-- 탐색기 -->
     <toolWindow id="EI Database" anchor="right" icon="AllIcons.Nodes.DataTables" factoryClass="ei.db.ui.DbToolWindowFactory"/>

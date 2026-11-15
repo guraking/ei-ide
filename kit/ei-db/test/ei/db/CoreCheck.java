@@ -92,6 +92,36 @@ public class CoreCheck {
     }
     eq(SqlGuard.isWrite("select * from docs where body ? 'k'"), false);
     eq(SqlGuard.isWrite("select domain from t"), false);
+    // 변경 판정: 괄호 밖 INTO 가 있는 조회
+    eq(SqlGuard.isWrite("SELECT * INTO new_t FROM t"), true);
+    eq(SqlGuard.isWrite("with d as (select 1 a) select a into t2 from d"), true);
+    eq(SqlGuard.isWrite("select a into outfile '/tmp/x' from t"), true);
+    eq(SqlGuard.isWrite("select a into @v from t"), false);
+    eq(SqlGuard.isWrite("select 'into' a, \"INTO\" from t"), false);
+    eq(SqlGuard.isWrite("WITH FUNCTION f RETURN NUMBER IS v NUMBER; BEGIN SELECT 1 INTO v FROM dual; RETURN v; END; SELECT f FROM dual"), false);
+    eq(SqlGuard.isWrite("select * from t where id in (select id from u)"), false);
+    // 트랜잭션 끝
+    eq(SqlGuard.isTxEnd("commit"), true);
+    eq(SqlGuard.isTxEnd(" COMMIT WORK;"), true);
+    eq(SqlGuard.isTxEnd("rollback"), true);
+    eq(SqlGuard.isTxEnd("END"), true);
+    eq(SqlGuard.isTxEnd("ROLLBACK TO SAVEPOINT a"), false);
+    eq(SqlGuard.isTxEnd("rollback work to a"), false);
+    eq(SqlGuard.isTxEnd("COMMIT PREPARED 'x'"), false);
+    eq(SqlGuard.isTxEnd("select 1"), false);
+    // 한 칸에 문장 여럿
+    eq(SqlGuard.hasSeveralStatements("SELECT 1; DELETE FROM T"), true);
+    eq(SqlGuard.hasSeveralStatements("SELECT 1;"), false);
+    eq(SqlGuard.hasSeveralStatements("SELECT 1; -- 끝"), false);
+    eq(SqlGuard.hasSeveralStatements("SELECT a\n\n  , b\n\nFROM t\n\n\nWHERE c = ';'"), false);
+    eq(SqlGuard.hasSeveralStatements("UPDATE t SET a = 1\r\n\r\nWHERE id = 1"), false);
+    eq(SqlGuard.hasSeveralStatements("BEGIN\n  UPDATE t SET a = 1;\n\n  DELETE FROM u;\nEND;"), false);
+    eq(SqlGuard.hasSeveralStatements("DO $$ BEGIN PERFORM 1; END $$;"), false);
+    eq(SqlGuard.hasSeveralStatements("UPDATE a SET x = 1 WHERE id = 1;\nUPDATE b SET y = 2 WHERE id = 2"), true);
+    eq(SqlGuard.hasSeveralStatements("SELECT 1; # 끝", DbKind.MYSQL), false);
+    eq(SqlGuard.hasSeveralStatements("SELECT 1 # it's\n; DELETE FROM t", DbKind.MYSQL), true);
+    eq(SqlGuard.hasSeveralStatements("SELECT 1; # 끝", DbKind.ORACLE), true);
+    eq(SqlGuard.hasSeveralStatements("WITH FUNCTION f RETURN NUMBER IS BEGIN RETURN 1; END;\nSELECT f FROM dual;", DbKind.ORACLE), false);
     // DROP 대상 이름: 객체 종류 · IF EXISTS 를 건너뛴다
     eq(SqlGuard.table("DROP INDEX ix_a"), "IX_A");
     eq(SqlGuard.table("drop table if exists app.t"), "T");

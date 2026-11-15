@@ -1,6 +1,7 @@
 package ei.db.bench;
 
 import com.intellij.icons.AllIcons;
+import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.ui.ComboBox;
@@ -38,12 +39,14 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableCellEditor;
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.FlowLayout;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -51,6 +54,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * 단계별 작성기: 왼쪽에서 표를 고르고 오른쪽 단계(칼럼 → 연결 → 조건 → 묶기 → 정렬 · 페이징)를 채우면 아래 미리 보기에 SQL 이 바로 나온다.
@@ -60,6 +65,8 @@ import java.util.Set;
  */
 final class BuilderPanel {
   private static final int COUNT_DEBOUNCE_MS = 700;
+  /** 건수는 한 행만 읽는다. */
+  private static final int COUNT_ROWS = 1;
   private static final float LEFT_SPLIT = 0.28f;
   /** 표 목록(위)과 고른 표(아래)를 나누는 처음 몫. 사용자가 끈 값은 KEY + "tablesSplit" 로 기억한다. */
   private static final float TABLES_SPLIT = 0.6f;
@@ -160,14 +167,23 @@ final class BuilderPanel {
   private final JPanel havingPanel = new JPanel(new BorderLayout());
   private final JPanel offsetRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
   private final JBCheckBox autoCount = new JBCheckBox("바꿀 때마다 건수 세기", true);
+  /** 「바꿀 때마다 건수 세기」 를 기억하는 키. 운영 접속은 기억과 상관없이 꺼진 채로 연다(큰 표의 교차 COUNT 가 운영 DB 로 나가지 않게). */
+  private static final String AUTO_COUNT_KEY = KEY + "autoCount";
   private final JBLabel countLabel = new JBLabel();
-  private final Timer countTimer = new Timer(COUNT_DEBOUNCE_MS, e -> count());
+  private final Timer countTimer = new Timer(COUNT_DEBOUNCE_MS, e -> count(true));
   private final List<Section> sections = new ArrayList<>();
   /** 표 하나가 보일 줄 수(이보다 많으면 표 안에서 스크롤). */
   private static final int VISIBLE_ROWS = 8;
 
   /** 건수 세기 순번. 늦게 온 앞 결과는 버린다. */
   private int countGeneration;
+  /** 건수를 세는 중이면 참. 그동안 온 요청은 새로 보내지 않고 countAgain 에 남겨, 끝난 뒤 그때의 조건으로 한 번 센다. */
+  private boolean counting;
+  private boolean countAgain;
+  /** 도는 건수 세기: 접속을 바꾸면 stop 을 켜고 문장을 멈춘다. */
+  private DbConfig countConfig;
+  private AtomicBoolean countStop = new AtomicBoolean();
+  private AtomicReference<Statement> countStatement = new AtomicReference<>();
   private Long lastCount;
   private int lastShape = -1;
 
@@ -421,9 +437,9 @@ final class BuilderPanel {
     countRow.add(autoCount, BorderLayout.WEST);
     countRow.add(countLabel, BorderLayout.CENTER);
     JButton countNow = new JButton("지금 세기");
-    countNow.addActionListener(e -> count());
+    countNow.addActionListener(e -> count(false));
     countRow.add(countNow, BorderLayout.EAST);
-    autoCount.addActionListener(e -> { if (autoCount.isSelected()) countTimer.restart(); });
+    autoCount.addActionListener(e -> autoCountChosen());
 
     countRow.setBorder(JBUI.Borders.empty(4, 8));
     JPanel right = new JPanel(new BorderLayout());
@@ -451,7 +467,13 @@ final class BuilderPanel {
     lastCount = null;
     lastShape = -1;
     countLabel.setText("");
-    if (bench.config() == null) return;
+    countTimer.stop();
+    countAgain = false;
+    countGeneration++;
+    stopCount();
+    DbConfig c = bench.config();
+    autoCount.setSelected(c != null && !c.production && PropertiesComponent.getInstance().getBoolean(AUTO_COUNT_KEY, true));
+    if (c == null) return;
     tableList.getEmptyText().setText("표 목록을 읽는 중…");
     bench.tables(list -> {
       loadedTables.clear();
@@ -720,32 +742,93 @@ final class BuilderPanel {
     if (autoCount.isSelected()) countTimer.restart();
   }
 
-  /** 지금 조건의 건수를 센다(값을 넣은 조건만). */
-  private void count() {
+  /** 운영이 아닌 접속에서 고른 값만 기억한다. */
+  private void autoCountChosen() {
+    DbConfig c = bench.config();
+    if (c != null && !c.production) PropertiesComponent.getInstance().setValue(AUTO_COUNT_KEY, autoCount.isSelected(), true);
+    if (autoCount.isSelected()) countTimer.restart();
+    else countTimer.stop();
+  }
+
+  /** 창을 닫을 때 부른다. 기다리는 건수 세기를 보내지 않는다(도는 문장은 Bench.close 가 멈춘다). */
+  void close() {
+    countTimer.stop();
+    countAgain = false;
+  }
+
+  /** 도는 건수 세기를 멈추고 끝난 것으로 둔다(그 결과는 countGeneration 이 달라 버려진다). 화면 스레드에서 부른다. */
+  private void stopCount() {
+    if (!counting) return;
+    countStop.set(true);
+    bench.cancel(countConfig, countStatement);
+    counting = false;
+  }
+
+  /**
+   * 지금 조건의 건수를 센다(값을 넣은 조건만). 앞 건수가 아직 돌면 보내지 않고 끝난 뒤 다시 센다.
+   * auto(바꿀 때마다 세기)면 그 접속에 다른 문장이 돌 때 보내지 않고 COUNT_DEBOUNCE_MS 뒤에 다시 본다(사용자 문장 앞에서 자리를 잡지 않는다).
+   */
+  private void count(boolean auto) {
     DbConfig c = bench.config();
     QueryBuilder.Spec s = spec();
     String sql = QueryBuilder.countSql(s);
-    if (c == null || sql == null) return;
+    if (c == null || sql == null || bench.isClosed()) return;
+    if (counting) {
+      countAgain = true;
+      return;
+    }
+    if (auto && DbSessions.get(bench.project).isRunning(c.id)) {
+      countTimer.restart();
+      return;
+    }
+    counting = true;
     int shape = s.tables.size() * 1000 + s.joins.size();
     int skipped = QueryBuilder.unfilled(s);
     int gen = ++countGeneration;
+    String before = countLabel.getText();
+    Color beforeColor = countLabel.getForeground();
     countLabel.setForeground(UIUtil.getContextHelpForeground());
     countLabel.setText("세는 중…");
+    AtomicBoolean stop = new AtomicBoolean();
+    AtomicReference<Statement> statement = new AtomicReference<>();
+    countConfig = c;
+    countStop = stop;
+    countStatement = statement;
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       String text;
       Long value = null;
+      boolean busy = false;
       try {
-        QueryResult r = DbSessions.get(bench.project).run(c, sql, List.of());
+        QueryResult r = bench.run(c, sql, List.of(), COUNT_ROWS, auto, stop::get, statement);
         Object v = r.rows().isEmpty() || r.rows().get(0).isEmpty() ? null : r.rows().get(0).get(0);
         value = v instanceof Number n ? n.longValue() : v == null ? null : Long.parseLong(v.toString().strip());
         text = value == null ? "건수를 읽지 못했습니다" : String.format(Locale.ROOT, "지금 %,d건", value);
+      } catch (Bench.Busy e) {
+        text = before;
+        busy = true;
       } catch (Exception e) {
         text = "건수를 세지 못했습니다: " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
       }
       String shown = text;
       Long got = value;
+      boolean yielded = busy;
       ApplicationManager.getApplication().invokeLater(() -> {
-        if (gen != countGeneration) return;
+        // 접속을 바꾼 뒤(stopCount) 늦게 온 결과는 버린다. 새 접속의 건수 세기는 이미 따로 돈다.
+        if (gen != countGeneration || bench.isClosed()) return;
+        counting = false;
+        if (yielded) {
+          countLabel.setForeground(beforeColor);
+          countLabel.setText(shown);
+          countAgain = false;
+          if (autoCount.isSelected()) countTimer.restart();
+          return;
+        }
+        if (countAgain) {
+          countAgain = false;
+          // 자동 세기가 꺼져 있으면 기다리던 요청은 「지금 세기」 다: 다른 문장 뒤에서라도 센다.
+          count(autoCount.isSelected());
+          return;
+        }
         String extra = skipped > 0 ? "  (값을 비운 조건 " + skipped + "개는 빼고 셌습니다)" : "";
         countLabel.setForeground(got == null ? UIUtil.getErrorForeground() : UIUtil.getLabelForeground());
         String jump = "";

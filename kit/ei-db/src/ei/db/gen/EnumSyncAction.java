@@ -38,6 +38,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * 자바 편집기 우클릭 「enum 다시 맞추기」: EnumDialog 가 만든 enum(Javadoc 에 @ei-sql)의 SQL 을 그 접속에서 다시 실행해
@@ -86,6 +87,10 @@ public final class EnumSyncAction extends AnAction {
       Notify.error(project, EiDbBundle.message("enumsync.no.connection", src.connection(), EnumGen.CONNECTION_TAG));
       return;
     }
+    if (SqlGuard.hasSeveralStatements(src.sql(), c.kind)) {
+      Notify.error(project, EiDbBundle.message("enumsync.many.statements", EnumGen.SQL_TAG, src.sql()));
+      return;
+    }
     if (constantsRange(cls) == null) {
       Notify.error(project, EiDbBundle.message("enumsync.unsupported", cls.getName()));
       return;
@@ -124,7 +129,7 @@ public final class EnumSyncAction extends AnAction {
         QueryResult r;
         try {
           // 상수가 빠지지 않게 조회 건수 제한 없이 끝까지 읽는다.
-          r = DbSessions.get(project).run(c, t.src().sql(), List.of(), DbSessions.ALL_ROWS);
+          r = DbSessions.get(project).run(c, t.src().sql(), List.of(), DbSessions.ALL_ROWS, indicator::isCanceled, new AtomicReference<>(), null);
         } catch (ProcessCanceledException e) {
           throw e;
         } catch (Exception e) {

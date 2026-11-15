@@ -242,7 +242,8 @@ public final class BackupSql {
   public record Restore(String body, List<String> excluded, Mode mode) {}
 
   /**
-   * 읽어 둔 행으로 되돌리는 문장을 만든다. DELETE 면 행마다 INSERT. UPDATE 면 PK 로 찾아 PK 아닌 모든 칼럼을 원래 값으로 되돌리는 UPDATE,
+   * 읽어 둔 행으로 되돌리는 문장을 만든다. DELETE 면 행마다 INSERT. UPDATE 면 PK 로 찾아 SET 이 바꾸는 칼럼(setUpper, 대문자)만 원래 값으로 되돌리는 UPDATE
+   * (생성 칼럼 · 그사이 다른 곳에서 바꾼 칼럼은 건드리지 않는다. 바꾸는 칼럼을 결과에서 하나도 찾지 못하면 PK 아닌 모든 칼럼),
    * PK 가 없거나(pkUpper 가 빔) PK 로 되돌리는 문장을 만들 수 없으면(PK 가 LOB · 이진, PK 칼럼뿐인 표) INSERT 로 남기고 mode 를 INSERT_NO_PK 로 한다.
    * LOB · 이진 칼럼은 뺀다(SqlText 규칙). 남는 칼럼이 없거나, 글로 옮길 수 없는 값(드라이버 객체: 사용자 정의 형 · XML 등)이 있으면
    * IllegalArgumentException(한국어 문구): 틀린 값을 적은 백업을 만들지 않는다.
@@ -250,6 +251,12 @@ public final class BackupSql {
    */
   public static Restore restore(boolean delete, String table, List<String> columns, List<String> types, List<List<Object>> rows,
                                 Set<String> pkUpper, DbKind kind) {
+    return restore(delete, table, columns, types, rows, pkUpper, Set.of(), kind);
+  }
+
+  /** restore 와 같되 UPDATE 는 setUpper 칼럼만 되돌린다(비면 PK 아닌 모든 칼럼). INSERT 로 남길 때는 모든 칼럼. */
+  public static Restore restore(boolean delete, String table, List<String> columns, List<String> types, List<List<Object>> rows,
+                                Set<String> pkUpper, Set<String> setUpper, DbKind kind) {
     for (int i = 0; i < columns.size(); i++) {
       String type = i < types.size() ? types.get(i) : "";
       if (SqlText.isUneditableType(type)) continue;
@@ -264,7 +271,10 @@ public final class BackupSql {
     Mode mode = delete ? Mode.INSERT : Mode.UPDATE;
     if (!delete && !pkUpper.isEmpty()) {
       try {
-        body = SqlText.updates(table, columns, types, rows, pkUpper, kind);
+        Set<String> restored = restoredColumns(columns, pkUpper, setUpper);
+        body = SqlText.updates(table, columns, types, rows, pkUpper, restored, kind);
+        // 바꾸는 칼럼이 모두 LOB · 이진이라 SET 이 비면 PK 아닌 모든 칼럼으로 되돌린다(뺀 LOB 은 excluded 로 알린다).
+        if (body.isEmpty() && restored != null) body = SqlText.updates(table, columns, types, rows, pkUpper, null, kind);
       } catch (IllegalArgumentException e) {
         // PK 로 되돌릴 수 없는 표: 아래에서 INSERT 로 남긴다.
         body = "";
@@ -275,6 +285,15 @@ public final class BackupSql {
       body = SqlText.inserts(table, columns, types, rows, kind);
     }
     return new Restore(body, excludedOf(body), mode);
+  }
+
+  /** UPDATE 되돌리기 SET 에 둘 칼럼(대문자): setUpper. 그 가운데 PK 아닌 칼럼이 결과에 하나도 없으면 null(PK 아닌 모든 칼럼). */
+  private static Set<String> restoredColumns(List<String> columns, Set<String> pkUpper, Set<String> setUpper) {
+    for (String c : columns) {
+      String upper = c.toUpperCase(Locale.ROOT);
+      if (setUpper.contains(upper) && !pkUpper.contains(upper)) return setUpper;
+    }
+    return null;
   }
 
   /** SqlText 가 문장 맨 위에 단 「LOB 칼럼 제외」 줄에서 칼럼 이름을 읽는다. 없으면 빈 목록. */

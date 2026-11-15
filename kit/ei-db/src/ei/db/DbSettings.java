@@ -49,6 +49,12 @@ public final class DbSettings implements PersistentStateComponent<DbSettings.Sta
     return null;
   }
 
+  /** 같은 id 의 지금 설정(창을 연 뒤 「읽기 전용」 · 「운영」 을 바꿨을 수 있다). 목록에서 지운 접속이면 받은 값 그대로. */
+  public DbConfig latest(DbConfig c) {
+    DbConfig now = find(c.id);
+    return now == null ? c : now;
+  }
+
   /** 같은 id 가 있으면 바꾸고 없으면 끝에 더한다. */
   public synchronized void put(DbConfig config) {
     List<DbConfig> next = new ArrayList<>(state.connections);

@@ -100,7 +100,7 @@ import javax.swing.RowFilter;
 import javax.swing.event.DocumentEvent;
 import java.awt.Color;
 
-/** 결과 탭 하나의 내용: 조회면 도구줄 + 표, 변경이면 한 줄 요약, 오류면 붉은 글. */
+/** 조회 결과 탭 하나의 내용: 도구줄 + 표. 오류 탭은 error 가 만든다(변경 문장 결과는 ChangeLog). */
 final class ResultPanel extends SimpleToolWindowPanel {
 
   /** 칸 너비를 잴 때 보는 앞쪽 행 수와, 처음 칸 너비가 넘지 않을 화면 폭의 몫(긴 글 칸 하나가 화면을 다 차지하지 않게). */
@@ -184,8 +184,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
     this.result = result;
     this.table = table;
     this.title = title;
-    if (result.isQuery()) buildQuery(c);
-    else buildUpdate(c);
+    buildQuery(c);
   }
 
   /** 결과 비교(ResultCompare)가 읽는 값. */
@@ -229,16 +228,6 @@ final class ResultPanel extends SimpleToolWindowPanel {
   // 편집기 글꼴에 없는 글자(드문 한자, 이모지 등)는 IDE 가 다른 글꼴로 대신 그리게 한다.
   private static Font monoFont() {
     return UIUtil.getFontWithFallback(EditorColorsManager.getInstance().getGlobalScheme().getFont(EditorFontType.PLAIN));
-  }
-
-  private void buildUpdate(DbConfig c) {
-    int count = Math.max(result.updateCount(), 0);
-    boolean auto = DbSessions.get(project).autoCommit(c);
-    JBLabel label = new JBLabel(EiDbBundle.message(auto ? "result.updated.auto" : "result.updated.pending", count) + " · " + result.millis() + " ms");
-    label.setForeground(auto ? UiColors.SUCCESS : UiColors.WARNING);
-    label.setToolTipText(result.sql());
-    label.setBorder(JBUI.Borders.empty(10, 12));
-    add(label, BorderLayout.NORTH);
   }
 
   /** 두 줄 머리의 위아래 여백(px, 배율 전). */
@@ -493,6 +482,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
    * 이미 실행된 조회 문장이라 위험 문장 확인은 다시 하지 않는다. 진행 막대에서 취소할 수 있다.
    */
   private void readMore(DbConfig c, int limit) {
+    if (refuseWhileApplying()) return;
     if (grid.isEditing()) grid.getCellEditor().stopCellEditing();
     // 다시 읽으면 이 패널을 새 결과로 바꾸므로 반영하지 않은 고친 값은 사라진다.
     if (hasPending() && Messages.showYesNoDialog(project,
@@ -515,6 +505,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
     boolean clear = text.isEmpty() && filterBase != null;
     if (!clear && !ResultFilter.isCondition(text)) return;
     String sql = clear ? base : ResultFilter.apply(base, text);
+    if (refuseWhileApplying()) return;
     if (text.contains(";") || !SqlText.isRereadable(sql)) {
       Notify.error(project, EiDbBundle.message("result.filter.refused"));
       return;
@@ -527,6 +518,18 @@ final class ResultPanel extends SimpleToolWindowPanel {
     }
     SqlRunner.reread(project, config, sql, result.binds(), Math.max(result.rows().size(), DbSessions.MAX_ROWS),
         found -> replaceWith(new ResultPanel(project, config, found, table, title, clear ? null : base, clear ? null : text)));
+  }
+
+  /** 「적용」 중이면 알리고 true: 다시 읽어 패널을 바꾸면 남은 문장이 옛 패널에서 나가므로 막는다. */
+  private boolean refuseWhileApplying() {
+    if (!applying) return false;
+    Notify.error(project, EiDbBundle.message("result.apply.busy"));
+    return true;
+  }
+
+  /** 반영하지 않은 고친 값 · 지움 표시가 있거나 「적용」 중인지. 결과 창은 이런 탭을 바꾸거나 밀어내지 않는다(ResultView.addTab). */
+  boolean holdsWork() {
+    return applying || hasPending();
   }
 
   /** 건수 칸에 쓴 수로 다시 읽는다. 1 ~ MAX_ROW_LIMIT 의 수가 아니면 알리고 읽지 않는다. */
@@ -707,19 +710,28 @@ final class ResultPanel extends SimpleToolWindowPanel {
     Notify.info(project, message);
   }
 
+  /** 고른 행(없으면 보이는 모든 행)을 탭으로 나눈 글로 복사한다. 글은 풀 스레드에서 만든다(행이 많으면 화면이 멈추지 않게). */
   private void copyTsv() {
-    StringBuilder sb = new StringBuilder(String.join("\t", result.columns())).append('\n');
-    for (int row : chosenRows()) {
-      List<Object> values = result.rows().get(row);
-      for (int i = 0; i < values.size(); i++) {
-        if (i > 0) sb.append('\t');
-        Object v = values.get(i);
-        if (v != null) sb.append(text(v).replace('\t', ' ').replace('\n', ' ').replace('\r', ' '));
+    List<String> columns = List.copyOf(result.columns());
+    List<List<Object>> rows = new ArrayList<>();
+    for (int row : chosenRows()) rows.add(result.rows().get(row));
+    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+      StringBuilder sb = new StringBuilder(String.join("\t", columns)).append('\n');
+      for (List<Object> values : rows) {
+        for (int i = 0; i < values.size(); i++) {
+          if (i > 0) sb.append('\t');
+          Object v = values.get(i);
+          if (v != null) sb.append(text(v).replace('\t', ' ').replace('\n', ' ').replace('\r', ' '));
+        }
+        sb.append('\n');
       }
-      sb.append('\n');
-    }
-    CopyPasteManager.getInstance().setContents(new StringSelection(sb.toString()));
-    Notify.info(project, EiDbBundle.message("result.copied.rows", chosenRows().length));
+      copyLater(sb.toString(), EiDbBundle.message("result.copied.rows", rows.size()));
+    });
+  }
+
+  /** 풀 스레드에서 만든 글을 화면 스레드에서 클립보드에 넣고 알린다. 그 사이 프로젝트가 닫히면 하지 않는다. */
+  private void copyLater(String text, String message) {
+    ApplicationManager.getApplication().invokeLater(() -> copy(text, message), project.getDisposed());
   }
 
   /** 저장할 파일을 묻는다. 취소하면 null. */
@@ -740,20 +752,21 @@ final class ResultPanel extends SimpleToolWindowPanel {
   private void exportCsv() {
     Path path = askSavePath(EiDbBundle.message("result.csv.export"), EiDbBundle.message("result.csv.export.description"), "csv");
     if (path == null) return;
-    wholeResultThen(rows -> {
-      StringBuilder sb = new StringBuilder(BOM);
-      appendCsvLine(sb, List.copyOf(result.columns()));
-      for (List<Object> row : rows) appendCsvLine(sb, row);
-      String csv = sb.toString();
-      ApplicationManager.getApplication().executeOnPooledThread(() -> {
-        try {
-          Files.writeString(path, csv, StandardCharsets.UTF_8);
-          Notify.info(project, EiDbBundle.message("result.csv.saved", path));
-        } catch (IOException e) {
-          Notify.error(project, EiDbBundle.message("result.csv.failed", e.getMessage()));
-        }
-      });
-    });
+    List<String> columns = List.copyOf(result.columns());
+    wholeResultThen(rows -> ApplicationManager.getApplication().executeOnPooledThread(() -> writeCsv(path, columns, rows)));
+  }
+
+  /** CSV 글(UTF-8 BOM 포함)을 만들어 저장한다. 행이 많을 수 있어 화면 스레드에서 부르지 않는다. */
+  private void writeCsv(Path path, List<String> columns, List<List<Object>> rows) {
+    StringBuilder sb = new StringBuilder(BOM);
+    appendCsvLine(sb, columns);
+    for (List<Object> row : rows) appendCsvLine(sb, row);
+    try {
+      Files.writeString(path, sb.toString(), StandardCharsets.UTF_8);
+      Notify.info(project, EiDbBundle.message("result.csv.saved", path));
+    } catch (IOException e) {
+      Notify.error(project, EiDbBundle.message("result.csv.failed", e.getMessage()));
+    }
   }
 
   /**
@@ -925,17 +938,19 @@ final class ResultPanel extends SimpleToolWindowPanel {
       if (target == null || target.isBlank()) return;
       target = target.strip();
     }
+    String name = target;
     List<List<Object>> rows = new ArrayList<>();
     for (int row : chosenRows()) rows.add(result.rows().get(row));
-    String sql;
-    try {
-      sql = SqlText.inserts(target, result.columns(), result.columnTypes(), rows, config.kind);
-    } catch (IllegalArgumentException e) {
-      Notify.error(project, e.getMessage());
-      return;
-    }
-    CopyPasteManager.getInstance().setContents(new StringSelection(sql));
-    Notify.info(project, EiDbBundle.message("result.insert.copied", rows.size()) + lobNotice(sql));
+    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+      String sql;
+      try {
+        sql = SqlText.inserts(name, result.columns(), result.columnTypes(), rows, config.kind);
+      } catch (IllegalArgumentException e) {
+        Notify.error(project, e.getMessage());
+        return;
+      }
+      copyLater(sql, EiDbBundle.message("result.insert.copied", rows.size()) + lobNotice(sql));
+    });
   }
 
   /** 복사 문장에 쓸 표 이름: 원래 문장에 쓴 그대로(따옴표 포함). 찾지 못하면 따옴표를 뗀 table. */
@@ -1252,7 +1267,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
    * SqlRunner 로 차례로(UPDATE 먼저, 그다음 DELETE) 실행한다. 실행은 ? 자리 + binds 로 하고(값 이스케이프를 드라이버에 맡김) 미리보기에만 리터럴 문장을 보인다.
    * 확인받은 뒤 첫 문장 전에 고치기 전 백업을 남긴다: 고친 칸은 표가 들고 있는 처음 값으로 되돌리는 UPDATE, 지울 행은 INSERT(다시 조회하지 않는다).
    * 백업을 남기지 못하면 백업 없이 실행할지 묻고, 취소하면 아무것도 실행하지 않는다. SqlRunner 에는 백업을 맡기지 않는다(이중 백업 금지).
-   * 운영 접속 확인 · 읽기 전용 거절은 SqlRunner 가 한다.
+   * 운영 접속 확인은 confirmApply 에서 묶음 전체에 한 번, 읽기 전용 거절은 SqlRunner 가 한다.
    * 앞 문장이 행을 바꾼 뒤에만 다음 문장을 실행하고, 그 행만 화면 값을 고친 값으로 바꾸고 고친 표시를 지운다(DELETE 는 그 행을 화면 표에서 뺀다).
    * 오류 · 취소 · 거절이면 그 행부터 고친 표시 · 지움 표시를 남겨 다시 반영할 수 있게 한다. 바뀐 행이 0 이면 알리고 멈춘다.
    * 행은 번호가 아니라 행 객체로 기억한다(실행 중 다른 행이 빠져 번호가 밀려도 맞는 행을 고친다).
@@ -1347,7 +1362,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
       grid.repaint();
       if (i + 1 < statements.size()) applyNext(rows, values, statements, i + 1, then);
       else then.run();
-    }, null, this::endApply);
+    }, null, this::endApply, true);
   }
 
   /** 「적용」이 DELETE 한 문장에 묶어 보내는 행 수. 행마다 한 문장씩 보내면 행 수만큼 DB 왕복 · 결과 표시가 생겨 느리다. */
@@ -1387,7 +1402,7 @@ final class ResultPanel extends SimpleToolWindowPanel {
       }
       removeRows(chunk);
       deleteNext(doomed, deletes, i + chunk.size(), updated);
-    }, null, this::endApply);
+    }, null, this::endApply, true);
   }
 
   /** 고친 칸을 표가 들고 있는 처음 값으로 되돌리는 UPDATE 문(리터럴, 고치기 전 백업용). WHERE 는 PK 처음 값. */
@@ -1457,7 +1472,11 @@ final class ResultPanel extends SimpleToolWindowPanel {
     dialog.setCenterPanel(scroll);
     dialog.addOkAction().setText(EiDbBundle.message("common.run"));
     dialog.addCancelAction();
-    return dialog.showAndGet();
+    if (!dialog.showAndGet()) return false;
+    // 운영 접속은 묶음 전체를 확인창 한 번으로 받는다(applyNext · deleteNext 는 문장마다 묻지 않는다). 읽기 전용이면 SqlRunner 가 거절한다.
+    DbConfig now = ei.db.DbSettings.getInstance().latest(config);
+    if (!now.production || now.readOnly || statements.isEmpty()) return true;
+    return GuardDialog.confirm(project, now, String.join("\n", previews), null, ei.db.SqlGuard.table(statements.get(0).sql()));
   }
 
   /** ANSI 표기(TIMESTAMP · DATE 글자)라 Oracle · MySQL · PostgreSQL 에서 같이 쓴다. */

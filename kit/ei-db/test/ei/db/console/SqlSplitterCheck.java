@@ -105,6 +105,19 @@ public class SqlSplitterCheck {
     eq(texts("UPDATE t SET a = 1\n\nSET SERVEROUTPUT ON"), List.of("UPDATE t SET a = 1", "SET SERVEROUTPUT ON"));
     eq(texts("WITH x AS (SELECT 1 a FROM dual) SELECT * FROM x\n\nSELECT 2 FROM dual"),
         List.of("WITH x AS (SELECT 1 a FROM dual) SELECT * FROM x", "SELECT 2 FROM dual"));
+    // Oracle WITH FUNCTION: 안의 END; 에서 끊지 않고 본문 SELECT 의 ; 에서 끝난다.
+    String withFn = "WITH\n  FUNCTION f(p NUMBER) RETURN NUMBER IS\n  BEGIN\n    RETURN p + 1;\n  END;\n\n  FUNCTION g RETURN NUMBER IS BEGIN RETURN 2; END g;\nSELECT f(1), g FROM dual;";
+    eq(texts(withFn + "\nSELECT 2 FROM dual;"), List.of(withFn, "SELECT 2 FROM dual;"));
+    eq(texts("WITH FUNCTION f RETURN NUMBER IS BEGIN RETURN 1; END;\nSELECT f FROM dual\n/\nSELECT 2 FROM dual"),
+        List.of("WITH FUNCTION f RETURN NUMBER IS BEGIN RETURN 1; END;\nSELECT f FROM dual", "SELECT 2 FROM dual"));
+    // MySQL # 줄 주석: 접속이 MySQL 일 때만 주석. 주석 안의 ' · ; 는 글자열 · 경계가 아니다.
+    eq(SqlSplitter.split("SELECT 1; # 끝", true).size(), 1);
+    eq(texts("SELECT 1; # 끝"), List.of("SELECT 1;", "# 끝"));
+    List<String> hashTexts = new ArrayList<>();
+    for (SqlSplitter.Stmt st : SqlSplitter.split("SELECT a # it's; x\n  FROM t; DELETE FROM u;", true)) hashTexts.add(st.text());
+    eq(hashTexts, List.of("SELECT a # it's; x\n  FROM t;", "DELETE FROM u;"));
+    eq(SqlSplitter.split("SELECT sid FROM v$session WHERE serial# > 0", false).size(), 1);
+    eq(SqlSplitter.at("# 머리\nSELECT 1;", 0, true).text(), "SELECT 1;");
 
     // 커서 위치로 고르기.
     String text = "-- 최근\nSELECT a\n  FROM t;\n\nUPDATE t SET a = 1 WHERE b = 2;\n";

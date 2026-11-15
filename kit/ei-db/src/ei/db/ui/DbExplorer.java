@@ -925,16 +925,36 @@ final class DbExplorer extends SimpleToolWindowPanel {
     if (pw == null) return;
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       SessionPassword.set(c, pw);
-      openSession(c);
+      // 틀린 값을 기억해 두면 펼치기 · 실행이 계속 그 값으로 로그인해 계정이 잠길 수 있다. 다음 「연결」 때 다시 묻는다.
+      if (!openSession(c)) SessionPassword.set(c, null);
     });
   }
 
-  /** 백그라운드에서 부른다. */
-  private void openSession(DbConfig c) {
+  /** 백그라운드에서 부른다. 열었으면 참. 열었고 그 접속 아래에 오류 마디가 있으면(비밀번호 없이 펼친 경우 등) 다시 읽게 한다. */
+  private boolean openSession(DbConfig c) {
     try {
       DbSessions.get(project).connection(c);
     } catch (Exception e) {
       Notify.error(project, EiDbBundle.message("explorer.connect.failed", c.name, e.getMessage()));
+      return false;
+    }
+    ApplicationManager.getApplication().invokeLater(() -> resetIfFailed(c), project.getDisposed());
+    return true;
+  }
+
+  /** 접속 마디 아래에 오류 마디가 있으면 펼치기 전 모양으로 되돌린다(다시 펼치면 새로 읽는다). 화면 스레드에서 부른다. */
+  private void resetIfFailed(DbConfig c) {
+    DefaultMutableTreeNode conn = conns.get(c.id);
+    if (conn == null) return;
+    java.util.Enumeration<javax.swing.tree.TreeNode> all = conn.breadthFirstEnumeration();
+    while (all.hasMoreElements()) {
+      if (node(all.nextElement()).getUserObject() instanceof Message m && m.error()) {
+        conn.removeAllChildren();
+        conn.add(schemaNode(c));
+        // 다른 접속 탭을 보고 있으면 그 나무에 알릴 것이 없다(탭을 고르면 새 뿌리로 그린다).
+        if (attached(conn)) model.nodeStructureChanged(conn);
+        return;
+      }
     }
   }
 

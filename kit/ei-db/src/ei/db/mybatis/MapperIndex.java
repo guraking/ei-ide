@@ -50,8 +50,8 @@ final class MapperIndex {
   private static final String XML_EXT = "xml";
   /** 이 글이 없는 XML 은 별칭을 찾지 않는다(설정 파일만 읽게). */
   private static final String TYPE_ALIAS_MARK = "<typeAlias";
-  /** 표를 고치는 일은 한 번에 하나만 한다(여러 데몬 스레드가 같은 변경을 두고 동시에 다시 읽지 않게). */
-  private static final Object REBUILD = new Object();
+  /** 프로젝트마다 표를 고치는 일은 한 번에 하나만 한다(여러 데몬 스레드가 같은 변경을 두고 동시에 다시 읽지 않게). */
+  private static final Key<Object> REBUILD = Key.create("ei.db.mybatis.MapperIndex.rebuild");
   /** 표를 다시 만들어야 하는 변경(XML · 폴더 구조, 루트)마다 오른다. 표는 만들 때의 값을 가진다. */
   private static final AtomicLong STRUCTURE = new AtomicLong();
 
@@ -69,6 +69,8 @@ final class MapperIndex {
   private static final Key<Table> TABLE = Key.create("ei.db.mybatis.MapperIndex.table");
   /** 표를 만든 뒤 내용이 바뀐 XML(다음 조회 때 그 파일만 다시 읽는다). */
   private static final Key<Set<VirtualFile>> DIRTY = Key.create("ei.db.mybatis.MapperIndex.dirty");
+  /** 표를 새로 만들다 멈췄을 때(취소) 그때까지 읽은 파일별 결과. 다음에 만들 때 수정 표시가 같으면 다시 읽지 않는다. */
+  private static final Key<Map<VirtualFile, Entry>> PARTIAL = Key.create("ei.db.mybatis.MapperIndex.partial");
 
   /** namespace 가 같은 매퍼 XML 들. */
   static List<Entry> find(Project project, String namespace) {
@@ -92,24 +94,47 @@ final class MapperIndex {
     Set<VirtualFile> dirty = dirtyOf(project);
     Table t = project.getUserData(TABLE);
     if (t != null && t.structure() == STRUCTURE.get() && dirty.isEmpty()) return t;
-    synchronized (REBUILD) {
+    synchronized (((UserDataHolderEx) project).putUserDataIfAbsent(REBUILD, new Object())) {
       t = project.getUserData(TABLE);
       long structure = STRUCTURE.get();
-      if (t == null || t.structure() != structure) t = scan(project, structure, t == null ? Map.of() : t.files());
+      if (t == null || t.structure() != structure) {
+        t = scan(project, structure, t == null ? Map.of() : t.files());
+        // 뒤의 다시 읽기가 취소돼도 새로 만든 표는 남긴다.
+        project.putUserData(TABLE, t);
+      }
       if (!dirty.isEmpty()) t = refresh(project, t, dirty);
       project.putUserData(TABLE, t);
       return t;
     }
   }
 
-  /** 프로젝트의 모든 XML 로 표를 새로 만든다. 수정 표시가 같은 파일은 old 의 결과를 그대로 쓴다. */
+  /**
+   * 프로젝트의 모든 XML 로 표를 새로 만든다. 수정 표시가 같은 파일은 old 나 지난번 멈춘 만들기({@link #PARTIAL})의 결과를 그대로 쓴다.
+   * 도중에 멈추면(취소) 그때까지 읽은 결과를 {@link #PARTIAL} 에 남긴다.
+   */
   private static Table scan(Project project, long structure, Map<VirtualFile, Entry> old) {
+    Map<VirtualFile, Entry> partial = project.getUserData(PARTIAL);
     Map<String, List<Entry>> byNamespace = new HashMap<>();
     Map<VirtualFile, Entry> files = new ConcurrentHashMap<>();
     ProjectFileIndex fileIndex = ProjectFileIndex.getInstance(project);
+    try {
+      scanInto(project, old, partial, files, byNamespace, fileIndex);
+    } catch (RuntimeException | Error ex) {
+      if (partial != null) {
+        for (Map.Entry<VirtualFile, Entry> p : partial.entrySet()) files.putIfAbsent(p.getKey(), p.getValue());
+      }
+      project.putUserData(PARTIAL, files);
+      throw ex;
+    }
+    project.putUserData(PARTIAL, null);
+    return new Table(structure, byNamespace, files);
+  }
+
+  private static void scanInto(Project project, Map<VirtualFile, Entry> old, @Nullable Map<VirtualFile, Entry> partial,
+                               Map<VirtualFile, Entry> files, Map<String, List<Entry>> byNamespace, ProjectFileIndex fileIndex) {
     for (VirtualFile f : FilenameIndex.getAllFilesByExt(project, XML_EXT, GlobalSearchScope.projectScope(project))) {
       ProgressManager.checkCanceled();
-      Entry e = entry(old, f);
+      Entry e = entry(partial != null && partial.containsKey(f) ? partial : old, f);
       if (e == null) continue;
       files.put(f, e);
       if (e.namespace() == null) continue;
@@ -118,12 +143,11 @@ final class MapperIndex {
       if (fileIndex.isInSourceContent(f)) same.add(0, e);
       else same.add(e);
     }
-    return new Table(structure, byNamespace, files);
   }
 
   /**
    * dirty 의 파일만 다시 읽어 고친 표. 처리할 파일을 dirty 에서 먼저 빼고 읽으므로 그 사이의 새 변경은 dirty 에 다시 남는다.
-   * 도중에 멈추면(취소) 뺀 파일을 dirty 에 돌려놓는다.
+   * 받은 표의 맵은 고치지 않으므로(복사해 고친다) 도중에 멈추면(취소) 뺀 파일을 dirty 에 돌려놓기만 하면 다음에 처음부터 다시 적용된다.
    */
   private static Table refresh(Project project, Table t, Set<VirtualFile> dirty) {
     List<VirtualFile> todo = new ArrayList<>(dirty);
@@ -131,7 +155,7 @@ final class MapperIndex {
     try {
       GlobalSearchScope scope = GlobalSearchScope.projectScope(project);
       ProjectFileIndex fileIndex = ProjectFileIndex.getInstance(project);
-      Map<VirtualFile, Entry> files = t.files();
+      Map<VirtualFile, Entry> files = new ConcurrentHashMap<>(t.files());
       Map<String, List<Entry>> byNamespace = t.byNamespace();
       for (VirtualFile f : todo) {
         ProgressManager.checkCanceled();
