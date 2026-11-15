@@ -93,6 +93,8 @@ final class History {
   static final char RECORD_SEP = '\u001e';
   static final char FIELD_SEP = '\u001f';
   static final char BODY_END = '\u001d';
+  // svn log --xml -v 의 <path kind="dir"> : 폴더 줄.
+  private static final String SVN_DIR_KIND = "dir";
   private static final String GIT_FORMAT = "--format=%x1e%H%x1f%P%x1f%an%x1f%at%x1f%D%x1f%B%x1f%ae%x1d";
   private static final int GIT_FIELDS = 7;
   // 합치기 커밋을 부모마다 따로 비교한 출력(sideArgs)의 머리: 해시만.
@@ -239,7 +241,8 @@ final class History {
       for (int j = 0; j < paths.getLength(); j++) {
         Element p = (Element)paths.item(j);
         String path = p.getTextContent();
-        if (path.startsWith(base)) files.add(new FileChange(p.getAttribute("action"), path.substring(base.length())));
+        // 폴더 줄(kind="dir")은 비교할 내용이 없어 파일 목록에 넣지 않는다(svn cat 이 E200009 로 실패한다). 복사 원본 찾기에는 쓴다.
+        if (path.startsWith(base) && !SVN_DIR_KIND.equals(p.getAttribute("kind"))) files.add(new FileChange(p.getAttribute("action"), path.substring(base.length())));
         String from = p.getAttribute("copyfrom-path");
         boolean covers = base.startsWith(path.endsWith("/") ? path : path + "/");
         if (!from.isEmpty() && covers && path.length() > copiedAt.length()) {

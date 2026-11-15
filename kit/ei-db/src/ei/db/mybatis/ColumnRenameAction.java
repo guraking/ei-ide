@@ -25,9 +25,11 @@ import com.intellij.psi.PsiField;
 import com.intellij.psi.PsiMethod;
 import com.intellij.psi.util.PropertyUtilBase;
 import com.intellij.refactoring.rename.RenameProcessor;
+import ei.db.DbConfig;
 import ei.db.EiDbBundle;
+import ei.db.Meta;
 import ei.db.Notify;
-import ei.db.gen.Names;
+import ei.db.SchemaCache;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -41,7 +43,7 @@ import java.util.TreeSet;
 
 /**
  * 「칼럼 이름 바꾸기…」: 프로젝트의 모든 매퍼 XML(MapperIndex) 에서 옛 칼럼을 찾아 미리보기로 고른 곳만 한 명령으로 바꾸고,
- * DTO 도 바꾸면 짝인 DTO 필드(camel(옛))와 그 getter · setter 를 이름 바꾸기 리팩터링으로 바꾼다.
+ * DTO 도 바꾸면 짝인 DTO 필드(ColumnRename.fields: 매퍼 만들기와 같은 이름)와 그 getter · setter 를 이름 바꾸기 리팩터링으로 바꾼다.
  * 편집기 오른쪽 클릭(매퍼 XML 에서만 보임, 커서 낱말을 옛 이름으로)과 소스 메뉴에서 연다.
  */
 public final class ColumnRenameAction extends AnAction {
@@ -73,7 +75,9 @@ public final class ColumnRenameAction extends AnAction {
     new Task.Backgroundable(project, EiDbBundle.message("columnrename.progress"), true) {
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
-        List<ColumnRenameDialog.Row> rows = ReadAction.nonBlocking(() -> collect(project, in))
+        List<String> columns = columns(project, in.table());
+        String[] props = ColumnRename.fields(in.oldName().trim(), in.newName().trim(), columns);
+        List<ColumnRenameDialog.Row> rows = ReadAction.nonBlocking(() -> collect(project, in, columns))
             .inSmartMode(project).wrapProgress(indicator).executeSynchronously();
         ApplicationManager.getApplication().invokeLater(() -> {
           if (rows.isEmpty()) {
@@ -81,7 +85,7 @@ public final class ColumnRenameAction extends AnAction {
             return;
           }
           ColumnRenameDialog.Preview preview = new ColumnRenameDialog.Preview(project, in, rows);
-          if (preview.showAndGet()) apply(project, in, preview.chosen());
+          if (preview.showAndGet()) apply(project, in, preview.chosen(), props);
         }, project.getDisposed());
       }
     }.queue();
@@ -97,15 +101,30 @@ public final class ColumnRenameAction extends AnAction {
     return ColumnRename.wordAt(text, editor.getCaretModel().getOffset());
   }
 
-  /** 읽기 접근 안에서 부른다. */
-  private static List<ColumnRenameDialog.Row> collect(Project project, ColumnRenameDialog.Input in) {
+  /**
+   * 표를 적었고 매퍼 SQL 검사와 같은 접속(MapperSqlInspection.connection)에서 그 표 칼럼을 읽어 두었으면 칼럼 이름들(표 순서), 아니면 null.
+   * DB 를 기다리지 않는다(열린 접속이면 뒤에서 읽어 두기만 한다).
+   */
+  private static List<String> columns(Project project, String table) {
+    if (table == null || table.isBlank()) return null;
+    DbConfig c = MapperSqlInspection.connection(project);
+    if (c == null) return null;
+    List<Meta.Column> cols = SchemaCache.columns(project, c, table.trim());
+    if (cols == null || cols.isEmpty()) return null;
+    List<String> out = new ArrayList<>();
+    for (Meta.Column col : cols) out.add(col.name());
+    return out;
+  }
+
+  /** 읽기 접근 안에서 부른다. columns 는 DTO 필드 이름을 정할 그 표 칼럼(null 이면 모름). */
+  private static List<ColumnRenameDialog.Row> collect(Project project, ColumnRenameDialog.Input in, List<String> columns) {
     List<ColumnRenameDialog.Row> rows = new ArrayList<>();
     for (MapperIndex.Entry entry : MapperIndex.all(project)) {
       ProgressManager.checkCanceled();
       Document doc = FileDocumentManager.getInstance().getDocument(entry.file());
       if (doc == null) continue;
       CharSequence text = doc.getImmutableCharSequence();
-      for (ColumnRename.Hit h : ColumnRename.find(text, in.oldName(), in.newName(), in.table(), in.renameDto())) {
+      for (ColumnRename.Hit h : ColumnRename.find(text, in.oldName(), in.newName(), in.table(), in.renameDto(), columns)) {
         int line = doc.getLineNumber(h.start());
         String lineText = text.subSequence(doc.getLineStartOffset(line), doc.getLineEndOffset(line)).toString().strip();
         rows.add(new ColumnRenameDialog.Row(entry.file(), doc, doc.getModificationStamp(), h, line + 1, lineText));
@@ -115,7 +134,7 @@ public final class ColumnRenameAction extends AnAction {
   }
 
   /** 화면 스레드에서 부른다. 찾은 뒤 문서가 바뀌었으면 아무것도 바꾸지 않는다. */
-  private static void apply(Project project, ColumnRenameDialog.Input in, List<ColumnRenameDialog.Row> chosen) {
+  private static void apply(Project project, ColumnRenameDialog.Input in, List<ColumnRenameDialog.Row> chosen, String[] props) {
     Map<Document, List<ColumnRenameDialog.Row>> byDoc = new LinkedHashMap<>();
     Set<VirtualFile> files = new LinkedHashSet<>();
     for (ColumnRenameDialog.Row r : chosen) {
@@ -142,16 +161,14 @@ public final class ColumnRenameAction extends AnAction {
       Notify.info(project, done);
       return;
     }
-    renameDtoFields(project, in, chosen, done);
+    renameDtoFields(project, chosen, done, props[0], props[1]);
   }
 
   /**
-   * 고른 줄 가운데 resultMap property · #{} 의 DTO 형식에서 camel(옛) 필드를 찾아 camel(새) 로 이름 바꾼다.
+   * 고른 줄 가운데 resultMap property · #{} 의 DTO 형식에서 oldProp 필드를 찾아 newProp 로 이름 바꾼다(ColumnRename.fields 로 정한 이름).
    * 소스에 있는 getter · setter 도 함께 바꾸고, 소스에 없는 것(Lombok 따위)은 필드만 바꾼다.
    */
-  private static void renameDtoFields(Project project, ColumnRenameDialog.Input in, List<ColumnRenameDialog.Row> chosen, String done) {
-    String oldProp = Names.camel(in.oldName());
-    String newProp = Names.camel(in.newName());
+  private static void renameDtoFields(Project project, List<ColumnRenameDialog.Row> chosen, String done, String oldProp, String newProp) {
     Set<PsiField> fields = new LinkedHashSet<>();
     Set<String> missing = new TreeSet<>();
     for (ColumnRenameDialog.Row r : chosen) {

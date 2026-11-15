@@ -54,6 +54,13 @@ public class GenCheck {
     eq(Names.sql(DbKind.ORACLE, "A\"B"), "\"A\"\"B\"");
     eq(Names.sql(DbKind.MYSQL, "OrderItem"), "OrderItem");
     eq(Names.sql(DbKind.POSTGRES, "public", "order_item"), "PUBLIC.ORDER_ITEM");
+    eq(Names.sql(DbKind.MYSQL, "", "T"), "T");
+    eq(Names.sql(DbKind.ORACLE, null, "T"), "T");
+    eq(Names.uniqueCamel(List.of("고객", "이름", "FIELD2", "USER_ID")).values().toString(), "[field, field2, field22, userId]");
+    List<Meta.Column> korean = List.of(new Meta.Column("고객번호", "NUMBER", 12, 0, true, false, false, ""),
+                                       new Meta.Column("고객명", "VARCHAR2", 50, 0, false, false, true, ""));
+    MapperGen kg = new MapperGen("고객", korean, "m.CustMapper", "m.CustDto", new MapperGen.Options(true, true, true, true, DbKind.ORACLE));
+    ok(kg.dtoFile().contains(" field;") && kg.dtoFile().contains(" field2;") && kg.xmlFile(MapperGen.allKinds()).contains("#{field2}"), kg.dtoFile());
 
     eq(TypeMap.javaType("NUMBER", false), "Long");
     eq(TypeMap.javaType("NUMBER", true), "BigDecimal");

@@ -56,6 +56,8 @@ import java.awt.Point;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
+import com.intellij.openapi.util.text.StringUtil;
+import java.util.HashSet;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.List;
@@ -82,6 +84,8 @@ final class LogFilterDialog extends DialogWrapper {
     private static final String TAB_SHOWN = "    ";
     // 정규식 검색이 콘솔 글 전체를 훑는 데 쓸 수 있는 시간. 넘으면 되돌이 폭주로 보고 거르기를 그만둔다.
     private static final long REGEX_TIMEOUT_SECONDS = 3;
+    // 정규식 검사 전체의 한도. 줄마다 빠르지만 줄이 아주 많아 오래 걸리는 식도 멈춘다.
+    private static final long REGEX_TOTAL_SECONDS = 30;
     // 처음 열 때 크기(화면 비율). 그 뒤에는 사용자가 바꾼 크기를 기억한다.
     private static final double SCREEN_WIDTH_SHARE = 0.5;
     private static final double SCREEN_HEIGHT_SHARE = 0.45;
@@ -323,9 +327,9 @@ final class LogFilterDialog extends DialogWrapper {
         } catch (PatternSyntaxException ex) {
             error = BootServersBundle.message("log.filter.regex.invalid", ex.getDescription());
         } catch (RegexTimeout ex) {
-            error = BootServersBundle.message("log.filter.regex.timeout", REGEX_TIMEOUT_SECONDS);
-        } catch (RuntimeException | StackOverflowError ex) {
-            // 깊게 되도는 정규식(StackOverflowError) 등 예상 못 한 오류도 결과로 넘겨 running 을 푼다. 아니면 거르기가 멈춘다.
+            error = BootServersBundle.message("log.filter.regex.timeout", ex.seconds);
+        } catch (RuntimeException | StackOverflowError | OutOfMemoryError ex) {
+            // 깊게 되도는 정규식(StackOverflowError) · 아주 큰 콘솔의 메모리 부족 등 예상 못 한 오류도 결과로 넘겨 running 을 푼다. 아니면 거르기가 멈춘다.
             error = String.valueOf(ex);
         }
         LogFilter.Resume next = result == null ? null : result.resume();
@@ -335,20 +339,35 @@ final class LogFilterDialog extends DialogWrapper {
     }
 
     /**
-     * from 부터 줄마다 정규식을 한 번 찾아 REGEX_TIMEOUT_SECONDS 안에 끝나는지 본다. 거르기와 같은 줄에 같은 식을 쓰므로,
-     * 이것이 끝나면 뒤이은 거르기도 끝난다. 넘으면 RegexTimeout 을 던진다.
+     * from 부터 줄마다 정규식을 한 번 찾아 줄 하나가 REGEX_TIMEOUT_SECONDS 안에 끝나는지 본다. 거르기와 같은 줄에 같은 식을 쓰므로,
+     * 이것이 끝나면 뒤이은 거르기도 끝난다. 넘으면 RegexTimeout 을 던진다. 한도는 줄마다 새로 잡고(콘솔이 커도 멀쩡한 식이 시간 초과로 보이지 않게),
+     * 전체는 REGEX_TOTAL_SECONDS 까지다.
      */
     private static void checkRegexFinishes(CharSequence text, LogFilter.Resume from, Pattern pattern) {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(REGEX_TIMEOUT_SECONDS);
-        for (String line : text.subSequence(from.offset(), text.length()).toString().split("\n", -1)) {
-            pattern.matcher(new TimedText(line, deadline)).find();
+        long limit = TimeUnit.SECONDS.toNanos(REGEX_TIMEOUT_SECONDS);
+        long total = System.nanoTime() + TimeUnit.SECONDS.toNanos(REGEX_TOTAL_SECONDS);
+        int start = from.offset();
+        while (start <= text.length()) {
+            if (System.nanoTime() > total) {
+                throw new RegexTimeout(REGEX_TOTAL_SECONDS);
+            }
+            int end = StringUtil.indexOf(text, '\n', start);
+            if (end < 0) {
+                end = text.length();
+            }
+            pattern.matcher(new TimedText(text.subSequence(start, end).toString(), System.nanoTime() + limit)).find();
+            start = end + 1;
         }
     }
 
     /** 정규식 검사가 마감 시각을 넘김. 스택은 쓰지 않는다. */
     private static final class RegexTimeout extends RuntimeException {
-        RegexTimeout() {
+        // 넘긴 한도(초). 알림 글에 쓴다.
+        final long seconds;
+
+        RegexTimeout(long seconds) {
             super(null, null, false, false);
+            this.seconds = seconds;
         }
     }
 
@@ -362,7 +381,7 @@ final class LogFilterDialog extends DialogWrapper {
         @Override
         public char charAt(int index) {
             if (System.nanoTime() > deadline) {
-                throw new RegexTimeout();
+                throw new RegexTimeout(REGEX_TIMEOUT_SECONDS);
             }
             return text.charAt(index);
         }
@@ -399,7 +418,25 @@ final class LogFilterDialog extends DialogWrapper {
             status.setForeground(UIUtil.getLabelForeground());
             statusHint.setVisible(true);
             updateHint();
+            // 따라가기로 목록을 새로 채워도 고른 줄(줄 번호)은 그대로 둔다. 아니면 더블 클릭 · 우클릭이 매초 풀린다.
+            Set<Integer> picked = new HashSet<>();
+            for (LogFilter.Line line : list.getSelectedValuesList()) {
+                picked.add(line.number());
+            }
             list.setModel(new CollectionListModel<>(lines));
+            if (!picked.isEmpty()) {
+                List<Integer> indices = new ArrayList<>();
+                for (int i = 0; i < lines.size(); i++) {
+                    if (picked.contains(lines.get(i).number())) {
+                        indices.add(i);
+                    }
+                }
+                int[] select = new int[indices.size()];
+                for (int i = 0; i < select.length; i++) {
+                    select[i] = indices.get(i);
+                }
+                list.setSelectedIndices(select);
+            }
             if (followBox.isSelected() && !lines.isEmpty()) {
                 list.ensureIndexIsVisible(lines.size() - 1);
             }

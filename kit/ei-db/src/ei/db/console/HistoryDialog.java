@@ -57,12 +57,13 @@ final class HistoryDialog extends DialogWrapper {
   private final SearchTextField search = new SearchTextField(false);
   private final SimpleDateFormat time = new SimpleDateFormat("MM-dd HH:mm:ss", Locale.KOREA);
 
-  /** 기록 파일은 백그라운드에서 읽고 화면 스레드에서 연다. */
+  /** 기록 파일은 백그라운드에서 읽고 화면 스레드에서 연다. 부른 때의 문맥으로 열어, 뒤에 뜬 다른 모달 창 위로 끼어들지 않는다. 화면 스레드에서 부른다. */
   static void open(Project project) {
+    ModalityState state = ModalityState.current();
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       try {
         List<RunHistory.Entry> entries = RunHistory.get().entries();
-        ApplicationManager.getApplication().invokeLater(() -> new HistoryDialog(project, entries).show(), ModalityState.any(), project.getDisposed());
+        ApplicationManager.getApplication().invokeLater(() -> new HistoryDialog(project, entries).show(), state, project.getDisposed());
       } catch (IOException e) {
         Notify.error(project, EiDbBundle.message("history.read.failed", e.getMessage()));
       }

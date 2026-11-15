@@ -54,7 +54,7 @@ import java.util.Set;
 
 /**
  * 자바 편집기 우클릭 「입력 검증 붙이기…」: 커서가 있는 클래스의 필드에 표 칼럼 메타(NOT NULL · 길이 · 자릿수)로
- * Bean Validation 주석을 붙인다. 필드와 칼럼은 Names.camel(칼럼) == 필드 이름으로 짝짓는다. 정적 필드는 보지 않는다.
+ * Bean Validation 주석을 붙인다. 필드와 칼럼은 Names.uniqueCamel(칼럼들) 의 필드 이름으로 짝짓는다(매퍼 · 기능 만들기가 만든 DTO 와 같은 이름). 정적 필드는 보지 않는다.
  */
 public final class ValidationAction extends AnAction {
 
@@ -145,6 +145,9 @@ public final class ValidationAction extends AnAction {
         } catch (Exception e) {
           Notify.error(project, EiDbBundle.message("validation.read.failed", table, e.getMessage()));
           return;
+        } finally {
+          // 자동 커밋 끔 PostgreSQL 에서 메타 읽기가 연 트랜잭션을 닫는다(idle in transaction 으로 남지 않게).
+          DbSessions.get(project).endReadTransaction(c);
         }
         if (cols.isEmpty()) {
           Notify.warning(project, EiDbBundle.message("validation.no.table", schema + "." + table));
@@ -178,8 +181,14 @@ public final class ValidationAction extends AnAction {
 
   /** 칼럼과 짝지은 필드마다 붙일 주석. 붙일 것이 없는 필드는 빼고, 짝 없는 필드 수를 unmatched[0] 에 둔다. */
   private static List<Plan> plan(PsiClass cls, List<Meta.Column> cols, int[] unmatched) {
+    Map<String, Meta.Column> byColumn = new HashMap<>();
+    List<String> names = new ArrayList<>();
+    for (Meta.Column col : cols) {
+      byColumn.putIfAbsent(col.name(), col);
+      names.add(col.name());
+    }
     Map<String, Meta.Column> byField = new HashMap<>();
-    for (Meta.Column col : cols) byField.putIfAbsent(Names.camel(col.name()), col);
+    for (Map.Entry<String, String> e : Names.uniqueCamel(names).entrySet()) byField.put(e.getValue(), byColumn.get(e.getKey()));
     List<Plan> out = new ArrayList<>();
     for (PsiField f : cls.getFields()) {
       if (f.hasModifierProperty(PsiModifier.STATIC)) continue;

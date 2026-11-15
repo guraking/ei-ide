@@ -146,8 +146,8 @@ final class CodeFlow {
     String key() { return label() + " " + where; }
   }
 
-  /** 화면 파일 하나의 글과 그 낱말 조각(FlowRules.tokens, 정규식을 돌리기 전에 거르는 데 쓴다). */
-  record Front(VirtualFile file, CharSequence text, Set<String> tokens) {
+  /** 화면 파일 하나의 글과 그 낱말 조각(FlowRules.tokens, 정규식을 돌리기 전에 거르는 데 쓴다). stamp 는 읽을 때의 수정 표시(stampOf). */
+  record Front(VirtualFile file, CharSequence text, Set<String> tokens, long stamp) {
     /** url 을 부를 수 있는 파일이면(조각이 모두 들어 있으면) true. */
     boolean mayCall(Api api) { return tokens.containsAll(FlowRules.literalTokens(api.url())); }
   }
@@ -197,17 +197,37 @@ final class CodeFlow {
         VirtualFile root = index.getContentRootForFile(f);
         String relative = root == null ? null : VfsUtilCore.getRelativePath(f, root);
         if (FlowRules.skippedFront(relative == null ? f.getPath() : relative)) continue;
-        CharSequence text = textOf(f);
-        out.add(new Front(f, text, FlowRules.tokens(text)));
+        out.add(front(f));
       }
     }
     return out;
   }
 
+  /**
+   * known 에서 읽은 뒤 바뀐 파일(수정 표시가 다름)은 다시 읽고, 지워진 파일은 뺀다. 읽기 접근 안에서 부른다.
+   * shortcut: 「조회」 뒤 새로 생긴 화면 파일은 들어가지 않는다. 다시 「조회」 하면 보인다.
+   */
+  static List<Front> refreshed(List<Front> known) {
+    List<Front> out = new ArrayList<>(known.size());
+    for (Front f : known) {
+      ProgressManager.checkCanceled();
+      if (!f.file().isValid()) continue;
+      out.add(stampOf(f.file()) == f.stamp() ? f : front(f.file()));
+    }
+    return out;
+  }
+
   /** 편집기에 열린 문서가 있으면 그 글(저장 전 포함), 없으면 디스크 글. */
-  private static CharSequence textOf(VirtualFile f) {
+  private static Front front(VirtualFile f) {
     Document d = FileDocumentManager.getInstance().getCachedDocument(f);
-    return d != null ? d.getImmutableCharSequence() : LoadTextUtil.loadText(f);
+    CharSequence text = d != null ? d.getImmutableCharSequence() : LoadTextUtil.loadText(f);
+    return new Front(f, text, FlowRules.tokens(text), stampOf(f));
+  }
+
+  /** 편집기 문서가 있으면 그 수정 표시(저장 전 바뀜 포함), 없으면 파일의 것. 저장하면 둘은 같은 값이 된다. */
+  private static long stampOf(VirtualFile f) {
+    Document d = FileDocumentManager.getInstance().getCachedDocument(f);
+    return d != null ? d.getModificationStamp() : f.getModificationStamp();
   }
 
   /** api 를 부르는 화면 위치들(앞에서 MAX_FRONT_HITS 개). URL 에 글자 마디가 없으면 null(찾을 수 없음). */
@@ -218,7 +238,7 @@ final class CodeFlow {
     for (Front f : fronts) {
       ProgressManager.checkCanceled();
       if (out.size() >= MAX_FRONT_HITS) break;
-      if (!f.mayCall(api)) continue;
+      if (!f.file().isValid() || !f.mayCall(api)) continue;
       Matcher m = p.matcher(f.text());
       while (out.size() < MAX_FRONT_HITS && m.find()) {
         int line = StringUtil.offsetToLineNumber(f.text(), m.start()) + 1;
@@ -251,12 +271,12 @@ final class CodeFlow {
     return new Found(run.finish(root), apis, !apis.isEmpty());
   }
 
-  /** apis 를 부르는 화면 묶음(새 마디). 읽기 접근 안에서 부른다. */
-  static Item screensGroup(Project project, List<Api> apis) {
+  /** apis 를 부르는 화면 묶음(새 마디). known 은 앞서 읽어 둔 화면 파일들(그 뒤 바뀐 것은 다시 읽는다), null 이면 새로 읽는다. 읽기 접근 안에서 부른다. */
+  static Item screensGroup(Project project, List<Api> apis, @Nullable List<Front> known) {
     Run run = new Run(project);
     Item g = new Item(EiDbBundle.message("codeflow.group.screens"), "", AllIcons.FileTypes.Html, null);
     if (apis.isEmpty()) g.note = EiDbBundle.message("codeflow.note.none");
-    else run.addScreens(g, apis, fronts(project));
+    else run.addScreens(g, apis, known != null ? refreshed(known) : fronts(project));
     return run.finish(g);
   }
 
@@ -308,6 +328,7 @@ final class CodeFlow {
     String title = col.isEmpty() ? tableInput.trim() : tableInput.trim() + "." + col;
     Item root = new Item(title, EiDbBundle.message("codeflow.kind.table"), AllIcons.Nodes.DataTables, null);
     for (MapperIndex.Entry e : run.sourceEntries()) {
+      if (!run.room()) break;
       Xml x = run.xml(e.file());
       if (x == null) continue;
       for (MapperDoc.Node st : x.doc().statements) {

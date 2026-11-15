@@ -50,7 +50,11 @@ final class ErrorWatcher implements Disposable {
                 }
                 synchronized (pending) {
                     if (pending.length() + event.getText().length() > MAX_PENDING_CHARS) {
-                        dropped = true;
+                        // 버린 글 앞뒤가 한 줄로 이어지지 않게 버린 자리에서 줄을 끊는다(한 번만, 한 글자라 한도를 넘어도 된다).
+                        if (!dropped) {
+                            pending.append('\n');
+                            dropped = true;
+                        }
                         return;
                     }
                     pending.append(event.getText());
@@ -92,16 +96,10 @@ final class ErrorWatcher implements Disposable {
     private synchronized void tick(boolean end) {
         try {
             String chunk;
-            boolean lost;
             synchronized (pending) {
                 chunk = pending.toString();
                 pending.setLength(0);
-                lost = dropped;
                 dropped = false;
-            }
-            if (lost) {
-                // 버린 글 앞뒤가 한 줄로 이어지지 않게 끊는다.
-                scan.flush();
             }
             if (!chunk.isEmpty()) {
                 scan.feed(chunk);

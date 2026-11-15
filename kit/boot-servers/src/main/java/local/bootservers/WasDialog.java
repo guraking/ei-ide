@@ -1,5 +1,8 @@
 package local.bootservers;
 
+import com.intellij.openapi.util.Disposer;
+import com.intellij.openapi.application.ModalityState;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
@@ -199,6 +202,12 @@ final class WasDialog extends DialogWrapper {
         updateFound();
     }
 
+    // 설치 폴더 판별 요청 번호. 화면 스레드에서만 읽고 쓴다.
+    private int foundGeneration;
+    // 마지막으로 판별을 마친 「종류\n경로」 와 그 판(설치 폴더가 아니면 null). 화면 스레드에서만 읽고 쓴다.
+    private String foundFor;
+    private String foundVersion;
+
     private void updateFound() {
         WasSettings.Kind k = selectedKind();
         shutdownLabel.setText(usesAdminPort(k) ? BootServersBundle.message("was.dialog.port.admin") : usesSecondPort(k) ? BootServersBundle.message("was.dialog.port.shutdown") : BootServersBundle.message("was.dialog.port.shutdown.unused"));
@@ -207,7 +216,22 @@ final class WasDialog extends DialogWrapper {
         for (JComponent c : List.of(jeusDomain, jeusServer, jeusUser, startCommand, stopCommand, deployCommand, forgetPassword, jeusHint)) {
             c.setEnabled(jeus);
         }
-        String version = versionOf(k, home.getText().strip());
+        // 설치 폴더 판별은 jar 를 열어 보므로(네트워크 경로면 느리다) 칸을 칠 때마다 화면 스레드에서 하지 않는다. 마지막 입력의 결과만 보인다.
+        String path = home.getText().strip();
+        int generation = ++foundGeneration;
+        ApplicationManager.getApplication().executeOnPooledThread(() -> {
+            String version = versionOf(k, path);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                if (generation == foundGeneration) {
+                    foundFor = k + "\n" + path;
+                    foundVersion = version;
+                    showFound(k, version);
+                }
+            }, ModalityState.any(), o -> getDisposable() == null || Disposer.isDisposed(getDisposable()));
+        });
+    }
+
+    private void showFound(WasSettings.Kind k, String version) {
         String hint = switch (k) {
             case WILDFLY -> BootServersBundle.message("was.dialog.hint.wildfly");
             case WEBLOGIC -> BootServersBundle.message("was.dialog.hint.weblogic");
@@ -216,6 +240,11 @@ final class WasDialog extends DialogWrapper {
         };
         found.setText(version == null ? BootServersBundle.message("was.dialog.choose.home", k.label, hint) : BootServersBundle.message("was.dialog.found", version));
         found.setForeground(version == null ? NamedColorUtil.getInactiveTextColor() : UIUtil.getLabelSuccessForeground());
+    }
+
+    /** 입력 검사용 판. 뒤에서 이미 판별한 칸 값이면 그 결과를 쓰고(검사는 화면 스레드에서 자주 돈다), 아니면 지금 판별한다. */
+    private String knownVersion(WasSettings.Kind k, String path) {
+        return (k + "\n" + path).equals(foundFor) ? foundVersion : versionOf(k, path);
     }
 
     private static String versionOf(WasSettings.Kind k, String path) {
@@ -273,7 +302,7 @@ final class WasDialog extends DialogWrapper {
         if (name.getText().isBlank()) {
             return new ValidationInfo(BootServersBundle.message("was.dialog.name.required"), name);
         }
-        if (versionOf(selectedKind(), home.getText().strip()) == null) {
+        if (knownVersion(selectedKind(), home.getText().strip()) == null) {
             return new ValidationInfo(BootServersBundle.message("was.dialog.not.home", selectedKind().label), home.getTextField());
         }
         if (selectedKind() == WasSettings.Kind.JEUS) {

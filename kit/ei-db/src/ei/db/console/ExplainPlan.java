@@ -35,6 +35,8 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Pattern;
 
 /**
  * 커서 문장(선택 영역이 있으면 그 첫 문장)의 실행 계획을 단계 표로 보이고 느린 곳 · 고칠 법을 붙인다(PlanPanel).
@@ -67,6 +69,10 @@ public final class ExplainPlan {
        WHERE SQL_ID = ?
          AND CHILD_NUMBER = ?
        ORDER BY ID""";
+  /** 계획을 읽은 뒤 이 문장의 PLAN_TABLE 행을 지운다(볼 때마다 쌓이지 않게). */
+  private static final String ORACLE_CLEAN = "DELETE FROM PLAN_TABLE WHERE STATEMENT_ID = ?";
+  /** SELECT … FOR UPDATE 는 행을 잠그므로 「실제 시간 재기」의 조회로 보지 않는다. */
+  private static final Pattern FOR_UPDATE = Pattern.compile("\\bFOR\\s+UPDATE\\b");
   private static final String CURSOR_DISPLAY = "SELECT PLAN_TABLE_OUTPUT FROM TABLE(DBMS_XPLAN.DISPLAY_CURSOR(?, ?, 'ALLSTATS LAST'))";
   /** STATISTICS_LEVEL 기본값. 재기가 끝나면 이것으로 돌린다. */
   private static final String STATISTICS_DEFAULT = "TYPICAL";
@@ -91,7 +97,7 @@ public final class ExplainPlan {
       Notify.error(project, EiDbBundle.message("console.connection.removed"));
       return;
     }
-    String sql = statement(editor);
+    String sql = statement(editor, c.kind == DbKind.MYSQL);
     if (sql == null) {
       Notify.info(project, EiDbBundle.message("explain.no.statement"));
       return;
@@ -110,13 +116,14 @@ public final class ExplainPlan {
         try {
           Plan plan;
           try {
-            plan = plan(DbSessions.get(project), c, sql, binds, source);
+            plan = plan(DbSessions.get(project), c, sql, binds, source, indicator);
           } finally {
             DbSessions.get(project).endReadTransaction(c);
           }
           ApplicationManager.getApplication().invokeLater(() -> ResultView.showPlan(project, c, plan), project.getDisposed());
         } catch (Exception e) {
-          ApplicationManager.getApplication().invokeLater(() -> ResultView.showError(project, c, sql, e), project.getDisposed());
+          if (indicator.isCanceled()) ApplicationManager.getApplication().invokeLater(() -> ResultView.showCancelled(project, c, sql), project.getDisposed());
+          else ApplicationManager.getApplication().invokeLater(() -> ResultView.showError(project, c, sql, e), project.getDisposed());
         }
       }
     }.queue();
@@ -149,28 +156,29 @@ public final class ExplainPlan {
     }.queue();
   }
 
-  /** SELECT · WITH 로 시작하고 바꾸는 문장이 아닌 것. 「실제 시간 재기」 단추를 켤지도 이것으로 정한다. */
+  /** SELECT · WITH 로 시작하고 바꾸는 문장 · FOR UPDATE 잠금이 아닌 것. 「실제 시간 재기」 단추를 켤지도 이것으로 정한다. */
   public static boolean isQuery(String sql) {
     String head = SqlText.code(sql).strip().toUpperCase(Locale.ROOT);
-    return (head.startsWith("SELECT") || head.startsWith("WITH")) && !SqlGuard.isWrite(sql);
+    return (head.startsWith("SELECT") || head.startsWith("WITH")) && !SqlGuard.isWrite(sql) && !FOR_UPDATE.matcher(head).find();
   }
 
-  /** 선택 영역의 첫 문장, 없으면 커서 문장. 끝의 ; 는 뗀다. 없으면 null. */
-  private static String statement(Editor editor) {
+  /** 선택 영역의 첫 문장, 없으면 커서 문장. 끝의 ; 는 뗀다. 없으면 null. hashComment 는 SqlSplitter.split 과 같다. */
+  private static String statement(Editor editor, boolean hashComment) {
     String selected = editor.getSelectionModel().getSelectedText();
     SqlSplitter.Stmt s;
     if (selected != null && !selected.isBlank()) {
-      List<SqlSplitter.Stmt> all = SqlSplitter.split(selected);
+      List<SqlSplitter.Stmt> all = SqlSplitter.split(selected, hashComment);
       s = all.isEmpty() ? null : all.get(0);
     } else {
-      s = SqlSplitter.at(editor.getDocument().getText(), editor.getCaretModel().getOffset());
+      s = SqlSplitter.at(editor.getDocument().getText(), editor.getCaretModel().getOffset(), hashComment);
     }
     if (s == null) return null;
     String text = s.text().strip();
     return text.endsWith(";") ? text.substring(0, text.length() - 1).strip() : text;
   }
 
-  private static Plan plan(DbSessions sessions, DbConfig c, String sql, List<Object> binds, String source) throws SQLException {
+  private static Plan plan(DbSessions sessions, DbConfig c, String sql, List<Object> binds, String source, ProgressIndicator indicator)
+      throws SQLException {
     List<Step> steps;
     String raw;
     if (c.kind == DbKind.ORACLE) {
@@ -179,18 +187,68 @@ public final class ExplainPlan {
       // EXPLAIN PLAN 은 바인드 값을 받지 않으므로(ORA-01006) 값은 리터럴로 넣는다. 계획만 보고 실행하지 않는다.
       // 리터럴: 문자열은 ' 겹치기, 숫자 그대로, NULL, 날짜는 ANSI DATE · TIMESTAMP 글자(NLS 설정과 무관).
       String text = binds == null ? sql : SqlValues.inline(sql, binds);
-      try (Statement st = sessions.connection(c).createStatement()) {
-        st.execute("EXPLAIN PLAN SET STATEMENT_ID = '" + id + "' FOR " + text);
+      boolean explained = false;
+      try {
+        cancellable(sessions, c, "EXPLAIN PLAN SET STATEMENT_ID = '" + id + "' FOR " + text, null, indicator);
+        explained = true;
+        QueryResult rows = cancellable(sessions, c, ORACLE_STEPS, List.of(id), indicator);
+        steps = PlanParse.oracle(rows.columns(), rows.rows());
+        raw = lines(cancellable(sessions, c, ORACLE_DISPLAY, List.of(id), indicator));
+      } finally {
+        // EXPLAIN PLAN 이 돌지 않았으면(자리 기다리다 멈춤 · 실패) 지울 행이 없다.
+        if (explained) cleanPlanTable(sessions, c, id);
       }
-      QueryResult rows = sessions.run(c, ORACLE_STEPS, List.of(id), DbSessions.ALL_ROWS);
-      steps = PlanParse.oracle(rows.columns(), rows.rows());
-      raw = lines(sessions.run(c, ORACLE_DISPLAY, List.of(id), DbSessions.ALL_ROWS));
     } else {
-      QueryResult r = sessions.run(c, "EXPLAIN " + sql, binds, DbSessions.ALL_ROWS);
+      QueryResult r = cancellable(sessions, c, "EXPLAIN " + sql, binds, indicator);
       steps = c.kind == DbKind.POSTGRES ? PlanParse.postgres(firstColumn(r)) : PlanParse.mysql(r.columns(), r.rows());
       raw = c.kind == DbKind.POSTGRES ? lines(r) : table(r);
     }
     return finish(sessions, c, sql, binds, source, steps, raw, false, 0, 0);
+  }
+
+  /** 끝까지 읽되 진행 창의 멈춤을 CANCEL_POLL_MS 마다 보아 그 문장에 cancel 을 보낸다. 멈추면 DbSessions.CancelledException. */
+  private static QueryResult cancellable(DbSessions sessions, DbConfig c, String sql, List<Object> binds, ProgressIndicator indicator)
+      throws SQLException {
+    AtomicReference<Statement> registered = new AtomicReference<>();
+    ScheduledFuture<?> watch = AppExecutorUtil.getAppScheduledExecutorService().scheduleWithFixedDelay(
+        () -> cancelWhenAsked(indicator, sessions, c, registered.get()), CANCEL_POLL_MS, CANCEL_POLL_MS, TimeUnit.MILLISECONDS);
+    try {
+      return sessions.run(c, sql, binds, DbSessions.ALL_ROWS, indicator::isCanceled, registered, null);
+    } finally {
+      watch.cancel(false);
+    }
+  }
+
+  private static void cancelWhenAsked(ProgressIndicator indicator, DbSessions sessions, DbConfig c, Statement st) {
+    if (!indicator.isCanceled()) return;
+    try {
+      sessions.cancel(c.id, st);
+    } catch (SQLException e) {
+      // 이미 끝났거나 닫힌 문장이다. 남은 문장은 실행 직전의 멈춤 확인이 막는다.
+      LOG.info("계획 문장 취소 실패", e);
+    }
+  }
+
+  /**
+   * 이 계획의 PLAN_TABLE 행을 지운다. 미반영 건수를 세지 않게 DbSessions.run 을 거치지 않고 접속에 바로 보낸다.
+   * 자동 커밋이 꺼져 있으면 EXPLAIN PLAN 이 넣은 행과 함께 사용자 트랜잭션 안에서 상쇄된다. 실패하면 계획은 그대로 보이고 기록만 남긴다.
+   * 그 접속에 다른 문장이 돌고 있으면(콘솔 실행 등) 같은 접속에 끼어들지 않고 행을 남긴다.
+   * shortcut: isRunning 확인과 DELETE 사이에 새 문장이 들어올 틈이 있다, DbSessions 가 미반영을 세지 않는 실행을 내주면 그것으로 바꾼다.
+   */
+  private static void cleanPlanTable(DbSessions sessions, DbConfig c, String id) {
+    // 끊긴 접속(취소 뒤 끊김 등)은 세션과 함께 행도 사라졌으므로 새로 열지 않는다.
+    Connection conn = sessions.openConnection(c.id);
+    if (conn == null) return;
+    if (sessions.isRunning(c.id)) {
+      LOG.info("다른 문장이 돌고 있어 PLAN_TABLE 정리를 건너뜀: " + id);
+      return;
+    }
+    try (PreparedStatement ps = conn.prepareStatement(ORACLE_CLEAN)) {
+      ps.setString(1, id);
+      ps.executeUpdate();
+    } catch (SQLException e) {
+      LOG.warn("PLAN_TABLE 정리 실패: " + id, e);
+    }
   }
 
   /**
@@ -223,11 +281,11 @@ public final class ExplainPlan {
     }
     long millis = System.currentTimeMillis() - start;
     try {
-      QueryResult cursor = sessions.run(c, FIND_CURSOR, List.of(marker.strip() + "%"), DbSessions.ALL_ROWS);
+      QueryResult cursor = cancellable(sessions, c, FIND_CURSOR, List.of(marker.strip() + "%"), indicator);
       if (cursor.rows().isEmpty()) throw new SQLException(EiDbBundle.message("plan.measure.not.found"));
       List<Object> key = List.of(cursor.rows().get(0).get(0), cursor.rows().get(0).get(1));
-      QueryResult rows = sessions.run(c, CURSOR_STEPS, key, DbSessions.ALL_ROWS);
-      String raw = lines(sessions.run(c, CURSOR_DISPLAY, key, DbSessions.ALL_ROWS));
+      QueryResult rows = cancellable(sessions, c, CURSOR_STEPS, key, indicator);
+      String raw = lines(cancellable(sessions, c, CURSOR_DISPLAY, key, indicator));
       return finish(sessions, c, sql, binds, source, PlanParse.oracle(rows.columns(), rows.rows()), raw, true, millis, fetched);
     } catch (SQLException e) {
       if (e.getErrorCode() == ORA_NO_TABLE || e.getErrorCode() == ORA_NO_PRIVILEGE) {

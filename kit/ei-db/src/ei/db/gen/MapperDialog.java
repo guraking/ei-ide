@@ -116,6 +116,9 @@ public final class MapperDialog extends DialogWrapper {
           throw e;
         } catch (Exception e) {
           Notify.error(project, EiDbBundle.message("validation.read.failed", table, e.getMessage()));
+        } finally {
+          // 자동 커밋 끔 PostgreSQL 에서 메타 읽기가 연 트랜잭션을 닫는다(idle in transaction 으로 남지 않게).
+          DbSessions.get(project).endReadTransaction(c);
         }
       }
     }.queue();

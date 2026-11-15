@@ -62,6 +62,20 @@ public final class SqlFormatter {
   /** Oracle q'…' 의 여는 괄호와 그 짝. 그 밖의 글자는 같은 글자로 닫는다. */
   private static final String Q_OPEN = "([{<";
   private static final String Q_CLOSE = ")]}>";
+  /** 한 낱말로 보는 연산자. 긴 것부터 맞춰 본다(#>> 를 #> + > 로 쪼개지 않게). PostgreSQL JSON · 배열 연산자 포함. */
+  private static final List<String> OPERATORS = List.of(
+      "->>", "#>>", "->", "#>", "@>", "<@", "&&", "?|", "?&", "<=", ">=", "<>", "!=", "||", "::", ":=", "=>");
+  /** PostgreSQL jsonb 「키 중 하나라도 있음」 연산자. */
+  private static final String JSON_ANY_KEY = "?|";
+  /** 바인드 자리 뒤 이어 붙이기. */
+  private static final String BIND_CONCAT = "?||";
+  /** #> · #>> 뒤 경로 배열 글자의 시작. */
+  private static final String PATH_LITERAL_START = "'{";
+  /** 앞 낱말에 붙여 쓰는 PL/SQL 속성(emp.ename%TYPE · SQL%ROWCOUNT). */
+  private static final Set<String> PERCENT_ATTRIBUTES = Set.of(
+      "TYPE", "ROWTYPE", "FOUND", "NOTFOUND", "ISOPEN", "ROWCOUNT", "BULK_ROWCOUNT", "BULK_EXCEPTIONS");
+  /** 앞 글자가 붙는 문자열: N'…'(국가 문자) · X'…'(16진) · B'…'(비트). U&'…' 는 따로 본다. */
+  private static final String STRING_PREFIXES = "NnXxBb";
 
   private enum Kind { WORD, STRING, NUMBER, SYMBOL, OPEN, CLOSE, COMMA, SEMI, LINE_COMMENT, TRAIL_COMMENT, BLOCK_COMMENT, DOT }
 
@@ -79,7 +93,9 @@ public final class SqlFormatter {
         if (i > start) {
           if (out.length() > 0) out.append("\n\n");
           out.append(block(toks.subList(start, i), ""));
-          if (i < toks.size()) out.append(';');
+          // 끝 낱말이 줄 주석이면 ; 가 주석 안으로 들어가지 않게 다음 줄에 쓴다.
+          Kind last = toks.get(i - 1).kind;
+          if (i < toks.size()) out.append(last == Kind.LINE_COMMENT || last == Kind.TRAIL_COMMENT ? "\n;" : ";");
         }
         start = i + 1;
       }
@@ -340,6 +356,7 @@ public final class SqlFormatter {
     if (t.kind == Kind.DOT || prev.kind == Kind.DOT) return false;
     if (t.kind == Kind.CLOSE || prev.kind == Kind.OPEN) return false;
     if (prev.kind == Kind.SYMBOL && prev.text.equals("::") || t.kind == Kind.SYMBOL && t.text.equals("::")) return false;
+    if (t.kind == Kind.WORD && t.text.startsWith("%")) return false;
     return true;
   }
 
@@ -393,8 +410,8 @@ public final class SqlFormatter {
   }
 
   /**
-   * i 에서 시작하는 특수 글자열(Oracle q'[…]' · PostgreSQL E'…' · $tag$…$tag$)의 끝 다음 위치. 아니면 i. 닫히지 않으면 글 끝.
-   * 셋 다 낱말 첫머리에서만 인정한다(v$session · name' 같은 것은 아니다). E'…' 안의 \ 는 다음 글자를 감싼다.
+   * i 에서 시작하는 특수 글자열(Oracle q'[…]' · PostgreSQL E'…' · $tag$…$tag$ · N'…' · X'…' · B'…' · U&'…')의 끝 다음 위치. 아니면 i.
+   * 닫히지 않으면 글 끝. 모두 낱말 첫머리에서만 인정한다(v$session · name' 같은 것은 아니다). E'…' 안의 \ 는 다음 글자를 감싼다.
    */
   private static int specialStringEnd(String s, int i) {
     int n = s.length();
@@ -421,6 +438,8 @@ public final class SqlFormatter {
       }
       return n;
     }
+    if (STRING_PREFIXES.indexOf(c) >= 0 && s.charAt(i + 1) == '\'') return quotedEnd(s, i + 1);
+    if ((c == 'u' || c == 'U') && s.startsWith("&'", i + 1)) return quotedEnd(s, i + 2);
     if (c == '$' && !Character.isDigit(s.charAt(i + 1))) {
       int j = i + 1;
       while (j < n && (Character.isLetterOrDigit(s.charAt(j)) || s.charAt(j) == '_')) j++;
@@ -431,6 +450,56 @@ public final class SqlFormatter {
       }
     }
     return i;
+  }
+
+  /** quote 자리의 ' 로 연 보통 문자열('' 는 따옴표 하나)의 끝 다음 위치. 닫히지 않으면 글 끝. */
+  private static int quotedEnd(String s, int quote) {
+    int n = s.length();
+    int e = quote + 1;
+    while (e < n) {
+      if (s.charAt(e) == '\'') {
+        if (e + 1 < n && s.charAt(e + 1) == '\'') { e += 2; continue; }
+        return e + 1;
+      }
+      e++;
+    }
+    return n;
+  }
+
+  /** i 의 연산자(OPERATORS 중 가장 긴 것). 없으면 null. ? 뒤가 || 이면 바인드 자리 + 이어 붙이기('%'||?||'%')라 ?| 로 보지 않는다. */
+  private static String operatorAt(String s, int i) {
+    for (String op : OPERATORS) {
+      if (op.equals(JSON_ANY_KEY) && s.startsWith(BIND_CONCAT, i)) continue;
+      if (s.startsWith(op, i)) return op;
+    }
+    return null;
+  }
+
+  /**
+   * 낱말 안의 # 가 PostgreSQL 경로 연산자(d#>'{a}' · d#>>'{a}')의 시작인지. Oracle 이름의 # 뒤 비교(SERIAL#>0)와 가르려고
+   * 뒤에 경로 배열 글자('{ 로 시작)가 올 때만 연산자로 본다(SERIAL#>'5' 는 이름 + 비교).
+   */
+  private static boolean isPathOperator(String s, int i) {
+    if (!s.startsWith("#>", i)) return false;
+    int e = s.startsWith("#>>", i) ? i + 3 : i + 2;
+    while (e < s.length() && Character.isWhitespace(s.charAt(e))) e++;
+    return s.startsWith(PATH_LITERAL_START, e);
+  }
+
+  /** i 에서 PL/SQL 이름표 <<이름>> 이 시작하면 그 끝 다음 위치, 아니면 i. */
+  private static int labelEnd(String s, int i) {
+    if (!s.startsWith("<<", i)) return i;
+    int e = i + 2;
+    while (e < s.length() && (Character.isLetterOrDigit(s.charAt(e)) || s.charAt(e) == '_' || s.charAt(e) == '$' || s.charAt(e) == '#')) e++;
+    return e > i + 2 && s.startsWith(">>", e) ? e + 2 : i;
+  }
+
+  /** i 의 % 가 앞 낱말에 붙은 PL/SQL 속성(%TYPE …)이면 그 끝 다음 위치, 아니면 i. */
+  private static int attributeEnd(String s, int i) {
+    if (s.charAt(i) != '%' || i == 0 || Character.isWhitespace(s.charAt(i - 1))) return i;
+    int e = i + 1;
+    while (e < s.length() && (Character.isLetterOrDigit(s.charAt(e)) || s.charAt(e) == '_')) e++;
+    return PERCENT_ATTRIBUTES.contains(s.substring(i + 1, e).toUpperCase(Locale.ROOT)) ? e : i;
   }
 
   /** 낱말 나누기. 문자열 · 따옴표 이름 · 주석은 한 덩어리로 그대로 둔다. MyBatis #{…} · ${…} 도 한 낱말. */
@@ -478,6 +547,21 @@ public final class SqlFormatter {
         i = e;
         continue;
       }
+      // # · ? 로 시작하는 연산자(#> · ?|)는 낱말보다 먼저 본다.
+      String op = operatorAt(s, i);
+      int label = labelEnd(s, i);
+      int attribute = attributeEnd(s, i);
+      if (label > i || attribute > i) {
+        int e = Math.max(label, attribute);
+        out.add(new Tok(Kind.WORD, s.substring(i, e)));
+        i = e;
+        continue;
+      }
+      if (op != null) {
+        out.add(new Tok(Kind.SYMBOL, op));
+        i += op.length();
+        continue;
+      }
       if ((c == '#' || c == '$') && i + 1 < n && s.charAt(i + 1) == '{') {
         int e = s.indexOf('}', i);
         e = e < 0 ? n : e + 1;
@@ -487,7 +571,8 @@ public final class SqlFormatter {
       }
       if (Character.isLetterOrDigit(c) || c == '_' || c == '$' || c == '#' || c == ':' && i + 1 < n && Character.isLetter(s.charAt(i + 1)) || c == '?') {
         int e = i + 1;
-        while (e < n && (Character.isLetterOrDigit(s.charAt(e)) || s.charAt(e) == '_' || s.charAt(e) == '$' || s.charAt(e) == '#')) e++;
+        while (e < n && (Character.isLetterOrDigit(s.charAt(e)) || s.charAt(e) == '_' || s.charAt(e) == '$'
+            || s.charAt(e) == '#' && !isPathOperator(s, e))) e++;
         String w = s.substring(i, e);
         out.add(new Tok(Character.isDigit(c) ? Kind.NUMBER : Kind.WORD, w));
         i = e;
@@ -499,15 +584,7 @@ public final class SqlFormatter {
         case ',' -> out.add(new Tok(Kind.COMMA, ","));
         case ';' -> out.add(new Tok(Kind.SEMI, ";"));
         case '.' -> out.add(new Tok(Kind.DOT, "."));
-        default -> {
-          String two = i + 1 < n ? s.substring(i, i + 2) : "";
-          if (Set.of("<=", ">=", "<>", "!=", "||", "::", ":=", "=>").contains(two)) {
-            out.add(new Tok(Kind.SYMBOL, two));
-            i += 2;
-            continue;
-          }
-          out.add(new Tok(Kind.SYMBOL, String.valueOf(c)));
-        }
+        default -> out.add(new Tok(Kind.SYMBOL, String.valueOf(c)));
       }
       i++;
     }

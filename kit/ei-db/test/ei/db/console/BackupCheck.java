@@ -246,6 +246,19 @@ public class BackupCheck {
       throw new AssertionError(r.body());
     }
 
+    // SET 이 바꾸는 칼럼만 되돌린다. 바꾸는 칼럼이 결과에 없으면 PK 아닌 모든 칼럼.
+    r = BackupSql.restore(false, "EMP", columns, types, rows, Set.of("ID"), Set.of("SAL"), DbKind.ORACLE);
+    eq(r.mode(), BackupSql.Mode.UPDATE);
+    if (!r.body().contains("   SET SAL = 1200.50\n WHERE 1 = 1\n   AND ID = 1;") || r.body().contains("NAME")) throw new AssertionError(r.body());
+    eq(r.excluded(), List.of());
+    // 바꾸는 칼럼이 LOB 뿐이면 PK 아닌 모든 칼럼으로 되돌리고 LOB 은 뺐다고 알린다(INSERT 로 떨어지지 않음).
+    r = BackupSql.restore(false, "EMP", columns, types, rows, Set.of("ID"), Set.of("PHOTO"), DbKind.ORACLE);
+    eq(r.mode(), BackupSql.Mode.UPDATE);
+    eq(r.excluded(), List.of("PHOTO"));
+    if (!r.body().contains("   SET NAME = 'O''Neil'\n     , SAL = 1200.50")) throw new AssertionError(r.body());
+    r = BackupSql.restore(false, "EMP", columns, types, rows, Set.of("ID"), Set.of("NOPE"), DbKind.ORACLE);
+    if (!r.body().contains("     , REG_DT = TIMESTAMP")) throw new AssertionError(r.body());
+
     // PK 없음 · PK 뿐인 표 · PK 가 이진 → INSERT 로 남기고 표시.
     eq(BackupSql.restore(false, "EMP", columns, types, rows, Set.of(), DbKind.ORACLE).mode(), BackupSql.Mode.INSERT_NO_PK);
     r = BackupSql.restore(false, "T", List.of("A", "B"), List.of("NUMBER", "NUMBER"), List.of(List.of(1, 2)), Set.of("A", "B"), DbKind.POSTGRES);

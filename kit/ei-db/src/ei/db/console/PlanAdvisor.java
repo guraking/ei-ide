@@ -31,8 +31,11 @@ public final class PlanAdvisor {
   static final long MISESTIMATE_MIN_ROWS = 100;
   /** 전체 비용(비용이 없으면 읽는 건수)이 이 아래면 작은 쿼리로 보고 곱하기 조인 말고는 짚지 않는다. 그 정도는 전체 읽기가 가장 빠르다. */
   static final long SMALL_PLAN_COST = 1000;
-  /** 값이 몇 가지뿐인 칼럼(Y/N · 플래그). 인덱스를 만들어도 DB 가 거의 쓰지 않아 후보에서 뺀다. */
-  private static final Pattern FEW_VALUES = Pattern.compile("(?i)(.*_)?(YN|FLAG|FLG|YN_CD|AT)$");
+  /**
+   * 값이 몇 가지뿐인 칼럼(Y/N · 플래그 · USE_AT). 인덱스를 만들어도 DB 가 거의 쓰지 않아 후보에서 뺀다.
+   * CREATED_AT · UPDATED_AT 처럼 과거분사(…ED) 뒤의 _AT 은 시각 칼럼이라 넣지 않는다.
+   */
+  private static final Pattern FEW_VALUES = Pattern.compile("(?i)(.*_)?(YN|FLAG|FLG|YN_CD|(?<!ED_)AT)$");
   /** IN 목록에도 INTERNAL_FUNCTION 이 찍힌다. 그때는 형 변환이 아니다. */
   private static final Pattern IN_LIST = Pattern.compile("(?i)^\\s*\"?\\)?\\s*(NOT\\s+)?IN\\b");
 

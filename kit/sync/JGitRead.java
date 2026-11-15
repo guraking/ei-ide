@@ -93,8 +93,14 @@ final class JGitRead {
   private static final String HEADER_SEP = ": ";
   /** git 이 서버에서 인증을 거절당했을 때 내는 글(SyncPanel.isGitAuthError · GitRemoteAuth.failedServers 가 읽는다). */
   private static final String AUTH_FAILED = "fatal: Authentication failed for '%s'";
-  /** 연결 · 인증서 단계에서 JGit 이 실패한 서버(GitLogins.serverOf 모양). */
-  private static final Set<String> GIT_ONLY_SERVERS = ConcurrentHashMap.newKeySet();
+  /**
+   * 연결 · 인증서 단계에서 JGit 이 실패한 서버(GitLogins.serverOf 모양) → 이 시각(ms)까지 git 에만 맡긴다.
+   * 인증서 실패(사내 인증서 · 프록시)는 바뀌지 않으므로 이번 실행 내내, 연결 실패(VPN 이 아직 안 붙음 · 일시 시간 초과)는 GIT_ONLY_RETRY_MS 뒤 다시 JGit 으로 해 본다.
+   */
+  private static final Map<String, Long> GIT_ONLY_SERVERS = new ConcurrentHashMap<>();
+  private static final long GIT_ONLY_RETRY_MS = 10 * 60 * 1000L;
+  // git-gc(1) gc.autoPackLimit 기본값.
+  private static final int DEFAULT_AUTO_PACK_LIMIT = 50;
 
   /** git 이 실패할 자리(오류 글 없는 종료 코드 1 · 서버 인증 실패). run 이 runOnce 와 같은 글의 IOException 으로 바꾼다. */
   private static final class GitFailure extends Exception {
@@ -157,14 +163,20 @@ final class JGitRead {
     File gitDir = builder.getGitDir();
     if (gitDir == null || new File(gitDir, "commondir").exists() || new File(gitDir, "shallow").exists() || new File(gitDir, "info/grafts").exists()) return null;
     Repository repo = builder.setMustExist(true).build();
-    Config config = repo.getConfig();
-    boolean partial = config.getString("extensions", null, "partialClone") != null;
-    for (String remote : config.getSubsections("remote")) partial |= config.getBoolean("remote", remote, "promisor", false);
-    if (repo.isBare() || partial || !repo.getRefDatabase().getRefsByPrefix(Constants.R_REFS + "replace/").isEmpty()) {
-      repo.close();
-      return null;
+    try {
+      Config config = repo.getConfig();
+      boolean partial = config.getString("extensions", null, "partialClone") != null;
+      for (String remote : config.getSubsections("remote")) partial |= config.getBoolean("remote", remote, "promisor", false);
+      if (repo.isBare() || partial || !repo.getRefDatabase().getRefsByPrefix(Constants.R_REFS + "replace/").isEmpty()) {
+        repo.close();
+        return null;
+      }
+      return repo;
     }
-    return repo;
+    catch (IOException | RuntimeException e) {
+      repo.close();
+      throw e;
+    }
   }
 
   // ---- 서버 ----
@@ -187,6 +199,8 @@ final class JGitRead {
     if (remote == null) return null;
     // 하위 모듈이 있으면 git 은 그 저장소도 받는다.
     if (repo.getWorkTree() != null && new File(repo.getWorkTree(), Constants.DOT_GIT_MODULES).exists()) return null;
+    // JGit fetch 는 받을 때마다 팩을 하나 더 만들고 정리(gc --auto)를 하지 않는다. 팩이 git 기준(gc.autoPackLimit)을 넘으면 이번만 git 으로 받아 git 이 정리하게 한다.
+    if (tooManyPacks(repo)) return null;
     RemoteConfig rc = new RemoteConfig(repo.getConfig(), remote);
     Server server = server(rc, logins);
     if (server == null) return null;
@@ -207,6 +221,14 @@ final class JGitRead {
     }
     if (prune) prune(repo, used, result);
     return new byte[0];
+  }
+
+  /** objects/pack 의 팩 수가 gc.autoPackLimit(git-gc(1) 기본 50, 0 이면 끔)을 넘는가. */
+  private static boolean tooManyPacks(Repository repo) {
+    int limit = repo.getConfig().getInt("gc", null, "autoPackLimit", DEFAULT_AUTO_PACK_LIMIT);
+    if (limit <= 0) return false;
+    File[] packs = new File(repo.getDirectory(), "objects/pack").listFiles((dir, name) -> name.endsWith(".pack"));
+    return packs != null && packs.length > limit;
   }
 
   /** ls-remote --heads 원격. 「해시\t참조」 줄을 참조 이름 순으로(git 과 같다). */
@@ -241,7 +263,7 @@ final class JGitRead {
     if (logins == null || !GitLogins.isHttpUrl(uri.toString())) return null;
     String name = GitLogins.serverOf(uri.toString());
     GitLogins.Login login = GitLogins.find(logins, name);
-    if (login == null || login.secret() == null || login.secret().isEmpty() || GIT_ONLY_SERVERS.contains(name)) return null;
+    if (login == null || login.secret() == null || login.secret().isEmpty() || GIT_ONLY_SERVERS.getOrDefault(name, 0L) > System.currentTimeMillis()) return null;
     String header = GitLogins.header(login);
     int sep = header.indexOf(HEADER_SEP);
     return new Server(name, uri.toString(), Map.of(header.substring(0, sep), header.substring(sep + HEADER_SEP.length())));
@@ -292,8 +314,9 @@ final class JGitRead {
       }
       catch (org.eclipse.jgit.api.errors.TransportException e) {
         if (name != null && networkFailure(e)) {
-          GIT_ONLY_SERVERS.add(name);
-          LOG.warn("JGit 이 서버에 닿지 못해 이번 실행 동안 git 으로만 받음 [" + remote + "] " + name + ": " + e);
+          boolean certificate = certificateFailure(e);
+          GIT_ONLY_SERVERS.put(name, certificate ? Long.MAX_VALUE : System.currentTimeMillis() + GIT_ONLY_RETRY_MS);
+          LOG.warn("JGit 이 서버에 닿지 못해 " + (certificate ? "이번 실행 동안" : "잠시") + " git 으로만 받음 [" + remote + "] " + name + ": " + e);
         }
         if (name != null && authRejected(e)) throw new GitFailure(String.format(AUTH_FAILED, url) + "\n" + SyncBundle.message("sync.git.auth"));
         throw e;
@@ -308,6 +331,13 @@ final class JGitRead {
     for (Throwable t = e; t != null; t = t.getCause()) {
       String message = t.getMessage();
       if (t instanceof org.eclipse.jgit.errors.TransportException && message != null && (message.endsWith(notAuthorized) || message.endsWith(noProvider))) return true;
+    }
+    return false;
+  }
+
+  private static boolean certificateFailure(Throwable e) {
+    for (Throwable t = e; t != null; t = t.getCause()) {
+      if (t instanceof SSLException) return true;
     }
     return false;
   }

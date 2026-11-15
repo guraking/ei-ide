@@ -113,6 +113,11 @@ public class PlanAdvisorCheck {
     fs = analyze(yn, Map.of());
     eq(rule(fs, "fullnarrow").args(), List.of("ORD", "USE_YN"));
     ok(!has(fs, "fullnoindex"), "Y/N 칼럼 인덱스는 권하지 않는다");
+    // 시각 칼럼 CREATED_AT 은 Y/N 칼럼(USE_AT)으로 보지 않고 인덱스 후보로 둔다.
+    List<Step> createdAt = PlanParse.oracle(ORACLE_COLS, List.of(
+        row(n(0), null, n(0), "SELECT STATEMENT", null, null, null, n(5000), n(90000), null, null),
+        row(n(1), n(0), n(1), "TABLE ACCESS", "FULL", "HR", "ORD", n(5000), n(90000), null, "\"O\".\"CREATED_AT\">SYSDATE-1")));
+    ok(!has(analyze(createdAt, Map.of()), "fullnarrow"), "CREATED_AT 은 값이 적은 칼럼이 아니다");
 
     // 함수 조건: 인덱스를 읽었고 그 칼럼 인덱스가 없으면 함수 탓을 하지 않는다. 있으면 한다.
     List<Step> fnPlan = PlanParse.oracle(ORACLE_COLS, List.of(

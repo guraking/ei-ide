@@ -114,6 +114,9 @@ final class EiGitAuthText {
     for (Map.Entry<String, String> entry : headers.entrySet()) {
       if (params.length() > 0) params.append(' ');
       params.append(quoted("http." + entry.getKey() + "/.extraHeader=" + entry.getValue()));
+      // 그 서버의 자격 증명 도우미(GCM · store)를 끈다. 켜 두면 401 뒤 도우미가 준 값으로 다시 묻는데 curl 은 이 머리글을 그대로 보내 실패가 한 번 더 늘고,
+      // 실패한 뒤 git 이 도우미에 그 값을 지우라고 해(credential reject) 사용자가 저장해 둔 맞는 비밀번호가 지워진다.
+      params.append(' ').append(quoted("credential." + entry.getKey() + "/.helper="));
     }
     return params.length() == before.length() ? Map.of() : Map.of(ENV_PARAMETERS, params.toString());
   }

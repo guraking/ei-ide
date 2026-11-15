@@ -122,6 +122,7 @@ public final class ConnectDialog extends DialogWrapper {
     autoCommit.setSelected(base.autoCommit);
     readOnly.setSelected(base.readOnly);
     production.setSelected(base.production);
+    savePassword.setSelected(base.saveCredential);
     url.setCopyable(true);
     if (existing != null) loadPassword(existing);
 
@@ -260,6 +261,7 @@ public final class ConnectDialog extends DialogWrapper {
     c.autoCommit = autoCommit.isSelected();
     c.readOnly = readOnly.isSelected();
     c.production = production.isSelected();
+    c.saveCredential = savePassword.isSelected();
     return c;
   }
 

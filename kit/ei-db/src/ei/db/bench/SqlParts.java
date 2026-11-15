@@ -51,7 +51,17 @@ public final class SqlParts {
       "JOIN", "NATURAL", "GROUP", "ORDER", "CONNECT", "START", "UNION", "MINUS", "EXCEPT", "INTERSECT", "FETCH", "LIMIT", "OFFSET", "FOR",
       "SET", "PARTITION", "SAMPLE", "WITH", "HAVING", "WINDOW", "LATERAL", "PIVOT", "UNPIVOT");
 
-  /** 문자열('' 이스케이프) · 줄 주석 · 블록 주석을 공백으로 가린다. 따옴표 문자와 줄바꿈은 남겨 위치 · 줄이 같다. */
+  /** Oracle q'[ ]' 글의 여는 구분자와 짝인 닫는 구분자. 그 밖의 구분자는 자신이 닫는다. */
+  private static final String Q_OPEN = "([{<";
+  private static final String Q_CLOSE = ")]}>";
+  /** 따옴표 이름 안에서 괄호 · 따옴표 · 주석 표시 대신 놓는 글자(이름 글자로 보여 절 · 괄호 깊이를 바꾸지 않는다). */
+  private static final char QUOTED_FILL = '_';
+  private static final String QUOTED_SPECIAL = "()'-/*;,";
+
+  /**
+   * 문자열('' 이스케이프 · Oracle q'[ ]') · 줄 주석 · 블록 주석을 공백으로 가린다. 따옴표 문자와 줄바꿈은 남겨 위치 · 줄이 같다.
+   * 따옴표 이름("A(B")은 그대로 두되 안의 괄호 · 따옴표 · 주석 표시 · ; · , 만 QUOTED_FILL 로 바꾼다.
+   */
   public static String mask(String sql) {
     char[] out = sql.toCharArray();
     int n = out.length;
@@ -59,7 +69,25 @@ public final class SqlParts {
     while (i < n) {
       char ch = sql.charAt(i);
       char next = i + 1 < n ? sql.charAt(i + 1) : 0;
-      if (ch == '-' && next == '-') {
+      if ((ch == 'q' || ch == 'Q') && next == '\'' && i + 2 < n && (i == 0 || !isWordChar(sql.charAt(i - 1)))) {
+        int k = Q_OPEN.indexOf(sql.charAt(i + 2));
+        char close = k >= 0 ? Q_CLOSE.charAt(k) : sql.charAt(i + 2);
+        int end = sql.indexOf(close + "'", i + 3);
+        int stop = end < 0 ? n : end + 1;
+        for (i += 2; i < stop; i++) if (out[i] != '\n') out[i] = ' ';
+        i++;
+      } else if (ch == '"') {
+        i++;
+        while (i < n) {
+          if (sql.charAt(i) == '"') {
+            if (i + 1 < n && sql.charAt(i + 1) == '"') { i += 2; continue; }
+            break;
+          }
+          if (QUOTED_SPECIAL.indexOf(out[i]) >= 0) out[i] = QUOTED_FILL;
+          i++;
+        }
+        i++;
+      } else if (ch == '-' && next == '-') {
         while (i < n && sql.charAt(i) != '\n') out[i++] = ' ';
       } else if (ch == '/' && next == '*') {
         int k = sql.indexOf("*/", i + 2);
@@ -399,6 +427,8 @@ public final class SqlParts {
     String n = name.replace("\"", "");
     return n.substring(n.lastIndexOf('.') + 1);
   }
+
+  private static boolean isWordChar(char c) { return Character.isLetterOrDigit(c) || c == '_' || c == '$' || c == '#'; }
 
   private static int firstToken(String masked) {
     for (int i = 0; i < masked.length(); i++) if (!Character.isWhitespace(masked.charAt(i))) return i;

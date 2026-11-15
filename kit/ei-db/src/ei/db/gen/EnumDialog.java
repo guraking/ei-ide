@@ -181,6 +181,7 @@ public final class EnumDialog extends DialogWrapper {
     if (!IDENT.matcher(cls()).matches()) return new ValidationInfo(EiDbBundle.message("common.class.name.invalid"), classField);
     if (!PACKAGE.matcher(pkg()).matches()) return new ValidationInfo(EiDbBundle.message("common.package.invalid"), packageField);
     if (locationField.getText().isBlank()) return new ValidationInfo(EiDbBundle.message("common.location.empty"), locationField);
+    if (!roots.valid(locationField.getText())) return new ValidationInfo(EiDbBundle.message("mapper.bad.path.sentence"), locationField);
     if (codeBox.getSelectedIndex() < 0) return new ValidationInfo(EiDbBundle.message("enum.code.column.empty"), codeBox);
     if (labelBox.getSelectedIndex() < 0) return new ValidationInfo(EiDbBundle.message("enum.label.column.empty"), labelBox);
     if (items().isEmpty()) return new ValidationInfo(EiDbBundle.message("enum.codes.empty"), codeBox);

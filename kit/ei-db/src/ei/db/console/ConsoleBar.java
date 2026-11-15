@@ -335,7 +335,8 @@ final class ConsoleBar extends JPanel {
   private void cancelRun() {
     DbConfig c = ConsoleOpener.config(project, file);
     if (c == null) return;
-    ApplicationManager.getApplication().executeOnPooledThread(() -> SqlRunner.cancel(project, c));
+    String sql = ConsoleRun.lastRun(file);
+    ApplicationManager.getApplication().executeOnPooledThread(() -> SqlRunner.cancel(project, c, sql));
   }
 
   private void endTransaction(boolean doCommit) {

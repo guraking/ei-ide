@@ -22,6 +22,8 @@ public class DbConfig {
   public boolean readOnly;
   public boolean production;
   public boolean autoCommit;
+  /** 접속 창에서 「비밀번호 저장」 을 켰는지. 껐으면 다음 편집 때도 꺼진 채로 보인다(비밀번호 자체는 여기 두지 않는다). */
+  public boolean saveCredential = true;
 
   public String url() { return kind.url(this); }
 
@@ -35,7 +37,7 @@ public class DbConfig {
     DbConfig c = new DbConfig();
     c.id = id; c.name = name; c.kind = kind; c.host = host; c.port = port; c.service = service; c.sid = sid;
     c.user = user; c.schema = schema; c.driverJar = driverJar; c.readOnly = readOnly; c.production = production;
-    c.autoCommit = autoCommit;
+    c.autoCommit = autoCommit; c.saveCredential = saveCredential;
     return c;
   }
 

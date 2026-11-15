@@ -203,7 +203,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
 
       @Override
       public void onThrowable(@NotNull Throwable error) {
-        Messages.showErrorDialog(project, error.getMessage(), SyncBundle.message("rmerge.title"));
+        Messages.showErrorDialog(project, SyncPanel.explained(SyncPanel.messageOf(error)), SyncBundle.message("rmerge.title"));
       }
     });
   }
@@ -686,7 +686,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
                                                                               factory.createFromBytes(project, right, path), into, from));
           }
           catch (IOException ex) {
-            Messages.showErrorDialog(project, ex.getMessage(), SyncBundle.message("rmerge.title"));
+            Messages.showErrorDialog(project, SyncPanel.explained(SyncPanel.messageOf(ex)), SyncBundle.message("rmerge.title"));
           }
         }, ModalityState.stateForComponent(getContentPanel()));
       });
@@ -792,7 +792,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
             }
             return;
           }
-          Messages.showErrorDialog(project, error.getMessage(), SyncBundle.message("rmerge.title"));
+          Messages.showErrorDialog(project, SyncPanel.explained(SyncPanel.messageOf(error)), SyncBundle.message("rmerge.title"));
         }
       });
     }
@@ -887,7 +887,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
       }
       WriteIntentReadAction.run((Runnable) () -> AbstractVcsHelper.getInstance(project).showMergeDialog(files, GitVcs.getInstance(project).getMergeProvider()));
       ProgressManager.getInstance().run(new Task.Backgroundable(project, SyncBundle.message("rmerge.finishing", from, into), false) {
-        private boolean finished;
+        private ReverseMerge.Finish finished = ReverseMerge.Finish.LEFT;
 
         @Override
         public void run(@NotNull ProgressIndicator indicator) {
@@ -911,14 +911,15 @@ public final class ReverseMergeAction extends DumbAwareAction {
 
         @Override
         public void onSuccess() {
-          if (finished) showDone(from, into, pushAfter);
+          if (finished == ReverseMerge.Finish.DONE) showDone(from, into, pushAfter);
+          else if (finished == ReverseMerge.Finish.ABORTED) Messages.showInfoMessage(project, SyncBundle.message("rmerge.aborted", current), SyncBundle.message("rmerge.title"));
           else Messages.showWarningDialog(project, SyncBundle.message("rmerge.conflict.left", into)
                                                    + (stashed ? "\n\n" + SyncBundle.message("rmerge.stash.left", current) : ""), SyncBundle.message("rmerge.title"));
         }
 
         @Override
         public void onThrowable(@NotNull Throwable error) {
-          Messages.showErrorDialog(project, error.getMessage(), SyncBundle.message("rmerge.title"));
+          Messages.showErrorDialog(project, SyncPanel.explained(SyncPanel.messageOf(error)), SyncBundle.message("rmerge.title"));
         }
       });
     }

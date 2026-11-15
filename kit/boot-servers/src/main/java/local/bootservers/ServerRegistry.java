@@ -4,12 +4,19 @@ import com.intellij.execution.process.ProcessEvent;
 import com.intellij.execution.process.ProcessHandler;
 import com.intellij.execution.process.ProcessListener;
 import com.intellij.openapi.components.Service;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Key;
+import com.intellij.util.concurrency.AppExecutorUtil;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BooleanSupplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -44,6 +51,10 @@ public final class ServerRegistry {
             return exitCode != null && !started && !stoppedByUser;
         }
     }
+
+    private static final Logger LOG = Logger.getInstance(ServerRegistry.class);
+    // 시작 완료 보조 판정을 그만두는 때(판정할 수 없는 앱에 끝없이 묻지 않게).
+    private static final long READY_GIVE_UP_SECONDS = 600;
 
     private final Map<String, Run> runs = new ConcurrentHashMap<>();
 
@@ -103,6 +114,43 @@ public final class ServerRegistry {
                 run.exitCode = event.getExitCode();
             }
         });
+    }
+
+    /**
+     * 출력에서 시작 완료 문구를 읽지 못하는 경우(한국어로 나오는 Tomcat 문구, 로그 수준 WARN · 파일로만 쓰는 로그)의 보조 판정.
+     * delaySeconds 뒤부터 periodSeconds 마다 작업 스레드에서 ready 를 묻고, 참이면 시작이 끝난 것으로 적고 onStarted 를 그 스레드에서 한 번 부른다.
+     * 출력으로 먼저 시작 완료를 읽었거나 프로세스가 끝났거나 READY_GIVE_UP_SECONDS 가 지나면 그만 묻는다. ready 가 오래 걸려도 한 번에 하나만 돈다.
+     */
+    static void watchReady(Run run, ProcessHandler handler, long delaySeconds, long periodSeconds, BooleanSupplier ready, Runnable onStarted) {
+        AtomicReference<ScheduledFuture<?>> future = new AtomicReference<>();
+        AtomicBoolean inFlight = new AtomicBoolean();
+        long giveUp = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(READY_GIVE_UP_SECONDS);
+        future.set(AppExecutorUtil.getAppScheduledExecutorService().scheduleWithFixedDelay(() -> {
+            if (run.started || handler.isProcessTerminated() || System.currentTimeMillis() > giveUp) {
+                ScheduledFuture<?> f = future.get();
+                if (f != null) {
+                    f.cancel(false);
+                }
+                return;
+            }
+            if (!inFlight.compareAndSet(false, true)) {
+                return;
+            }
+            AppExecutorUtil.getAppExecutorService().execute(() -> {
+                try {
+                    if (!run.started && !handler.isProcessTerminated() && ready.getAsBoolean()) {
+                        run.started = true;
+                        onStarted.run();
+                    }
+                }
+                catch (RuntimeException e) {
+                    LOG.debug("시작 완료 보조 판정 실패", e);
+                }
+                finally {
+                    inFlight.set(false);
+                }
+            });
+        }, delaySeconds, periodSeconds, TimeUnit.SECONDS));
     }
 
     /** 실행 설정 이름이 바뀌면 기록도 새 이름으로 옮긴다. 실행 중에 이름을 바꿔도 상태 · 포트가 이어진다. */

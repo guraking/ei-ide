@@ -2,6 +2,7 @@ package ei.db.gen;
 
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.progress.ProgressIndicator;
@@ -17,6 +18,7 @@ import com.intellij.ui.components.JBTabbedPane;
 import com.intellij.ui.components.JBTextField;
 import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.FormBuilder;
+import com.intellij.util.concurrency.AppExecutorUtil;
 import com.intellij.util.ui.JBUI;
 import ei.db.DbConfig;
 import ei.db.DbSessions;
@@ -127,6 +129,8 @@ public final class FeatureDialog extends DialogWrapper {
   private final Timer refreshTimer = new Timer(REFRESH_DELAY_MS, e -> doRefresh());
   /** 콤보를 코드로 맞출 때 선택 변경을 사용자 선택으로 받지 않는다. */
   private boolean syncingChoice;
+  /** 늦게 끝난 이전 미리보기 계산이 새 결과를 덮지 않게 매번 올린다. 화면 스레드에서만 바꾼다. */
+  private int refreshSeq;
 
   public static void show(Project project, DbConfig c, String schema, String table) {
     new Task.Backgroundable(project, EiDbBundle.message("validation.progress", table), true) {
@@ -148,6 +152,9 @@ public final class FeatureDialog extends DialogWrapper {
           throw e;
         } catch (Exception e) {
           Notify.error(project, EiDbBundle.message("validation.read.failed", table, e.getMessage()));
+        } finally {
+          // 자동 커밋 끔 PostgreSQL 에서 메타 읽기가 연 트랜잭션을 닫는다(idle in transaction 으로 남지 않게).
+          DbSessions.get(project).endReadTransaction(c);
         }
       }
     }.queue();
@@ -401,8 +408,8 @@ public final class FeatureDialog extends DialogWrapper {
     };
   }
 
-  private Plan plan(FeatureGen g, FeatureGen.Out o) throws IOException {
-    String path = path(o);
+  /** path 는 {@link #path} 로 화면 스레드에서 미리 구한 것, skip 은 그때의 skipped. 읽기 동작 안에서 부른다. */
+  private Plan plan(FeatureGen g, FeatureGen.Out o, String path, Set<FeatureGen.Out> skip) throws IOException {
     if (path == null) {
       String why = EiDbBundle.message(o == FeatureGen.Out.DTO ? "feature.why.no.dto" : "feature.why.no.split");
       return new Plan(null, false, false, note(o, why), null, null);
@@ -418,7 +425,7 @@ public final class FeatureDialog extends DialogWrapper {
       String msg = EiDbBundle.message("feature.exists.skipped.why", rel, cannot);
       return new Plan(path, true, false, note(o, msg), null, msg);
     }
-    if (skipped.contains(o)) {
+    if (skip.contains(o)) {
       String msg = EiDbBundle.message("feature.exists.skipped", rel);
       return new Plan(path, true, true, note(o, msg), null, msg);
     }
@@ -450,13 +457,18 @@ public final class FeatureDialog extends DialogWrapper {
     refreshTimer.restart();
   }
 
-  /** 미리보기는 화면 스레드에서 다시 만든다(입력이 멈춘 뒤 한 번). 못 읽은 파일은 그 탭에 까닭을 보인다. */
+  /**
+   * 미리보기를 다시 만든다(입력이 멈춘 뒤 한 번). 입력(경로 · 건너뛸 출력)은 화면 스레드에서 모으고, 파일 읽기 · 합치기는 백그라운드 읽기 동작에서 한 뒤
+   * 결과를 화면에 넣는다. 못 읽은 파일은 그 탭에 까닭을 보인다.
+   */
   private void doRefresh() {
     if (previews.isEmpty() || isDisposed()) return;
+    int seq = ++refreshSeq;
     FeatureGen g;
+    Map<FeatureGen.Out, String> paths = new EnumMap<>(FeatureGen.Out.class);
     try {
       g = gen();
-      for (FeatureGen.Out o : TAB_OUTS) path(o);
+      for (FeatureGen.Out o : TAB_OUTS) paths.put(o, path(o));
     } catch (InvalidPathException e) {
       shown.clear();
       fileLabel.setText(EiDbBundle.message("mapper.bad.path"));
@@ -464,16 +476,36 @@ public final class FeatureDialog extends DialogWrapper {
       existingChoice.setVisible(false);
       return;
     }
+    Set<FeatureGen.Out> skip = EnumSet.copyOf(skipped);
+    // 쓰기 동작이 끼면 읽기를 다시 하고(화면을 막지 않음), 창을 닫으면 그만둔다.
+    ReadAction.nonBlocking(() -> plans(g, paths, skip))
+        .expireWith(getDisposable())
+        .finishOnUiThread(ModalityState.any(), plans -> {
+          if (seq == refreshSeq) showPlans(plans);
+        })
+        .submit(AppExecutorUtil.getAppExecutorService());
+  }
+
+  /** 출력마다 할 일. 못 읽은 파일 · 쓸 수 없는 경로는 그 탭에 까닭을 보인다. 읽기 동작 안에서 부른다. */
+  private Map<FeatureGen.Out, Plan> plans(FeatureGen g, Map<FeatureGen.Out, String> paths, Set<FeatureGen.Out> skip) {
+    Map<FeatureGen.Out, Plan> out = new EnumMap<>(FeatureGen.Out.class);
     for (FeatureGen.Out o : TAB_OUTS) {
+      String path = paths.get(o);
       Plan p;
       try {
-        p = plan(g, o);
-      } catch (IOException e) {
-        p = new Plan(path(o), true, false, note(o, EiDbBundle.message("feature.read.failed", e.getMessage())), null, null);
+        p = plan(g, o, path, skip);
+      } catch (IOException | InvalidPathException e) {
+        p = new Plan(path, true, false, note(o, EiDbBundle.message("feature.read.failed", e.getMessage())), null, null);
       }
-      shown.put(o, p);
-      previews.get(o).setText(p.preview());
+      out.put(o, p);
     }
+    return out;
+  }
+
+  private void showPlans(Map<FeatureGen.Out, Plan> plans) {
+    shown.clear();
+    shown.putAll(plans);
+    for (FeatureGen.Out o : TAB_OUTS) previews.get(o).setText(plans.get(o).preview());
     showHead();
   }
 
@@ -546,7 +578,7 @@ public final class FeatureDialog extends DialogWrapper {
     List<String> report = new ArrayList<>();
     try {
       for (FeatureGen.Out o : TAB_OUTS) {
-        Plan p = plan(g, o);
+        Plan p = plan(g, o, path(o), skipped);
         if (p.job() != null) jobs.add(p.job());
         if (p.report() != null) report.add(p.report());
       }

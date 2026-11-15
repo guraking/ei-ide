@@ -76,8 +76,26 @@ public class SqlTextCheck {
     eq(SqlText.parseEdit("2024-03-01", "DATE"), java.sql.Date.valueOf("2024-03-01"));
     fails(() -> SqlText.parseEdit("12a", "NUMBER"));
     fails(() -> SqlText.parseEdit("3월 1일", "TIMESTAMP"));
+    // 시간대 칸: 보이는 꼴 그대로 다시 받으면 같은 값(열었다 닫기만 해도 오류가 나지 않는다).
+    java.time.OffsetDateTime tz = java.time.OffsetDateTime.parse("2026-11-15T10:00+09:00");
+    eq(SqlText.parseEdit(SqlText.text(tz), "TIMESTAMP WITH TIME ZONE"), tz);
+    eq(SqlText.parseEdit(SqlText.text(tz), "timestamptz"), tz);
+    fails(() -> SqlText.parseEdit("2026-11-15T10:00+09:00", "TIMESTAMP"));
+    eq(SqlText.literal(tz), "TIMESTAMP '2026-11-15 10:00:00.0 +09:00'");
+    eq(SqlText.literal(tz, ei.db.DbKind.ORACLE), "TIMESTAMP '2026-11-15 10:00:00.0 +09:00'");
+    eq(SqlText.literal(tz, ei.db.DbKind.POSTGRES), "TIMESTAMP WITH TIME ZONE '2026-11-15 10:00:00.0 +09:00'");
+    eq(SqlText.literal(java.time.OffsetDateTime.parse("2026-11-15T01:00:00.5Z"), ei.db.DbKind.ORACLE), "TIMESTAMP '2026-11-15 01:00:00.5 +00:00'");
+    // SET 칼럼을 고른 UPDATE(고친 칼럼만 되돌리기): 고른 칼럼이 없는 행은 만들지 않는다.
+    eq(SqlText.updates("t", List.of("ID", "A", "B"), List.of(), List.of(Arrays.asList(1, "x", "y")), Set.of("ID"), Set.of("B"), null),
+       "UPDATE t\n   SET B = 'y'\n WHERE 1 = 1\n   AND ID = 1;\n");
+    eq(SqlText.updates("t", List.of("ID", "A"), List.of(), List.of(Arrays.asList(1, "x")), Set.of("ID"), Set.of(), null), "");
 
     eq(SqlText.notEditable("SELECT * FROM TB_PART WHERE A IN (1, 2)"), null);
+    // 따옴표 이름 · 한글 이름도 표 하나 조회로 본다.
+    eq(SqlText.notEditable("SELECT * FROM \"MyTable\" WHERE \"Id\" = 1"), null);
+    eq(SqlText.notEditable("SELECT \"Id\", \"Name\" FROM app.\"MyTable\" t"), null);
+    eq(SqlText.notEditable("SELECT 고객번호, 고객명 FROM 고객 ㄱ WHERE 고객번호 = 1"), null);
+    eq(SqlText.notEditable("SELECT * FROM \"MyTable\" a, \"Other\" b") != null, true);
     eq(SqlText.notEditable("SELECT * FROM TB_PART p WHERE p.A = ','"), null);
     eq(SqlText.notEditable("select p.id, name\n  from tb_part p\n where p.a = 'UNION SELECT' order by id;"), null);
     eq(SqlText.notEditable("SELECT * FROM TB_PART -- , TB_ITEM\nWHERE 1 = 1"), null);
@@ -115,6 +133,11 @@ public class SqlTextCheck {
     List<List<Object>> lobRows = List.of(Arrays.asList(1, cut, "(BLOB 3 바이트)", new byte[]{1}, "a"));
     eq(SqlText.updates("t", lobCols, lobTypes, lobRows, Set.of("ID"), null),
        "-- LOB 칼럼 제외: DOC, IMG, RAWV\nUPDATE t\n   SET NAME = 'a'\n WHERE 1 = 1\n   AND ID = 1;\n");
+    // SET 칼럼을 고르면 고른 것 가운데 LOB 만 적는다(LOB 을 안 건드린 UPDATE 는 주석 없음).
+    eq(SqlText.updates("t", lobCols, lobTypes, lobRows, Set.of("ID"), Set.of("NAME"), null),
+       "UPDATE t\n   SET NAME = 'a'\n WHERE 1 = 1\n   AND ID = 1;\n");
+    eq(SqlText.updates("t", lobCols, lobTypes, lobRows, Set.of("ID"), Set.of("NAME", "IMG"), null),
+       "-- LOB 칼럼 제외: IMG\nUPDATE t\n   SET NAME = 'a'\n WHERE 1 = 1\n   AND ID = 1;\n");
     eq(SqlText.inserts("t", lobCols, lobTypes, lobRows, null),
        "-- LOB 칼럼 제외: DOC, IMG, RAWV\nINSERT INTO t (\n       ID\n     , NAME\n) VALUES (\n       1    -- ID\n     , 'a'  -- NAME\n);\n");
     eq(SqlText.isLobValue(new Object() { @Override public String toString() { return "x"; } }), false);

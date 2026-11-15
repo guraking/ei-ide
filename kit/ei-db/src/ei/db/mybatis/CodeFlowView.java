@@ -266,6 +266,8 @@ public final class CodeFlowView {
     final Project project;
     final Runner runner;
     final ResultTree tree;
+    /** 「조회」 때 읽어 둔 화면 파일들(화면 스레드에서만 바꾼다). null 이면 화면 묶음을 붙일 때마다 새로 읽는다. */
+    @Nullable List<CodeFlow.Front> fronts;
 
     Tab(Project project, String empty) {
       super(new BorderLayout());
@@ -285,12 +287,13 @@ public final class CodeFlowView {
 
     /** find 로 찾은 뒤(요소가 지워졌으면 null) 화면 묶음을 따로 읽어 붙인다. */
     void searchFound(String op, java.util.concurrent.Callable<CodeFlow.Found> find) {
+      List<CodeFlow.Front> known = fronts;
       search(op, indicator -> {
         CodeFlow.Found found = CodeFlow.read(project, find);
         if (found == null) return null;
         if (found.screens()) {
           indicator.setText(EiDbBundle.message("codeflow.step.screens"));
-          found.root().kids.add(CodeFlow.read(project, () -> CodeFlow.screensGroup(project, found.apis())));
+          found.root().kids.add(CodeFlow.read(project, () -> CodeFlow.screensGroup(project, found.apis(), known)));
         }
         return found.root();
       }, EiDbBundle.message("codeflow.gone"));
@@ -344,6 +347,9 @@ public final class CodeFlowView {
     /** 오른쪽에 흐름을 보인 URL(우클릭 메뉴로 다른 메서드를 보이면 null). */
     private CodeFlow.Api shown;
 
+    /** 「조회」 한 번에 읽는 URL 목록과 화면 파일들. */
+    private record Listing(List<CodeFlow.Api> apis, List<CodeFlow.Front> fronts) {}
+
     FlowTab(Project project) {
       super(project, EiDbBundle.message("codeflow.flow.empty"));
       listRunner = new Runner(project);
@@ -386,9 +392,10 @@ public final class CodeFlowView {
       list.getEmptyText().setText(EiDbBundle.message("codeflow.searching"));
       model.removeAll();
       listRunner.start(EiDbBundle.message("codeflow.progress"), "URL 목록",
-          indicator -> CodeFlow.read(project, () -> CodeFlow.apis(project)),
-          apis -> {
-            all = apis;
+          indicator -> new Listing(CodeFlow.read(project, () -> CodeFlow.apis(project)), CodeFlow.read(project, () -> CodeFlow.fronts(project))),
+          listing -> {
+            all = listing.apis();
+            fronts = listing.fronts();
             list.getEmptyText().setText(EiDbBundle.message("codeflow.flow.list.none"));
             applyFilter();
           },

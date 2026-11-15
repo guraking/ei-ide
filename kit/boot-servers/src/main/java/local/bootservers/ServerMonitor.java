@@ -29,6 +29,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -42,7 +45,8 @@ import java.util.function.Supplier;
 final class ServerMonitor {
 
     /** 서버 창의 줄 하나. module 은 스프링 부트만(WAS 는 null), pid 는 실행 중일 때만(-1). */
-    record Watched(String name, Module module, String vmProfile, boolean live, long pid, Integer port) {
+    /** paused: 디버그로 멈춰 있음(JVM 값 · 요청 수 · 느린 요청 읽기를 쉰다). */
+    record Watched(String name, Module module, String vmProfile, boolean live, long pid, Integer port, boolean paused) {
     }
 
     /** 한 연결의 마지막 확인. checked 가 false 면 아직 확인 전. downSince 는 끊긴 것을 처음 본 시각(붙어 있으면 0). */
@@ -61,6 +65,8 @@ final class ServerMonitor {
     // 느린 요청 목록은 재기 여섯 번에 한 번(30초)
     private static final int SLOW_ROUNDS = 6;
     private static final int CONNECT_TIMEOUT_MILLIS = 1500;
+    // 연결 확인 한 차례 전체의 한도. 붙기 한도에 이름 찾기 몫을 더한다.
+    private static final int LINKS_DEADLINE_MILLIS = 3000;
     private static final int SLOW_TOP = 5;
     static final Set<String> LOCAL_HOSTS = Set.of("localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]");
     private static final String NOTIFICATION_GROUP = "서버 연결";
@@ -209,9 +215,10 @@ final class ServerMonitor {
                 continue;
             }
             anyLive = true;
-            ServerProbe.Jvm jvm = w.pid() < 0 ? null : ServerProbe.jvm(w.pid());
-            MBeanServerConnection server = w.module() == null || w.pid() < 0 ? null : ServerProbe.connection(w.pid());
-            MetricsProbe.Requests r = w.module() == null ? MetricsProbe.Requests.of(MetricsProbe.Access.NONE) : MetricsProbe.requests(server);
+            // 디버그로 멈춘 JVM 은 attach · JMX 호출이 시간 제한까지 막히므로 재지 않는다(그 차례는 빈 값).
+            ServerProbe.Jvm jvm = w.pid() < 0 || w.paused() ? null : ServerProbe.jvm(w.pid());
+            MBeanServerConnection server = w.module() == null || w.pid() < 0 || w.paused() ? null : ServerProbe.connection(w.pid());
+            MetricsProbe.Requests r = w.module() == null || w.paused() ? MetricsProbe.Requests.of(MetricsProbe.Access.NONE) : MetricsProbe.requests(server);
             accesses.put(w.name(), r.access());
             samples.put(w.name(), sample(jvm, r));
             if (checkSlow && w.name().equals(slowName) && r.access() == MetricsProbe.Access.OK) {
@@ -225,9 +232,7 @@ final class ServerMonitor {
         if (checkLinks && anyLive) {
             names = new LinkedHashSet<>();
             found = findLinks(list, override, names);
-            for (Link link : found) {
-                checked.put(link.key(), connect(link.target()));
-            }
+            checked.putAll(connectAll(found));
         }
         List<Link> foundLinks = found;
         Set<String> foundNames = names;
@@ -286,6 +291,33 @@ final class ServerMonitor {
                     continue;
                 }
                 result.add(new Link(r.server().name(), to, t, r.config().files().get(t.source())));
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 연결들을 동시에 확인한다. 이름 찾기(DNS)까지 합쳐 LINKS_DEADLINE_MILLIS 안에 답이 없는 연결은 끊긴 것으로 본다.
+     * 집 · VPN 없는 PC 에서 회사 서버 여럿을 하나씩 기다리느라 CPU · 힙 표시까지 멈추지 않게 한다.
+     */
+    private static Map<String, LinkState> connectAll(List<Link> found) {
+        Map<String, Future<LinkState>> pending = new LinkedHashMap<>();
+        for (Link link : found) {
+            pending.putIfAbsent(link.key(), AppExecutorUtil.getAppExecutorService().submit(() -> connect(link.target())));
+        }
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(LINKS_DEADLINE_MILLIS);
+        Map<String, LinkState> result = new HashMap<>();
+        for (Map.Entry<String, Future<LinkState>> e : pending.entrySet()) {
+            try {
+                result.put(e.getKey(), e.getValue().get(Math.max(0, deadline - System.nanoTime()), TimeUnit.NANOSECONDS));
+            }
+            catch (TimeoutException | ExecutionException ex) {
+                e.getValue().cancel(true);
+                result.put(e.getKey(), new LinkState(true, false, 0, System.currentTimeMillis()));
+            }
+            catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                break;
             }
         }
         return result;

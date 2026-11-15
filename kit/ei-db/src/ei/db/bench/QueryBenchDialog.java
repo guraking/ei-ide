@@ -26,7 +26,6 @@ import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
 import ei.db.DbConfig;
 import ei.db.DbKind;
-import ei.db.DbSessions;
 import ei.db.DbSettings;
 import ei.db.Meta;
 import ei.db.Notify;
@@ -176,6 +175,14 @@ public final class QueryBenchDialog extends DialogWrapper {
 
   @Override
   protected @Nullable String getDimensionServiceKey() { return DIMENSION_KEY; }
+
+  /** 닫으면 건수 세기 타이머를 멈추고 작업대가 보낸 문장(실행해 보기 · 건수)을 멈춘다. */
+  @Override
+  protected void dispose() {
+    builder.close();
+    bench.close();
+    super.dispose();
+  }
 
   @Override
   public Dimension getInitialSize() {
@@ -465,6 +472,10 @@ public final class QueryBenchDialog extends DialogWrapper {
     String text = sql.getText().strip();
     DbConfig c = bench.config();
     if (text.isEmpty() || c == null) return;
+    if (Bench.manyStatements(text, c.kind)) {
+      setStatus(Bench.MANY_STATEMENTS, true);
+      return;
+    }
     ConsoleRun.runSql(project, c, text);
   }
 
@@ -473,6 +484,10 @@ public final class QueryBenchDialog extends DialogWrapper {
     String text = sql.getText().strip();
     DbConfig c = bench.config();
     if (text.isEmpty() || c == null) return;
+    if (Bench.manyStatements(text, c.kind)) {
+      setStatus(Bench.MANY_STATEMENTS, true);
+      return;
+    }
     if (!ExplainPlan.isQuery(text)) {
       setStatus("「실행해 보기」 는 SELECT · WITH 만 됩니다. 바꾸는 문장은 「실행」 으로 콘솔에서 돌리세요.", true);
       return;
@@ -480,7 +495,7 @@ public final class QueryBenchDialog extends DialogWrapper {
     SqlParams.Bound b = ConsoleRun.bind(project, text);
     if (b == null) return;
     setStatus("읽는 중…", false);
-    bench.load(() -> DbSessions.get(project).run(c, b.sql(), b.binds(), PREVIEW_ROWS), this::showResult);
+    bench.load(() -> bench.run(c, b.sql(), b.binds(), PREVIEW_ROWS), this::showResult);
   }
 
   private void showResult(QueryResult r) {

@@ -59,6 +59,18 @@ public class RunHistoryCheck {
     eq(all.size(), RunHistory.MAX);
     eq(all.get(0).sql(), "SELECT " + (RunHistory.MAX + 4));
     eq(all.get(all.size() - 1).sql(), "SELECT 5");
+    // 새 기록은 덧붙인다(파일을 매번 다시 쓰지 않음). 줄이 COMPACT_AT 를 넘으면 최근 MAX 건으로 줄인다.
+    eq(Files.readAllLines(file).size(), RunHistory.MAX + 5);
+    for (int i = 0; i < RunHistory.COMPACT_AT; i++) h.add(new RunHistory.Entry(i, "id", "n", i, i, true, "SELECT x" + i, List.of()));
+    if (Files.readAllLines(file).size() > RunHistory.COMPACT_AT) throw new AssertionError("기록 파일이 줄지 않았습니다");
+    eq(new RunHistory(file).entries().get(0).sql(), "SELECT x" + (RunHistory.COMPACT_AT - 1));
+    eq(new RunHistory(file).entries().size(), RunHistory.MAX);
+    // 끝 줄바꿈 없이 끊긴 파일은 덧붙이지 않고 다시 쓴다.
+    Path cut = dir.resolve("cut.tsv");
+    Files.writeString(cut, "1\tid\tn\t0\t0\t1\tSELECT 1\n2\tid\tn");
+    RunHistory hc = new RunHistory(cut);
+    hc.add(new RunHistory.Entry(3, "id", "n", 0, 0, true, "SELECT 3", List.of()));
+    eq(new RunHistory(cut).entries().size(), 2);
     // 깨진 줄은 건너뛰고 예전 줄 · 새 줄은 함께 읽는다.
     Files.writeString(file, "깨진 줄\n1\tid\tn\t0\t0\t1\tSELECT 1\n" + bl + "\n");
     List<RunHistory.Entry> mixed = new RunHistory(file).entries();

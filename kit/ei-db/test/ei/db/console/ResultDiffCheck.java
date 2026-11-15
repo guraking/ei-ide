@@ -20,6 +20,7 @@ public class ResultDiffCheck {
     eq(ResultDiff.same(null, ""), false);
     eq(ResultDiff.same("1", 1), false);
     eq(ResultDiff.same(Double.NaN, Double.NaN), true);
+    eq(ResultDiff.same(new ei.db.QueryResult.BinaryValue(3), new ei.db.QueryResult.BinaryValue(3)), false);
 
     // 칼럼은 대소문자 무시, 왼쪽 순서, 겹치는 이름은 처음 것.
     eq(ResultDiff.commonColumns(List.of("ID", "Name", "AGE", "id"), List.of("name", "id", "DEPT")), List.of("ID", "Name"));

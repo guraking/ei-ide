@@ -188,7 +188,7 @@ public final class FeatureGen {
     Set<String> out = new HashSet<>();
     for (Meta.Column c : s.cols()) {
       if (!s.searchColumns().contains(c.name())) continue;
-      String f = Names.camel(c.name());
+      String f = mapper.field(c.name());
       if (MapperGen.isDate(c.type())) {
         out.add(f + RANGE_FROM);
         out.add(f + RANGE_TO);
@@ -280,7 +280,7 @@ public final class FeatureGen {
   /** 복합 PK 는 /{a}/{b}. */
   private String pkPath() {
     StringBuilder b = new StringBuilder();
-    for (Meta.Column c : pkCols()) b.append("/{").append(Names.camel(c.name())).append('}');
+    for (Meta.Column c : pkCols()) b.append("/{").append(mapper.field(c.name())).append('}');
     return b.toString();
   }
 
@@ -288,7 +288,7 @@ public final class FeatureGen {
   private String pkParams() {
     List<String> out = new ArrayList<>();
     for (Meta.Column c : pkCols()) {
-      String f = Names.camel(c.name());
+      String f = mapper.field(c.name());
       out.add("@PathVariable(\"" + f + "\") " + javaType(c) + " " + f);
     }
     return String.join(", ", out);
@@ -298,7 +298,7 @@ public final class FeatureGen {
     StringBuilder b = new StringBuilder();
     if (newParam) b.append(IND2).append(dto).append(' ').append(PARAM).append(" = new ").append(dto).append("();\n");
     for (Meta.Column c : pkCols()) {
-      String f = Names.camel(c.name());
+      String f = mapper.field(c.name());
       b.append(IND2).append(PARAM).append(".set").append(Names.upperFirst(f)).append('(').append(f).append(");\n");
     }
     return b.toString();
