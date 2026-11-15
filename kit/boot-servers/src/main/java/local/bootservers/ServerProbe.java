@@ -54,14 +54,22 @@ final class ServerProbe {
     private static final String JAVA_EXE = "java";
     private static final String CALL_THREAD_NAME = "Moa IDE JMX 조회";
     private static final String STUCK_MESSAGE = "JMX 응답 시간 초과 pid=";
+    // 스프링 부트 SpringApplication 관리 MBean(기본 이름 org.springframework.boot:type=Admin,name=SpringApplication)과 그 시작 완료 속성.
+    private static final String ADMIN_MBEAN = "*:type=Admin,name=SpringApplication";
+    private static final String ADMIN_READY = "Ready";
     // attach 로 연 JMX 연결. 같은 프로세스는 다시 붙지 않고, 끝난 프로세스의 연결은 다음 조회 때 닫는다.
     private static final Map<Long, JMXConnector> CONNECTIONS = new ConcurrentHashMap<>();
     // JMX 호출 하나(MBean 읽기 · 부르기)의 시간 제한
     private static final long CALL_TIMEOUT_SECONDS = 3;
     // attach 와 관리 에이전트 시작까지의 시간 제한(처음 붙을 때 에이전트를 띄우느라 호출 하나보다 오래 걸린다)
     private static final long CONNECT_TIMEOUT_SECONDS = 10;
-    // 시간 제한을 넘긴 호출이 아직 끝나지 않은 프로세스. 그 호출이 끝나면 빠진다.
-    private static final Set<Long> STUCK = ConcurrentHashMap.newKeySet();
+    // 시간 제한을 넘긴 호출이 아직 끝나지 않은 프로세스 → 그런 호출 수. 그 호출들이 모두 끝나면 빠진다.
+    private static final Map<Long, Integer> STUCK = new ConcurrentHashMap<>();
+    // attach 가 실패한 프로세스 → { 다시 해 볼 수 있는 때(밀리초), 연이은 실패 수 }. 보안 프로그램이 attach 를 막으면 몇 초마다 다시 붙지 않게 한다.
+    private static final Map<Long, long[]> ATTACH_FAILED = new ConcurrentHashMap<>();
+    // attach 실패 뒤 다시 해 보기까지 처음 기다림과 가장 긴 기다림. 실패할 때마다 두 배로 늘린다.
+    private static final long ATTACH_RETRY_FIRST_MILLIS = 5_000;
+    private static final long ATTACH_RETRY_MAX_MILLIS = 300_000;
     // 띄운 프로세스 pid → 그 java 프로세스 pid(스크립트로 띄운 WAS 는 자식). 한 번 찾으면 살아 있는 동안 자식 프로세스를 다시 훑지 않는다.
     private static final Map<Long, Long> JAVA_PIDS = new ConcurrentHashMap<>();
     // JMX 호출을 돌리는 스레드. 인텔리제이 클래스를 쓰지 않으므로(MetricsProbeCheck 가 함께 컴파일) JDK 풀을 쓴다. IDE 를 끌 때 막지 않게 데몬.
@@ -93,6 +101,29 @@ final class ServerProbe {
         }
         catch (IOException | javax.management.JMException | RuntimeException e) {
             return null;
+        }
+    }
+
+    /**
+     * 스프링 부트 앱이 시작을 마쳤는가: SpringApplication 관리 MBean(spring.application.admin.enabled, ActuatorExposurePatcher 가 켠다)의
+     * Ready 가 참이면 참. Ready 는 웹 서버 · 시작 러너까지 끝난 뒤(ApplicationReadyEvent) 참이 된다. 앱 코드를 부르지 않는다.
+     * attach 를 못 하거나 MBean 이 없거나(관리 MBean 을 켜지 않은 앱) 아직이면 false.
+     */
+    static boolean ready(long rootPid) {
+        MBeanServerConnection server = connection(rootPid);
+        if (server == null) {
+            return false;
+        }
+        try {
+            for (ObjectName admin : server.queryNames(new ObjectName(ADMIN_MBEAN), null)) {
+                if (Boolean.TRUE.equals(server.getAttribute(admin, ADMIN_READY))) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        catch (IOException | javax.management.JMException | RuntimeException e) {
+            return false;
         }
     }
 
@@ -142,20 +173,41 @@ final class ServerProbe {
     static MBeanServerConnection connection(long rootPid) {
         closeDead();
         long pid = javaPid(rootPid);
-        if (STUCK.contains(pid)) {
+        if (STUCK.containsKey(pid)) {
             return null;
         }
-        try {
-            JMXConnector connector = CONNECTIONS.get(pid);
-            if (connector == null) {
-                connector = timed(pid, CONNECT_TIMEOUT_SECONDS, () -> register(pid, connect(pid)));
+        JMXConnector connector = CONNECTIONS.get(pid);
+        if (connector == null) {
+            long[] failed = ATTACH_FAILED.get(pid);
+            if (failed != null && System.currentTimeMillis() < failed[0]) {
+                return null;
             }
+            try {
+                connector = timed(pid, CONNECT_TIMEOUT_SECONDS, () -> register(pid, connect(pid)));
+                ATTACH_FAILED.remove(pid);
+            }
+            catch (Exception | LinkageError e) {
+                attachFailed(pid);
+                close(pid);
+                return null;
+            }
+        }
+        try {
             return timedConnection(pid, connector.getMBeanServerConnection());
         }
         catch (Exception | LinkageError e) {
             close(pid);
             return null;
         }
+    }
+
+    /** attach 실패를 적는다. 다음 시도까지 ATTACH_RETRY_FIRST_MILLIS 부터 두 배씩, ATTACH_RETRY_MAX_MILLIS 까지 기다린다. */
+    private static void attachFailed(long pid) {
+        ATTACH_FAILED.compute(pid, (k, old) -> {
+            long count = old == null ? 1 : old[1] + 1;
+            long wait = Math.min(ATTACH_RETRY_MAX_MILLIS, ATTACH_RETRY_FIRST_MILLIS << Math.min(count - 1, 16));
+            return new long[] {System.currentTimeMillis() + wait, count};
+        });
     }
 
     /** 새 연결을 맡긴다. 다른 스레드가 먼저 맡겼으면 새 연결은 닫고 먼저 것을 돌려준다. */
@@ -206,26 +258,34 @@ final class ServerProbe {
      * 멈춘 연결을 닫는 일도 원격 호출이라 막힐 수 있으므로 닫기는 다른 스레드에서 한다.
      */
     private static <T> T timed(long pid, long seconds, Callable<T> call) throws Exception {
-        if (STUCK.contains(pid)) {
+        if (STUCK.containsKey(pid)) {
             throw new SocketTimeoutException(STUCK_MESSAGE + pid);
         }
+        // 이 호출이 시간 제한을 넘겨 STUCK 에 세어졌는가. 세어진 호출만 끝날 때 STUCK 에서 하나를 뺀다(다른 호출이 아직 멈춰 있으면 남는다).
+        AtomicBoolean counted = new AtomicBoolean();
         AtomicBoolean finished = new AtomicBoolean();
         Future<T> future = CALLS.submit(() -> {
             try {
                 return call.call();
             }
             finally {
-                finished.set(true);
-                STUCK.remove(pid);
+                synchronized (counted) {
+                    finished.set(true);
+                    if (counted.get()) {
+                        unstuck(pid);
+                    }
+                }
             }
         });
         try {
             return future.get(seconds, TimeUnit.SECONDS);
         }
         catch (TimeoutException e) {
-            STUCK.add(pid);
-            if (finished.get()) {
-                STUCK.remove(pid);
+            synchronized (counted) {
+                if (!finished.get()) {
+                    counted.set(true);
+                    STUCK.merge(pid, 1, Integer::sum);
+                }
             }
             future.cancel(true);
             JMXConnector dropped = CONNECTIONS.remove(pid);
@@ -242,6 +302,10 @@ final class ServerProbe {
         catch (ExecutionException e) {
             throw rethrowable(e.getCause());
         }
+    }
+
+    private static void unstuck(long pid) {
+        STUCK.computeIfPresent(pid, (k, n) -> n > 1 ? n - 1 : null);
     }
 
     private static JMXConnector connect(long pid) throws IOException, AttachNotSupportedException {
@@ -297,6 +361,7 @@ final class ServerProbe {
             }
         }
         JAVA_PIDS.values().removeIf(pid -> !isAlive(pid));
+        ATTACH_FAILED.keySet().removeIf(pid -> !isAlive(pid));
     }
 
     private static void close(long pid) {

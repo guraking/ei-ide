@@ -66,6 +66,7 @@ import org.jetbrains.annotations.NotNull;
 
 import javax.swing.DefaultListModel;
 import javax.swing.JEditorPane;
+import javax.swing.JScrollPane;
 import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.event.HyperlinkEvent;
@@ -139,6 +140,7 @@ final class ErrorPanel extends JPanel {
     private final DefaultListModel<ErrorScan.Item> model = new DefaultListModel<>();
     private final JBList<ErrorScan.Item> list = new JBList<>(model);
     private final JEditorPane detail = new JEditorPane();
+    private final JScrollPane detailScroll;
     private final JBLabel status = new JBLabel();
     // 목록을 다시 채우는 중이면 참(고르기 알림으로 설명을 여러 번 그리지 않는다).
     private boolean updating;
@@ -146,6 +148,8 @@ final class ErrorPanel extends JPanel {
     private ErrorScan.Item shownItem;
     // 프로젝트 소스의 클래스로 확인된 로거 이름. 이 로거의 오류에만 「로그를 찍은 곳」 줄을 보인다.
     private final Set<String> projectLoggers = new HashSet<>();
+    // 프로젝트 소스의 클래스가 아니라고 확인한 로거 이름. 같은 오류가 날 때마다 다시 찾지 않게 한다.
+    private final Set<String> notProjectLoggers = new HashSet<>();
 
     /**
      * @param consoleEditor 콘솔 편집기(닫혔으면 null)
@@ -188,7 +192,8 @@ final class ErrorPanel extends JPanel {
         OnePixelSplitter split = new OnePixelSplitter(false, SPLIT_KEY, SPLIT_PROPORTION);
         split.setHonorComponentsMinimumSize(false);
         split.setFirstComponent(ScrollPaneFactory.createScrollPane(list, true));
-        split.setSecondComponent(ScrollPaneFactory.createScrollPane(detail, true));
+        detailScroll = ScrollPaneFactory.createScrollPane(detail, true);
+        split.setSecondComponent(detailScroll);
 
         DefaultActionGroup actions = new DefaultActionGroup(
                 action("errors.action.console", AllIcons.Actions.Find, this::jumpToConsole),
@@ -206,6 +211,12 @@ final class ErrorPanel extends JPanel {
         add(split, BorderLayout.CENTER);
         showDetail();
         watcher.listen(this::update);
+        // 실행 창이 닫히면(다시 실행 포함) 남은 알림도 지운다. 알림의 「오류 보기」 가 닫힌 실행 창 · 오류 기록을 붙잡고 있지 않게 한다.
+        Disposer.register(watcher, () -> {
+            if (lastNotification != null) {
+                lastNotification.expire();
+            }
+        });
     }
 
     /**
@@ -216,7 +227,7 @@ final class ErrorPanel extends JPanel {
         attachLater(project, handler, run, serverName, new ErrorWatcher(handler), FIND_TRIES);
     }
 
-    /** 실행 창이 아직 실행 창 목록에 없을 수 있어 FIND_DELAY_MS 간격으로 tries 번까지 찾는다. 끝내 없으면 읽기를 멈춘다. */
+    /** 실행 창이 아직 실행 창 목록에 없거나 창 틀이 없을 수 있어 FIND_DELAY_MS 간격으로 tries 번까지 찾는다. 끝내 없으면 읽기를 멈춘다. */
     private static void attachLater(Project project, ProcessHandler handler, ServerRegistry.Run run, String serverName,
                                     ErrorWatcher watcher, int tries) {
         ApplicationManager.getApplication().invokeLater(() -> {
@@ -226,7 +237,8 @@ final class ErrorPanel extends JPanel {
                     descriptor = d;
                 }
             }
-            if (descriptor == null && tries > 1) {
+            // 디버그 실행은 실행 화면이 목록에 먼저 오고 창 틀(RunnerLayoutUi)이 조금 뒤에 생길 수 있으므로 틀이 생길 때까지도 다시 본다.
+            if ((descriptor == null || descriptor.getRunnerLayoutUi() == null && !Disposer.isDisposed(descriptor)) && tries > 1) {
                 AppExecutorUtil.getAppScheduledExecutorService().schedule(
                         () -> attachLater(project, handler, run, serverName, watcher, tries - 1), FIND_DELAY_MS, TimeUnit.MILLISECONDS);
                 return;
@@ -341,6 +353,7 @@ final class ErrorPanel extends JPanel {
         ErrorScan.Item selected = list.getSelectedValue();
         String selectedKey = selected == null ? null : selected.key();
         int select = items.isEmpty() ? -1 : 0;
+        int before = list.getSelectedIndex();
         updating = true;
         try {
             model.clear();
@@ -353,7 +366,10 @@ final class ErrorPanel extends JPanel {
             }
             if (select >= 0) {
                 list.setSelectedIndex(select);
-                list.ensureIndexIsVisible(select);
+                // 고른 줄의 자리가 그대로면 목록 스크롤을 건드리지 않는다(읽던 자리를 지킨다).
+                if (select != before) {
+                    list.ensureIndexIsVisible(select);
+                }
             }
         }
         finally {
@@ -370,15 +386,30 @@ final class ErrorPanel extends JPanel {
         if (shownItem != null && item != null && shownItem.last() == item.last() && shownItem.count() == item.count()) {
             return;
         }
+        // 같은 오류가 또 났을 뿐이면 읽던 자리(스크롤)를 지키고, 글을 골라 두었으면(복사하려고) 고른 것이 풀리지 않게 다시 그리지 않는다.
+        boolean sameKind = shownItem != null && item != null && shownItem.key().equals(item.key());
+        if (sameKind && detail.getSelectionStart() != detail.getSelectionEnd()) {
+            return;
+        }
         shownItem = item;
-        drawDetail();
+        drawDetail(sameKind);
         resolveLogger(item);
     }
 
     private void drawDetail() {
+        drawDetail(true);
+    }
+
+    /** keepScroll 이면 그리기 전 스크롤 자리로 되돌린다. 아니면 맨 위부터 보인다. */
+    private void drawDetail(boolean keepScroll) {
         ErrorScan.Item item = shownItem;
+        int scroll = detailScroll.getVerticalScrollBar().getValue();
         detail.setText(item == null ? html(esc(BootServersBundle.message(model.isEmpty() ? "errors.empty" : "errors.pick"))) : detailHtml(item));
         detail.setCaretPosition(0);
+        if (keepScroll) {
+            // 새 글의 배치가 끝난 뒤에 스크롤 막대 범위가 맞춰지므로 다음 차례에 되돌린다.
+            ApplicationManager.getApplication().invokeLater(() -> detailScroll.getVerticalScrollBar().setValue(scroll), ModalityState.any());
+        }
     }
 
     /**
@@ -387,14 +418,17 @@ final class ErrorPanel extends JPanel {
      */
     private void resolveLogger(ErrorScan.Item item) {
         String logger = item == null || item.last().frame() != null ? null : item.last().logger();
-        if (logger == null || projectLoggers.contains(logger) || ErrorRules.isFramework(logger)) {
+        if (logger == null || projectLoggers.contains(logger) || notProjectLoggers.contains(logger) || ErrorRules.isFramework(logger)) {
             return;
         }
         ReadAction.nonBlocking(() -> loggerFile(logger) != null)
                 .inSmartMode(project)
                 .expireWith(project)
                 .finishOnUiThread(ModalityState.defaultModalityState(), (Boolean found) -> {
-                    if (found && shownItem == item) {
+                    if (!found) {
+                        notProjectLoggers.add(logger);
+                    }
+                    else if (shownItem == item) {
                         projectLoggers.add(logger);
                         drawDetail();
                     }
@@ -704,7 +738,7 @@ final class ErrorPanel extends JPanel {
         }
         String head = item.last().lines().get(0);
         Document doc = editor.getDocument();
-        int at = head.isEmpty() ? -1 : doc.getImmutableCharSequence().toString().lastIndexOf(head);
+        int at = head.isEmpty() ? -1 : lastIndexOf(doc.getImmutableCharSequence(), head);
         if (at < 0) {
             status.setText(BootServersBundle.message("errors.console.gone"));
             return;
@@ -715,6 +749,17 @@ final class ErrorPanel extends JPanel {
         editor.getSelectionModel().setSelection(doc.getLineStartOffset(line), doc.getLineEndOffset(line));
         editor.getScrollingModel().scrollToCaret(ScrollType.CENTER);
         status.setText("");
+    }
+
+    /** text 안에서 마지막 needle 의 자리. 없으면 -1. 콘솔 전체를 문자열로 복사하지 않고(큰 콘솔이면 수백 MB) 그 자리에서 뒤부터 찾는다. */
+    static int lastIndexOf(CharSequence text, String needle) {
+        char first = needle.charAt(0);
+        for (int i = text.length() - needle.length(); i >= 0; i--) {
+            if (text.charAt(i) == first && StringUtil.startsWith(text, i, needle)) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private void copyAll() {

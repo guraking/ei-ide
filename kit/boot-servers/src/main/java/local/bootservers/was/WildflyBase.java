@@ -94,7 +94,17 @@ public final class WildflyBase {
     public static boolean publish(Path base, TomcatBase.App app) throws IOException {
         Path deployments = base.resolve("deployments");
         String war = ExplodedSync.warName(app.contextPath()) + ".war";
-        boolean changed = ExplodedSync.sync(app, deployments.resolve(war));
+        boolean changed;
+        try {
+            changed = ExplodedSync.sync(app, deployments.resolve(war));
+        }
+        catch (ExplodedSync.Partial e) {
+            // 들어간 파일만이라도 다시 올린다.
+            if (e.changed) {
+                ExplodedSync.touch(deployments.resolve(war + ".dodeploy"));
+            }
+            throw e;
+        }
         if (changed) {
             ExplodedSync.touch(deployments.resolve(war + ".dodeploy"));
         }

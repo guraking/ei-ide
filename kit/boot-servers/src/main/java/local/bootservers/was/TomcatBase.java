@@ -26,9 +26,14 @@ public final class TomcatBase {
     public record App(String contextPath, Path docBase, List<Path> classDirs, List<Path> jars) {
     }
 
-    private static final Pattern SERVER_PORT = Pattern.compile("(<Server\\s+port=\")-?\\d+(\")");
-    // 기본 server.xml 의 첫 HTTP 연결자. 주석 안의 연결자는 앞에서 주석을 지운 뒤에 찾으므로 걸리지 않는다.
-    private static final Pattern HTTP_CONNECTOR = Pattern.compile("(<Connector\\s+port=\")\\d+(\"\\s+protocol=\"HTTP/1\\.1\")");
+    // 여는 태그 하나(속성 순서 · 줄바꿈은 가리지 않는다). 주석 안의 태그는 앞에서 주석을 지운 뒤에 찾으므로 걸리지 않는다.
+    private static final Pattern SERVER_TAG = Pattern.compile("<Server\\b[^>]*>");
+    private static final Pattern CONNECTOR_TAG = Pattern.compile("<Connector\\b[^>]*>");
+    private static final Pattern PORT_ATTR = Pattern.compile("(\\bport\\s*=\\s*[\"'])-?\\d+([\"'])");
+    private static final Pattern PROTOCOL_ATTR = Pattern.compile("\\bprotocol\\s*=\\s*[\"']([^\"']*)[\"']");
+    private static final Pattern SSL_ATTR = Pattern.compile("\\bSSLEnabled\\s*=\\s*[\"']true[\"']", Pattern.CASE_INSENSITIVE);
+    // HTTP 연결자의 protocol 값: 기본 「HTTP/1.1」 또는 구현 클래스 이름(org.apache.coyote.http11.Http11NioProtocol 등). 없으면 HTTP/1.1 이다.
+    private static final Pattern HTTP_PROTOCOL = Pattern.compile("HTTP/1\\.1|http11", Pattern.CASE_INSENSITIVE);
     private static final Pattern XML_COMMENT = Pattern.compile("<!--.*?-->", Pattern.DOTALL);
 
     private TomcatBase() {
@@ -73,10 +78,11 @@ public final class TomcatBase {
             }
         }
         Path serverXml = base.resolve("conf").resolve("server.xml");
-        Files.writeString(serverXml, patchServerXml(Files.readString(serverXml, StandardCharsets.UTF_8), httpPort, shutdownPort),
-                StandardCharsets.UTF_8);
+        // 회사에서 고친 server.xml 은 한국어 주석이 CP949 로 저장돼 있을 수 있다. 바꾸는 것은 ASCII 숫자뿐이므로 바이트를 그대로 옮기는 ISO-8859-1 로 읽고 쓴다.
+        Files.writeString(serverXml, patchServerXml(Files.readString(serverXml, StandardCharsets.ISO_8859_1), httpPort, shutdownPort),
+                StandardCharsets.ISO_8859_1);
 
-        Path contexts = base.resolve("conf").resolve("Catalina").resolve("localhost");
+        Path contexts = contextDir(base);
         deleteTree(contexts);
         Files.createDirectories(contexts);
         for (App app : apps) {
@@ -85,22 +91,50 @@ public final class TomcatBase {
         }
     }
 
+    /** 앱 컨텍스트 파일 폴더(conf/Catalina/localhost). 이 파일의 수정 시각이 바뀌면 Tomcat(autoDeploy)이 그 앱을 다시 올린다. */
+    public static Path contextDir(Path base) {
+        return base.resolve("conf").resolve("Catalina").resolve("localhost");
+    }
+
+    /**
+     * 종료 포트(&lt;Server port&gt;)와 첫 HTTP 연결자(SSL 이 아닌, protocol 이 HTTP/1.1 · Http11… 이거나 없는 &lt;Connector&gt;)의 포트를 바꾼다.
+     * 속성 순서 · 따옴표 · 줄바꿈은 가리지 않는다. 주석은 지운 채 돌려준다.
+     */
     static String patchServerXml(String xml, int httpPort, int shutdownPort) throws IOException {
         String live = XML_COMMENT.matcher(xml).replaceAll("");
-        Matcher connector = HTTP_CONNECTOR.matcher(live);
-        if (!connector.find()) {
+        Matcher connector = CONNECTOR_TAG.matcher(live);
+        int start = -1;
+        int end = -1;
+        while (connector.find()) {
+            String tag = connector.group();
+            Matcher protocol = PROTOCOL_ATTR.matcher(tag);
+            boolean http = !protocol.find() || HTTP_PROTOCOL.matcher(protocol.group(1)).find();
+            if (http && !SSL_ATTR.matcher(tag).find() && PORT_ATTR.matcher(tag).find()) {
+                start = connector.start();
+                end = connector.end();
+                break;
+            }
+        }
+        if (start < 0) {
             throw new IOException("server.xml 에서 HTTP/1.1 연결자(<Connector port=\"..\" protocol=\"HTTP/1.1\")를 찾지 못했습니다.");
         }
-        Matcher server = SERVER_PORT.matcher(live);
-        if (!server.find()) {
+        Matcher server = SERVER_TAG.matcher(live);
+        if (!server.find() || !PORT_ATTR.matcher(server.group()).find()) {
             throw new IOException("server.xml 에서 <Server port=\"..\"> 를 찾지 못했습니다.");
         }
-        live = server.replaceFirst("$1" + shutdownPort + "$2");
-        return HTTP_CONNECTOR.matcher(live).replaceFirst("$1" + httpPort + "$2");
+        if (server.start() > start) {
+            throw new IOException("server.xml 에서 <Server> 보다 앞에 <Connector> 가 있습니다.");
+        }
+        return live.substring(0, server.start()) + withPort(server.group(), shutdownPort)
+                + live.substring(server.end(), start) + withPort(live.substring(start, end), httpPort) + live.substring(end);
+    }
+
+    private static String withPort(String tag, int port) {
+        return PORT_ATTR.matcher(tag).replaceFirst("$1" + port + "$2");
     }
 
     /** Tomcat 규칙: "/" → ROOT, "/a/b" → a#b */
-    static String contextFileName(String contextPath) {
+    public static String contextFileName(String contextPath) {
         String p = contextPath.replaceAll("^/+|/+$", "");
         return p.isEmpty() ? "ROOT" : p.replace('/', '#');
     }

@@ -8,6 +8,7 @@ import com.intellij.execution.ui.RunContentDescriptor;
 import com.intellij.execution.ui.RunContentManager;
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.util.concurrency.AppExecutorUtil;
@@ -25,6 +26,8 @@ import java.util.concurrent.TimeUnit;
  * 탭을 닫으면 따라 읽기를 멈춘다.
  */
 final class LogFileView {
+
+    private static final Logger LOG = Logger.getInstance(LogFileView.class);
 
     // 처음 열 때 보일 파일 끝 크기. 오래된 큰 로그를 통째로 읽지 않는다.
     private static final long INITIAL_BYTES = 512 * 1024;
@@ -51,9 +54,15 @@ final class LogFileView {
         int[] polls = {0};
         Path[] noticed = {null};
         ScheduledFuture<?> future = AppExecutorUtil.getAppScheduledExecutorService().scheduleWithFixedDelay(() -> {
-            show(console, tail.poll());
-            if (polls[0]++ % NEWER_CHECK_POLLS == 0) {
-                noticeNewer(console, file, noticed);
+            // 주기 작업은 잡지 않은 예외 하나로 영영 멈추므로 여기서 받는다(네트워크 폴더가 잠깐 끊겨 폴더 읽기가 DirectoryIteratorException 을 내는 경우 등).
+            try {
+                show(console, tail.poll());
+                if (polls[0]++ % NEWER_CHECK_POLLS == 0) {
+                    noticeNewer(console, file, noticed);
+                }
+            }
+            catch (RuntimeException e) {
+                LOG.warn("로그 파일 따라 읽기 실패: " + file, e);
             }
         }, 0, POLL_MILLIS, TimeUnit.MILLISECONDS);
         // 프로세스가 없는 탭은 실행 창이 끝난 탭으로 보고 다음 실행에 다시 쓰거나(닫아 버리거나) 이 탭이 끝난 다른 탭을 차지하므로 다시 쓰기를 막는다.

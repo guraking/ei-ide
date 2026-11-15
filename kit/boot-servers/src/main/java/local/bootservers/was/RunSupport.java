@@ -14,6 +14,9 @@ public final class RunSupport {
 
     // 이미 듣고 있는 서버가 있는지 붙어 보는 한도. 로컬이라 짧아도 된다.
     private static final int CONNECT_TIMEOUT_MILLIS = 200;
+    // 시작 완료 보조 판정에서 HTTP 답을 기다리는 한도.
+    private static final int HTTP_ANSWER_MILLIS = 1000;
+    private static final byte[] HEAD_REQUEST = "HEAD / HTTP/1.0\r\nHost: localhost\r\n\r\n".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
     // 실행 창이 출력을 UTF-8 로 읽으므로 JVM 콘솔 출력만 UTF-8 로 맞춘다. sun.* 는 JDK 8~18, stdout · stderr.encoding 은 JDK 19 부터 쓴다.
     // file.encoding 은 앱의 파일 읽기 · 쓰기 기본 문자셋까지 바꾸므로 넣지 않는다.
     private static final List<String> ENCODING_OPTIONS = List.of(
@@ -40,6 +43,24 @@ public final class RunSupport {
         }
         catch (IOException e) {
             // 붙지 못하면 듣는 서버가 없다.
+            return false;
+        }
+    }
+
+    /**
+     * localhost 의 포트가 HTTP 요청에 답하면 true. 시작을 마쳤는지 보는 보조 판정에 쓴다.
+     * 포트가 열린 것만으로는 모자라다: Tomcat 은 앱을 올리기 전에 포트를 묶고(bindOnInit) 연결자를 시작한 뒤에야 답한다.
+     * 답이 HTTP_ANSWER_MILLIS 안에 한 바이트라도 오면 답한 것으로 본다(상태 코드는 보지 않는다).
+     */
+    public static boolean httpAnswers(int port) {
+        try (Socket s = new Socket()) {
+            s.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), CONNECT_TIMEOUT_MILLIS);
+            s.setSoTimeout(HTTP_ANSWER_MILLIS);
+            s.getOutputStream().write(HEAD_REQUEST);
+            s.getOutputStream().flush();
+            return s.getInputStream().read() != -1;
+        }
+        catch (IOException e) {
             return false;
         }
     }

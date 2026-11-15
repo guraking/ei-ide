@@ -216,6 +216,25 @@ public final class ErrorScanCheck {
         longLine.feed("ERROR " + "y".repeat(ErrorScan.MAX_LINE_CHARS * 3));
         longLine.flush();
         check(longLine.items().get(0).last().lines().get(0).length() <= ErrorScan.MAX_LINE_CHARS, "줄 길이 한도");
+        ErrorScan longWithEnd = new ErrorScan();
+        longWithEnd.feed("ERROR " + "z".repeat(ErrorScan.MAX_LINE_CHARS * 50) + "\nINFO 다음\n");
+        longWithEnd.flush();
+        check(longWithEnd.items().size() == 1 && longWithEnd.items().get(0).last().lines().get(0).length() <= ErrorScan.MAX_LINE_CHARS, "한 조각 안 긴 줄 한도");
+        // ERROR 뒤로 레벨 없는 보통 줄이 쉬지 않고 이어져도 묶음이 차면 끝난다(flush 전에 오류가 잡힌다).
+        ErrorScan noisy = new ErrorScan();
+        noisy.feed(T + "1.000 ERROR 1 --- [main] c.x.A : 실패\n");
+        for (int i = 0; i <= ErrorScan.BLOCK_LINES; i++) {
+            noisy.feed("진행 " + i + "\n");
+        }
+        check(noisy.items().size() == 1, "가득 찬 묶음은 보통 줄에서 끝남");
+        // 긴 스택은 한도를 넘어도 한 오류다.
+        ErrorScan deep = new ErrorScan();
+        deep.feed(T + "1.000 ERROR 1 --- [main] c.x.A : 깊음\njava.lang.RuntimeException: x\n");
+        for (int i = 0; i < ErrorScan.BLOCK_LINES * 2; i++) {
+            deep.feed((i == ErrorScan.BLOCK_LINES ? "Caused by: java.lang.IllegalStateException: y\n" : "\tat com.x.A.m" + i + "(A.java:1)\n"));
+        }
+        deep.flush();
+        check(deep.items().size() == 1, "긴 스택은 한 오류: " + deep.items().size());
         new ErrorScan().flush();
     }
 

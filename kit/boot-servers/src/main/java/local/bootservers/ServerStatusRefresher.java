@@ -9,6 +9,11 @@ import com.intellij.execution.process.ProcessHandler;
 import com.intellij.execution.process.ProcessListener;
 import com.intellij.execution.runners.ExecutionEnvironment;
 import com.intellij.ide.projectView.ProjectView;
+import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.project.DumbService;
+import com.intellij.psi.JavaPsiFacade;
+import com.intellij.psi.PsiClass;
+import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Key;
@@ -26,6 +31,9 @@ public final class ServerStatusRefresher implements ExecutionListener {
 
     // 정상 종료(스프링 컨텍스트 닫기)를 기다리는 한도. 넘으면 프로세스를 강제로 끝낸다.
     private static final int STOP_GRACE_SECONDS = 10;
+    // 시작 완료 문구를 기다렸다가 보조 판정(JMX 끝점)을 시작하는 때와 묻는 간격. 보통은 문구가 먼저 나와 보조 판정은 돌지 않는다.
+    private static final long READY_DELAY_SECONDS = 10;
+    private static final long READY_PERIOD_SECONDS = 5;
 
     private final Project project;
 
@@ -33,15 +41,32 @@ public final class ServerStatusRefresher implements ExecutionListener {
         this.project = project;
     }
 
-    /** 서버 창 · 트리가 상태를 보이는 실행 설정(ServerLauncher.settingsOf 와 같은 애플리케이션 종류)인가. */
-    private static boolean isServer(RunnerAndConfigurationSettings settings) {
-        return settings != null && settings.getConfiguration() instanceof ApplicationConfiguration;
+    /**
+     * 서버 창 · 트리가 상태를 보이는 실행 설정인가: 메인 클래스에 @SpringBootApplication 이 붙은 애플리케이션 실행 설정(서버 창이 고르는 것과 같다).
+     * 그냥 main 실행은 서버로 보지 않아 오류 탭 · 「서버 오류」 알림 · 강제 종료 · 실패 표시를 붙이지 않는다.
+     * 색인 중이거나 클래스를 찾지 못하면 판단할 수 없으므로 서버로 본다.
+     */
+    private static boolean isServer(Project project, RunnerAndConfigurationSettings settings) {
+        if (settings == null || !(settings.getConfiguration() instanceof ApplicationConfiguration app)) {
+            return false;
+        }
+        String main = app.getMainClassName();
+        if (main == null || main.isBlank()) {
+            return false;
+        }
+        if (DumbService.isDumb(project)) {
+            return true;
+        }
+        return ReadAction.compute(() -> {
+            PsiClass c = JavaPsiFacade.getInstance(project).findClass(main, GlobalSearchScope.allScope(project));
+            return c == null || c.hasAnnotation(ServerLauncher.BOOT_APP_ANNOTATION);
+        });
     }
 
     @Override
     public void processStarted(@NotNull String executorId, @NotNull ExecutionEnvironment env, @NotNull ProcessHandler handler) {
         RunnerAndConfigurationSettings settings = env.getRunnerAndConfigurationSettings();
-        if (!isServer(settings)) {
+        if (!isServer(project, settings)) {
             return;
         }
         ServerRegistry registry = ServerRegistry.getInstance(project);
@@ -78,6 +103,12 @@ public final class ServerStatusRefresher implements ExecutionListener {
                 refreshLater();
             }
         });
+        // 「Started … in N seconds」 줄이 콘솔에 안 나오는 앱(로그 수준 WARN · 파일로만 쓰는 로그)은 SpringApplication 관리 MBean 이 Ready 면 시작이 끝난 것으로 본다.
+        long pid = ServerLauncher.pidOf(handler);
+        if (pid >= 0) {
+            ServerRegistry.watchReady(run, handler, READY_DELAY_SECONDS, READY_PERIOD_SECONDS,
+                    () -> !ServerLauncher.debugPaused(project, handler) && ServerProbe.ready(pid), this::refreshLater);
+        }
         ProjectView.getInstance(project).refresh();
     }
 
