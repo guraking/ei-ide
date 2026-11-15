@@ -167,6 +167,8 @@ final class GitLogins {
       if (login.secret() == null || login.secret().isEmpty()) continue;
       if (params.length() > 0) params.append(' ');
       params.append(quoted("http." + login.server() + "/.extraHeader=" + header(login)));
+      // EiGitAuthText.env 와 같다: 그 서버의 자격 증명 도우미를 꺼 401 때 실패가 두 번 가지 않고 도우미에 저장된 비밀번호가 지워지지 않게 한다.
+      params.append(' ').append(quoted("credential." + login.server() + "/.helper="));
     }
     return params.length() == before.length() ? Map.of() : Map.of(ENV_PARAMETERS, params.toString());
   }

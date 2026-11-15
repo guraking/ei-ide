@@ -23,6 +23,7 @@ public class SyncCheck {
     eq(ReverseMerge.parseStatusZ("").untracked(), Set.of());
     // 충돌이 남은 항목(UU)은 올려 둔 변경으로 보아 합치기를 막는다.
     eq(ReverseMerge.parseStatusZ("UU m.txt\0").staged(), true);
+    eq(ReverseMerge.parseStatusZ("UU m.txt\0AA n.txt\0DD o.txt\0A  p.txt\0D  q.txt\0").unmerged(), Set.of("m.txt", "n.txt", "o.txt"));
     // 옮기지도 따라잡지도 않으면 diff 는 하나, 모두 하면 셋.
     eq(ReverseMerge.touchedCommands("HEAD", "HEAD", "abc").size(), 1);
     eq(ReverseMerge.touchedCommands("HEAD", "refs/remotes/origin/f", "abc").size(), 2);
@@ -224,6 +225,7 @@ public class SyncCheck {
     eq(SyncPanel.unquote("\"a\\\"b\\\\c\\td\""), "a\"b\\c\td");
     eq(SyncPanel.unquote("\"\\355\\225\\234.txt\""), "한.txt");
     eq(SyncPanel.unquote("plain.txt"), "plain.txt");
+    eq(SyncPanel.unquote("\"a\\\"\uD83D\uDE00.txt\""), "a\"\uD83D\uDE00.txt");
     checkNestedRepo();
     checkAudit1106();
     checkCloneBranch();
@@ -550,11 +552,11 @@ public class SyncCheck {
     eq(merge(mine, "origin", "develop", "feature/kim", "feature/kim", true, false), ReverseMerge.Result.CONFLICT);
     eq(ReverseMerge.conflicts(mine), Set.of("A.java"));
     // 충돌이 남았으면 마무리하지 않는다. 해결하면 합치기 커밋 · 푸시까지 한다.
-    eq(ReverseMerge.finish(mine, "origin", "feature/kim", "feature/kim", true, false), false);
+    eq(ReverseMerge.finish(mine, "origin", "feature/kim", "feature/kim", true, false), ReverseMerge.Finish.LEFT);
     sh(mine, "echo resolved > A.java && git add A.java");
-    eq(ReverseMerge.finish(mine, "origin", "feature/kim", "feature/kim", true, false), true);
+    eq(ReverseMerge.finish(mine, "origin", "feature/kim", "feature/kim", true, false), ReverseMerge.Finish.DONE);
     eq(SyncPanel.git(mine, "rev-parse", "HEAD").trim(), SyncPanel.git(server, "rev-parse", "feature/kim").trim());
-    eq(ReverseMerge.finish(mine, "origin", "feature/kim", "feature/kim", true, false), false);  // 이미 마무리됨(MERGE_HEAD 없음)
+    eq(ReverseMerge.finish(mine, "origin", "feature/kim", "feature/kim", true, false), ReverseMerge.Finish.ABORTED);  // 이미 마무리됨(MERGE_HEAD 없음): 지금 브랜치 그대로
     // 충돌 없는 쪽: 다른 개발자가 내 파일을 건드리지 않은 develop 을 새 개인 브랜치로 합치고 푸시.
     sh(other, "git push -q origin develop~1:refs/heads/feature/new");
     ReverseMerge.fetch(mine, "origin", "develop", "feature/new");
@@ -994,11 +996,11 @@ public class SyncCheck {
     eq(GitLogins.header(token), "Authorization: Basic " + java.util.Base64.getEncoder().encodeToString("oauth2:glpat-1".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
 
     java.util.Map<String, String> env = GitLogins.env(List.of(pw, empty, token), java.util.Map.of());
-    eq(env, java.util.Map.of("GIT_CONFIG_PARAMETERS", "'http.https://a.com/.extraHeader=" + GitLogins.header(pw) + "' 'http.https://b.com:8443/.extraHeader="
-                                                      + GitLogins.header(token) + "'"));
+    eq(env, java.util.Map.of("GIT_CONFIG_PARAMETERS", "'http.https://a.com/.extraHeader=" + GitLogins.header(pw) + "' 'credential.https://a.com/.helper=' "
+                                                      + "'http.https://b.com:8443/.extraHeader=" + GitLogins.header(token) + "' 'credential.https://b.com:8443/.helper='"));
     // IDE 에 이미 GIT_CONFIG_PARAMETERS 가 있으면 그 뒤에 잇는다.
     eq(GitLogins.env(List.of(pw), java.util.Map.of("GIT_CONFIG_PARAMETERS", "'a.b=1' ")).get("GIT_CONFIG_PARAMETERS"),
-       "'a.b=1' 'http.https://a.com/.extraHeader=" + GitLogins.header(pw) + "'");
+       "'a.b=1' 'http.https://a.com/.extraHeader=" + GitLogins.header(pw) + "' 'credential.https://a.com/.helper='");
     eq(GitLogins.env(List.of(empty), java.util.Map.of()), java.util.Map.of());
     eq(GitLogins.quoted("it's"), "'it'\\''s'");
 
