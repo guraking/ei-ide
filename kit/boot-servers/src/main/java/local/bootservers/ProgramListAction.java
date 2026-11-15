@@ -147,14 +147,11 @@ public final class ProgramListAction extends DumbAwareAction {
     }
 
     /**
-     * 작업 스레드에서 부른다. 파일 목록 · URL 매핑은 짧은 읽기 동작으로 모으고(편집이 끼면 그 동작만 다시 돈다),
+     * 작업 스레드에서 부른다. 파일 목록은 모듈마다, URL 매핑은 따로 짧은 읽기 동작으로 모으고(편집 · 빌드로 파일이 바뀌면 그 동작만 다시 돈다),
      * 파일 글은 읽기 동작 밖에서 하나씩 읽어 목록 줄을 만든 뒤 버린다(프로젝트 전체 글을 메모리에 쥐지 않는다).
      */
     private static Collected collect(Project project, List<String> scope, ProgressIndicator indicator) {
-        List<Source> sources = ReadAction.nonBlocking(() -> scan(project, scope, indicator))
-                .inSmartMode(project)
-                .wrapProgress(indicator)
-                .executeSynchronously();
+        List<Source> sources = scan(project, scope, indicator);
         sources.sort(Comparator.comparing(Source::module).thenComparing(Source::path));
         List<List<Object>> programs = new ArrayList<>();
         for (Source source : sources) {
@@ -230,34 +227,55 @@ public final class ProgramListAction extends DumbAwareAction {
         return List.of(files);
     }
 
+    /**
+     * 작업 스레드에서 부른다. 모듈마다 따로 읽기 동작으로 훑는다. 한 동작에 모든 모듈을 넣으면 빌드 · fetch 로 파일이 바뀔 때마다
+     * 처음부터 다시 돌아 큰 워크스페이스에서는 끝나지 않는다. 여러 모듈에 걸친 파일은 앞 모듈(이름순) 것만 남긴다.
+     */
     private static List<Source> scan(Project project, List<String> scope, ProgressIndicator indicator) {
+        Module[] modules = ReadAction.compute(() -> ModuleManager.getInstance(project).getModules());
+        Arrays.sort(modules, Comparator.comparing(Module::getName));
+        Set<VirtualFile> seen = new LinkedHashSet<>();
+        List<Source> result = new ArrayList<>();
+        for (Module module : modules) {
+            indicator.checkCanceled();
+            List<Source> found = ReadAction.nonBlocking(() -> module.isDisposed() ? List.<Source>of() : scanModule(project, module, scope, indicator))
+                    .inSmartMode(project)
+                    .wrapProgress(indicator)
+                    .executeSynchronously();
+            for (Source source : found) {
+                if (seen.add(source.file())) {
+                    result.add(source);
+                }
+            }
+        }
+        return result;
+    }
+
+    /** 읽기 동작 안에서 부른다. 이 모듈의 소스 · 웹 루트 아래 고른 범위 안 파일. */
+    private static List<Source> scanModule(Project project, Module module, List<String> scope, ProgressIndicator indicator) {
         VirtualFile base = ProjectUtil.guessProjectDir(project);
         ProjectFileIndex index = ProjectFileIndex.getInstance(project);
         Set<VirtualFile> seen = new LinkedHashSet<>();
         List<Source> result = new ArrayList<>();
-        Module[] modules = ModuleManager.getInstance(project).getModules();
-        Arrays.sort(modules, Comparator.comparing(Module::getName));
-        for (Module module : modules) {
-            for (VirtualFile root : roots(module)) {
-                if (!ProgramList.reachesScope(root.getPath(), scope)) {
-                    continue;
-                }
-                VfsUtilCore.visitChildrenRecursively(root, new VirtualFileVisitor<Void>() {
-                    @Override
-                    public boolean visitFile(@NotNull VirtualFile file) {
-                        ProgressManager.checkCanceled();
-                        if (file.isDirectory()) {
-                            return !ProgramList.isExcludedDir(file.getName()) && !index.isExcluded(file);
-                        }
-                        if (ProgramList.inScope(file.getPath(), scope) && seen.add(file)) {
-                            String path = relativePath(file, base);
-                            indicator.setText2(path);
-                            result.add(new Source(module.getName(), path, file));
-                        }
-                        return false;
-                    }
-                });
+        for (VirtualFile root : roots(module)) {
+            if (!ProgramList.reachesScope(root.getPath(), scope)) {
+                continue;
             }
+            VfsUtilCore.visitChildrenRecursively(root, new VirtualFileVisitor<Void>() {
+                @Override
+                public boolean visitFile(@NotNull VirtualFile file) {
+                    ProgressManager.checkCanceled();
+                    if (file.isDirectory()) {
+                        return !ProgramList.isExcludedDir(file.getName()) && !index.isExcluded(file);
+                    }
+                    if (ProgramList.inScope(file.getPath(), scope) && seen.add(file)) {
+                        String path = relativePath(file, base);
+                        indicator.setText2(path);
+                        result.add(new Source(module.getName(), path, file));
+                    }
+                    return false;
+                }
+            });
         }
         return result;
     }

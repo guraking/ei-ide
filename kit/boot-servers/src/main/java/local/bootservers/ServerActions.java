@@ -12,6 +12,7 @@ import com.intellij.openapi.actionSystem.LangDataKeys;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.project.ProjectUtil;
 import com.intellij.openapi.roots.ModuleRootManager;
 import com.intellij.openapi.vfs.VirtualFile;
 import org.jetbrains.annotations.NotNull;
@@ -32,6 +33,10 @@ final class ServerActions {
         VirtualFile dir = e.getData(CommonDataKeys.VIRTUAL_FILE);
         if (context != null || project == null || dir == null || !dir.isDirectory()) {
             return context;
+        }
+        // 워크스페이스 맨 위 폴더 줄은 저장소 폴더 줄이 아니다. 저장소가 하나뿐인 워크스페이스에서 그 줄에 서버 메뉴가 뜨지 않게 한다.
+        if (dir.equals(ProjectUtil.guessProjectDir(project))) {
+            return null;
         }
         Module below = null;
         for (Module module : ModuleManager.getInstance(project).getModules()) {

@@ -127,6 +127,8 @@ def main():
     # 기존 extensions 블록 끝에 등록하고, 메뉴 정의는 파일 끝에 붙인다.
     if not applied and (xml.count("</extensions>") != 1 or xml.count("</idea-plugin>") != 1):
         raise SystemExit("아무 파일도 바꾸지 않았습니다. plugin.xml 구조가 예상과 다릅니다(extensions · idea-plugin 닫는 태그가 하나씩이어야 함).")
+    if not (module / JAVA_DIR).is_dir():
+        raise SystemExit(f"아무 파일도 바꾸지 않았습니다. 자바 소스 폴더가 없습니다: {module / JAVA_DIR}")
     apply_deps(module)
     java_src = Path(__file__).with_name("KingGuraMainMenuCustomizer.java")
     shutil.copyfile(java_src, module / JAVA_DIR / java_src.name)

@@ -55,6 +55,18 @@ def main():
         run(root)
         assert snapshot(root) == first, "옛 글꼴 등록 코드가 새 코드로 바뀌어야 한다"
         assert first[d.FONT_SERVICE_FILE].decode("utf-8").count("private static void registerEiFonts()") == 1
+
+        # 1116 까지 넣던 자동 연결 손질(5)은 원문으로 되돌린다.
+        autolink = root / d.AUTOLINK_FILE
+        autolink.write_bytes(first[d.AUTOLINK_FILE].decode("utf-8").replace(d.AUTOLINK_ORIGINAL, d.AUTOLINK_DEPTH2).encode("utf-8"))
+        run(root)
+        assert snapshot(root) == first, "옛 자동 연결 손질은 원문으로 되돌아가야 한다"
+
+        # 1109~1116 이 넣은 Gradle 손질(35)은 지금 것으로 바뀐다.
+        gradle = root / d.GRADLE_SETTINGS_FILE
+        gradle.write_bytes(first[d.GRADLE_SETTINGS_FILE].decode("utf-8").replace(d.GRADLE_HOME_EDIT, d.GRADLE_HOME_1114).encode("utf-8"))
+        run(root)
+        assert snapshot(root) == first, "옛 Gradle 손질이 지금 것으로 바뀌어야 한다"
     print("apply_defaults 점검 통과")
 
 
