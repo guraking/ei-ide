@@ -1997,16 +1997,19 @@ final class SyncPanel extends SimpleToolWindowPanel {
   /** 받기를 시작한다: 받기 단추 둘을 끈다. endPull 과 짝. EDT. */
   private void startPull() {
     pulling++;
-    pullButton.setEnabled(false);
-    pullAllButton.setEnabled(false);
+    setPullEnabled(false);
   }
 
   /** 받기 하나가 끝났다. 모두 끝났으면 단추를 켜고, 받는 동안 미뤄 둔 새로고침을 한다(endBusy). EDT. */
   private void endPull() {
     if (--pulling > 0) return;
-    pullButton.setEnabled(true);
-    pullAllButton.setEnabled(true);
     if (!busy) endBusy();
+  }
+
+  /** 받기 단추 둘을 켜거나 끈다. EDT. */
+  private void setPullEnabled(boolean on) {
+    pullButton.setEnabled(on);
+    pullAllButton.setEnabled(on);
   }
 
   /**
@@ -2629,6 +2632,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
       return;
     }
     busy = true;
+    // 새로고침 동안 받으면 받기 뒤 다시 비교가 새로고침 결과를 버린다. 끝나면 endBusy 가 다시 켠다.
+    setPullEnabled(false);
     tree.setPaintBusy(true);
     String progress = SyncBundle.message("sync.comparing");
     showStatus("");
@@ -2804,6 +2809,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
     }
     String name = root.getName();
     busy = true;
+    // 새로고침 동안 받으면 받기 뒤 다시 비교가 새로고침 결과를 버린다. 끝나면 endBusy 가 다시 켠다.
+    setPullEnabled(false);
     tree.setPaintBusy(true);
     String progress = SyncBundle.message(fetch ? "sync.repo.fetching" : "sync.comparing", name);
     showStatus("");
@@ -2924,6 +2931,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private void endBusy() {
     if (project.isDisposed()) return;
     busy = false;
+    if (pulling == 0) setPullEnabled(true);
     tree.setPaintBusy(false);
     gauge.setVisible(false);
     if (!pendingRoots.isEmpty() || !pendingPaths.isEmpty() || !switchedRoots.isEmpty()) debounce.restart();
@@ -4026,11 +4034,14 @@ final class SyncPanel extends SimpleToolWindowPanel {
         if (!containsAny(messageOf(e), NOT_ON_REMOTE)) {
           LOG.warn("비교할 원격 내용을 읽지 못함 [" + repo.root().getName() + "] " + change.path() + ": " + e.getMessage());
           String why = reason(messageOf(e));
-          SwingUtilities.invokeLater(() -> {
+          ApplicationManager.getApplication().invokeLater(() -> {
             if (tree.getLastSelectedPathComponent() instanceof DefaultMutableTreeNode now && change.equals(now.getUserObject())) {
               diffPanel.setRequest(new MessageDiffRequest(why));
+              // 머리 줄이 앞서 고른 파일 이름으로 남지 않게 숨기고, 닫아 둔 비교 칸이면 안내가 보이게 연다.
+              diffHead.setVisible(false);
+              diffSide.setVisible(true);
             }
-          });
+          }, ModalityState.nonModal(), project.getDisposed());
           return;
         }
         remote = new byte[0];

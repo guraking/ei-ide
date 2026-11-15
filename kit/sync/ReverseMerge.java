@@ -605,13 +605,17 @@ final class ReverseMerge {
     List<String> local = gitAll(root, List.of(IGNORE_CASE,
                                               new String[]{"--no-optional-locks", "status", "--porcelain=v1", "-z", "-uall"},
                                               new String[]{"rev-parse", "HEAD"},
-                                              new String[]{"rev-parse", "--abbrev-ref", "HEAD"}));
+                                              new String[]{"rev-parse", "--symbolic-full-name", "HEAD"}));
     boolean folded = Boolean.parseBoolean(local.get(0).trim());
     WorkTree work = parseStatusZ(local.get(1));
     String head = local.get(2).trim();
     // current 는 IntelliJ 가 늦게 고치는 값이라, 그사이 터미널 등에서 브랜치를 옮겼으면 엉뚱한 브랜치로 돌아가지 않게 멈춘다.
+    // 같은 이름 태그가 있으면 --abbrev-ref 는 heads/<이름> 을 내므로 전체 이름(refs/heads/…)으로 견준다. detached 면 HEAD.
     String actual = local.get(3).trim();
-    if (!(actual.equals(current) || folded && actual.equalsIgnoreCase(current))) throw new IOException(SyncBundle.message("rmerge.branch.moved", current, actual));
+    String expected = HEADS + current;
+    if (!(actual.equals(expected) || folded && actual.equalsIgnoreCase(expected))) {
+      throw new IOException(SyncBundle.message("rmerge.branch.moved", current, actual.startsWith(HEADS) ? actual.substring(HEADS.length()) : actual));
+    }
     // 풀지 않은 충돌이 남아 있으면 git stash · checkout 이 영어 오류(needs merge)로 멈춘다.
     if (!work.unmerged().isEmpty()) throw new IOException(SyncBundle.message("rmerge.unmerged", pathList(new ArrayList<>(work.unmerged()))));
     boolean switched = !(into.equals(current) || folded && into.equalsIgnoreCase(current));
@@ -939,9 +943,23 @@ final class ReverseMerge {
     }
     catch (IOException e) {
       // 되살리다 3-way 충돌이 나면 git 은 충돌 표시를 남긴 채 Stash 를 지우지 않는다. 다시 Unstash 하면 needs merge 로 실패하므로 충돌 파일을 풀라고 안내한다.
-      Set<String> left = conflicts(root);
-      if (!left.isEmpty()) throw new IOException(SyncBundle.message("rmerge.unstash.conflict", pathList(new ArrayList<>(left))), e);
+      Set<String> left;
+      try {
+        left = conflicts(root);
+      }
+      catch (IOException unknown) {
+        e.addSuppressed(unknown);
+        left = Set.of();
+      }
+      if (!left.isEmpty()) throw new UnstashConflictException(SyncBundle.message("rmerge.unstash.conflict", pathList(new ArrayList<>(left))), e);
       throw new IOException(e.getMessage() + "\n" + SyncBundle.message("rmerge.unstash.failed"), e);
+    }
+  }
+
+  /** Stash 를 되살렸지만 충돌 표시가 남았다. 다시 Unstash 하라고 하면 안 되므로 그 안내만 보인다(restore). */
+  static final class UnstashConflictException extends IOException {
+    UnstashConflictException(String message, Throwable cause) {
+      super(message, cause);
     }
   }
 
@@ -966,6 +984,10 @@ final class ReverseMerge {
       try {
         unstash(root);
         return cause;
+      }
+      catch (UnstashConflictException conflict) {
+        // 변경은 이미 작업본에 풀렸다. 「Unstash 로 되살리세요」(stash.left)를 붙이지 않는다.
+        return new IOException(cause.getMessage() + "\n" + conflict.getMessage(), cause);
       }
       catch (IOException e) {
         cause.addSuppressed(e);
@@ -1030,7 +1052,8 @@ final class ReverseMerge {
    * 그사이 사용자가 다른 브랜치로 옮겼으면 건드리지 않고 false. 되살리지 못하면 그 안내를 담은 IOException.
    */
   private static boolean backAfterAbort(File root, String into, String current, boolean stashed) throws IOException, InterruptedException {
-    String head = git(root, "rev-parse", "--abbrev-ref", "HEAD").trim();
+    String full = git(root, "rev-parse", "--symbolic-full-name", "HEAD").trim();
+    String head = full.startsWith(HEADS) ? full.substring(HEADS.length()) : full;
     boolean onCurrent = sameBranch(root, head, current);
     if (!onCurrent && !sameBranch(root, head, into)) return false;
     if (!onCurrent) git(root, GIT_LONG_TIMEOUT_SEC, "checkout", current);
@@ -1044,6 +1067,8 @@ final class ReverseMerge {
       git(root, GIT_LONG_TIMEOUT_SEC, "checkout", current);
     }
     catch (IOException e) {
+      // 파일 잠금(백신 · IDE)은 잠깐이라 한 번 더 해 본다. 되면 끝난 것으로 본다.
+      if (checkoutBack(root, current, e)) return;
       throw new IOException(SyncBundle.message(pushed ? "rmerge.back.failed.pushed" : "rmerge.back.failed", into, current) + "\n" + e.getMessage(), e);
     }
   }
