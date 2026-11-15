@@ -84,6 +84,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 final class ProjectHistoryPanel extends JPanel {
   static final String ID = "ProjectHistory";
   // 한 번에 읽는 커밋 수. 목록을 맨 아래까지 내리면 다음 묶음을 읽어 밑에 붙인다.
+  private static final com.intellij.openapi.diagnostic.Logger LOG = com.intellij.openapi.diagnostic.Logger.getInstance(ProjectHistoryPanel.class);
   private static final int LOG_LIMIT = 200;
   private static final ZoneId ZONE = ZoneId.systemDefault();
   private static final Locale TIME_LOCALE = Locale.forLanguageTag(SyncBundle.message("history.locale"));
@@ -231,6 +232,10 @@ final class ProjectHistoryPanel extends JPanel {
   private final Font hashFont = new Font(EditorColorsManager.getInstance().getGlobalScheme().getEditorFontName(), Font.PLAIN, JBUI.Fonts.label().getSize());
   private Loaded loaded;
   private boolean loadingMore;
+  // 지금 도는 기록 읽기(load · loadMore). 새로 읽거나 창을 닫으면 끊어, 버릴 결과를 읽는 git · svn 이 로컬 git 자리를 잡고 있지 않게 한다(EDT 에서만 바꾼다).
+  private java.util.concurrent.Future<?> reading;
+  // load 가 읽는 저장소 · 브랜치(EDT 에서만).
+  private Target readingTarget;
   // 마지막으로 시작한 load 번호와 화면에 반영한 번호. 새로고침을 연달아 누르면 마지막 결과만 반영하고 그것만 진행 줄을 숨긴다.
   private int loadSeq;
   private int shownSeq;
@@ -348,6 +353,7 @@ final class ProjectHistoryPanel extends JPanel {
     repos.setSecondComponent(right);
     add(repos, BorderLayout.CENTER);
 
+    com.intellij.openapi.util.Disposer.register(parent, this::stopReading);
     reloadTargets(true);
     // Clone · Close Project · Open Project · 모듈 가져오기 뒤 저장소 목록을 바로 다시 채운다. 한 번에 여러 모듈이 바뀌어도 한 번만 읽는다.
     AtomicBoolean reloadQueued = new AtomicBoolean();
@@ -360,6 +366,13 @@ final class ProjectHistoryPanel extends JPanel {
       @Override public void modulesAdded(@NotNull Project p, @NotNull List<? extends Module> modules) { queueReload.run(); }
       @Override public void moduleRemoved(@NotNull Project p, @NotNull Module module) { queueReload.run(); }
     });
+    // 다시 켠 뒤 Maven 이 모듈 폴더를 늦게 채우면 모듈 알림 없이 roots 알림만 온다. 브랜치를 바꾸면 저장소 알림이 온다.
+    // 둘 다 목록만 다시 맞추고, 고른 저장소 · 브랜치가 그대로면 기록은 다시 읽지 않는다(reloadTargets(false)).
+    project.getMessageBus().connect(parent).subscribe(com.intellij.openapi.roots.ModuleRootListener.TOPIC, new com.intellij.openapi.roots.ModuleRootListener() {
+      @Override public void rootsChanged(@NotNull com.intellij.openapi.roots.ModuleRootEvent event) { queueReload.run(); }
+    });
+    project.getMessageBus().connect(parent).subscribe(git4idea.repo.GitRepository.GIT_REPO_CHANGE,
+                                                      (git4idea.repo.GitRepositoryChangeListener) repository -> queueReload.run());
   }
 
   private void selectRowAt(MouseEvent e) {
@@ -546,6 +559,12 @@ final class ProjectHistoryPanel extends JPanel {
     return row < 0 || row >= shown.size() ? null : shown.get(row);
   }
 
+  /** 도는 기록 읽기를 끊는다(git · svn 프로세스는 runOnce 가 끝낸다). EDT. */
+  private void stopReading() {
+    if (reading != null) reading.cancel(true);
+    reading = null;
+  }
+
   /** 읽는 동안 상태 글 자리에 진행 막대를 보인다. */
   private void loading(boolean on) {
     if (on) status.setText("");
@@ -557,22 +576,29 @@ final class ProjectHistoryPanel extends JPanel {
     if (target == null) return;
     // 읽는 중이 아니고(shownSeq == loadSeq) 화면의 기록이 같은 저장소 · 브랜치면 그대로 둔다(keepLoaded).
     if (keepLoaded && loaded != null && shownSeq == loadSeq && target.equals(loaded.target())) return;
+    // 목록만 다시 맞출 때(저장소 · roots 알림) 같은 저장소 · 브랜치를 읽는 중이면 끊고 다시 읽지 않는다.
+    if (keepLoaded && target.equals(readingTarget) && reading != null && !reading.isDone()) return;
+    readingTarget = target;
     int request = ++loadSeq;
     loading(true);
-    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+    stopReading();
+    reading = ApplicationManager.getApplication().executeOnPooledThread(() -> {
       Loaded result;
       String error = null;
       try {
         result = read(target, null);
       }
       catch (IOException e) {
+        // 상태 줄에는 한 줄 안내(SyncPanel.reason)만 보이므로 원문은 idea.log 에 남긴다.
+        LOG.warn("Git Log 읽기 실패 " + target.dir() + ": " + e.getMessage());
         result = null;
-        error = e.getMessage();
+        error = SyncPanel.messageOf(e);
       }
       catch (RuntimeException e) {
-        // 읽기 · 해석에서 난 예상 못 한 오류도 상태 글로 보이고 읽는 중 표시를 끈다.
+        // 읽기 · 해석에서 난 예상 못 한 오류도 상태 글로 보이고 읽는 중 표시를 끈다. 자바 예외 글은 사용자에게 보이지 않고 idea.log 에 남긴다.
+        LOG.warn("Git Log 읽기 실패 " + target.dir(), e);
         result = null;
-        error = String.valueOf(e);
+        error = SyncBundle.message("history.failed");
       }
       catch (InterruptedException e) {
         Thread.currentThread().interrupt();
@@ -589,7 +615,7 @@ final class ProjectHistoryPanel extends JPanel {
         onlyMine.setVisible(target.vcs() == SyncPanel.Vcs.GIT);
         fillCommits();
         loading(false);
-        status.setText(done == null ? failure : SyncBundle.message("history.count", done.entries().size()));
+        status.setText(done == null ? SyncPanel.reason(failure) : SyncBundle.message("history.count", done.entries().size()));
       });
     });
   }
@@ -601,18 +627,20 @@ final class ProjectHistoryPanel extends JPanel {
     int request = loadSeq;
     loadingMore = true;
     loading(true);
-    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+    reading = ApplicationManager.getApplication().executeOnPooledThread(() -> {
       Loaded result = null;
       String error = null;
       try {
         result = read(before.target(), before);
       }
       catch (IOException e) {
-        error = e.getMessage();
+        LOG.warn("Git Log 더 읽기 실패 " + before.target().dir() + ": " + e.getMessage());
+        error = SyncPanel.messageOf(e);
       }
       catch (RuntimeException e) {
         // load 와 같다. 빠져나가면 loadingMore 가 풀리지 않아 더 읽지 못한다.
-        error = String.valueOf(e);
+        LOG.warn("Git Log 더 읽기 실패 " + before.target().dir(), e);
+        error = SyncBundle.message("history.failed");
       }
       catch (InterruptedException e) {
         Thread.currentThread().interrupt();
@@ -627,7 +655,7 @@ final class ProjectHistoryPanel extends JPanel {
           loaded = new Loaded(before.target(), before.branch(), before.svnRoot(), before.svnPrefixes(), before.start(), before.remotes(),
                               before.entries(), before.rows(), false, before.me(), before.sides(), before.clashes());
           loading(false);
-          status.setText(Objects.toString(failure, SyncBundle.message("history.count", before.entries().size())));
+          status.setText(failure != null ? SyncPanel.reason(failure) : SyncBundle.message("history.count", before.entries().size()));
           return;
         }
         loaded = done;
@@ -961,7 +989,8 @@ final class ProjectHistoryPanel extends JPanel {
       }
       catch (RuntimeException e) {
         // 예상 못 한 오류도 버리지 않고 비교 창에 오류 문구로 보인다(load 와 같다).
-        error = String.valueOf(e);
+        LOG.warn("Git Log 비교 읽기 실패 " + file.path(), e);
+        error = SyncBundle.message("history.failed");
       }
       catch (InterruptedException e) {
         Thread.currentThread().interrupt();
@@ -972,7 +1001,7 @@ final class ProjectHistoryPanel extends JPanel {
       String failure = error;
       openLater(() -> {
         if (failure != null) {
-          DiffManager.getInstance().showDiff(project, new MessageDiffRequest(failure));
+          DiffManager.getInstance().showDiff(project, new MessageDiffRequest(SyncPanel.explained(failure)));
           return;
         }
         File dir = source.target().dir();
@@ -1008,12 +1037,13 @@ final class ProjectHistoryPanel extends JPanel {
         contents = new byte[][]{blob(dir, clash.ownerChange().newBlob()), blob(dir, clash.change().newBlob())};
       }
       catch (IOException e) {
-        openLater(() -> DiffManager.getInstance().showDiff(project, new MessageDiffRequest(e.getMessage())));
+        openLater(() -> DiffManager.getInstance().showDiff(project, new MessageDiffRequest(SyncPanel.explained(SyncPanel.messageOf(e)))));
         return;
       }
       catch (RuntimeException e) {
         // 예상 못 한 오류도 버리지 않고 비교 창에 오류 문구로 보인다(load 와 같다).
-        openLater(() -> DiffManager.getInstance().showDiff(project, new MessageDiffRequest(String.valueOf(e))));
+        LOG.warn("Git Log 비교 읽기 실패 " + clash.change().path(), e);
+        openLater(() -> DiffManager.getInstance().showDiff(project, new MessageDiffRequest(SyncBundle.message("history.failed"))));
         return;
       }
       catch (InterruptedException e) {
@@ -1065,8 +1095,12 @@ final class ProjectHistoryPanel extends JPanel {
     catch (NumberFormatException e) {
       throw new IOException("svn 리비전을 읽지 못했습니다: " + entry.id());
     }
-    // 브랜치를 만들기 전 리비전은 그때의 경로(복사 원본)에서 읽는다.
-    String prefix = source.svnPrefixes().getOrDefault(entry.id(), source.branch());
+    // 브랜치를 만들기 전 리비전은 그때의 경로(복사 원본)에서 읽는다. 바뀌기 전(before)은 바로 앞 리비전의 경로다:
+    // 브랜치를 만든 리비전(작업본에서 고친 채 복사)의 앞 판은 새 브랜치 경로에 없고 복사 원본에 있다. 앞 리비전을 아직 읽지 않았으면 더 오래된 쪽 경로(SVN_OLDER).
+    Map<String, String> prefixes = source.svnPrefixes();
+    String older = prefixes.getOrDefault(SVN_OLDER, source.branch());
+    String prefix = !before ? prefixes.getOrDefault(entry.id(), source.branch())
+                    : entry.parents().isEmpty() ? older : prefixes.getOrDefault(entry.parents().get(0), older);
     return SyncPanel.runBytes(dir, CAT_TIMEOUT_SEC, "svn", "cat", SVN_NO_PROMPT, source.svnRoot() + prefix + "/" + path + "@" + rev);
   }
 

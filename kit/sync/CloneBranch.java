@@ -44,7 +44,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * 이클립스 Clone 마법사의 「Initial branch」: Git Clone 이 끝나면 서버 브랜치 가운데 받을 것을 고르게 하고, 고른 브랜치로 바꾼다(원격 추적 설정).
- * Clone 은 서버 브랜치를 모두 받아 오므로 고르기와 바꾸기는 서버에 다시 묻지 않는다.
+ * 보통 Clone 은 서버 브랜치를 모두 받아 오므로 고르기와 바꾸기는 서버에 다시 묻지 않는다. 얕은 Clone(--depth, 한 브랜치만 받음)은 받은 서버 브랜치가 하나라 창을 띄우지 않는다.
  * 기본 선택은 Clone 이 꺼낸 서버 기본 브랜치, 내 이름(git user.name · 메일 앞부분 · Git 로그인 아이디)이 들어간 브랜치는 목록 위로 올린다.
  * 서버 브랜치가 하나뿐이거나 빈 저장소, 기본 브랜치를 알 수 없으면 창을 띄우지 않는다. 취소하면 기본 브랜치 그대로다.
  * 바꾸기에 실패하면 알리고 기본 브랜치로 둔다(Clone 결과는 그대로).
@@ -68,7 +68,10 @@ final class CloneBranch {
     List<String> mine;
     try {
       remote = remote(dir);
-      if (remote == null || remote.branches().size() < 2) return;
+      if (remote == null || remote.branches().size() < 2) {
+        if (remote != null) LOG.info("받은 서버 브랜치가 하나라(얕은 Clone · 한 브랜치 저장소) 받을 브랜치 창을 띄우지 않습니다: " + dir);
+        return;
+      }
       mine = mine(remote.branches(), nameParts(dir));
     }
     catch (IOException e) {
@@ -93,7 +96,7 @@ final class CloneBranch {
     catch (IOException e) {
       LOG.warn("받을 브랜치로 바꾸지 못했습니다: " + dir + " " + branch, e);
       ApplicationManager.getApplication().invokeLater(
-        () -> Messages.showErrorDialog(project, SyncBundle.message("clonebranch.failed", branch, remote.defaultBranch(), e.getMessage()),
+        () -> Messages.showErrorDialog(project, SyncBundle.message("clonebranch.failed", branch, remote.defaultBranch(), SyncPanel.explained(SyncPanel.messageOf(e))),
                                        SyncBundle.message("clonebranch.title")),
         ModalityState.nonModal());
     }

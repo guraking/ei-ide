@@ -37,6 +37,9 @@ final class ReverseMerge {
   private static final String FETCH_KEY_SUFFIX = ".fetch";
   // git config --unset-all 이 맞는 값이 없을 때 내는 종료 코드(git-config(1): 5, 오류 글 없음)를 SyncPanel.runOnce 가 옮긴 글.
   private static final String CONFIG_NO_MATCH = "종료 코드 5";
+  // git config --get-regexp 가 맞는 키가 없을 때 내는 종료 코드(git-config(1): 1, 오류 글 없음)를 SyncPanel.runOnce 가 옮긴 글.
+  private static final String CONFIG_NO_KEY = "종료 코드 1";
+  private static final int CONFIG_READ_ATTEMPTS = 2;
   private static final com.intellij.openapi.diagnostic.Logger LOG = com.intellij.openapi.diagnostic.Logger.getInstance(ReverseMerge.class);
   private static final char LOG_START = '\u0001';
   private static final char LOG_SEP = '\u001f';
@@ -224,14 +227,21 @@ final class ReverseMerge {
 
   /**
    * 역머지가 쓰는 설정(user.* · branch.*.remote · ei.reverseMerge.*)을 git 한 번으로 다 읽는다. 하나씩 읽으면 git 을 넷 띄운다(회사 PC 는 하나에 0.8초).
-   * 맞는 키가 없으면(종료 코드 1) 빈 맵.
+   * 맞는 키가 없으면(종료 코드 1) 빈 맵. 다른 실패(시간 초과 · 파일 잠금)는 한 번 더 읽고, 그래도 못 읽으면 기록을 남기고 빈 맵이다.
+   * 한 번의 일시 실패로 원격 이름이 origin 으로, 대소문자 설정이 거짓으로 읽혀 엉뚱한 서버 브랜치와 견주지 않게 한다.
    */
   static Map<String, String> configs(File root) throws InterruptedException {
-    try {
-      return parseConfigs(git(root, "config", "--get-regexp", CONFIG_KEYS));
-    }
-    catch (IOException missing) {
-      return Map.of();
+    for (int attempt = 1; ; attempt++) {
+      try {
+        return parseConfigs(git(root, "config", "--get-regexp", CONFIG_KEYS));
+      }
+      catch (IOException e) {
+        if (SyncPanel.messageOf(e).endsWith(CONFIG_NO_KEY)) return Map.of();
+        if (attempt >= CONFIG_READ_ATTEMPTS) {
+          LOG.warn("git 설정을 읽지 못함 " + root + ": " + e.getMessage());
+          return Map.of();
+        }
+      }
     }
   }
 
@@ -594,14 +604,23 @@ final class ReverseMerge {
     // 서로 기다릴 필요 없는 읽기는 묶어서 동시에 돌린다. 회사 PC 는 git 을 하나 띄울 때마다 보안 검사로 0.5초 안팎이 든다.
     List<String> local = gitAll(root, List.of(IGNORE_CASE,
                                               new String[]{"--no-optional-locks", "status", "--porcelain=v1", "-z", "-uall"},
-                                              new String[]{"rev-parse", "HEAD"}));
+                                              new String[]{"rev-parse", "HEAD"},
+                                              new String[]{"rev-parse", "--abbrev-ref", "HEAD"}));
     boolean folded = Boolean.parseBoolean(local.get(0).trim());
     WorkTree work = parseStatusZ(local.get(1));
     String head = local.get(2).trim();
+    // current 는 IntelliJ 가 늦게 고치는 값이라, 그사이 터미널 등에서 브랜치를 옮겼으면 엉뚱한 브랜치로 돌아가지 않게 멈춘다.
+    String actual = local.get(3).trim();
+    if (!(actual.equals(current) || folded && actual.equalsIgnoreCase(current))) throw new IOException(SyncBundle.message("rmerge.branch.moved", current, actual));
+    // 풀지 않은 충돌이 남아 있으면 git stash · checkout 이 영어 오류(needs merge)로 멈춘다.
+    if (!work.unmerged().isEmpty()) throw new IOException(SyncBundle.message("rmerge.unmerged", pathList(new ArrayList<>(work.unmerged()))));
     boolean switched = !(into.equals(current) || folded && into.equalsIgnoreCase(current));
     boolean stashed = false;
+    // 윈도우에서 대소문자만 다른 내 브랜치가 있으면 그 이름으로 찾고 옮긴다. 서버 철자로 찾으면 packed-refs 의 다른 철자를 못 찾아 같은 브랜치를 하나 더 만든다.
+    String intoLocal = switched ? localSpelling(root, into, folded) : into;
+    boolean intoExists = switched && hasRef(root, HEADS + intoLocal);
     // 합치기가 시작하는 곳: 옮겨 갈 브랜치(없으면 서버 것으로 만든다) 또는 지금 HEAD. 서버 것이 앞서 있으면 따라잡은 뒤 거기서 합친다.
-    String start = !switched ? "HEAD" : hasRef(root, HEADS + into) ? HEADS + into : intoRemote;
+    String start = !switched ? "HEAD" : intoExists ? HEADS + intoLocal : intoRemote;
     List<String[]> second = new ArrayList<>();
     second.add(new String[]{"rev-list", "--count", start + ".." + intoRemote});
     if (folded) second.add(new String[]{"ls-tree", "-r", "--name-only", fromTip});
@@ -633,13 +652,12 @@ final class ReverseMerge {
     if (!inWay.isEmpty()) throw new IOException(SyncBundle.message("rmerge.untracked", pathList(inWay)));
     if (blocksMerge(work, touched.keySet())) {
       if (!stash) throw new DirtyException();
-      git(root, GIT_LONG_TIMEOUT_SEC, "stash", "push", "-m", STASH_MESSAGE);
-      stashed = true;
+      stashed = stashPush(root, current);
     }
     try {
       if (switched) {
-        // 윈도우에서 대소문자만 다른 내 브랜치가 있으면 그 이름으로 옮긴다. 서버 철자로 옮기면 HEAD 가 다른 철자를 가리켜 추적 설정을 잃는다.
-        if (hasRef(root, HEADS + into)) git(root, GIT_LONG_TIMEOUT_SEC, "checkout", localSpelling(root, into, folded));
+        // 서버 철자로 옮기면 HEAD 가 다른 철자를 가리켜 추적 설정을 잃는다.
+        if (intoExists) git(root, GIT_LONG_TIMEOUT_SEC, "checkout", intoLocal);
         else {
           // --track 은 fetch 설정이 그 브랜치를 받지 않으면(개인 브랜치만 받는 clone) 실패해서, 추적 설정을 직접 적는다.
           git(root, GIT_LONG_TIMEOUT_SEC, "checkout", "-b", into, intoRemote);
@@ -679,7 +697,7 @@ final class ReverseMerge {
         if (!undoCommit(root, beforeMerge, e)) throw e;
         throw new PushRejectedException(SyncBundle.message("rmerge.push.rejected", remote + "/" + into), e);
       }
-      if (switched) git(root, GIT_LONG_TIMEOUT_SEC, "checkout", current);
+      if (switched) checkoutAfterMerge(root, into, current, push);
     }
     catch (IOException e) {
       throw restore(root, current, switched, stashed, e);
@@ -716,16 +734,18 @@ final class ReverseMerge {
   }
 
   /** 작업본 상태: 추적 안 한 파일, 올려 둔(staged) 변경이 있는가, 올리지 않은 고친 파일. */
-  record WorkTree(Set<String> untracked, boolean staged, Set<String> unstaged) {}
+  record WorkTree(Set<String> untracked, boolean staged, Set<String> unstaged, Set<String> unmerged) {}
 
   /**
    * git status --porcelain=v1 -z -uall 출력 → WorkTree. 한 항목은 「XY 경로」이고 이름 바꾸기(X 또는 Y 가 R · C)는 다음 칸에 옛 경로가 더 온다.
    * ?? 는 추적 안 한 파일, X 가 빈칸이 아니면 올려 둔 변경, Y 가 빈칸이 아니면 올리지 않은 변경이다.
+   * 풀지 않은 충돌(git-status(1) 의 DD · AU · UD · UA · DU · AA · UU)은 unmerged 에 따로 모은다.
    * ls-files --others --exclude-standard · diff --cached --name-only · diff --name-only 셋을 git 한 번으로 대신한다.
    */
   static WorkTree parseStatusZ(String output) {
     Set<String> untracked = new LinkedHashSet<>();
     Set<String> unstaged = new LinkedHashSet<>();
+    Set<String> unmerged = new LinkedHashSet<>();
     boolean staged = false;
     String[] items = output.split("\0");
     for (int k = 0; k < items.length; k++) {
@@ -739,10 +759,11 @@ final class ReverseMerge {
         untracked.add(path);
         continue;
       }
+      if (x == 'U' || y == 'U' || x == y && (x == 'A' || x == 'D')) unmerged.add(path);
       if (x != ' ') staged = true;
       if (y != ' ') unstaged.add(path);
     }
-    return new WorkTree(untracked, staged, unstaged);
+    return new WorkTree(untracked, staged, unstaged, unmerged);
   }
 
   /**
@@ -917,6 +938,9 @@ final class ReverseMerge {
       git(root, GIT_LONG_TIMEOUT_SEC, "stash", "pop", ref);
     }
     catch (IOException e) {
+      // 되살리다 3-way 충돌이 나면 git 은 충돌 표시를 남긴 채 Stash 를 지우지 않는다. 다시 Unstash 하면 needs merge 로 실패하므로 충돌 파일을 풀라고 안내한다.
+      Set<String> left = conflicts(root);
+      if (!left.isEmpty()) throw new IOException(SyncBundle.message("rmerge.unstash.conflict", pathList(new ArrayList<>(left))), e);
       throw new IOException(e.getMessage() + "\n" + SyncBundle.message("rmerge.unstash.failed"), e);
     }
   }
@@ -936,6 +960,7 @@ final class ReverseMerge {
    */
   private static IOException restore(File root, String current, boolean switched, boolean stashed, IOException cause) throws InterruptedException {
     boolean back = !switched || checkoutBack(root, current, cause);
+    if (!back && !stashed) return new IOException(cause.getMessage() + "\n" + SyncBundle.message("rmerge.still.on", current), cause);
     if (!stashed) return cause;
     if (back) {
       try {
@@ -959,11 +984,11 @@ final class ReverseMerge {
 
   /**
    * 충돌을 해결한 뒤 합치기를 마무리한다: 합치기 커밋, push 면 서버 개인 브랜치로 올리기, into 로 옮겼으면 원래 브랜치로 돌아오기.
-   * 충돌이 남았거나 합치기를 취소해(MERGE_HEAD 없음) 마무리할 것이 없으면 false 를 돌려주고 아무것도 하지 않는다.
+   * 충돌이 남았으면 LEFT 로 아무것도 하지 않는다. 합치기를 취소해(MERGE_HEAD 없음) 마무리할 것이 없으면 backAfterAbort(ABORTED, 다른 브랜치로 옮겼으면 LEFT).
    * stashed 는 이 합치기가 Stash 를 했는지(merge 가 CONFLICT_STASHED 를 돌려줬는지)다. 참일 때만 원래 브랜치에서 되살린다(unstash).
    * push · 돌아오기가 실패해도 원래 브랜치로 돌아가 되살린다. 커밋이 실패하면 into 에 남고, Stash 가 남았다는 안내를 붙인다.
    */
-  static boolean finish(File root, String remote, String into, String current, boolean push, boolean stashed) throws IOException, InterruptedException {
+  static Finish finish(File root, String remote, String into, String current, boolean push, boolean stashed) throws IOException, InterruptedException {
     String work = SyncPanel.beginWork(root);
     try {
       return finishAlone(root, remote, into, current, push, stashed);
@@ -973,9 +998,10 @@ final class ReverseMerge {
     }
   }
 
-  private static boolean finishAlone(File root, String remote, String into, String current, boolean push, boolean stashed)
+  private static Finish finishAlone(File root, String remote, String into, String current, boolean push, boolean stashed)
     throws IOException, InterruptedException {
-    if (!hasRef(root, "MERGE_HEAD") || !conflicts(root).isEmpty()) return false;
+    if (!conflicts(root).isEmpty()) return Finish.LEFT;
+    if (!hasRef(root, "MERGE_HEAD")) return backAfterAbort(root, into, current, stashed) ? Finish.ABORTED : Finish.LEFT;
     try {
       // 커밋 훅(lint 등)이 느려도 끊지 않게 합치기와 같은 긴 시간 제한을 쓴다.
       git(root, GIT_LONG_TIMEOUT_SEC, "commit", "--no-edit");
@@ -987,13 +1013,65 @@ final class ReverseMerge {
     boolean switched = !sameBranch(root, into, current);
     try {
       if (push) pushAfterFinish(root, remote, into, switched);
-      if (switched) git(root, GIT_LONG_TIMEOUT_SEC, "checkout", current);
+      if (switched) checkoutAfterMerge(root, into, current, push);
     }
     catch (IOException e) {
       throw restore(root, current, switched, stashed, e);
     }
     if (stashed) unstash(root);
+    return Finish.DONE;
+  }
+
+  /** finish 결과: 마무리함, 충돌이 남아 그대로 둠, 사용자가 합치기를 취소해 원래 브랜치로 돌아옴. */
+  enum Finish { DONE, LEFT, ABORTED }
+
+  /**
+   * 충돌 창에서 합치기를 취소(MERGE_HEAD 없음, 충돌 없음)한 뒤: 아직 into 에 있으면 원래 브랜치로 돌아가 Stash 를 되살린다.
+   * 그사이 사용자가 다른 브랜치로 옮겼으면 건드리지 않고 false. 되살리지 못하면 그 안내를 담은 IOException.
+   */
+  private static boolean backAfterAbort(File root, String into, String current, boolean stashed) throws IOException, InterruptedException {
+    String head = git(root, "rev-parse", "--abbrev-ref", "HEAD").trim();
+    boolean onCurrent = sameBranch(root, head, current);
+    if (!onCurrent && !sameBranch(root, head, into)) return false;
+    if (!onCurrent) git(root, GIT_LONG_TIMEOUT_SEC, "checkout", current);
+    if (stashed) unstash(root);
     return true;
+  }
+
+  /** 합치기(와 Push)가 끝난 뒤 원래 브랜치로 돌아간다. 돌아가지 못하면 합치기는 끝났다는 안내를 앞에 붙인 IOException(restore 가 받는다). */
+  private static void checkoutAfterMerge(File root, String into, String current, boolean pushed) throws IOException, InterruptedException {
+    try {
+      git(root, GIT_LONG_TIMEOUT_SEC, "checkout", current);
+    }
+    catch (IOException e) {
+      throw new IOException(SyncBundle.message(pushed ? "rmerge.back.failed.pushed" : "rmerge.back.failed", into, current) + "\n" + e.getMessage(), e);
+    }
+  }
+
+  /**
+   * 커밋 안 한 변경을 Stash(STASH_MESSAGE)에 넣는다. 실제로 새 Stash 가 생겼으면 true(서브모듈의 추적 안 한 파일뿐이면 git 은 「No local changes to save」로 끝나 만들지 않는다).
+   * git 이 Stash 를 만든 뒤 작업본 되돌리기에서 실패하면(파일 잠금 · 시간 초과) 변경은 Stash 에 있으므로 그 안내를 붙인 IOException.
+   */
+  private static boolean stashPush(File root, String current) throws IOException, InterruptedException {
+    String before = stashTop(root);
+    try {
+      git(root, GIT_LONG_TIMEOUT_SEC, "stash", "push", "-m", STASH_MESSAGE);
+    }
+    catch (IOException e) {
+      if (Objects.equals(before, stashTop(root))) throw e;
+      throw new IOException(e.getMessage() + "\n" + SyncBundle.message("rmerge.stash.left", current), e);
+    }
+    return !Objects.equals(before, stashTop(root));
+  }
+
+  /** 맨 위 Stash 커밋. Stash 가 없으면 null. */
+  private static String stashTop(File root) throws InterruptedException {
+    try {
+      return git(root, "rev-parse", "--verify", "--quiet", "refs/stash").trim();
+    }
+    catch (IOException none) {
+      return null;
+    }
   }
 
   /**

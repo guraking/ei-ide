@@ -59,6 +59,7 @@ public class HistoryCheck {
       <date>2026-10-22T09:54:00.123456Z</date>
       <paths>
       <path action="M" kind="file">/trunk/app/src/A.java</path>
+      <path action="A" kind="dir">/trunk/app/src/new</path>
       <path action="A" kind="file">/trunk/app2/B.java</path>
       <path action="D" kind="file">/trunk/app/한글.txt</path>
       </paths>
