@@ -88,6 +88,14 @@ public class ColumnRenameCheck {
     for (ColumnRename.Hit h : cols) eq(h.kind(), ColumnRename.Kind.COLUMN);
     eq(cols.size(), 6);
 
+    // DTO 필드 이름: 칼럼 목록이 있으면 매퍼 만들기(uniqueCamel)와 같은 이름, 없거나 목록에 없으면 camel.
+    eq(List.of(ColumnRename.fields("USER_NM", "USER_NAME", null)), List.of("userNm", "userName"));
+    eq(List.of(ColumnRename.fields("USER_NM", "USER_NAME", List.of("A"))), List.of("userNm", "userName"));
+    eq(List.of(ColumnRename.fields("이름", "NAME_X", List.of("명칭", "이름"))), List.of("field2", "nameX"));
+    eq(List.of(ColumnRename.fields("이름", "성명", List.of("명칭", "이름"))), List.of("field2", "field2"));
+    eq(List.of(ColumnRename.fields("user_nm", "FIELD", List.of("명칭", "USER_NM"))), List.of("userNm", "field2"));
+    eq(ColumnRename.find(XML, "USER_NM", "USER_NAME", "", true, List.of("명칭", "USER_NM")).size(), all.size());
+
     // 없는 표, 매퍼 아님, 닫히지 않은 #{.
     eq(ColumnRename.find(XML, "USER_NM", "X", "TB_NONE", true).isEmpty(), true);
     eq(ColumnRename.find("<beans/>", "USER_NM", "X", null, true).isEmpty(), true);

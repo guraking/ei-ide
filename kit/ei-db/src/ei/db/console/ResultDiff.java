@@ -1,5 +1,7 @@
 package ei.db.console;
 
+import ei.db.QueryResult;
+
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayDeque;
@@ -101,8 +103,12 @@ final class ResultDiff {
     return new Outcome(common, onlyIn(leftColumns, rightIndex), onlyIn(rightColumns, leftIndex), rows);
   }
 
-  /** 값이 같은지. 숫자는 값으로, 나머지는 equals. null 은 null 과만 같다. */
+  /**
+   * 값이 같은지. 숫자는 값으로, 나머지는 equals. null 은 null 과만 같다.
+   * 이진 값(BinaryValue)은 길이만 읽어 두어 내용을 견줄 수 없으므로 같다고 하지 않는다(길이가 같아도 「다름」으로 보인다).
+   */
   static boolean same(Object a, Object b) {
+    if (a instanceof QueryResult.BinaryValue || b instanceof QueryResult.BinaryValue) return false;
     return Objects.equals(normalize(a), normalize(b));
   }
 

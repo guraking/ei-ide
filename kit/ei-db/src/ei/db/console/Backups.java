@@ -1,6 +1,10 @@
 package ei.db.console;
 
 import com.intellij.ide.util.PropertiesComponent;
+import com.intellij.notification.Notification;
+import com.intellij.notification.NotificationAction;
+import com.intellij.notification.NotificationGroupManager;
+import com.intellij.notification.NotificationType;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.diagnostic.Logger;
@@ -8,6 +12,7 @@ import com.intellij.openapi.options.Configurable;
 import com.intellij.openapi.options.ConfigurationException;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
+import com.intellij.openapi.util.Key;
 import com.intellij.ui.JBIntSpinner;
 import com.intellij.ui.components.JBCheckBox;
 import com.intellij.ui.components.JBLabel;
@@ -53,9 +58,10 @@ import java.util.function.BooleanSupplier;
 
 /**
  * 「고치기 전 백업」: UPDATE · DELETE 를 실행하기 직전에 바뀔 행을 같은 접속(같은 세션)에서 읽어 되돌리는 SQL 을 파일로 남긴다.
- * 파일은 IDE 설정 폴더의 ei-db/backup/접속 이름/yyyyMMdd-HHmmss_표.sql (UTF-8). 문장 읽기 · 되돌리는 SQL · 머리 형식은 BackupSql.
+ * 파일은 IDE 설정 폴더의 ei-db/backup/접속 id/yyyyMMdd-HHmmss_표.sql (UTF-8). 예전에 쓰던 접속 이름 폴더도 목록 · 보존 정리에서 함께 읽는다. 문장 읽기 · 되돌리는 SQL · 머리 형식은 BackupSql.
  * 백업하지 못하는 문장은 알리고 실행은 그대로 둔다. 읽기 · 쓰기에 실패했거나 행이 한도를 넘으면 백업 없이 실행할지 묻는다(묻지 않고 실행하지 않는다).
- * 보존 일수가 지난 파일은 그 접속 폴더에 새 백업을 쓸 때 지운다.
+ * 보존 일수가 지난 파일은 그 접속 폴더(예전 이름 폴더 포함)에 새 백업을 쓸 때 지운다.
+ * 이어진 백업(「모두 실행」 의 UPDATE 수백 개)은 알림 하나로 묶는다: 방금 띄운 앞 알림을 닫고 묶은 개수를 적은 새 알림으로 바꾼다.
  */
 public final class Backups {
   /** plugin.xml 에 등록한 알림 묶음(Notify 와 같다). */
@@ -93,9 +99,26 @@ public final class Backups {
     return Math.max(KEEP_FOREVER, Math.min(n, MAX_KEEP_DAYS));
   }
 
-  /** 그 접속의 백업 폴더(없을 수 있다). */
+  /** 마지막 백업 알림과 그 알림이 묶은 백업 수 · LOB 경고(없으면 null) · 띄운 시각. */
+  private record Shown(Notification notification, String connectionId, int count, String warning, long shownAt) {}
+  /** 앞 알림이 이 시간 안에 떴고 아직 닫히지 않았으면 한 알림으로 묶는다(한 번의 「모두 실행」). */
+  private static final long BUNDLE_WINDOW_MS = 60_000;
+  private static final Key<Shown> SHOWN = Key.create("ei.db.backup.shown");
+
+  private static Path root() {
+    return PathManager.getConfigDir().resolve("ei-db").resolve("backup");
+  }
+
+  /** 그 접속의 백업 폴더(없을 수 있다). 이름이 같은 두 접속이 섞이지 않게 접속 id 로 정한다. */
   static Path dir(DbConfig c) {
-    return PathManager.getConfigDir().resolve("ei-db").resolve("backup").resolve(BackupSql.safeName(c.name));
+    return root().resolve(BackupSql.safeName(c.id));
+  }
+
+  /** 새 백업을 쓰는 폴더와, 접속 이름으로 정하던 예전 폴더(목록 · 보존 정리에서만 읽는다). */
+  private static List<Path> dirs(DbConfig c) {
+    Path legacy = root().resolve(BackupSql.safeName(c.name));
+    Path now = dir(c);
+    return legacy.equals(now) ? List.of(now) : List.of(now, legacy);
   }
 
   /**
@@ -136,7 +159,7 @@ public final class Backups {
       // PK 값을 바꾸는 UPDATE 는 실행 뒤 옛 PK 로 찾을 행이 없다: PK 로 되돌리는 문장 대신 처음 행을 INSERT 로 남긴다.
       boolean pkChanged = !Collections.disjoint(pks, t.setColumns());
       BackupSql.Restore restore = BackupSql.restore(t.delete(), t.table(), rows.columns(), rows.columnTypes(), rows.rows(),
-          pkChanged ? Set.of() : pks, c.kind);
+          pkChanged ? Set.of() : pks, t.setColumns(), c.kind);
       if (pkChanged) restore = new BackupSql.Restore(restore.body(), restore.excluded(), BackupSql.Mode.INSERT_PK_CHANGED);
       write(c, origin, t.table(), sql, rows.rows().size(), restore);
       announce(project, c, t.table(), rows.rows().size(), restore);
@@ -145,6 +168,10 @@ public final class Backups {
       return false;
     } catch (SQLException | IOException | RuntimeException e) {
       return ask(project, EiDbBundle.message("backup.failed.ask", reason(e)));
+    } catch (OutOfMemoryError e) {
+      // 읽은 행은 이미 버려졌다. 실행 대기에 멈추지 않고 백업 없이 실행할지 묻는다.
+      LOG.warn("고치기 전 백업 중 메모리 부족: " + t.table(), e);
+      return ask(project, EiDbBundle.message("backup.failed.ask", EiDbBundle.message("backup.out.of.memory", limit)));
     }
   }
 
@@ -207,14 +234,28 @@ public final class Backups {
 
   /**
    * 백업을 쓴 뒤: 「백업 보기」 로 목록 창을 여는 알림을 띄운다(어디서 되살리는지 알 수 있게).
-   * LOB · 이진 칼럼을 빼고 남겼으면 그 칼럼 이름도 경고로 알린다. 실행은 막지 않는다.
+   * LOB · 이진 칼럼을 빼고 남겼으면 그 칼럼 이름도 같은 알림에 경고로 적는다. 실행은 막지 않는다.
+   * BUNDLE_WINDOW_MS 안에 같은 접속에서 띄운 앞 백업 알림이 아직 닫히지 않았으면 닫고 개수를 더한 알림 하나로 바꾼다(「백업 보기」 가 그 접속을 연다).
+   * 앞 알림의 LOB 경고는 새 경고 앞에 이어 적는다.
    */
-  private static void announce(Project project, DbConfig c, String table, int rows, BackupSql.Restore restore) {
-    com.intellij.notification.NotificationGroupManager.getInstance().getNotificationGroup(NOTIFICATION_GROUP)
-        .createNotification(EiDbBundle.message("backup.saved", table, rows), com.intellij.notification.NotificationType.INFORMATION)
-        .addAction(com.intellij.notification.NotificationAction.createSimpleExpiring(EiDbBundle.message("backup.menu.view"), () -> BackupDialog.open(project, c)))
-        .notify(project);
-    if (!restore.excluded().isEmpty()) Notify.warning(project, EiDbBundle.message("backup.lob.excluded", table, String.join(", ", restore.excluded())));
+  private static synchronized void announce(Project project, DbConfig c, String table, int rows, BackupSql.Restore restore) {
+    Shown prev = project.getUserData(SHOWN);
+    long now = System.currentTimeMillis();
+    boolean open = prev != null && prev.connectionId().equals(c.id) && !prev.notification().isExpired() && now - prev.shownAt() < BUNDLE_WINDOW_MS;
+    int count = open ? prev.count() + 1 : 1;
+    String warning = open ? prev.warning() : null;
+    if (!restore.excluded().isEmpty()) {
+      String added = EiDbBundle.message("backup.lob.excluded", table, String.join(", ", restore.excluded()));
+      warning = warning == null ? added : warning + "<br>" + added;
+    }
+    if (open) prev.notification().expire();
+    String text = count == 1 ? EiDbBundle.message("backup.saved", table, rows) : EiDbBundle.message("backup.saved.many", count, table, rows);
+    if (warning != null) text += "<br>" + warning;
+    Notification n = NotificationGroupManager.getInstance().getNotificationGroup(NOTIFICATION_GROUP)
+        .createNotification(text, warning == null ? NotificationType.INFORMATION : NotificationType.WARNING)
+        .addAction(NotificationAction.createSimpleExpiring(EiDbBundle.message("backup.menu.view"), () -> BackupDialog.open(project, c)));
+    project.putUserData(SHOWN, new Shown(n, c.id, count, warning, now));
+    n.notify(project);
   }
 
   private static String gridSql(List<String> sqls) {
@@ -253,7 +294,7 @@ public final class Backups {
       } catch (FileAlreadyExistsException e) {
         continue;
       }
-      prune(dir, keepDays());
+      for (Path d : dirs(c)) prune(d, keepDays());
       return file;
     }
     throw new IOException(EiDbBundle.message("backup.name.exhausted", dir));
@@ -261,7 +302,7 @@ public final class Backups {
 
   /** 고친 시각이 days 일보다 오래된 우리 백업 파일(BackupSql.isOurs)을 지운다. 사용자가 넣은 다른 파일은 두고, 지우지 못한 파일은 다음 백업 때 다시 지우므로 기록만 남긴다. */
   private static void prune(Path dir, int days) {
-    if (days == KEEP_FOREVER) return;
+    if (days == KEEP_FOREVER || !Files.isDirectory(dir)) return;
     Instant cut = Instant.now().minus(Duration.ofDays(days));
     try (DirectoryStream<Path> files = Files.newDirectoryStream(dir, "*" + BackupSql.EXTENSION)) {
       for (Path f : files) {
@@ -284,14 +325,15 @@ public final class Backups {
   /** 목록 한 줄. header 가 null 이면 우리 머리가 없는 파일이다(이름만 보인다). */
   record Entry(Path file, BackupSql.Header header) {}
 
-  /** 그 접속 폴더의 백업 파일을 새것부터. 폴더가 없으면 빈 목록. 머리만 읽는다. 화면 스레드에서 부르지 않는다. */
+  /** 그 접속 폴더(예전 이름 폴더 포함)의 백업 파일을 새것부터. 폴더가 없으면 빈 목록. 머리만 읽는다. 화면 스레드에서 부르지 않는다. */
   static List<Entry> list(DbConfig c) throws IOException {
-    Path dir = dir(c);
     List<Entry> out = new ArrayList<>();
-    if (!Files.isDirectory(dir)) return out;
-    try (DirectoryStream<Path> files = Files.newDirectoryStream(dir, "*" + BackupSql.EXTENSION)) {
-      for (Path f : files) {
-        if (Files.isRegularFile(f)) out.add(new Entry(f, readHeader(f)));
+    for (Path dir : dirs(c)) {
+      if (!Files.isDirectory(dir)) continue;
+      try (DirectoryStream<Path> files = Files.newDirectoryStream(dir, "*" + BackupSql.EXTENSION)) {
+        for (Path f : files) {
+          if (Files.isRegularFile(f)) out.add(new Entry(f, readHeader(f)));
+        }
       }
     }
     // 파일 이름이 시각으로 시작하므로 이름 역순이 새것부터다.
@@ -329,7 +371,7 @@ public final class Backups {
       limit = new JBIntSpinner(DEFAULT_ROW_LIMIT, 1, DbSessions.MAX_ROW_LIMIT);
       days = new JBIntSpinner(DEFAULT_KEEP_DAYS, KEEP_FOREVER, MAX_KEEP_DAYS);
       reset();
-      JBLabel where = new JBLabel(EiDbBundle.message("backup.settings.where", PathManager.getConfigDir().resolve("ei-db").resolve("backup")),
+      JBLabel where = new JBLabel(EiDbBundle.message("backup.settings.where", root()),
           UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER);
       where.setCopyable(true);
       return FormBuilder.createFormBuilder()

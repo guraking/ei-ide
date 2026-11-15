@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Set;
 import java.util.TreeSet;
@@ -46,6 +47,8 @@ public final class MapperGen {
   private final String namespace;
   private final String dtoType;
   private final Options o;
+  /** 칼럼 이름 → DTO 필드 이름({@link Names#uniqueCamel}). */
+  private final Map<String, String> fieldNames;
 
   /** dtoType 은 DTO 의 FQN(패키지가 없으면 단순 이름). */
   public MapperGen(String table, List<Meta.Column> cols, String namespace, String dtoType, Options o) {
@@ -56,6 +59,15 @@ public final class MapperGen {
     this.namespace = namespace;
     this.dtoType = dtoType;
     this.o = o;
+    List<String> names = new ArrayList<>();
+    for (Meta.Column c : cols) names.add(c.name());
+    this.fieldNames = Names.uniqueCamel(names);
+  }
+
+  /** 칼럼의 DTO 필드 이름. 다른 칼럼과 camel 이 겹치면 뒤에 숫자가 붙는다. */
+  String field(String column) {
+    String f = fieldNames.get(column);
+    return f != null ? f : Names.camel(column);
   }
 
   public boolean hasPk() {
@@ -169,7 +181,7 @@ public final class MapperGen {
   public List<DtoGen.Field> fields() {
     List<DtoGen.Field> out = new ArrayList<>();
     for (Meta.Column c : cols) {
-      out.add(new DtoGen.Field(c.name(), Names.camel(c.name()), TypeMap.forColumn(c.type(), c.size(), c.scale()), c.comment()));
+      out.add(new DtoGen.Field(c.name(), field(c.name()), TypeMap.forColumn(c.type(), c.size(), c.scale()), c.comment()));
     }
     return out;
   }
@@ -207,7 +219,7 @@ public final class MapperGen {
     List<String> names = new ArrayList<>();
     int width = 0;
     for (Meta.Column c : cols) {
-      String n = useMap ? name(c.name()) : name(c.name()) + " AS " + Names.camel(c.name());
+      String n = useMap ? name(c.name()) : name(c.name()) + " AS " + field(c.name());
       names.add(n);
       width = Math.max(width, n.length());
     }
@@ -241,7 +253,7 @@ public final class MapperGen {
     }
     for (Meta.Column c : cols) {
       String col = alias + "." + name(c.name());
-      String f = Names.camel(c.name());
+      String f = field(c.name());
       if (isDate(c.type())) {
         ifBlock(b, indent, given(c, f + RANGE_FROM), "AND " + col + " " + cmp(">=") + " " + bind(c, f + RANGE_FROM));
         ifBlock(b, indent, given(c, f + RANGE_TO), "AND " + col + " " + cmp("<=") + " " + bind(c, f + RANGE_TO));
@@ -273,7 +285,7 @@ public final class MapperGen {
     b.append("    ) VALUES (\n");
     first = true;
     for (Meta.Column c : cols) {
-      b.append(first ? LEAD_FIRST : LEAD_NEXT).append("#{").append(Names.camel(c.name())).append("}\n");
+      b.append(first ? LEAD_FIRST : LEAD_NEXT).append("#{").append(field(c.name())).append("}\n");
       first = false;
     }
     return b.append("    )\n  </insert>\n").toString();
@@ -286,7 +298,7 @@ public final class MapperGen {
       b.append("    <set>\n");
       for (Meta.Column c : cols) {
         if (c.pk()) continue;
-        String f = Names.camel(c.name());
+        String f = field(c.name());
         b.append("      <if test=\"").append(f).append(" != null\">").append(name(c.name()))
          .append(" = #{").append(f).append("},</if>\n");
       }
@@ -296,7 +308,7 @@ public final class MapperGen {
       for (Meta.Column c : cols) {
         if (c.pk()) continue;
         b.append(first ? "       SET " : LEAD_NEXT).append(name(c.name()))
-         .append(" = #{").append(Names.camel(c.name())).append("}\n");
+         .append(" = #{").append(field(c.name())).append("}\n");
         first = false;
       }
     }
@@ -342,7 +354,7 @@ public final class MapperGen {
     b.append("    USING DUAL\n");
     List<String> on = new ArrayList<>();
     for (Meta.Column c : cols) {
-      if (c.pk()) on.add(alias + "." + name(c.name()) + " = #{" + Names.camel(c.name()) + "}");
+      if (c.pk()) on.add(alias + "." + name(c.name()) + " = #{" + field(c.name()) + "}");
     }
     b.append("       ON (").append(String.join(" AND ", on)).append(")\n");
     b.append("     WHEN MATCHED THEN\n");
@@ -351,7 +363,7 @@ public final class MapperGen {
     for (Meta.Column c : cols) {
       if (c.pk()) continue;
       b.append(MERGE_INDENT).append(first ? LEAD_FIRST : LEAD_NEXT).append(alias).append('.').append(name(c.name()))
-       .append(" = #{").append(Names.camel(c.name())).append("}\n");
+       .append(" = #{").append(field(c.name())).append("}\n");
       first = false;
     }
     b.append("     WHEN NOT MATCHED THEN\n");
@@ -368,7 +380,7 @@ public final class MapperGen {
     boolean first = true;
     for (Meta.Column c : cols) {
       b.append(indent).append(first ? LEAD_FIRST : LEAD_NEXT);
-      b.append(values ? "#{" + Names.camel(c.name()) + "}" : name(c.name())).append('\n');
+      b.append(values ? "#{" + field(c.name()) + "}" : name(c.name())).append('\n');
       first = false;
     }
   }
@@ -386,7 +398,7 @@ public final class MapperGen {
     for (Meta.Column c : cols) {
       if (!c.pk()) continue;
       b.append(first ? "     WHERE " : "       AND ").append(prefix).append(name(c.name()))
-       .append(" = #{").append(Names.camel(c.name())).append("}\n");
+       .append(" = #{").append(field(c.name())).append("}\n");
       first = false;
     }
   }

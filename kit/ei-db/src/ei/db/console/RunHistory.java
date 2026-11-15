@@ -4,7 +4,10 @@ import com.intellij.openapi.application.PathManager;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.LocalDate;
@@ -17,7 +20,8 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
- * SqlRunner 로 실행한 문장의 기록. IDE 설정 폴더의 ei-db/history.tsv 에 한 줄 한 건(오래된 것부터), 최근 MAX 건만 둔다.
+ * SqlRunner 로 실행한 문장의 기록. IDE 설정 폴더의 ei-db/history.tsv 에 한 줄 한 건(오래된 것부터), 최근 MAX 건만 보인다.
+ * 새 기록은 파일 끝에 한 줄 덧붙이고, 줄이 COMPACT_AT 에 닿으면 최근 MAX 건으로 다시 쓴다(「모두 실행」 문장마다 파일 전체를 쓰지 않게).
  * 줄 형식: 시각(ms) · 접속 id · 접속 이름 · 걸린 시간(ms) · 건수 · 성공(1/0) · 문장 · 바인드 값(0개 이상, 한 칸에 하나),
  * 탭으로 나누고 \ 탭 줄바꿈은 \\ \t \n \r 로 쓴다. 바인드 칸이 없는 예전 줄은 값 없음으로 읽는다.
  * 바인드 값 칸은 「형식 글자:값」. S 문자열 · L Long · I Integer · N BigDecimal(그 밖의 숫자 포함) · B Boolean ·
@@ -43,13 +47,17 @@ public final class RunHistory {
   private static final Pattern PASSWORD_LITERAL = Pattern.compile("(?i)(\\bPASSWORD\\s+)'(?:[^']|'')*'");
   private static final Pattern SECRET_NAME = Pattern.compile("(?i).*(PASSWORD|PASSWD|PWD).*");
   private static final Set<Object> SECRETS = new LinkedHashSet<>();
+  /** 파일 줄(깨진 줄 포함)이 이 수를 넘으면 최근 MAX 건으로 다시 쓴다. */
+  static final int COMPACT_AT = MAX * 2;
 
   /** count 는 조회면 읽은 행 수, 변경이면 변경 수, 모르면 NO_COUNT. binds 는 ? 자리 값(없으면 빈 목록). */
   public record Entry(long time, String configId, String configName, long millis, int count, boolean ok, String sql, List<Object> binds) {}
 
   private final Path file;
-  /** 오래된 것부터. 처음 쓸 때 파일에서 읽는다. */
+  /** 오래된 것부터, 최근 MAX 건. 처음 쓸 때 파일에서 읽는다. */
   private List<Entry> entries;
+  /** 지금 파일의 줄 수(깨진 줄 포함). */
+  private int fileLines;
 
   RunHistory(Path file) {
     this.file = file;
@@ -71,23 +79,44 @@ public final class RunHistory {
     return out;
   }
 
-  /** 비밀번호를 가려 더하고 파일을 다시 쓴다. 파일을 읽지 못했으면 덮지 않고 예외를 낸다. */
+  /** 비밀번호를 가려 파일 끝에 더한다. 줄이 COMPACT_AT 를 넘으면 최근 MAX 건으로 다시 쓴다. 파일을 읽지 못했으면 덮지 않고 예외를 낸다. */
   public synchronized void add(Entry e) throws IOException {
     List<Entry> list = load();
-    list.add(masked(e));
+    Entry m = masked(e);
+    list.add(m);
     while (list.size() > MAX) list.remove(0);
+    if (fileLines < COMPACT_AT) {
+      try {
+        Files.createDirectories(file.toAbsolutePath().getParent());
+        Files.writeString(file, format(m) + "\n", StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+      } catch (IOException ex) {
+        // 쓰다 만 줄이 남았을 수 있어 다음 add 는 목록 전체로 다시 쓴다(이번 건은 목록에 남아 그때 함께 쓰인다).
+        fileLines = COMPACT_AT;
+        throw ex;
+      }
+      fileLines++;
+      return;
+    }
     StringBuilder text = new StringBuilder();
     for (Entry x : list) text.append(format(x)).append('\n');
     ConsoleFiles.write(file, text.toString());
+    fileLines = list.size();
   }
 
   private List<Entry> load() throws IOException {
     if (entries != null) return entries;
     List<Entry> list = new ArrayList<>();
-    for (String line : ConsoleFiles.read(file).split("\n")) {
+    int lines = 0;
+    String text = ConsoleFiles.read(file);
+    for (String line : text.split("\n")) {
+      if (line.isEmpty()) continue;
+      lines++;
       Entry e = parse(line);
       if (e != null) list.add(e);
     }
+    if (list.size() > MAX) list.subList(0, list.size() - MAX).clear();
+    // 끝 줄바꿈이 없으면(쓰다 끊긴 줄) 덧붙이지 않고 다음 기록 때 다시 쓴다.
+    fileLines = text.isEmpty() || text.endsWith("\n") ? lines : COMPACT_AT;
     entries = list;
     return list;
   }

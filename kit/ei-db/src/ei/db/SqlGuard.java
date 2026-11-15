@@ -1,5 +1,7 @@
 package ei.db;
 
+import ei.db.console.SqlSplitter;
+
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -31,6 +33,16 @@ public final class SqlGuard {
       + "|TABLE|INDEX|VIEW|SEQUENCE|SYNONYM|PACKAGE|PROCEDURE|FUNCTION|TRIGGER|TYPE|USER|SCHEMA|DATABASE|ROLE|TABLESPACE)\\s+)?"
       + "(?:CONCURRENTLY\\s+)?(?:IF\\s+EXISTS\\s+)?([\\w.$#\"]+)");
   private static final Pattern WHERE = Pattern.compile("\\bWHERE\\b");
+  /**
+   * 괄호 밖 INTO 가 있는 조회: PostgreSQL 의 SELECT … INTO 새표(표를 만든다), MySQL 의 INTO OUTFILE · DUMPFILE(서버에 파일을 쓴다).
+   * MySQL 의 INTO @변수는 세션 변수에 담기만 하므로 뺀다. Oracle 의 SELECT INTO 는 PL/SQL 블록 안에서만 쓰여 이미 변경으로 본다.
+   * Oracle 12c 의 WITH FUNCTION · PROCEDURE 는 선언부 본문의 SELECT … INTO 변수라서 뺀다.
+   */
+  private static final Pattern SELECT_INTO = Pattern.compile("^(?:SELECT|WITH(?!\\s+(?:FUNCTION|PROCEDURE)\\b))\\b.*\\bINTO\\b(?!\\s*@)", Pattern.DOTALL);
+  /** 트랜잭션을 끝내는 문장(PostgreSQL 의 END · ABORT 포함). 저장점까지만 되돌리는 ROLLBACK … TO 와 2단계 커밋의 … PREPARED 는 뺀다. */
+  private static final Pattern TX_END = Pattern.compile("^(?:COMMIT|END|ABORT|ROLLBACK)\\b(?!\\s+PREPARED\\b)(?!.*\\bTO\\b)", Pattern.DOTALL);
+  /** 공백뿐인 줄. 문장 수를 셀 때 지운다: 드라이버는 빈 줄에서 문장을 나누지 않는다(SqlSplitter 는 콘솔 편의로 나눈다). */
+  private static final Pattern BLANK_LINE = Pattern.compile("\\n[ \\t\\r]*(?=\\n)");
   /** 끝의 ; 가 문장의 일부인 PL/SQL 단위(END 이름; 까지 그대로 보낸다). */
   private static final Pattern PLSQL = Pattern.compile(
       "^(?:CREATE\\s+(?:OR\\s+REPLACE\\s+)?(?:(?:NON)?EDITIONABLE\\s+)?(?:PROCEDURE|FUNCTION|PACKAGE|TRIGGER|TYPE)\\b|DECLARE\\b|BEGIN\\b)");
@@ -66,7 +78,26 @@ public final class SqlGuard {
   public static boolean isWrite(String sql) {
     String s = normalize(sql);
     if (WRITE.matcher(s).find()) return true;
+    if (SELECT_INTO.matcher(topLevel(QUOTED_NAME.matcher(s).replaceAll("\"\""))).find()) return true;
     return (WITH.matcher(s).find() || EXPLAIN_ANALYZE.matcher(s).find()) && DML.matcher(s).find();
+  }
+
+  /** COMMIT · ROLLBACK(저장점까지가 아닌 것) · PostgreSQL END · ABORT 처럼 지금 트랜잭션을 끝내는 문장인지. */
+  public static boolean isTxEnd(String sql) {
+    return TX_END.matcher(normalize(sql)).find();
+  }
+
+  /**
+   * 한 칸에 문장이 둘 이상인지(SqlSplitter 의 ; 경계 · / 줄 기준, 빈 줄은 경계로 보지 않는다).
+   * PostgreSQL · MySQL(allowMultiQueries) 드라이버는 이어진 문장을 모두 실행하지만 판정은 맨 앞 문장만 보므로 실행 전에 거절한다.
+   */
+  public static boolean hasSeveralStatements(String sql) {
+    return hasSeveralStatements(sql, null);
+  }
+
+  /** hasSeveralStatements 와 같되 kind 가 MySQL 이면 # 줄 주석을 주석으로 본다. kind 는 null 이어도 된다. */
+  public static boolean hasSeveralStatements(String sql, DbKind kind) {
+    return SqlSplitter.split(BLANK_LINE.matcher(sql).replaceAll(""), kind == DbKind.MYSQL).size() > 1;
   }
 
   /** 자동 커밋이 꺼져 있어도 Oracle · MySQL 이 앞 변경까지 커밋해 버리는 DDL 인지. */

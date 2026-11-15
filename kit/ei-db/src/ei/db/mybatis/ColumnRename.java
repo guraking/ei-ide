@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
  * 매퍼 XML 글에서 칼럼 이름을 바꿀 위치를 찾는다(IntelliJ 클래스 없음). 위치는 모두 문서 글자 안의 오프셋이다.
  * 찾는 곳: 문장(select · insert · update · delete) · &lt;sql&gt; 조각의 SQL 글(CDATA 포함), resultMap 안 요소의 column 속성.
  * 낱말 단위(앞뒤가 식별자 글자가 아님)로 대소문자를 가리지 않고 찾으며 '...' 문자열 · XML 주석 · #{} · ${} · 엔티티 안은 뺀다.
- * DTO 속성도 바꾸면 #{camel(옛)} 의 첫 마디와, 칼럼을 바꾼 resultMap 요소의 property="camel(옛)" 도 바꾼다.
+ * DTO 속성도 바꾸면 #{옛 필드} 의 첫 마디와, 칼럼을 바꾼 resultMap 요소의 property="옛 필드" 도 바꾼다(필드 이름은 fields).
  */
 final class ColumnRename {
   private ColumnRename() {}
@@ -64,6 +64,21 @@ final class ColumnRename {
     return newName;
   }
 
+  /**
+   * 옛 · 새 칼럼의 DTO 필드 이름 {옛, 새}. columns(그 표의 칼럼, 표 순서)에 옛 칼럼이 있으면(대소문자 무시) 매퍼 만들기와 같이
+   * Names.uniqueCamel 로 정한다(겹치는 이름의 2, 3 … 포함, 새 이름은 옛 칼럼 자리를 새 이름으로 바꾼 목록에서). 없으면 Names.camel.
+   */
+  static String[] fields(String oldName, String newName, List<String> columns) {
+    int at = -1;
+    if (columns != null) {
+      for (int i = 0; i < columns.size() && at < 0; i++) if (columns.get(i).equalsIgnoreCase(oldName)) at = i;
+    }
+    if (at < 0) return new String[] {Names.camel(oldName), Names.camel(newName)};
+    List<String> renamed = new ArrayList<>(columns);
+    renamed.set(at, newName);
+    return new String[] {Names.uniqueCamel(columns).get(columns.get(at)), Names.uniqueCamel(renamed).get(newName)};
+  }
+
   /** offset 에 걸친 식별자 낱말. 없으면 빈 글. */
   static String wordAt(CharSequence text, int offset) {
     int a = Math.max(0, Math.min(offset, text.length()));
@@ -78,11 +93,17 @@ final class ColumnRename {
    * 그 문장이 포함하는 조각, 그 문장이 resultMap 속성으로 쓰는 resultMap 만 본다.
    */
   static List<Hit> find(CharSequence text, String oldName, String newName, String table, boolean renameProperty) {
+    return find(text, oldName, newName, table, renameProperty, null);
+  }
+
+  /** find 와 같되 DTO 속성 이름은 그 표의 칼럼 목록 columns(null 이면 모름)로 정한다({@link #fields}). */
+  static List<Hit> find(CharSequence text, String oldName, String newName, String table, boolean renameProperty, List<String> columns) {
     String o = oldName.trim();
     String n = newName.trim();
     String t = table == null || table.isBlank() ? null : table.trim();
-    String oldProp = renameProperty ? Names.camel(o) : null;
-    String newProp = Names.camel(n);
+    String[] props = fields(o, n, columns);
+    String oldProp = renameProperty ? props[0] : null;
+    String newProp = props[1];
     MapperDoc doc = MapperDoc.parse(text);
     Node mapper = mapperOf(doc);
     List<Hit> out = new ArrayList<>();

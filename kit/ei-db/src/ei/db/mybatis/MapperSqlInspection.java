@@ -112,7 +112,7 @@ public final class MapperSqlInspection extends LocalInspectionTool {
   }
 
   /** 매퍼 실행 창에서 마지막에 고른 접속, 없으면 접속이 하나뿐일 때 그것(주석 만들기의 DB 주석과 같은 규칙). 못 정하면 null. */
-  private static DbConfig connection(Project project) {
+  static DbConfig connection(Project project) {
     DbSettings settings = DbSettings.getInstance();
     DbConfig c = settings.find(PropertiesComponent.getInstance(project).getValue(MyBatisRunDialog.CONNECTION_KEY, ""));
     if (c == null && settings.connections().size() == 1) c = settings.connections().get(0);

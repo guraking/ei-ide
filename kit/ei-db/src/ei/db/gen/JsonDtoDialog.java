@@ -149,6 +149,7 @@ final class JsonDtoDialog extends DialogWrapper {
     if (!IDENT.matcher(cls()).matches()) return new ValidationInfo(EiDbBundle.message("common.class.name.invalid"), classField);
     if (!PACKAGE.matcher(pkg()).matches()) return new ValidationInfo(EiDbBundle.message("common.package.invalid"), packageField);
     if (locationField.getText().isBlank()) return new ValidationInfo(EiDbBundle.message("common.location.empty"), locationField);
+    if (!roots.valid(locationField.getText())) return new ValidationInfo(EiDbBundle.message("mapper.bad.path.sentence"), locationField);
     if (jsonArea.getText().isBlank()) return new ValidationInfo(EiDbBundle.message("jsondto.json.empty"), jsonArea);
     try {
       dtoText();

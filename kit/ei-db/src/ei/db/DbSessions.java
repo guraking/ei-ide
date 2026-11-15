@@ -84,7 +84,11 @@ public final class DbSessions implements Disposable {
   private static final String ORACLE_SQL = "oracle.sql.";
   /** 접속을 맺을 때 기다리는 초. 서버가 응답하지 않을 때 무한정 막히지 않게 한다. */
   private static final int CONNECT_TIMEOUT_SEC = 10;
+  /** PostgreSQL 로그인 전체(소켓 연결 · 인증 · 시작 설정)를 기다리는 초. 서버가 연결만 받고 답하지 않을 때 무한정 막히지 않게 한다. */
+  private static final int PG_LOGIN_TIMEOUT_SEC = 30;
   private static final int MILLIS_PER_SEC = 1000;
+  /** 같은 접속의 앞 문장이 끝나기를 기다릴 때 stop 을 다시 보는 간격(밀리초). */
+  private static final long SLOT_WAIT_MS = 200;
 
   private final Project project;
   private final Map<String, Connection> open = new ConcurrentHashMap<>();
@@ -110,8 +114,12 @@ public final class DbSessions implements Disposable {
   private final Set<Statement> cancelled = ConcurrentHashMap.newKeySet();
   /** insertBatch 가 도는 접속 id. 그동안 다른 문장 실행(execute) · 커밋 · 롤백은 거절하고 자동 커밋 바꾸기는 배치가 끝날 때 건다. txLock 안에서 넣는다. */
   private final Set<String> batching = ConcurrentHashMap.newKeySet();
+  /** execute 가 자리를 잡고 문장을 만드는 중인 접속 id(running 에 넣기 전). txLock(id) 안에서 바꾼다. */
+  private final Set<String> reserved = ConcurrentHashMap.newKeySet();
   /** 이 프로젝트의 조회 건수(콘솔 도구줄에서 고른다). 저장하지 않으며 IDE 를 다시 열면 MAX_ROWS. */
   private volatile int maxRows = MAX_ROWS;
+  /** dispose 가 시작됐는지. 그 뒤에 열린 접속은 목록에 넣지 않고 닫는다. this 잠금 안에서 바꾸고 본다. */
+  private boolean disposed;
 
   public DbSessions(Project project) {
     this.project = project;
@@ -211,7 +219,7 @@ public final class DbSessions implements Disposable {
 
   public int pending(String id) { return pending.getOrDefault(id, 0); }
 
-  public boolean isRunning(String id) { return running.containsKey(id); }
+  public boolean isRunning(String id) { return running.containsKey(id) || reserved.contains(id); }
 
   /** cancel 로 멈춘 실행. 실행하던 쪽(run)이 받는다. */
   public static final class CancelledException extends SQLException {
@@ -286,7 +294,9 @@ public final class DbSessions implements Disposable {
    * 열린 접속이 응답하지 않을 때: 미반영 변경이 있고 접속이 닫히지 않았으면(느린 망일 수 있음) 다시 열지 않고 오류,
    * 그 밖에는 닫고 다시 열며 사라진 미반영 변경 건수를 알린다.
    */
-  public Connection connection(DbConfig c) throws SQLException {
+  public Connection connection(DbConfig given) throws SQLException {
+    // 접속을 쥔 창이 옛 설정을 들고 있어도 지금 설정(읽기 전용 등)으로 연다.
+    DbConfig c = DbSettings.getInstance().latest(given);
     synchronized (lock(c.id)) {
       Connection conn = open.get(c.id);
       if (conn != null) {
@@ -296,7 +306,10 @@ public final class DbSessions implements Disposable {
         if (lost > 0 && !conn.isClosed()) {
           throw new SQLException(EiDbBundle.message("sessions.not.responding", c.name, VALID_TIMEOUT_SEC, lost));
         }
-        close(c.id);
+        // 응답하지 않는 접속에 롤백 · 닫기를 보내면 잠금을 쥔 채 막힐 수 있어 바로 끊는다(서버가 롤백한다).
+        Connection dead = detach(c.id);
+        if (dead != null) abort(dead);
+        notifyChanged();
         if (lost > 0) Notify.error(project, EiDbBundle.message("sessions.lost", c.name, lost));
       }
       return openNew(c);
@@ -305,7 +318,8 @@ public final class DbSessions implements Disposable {
 
   private Connection openNew(DbConfig c) throws SQLException {
     String schema = c.schema == null ? "" : c.schema.trim();
-    if (!schema.isEmpty() && !IDENT.matcher(schema).matches()) throw new SQLException(EiDbBundle.message("sessions.bad.schema", schema));
+    // Oracle 만 문장에 이름을 이어 붙인다. MySQL · PostgreSQL 은 드라이버(setCatalog · setSchema)가 이름을 감싸므로 한글 · - 도 받는다.
+    if (c.kind == DbKind.ORACLE && !schema.isEmpty() && !IDENT.matcher(schema).matches()) throw new SQLException(EiDbBundle.message("sessions.bad.schema", schema));
     String password = Passwords.get(c);
     if (password == null) throw new SQLException(EiDbBundle.message("sessions.no.password"));
     Connection conn = connect(c, password);
@@ -327,7 +341,15 @@ public final class DbSessions implements Disposable {
       throw e;
     }
     warnOldDriver(c, conn);
-    open.put(c.id, conn);
+    boolean closing;
+    synchronized (this) {
+      closing = disposed;
+      if (!closing) open.put(c.id, conn);
+    }
+    if (closing) {
+      closeWithoutCommit(conn);
+      throw new SQLException(EiDbBundle.message("sessions.project.closed"));
+    }
     pending.put(c.id, 0);
     txTouched.remove(c.id);
     notifyChanged();
@@ -375,6 +397,7 @@ public final class DbSessions implements Disposable {
       }
       case POSTGRES -> {
         props.setProperty("connectTimeout", String.valueOf(CONNECT_TIMEOUT_SEC));
+        props.setProperty("loginTimeout", String.valueOf(PG_LOGIN_TIMEOUT_SEC));
         props.setProperty("stringtype", "unspecified");
         if (c.readOnly) props.setProperty("readOnlyMode", "always");
         props.setProperty("autosave", "always");
@@ -431,21 +454,28 @@ public final class DbSessions implements Disposable {
    */
   private QueryResult execute(DbConfig c, String sql, List<Object> binds, int limit, BooleanSupplier stop, AtomicReference<Statement> registered,
                               IntConsumer progress) throws SQLException {
-    Connection conn = connection(c);
     String text = SqlGuard.trimStatement(sql);
-    long start = System.currentTimeMillis();
     boolean plain = binds == null || binds.isEmpty();
-    Statement ps = plain ? conn.createStatement() : conn.prepareStatement(text);
-    boolean batchRunning;
+    reserveSlot(c, stop);
+    Connection conn;
+    Statement ps;
+    try {
+      // 자리를 잡은 뒤에 접속을 받는다: 기다리는 사이 앞 문장 쪽에서 접속이 끊기고 새로 열렸을 수 있다.
+      // 문장 만들기도 자리를 잡은 뒤에 한다(Oracle 드라이버는 실행 중인 접속에서 문장 만들기를 막는다).
+      conn = connection(c);
+      ps = plain ? conn.createStatement() : conn.prepareStatement(text);
+    } catch (SQLException | RuntimeException e) {
+      synchronized (txLock(c.id)) {
+        reserved.remove(c.id);
+        txLock(c.id).notifyAll();
+      }
+      throw e;
+    }
     synchronized (txLock(c.id)) {
-      batchRunning = batching.contains(c.id);
-      if (!batchRunning) running.put(c.id, ps);
+      reserved.remove(c.id);
+      running.put(c.id, ps);
     }
-    if (batchRunning) {
-      // 배치의 커밋 · 되돌리기에 이 문장의 변경이 함께 묶이지 않게 한다.
-      ps.close();
-      throw new SQLException(EiDbBundle.message("sessions.batch.running", c.name));
-    }
+    long start = System.currentTimeMillis();
     registered.set(ps);
     notifyChanged();
     try (ps) {
@@ -519,10 +549,39 @@ public final class DbSessions implements Disposable {
         if (cancelled.contains(ps)) throw new CancelledException(e);
         throw e;
       } finally {
-        running.remove(c.id, ps);
+        release(c.id, ps);
         cancelled.remove(ps);
         notifyChanged();
       }
+    }
+  }
+
+  /**
+   * 그 접속의 실행 자리를 잡는다. 앞 문장(execute · insertBatch)이 돌거나 다른 execute 가 자리를 잡아 두었으면 끝날 때까지 기다린다.
+   * 그래서 등록된 문장이 늘 실제로 도는 문장이라 「중지」 · 커밋 거절이 엉뚱한 문장에 닿지 않는다.
+   * 기다리는 동안 SLOT_WAIT_MS 마다 stop 을 보고, 참이면 CancelledException. 배치가 돌면 배치 거절과 같은 SQLException.
+   */
+  private void reserveSlot(DbConfig c, BooleanSupplier stop) throws SQLException {
+    synchronized (txLock(c.id)) {
+      while (running.containsKey(c.id) || reserved.contains(c.id)) {
+        if (batching.contains(c.id)) throw new SQLException(EiDbBundle.message("sessions.batch.running", c.name));
+        if (stop.getAsBoolean()) throw new CancelledException(new SQLException(EiDbBundle.message("sessions.cancelled")));
+        try {
+          txLock(c.id).wait(SLOT_WAIT_MS);
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          throw new SQLException(EiDbBundle.message("sessions.cancelled"), e);
+        }
+      }
+      reserved.add(c.id);
+    }
+  }
+
+  /** 등록을 풀고, 같은 접속에서 자리를 기다리는 execute 를 깨운다. */
+  private void release(String id, Statement ps) {
+    synchronized (txLock(id)) {
+      running.remove(id, ps);
+      txLock(id).notifyAll();
     }
   }
 
@@ -554,7 +613,7 @@ public final class DbSessions implements Disposable {
     PreparedStatement ps = conn.prepareStatement(sql);
     boolean free;
     synchronized (txLock(c.id)) {
-      free = running.putIfAbsent(c.id, ps) == null;
+      free = !reserved.contains(c.id) && running.putIfAbsent(c.id, ps) == null;
       if (free) batching.add(c.id);
     }
     if (!free) {
@@ -612,7 +671,7 @@ public final class DbSessions implements Disposable {
           if (auto) restoreAutoCommit(c, conn); else applyChangedAutoCommit(c, conn);
         }
         batching.remove(c.id);
-        running.remove(c.id, ps);
+        release(c.id, ps);
         cancelled.remove(ps);
         notifyChanged();
       }
@@ -702,6 +761,13 @@ public final class DbSessions implements Disposable {
    * (DDL 자신도 바로 반영된다). PostgreSQL 의 DDL 은 트랜잭션 안이라 변경 한 건으로 센다.
    */
   private void countChange(DbConfig c, Connection conn, String text) throws SQLException {
+    if (SqlGuard.isTxEnd(text)) {
+      // 콘솔에서 친 COMMIT · ROLLBACK 도 「커밋」 · 「롤백」 단추와 같게 센다.
+      pending.put(c.id, 0);
+      txTouched.remove(c.id);
+      notifyChanged();
+      return;
+    }
     if (conn.getAutoCommit() || !SqlGuard.isWrite(text)) return;
     if (c.kind != DbKind.POSTGRES && SqlGuard.isDdl(text)) {
       Integer committed = pending.put(c.id, 0);
@@ -741,10 +807,13 @@ public final class DbSessions implements Disposable {
     return v;
   }
 
-  /** insertBatch 가 도는 접속이면 SQLException(커밋하지 않는다): 반쯤 들어간 묶음이 굳거나 배치의 세이브포인트가 사라지지 않게 한다. */
+  /**
+   * insertBatch 가 도는 접속이면 SQLException(커밋하지 않는다): 반쯤 들어간 묶음이 굳거나 배치의 세이브포인트가 사라지지 않게 한다.
+   * 다른 문장이 실행 중이어도 SQLException: 그 문장의 변경이 반쯤 함께 커밋되지 않게 한다.
+   */
   public void commit(String id) throws SQLException {
     synchronized (txLock(id)) {
-      refuseWhileBatching(id);
+      refuseWhileBusy(id);
       Connection conn = open.get(id);
       if (conn != null) conn.commit();
       pending.put(id, 0);
@@ -753,10 +822,10 @@ public final class DbSessions implements Disposable {
     notifyChanged();
   }
 
-  /** insertBatch 가 도는 접속이면 SQLException(롤백하지 않는다). */
+  /** insertBatch 가 돌거나 다른 문장이 실행 중인 접속이면 SQLException(롤백하지 않는다). */
   public void rollback(String id) throws SQLException {
     synchronized (txLock(id)) {
-      refuseWhileBatching(id);
+      refuseWhileBusy(id);
       Connection conn = open.get(id);
       if (conn != null) conn.rollback();
       pending.put(id, 0);
@@ -765,11 +834,21 @@ public final class DbSessions implements Disposable {
     notifyChanged();
   }
 
-  /** txLock(id) 안에서 부른다(insertBatch 의 등록과 서로 막힌다). */
-  private void refuseWhileBatching(String id) throws SQLException {
-    if (!batching.contains(id)) return;
+  /** txLock(id) 안에서 부른다(insertBatch · execute 의 등록과 서로 막힌다). */
+  private void refuseWhileBusy(String id) throws SQLException {
+    boolean batch = batching.contains(id);
+    if (!batch && !isRunning(id)) return;
     DbConfig c = DbSettings.getInstance().find(id);
-    throw new SQLException(EiDbBundle.message("sessions.batch.running", c == null ? id : c.name));
+    throw new SQLException(EiDbBundle.message(batch ? "sessions.batch.running" : "sessions.tx.running", c == null ? id : c.name));
+  }
+
+  /** 미반영 변경이 있는 열린 접속 id → 건수(프로젝트 닫기 확인용). */
+  public Map<String, Integer> pendingAll() {
+    Map<String, Integer> out = new java.util.LinkedHashMap<>();
+    for (Map.Entry<String, Integer> e : pending.entrySet()) {
+      if (e.getValue() > 0 && open.containsKey(e.getKey())) out.put(e.getKey(), e.getValue());
+    }
+    return out;
   }
 
   /** 미반영 변경은 롤백된다. 부르는 쪽이 먼저 확인받는다. 실행 중이면 롤백 · 닫기가 그 실행 뒤에 막히므로 접속을 끊는다(서버가 롤백). */
@@ -807,6 +886,9 @@ public final class DbSessions implements Disposable {
   /** 롤백 · 닫기는 망을 거쳐 막힐 수 있어(망이 끊긴 경우) 화면 스레드가 아닌 풀 스레드에서 한다. 접속은 먼저 목록에서 뺀다. 실행 중인 접속은 끊는다. */
   @Override
   public void dispose() {
+    synchronized (this) {
+      disposed = true;
+    }
     List<Connection> closing = new ArrayList<>();
     List<Connection> busy = new ArrayList<>();
     for (String id : new ArrayList<>(open.keySet())) {

@@ -45,6 +45,9 @@ public class QueryBenchCheck {
     eq(s.get(2).ref(), "i");
     eq(SqlParts.refs("o.X = c.Y AND EXISTS (SELECT 1 FROM Z z WHERE z.A = o.X)").toString(), "[O, C]");
     eq(SqlParts.split("SELECT * FROM T START WITH P IS NULL CONNECT BY PRIOR ID = P").get(2).key(), "START WITH");
+    eq(SqlParts.split("SELECT \"A(B\" FROM T WHERE X = 1").get(1).body(), "T");
+    eq(SqlParts.split("SELECT q'[it's (FROM]' FROM T WHERE X = 1").get(1).body(), "T");
+    eq(SqlParts.mask("SELECT \"a--b\", 1 FROM T"), "SELECT \"a__b\", 1 FROM T");
   }
 
   static void builder() {
@@ -190,6 +193,8 @@ public class QueryBenchCheck {
     eq(DialectConvert.toPostgres("SELECT LISTAGG(x, ',') WITHIN GROUP (ORDER BY y) FROM t").sql(), "SELECT STRING_AGG(CAST(x AS VARCHAR), ',' ORDER BY y) FROM t");
     eq(DialectConvert.toOracle("SELECT STRING_AGG(x, ',' ORDER BY y) FROM t").sql(), "SELECT LISTAGG(x, ',') WITHIN GROUP (ORDER BY y) FROM t");
     eq(DialectConvert.toOracle("SELECT 1").sql(), "SELECT 1\n  FROM DUAL");
+    yes(DialectConvert.toOracle("SELECT a FROM t LIMIT 99999999999").sql().contains("LIMIT"), "huge limit left as is");
+    yes(DialectConvert.toOracle("SELECT a FROM t LIMIT 5 OFFSET 99999999999").sql().contains("OFFSET"), "huge offset left as is");
     eq(DialectConvert.toOracle("SELECT x::double precision, y::float8 FROM t").sql(), "SELECT CAST(x AS BINARY_DOUBLE), CAST(y AS BINARY_DOUBLE) FROM t");
     eq(DialectConvert.toOracle("SELECT a::timestamp with time zone, b::timestamptz, c::timestamp without time zone FROM t").sql(),
        "SELECT CAST(a AS TIMESTAMP WITH TIME ZONE), CAST(b AS TIMESTAMP WITH TIME ZONE), CAST(c AS TIMESTAMP) FROM t");
@@ -281,6 +286,9 @@ public class QueryBenchCheck {
     yes(t.sql().contains("DATE_TRUNC('month', o.ORDER_DT)") && t.sql().contains("DATE_TRUNC('day', o.ORDER_DT)") && t.sql().contains("TRUNC(o.AMOUNT, 2)"), t.sql());
     DialectConvert.Result pg = DialectConvert.toPostgres("SELECT * FROM (SELECT q.*, ROWNUM AS RN FROM (SELECT o.* FROM ORDERS o ORDER BY o.ORDER_ID DESC) q WHERE ROWNUM <= 30) WHERE RN > 20");
     yes(pg.sql().contains("LIMIT 10 OFFSET 20") && !pg.sql().toUpperCase(java.util.Locale.ROOT).contains("ROWNUM"), pg.sql());
+    String huge = "SELECT * FROM (SELECT q.*, ROWNUM AS RN FROM (SELECT o.* FROM ORDERS o) q WHERE ROWNUM <= 99999999999) WHERE RN > 20";
+    yes(DialectConvert.toPostgres(huge).sql().contains("ROWNUM"), "huge rownum left as is");
+    yes(DialectConvert.toPostgres("SELECT a FROM t WHERE ROWNUM <= 99999999999").sql().contains("ROWNUM"), "huge rownum");
     DialectConvert.Result up = DialectConvert.toPostgres("UPDATE ORDERS o SET o.STATUS = 'X', o.MEMO = NULL WHERE o.ORDER_ID = 1");
     yes(up.sql().contains("SET STATUS = 'X', MEMO = NULL") && up.sql().contains("WHERE o.ORDER_ID = 1"), up.sql());
     yes(String.join(" ", DialectConvert.toPostgres("SELECT * FROM USER_TAB_COLUMNS").notes()).contains("데이터 사전"), "dictionary note");

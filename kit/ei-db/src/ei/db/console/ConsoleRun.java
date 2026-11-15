@@ -16,7 +16,9 @@ import com.intellij.openapi.util.Key;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.openapi.vfs.VirtualFile;
 import ei.db.DbConfig;
+import ei.db.DbKind;
 import ei.db.EiDbBundle;
+import ei.db.DbSettings;
 import ei.db.Notify;
 import ei.db.SqlGuard;
 import ei.db.SqlRunner;
@@ -50,6 +52,8 @@ public final class ConsoleRun {
   }
 
   private static final Key<Queue> QUEUE = Key.create("ei.db.console.queue");
+  /** 그 콘솔이 마지막으로 실행에 넘긴 문장. 콘솔 「중지」 가 이 문장의 실행만 멈춘다. */
+  private static final Key<String> LAST_RUN = Key.create("ei.db.console.lastRun");
   /** 대기열이 있는 콘솔 파일들. 결과가 왔을 때 어느 콘솔의 대기열인지 찾는다. 화면 스레드에서만 쓴다. */
   private static final Key<Set<VirtualFile>> QUEUED = Key.create("ei.db.console.queued");
 
@@ -57,15 +61,21 @@ public final class ConsoleRun {
   static void runCurrent(Project project, Editor editor, VirtualFile file) {
     String selected = editor.getSelectionModel().getSelectedText();
     if (selected != null && !selected.isBlank()) {
-      start(project, file, texts(SqlSplitter.split(selected)));
+      start(project, file, texts(SqlSplitter.split(selected, hashComment(project, file))));
       return;
     }
-    SqlSplitter.Stmt stmt = SqlSplitter.at(editor.getDocument().getText(), editor.getCaretModel().getOffset());
+    SqlSplitter.Stmt stmt = SqlSplitter.at(editor.getDocument().getText(), editor.getCaretModel().getOffset(), hashComment(project, file));
     start(project, file, stmt == null ? List.of() : List.of(stmt.text()));
   }
 
   static void runAll(Project project, Editor editor, VirtualFile file) {
-    start(project, file, texts(SqlSplitter.split(editor.getDocument().getText())));
+    start(project, file, texts(SqlSplitter.split(editor.getDocument().getText(), hashComment(project, file))));
+  }
+
+  /** MySQL 접속 콘솔이면 # 줄 주석도 주석으로 나눈다(SqlRunner 의 문장 수 판정과 같게). 접속이 지워졌으면 거짓(start 가 알린다). */
+  private static boolean hashComment(Project project, VirtualFile file) {
+    DbConfig c = ConsoleOpener.config(project, file);
+    return c != null && c.kind == DbKind.MYSQL;
   }
 
   /** 선택 영역(없으면 콘솔 전체)의 글을 f 로 바꾼다. 바뀐 것이 없으면 실행 취소 기록도 남기지 않는다. */
@@ -119,11 +129,17 @@ public final class ConsoleRun {
     q.waiting = SqlGuard.trimStatement(stmt.sql());
     if (q.rest.isEmpty()) {
       clear(project, file);
-    } else if (q.c.readOnly && SqlGuard.isWrite(stmt.sql())) {
+    } else if (DbSettings.getInstance().latest(q.c).readOnly && SqlGuard.isWrite(stmt.sql())) {
       // SqlRunner 가 결과 없이 거절하므로 기다릴 것이 없다.
       drop(project, file);
     }
+    file.putUserData(LAST_RUN, stmt.sql());
     SqlRunner.run(project, q.c, stmt.sql(), stmt.binds());
+  }
+
+  /** 그 콘솔이 마지막으로 실행에 넘긴 문장(없으면 null). */
+  static String lastRun(VirtualFile file) {
+    return file.getUserData(LAST_RUN);
   }
 
   /** 콘솔 밖(쿼리 작업대)에서 문장 하나를 실행한다. 값 자리가 있으면 값을 묻고, 취소하면 실행하지 않는다. */

@@ -64,10 +64,9 @@ public final class ResultView {
       ConsoleRun.finished(project, c, result.sql(), true);
       return;
     }
-    String title = result.isQuery() ? firstTable(result.sql()) : EiDbBundle.message("result.tab.update");
-    Icon icon = result.isQuery() ? AllIcons.Nodes.DataTables : AllIcons.Actions.Commit;
+    String title = firstTable(result.sql());
     String tabTitle = tabTitle(project, title == null ? EiDbBundle.message("result.tab.query") : title);
-    addTab(project, sameKey(RUN, c.id, result.sql()), tabTitle, icon, new ResultPanel(project, c, result, firstTable(result.sql()), tabTitle));
+    addTab(project, sameKey(RUN, c.id, result.sql()), tabTitle, AllIcons.Nodes.DataTables, new ResultPanel(project, c, result, title, tabTitle));
     ConsoleRun.finished(project, c, result.sql(), true);
   }
 
@@ -165,9 +164,23 @@ public final class ResultView {
     return kind + "\n" + connectionId + "\n" + text;
   }
 
+  private static boolean holdsWork(Content content) {
+    return content.getComponent() instanceof ResultPanel panel && panel.holdsWork();
+  }
+
+  /** 지워도 되는 가장 오래된 탭(added 와 holdsWork 탭 제외). 없으면 null. */
+  private static Content oldestFree(ContentManager contents, Content added) {
+    for (Content c : contents.getContents()) {
+      if (c != added && !holdsWork(c)) return c;
+    }
+    return null;
+  }
+
   /**
    * icon 은 탭 종류(조회 · 변경 · 오류 · 취소)를 탭 이름 앞에 보인다. title 은 tabTitle 로 번호를 붙인 글.
    * same 이 같은 탭이 있으면 그 자리에서 내용을 바꾸고, 없으면 새 탭을 끝에 더한다.
+   * 반영하지 않은 고침이 있거나 「적용」 중인 결과 탭(holdsWork)은 바꾸지도 밀어내지도 않는다: 그때는 새 탭을 더하고,
+   * 그런 탭만 남았으면 MAX_TABS 를 넘겨도 둔다.
    */
   private static void addTab(Project project, String same, String title, Icon icon, JComponent panel) {
     ToolWindow window = ToolWindowManager.getInstance(project).getToolWindow(TOOL_WINDOW_ID);
@@ -177,7 +190,7 @@ public final class ResultView {
     }
     ContentManager contents = window.getContentManager();
     for (Content old : contents.getContents()) {
-      if (same.equals(old.getUserData(SAME))) {
+      if (same.equals(old.getUserData(SAME)) && !holdsWork(old)) {
         old.setComponent(panel);
         old.setDisplayName(title);
         old.setIcon(icon);
@@ -192,7 +205,11 @@ public final class ResultView {
     content.setIcon(icon);
     content.putUserData(ToolWindow.SHOW_CONTENT_ICON, Boolean.TRUE);
     contents.addContent(content);
-    while (contents.getContentCount() > MAX_TABS) contents.removeContent(contents.getContent(0), true);
+    while (contents.getContentCount() > MAX_TABS) {
+      Content oldest = oldestFree(contents, content);
+      if (oldest == null) break;
+      contents.removeContent(oldest, true);
+    }
     contents.setSelectedContent(content);
     window.show();
   }

@@ -61,6 +61,8 @@ public final class BackupDialog extends DialogWrapper {
   private static final int COL_ROWS = 3;
   private static final int COL_SQL = 4;
   private static final String COMMENT = "-- ";
+  /** 미리보기에 넣는 글자 수의 끝. 큰 백업을 화면 스레드에서 통째로 넣으면 멈춘다. 「콘솔에서 열기」는 모두 넣는다. */
+  private static final int PREVIEW_CHARS = 100_000;
   private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
   private final Project project;
@@ -175,19 +177,28 @@ public final class BackupDialog extends DialogWrapper {
       try {
         text = Files.readString(file, StandardCharsets.UTF_8);
         ok = true;
-      } catch (IOException | RuntimeException ex) {
+      } catch (IOException | RuntimeException | OutOfMemoryError ex) {
         text = COMMENT + EiDbBundle.message("backup.dialog.read.failed", ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage());
         ok = false;
       }
-      String shown = text;
+      String full = text;
+      String shown = ok ? previewOf(text) : text;
       boolean read = ok;
       ApplicationManager.getApplication().invokeLater(() -> {
         if (isDisposed() || !file.equals(wanted)) return;
-        if (read) loadedText = shown;
+        if (read) loadedText = full;
         setPreview(shown);
         updateButtons();
       }, state);
     });
+  }
+
+  /** PREVIEW_CHARS 를 넘으면 그 안의 마지막 줄 끝까지와 생략 안내 한 줄. */
+  private static String previewOf(String text) {
+    if (text.length() <= PREVIEW_CHARS) return text;
+    int cut = text.lastIndexOf('\n', PREVIEW_CHARS);
+    if (cut <= 0) cut = Character.isHighSurrogate(text.charAt(PREVIEW_CHARS - 1)) ? PREVIEW_CHARS - 1 : PREVIEW_CHARS;
+    return text.substring(0, cut) + "\n" + COMMENT + EiDbBundle.message("backup.dialog.preview.cut", text.length() - cut);
   }
 
   private void setPreview(String text) {

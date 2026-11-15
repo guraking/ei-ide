@@ -30,7 +30,6 @@ import java.awt.geom.Path2D;
 import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -104,6 +103,9 @@ final class ErdCanvas extends JComponent {
   private final List<List<Meta.ForeignKey>> groups;
   /** groups 와 같은 순서의 꺾은선. 배치가 바뀌면 null 로 두고 다음 그리기에서 한 번 다시 찾는다. */
   private List<List<Point>> routes;
+  /** channels 의 후보 가로 줄(작은 것부터)과 모든 카드 아래 줄. 카드가 움직이면 null 로 두고 다음에 한 번 다시 만든다. */
+  private int[] channelYs;
+  private int channelBottom;
   private boolean dragged;
   private final Consumer<String> onOpenTable;
   private boolean keysOnly;
@@ -126,10 +128,10 @@ final class ErdCanvas extends JComponent {
       @Override public void mouseReleased(MouseEvent e) {
         dragOffset = null;
         panStart = null;
-        // 끄는 동안에는 그 카드의 선만 다시 찾았으므로, 놓으면 다른 선이 새 자리를 피하도록 전부 다시 찾는다.
+        // 놓을 때 그 카드의 선과 놓은 자리를 지나는 남의 선만 다시 찾는다(전부 찾으면 표가 많을 때 화면이 멈춘다). 전부는 「다시 배치」 때.
         if (dragged) {
           dragged = false;
-          routes = null;
+          rerouteDropped();
           repaint();
         }
       }
@@ -181,6 +183,7 @@ final class ErdCanvas extends JComponent {
       x += width + GAP_X;
     }
     routes = null;
+    channelYs = null;
     resize();
   }
 
@@ -261,6 +264,7 @@ final class ErdCanvas extends JComponent {
       selected.x = Math.max(0, p.x - dragOffset.x);
       selected.y = Math.max(0, p.y - dragOffset.y);
       dragged = true;
+      channelYs = null;
       rerouteSelected();
       resize();
     } else if (panStart != null && getParent() instanceof JViewport vp) {
@@ -342,13 +346,38 @@ final class ErdCanvas extends JComponent {
     return out;
   }
 
-  /** 끄는 카드에 붙은 선만 다시 찾는다. 비키기(tracks)는 놓을 때 전부 다시 찾으면서 맞춘다. */
+  /** 끄는 카드에 붙은 선만 다시 찾는다. 다른 선과의 비키기(tracks)는 「다시 배치」 로 전부 다시 찾을 때 맞춘다. */
   private void rerouteSelected() {
     if (routes == null) return;
     for (int i = 0; i < groups.size(); i++) {
       Meta.ForeignKey fk = groups.get(i).get(0);
       if (byName.get(fk.fkTable()) == selected || byName.get(fk.pkTable()) == selected) routes.set(i, route(groups.get(i), new HashMap<>()));
     }
+  }
+
+  /** 놓은 카드(selected)에 붙은 선과, 그 카드 상자(CLEARANCE 여유)를 지나는 다른 선을 다시 찾는다. */
+  private void rerouteDropped() {
+    if (routes == null || selected == null) return;
+    Rectangle box = selected.bounds();
+    box.grow(CLEARANCE, CLEARANCE);
+    for (int i = 0; i < groups.size(); i++) {
+      Meta.ForeignKey fk = groups.get(i).get(0);
+      boolean attached = byName.get(fk.fkTable()) == selected || byName.get(fk.pkTable()) == selected;
+      if (attached || crosses(routes.get(i), box)) routes.set(i, route(groups.get(i), new HashMap<>()));
+    }
+  }
+
+  /** 꺾은선의 토막 하나라도 box 와 겹치면 참. */
+  private static boolean crosses(List<Point> path, Rectangle box) {
+    for (int i = 1; i < path.size(); i++) {
+      Rectangle segment = new Rectangle(path.get(i - 1));
+      segment.add(path.get(i));
+      // 가로 · 세로 토막은 폭이나 높이가 0 이라 intersects 가 늘 거짓이다. 한 점 두께를 준다.
+      segment.width = Math.max(segment.width, 1);
+      segment.height = Math.max(segment.height, 1);
+      if (segment.intersects(box)) return true;
+    }
+    return false;
   }
 
   private List<Point> route(List<Meta.ForeignKey> group, Map<Integer, Integer> tracks) {
@@ -487,8 +516,26 @@ final class ErdCanvas extends JComponent {
     return true;
   }
 
-  /** 다섯 토막 길의 가로 줄 후보: 카드 위 · 아래 틈을 sy · ey 가운데에 가까운 순으로, 맨 끝은 모든 카드 아래(늘 비어 있음). */
+  /**
+   * 다섯 토막 길의 가로 줄 후보: 카드 위 · 아래 틈을 sy · ey 가운데에 가까운 순으로 MAX_CHANNELS 개, 맨 끝은 모든 카드 아래(늘 비어 있음).
+   * 후보는 정렬해 두고(channelYs) 가운데 자리에서 양쪽으로 가까운 것을 고른다.
+   */
   private List<Integer> channels(int sy, int ey) {
+    if (channelYs == null) sortChannels();
+    int mid = (sy + ey) / 2;
+    int at = java.util.Arrays.binarySearch(channelYs, mid);
+    int hi = at >= 0 ? at : -at - 1;
+    int lo = hi - 1;
+    List<Integer> out = new ArrayList<>();
+    while (out.size() < MAX_CHANNELS && (lo >= 0 || hi < channelYs.length)) {
+      boolean takeLow = hi >= channelYs.length || lo >= 0 && mid - channelYs[lo] <= channelYs[hi] - mid;
+      out.add(takeLow ? channelYs[lo--] : channelYs[hi++]);
+    }
+    out.add(channelBottom + GAP_Y / 2);
+    return out;
+  }
+
+  private void sortChannels() {
     List<Integer> ys = new ArrayList<>();
     int bottom = 0;
     for (Card c : cards) {
@@ -496,11 +543,11 @@ final class ErdCanvas extends JComponent {
       ys.add(c.y + c.h + GAP_Y / 2);
       bottom = Math.max(bottom, c.y + c.h);
     }
-    int mid = (sy + ey) / 2;
-    ys.sort(Comparator.comparingInt(y -> Math.abs(y - mid)));
-    List<Integer> out = new ArrayList<>(ys.subList(0, Math.min(ys.size(), MAX_CHANNELS)));
-    out.add(bottom + GAP_Y / 2);
-    return out;
+    int[] sorted = new int[ys.size()];
+    for (int i = 0; i < sorted.length; i++) sorted[i] = ys.get(i);
+    java.util.Arrays.sort(sorted);
+    channelYs = sorted;
+    channelBottom = bottom;
   }
 
   /**
@@ -613,19 +660,28 @@ final class ErdCanvas extends JComponent {
     g.setClip(oldClip);
   }
 
-  /** 배율 1 로 전체를 그린 그림(PNG 저장용). */
-  BufferedImage snapshot() {
+  /** 배율 1 의 전체 그림 크기(PNG 저장용). */
+  Dimension diagramSize() {
     int w = 1;
     int h = 1;
     for (Card c : cards) {
       w = Math.max(w, c.x + c.w + MARGIN + DETOUR);
       h = Math.max(h, c.y + c.h + MARGIN);
     }
+    return new Dimension(w, h);
+  }
+
+  /** 전체를 scale 배로 그린 그림(PNG 저장용). 화면 스레드에서 부른다(카드 · 선을 읽는다). */
+  BufferedImage snapshot(double scale) {
+    Dimension size = diagramSize();
+    int w = Math.max(1, (int) Math.ceil(size.width * scale));
+    int h = Math.max(1, (int) Math.ceil(size.height * scale));
     BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
     Graphics2D g = img.createGraphics();
     try {
       g.setColor(UIUtil.getPanelBackground());
       g.fillRect(0, 0, w, h);
+      g.scale(scale, scale);
       paintDiagram(g);
     } finally {
       g.dispose();

@@ -40,7 +40,11 @@ import javax.imageio.ImageIO;
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
 import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.image.BufferedImage;
+import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -69,6 +73,10 @@ public final class ErdView {
   private static final double ACTUAL_ZOOM = 1.0;
   /** 범례 꼬리표 · 안내 사이 간격(px, 배율 전). */
   private static final int LEGEND_GAP = 8;
+  /** PNG 한 장의 최대 화소 수(ARGB 한 화소 4바이트, 약 120MB). 그림이 더 크면 이 안에 들게 줄여 그린다. */
+  private static final long MAX_PNG_PIXELS = 30_000_000L;
+  private static final String PNG = "png";
+  private static final String PNG_PREFIX = "erd";
 
   /** tables 가 null 이면 스키마의 모든 표. */
   public static void open(Project project, DbConfig c, String schema, List<String> tables) {
@@ -133,6 +141,9 @@ public final class ErdView {
           throw e;
         } catch (Exception e) {
           Notify.error(project, EiDbBundle.message("erd.read.failed", e.getMessage()));
+        } finally {
+          // 자동 커밋 끔 PostgreSQL 에서 메타 읽기가 연 트랜잭션을 닫는다(idle in transaction 으로 남지 않게).
+          DbSessions.get(project).endReadTransaction(c);
         }
       }
     }.queue();
@@ -259,14 +270,48 @@ public final class ErdView {
     @Override public @NotNull ActionUpdateThread getActionUpdateThread() { return ActionUpdateThread.EDT; }
   }
 
+  /**
+   * 그림은 화면 스레드에서 그리고(카드 · 선을 읽는다) PNG 쓰기는 배경에서 한다. 그림이 MAX_PNG_PIXELS 보다 크면 줄여 그리고 알린다.
+   * 스키마가 없는 접속(MySQL 등)은 파일 이름에 스키마를 넣지 않는다.
+   */
   private static void savePng(Project project, String schema, ErdCanvas canvas) {
+    String name = PNG_PREFIX + (schema == null || schema.isEmpty() ? "" : "-" + schema.toLowerCase(java.util.Locale.ROOT)) + "." + PNG;
     VirtualFileWrapper target = FileChooserFactory.getInstance()
-        .createSaveFileDialog(new FileSaverDescriptor(EiDbBundle.message("erd.save.png"), EiDbBundle.message("erd.save.png.description"), "png"), project)
-        .save("erd-" + schema.toLowerCase(java.util.Locale.ROOT) + ".png");
+        .createSaveFileDialog(new FileSaverDescriptor(EiDbBundle.message("erd.save.png"), EiDbBundle.message("erd.save.png.description"), PNG), project)
+        .save(name);
     if (target == null) return;
+    Dimension size = canvas.diagramSize();
+    double scale = Math.min(1.0, Math.sqrt(MAX_PNG_PIXELS / ((double) size.width * size.height)));
+    BufferedImage image;
     try {
-      if (!ImageIO.write(canvas.snapshot(), "png", target.getFile())) throw new IOException(EiDbBundle.message("erd.no.png.writer"));
-      Notify.info(project, EiDbBundle.message("common.saved.to", target.getFile().getPath()));
+      image = canvas.snapshot(scale);
+    } catch (OutOfMemoryError e) {
+      Notify.error(project, EiDbBundle.message("erd.save.failed", EiDbBundle.message("erd.png.no.memory")));
+      return;
+    }
+    File file = target.getFile();
+    new Task.Backgroundable(project, EiDbBundle.message("erd.save.png"), false) {
+      @Override
+      public void run(@NotNull ProgressIndicator indicator) {
+        try {
+          if (!ImageIO.write(image, PNG, file)) throw new IOException(EiDbBundle.message("erd.no.png.writer"));
+          Notify.info(project, scale < 1.0 ? EiDbBundle.message("erd.png.scaled", Math.round(scale * PERCENT), file.getPath())
+                                           : EiDbBundle.message("common.saved.to", file.getPath()));
+        } catch (IOException e) {
+          discard(project, file);
+          Notify.error(project, EiDbBundle.message("erd.save.failed", e.getMessage()));
+        } catch (OutOfMemoryError e) {
+          discard(project, file);
+          Notify.error(project, EiDbBundle.message("erd.save.failed", EiDbBundle.message("erd.png.no.memory")));
+        }
+      }
+    }.queue();
+  }
+
+  /** 쓰다 만 PNG 를 지운다. 못 지우면 그 까닭을 알린다. */
+  private static void discard(Project project, File file) {
+    try {
+      Files.deleteIfExists(file.toPath());
     } catch (IOException e) {
       Notify.error(project, EiDbBundle.message("erd.save.failed", e.getMessage()));
     }

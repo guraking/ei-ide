@@ -8,6 +8,7 @@ import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import ei.db.DbConfig;
+import ei.db.DbKind;
 import ei.db.bench.QueryBenchDialog;
 import org.jetbrains.annotations.NotNull;
 
@@ -38,7 +39,8 @@ public class QueryBenchAction extends DumbAwareAction {
     String selected = editor.getSelectionModel().getSelectedText();
     String sql = selected;
     if (sql == null || sql.isBlank()) {
-      SqlSplitter.Stmt stmt = SqlSplitter.at(editor.getDocument().getText(), editor.getCaretModel().getOffset());
+      SqlSplitter.Stmt stmt = SqlSplitter.at(editor.getDocument().getText(), editor.getCaretModel().getOffset(),
+          c != null && c.kind == DbKind.MYSQL);
       sql = stmt == null ? null : stmt.text();
     }
     QueryBenchDialog.open(project, c, sql, file);

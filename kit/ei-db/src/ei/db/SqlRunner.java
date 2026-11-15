@@ -17,7 +17,12 @@ import org.jetbrains.annotations.NotNull;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Deque;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -26,7 +31,7 @@ import java.util.function.Consumer;
 
 /**
  * 실행의 공통 입구(콘솔 · MyBatis 실행 · 로그 변환 · 표 데이터 보기). 화면 스레드에서 부른다.
- * 순서: 읽기 전용 접속의 변경 거절 → 위험 문장(WHERE 없는 UPDATE · DELETE, DROP · TRUNCATE)과 운영 접속의 변경은 확인창
+ * 순서: 한 칸에 문장이 둘 이상이면 거절 → 읽기 전용 접속의 변경 거절 → 위험 문장(WHERE 없는 UPDATE · DELETE, DROP · TRUNCATE)과 운영 접속의 변경은 확인창
  * → 미반영 변경이 있는 접속(Oracle · MySQL)의 DDL 은 함께 커밋된다는 확인 → 백그라운드에서 고치기 전 백업(Backups, UPDATE · DELETE) → 실행
  * → 결과 창에 표시 → 실행 기록(RunHistory)에 남김.
  * 진행 막대를 취소하면 DbSessions.cancel 로 드라이버에 취소를 보낸다.
@@ -36,6 +41,11 @@ public final class SqlRunner {
 
   /** 진행 막대의 취소를 살피는 간격. JDBC 실행은 막혀 있어 진행 표시가 스스로 취소를 알 수 없다. */
   private static final long CANCEL_POLL_MS = 200;
+  /** 접속 id → 그 접속에서 돌거나 자리를 기다리는 실행(먼저 시작한 것이 앞). 콘솔 「중지」 가 그 콘솔이 낸 실행만 멈추게 찾는다. */
+  private static final Map<String, Deque<Running>> TASKS = new ConcurrentHashMap<>();
+
+  /** sql 은 trimStatement 한 글. */
+  private record Running(String sql, ProgressIndicator indicator) {}
 
   public static void run(Project project, DbConfig c, String sql, List<Object> binds) {
     run(project, c, sql, binds, null);
@@ -63,15 +73,33 @@ public final class SqlRunner {
    */
   public static void run(Project project, DbConfig c, String sql, List<Object> binds, Consumer<QueryResult> onSuccess, BackupSql.Origin backup,
                          Runnable onStopped) {
+    run(project, c, sql, binds, onSuccess, backup, onStopped, false);
+  }
+
+  /**
+   * guardConfirmed 가 참이면 위험 문장 · 운영 접속 확인창을 띄우지 않는다: 부르는 쪽이 묶음 전체를 GuardDialog 로 한 번 확인받았다(결과 표 「적용」).
+   * 문장 둘 이상 거절 · 읽기 전용 거절 · 그 뒤의 확인은 그대로 한다. 접속 설정은 지금 값(DbSettings.latest)으로 본다.
+   */
+  public static void run(Project project, DbConfig given, String sql, List<Object> binds, Consumer<QueryResult> onSuccess, BackupSql.Origin backup,
+                         Runnable onStopped, boolean guardConfirmed) {
+    DbConfig c = DbSettings.getInstance().latest(given);
     Runnable stopped = onStopped == null ? () -> {} : onStopped;
+    if (SqlGuard.hasSeveralStatements(sql, c.kind)) {
+      Notify.error(project, EiDbBundle.message("runner.several.statements", c.name));
+      ConsoleRun.stop(project, c, sql);
+      stopped.run();
+      return;
+    }
     boolean write = SqlGuard.isWrite(sql);
     if (write && c.readOnly) {
       Notify.error(project, EiDbBundle.message("runner.read.only", c.name));
+      // 콘솔이 옛 설정으로 이 문장을 기다리고 있으면 남은 문장을 버린다(결과가 오지 않는다).
+      ConsoleRun.stop(project, c, sql);
       stopped.run();
       return;
     }
     String danger = SqlGuard.danger(sql);
-    if ((danger != null || (c.production && write)) && !GuardDialog.confirm(project, c, sql, danger, SqlGuard.table(sql))) {
+    if (!guardConfirmed && (danger != null || (c.production && write)) && !GuardDialog.confirm(project, c, sql, danger, SqlGuard.table(sql))) {
       stopped.run();
       return;
     }
@@ -129,16 +157,21 @@ public final class SqlRunner {
 
   /**
    * 바인드 없는 문장 여럿을 확인 한 번으로 차례로 실행한다(탐색기 「주석 고치기」). 화면 스레드에서 부른다. 결과 탭은 만들지 않고 문장마다 실행 기록에 남긴다.
-   * 확인은 run 과 같되 한 번씩만: 읽기 전용 접속의 변경 거절 → 위험 문장 · 운영 접속의 변경 확인(문장을 이어 붙여 보인다) → 실행 전 점검
+   * 확인은 run 과 같되 한 번씩만: 한 칸에 문장 둘 이상 거절 → 읽기 전용 접속의 변경 거절 → 위험 문장 · 운영 접속의 변경 확인(문장을 이어 붙여 보인다) → 실행 전 점검
    * → 미반영 변경이 있는 접속(Oracle · MySQL)의 DDL 확인. 거절 · 취소면 아무것도 실행하지 않고 false(onDone 은 불리지 않는다).
    * 앞 문장이 실패하거나 취소되면 멈춘다. onDone 은 화면 스레드에서 (성공한 문장 수, 멈춘 까닭 — 모두 성공이면 null)로 한 번 불린다.
    */
-  public static boolean runAll(Project project, DbConfig c, List<String> sqls, java.util.function.BiConsumer<Integer, String> onDone) {
+  public static boolean runAll(Project project, DbConfig given, List<String> sqls, java.util.function.BiConsumer<Integer, String> onDone) {
     if (sqls.isEmpty()) return false;
+    DbConfig c = DbSettings.getInstance().latest(given);
     boolean write = false;
     String danger = null;
     String ddl = null;
     for (String sql : sqls) {
+      if (SqlGuard.hasSeveralStatements(sql, c.kind)) {
+        Notify.error(project, EiDbBundle.message("runner.several.statements", c.name));
+        return false;
+      }
       write |= SqlGuard.isWrite(sql);
       if (danger == null) danger = SqlGuard.danger(sql);
       if (ddl == null && SqlGuard.isDdl(sql)) ddl = sql;
@@ -193,6 +226,9 @@ public final class SqlRunner {
       public void run(@NotNull ProgressIndicator indicator) {
         AtomicBoolean failed = new AtomicBoolean();
         AtomicReference<Statement> mine = new AtomicReference<>();
+        Running self = new Running(SqlGuard.trimStatement(sql), indicator);
+        Deque<Running> tasks = TASKS.computeIfAbsent(c.id, k -> new ConcurrentLinkedDeque<>());
+        tasks.add(self);
         ScheduledFuture<?> watch = AppExecutorUtil.getAppScheduledExecutorService().scheduleWithFixedDelay(
             () -> cancelIfAsked(project, c, mine, indicator, failed), CANCEL_POLL_MS, CANCEL_POLL_MS, TimeUnit.MILLISECONDS);
         long start = System.currentTimeMillis();
@@ -212,8 +248,14 @@ public final class SqlRunner {
         } catch (Exception e) {
           ApplicationManager.getApplication().invokeLater(() -> outcome.failed(e), project.getDisposed());
           record(project, c, sql, binds, System.currentTimeMillis() - start, RunHistory.NO_COUNT, false);
+        } catch (OutOfMemoryError e) {
+          // 읽던 행은 이 블록을 나가며 버려진다. 결과 창 · 콘솔 대기열이 「기다림」 에 멈추지 않게 실패로 알린다.
+          SQLException tooBig = new SQLException(EiDbBundle.message("runner.out.of.memory", c.name), e);
+          ApplicationManager.getApplication().invokeLater(() -> outcome.failed(tooBig), project.getDisposed());
+          record(project, c, sql, binds, System.currentTimeMillis() - start, RunHistory.NO_COUNT, false);
         } finally {
           watch.cancel(false);
+          tasks.remove(self);
         }
       }
     }.queue();
@@ -242,7 +284,28 @@ public final class SqlRunner {
     }
   }
 
-  /** 그 접속에서 실행 중인 문장을 멈춘다(콘솔 「중지」 · 진행 막대 취소). 화면 스레드가 아닌 곳에서 부른다. 실패는 알리고 거짓. */
+  /**
+   * 콘솔 「중지」: 그 콘솔이 마지막으로 낸 문장(sql)의 실행이 있으면 그 진행만 취소한다(자리를 기다리는 중이면 기다림을 그만두고,
+   * 돌고 있으면 cancelIfAsked 가 그 문장에 cancel 을 보낸다). 같은 접속의 다른 콘솔 문장은 건드리지 않는다.
+   * 찾지 못하면(sql 이 null 이거나 콘솔 밖 실행) 그 접속에서 실행 중인 문장을 멈춘다. 화면 스레드가 아닌 곳에서 부른다.
+   */
+  public static boolean cancel(Project project, DbConfig c, String sql) {
+    Deque<Running> tasks = sql == null ? null : TASKS.get(c.id);
+    if (tasks != null) {
+      String key = SqlGuard.trimStatement(sql);
+      Iterator<Running> it = tasks.descendingIterator();
+      while (it.hasNext()) {
+        Running r = it.next();
+        if (r.sql().equals(key)) {
+          r.indicator().cancel();
+          return true;
+        }
+      }
+    }
+    return cancel(project, c);
+  }
+
+  /** 그 접속에서 실행 중인 문장을 멈춘다(진행 막대 취소). 화면 스레드가 아닌 곳에서 부른다. 실패는 알리고 거짓. */
   public static boolean cancel(Project project, DbConfig c) {
     try {
       DbSessions.get(project).cancel(c.id);

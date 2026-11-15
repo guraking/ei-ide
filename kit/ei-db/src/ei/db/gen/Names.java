@@ -3,7 +3,11 @@ package ei.db.gen;
 import ei.db.DbKind;
 
 import javax.lang.model.SourceVersion;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -17,6 +21,8 @@ public final class Names {
   private static final String FALLBACK_ALIAS = "t";
   /** 자바 예약어(class · int 등)인 필드 이름 뒤에 붙인다. JsonDto 의 필드 이름과 같은 규칙. */
   private static final String KEYWORD_SUFFIX = "_";
+  /** 겹치는 필드 이름 뒤에 붙이는 첫 숫자(field, field2, field3 …). */
+  private static final int FIRST_SUFFIX = 2;
   /** 따옴표 없이 써도 그 이름 그대로 잡히는 꼴: Oracle 은 대문자로, PostgreSQL 은 소문자로 접힌다. */
   private static final Pattern ORACLE_PLAIN = Pattern.compile("[A-Z][A-Z0-9_$#]*");
   private static final Pattern POSTGRES_PLAIN = Pattern.compile("[a-z_][a-z0-9_$]*");
@@ -25,6 +31,22 @@ public final class Names {
   public static String camel(String raw) {
     String name = javaWord(raw);
     return SourceVersion.isKeyword(name) ? name + KEYWORD_SUFFIX : name;
+  }
+
+  /**
+   * 칼럼마다 camel 필드 이름(칼럼 이름 → 필드 이름, 칼럼 순서). 겹치면(한글 칼럼은 모두 field) 뒤에 나온 것에 2, 3 … 을 붙여 서로 다르게 한다.
+   * 매퍼 · 기능 만들기의 DTO 필드 · #{} 자리 · 입력 검증의 필드 짝이 같은 이름을 쓴다.
+   */
+  public static Map<String, String> uniqueCamel(List<String> columns) {
+    Map<String, String> out = new LinkedHashMap<>();
+    Set<String> used = new HashSet<>();
+    for (String column : columns) {
+      String base = camel(column);
+      String name = base;
+      for (int n = FIRST_SUFFIX; !used.add(name); n++) name = base + n;
+      out.put(column, name);
+    }
+    return out;
   }
 
   /** camel 에서 예약어 처리만 뺀 것. 클래스 이름(pascal)은 첫 글자가 대문자라 예약어와 겹치지 않는다. */
@@ -81,9 +103,9 @@ public final class Names {
     };
   }
 
-  /** 스키마.표 표기. */
+  /** 스키마.표 표기. 스키마가 없으면(MySQL 등) 표만. */
   public static String sql(DbKind kind, String schema, String table) {
-    return sql(kind, schema) + "." + sql(kind, table);
+    return schema == null || schema.isEmpty() ? sql(kind, table) : sql(kind, schema) + "." + sql(kind, table);
   }
 
   private static String quote(String name) {

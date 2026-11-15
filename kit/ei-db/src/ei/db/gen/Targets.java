@@ -18,6 +18,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -60,6 +61,16 @@ final class Targets {
 
     String javaFile(String fqn) {
       return java + "/" + fqn.replace('.', '/') + ".java";
+    }
+
+    /** 운영체제가 받지 않는 글자(윈도의 < > : " | ? * 등)가 있으면 거짓. */
+    boolean valid(String path) {
+      try {
+        abs(path);
+        return true;
+      } catch (InvalidPathException e) {
+        return false;
+      }
     }
   }
 
