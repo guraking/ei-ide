@@ -7,6 +7,7 @@ import com.intellij.execution.RunnerAndConfigurationSettings;
 import com.intellij.execution.application.ApplicationConfiguration;
 import com.intellij.execution.application.ApplicationConfigurationType;
 import com.intellij.execution.impl.ExecutionManagerImpl;
+import com.intellij.execution.process.BaseProcessHandler;
 import com.intellij.execution.process.ProcessHandler;
 import com.intellij.execution.runners.ExecutionUtil;
 import com.intellij.execution.ui.RunContentDescriptor;
@@ -28,6 +29,8 @@ import com.intellij.psi.PsiClass;
 import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.search.searches.AnnotatedElementsSearch;
 import com.intellij.util.concurrency.AppExecutorUtil;
+import com.intellij.xdebugger.XDebugSession;
+import com.intellij.xdebugger.XDebuggerManager;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -51,7 +54,7 @@ import java.util.function.Consumer;
 final class ServerLauncher {
 
     // 스프링 부트 2.x · 3.x 공통 정규 이름
-    private static final String BOOT_APP_ANNOTATION = "org.springframework.boot.autoconfigure.SpringBootApplication";
+    static final String BOOT_APP_ANNOTATION = "org.springframework.boot.autoconfigure.SpringBootApplication";
     /** 하위 빌드 단위(Maven · Gradle 하위 모듈) 폴더를 알아보는 빌드 파일 이름. */
     private static final List<String> BUILD_FILES = List.of("pom.xml", "build.gradle", "build.gradle.kts");
 
@@ -86,7 +89,7 @@ final class ServerLauncher {
     static List<RunContentDescriptor> runningDescriptors(RunnerAndConfigurationSettings settings) {
         List<RunContentDescriptor> result = new ArrayList<>();
         List<RunContentDescriptor> descriptors = ExecutionManagerImpl.getInstance(settings.getConfiguration().getProject())
-                .getRunningDescriptors(s -> s == settings);
+                .getRunningDescriptors(s -> sameSettings(s, settings));
         for (RunContentDescriptor descriptor : descriptors) {
             ProcessHandler handler = descriptor.getProcessHandler();
             if (handler != null && !handler.isProcessTerminated()) {
@@ -94,6 +97,40 @@ final class ServerLauncher {
             }
         }
         return result;
+    }
+
+    /**
+     * 같은 실행 설정인가. 실행 설정 파일(.run · .idea/runConfigurations)을 디스크에서 다시 읽으면 RunManager 가 새 객체를 만들므로,
+     * 객체가 아니라 고유 id 로 비교한다. 이름을 바꿔도 고유 id 는 그 객체에서 함께 바뀌므로 맞는다.
+     */
+    static boolean sameSettings(RunnerAndConfigurationSettings a, RunnerAndConfigurationSettings b) {
+        return a == b || a != null && b != null && a.getUniqueID().equals(b.getUniqueID());
+    }
+
+    /**
+     * 이 프로세스의 디버그 세션이 중단점 등에서 멈춰 있는가. 멈춘 동안에는 상태 점검(health · 요청 수 · attach)을 쉰다:
+     * 앱 코드를 불러 중단점에 걸리거나, 멈춘 JVM 에 attach 하느라 시간 제한까지 기다리지 않게 한다. 어느 스레드에서든 부른다.
+     */
+    static boolean debugPaused(Project project, ProcessHandler handler) {
+        if (project.isDisposed()) {
+            return false;
+        }
+        for (XDebugSession session : XDebuggerManager.getInstance(project).getDebugSessions()) {
+            if (session.getDebugProcess().getProcessHandler() == handler && session.isPaused()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 프로세스 번호. 실행기가 OS 프로세스가 아니거나(원격 · 컨테이너 대상) 알 수 없으면 -1. */
+    static long pidOf(ProcessHandler handler) {
+        try {
+            return handler instanceof BaseProcessHandler<?> process ? process.getProcess().pid() : -1;
+        }
+        catch (UnsupportedOperationException e) {
+            return -1;
+        }
     }
 
     /** 이 모듈의 실행 설정 가운데 살아 있는 것. 없으면 빈 목록. */

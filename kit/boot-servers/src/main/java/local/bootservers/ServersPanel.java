@@ -9,7 +9,6 @@ import com.intellij.execution.configurations.RunConfiguration;
 import com.intellij.execution.executors.DefaultDebugExecutor;
 import com.intellij.execution.executors.DefaultRunExecutor;
 import com.intellij.execution.impl.RunDialog;
-import com.intellij.execution.process.BaseProcessHandler;
 import com.intellij.execution.process.ProcessHandler;
 import com.intellij.execution.ui.RunContentDescriptor;
 import com.intellij.execution.ui.RunContentManager;
@@ -38,6 +37,7 @@ import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.DumbAwareToggleAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
+import java.util.concurrent.atomic.AtomicBoolean;
 import com.intellij.openapi.ui.SimpleToolWindowPanel;
 import com.intellij.openapi.ui.popup.JBPopupFactory;
 import com.intellij.openapi.util.Disposer;
@@ -185,6 +185,10 @@ final class ServersPanel extends SimpleToolWindowPanel {
     private final Tree tree = new Tree(treeModel);
     // 서버 목록을 찾는 동안 트리 위에 보이는 진행 막대
     private final Gauge gauge = Gauge.create(BootServersBundle.message("servers.empty.loading"));
+    // 서버 목록(스프링 부트 모듈)을 찾는 중. 화면 스레드에서만 읽고 쓴다.
+    private boolean loading;
+    // 머리줄 상태 점검이 도는 중. 화면 스레드에서 켜고 풀 스레드에서 끈다.
+    private final AtomicBoolean probing = new AtomicBoolean();
 
     // 오른쪽 칸: 아무것도 안 골랐을 때 안내, 골랐을 때 머리줄 · 설정 · 탭
     private final CardLayout sideCards = new CardLayout();
@@ -265,7 +269,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
         AnAction start = action(BootServersBundle.message("servers.action.start"), AllIcons.Actions.Execute, t -> isStartable(stateOf(t)), t -> start(t, false));
         AnAction debug = action(BootServersBundle.message("servers.action.debug"), AllIcons.Actions.StartDebugger, t -> isStartable(stateOf(t)), t -> start(t, true));
         AnAction restart = action(BootServersBundle.message("servers.action.restart"), AllIcons.Actions.Restart, t -> isLive(stateOf(t)), this::restart);
-        AnAction stop = action(BootServersBundle.message("servers.action.stop"), AllIcons.Actions.Suspend, t -> isLive(stateOf(t)), this::stop);
+        AnAction stop = action(BootServersBundle.message("servers.action.stop"), AllIcons.Actions.Suspend, t -> isLive(stateOf(t)) || isLaunchingWas(t), this::stop);
         AnAction edit = action(BootServersBundle.message("servers.action.edit.settings"), AllIcons.Actions.EditSource, t -> true, this::editSettings);
         DefaultActionGroup serverActions = serverActions(start, debug, restart, stop, edit);
         DefaultActionGroup more = new DefaultActionGroup(BootServersBundle.message("servers.action.more"), true);
@@ -377,6 +381,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
     private void reload() {
         tree.getEmptyText().setText("");
         gauge.setVisible(true);
+        loading = true;
         ReadAction.nonBlocking(() -> ServerLauncher.serverModules(project))
                 .inSmartMode(project)
                 .expireWith(parent)
@@ -384,6 +389,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
                 .coalesceBy(this)
                 .finishOnUiThread(ModalityState.any(), found -> {
                     gauge.setVisible(false);
+                    loading = false;
                     bootModules = found;
                     rebuildRows();
                     tree.getEmptyText().setText(BootServersBundle.message("servers.empty.none"))
@@ -391,7 +397,10 @@ final class ServersPanel extends SimpleToolWindowPanel {
                 })
                 .submit(AppExecutorUtil.getAppExecutorService())
                 // 모듈 읽기가 실패하면 finishOnUiThread 가 불리지 않는다. 진행 표시만이라도 내린다.
-                .onError(e -> ApplicationManager.getApplication().invokeLater(() -> gauge.setVisible(false), ModalityState.any()));
+                .onError(e -> ApplicationManager.getApplication().invokeLater(() -> {
+                    gauge.setVisible(false);
+                    loading = false;
+                }, ModalityState.any()));
     }
 
     private void reloadLater() {
@@ -418,7 +427,9 @@ final class ServersPanel extends SimpleToolWindowPanel {
             }
             int before = list.size();
             for (RunnerAndConfigurationSettings s : ServerLauncher.settingsOf(m)) {
-                if (entry.getValue().contains(((ApplicationConfiguration) s.getConfiguration()).getMainClassName())) {
+                // 메인 클래스 칸이 빈 설정은 null 이다. TreeSet.contains(null) 은 NullPointerException 을 낸다.
+                String main = ((ApplicationConfiguration) s.getConfiguration()).getMainClassName();
+                if (main != null && entry.getValue().contains(main)) {
                     list.add(new Boot(m, s));
                 }
             }
@@ -472,7 +483,7 @@ final class ServersPanel extends SimpleToolWindowPanel {
     /** 같은 줄인가. Boot 는 다시 만든 레코드라도 같은 실행 설정(자리 줄은 같은 모듈)이면 같다. */
     private static boolean same(Object row, Object target) {
         if (row instanceof Boot b && target instanceof Boot t) {
-            return b.settings() == null ? t.settings() == null && b.module().equals(t.module()) : b.settings() == t.settings();
+            return b.settings() == null ? t.settings() == null && b.module().equals(t.module()) : ServerLauncher.sameSettings(b.settings(), t.settings());
         }
         return row == target;
     }
@@ -541,6 +552,11 @@ final class ServersPanel extends SimpleToolWindowPanel {
 
     private static boolean isLive(ServerLauncher.State s) {
         return s == ServerLauncher.State.RUNNING || s == ServerLauncher.State.STARTING;
+    }
+
+    /** 시작 전 준비(빌드 · 실행 폴더 꾸미기) 중인 WAS 줄인가. 이때도 중지로 준비를 그만둘 수 있다. */
+    private boolean isLaunchingWas(Object row) {
+        return row instanceof WasSettings.Server s && WasRunner.getInstance(project).isLaunching(s);
     }
 
     private static boolean isStartable(ServerLauncher.State s) {
@@ -973,6 +989,10 @@ final class ServersPanel extends SimpleToolWindowPanel {
                 missing.add(labelOf(key));
             }
         }
+        if (loading && !missing.isEmpty()) {
+            Messages.showInfoMessage(project, BootServersBundle.message("servers.group.loading", group.name), BootServersBundle.message("servers.group.title"));
+            return;
+        }
         if (group.members.isEmpty() || !missing.isEmpty()) {
             Messages.showErrorDialog(project, group.members.isEmpty()
                     ? BootServersBundle.message("servers.group.empty", group.name)
@@ -1322,15 +1342,18 @@ final class ServersPanel extends SimpleToolWindowPanel {
             }
             boolean live = stateOf(row) == ServerLauncher.State.RUNNING;
             ProcessHandler handler = live ? handlerOf(row) : null;
-            long pid = handler instanceof BaseProcessHandler<?> process ? process.getProcess().pid() : -1;
+            long pid = ServerLauncher.pidOf(handler);
             if (row instanceof Boot b) {
                 ServerRegistry.Run run = ServerRegistry.getInstance(project).get(b.name());
                 Integer port = live && run != null && run.port != null ? run.port : portNumber(getProperty(vmOf(b), PORT_KEY));
-                result.add(new ServerMonitor.Watched(b.name(), b.module(), profileOf(b), live, pid, port));
+                // 설정 파일은 실행 클래스패스 모듈(Gradle 이면 폴더 모듈.main)의 리소스 폴더에 있다.
+                Module classModule = ((ApplicationConfiguration) b.settings().getConfiguration()).getConfigurationModule().getModule();
+                result.add(new ServerMonitor.Watched(b.name(), classModule != null ? classModule : b.module(), profileOf(b), live, pid, port,
+                        handler != null && ServerLauncher.debugPaused(project, handler)));
             }
             else {
                 WasSettings.Server s = (WasSettings.Server) row;
-                result.add(new ServerMonitor.Watched(s.name, null, null, live, pid, s.httpPort));
+                result.add(new ServerMonitor.Watched(s.name, null, null, live, pid, s.httpPort, false));
             }
         }
         return result;
@@ -1558,7 +1581,8 @@ final class ServersPanel extends SimpleToolWindowPanel {
     private void probe() {
         Object row = detailBoot != null ? detailBoot : detailServer;
         ProcessHandler handler = row == null || stateOf(row) != ServerLauncher.State.RUNNING ? null : handlerOf(row);
-        if (!(handler instanceof BaseProcessHandler<?> process)) {
+        long pid = handler == null ? -1 : ServerLauncher.pidOf(handler);
+        if (pid < 0) {
             showProbe(row, null, null);
             return;
         }
@@ -1567,9 +1591,19 @@ final class ServersPanel extends SimpleToolWindowPanel {
             showProbe(row, null, memory);
             return;
         }
-        long pid = process.getProcess().pid();
+        // 디버그로 멈춰 있으면 health 가 앱의 상태 점검 코드를 불러 중단점에 걸리므로 묻지 않는다. 앞 점검이 아직 돌면(attach 대기) 겹쳐 돌리지 않는다.
+        if (ServerLauncher.debugPaused(project, handler) || !probing.compareAndSet(false, true)) {
+            showProbe(row, null, memory);
+            return;
+        }
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
-            ServerProbe.Health result = ServerProbe.health(pid);
+            ServerProbe.Health result;
+            try {
+                result = ServerProbe.health(pid);
+            }
+            finally {
+                probing.set(false);
+            }
             ApplicationManager.getApplication().invokeLater(() -> {
                 Object now = detailBoot != null ? detailBoot : detailServer;
                 if (now != null && same(now, row)) {

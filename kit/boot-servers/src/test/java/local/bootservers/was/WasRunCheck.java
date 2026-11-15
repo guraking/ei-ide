@@ -20,7 +20,69 @@ public final class WasRunCheck {
         weblogicKeepsUserApp();
         jeusDeployQuotesPath();
         passwordFile();
+        tomcatServerXml();
+        exploded();
         System.out.println("WasRunCheck 통과");
+    }
+
+    private static void tomcatServerXml() throws IOException {
+        String stock = "<Server port=\"8005\" shutdown=\"SHUTDOWN\">\n<!-- <Connector port=\"8080\" protocol=\"HTTP/1.1\"/> -->\n"
+                + "<Connector port=\"8080\" protocol=\"HTTP/1.1\" redirectPort=\"8443\"/>\n<Connector port=\"8009\" protocol=\"AJP/1.3\"/>\n</Server>";
+        String out = TomcatBase.patchServerXml(stock, 9090, 9005);
+        check(out.contains("<Server port=\"9005\"") && out.contains("<Connector port=\"9090\" protocol=\"HTTP/1.1\" redirectPort=\"8443\"/>")
+                && out.contains("port=\"8009\" protocol=\"AJP/1.3\""), "기본 server.xml");
+        String edited = "<Server shutdown=\"SHUTDOWN\"\n  port='8005'>\n<Connector port=\"8443\" protocol=\"org.apache.coyote.http11.Http11NioProtocol\" SSLEnabled=\"true\"/>\n"
+                + "<Connector\n   protocol=\"org.apache.coyote.http11.Http11NioProtocol\"\n   port=\"8080\" connectionTimeout=\"20000\"/>\n</Server>";
+        out = TomcatBase.patchServerXml(edited, 9090, 9005);
+        check(out.contains("port='9005'") && out.contains("port=\"8443\"") && out.contains("port=\"9090\" connectionTimeout"), "속성 순서 · 구현 클래스 이름 · SSL 건너뜀");
+        check(TomcatBase.patchServerXml("<Server port=\"8005\"><Connector port=\"8080\"/></Server>", 1, 2).contains("<Connector port=\"1\"/>"), "protocol 없으면 HTTP/1.1");
+        boolean failed = false;
+        try {
+            TomcatBase.patchServerXml("<Server port=\"8005\"><Connector port=\"8009\" protocol=\"AJP/1.3\"/></Server>", 1, 2);
+        }
+        catch (IOException e) {
+            failed = true;
+        }
+        check(failed, "HTTP 연결자 없으면 실패");
+        // CP949 주석이 든 server.xml 도 읽고, 주석 밖 바이트는 그대로 둔다.
+        Path home = Files.createTempDirectory("tc-home");
+        Files.createDirectories(home.resolve("conf"));
+        byte[] korean = "<!-- 회사 설정 -->".getBytes("MS949");
+        byte[] rest = "<Server port=\"8005\"><Connector port=\"8080\" protocol=\"HTTP/1.1\"/><Valve pattern=\"".getBytes("ISO-8859-1");
+        byte[] tail = "한\"/></Server>".getBytes("MS949");
+        Files.write(home.resolve("conf/server.xml"), concat(korean, rest, tail));
+        Path base = Files.createTempDirectory("tc-base");
+        TomcatBase.prepare(home, base, 9090, 9005, List.of(), true);
+        byte[] written = Files.readAllBytes(base.resolve("conf/server.xml"));
+        String asLatin = new String(written, "ISO-8859-1");
+        check(asLatin.contains("port=\"9090\"") && asLatin.endsWith(new String(tail, "ISO-8859-1")), "CP949 server.xml 바이트 유지");
+    }
+
+    private static void exploded() throws IOException {
+        Path web = Files.createTempDirectory("sync-src");
+        Files.writeString(web.resolve("a.txt"), "a");
+        Files.writeString(web.resolve("b.txt"), "b");
+        Path war = Files.createTempDirectory("sync-war");
+        // a.txt 자리에 비지 않은 폴더가 있어 덮어쓸 수 없다(잠긴 jar 대신).
+        Files.createDirectories(war.resolve("a.txt"));
+        Files.writeString(war.resolve("a.txt").resolve("x"), "x");
+        boolean partial = false;
+        try {
+            ExplodedSync.sync(new TomcatBase.App("/p", web, List.of(), List.of()), war);
+        }
+        catch (ExplodedSync.Partial e) {
+            partial = e.changed && e.getMessage().contains("a.txt");
+        }
+        check(partial, "한 파일이 실패해도 Partial(changed)");
+        check(Files.readString(war.resolve("b.txt")).equals("b"), "실패한 파일 뒤의 파일도 복사");
+    }
+
+    private static byte[] concat(byte[]... parts) {
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        for (byte[] p : parts) {
+            out.writeBytes(p);
+        }
+        return out.toByteArray();
     }
 
     private static void ports() throws IOException {
@@ -30,6 +92,23 @@ public final class WasRunCheck {
             check(RunSupport.portInUse(port), "듣고 있는 포트는 사용 중");
         }
         check(!RunSupport.portInUse(port), "닫은 포트는 빈 포트");
+        check(!RunSupport.httpAnswers(port), "닫은 포트는 답 없음");
+        // 묶기만 하고 답하지 않는 포트(Tomcat 이 앱을 올리는 중)는 답 없음, 한 바이트라도 답하면 답함.
+        try (ServerSocket silent = new ServerSocket(0)) {
+            check(!RunSupport.httpAnswers(silent.getLocalPort()), "묶기만 한 포트는 답 없음");
+        }
+        try (ServerSocket http = new ServerSocket(0)) {
+            Thread answer = new Thread(() -> {
+                try (java.net.Socket c = http.accept()) {
+                    c.getOutputStream().write("HTTP/1.0 404 Not Found\r\n\r\n".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+                }
+                catch (IOException ignored) {
+                    // 점검 끝에 닫혀도 된다.
+                }
+            });
+            answer.start();
+            check(RunSupport.httpAnswers(http.getLocalPort()), "답하는 포트");
+        }
     }
 
     private static void encoding() {

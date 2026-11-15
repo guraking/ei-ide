@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.FileTime;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -20,15 +21,36 @@ import java.util.stream.Stream;
  */
 public final class ExplodedSync {
 
+    // 바꾸지 못한 파일을 알림에 보일 최대 개수. 나머지는 개수만 보인다.
+    private static final int FAILED_SHOWN = 5;
+
+    /**
+     * 몇 파일만 바꾸지 못했다(윈도우에서 실행 중인 서버가 WEB-INF/lib 의 jar 를 잡고 있는 경우 등). 나머지 파일은 다 맞췄다.
+     * changed 는 바꾼 파일이 있었는지(있으면 부른 쪽이 다시 올리기 표시를 남긴다).
+     */
+    public static final class Partial extends IOException {
+        public final boolean changed;
+
+        Partial(boolean changed, List<String> failed) {
+            super("파일 " + failed.size() + "개를 바꾸지 못했습니다(서버가 쓰는 중이면 다시 시작해야 들어갑니다): "
+                    + String.join(", ", failed.subList(0, Math.min(FAILED_SHOWN, failed.size())))
+                    + (failed.size() > FAILED_SHOWN ? " 외 " + (failed.size() - FAILED_SHOWN) + "개" : ""));
+            this.changed = changed;
+        }
+    }
+
     private ExplodedSync() {
     }
 
-    /** @return 무엇이든 복사하거나 지웠으면 true */
+    /** @return 무엇이든 복사하거나 지웠으면 true. 몇 파일만 실패하면 나머지를 다 맞춘 뒤 {@link Partial}. */
     public static boolean sync(TomcatBase.App app, Path warDir) throws IOException {
         return sync(app, warDir, Set.of());
     }
 
-    /** keep: 원본에 없어도 지우지 않을 파일(warDir 기준 상대 경로, 예: "WEB-INF/REDEPLOY"). WAS 가 쓰는 표시 파일용. */
+    /**
+     * keep: 원본에 없어도 지우지 않을 파일(warDir 기준 상대 경로, 예: "WEB-INF/REDEPLOY"). WAS 가 쓰는 표시 파일용.
+     * 파일 하나를 복사 · 지우지 못해도 멈추지 않고 나머지를 맞춘 뒤, 실패한 파일을 모아 {@link Partial} 로 알린다.
+     */
     public static boolean sync(TomcatBase.App app, Path warDir, Set<String> keep) throws IOException {
         Map<Path, Path> wanted = new HashMap<>();
         collect(app.docBase(), warDir, wanted);
@@ -40,6 +62,7 @@ public final class ExplodedSync {
         }
 
         boolean changed = false;
+        List<String> failed = new ArrayList<>();
         for (Map.Entry<Path, Path> e : wanted.entrySet()) {
             Path target = e.getKey();
             Path source = e.getValue();
@@ -48,10 +71,15 @@ public final class ExplodedSync {
                     && Files.getLastModifiedTime(target).equals(Files.getLastModifiedTime(source))) {
                 continue;
             }
-            Files.createDirectories(target.getParent());
-            Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
-            Files.setLastModifiedTime(target, Files.getLastModifiedTime(source));
-            changed = true;
+            try {
+                Files.createDirectories(target.getParent());
+                Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
+                Files.setLastModifiedTime(target, Files.getLastModifiedTime(source));
+                changed = true;
+            }
+            catch (IOException copyFailed) {
+                failed.add(warDir.relativize(target).toString().replace('\\', '/'));
+            }
         }
         if (Files.isDirectory(warDir)) {
             List<Path> existing;
@@ -59,17 +87,29 @@ public final class ExplodedSync {
                 existing = walk.sorted(Comparator.reverseOrder()).toList();
             }
             for (Path p : existing) {
-                if (Files.isRegularFile(p) && !wanted.containsKey(p) && !keep.contains(warDir.relativize(p).toString().replace('\\', '/'))) {
-                    Files.delete(p);
-                    changed = true;
+                String rel = warDir.relativize(p).toString().replace('\\', '/');
+                try {
+                    if (Files.isRegularFile(p) && !wanted.containsKey(p) && !keep.contains(rel)) {
+                        Files.delete(p);
+                        changed = true;
+                    }
+                    else if (Files.isDirectory(p) && !p.equals(warDir) && isEmpty(p)) {
+                        Files.delete(p);
+                    }
                 }
-                else if (Files.isDirectory(p) && !p.equals(warDir) && isEmpty(p)) {
-                    Files.delete(p);
+                catch (IOException e) {
+                    // 지우지 못한 파일이 든 폴더는 비지 않아 그대로 남는다. 파일만 알린다.
+                    if (!Files.isDirectory(p)) {
+                        failed.add(rel);
+                    }
                 }
             }
         }
         else {
             Files.createDirectories(warDir);
+        }
+        if (!failed.isEmpty()) {
+            throw new Partial(changed, failed);
         }
         return changed;
     }

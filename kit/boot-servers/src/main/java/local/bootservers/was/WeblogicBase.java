@@ -74,7 +74,17 @@ public final class WeblogicBase {
 
     private static boolean syncAndMark(Path warDir, TomcatBase.App app) throws IOException {
         ExplodedSync.claim(warDir, OWNED_MARK);
-        boolean changed = ExplodedSync.sync(app, warDir, Set.of(OWNED_MARK, "WEB-INF/REDEPLOY"));
+        boolean changed;
+        try {
+            changed = ExplodedSync.sync(app, warDir, Set.of(OWNED_MARK, "WEB-INF/REDEPLOY"));
+        }
+        catch (ExplodedSync.Partial e) {
+            // 들어간 파일만이라도 다시 올린다.
+            if (e.changed) {
+                ExplodedSync.touch(warDir.resolve("WEB-INF").resolve("REDEPLOY"));
+            }
+            throw e;
+        }
         if (changed) {
             ExplodedSync.touch(warDir.resolve("WEB-INF").resolve("REDEPLOY"));
         }

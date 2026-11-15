@@ -21,6 +21,8 @@ final class ErrorScan {
     static final int CONTEXT_LINES = 300;
     static final int BLOCK_LINES = 300;
     static final int MAX_LINE_CHARS = 4000;
+    // 색 코드를 지우기 전의 줄을 이어 붙일 때의 한도. 색 코드 몫을 두고 MAX_LINE_CHARS 의 두 배까지만 모은다(한 줄이 수 MB 여도 복사하지 않게).
+    private static final int RAW_LINE_CHARS = 2 * MAX_LINE_CHARS;
     static final int BLOCK_CHARS = 50_000;
     static final int MAX_GROUPS = 200;
 
@@ -81,14 +83,14 @@ final class ErrorScan {
         int start = 0;
         for (int i = 0; i < chunk.length(); i++) {
             if (chunk.charAt(i) == '\n') {
-                partial.append(chunk, start, i);
+                partial.append(chunk, start, Math.min(i, start + Math.max(0, RAW_LINE_CHARS - partial.length())));
                 line(partial.toString());
                 partial.setLength(0);
                 start = i + 1;
             }
         }
-        if (partial.length() < MAX_LINE_CHARS) {
-            partial.append(chunk, start, Math.min(chunk.length(), start + MAX_LINE_CHARS - partial.length()));
+        if (partial.length() < RAW_LINE_CHARS) {
+            partial.append(chunk, start, Math.min(chunk.length(), start + RAW_LINE_CHARS - partial.length()));
         }
     }
 
@@ -110,6 +112,11 @@ final class ErrorScan {
         boolean levelLine = level != null && !LogFields.isTraceLine(line);
         boolean trace = LogFields.isTraceLine(line);
         if (block != null && levelLine && !(failureReport && !LogFilter.LEADING_TIMESTAMP.matcher(line).lookingAt())) {
+            close();
+        }
+        // 묶음이 가득 찼는데 스택이 아닌 보통 줄이 이어지면(ERROR 뒤로 레벨 없는 System.out 이 쉬지 않고 나오는 경우) 거기서 끝낸다.
+        // 스택 줄은 계속 받아 버리므로 긴 스택이 두 오류로 갈라지지 않는다.
+        if (block != null && !trace && !line.isBlank() && (block.size() >= BLOCK_LINES || blockChars + line.length() > BLOCK_CHARS)) {
             close();
         }
         // printStackTrace 처럼 레벨 없이 시작한 묶음은 스택 줄이 나온 뒤의 보통 줄에서 끝난다.
