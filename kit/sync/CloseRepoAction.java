@@ -28,6 +28,7 @@ import com.intellij.openapi.module.ModuleUtilCore;
 import com.intellij.openapi.module.UnloadedModuleDescription;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.roots.ContentEntry;
 import com.intellij.openapi.roots.ModuleRootManager;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vcs.ProjectLevelVcsManager;
@@ -513,9 +514,11 @@ public class CloseRepoAction extends DumbAwareAction {
    * 폴더가 없어져 프로젝트에서 지운 닫은 저장소(CloneIntoProject.dropStaleClosed)의 닫은 기록(CLOSED_KEY)과 Maven 무시를 뺀다. EDT.
    * 남으면 같은 자리에 다시 받은 저장소가 켤 때 다시 닫히고(reclose), 그 pom 을 Maven 이 계속 무시한다.
    * 워크스페이스 창은 모듈 리스너의 sync 가 같은 정리를 하지만, 일반 창에서는 sync 가 돌지 않아 여기서 한다.
+   * 지운 모듈 이름(names)의 루트 기록(ROOTS_KEY)도 지운다. 남으면 쓰지 않는 기록이 프로젝트 설정에 쌓이고, 같은 이름의 내린 모듈이 루트를 잃었을 때 그 옛 경로를 쓴다(rootsOf).
    */
-  static void forgetClosed(Project project, List<String> roots) {
+  static void forgetClosed(Project project, List<String> roots, List<String> names) {
     PropertiesComponent properties = PropertiesComponent.getInstance(project);
+    for (String name : names) properties.unsetValue(ROOTS_KEY + name);
     List<String> saved = properties.getList(CLOSED_KEY);
     if (saved != null) {
       List<String> ours = new ArrayList<>(saved);
@@ -589,15 +592,24 @@ public class CloseRepoAction extends DumbAwareAction {
   /**
    * 모듈이 빠지거나 더해질 때 sync 를 부른다(우리 단추 · IntelliJ Load/Unload Modules · Remove Module · Maven 다시 읽기 모두).
    * Gradle 이 같은 폴더에 모듈을 새로 만들었으면 우리 빈 모듈을 뺀다(CloneIntoProject.dropShadowedModules).
+   * 빠진 모듈과 같은 콘텐츠 루트를 다른 모듈이 이어받았으면(Maven · Gradle 가져오기, dropShadowedModules) 빠진 모듈의 제외 폴더를 그 모듈에 옮긴다(moveExcludes).
    * 빠지기 직전에 콘텐츠 루트를 모아 두고, 한 번에 여러 모듈이 바뀌어도 EDT 에서 한 번만 돈다.
    */
   public static final class ModuleSync implements ModuleListener {
     private final Set<String> removed = ConcurrentHashMap.newKeySet();
+    // 빠진 모듈의 콘텐츠 루트 경로 → 그 루트의 제외 폴더 URL. 같은 루트를 이어받은 모듈에 옮긴다(CloneIntoProject.moveExcludes).
+    private final Map<String, List<String>> excludes = new ConcurrentHashMap<>();
     private final AtomicBoolean scheduled = new AtomicBoolean();
 
     @Override
     public void beforeModuleRemoved(@NotNull Project project, @NotNull Module module) {
-      for (VirtualFile root : ModuleRootManager.getInstance(module).getContentRoots()) removed.add(root.getPath());
+      for (ContentEntry entry : ModuleRootManager.getInstance(module).getContentEntries()) {
+        VirtualFile root = entry.getFile();
+        if (root == null) continue;
+        removed.add(root.getPath());
+        List<String> urls = entry.getExcludeFolderUrls();
+        if (!urls.isEmpty()) excludes.put(root.getPath(), List.copyOf(urls));
+      }
       schedule(project);
     }
 
@@ -612,7 +624,13 @@ public class CloseRepoAction extends DumbAwareAction {
         scheduled.set(false);
         List<String> roots = new ArrayList<>(removed);
         removed.removeAll(roots);
+        Map<String, List<String>> moved = new LinkedHashMap<>();
+        for (String root : roots) {
+          List<String> urls = excludes.remove(root);
+          if (urls != null) moved.put(root, urls);
+        }
         sync(project, roots, List.of(), false);
+        CloneIntoProject.moveExcludes(project, moved);
         CloneIntoProject.dropShadowedModules(project);
       }, project.getDisposed());
     }

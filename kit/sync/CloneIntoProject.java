@@ -111,7 +111,7 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
   @Override
   public void runActivity(@NotNull Project project) {
     excludeBuildOutput(project);
-    attachWorkspaceRepos(project);
+    attachWorkspaceRepos(project, true);
     ApplicationManager.getApplication().invokeLater(() -> removeWorkspaceModule(project), project.getDisposed());
     // 캐시 없이 연 프로젝트는 아래 AfterJpsLoad 가 오지 않을 수 있어 색인 뒤에도 한 번 한다. 두 번 해도 결과가 같다.
     DumbService.getInstance(project).smartInvokeLater(() -> tidyClosed(project));
@@ -162,6 +162,8 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
   /**
    * IntelliJ 는 캐시로 모듈을 먼저 올리고 몇 초 뒤 프로젝트 파일(.iml · modules.xml)을 다시 읽어 맞춘다(JpsProjectModelSynchronizer).
    * 그 전에 지운 닫힌 모듈은 그때 되살아나므로, 다시 읽기가 끝난 뒤(JpsProjectLoadedListener)에도 정리한다.
+   * 거꾸로 캐시에만 있고 modules.xml 에 저장되기 전에 IDE 가 꺼진 모듈은 다시 읽기에서 빠지므로(그 VCS 매핑도 ModuleSync 가 뗀다)
+   * 워크스페이스 저장소 붙이기를 한 번 더 한다. 빌드 파일 연결은 켤 때 한 번만 한다(두 번 하면 같은 pom 을 두 번 연결할 수 있다).
    */
   public static final class AfterJpsLoad implements JpsProjectLoadedListener {
     private final Project project;
@@ -173,6 +175,9 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
     @Override
     public void loaded() {
       ApplicationManager.getApplication().invokeLater(() -> tidyClosed(project), project.getDisposed());
+      ApplicationManager.getApplication().executeOnPooledThread(() -> {
+        if (!project.isDisposed()) attachWorkspaceRepos(project, false);
+      });
     }
   }
 
@@ -257,7 +262,9 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
     LOG.info("폴더가 없어진 닫은 저장소를 지웁니다: " + stale);
     WriteAction.run(() -> modules.removeUnloadedModules(stale));
     // 닫은 기록도 뺀다. 남으면 같은 자리에 다시 받은 저장소를 켤 때 다시 닫는다(CloseRepoAction.reclose).
-    CloseRepoAction.forgetClosed(project, staleRoots);
+    List<String> staleNames = new ArrayList<>();
+    for (UnloadedModuleDescription description : stale) staleNames.add(description.getName());
+    CloseRepoAction.forgetClosed(project, staleRoots, staleNames);
     // 닫을 때 넣은 「등록 안 된 루트 무시」도 뺀다. 남으면 같은 자리에 IDE 밖에서 다시 받은 저장소를 IntelliJ 가 찾지 않아 동기화 창 · Git Log 에 안 보인다.
     VcsConfiguration.getInstance(project).removeFromIgnoredUnregisteredRoots(staleRoots);
   }
@@ -335,10 +342,11 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
    * 대상 폴더는 looseWorkspace · repoDirs 가 고른다. 닫은 저장소(내린 모듈)와 겹치는 폴더는 붙이지도 연결하지도 않는다.
    * 시작 작업 스레드에서 부른다. 폴더 찾기 · 빌드 결과 폴더 찾기는 이 스레드에서, 모듈 붙이기는 EDT 에서 한다. 바로 뒤에 오는 removeWorkspaceModule 보다 먼저 EDT 에 올린다.
    * 실패해도 기록만 남기고 돌아간다. 뒤따르는 켤 때 정리(removeWorkspaceModule · tidyClosed)를 막지 않는다.
+   * link 가 false 면 모듈만 붙이고 빌드 파일은 연결하지 않는다(AfterJpsLoad).
    */
-  private static void attachWorkspaceRepos(Project project) {
+  private static void attachWorkspaceRepos(Project project, boolean link) {
     try {
-      attachWorkspaceReposOrThrow(project);
+      attachWorkspaceReposOrThrow(project, link);
     }
     catch (ProcessCanceledException e) {
       throw e;
@@ -348,7 +356,7 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
     }
   }
 
-  private static void attachWorkspaceReposOrThrow(Project project) {
+  private static void attachWorkspaceReposOrThrow(Project project, boolean link) {
     String base = project.isDefault() ? null : project.getBasePath();
     if (base == null || !looseWorkspace(Path.of(base)) || svnProject(project)) return;
     LooseState state = ReadAction.compute(() -> looseState(project, base));
@@ -368,7 +376,7 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
     if (repos.isEmpty()) return;
     ApplicationManager.getApplication().invokeLater(() -> attachRepos(project, repos), project.getDisposed());
     // 연결은 색인이 끝난 뒤 EDT 에서 돈다(smartInvokeLater). 위 모듈 붙이기보다 늦게 돈다.
-    linkOnOpen(project, repos);
+    if (link) linkOnOpen(project, repos);
   }
 
   /** path 가 paths 가운데 하나와 같거나 그 안 · 위 폴더면 true. */
@@ -622,6 +630,27 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
         }
       }
     });
+  }
+
+  /**
+   * 빠진 모듈의 제외 폴더(콘텐츠 루트 경로 → 제외 URL)를 같은 경로를 콘텐츠 루트로 가진 올라온 모듈에 더한다. EDT 에서 부른다.
+   * Maven 은 이름이 다른 모듈이 같은 루트를 잡으면 그 루트를 제외 폴더째 지운 뒤 제외를 이어받으므로(WorkspaceProjectImporter
+   * removeNonMavenModulesWithClashingContentRoots 가 retainManualChanges 보다 먼저 돈다) 우리가 넣은 node_modules · bin 제외가 사라진다.
+   * Gradle 에 겹친 우리 모듈을 뺄 때(dropShadowedModules)도 같다. 켤 때 넣는 제외는 한 번만 넣으므로(excludeDirs) 여기서 옮기지 않으면 다시 생기지 않는다.
+   * 프로젝트 폴더 루트는 옮기지 않는다(워크스페이스 폴더 모듈). 사용자가 푼 제외는 빠진 모듈에 없으므로 되살아나지 않는다.
+   */
+  static void moveExcludes(Project project, Map<String, List<String>> excluded) {
+    if (excluded.isEmpty() || project.isDisposed()) return;
+    String base = project.getBasePath();
+    for (Module module : ModuleManager.getInstance(project).getModules()) {
+      for (VirtualFile root : ModuleRootManager.getInstance(module).getContentRoots()) {
+        List<String> urls = excluded.get(root.getPath());
+        if (urls == null || (base != null && FileUtil.pathsEqual(root.getPath(), base))) continue;
+        List<Path> dirs = new ArrayList<>();
+        for (String url : urls) dirs.add(Path.of(FileUtil.toSystemDependentName(VfsUtilCore.urlToPath(url))));
+        excludeDirs(module, dirs, true);
+      }
+    }
   }
 
   private static boolean coversAny(String url, List<String> sources) {

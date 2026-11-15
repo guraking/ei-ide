@@ -99,7 +99,8 @@ final class KingGuraMainMenuCustomizer implements ActionConfigurationCustomizer,
    * 고른 폴더 하나가 저장소 폴더(REPO_DIRS 가 바로 아래에 있음)이고 Maven 프로젝트 폴더가 아니며(pom.xml 없음) 바로 아래 폴더들에 pom.xml 이 있으면,
    * 그 pom 들을 고른 것으로 바꿔 넘긴다. 저장소 폴더만 보는 것은 메뉴를 열 때마다 큰 폴더(node_modules 등)의 아래를 훑지 않기 위해서다.
    * 빌드 파일이 한 단계 아래에 있는 저장소 폴더 줄(저장소\하위\pom.xml)에서도 Maven 다시 읽기가 보이고 그 안 프로젝트를 다시 읽는다.
-   * Maven 이 모르는 pom 이면 원래 동작이 스스로 숨는다. 그 밖의 선택은 그대로 넘긴다.
+   * 원래 동작은 넘긴 pom 중 하나라도 Maven 이 모르거나 무시한 것이면 통째로 숨으므로(MavenActionUtil.getMavenProjects),
+   * pom 마다 원래 동작의 update 로 보이는지 먼저 보고 보이는 것만 넘긴다. 하나도 없으면 원래 선택 그대로 둔다. 그 밖의 선택은 그대로 넘긴다.
    */
   private static final class MavenBelow extends AnActionWrapper {
     private static final String POM = "pom.xml";
@@ -118,7 +119,7 @@ final class KingGuraMainMenuCustomizer implements ActionConfigurationCustomizer,
       super.actionPerformed(below(e));
     }
 
-    private static AnActionEvent below(AnActionEvent e) {
+    private AnActionEvent below(AnActionEvent e) {
       VirtualFile[] files = e.getData(CommonDataKeys.VIRTUAL_FILE_ARRAY);
       if (files == null || files.length != 1 || !files[0].isValid() || !files[0].isDirectory() || files[0].findChild(POM) != null
           || !isRepoDir(files[0])) {
@@ -131,11 +132,20 @@ final class KingGuraMainMenuCustomizer implements ActionConfigurationCustomizer,
           poms.add(pom);
         }
       }
-      if (poms.isEmpty()) {
-        return e;
+      List<VirtualFile> known = new ArrayList<>();
+      for (VirtualFile pom : poms) {
+        // 고른 것이 하나면 원래 동작은 그 pom 하나로 판단한다. 같은 표시 객체를 쓰므로 아래 마지막 update 가 결과를 다시 쓴다.
+        AnActionEvent one = withFiles(e, new VirtualFile[]{pom});
+        getDelegate().update(one);
+        if (one.getPresentation().isEnabledAndVisible()) {
+          known.add(pom);
+        }
       }
-      VirtualFile[] below = poms.toArray(VirtualFile.EMPTY_ARRAY);
-      return e.withDataContext(CustomizedDataContext.withSnapshot(e.getDataContext(), sink -> sink.set(CommonDataKeys.VIRTUAL_FILE_ARRAY, below)));
+      return known.isEmpty() ? e : withFiles(e, known.toArray(VirtualFile.EMPTY_ARRAY));
+    }
+
+    private static AnActionEvent withFiles(AnActionEvent e, VirtualFile[] files) {
+      return e.withDataContext(CustomizedDataContext.withSnapshot(e.getDataContext(), sink -> sink.set(CommonDataKeys.VIRTUAL_FILE_ARRAY, files)));
     }
   }
 
