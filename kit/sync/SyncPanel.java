@@ -1270,6 +1270,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
           failed.put(root, messageOf(ex));
         }
       }
+      LocalExcludeAction.refresh(rootsOf(selected));
       String m = withFailures(LocalExcludeAction.message(done, true), failed);
       ApplicationManager.getApplication().invokeLater(() -> {
         showStatus(m);
