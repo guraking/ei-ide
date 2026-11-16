@@ -625,6 +625,11 @@ EDITS = [
     ("java/ide-customization/backend/resources/intellij.java.ide.customization.backend.xml",
      '    <registryKey key="idea.welcome.screen.non.modal.enabled" defaultValue="true" restartRequired="true"\n',
      '    <registryKey key="idea.welcome.screen.non.modal.enabled" defaultValue="false" restartRequired="true"\n'),
+    # 37) 커밋 창은 버전 관리 안 된 파일이 이 수를 넘으면 목록을 「파일 N개 둘러보기」 한 줄로 접어 체크할 수 없다. 새 저장소에 앱 소스를
+    #     통째로 넣으면 1,000개를 쉽게 넘으므로 10000 까지는 펼친다. 제외 폴더(node_modules · dist 등)는 이 목록에 들어오지 않는다.
+    ("platform/util/resources/misc/registry.properties",
+     "vcs.unversioned.files.max.intree=1000\n",
+     "vcs.unversioned.files.max.intree=10000\n"),
 ]
 
 
