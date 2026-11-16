@@ -15,6 +15,9 @@ import com.intellij.openapi.vcs.changes.ChangeListManager;
 import com.intellij.openapi.vcs.changes.VcsDirtyScopeManager;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.openapi.wm.ToolWindow;
+import com.intellij.openapi.wm.ToolWindowManager;
+import com.intellij.ui.content.Content;
 import com.intellij.vcsUtil.VcsUtil;
 import org.jetbrains.annotations.NotNull;
 
@@ -84,6 +87,10 @@ public class LocalExcludeAction extends AnAction implements DumbAware {
       ApplicationManager.getApplication().invokeLater(() -> {
         // IntelliJ 는 info/exclude 를 고친 것만으로는 새 파일 목록을 다시 읽지 않을 수 있어 고른 경로를 다시 보게 한다.
         VcsDirtyScopeManager.getInstance(project).filePathsDirty(paths(byRoot), List.of());
+        // 동기화 창은 변경 목록 알림으로 다시 비교하지 않으므로 바꾼 저장소만 따로 다시 비교하게 한다.
+        ToolWindow window = ToolWindowManager.getInstance(project).getToolWindow(SyncToolWindowFactory.ID);
+        Content content = window == null ? null : window.getContentManager().getContent(0);
+        if (content != null && content.getComponent() instanceof SyncPanel panel) panel.recompareRoots(byRoot.keySet());
         String title = SyncBundle.message(on ? "action.KingGura.LocalExclude.text" : "action.KingGura.LocalExclude.Undo.text");
         if (failures.isEmpty()) VcsNotifier.getInstance(project).notifyInfo(NOTIFICATION_ID, title, m);
         else VcsNotifier.getInstance(project).notifyError(NOTIFICATION_ID, title, m);
