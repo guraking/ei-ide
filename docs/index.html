@@ -462,6 +462,7 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
       <tr><td>Git ▸ Merge Branches…</td><td>그 저장소로 역머지 창</td></tr>
       <tr><td>Close Project · Open Project (맨 위, 저장소 폴더 줄)</td><td>이클립스처럼 저장소 하나만 닫기 · 다시 열기. 닫힌 저장소는 색인 · 검색 · 컴파일 · 동기화 창 · Git Log 에서 빠지고 트리에 닫힌 아이콘 줄로 남습니다. 파일은 그대로입니다. 빌드 파일이 한 단계 아래에 있는 저장소는 저장소 폴더 줄에서 닫으면 그 안 모듈이 모두 닫힙니다. 이 저장소를 쓰는 다른 Maven 모듈은 닫는 동안 로컬 Maven 저장소의 jar 를 씁니다(jar 가 없으면 닫기 전에 묻습니다)</td></tr>
       <tr><td>Assume Unchanged · No Assume Unchanged (맨 아래)</td><td>내 PC 에서만 고친 파일을 변경 목록에서 숨기기 · 되돌리기</td></tr>
+      <tr><td>이 PC 에서만 무시 · 이 PC 에서만 무시 풀기 (맨 아래)</td><td>아직 Git 에 안 올린 새 파일 · 폴더를 <code>.git/info/exclude</code> 에 적어 커밋 목록에서 빼기 · 되돌리기. 저장소에는 안 올라갑니다</td></tr>
       <tr><td><kbd>F5</kbd> (Reload from Disk)</td><td>고른 프로젝트 · 폴더 · 파일을 디스크에서 다시 읽기</td></tr>
     </table>
 
@@ -486,6 +487,7 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
       <tr><td>실행 · 서버 콘솔 → AI ▸ Find Cause of This Error (맨 아래)</td><td>고른 오류 글을 Claude Code 로</td></tr>
       <tr><td>실행 · 서버 콘솔 → <kbd>Ctrl</kbd>+<kbd>F</kbd> (Find in Console)</td><td>콘솔 출력 검색</td></tr>
       <tr><td>커밋 창 · 변경 목록 파일 → Assume Unchanged (맨 아래)</td><td>그 파일을 변경 목록에서 숨기기</td></tr>
+      <tr><td>커밋 창 · 변경 목록 새 파일 → 이 PC 에서만 무시 (맨 아래)</td><td>새 파일을 이 PC 에서만 커밋 목록에서 빼기</td></tr>
       <tr><td>Result 창 탭 → Compare with Another Result…</td><td>결과 두 개 비교 (<a href="#db">데이터베이스</a>)</td></tr>
     </table>
 
@@ -493,7 +495,7 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
     <table class="keys map">
       <tr><th>창 (자리)</th><th>단추 · 우클릭</th></tr>
       <tr><td>Servers (아래)</td><td>Start · Start in Debug · Restart · Stop · Stop All · Add WAS… · Server Groups(New Group… · Start Group · Stop Group) · ⋯ More(Duplicate Server · Publish (Rebuild) · Remove WAS · Show Log Files…) · Refresh Server List. 줄 우클릭에 Open in Browser · Show Console · Edit Settings… (<a href="#servers">서버 창</a>)</td></tr>
-      <tr><td>Synchronize (아래)</td><td>Show All · Incoming · Outgoing · Conflicts · Refresh All · Selected Repository Only, 아래 Pull All · Pull Selected · Push · Commit and Push… · Resolve Conflicts · Merge Branches. 목록 우클릭 Pull · Update Only These Files · Commit… · Push · Resolve Conflicts · Undo Last Git Action…, 저장소 줄 우클릭 Pull · Push · Refresh This Repository · Merge Branches… · Undo Last Git Action… · Show in Git Log · 탐색기에서 열기, 파일 우클릭 Add to .gitignore · Replace with HEAD · Unstage Only, Keep Files · Assume Unchanged · Jump to Source · Show History · Copy Absolute Path · Select in Project View, 도구줄 모두 펼치기 · 모두 접기 · 폴더별로 묶기 · 이전 · 다음 파일 (<a href="#sync">Git · SVN</a>)</td></tr>
+      <tr><td>Synchronize (아래)</td><td>Show All · Incoming · Outgoing · Conflicts · Refresh All · Selected Repository Only, 아래 Pull All · Pull Selected · Push · Commit and Push… · Resolve Conflicts · Merge Branches. 목록 우클릭 Pull · Update Only These Files · Commit… · Push · Resolve Conflicts · Undo Last Git Action…, 저장소 줄 우클릭 Pull · Push · Refresh This Repository · Merge Branches… · Undo Last Git Action… · Show in Git Log · 탐색기에서 열기, 파일 우클릭 Add to .gitignore · 이 PC 에서만 무시 · Replace with HEAD · Unstage Only, Keep Files · Assume Unchanged · Jump to Source · Show History · Copy Absolute Path · Select in Project View, 도구줄 모두 펼치기 · 모두 접기 · 폴더별로 묶기 · 이전 · 다음 파일 (<a href="#sync">Git · SVN</a>)</td></tr>
       <tr><td>Git Log (아래)</td><td>왼쪽 저장소 목록 · Refresh · 「?」 · 소스 건드린 커밋만 · 찾기 칸 (<a href="#sync">Git · SVN</a>)</td></tr>
       <tr><td>Database (오른쪽)</td><td>Refresh · New Console · Connect · Disconnect · Edit · Delete · Find · More(Export · Import Connections). 표 우클릭 View Data · Generate SELECT · INSERT · UPDATE Statement · Generate Mapper Skeleton · Generate Feature Set… · Open ERD · Table Specification Excel… · DDL 보기 · 주석 고치기 · 엑셀 붙여 넣어 행 넣기… · 테스트 데이터 만들기…, 접속 우클릭 View Sessions · View Locks · Open ERD (All) · ERD 열기 (거른 표 N개)(찾기 칸으로 거른 뒤) · 고치기 전 백업 보기, 위 단추 줄 시계 단추(고치기 전 백업 보기), 프로그램 우클릭 Open Source · View Compilation Errors (<a href="#db">데이터베이스</a>)</td></tr>
       <tr><td>Result (아래)</td><td>Fetch · Apply · Revert · 새로 고침 · CSV · Excel · JSON · DTO · 건수 · 중복 · 분석 · 피벗 · 트리 · 찾기(<kbd>Ctrl</kbd>+<kbd>F</kbd>, 조건 + <kbd>Enter</kbd>). 칸 우클릭 Copy Value · Copy Selected Rows · Copy as INSERT · Copy as UPDATE · Generate enum · Copy Column Values as IN List · Sort · 참조 따라가기 · 값 크게 보기(<kbd>F4</kbd>) · 행 지우기 (<a href="#db">데이터베이스</a>)</td></tr>
@@ -1129,7 +1131,7 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
       </div>
       <ol class="legend">
         <li><span class="mark">1</span><div><b>보기 거르기</b> <span class="t">Show All · Incoming · Outgoing · Conflicts 로 따로 볼 수 있습니다.</span></div></li>
-        <li><span class="mark">2</span><div><b>파일 우클릭</b> <span class="t">Commit… · Push · Replace with HEAD · Add to .gitignore · Assume Unchanged. 새로 추가 · 이름 바꿈 · 복사한 파일은 지워지지 않게 Replace with HEAD 에서 빠지고 「Unstage Only, Keep Files」로 갑니다.</span></div></li>
+        <li><span class="mark">2</span><div><b>파일 우클릭</b> <span class="t">Commit… · Push · Replace with HEAD · Add to .gitignore · 이 PC 에서만 무시 · Assume Unchanged. 「??」 새 파일에는 Assume Unchanged 가 걸리지 않습니다(Git 이 아직 모르는 파일). 저장소에 안 올리고 나만 빼려면 「이 PC 에서만 무시」를 씁니다(<code>.git/info/exclude</code>, 풀기는 프로젝트 트리 우클릭). 새로 추가 · 이름 바꿈 · 복사한 파일은 지워지지 않게 Replace with HEAD 에서 빠지고 「Unstage Only, Keep Files」로 갑니다.</span></div></li>
         <li><span class="mark">3</span><div><b>Assume Unchanged</b> <span class="t"><code>application-local.yml</code> 처럼 내 PC 에서만 고친 파일이 커밋 목록에 계속 뜰 때 씁니다. 커밋 창 · 프로젝트 트리의 파일 우클릭에도 있습니다(프로젝트 트리에는 「No Assume Unchanged」도). 원격에서 그 파일이 바뀌면 받기(Pull)가 멈추니 그때는 먼저 No Assume Unchanged 로 푸세요.</span></div></li>
         <li><span class="mark">4</span><div><b>Assume Unchanged · 풀기</b> <span class="t">Assume Unchanged 로 둔 파일은 「모두 보기」 맨 아래 「Assume Unchanged」 묶음에 모입니다. 우클릭 「No Assume Unchanged」로 되돌리면 내 변경이 다시 나갈 변경으로 보입니다. 파일 내용은 그대로입니다.</span></div></li>
         <li><span class="mark">5</span><div><b>역머지 안내</b> <span class="t">Merge Branches 를 한 번 한 저장소 줄에 「develop 보다 3개 뒤 · 내 파일 2개 겹침」(겹치면 주황), 아직 안 합쳐진 내 커밋이 있으면 「develop 에 안 합쳐진 내 커밋 N개」가 나옵니다(합치기 커밋은 세지 않습니다).</span></div></li>

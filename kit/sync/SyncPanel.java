@@ -897,6 +897,11 @@ final class SyncPanel extends SimpleToolWindowPanel {
         if (!folders.isEmpty()) {
           items.add(item(SyncBundle.message("sync.menu.ignore.folders", ignoreName, String.join(", ", folders)), null, () -> ignore(ignorable, true)));
         }
+        // 저장소에 올라가는 .gitignore 대신 이 PC 의 .git/info/exclude 에 적어 나만 뺀다. SVN 에는 대응 기능이 없다.
+        List<Change> excludable = ignorable.stream().filter(c -> c.repo().vcs() == Vcs.GIT).toList();
+        if (!excludable.isEmpty()) {
+          items.add(item(SyncBundle.message("sync.menu.exclude", excludable.size()), null, () -> excludeLocal(excludable)));
+        }
       }
       // 되돌리기는 HEAD 에 있는 파일의 내 변경만 대상이다. 새 파일 · 이름 바꾼 파일 · 복사한 파일은 지우지 않고 스테이징만 풀 수 있다.
       List<Change> revertable = selected.stream().filter(c -> undoOf(c) == Undo.REVERT).toList();
@@ -1247,6 +1252,33 @@ final class SyncPanel extends SimpleToolWindowPanel {
     });
   }
 
+  /**
+   * 새 파일 · 폴더를 저장소별 .git/info/exclude 에 넣는다(LocalExcludeAction.add). 파일 쓰기라 작업 스레드에서 돌고,
+   * 한 저장소가 실패해도 나머지는 하고 실패한 저장소를 함께 알린다.
+   */
+  private void excludeLocal(List<Change> selected) {
+    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+      Map<File, String> failed = new LinkedHashMap<>();
+      int done = 0;
+      for (Map.Entry<Repo, List<Change>> entry : byRepo(selected).entrySet()) {
+        File root = entry.getKey().root();
+        try {
+          done += LocalExcludeAction.add(root, ignorePatterns(entry.getValue(), false));
+        }
+        catch (IOException ex) {
+          LOG.warn("이 PC 에서만 무시 실패 [" + root.getName() + "] " + ex.getMessage());
+          failed.put(root, messageOf(ex));
+        }
+      }
+      String m = withFailures(LocalExcludeAction.message(done, true), failed);
+      ApplicationManager.getApplication().invokeLater(() -> {
+        showStatus(m);
+        notifyFailures(failed);
+        recompareRoots(rootsOf(selected));
+      }, ModalityState.nonModal(), project.getDisposed());
+    });
+  }
+
   /** 편집기에 저장 안 한 내용을 디스크에 쓴다. 단추 · 메뉴 클릭은 쓰기 락 없이 오므로 락을 잡는다. EDT 에서 부른다. */
   private static void saveAllDocuments() {
     WriteIntentReadAction.run((Runnable) () -> FileDocumentManager.getInstance().saveAllDocuments());
@@ -1265,9 +1297,13 @@ final class SyncPanel extends SimpleToolWindowPanel {
     return patterns;
   }
 
-  /** 저장소 맨 위 .gitignore 끝에 패턴을 이스케이프해 더한다. 이미 있는 줄은 다시 넣지 않고, 줄 끝은 파일이 쓰던 것(CRLF · LF)을 따른다. */
+  /** 저장소 맨 위 .gitignore 끝에 패턴을 이스케이프해 더한다. */
   static void addToGitignore(File root, List<String> patterns) throws IOException {
-    File gitignore = new File(root, ".gitignore");
+    appendIgnoreLines(new File(root, ".gitignore"), patterns);
+  }
+
+  /** gitignore 형식 파일(.gitignore · .git/info/exclude) 끝에 패턴을 이스케이프해 더한다. 이미 있는 줄은 다시 넣지 않고, 줄 끝은 파일이 쓰던 것(CRLF · LF)을 따른다. */
+  static void appendIgnoreLines(File gitignore, List<String> patterns) throws IOException {
     String text = gitignore.isFile() ? Files.readString(gitignore.toPath(), StandardCharsets.UTF_8) : "";
     String eol = text.contains("\r\n") ? "\r\n" : "\n";
     Set<String> existing = new HashSet<>(Arrays.asList(text.replace("\r\n", "\n").split("\n")));

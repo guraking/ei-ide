@@ -266,6 +266,7 @@ public class SyncCheck {
     eq(SyncPanel.gitignoreEscape("/a#b!c"), "/a#b!c");
     eq(SyncPanel.gitignoreEscape("/sp  "), "/sp\\ \\ ");
     checkGitignore();
+    checkLocalExclude();
     eq(SyncPanel.shortDir("src/main/java/com/shop/order"), "src/main/java/\u2026/order");
     eq(SyncPanel.shortDir("src/main/resources/mapper"), "src/main/resources/mapper");
     eq(SyncPanel.shortDir("src"), "src");
@@ -932,6 +933,42 @@ public class SyncCheck {
     File lf = java.nio.file.Files.createTempDirectory("ignore-lf").toFile();
     SyncPanel.addToGitignore(lf, List.of("/b.txt", "/b.txt"));
     eq(java.nio.file.Files.readString(new File(lf, ".gitignore").toPath()), "/b.txt\n");
+  }
+
+  /**
+   * 이 PC 에서만 무시: 보통 저장소 · 연결 작업본(공용 .git 의 info/exclude) 모두 git 이 읽는 위치에 쓰고, git 이 실제로 무시하며,
+   * 풀기는 같은 줄만 지우고 나머지 줄 · 줄 끝은 그대로 둔다. info 폴더가 없어도 만든다.
+   */
+  static void checkLocalExclude() throws Exception {
+    File base = java.nio.file.Files.createTempDirectory("local-exclude").toFile();
+    File repo = new File(base, "repo");
+    repo.mkdirs();
+    SyncPanel.git(repo, "init", "-q");
+    sh(repo, "git -c user.name=t -c user.email=t@t commit -q --allow-empty -m init && git worktree add -q ../wt");
+    File wt = new File(base, "wt");
+    for (File root : List.of(repo, wt)) {
+      File expected = new File(SyncPanel.git(root, "rev-parse", "--path-format=absolute", "--git-path", "info/exclude").trim());
+      eq(LocalExcludeAction.excludeFile(root).getCanonicalFile(), expected.getCanonicalFile());
+    }
+    File info = new File(repo, ".git/info");
+    for (File f : info.listFiles()) f.delete();
+    info.delete();
+    java.nio.file.Files.writeString(new File(repo, "새 [1].txt").toPath(), "x");
+    new File(repo, "폴더").mkdirs();
+    java.nio.file.Files.writeString(new File(repo, "폴더/a.txt").toPath(), "x");
+    java.nio.file.Files.writeString(new File(repo, "keep.txt").toPath(), "x");
+    eq(LocalExcludeAction.add(repo, List.of("/새 [1].txt", "/폴더/")), 2);
+    eq(SyncPanel.git(repo, "-c", "core.quotePath=false", "status", "--porcelain", "-uall").trim(), "?? keep.txt");
+    // 연결 작업본도 같은 공용 info/exclude 를 읽는다.
+    java.nio.file.Files.writeString(new File(wt, "새 [1].txt").toPath(), "x");
+    eq(SyncPanel.git(wt, "status", "--porcelain").trim(), "");
+    File exclude = LocalExcludeAction.excludeFile(repo);
+    java.nio.file.Files.writeString(exclude.toPath(), "# 주석\r\n" + java.nio.file.Files.readString(exclude.toPath()).replace("\n", "\r\n"));
+    eq(LocalExcludeAction.excludedLines(repo).contains("/새 \\[1\\].txt"), true);
+    eq(LocalExcludeAction.remove(repo, List.of("/새 [1].txt", "/없음.txt")), 1);
+    eq(java.nio.file.Files.readString(exclude.toPath()), "# 주석\r\n/폴더/\r\n");
+    eq(LocalExcludeAction.remove(repo, List.of("/새 [1].txt")), 0);
+    eq(SyncPanel.git(repo, "-c", "core.quotePath=false", "status", "--porcelain", "-uall").trim(), "?? keep.txt\n?? \"새 [1].txt\"");
   }
 
   /** 띄울 git: PATH 의 설치본(실제 exe 우선) → 없으면 내장 MinGit → 그것도 없으면 「git」. */

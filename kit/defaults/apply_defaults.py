@@ -625,6 +625,19 @@ EDITS = [
     ("java/ide-customization/backend/resources/intellij.java.ide.customization.backend.xml",
      '    <registryKey key="idea.welcome.screen.non.modal.enabled" defaultValue="true" restartRequired="true"\n',
      '    <registryKey key="idea.welcome.screen.non.modal.enabled" defaultValue="false" restartRequired="true"\n'),
+    # 37) 커밋 창은 버전 관리 안 된 파일이 이 수를 넘으면 목록을 「파일 N개 둘러보기」 한 줄로 접어 체크할 수 없다. 새 저장소에 앱 소스를
+    #     통째로 넣으면 1,000개를 쉽게 넘으므로 10000 까지는 펼친다. 제외 폴더(node_modules · dist 등)는 이 목록에 들어오지 않는다.
+    ("platform/util/resources/misc/registry.properties",
+     "vcs.unversioned.files.max.intree=1000\n",
+     "vcs.unversioned.files.max.intree=10000\n"),
+    # 38) 제목 줄 로고를 누르면 뜨는 창 메뉴(복원 · 최소화 · 최대화 · 닫기)는 창을 만들 때 한 번 만들고 화면 나무에 붙지 않아,
+    #     창이 뜬 뒤 테마가 바뀌면 바탕은 옛 테마 색, 테두리 · 구분선은 새 테마 색으로 섞여 그려진다. 띄우기 직전에 지금 테마를 입힌다.
+    ("platform/platform-impl/src/com/intellij/openapi/wm/impl/customFrameDecorations/header/CustomHeader.kt",
+     "      override fun mousePressed(e: MouseEvent?) {\n"
+     "        JBPopupMenu.showBelow(ic, menu)\n",
+     "      override fun mousePressed(e: MouseEvent?) {\n"
+     "        javax.swing.SwingUtilities.updateComponentTreeUI(menu)  // Moa IDE: 38\n"
+     "        JBPopupMenu.showBelow(ic, menu)\n"),
 ]
 
 
