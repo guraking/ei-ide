@@ -65,11 +65,18 @@
       <!-- 스테이징을 켜면 커밋 창이 Staged · Unstaged 목록으로 바뀌고 우클릭 메뉴도 이 묶음을 쓴다. -->
       <add-to-group group-id="Git.Stage.Tree.Menu" anchor="last"/>
     </action>
+    <!-- 아직 Git 에 올리지 않은 새 파일 · 폴더를 .git/info/exclude 에 적어 이 PC 에서만 커밋 목록에서 뺀다(Assume Unchanged 는 추적 중인 파일에만 걸린다). -->
+    <action id="KingGura.LocalExclude" class="kinggura.sync.LocalExcludeAction">
+      <add-to-group group-id="ChangesViewPopupMenu" anchor="last"/>
+      <add-to-group group-id="Git.Stage.Tree.Menu" anchor="last"/>
+    </action>
     <!-- 프로젝트 트리에서 고른 파일에도 모른 척하기 · 풀기. 모른 척 중인 파일은 변경 목록에 안 뜨므로 풀기는 여기와 동기화 창에 둔다. -->
     <group id="KingGura.AssumeGroup">
       <separator/>
       <reference ref="KingGura.AssumeUnchanged"/>
       <action id="KingGura.AssumeUnchanged.Undo" class="kinggura.sync.AssumeUnchangedAction$Undo" icon="/icons/ei/assumeUnchangedUndo.svg"/>
+      <reference ref="KingGura.LocalExclude"/>
+      <action id="KingGura.LocalExclude.Undo" class="kinggura.sync.LocalExcludeAction$Undo"/>
       <separator/>
       <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
     </group>
