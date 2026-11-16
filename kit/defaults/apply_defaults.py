@@ -630,6 +630,14 @@ EDITS = [
     ("platform/util/resources/misc/registry.properties",
      "vcs.unversioned.files.max.intree=1000\n",
      "vcs.unversioned.files.max.intree=10000\n"),
+    # 38) 제목 줄 로고를 누르면 뜨는 창 메뉴(복원 · 최소화 · 최대화 · 닫기)는 창을 만들 때 한 번 만들고 화면 나무에 붙지 않아,
+    #     창이 뜬 뒤 테마가 바뀌면 바탕은 옛 테마 색, 테두리 · 구분선은 새 테마 색으로 섞여 그려진다. 띄우기 직전에 지금 테마를 입힌다.
+    ("platform/platform-impl/src/com/intellij/openapi/wm/impl/customFrameDecorations/header/CustomHeader.kt",
+     "      override fun mousePressed(e: MouseEvent?) {\n"
+     "        JBPopupMenu.showBelow(ic, menu)\n",
+     "      override fun mousePressed(e: MouseEvent?) {\n"
+     "        javax.swing.SwingUtilities.updateComponentTreeUI(menu)  // Moa IDE: 38\n"
+     "        JBPopupMenu.showBelow(ic, menu)\n"),
 ]
 
 
