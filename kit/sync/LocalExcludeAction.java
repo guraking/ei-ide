@@ -13,6 +13,7 @@ import com.intellij.openapi.vcs.VcsNotifier;
 import com.intellij.openapi.vcs.VcsRoot;
 import com.intellij.openapi.vcs.changes.ChangeListManager;
 import com.intellij.openapi.vcs.changes.VcsDirtyScopeManager;
+import com.intellij.openapi.vfs.VfsUtil;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.wm.ToolWindow;
@@ -26,6 +27,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -80,6 +82,7 @@ public class LocalExcludeAction extends AnAction implements DumbAware {
           failures.add(entry.getKey().getName() + ": " + ex.getMessage());
         }
       }
+      refresh(byRoot.keySet());
       List<String> lines = new ArrayList<>();
       if (count > 0 || failures.isEmpty()) lines.add(message(count, on));
       lines.addAll(failures);
@@ -96,6 +99,21 @@ public class LocalExcludeAction extends AnAction implements DumbAware {
         else VcsNotifier.getInstance(project).notifyError(NOTIFICATION_ID, title, m);
       }, project.getDisposed());
     });
+  }
+
+  /**
+   * 고친 info/exclude 를 IntelliJ 파일 목록에 바로 알린다. Git 플러그인은 이 파일이 바뀐 것을 보고 저장소 전체를 다시 읽어
+   * 프로젝트 트리 색(무시 · 새 파일)을 바꾼다. 알리지 않으면 파일 감시가 알아챌 때까지 옛 색이 남는다. 위치를 못 읽은 저장소는 건너뛴다.
+   */
+  static void refresh(Collection<File> roots) {
+    for (File root : roots) {
+      try {
+        VfsUtil.markDirtyAndRefresh(true, false, false, excludeFile(root));
+      }
+      catch (IOException ignored) {
+        // add · remove 가 같은 까닭으로 이미 실패를 알렸다.
+      }
+    }
   }
 
   /** 무시하기 · 풀기 뒤 알림 문구. 동기화 창 메뉴와 같이 쓴다. */
