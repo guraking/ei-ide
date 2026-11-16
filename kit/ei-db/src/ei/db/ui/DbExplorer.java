@@ -685,6 +685,7 @@ final class DbExplorer extends SimpleToolWindowPanel {
       g.add(new Act(EiDbBundle.message("explorer.open.source"), AllIcons.Actions.Edit, () -> true, () -> openSource(p)));
       g.add(new Act(EiDbBundle.message("explorer.compile.errors"), null, () -> true,
           () -> SqlRunner.run(project, p.c(), ProgramSql.ERRORS, List.of(p.schema(), p.item().name()))));
+      g.add(new Act(EiDbBundle.message("explorer.grant"), null, () -> true, () -> GrantDialog.show(project, p.c(), p.schema(), List.of(p.item().name()), true)));
       return g;
     }
     if (o instanceof Meta.Column) {
@@ -713,6 +714,7 @@ final class DbExplorer extends SimpleToolWindowPanel {
       g.addSeparator();
       g.add(new Act(EiDbBundle.message("explorer.ddl"), null, () -> true, () -> DdlDialog.show(project, t.c, t.schema, picked)));
       g.add(new Act(EiDbBundle.message("explorer.comments"), null, () -> true, () -> CommentDialog.show(project, t.c, t.schema, t.table.name())));
+      g.add(new Act(EiDbBundle.message("explorer.grant"), null, () -> true, () -> GrantDialog.show(project, t.c, t.schema, picked, false)));
       g.add(new Act(EiDbBundle.message("explorer.erd"), null, () -> true, () -> ErdView.open(project, t.c, t.schema, picked)));
       g.add(new Act(EiDbBundle.message("explorer.code.users"), AllIcons.Hierarchy.Supertypes, () -> true,
           () -> ei.db.mybatis.CodeFlowView.findTable(project, t.schema == null || t.schema.isBlank() ? t.table.name() : t.schema + "." + t.table.name())));
