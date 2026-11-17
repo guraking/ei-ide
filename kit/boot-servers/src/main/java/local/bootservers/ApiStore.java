@@ -29,6 +29,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 
 /**
@@ -82,6 +84,8 @@ public final class ApiStore implements PersistentStateComponent<ApiStore.StateBe
     private final Project project;
     /** 본문 파일 쓰기 · 지우기를 부른 차례대로 하나씩 한다(같은 key 를 잇달아 저장해도 마지막 것이 남게). */
     private final ExecutorService io = AppExecutorUtil.createBoundedApplicationPoolExecutor("Moa API 요청 저장", 1);
+    /** 화면 스레드에서 지운 key. 그 전에 시작한 저장이 늦게 끝나도 목록에 되살리지 않는다. 다시 보내면(saveSent) 풀린다. */
+    private final Set<String> removed = ConcurrentHashMap.newKeySet();
     private volatile StateBean state = new StateBean();
 
     public ApiStore(Project project) {
@@ -124,13 +128,21 @@ public final class ApiStore implements PersistentStateComponent<ApiStore.StateBe
 
     /** 보낸 요청 값과 받은 응답을 기준으로 저장한다. 본문 파일 쓰기 · 지문 계산은 백그라운드에서 하고 끝나면 목록에 넣는다. */
     void saveSent(Entry sent, Map<String, String> secrets, int code, String responseBody) {
+        // 화면 스레드에서 불린다: 지운 뒤 다시 보낸 key 는 다시 저장한다.
+        removed.remove(sent.key);
         io.execute(() -> {
             writeSecrets(sent.key, secrets);
             sent.code = code;
             sent.print = ApiSaved.fingerprint(responseBody);
             sent.savedAt = System.currentTimeMillis();
-            writeBody(sent.key, ApiSaved.cap(responseBody));
-            ApplicationManager.getApplication().invokeLater(() -> put(sent), project.getDisposed());
+            // 비교 창 왼쪽(기준)도 오른쪽(이번 응답, ApiReplay.resend)처럼 줄맞춤한 뒤 줄인다.
+            writeBody(sent.key, ApiSaved.cap(ApiText.prettyJson(responseBody)));
+            ApplicationManager.getApplication().invokeLater(() -> {
+                // 저장하는 사이 지웠으면 되살리지 않는다(지우기가 본문 · 비밀을 뒤에서 지운다).
+                if (!removed.contains(sent.key)) {
+                    put(sent);
+                }
+            }, project.getDisposed());
         });
     }
 
@@ -158,6 +170,7 @@ public final class ApiStore implements PersistentStateComponent<ApiStore.StateBe
 
     /** 화면 스레드에서. 목록과 본문 파일을 지운다. */
     void remove(String key) {
+        removed.add(key);
         synchronized (this) {
             List<Entry> next = new ArrayList<>(state.entries);
             next.removeIf(e -> e.key.equals(key));

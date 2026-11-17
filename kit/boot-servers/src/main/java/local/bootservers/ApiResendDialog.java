@@ -7,6 +7,7 @@ import com.intellij.openapi.progress.EmptyProgressIndicator;
 import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
+import com.intellij.openapi.progress.util.ProgressWrapper;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.openapi.ui.Messages;
@@ -212,11 +213,12 @@ final class ApiResendDialog extends DialogWrapper {
                 ApiReplay.Result result = null;
                 try {
                     if (!indicator.isCanceled() && !project.isDisposed()) {
-                        result = ProgressManager.getInstance().runProcess(() -> ApiReplay.resend(project, item.key), indicator);
+                        // 일꾼마다 따로 감싼다: 한 진행 표시를 두 스레드가 runProcess 로 함께 시작 · 멈추지 않게. 취소는 감싼 쪽이 따라간다.
+                        result = ProgressManager.getInstance().runProcess(() -> ApiReplay.resend(project, item.key), ProgressWrapper.wrap(indicator));
                     }
                 } catch (ProcessCanceledException cancelled) {
                     // 취소: 결과 없이 다음으로(남은 것도 곧 취소를 본다).
-                } catch (RuntimeException unexpected) {
+                } catch (RuntimeException | StackOverflowError unexpected) {
                     // 보내기 밖의 예외(프로젝트 닫는 중 등)도 이 줄의 실패로 보여 「보내는 중」에 멈추지 않게 한다.
                     LOG.warn("API 다시 보내기 실패", unexpected);
                     result = ApiReplay.failed(item.key, item.title, item.method,

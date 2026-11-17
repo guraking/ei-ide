@@ -5,6 +5,7 @@ import com.intellij.ide.passwordSafe.PasswordSafe;
 import com.intellij.ide.ui.UISettings;
 import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.editor.EditorFactory;
 import com.intellij.openapi.fileEditor.FileEditor;
@@ -122,8 +123,13 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
     /**
      * 화면을 열 때 채울 값. title 은 탭 이름(짧은 이름), key 는 같은 요청인지 가르는 이름(패키지까지 붙은 클래스 · 메서드).
      * key 가 같은 탭이 열려 있으면 그 탭에 새 값을 넣어 다시 채운다.
+     * useSaved 가 거짓이면 저장한 값(ApiStore)으로 채우지 않는다: 오류 로그에서 꺼낸 값처럼 그 값 그대로 보내야 하는 요청.
      */
-    record Request(String title, String key, String method, String url, List<Row> query, List<Row> headers, String body) {
+    record Request(String title, String key, String method, String url, List<Row> query, List<Row> headers, String body, boolean useSaved) {
+        Request(String title, String key, String method, String url, List<Row> query, List<Row> headers, String body) {
+            this(title, key, method, url, query, headers, body, true);
+        }
+
         /** key 를 따로 주지 않으면 탭 이름을 key 로 쓴다. */
         Request(String title, String method, String url, List<Row> query, List<Row> headers, String body) {
             this(title, title, method, url, query, headers, body);
@@ -134,6 +140,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
     record Row(String name, String value, String source) {
     }
 
+    private static final Logger LOG = Logger.getInstance(ApiRequestEditor.class);
     private static final Key<Request> REQUEST = Key.create("ei.api.request");
     /** 화면에 넣을 응답 본문 최대 글자 수. 넘으면 앞부분만 보인다. */
     private static final int MAX_SHOWN_CHARS = 2_000_000;
@@ -906,7 +913,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         if (request == null) {
             return;
         }
-        ApiStore.Entry saved = useSaved ? ApiStore.getInstance(project).get(request.key()) : null;
+        ApiStore.Entry saved = useSaved && request.useSaved() ? ApiStore.getInstance(project).get(request.key()) : null;
         methodBox.setSelectedItem(saved == null ? request.method() : saved.method);
         urlField.setText(saved == null ? request.url() : saved.url);
         setRows(queryModel, request.query(), saved == null ? null : ApiStore.lines(saved.query));
@@ -917,47 +924,57 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         bodyField.setText(saved == null ? request.body() : saved.body);
         int generation = ++fillGeneration;
         if (saved != null) {
-            restoreSecrets(saved, generation);
+            restoreSecrets(saved, request, generation);
         }
     }
 
     /**
-     * 저장할 때 비운 비밀 값(ApiSaved.scrub)을 비밀번호 저장소에서 읽어(백그라운드) 채운다.
+     * 저장할 때 비운 비밀 값(ApiSaved.scrub)을 비밀번호 저장소에서 읽어(백그라운드) 채운다. 저장소에 없는 비밀 줄은 코드의 시험 값으로 채운다.
      * 그 사이 다시 채웠거나 사용자가 고친 칸(비어 있지 않은 칸, 저장한 글과 달라진 주소 · 본문)은 덮지 않는다.
      */
-    private void restoreSecrets(ApiStore.Entry saved, int generation) {
+    private void restoreSecrets(ApiStore.Entry saved, Request request, int generation) {
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
             Map<String, String> secrets = ApiStore.getInstance(project).secrets(saved.key);
-            if (secrets.isEmpty()) {
-                return;
-            }
             ApplicationManager.getApplication().invokeLater(() -> {
                 if (generation != fillGeneration) {
                     return;
                 }
-                restoreRows(queryModel, 0, ApiSaved.QUERY, secrets);
-                restoreRows(headerModel, authRowShown ? 1 : 0, ApiSaved.HEADER, secrets);
-                if (urlField.getText().equals(saved.url)) {
-                    urlField.setText(ApiSaved.restore(saved.url, ApiSaved.URL, secrets));
-                }
-                if (bodyField.getText().equals(saved.body)) {
-                    bodyField.setText(ApiSaved.restore(saved.body, ApiSaved.BODY, secrets));
+                restoreRows(queryModel, 0, ApiSaved.QUERY, secrets, request.query());
+                restoreRows(headerModel, authRowShown ? 1 : 0, ApiSaved.HEADER, secrets, request.headers());
+                try {
+                    if (urlField.getText().equals(saved.url)) {
+                        urlField.setText(ApiSaved.restore(saved.url, ApiSaved.URL, secrets));
+                    }
+                    if (bodyField.getText().equals(saved.body)) {
+                        bodyField.setText(ApiSaved.restore(saved.body, ApiSaved.BODY, secrets));
+                    }
+                } catch (RuntimeException | StackOverflowError e) {
+                    // 되살리기는 덧붙이는 일이다: 실패해도 저장한 글(비밀은 빈 값)을 그대로 두고 탭은 쓸 수 있게 한다.
+                    LOG.warn("API 요청 비밀 값을 되살리지 못함", e);
                 }
             }, ModalityState.defaultModalityState(), project.getDisposed());
         });
     }
 
-    /** from 번째 줄부터 비어 있는 비밀 값 칸을 채운다. */
-    private static void restoreRows(DefaultTableModel model, int from, String prefix, Map<String, String> secrets) {
+    /** from 번째 줄부터 비어 있는 비밀 이름 칸을 저장소 값으로, 없으면 코드의 같은 이름 줄(fresh) 값으로 채운다. */
+    private static void restoreRows(DefaultTableModel model, int from, String prefix, Map<String, String> secrets, List<Row> fresh) {
         for (int i = from; i < model.getRowCount(); i++) {
             Object name = model.getValueAt(i, NAME_COLUMN);
             Object value = model.getValueAt(i, VALUE_COLUMN);
-            if (name == null || (value != null && !value.toString().isEmpty())) {
+            if (name == null || !ApiSaved.isSecretName(name.toString()) || (value != null && !value.toString().isEmpty())) {
                 continue;
             }
-            List<ApiSaved.Line> one = ApiSaved.restore(List.of(new ApiSaved.Line(name.toString(), "", true)), prefix, secrets);
-            if (!one.get(0).value().isEmpty()) {
-                model.setValueAt(one.get(0).value(), i, VALUE_COLUMN);
+            String restored = ApiSaved.restore(List.of(new ApiSaved.Line(name.toString(), "", true)), prefix, secrets).get(0).value();
+            if (restored.isEmpty()) {
+                for (Row row : fresh) {
+                    if (row.name().equalsIgnoreCase(name.toString().strip())) {
+                        restored = row.value();
+                        break;
+                    }
+                }
+            }
+            if (!restored.isEmpty()) {
+                model.setValueAt(restored, i, VALUE_COLUMN);
             }
         }
     }
@@ -982,14 +999,21 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
 
     /**
      * 보낼 때의 값: 쿼리 · 헤더는 체크 상태까지(인증 줄은 빼고), authOn 은 인증을 붙였는지(인증이 없던 때는 참).
-     * 비밀은 ApiSaved.scrub 으로 떼어 secrets 로 둔다. 요청 본문이 ApiSaved.BODY_LIMIT 를 넘으면 workspace.xml 이 커지지 않게 저장하지 않는다(null).
+     * 비밀은 ApiSaved.scrub 으로 떼어 secrets 로 둔다. 요청 본문이 ApiSaved.REQUEST_BODY_LIMIT 를 넘으면 workspace.xml 이 커지지 않게 저장하지 않는다(null).
+     * 비밀 떼기가 실패해도 보내기는 막지 않는다: 저장만 건너뛴다(null).
      */
     private @Nullable Sent snapshot(String method, String url, boolean authOn, String body) {
-        if (body != null && body.length() > ApiSaved.BODY_LIMIT) {
+        if (body != null && body.length() > ApiSaved.REQUEST_BODY_LIMIT) {
             return null;
         }
         Request request = file.getUserData(REQUEST);
-        ApiSaved.Scrubbed s = ApiSaved.scrub(tableLines(queryModel, 0), tableLines(headerModel, authRowShown ? 1 : 0), url, body);
+        ApiSaved.Scrubbed s;
+        try {
+            s = ApiSaved.scrub(tableLines(queryModel, 0), tableLines(headerModel, authRowShown ? 1 : 0), url, body);
+        } catch (RuntimeException | StackOverflowError e) {
+            LOG.warn("API 요청을 저장하지 못함(비밀 값 떼기 실패)", e);
+            return null;
+        }
         ApiStore.Entry e = new ApiStore.Entry();
         e.key = request == null ? file.getName() : request.key();
         e.title = request == null ? file.getName() : request.title();

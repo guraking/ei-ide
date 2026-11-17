@@ -31,6 +31,8 @@ final class ApiSaved {
 
     /** 저장 · 비교 창에 둘 응답 본문 최대 글자 수. 넘으면 앞부분만 두고 CUT_NOTE 를 붙인다(비교는 지문으로 한다). */
     static final int BODY_LIMIT = 256 * 1024;
+    /** workspace.xml 에 저장할 요청 본문 최대 글자 수. 넘는 요청은 저장하지 않는다(300건이면 파일이 커져 열고 저장할 때 느려짐). */
+    static final int REQUEST_BODY_LIMIT = 32 * 1024;
     /** 저장할 요청 수. 넘으면 오래 쓰지 않은 것부터 버린다. */
     static final int MAX_SAVED = 300;
     /** 저장한 응답이 없을 때의 상태 코드. */
@@ -43,8 +45,8 @@ final class ApiSaved {
 
     /** 비밀번호 · 토큰처럼 보이는 헤더 · 파라미터 · 본문 필드 이름. 그 값은 workspace.xml 에는 빈 글로, 실제 값은 IDE 비밀번호 저장소에 둔다. */
     private static final Pattern SECRET_NAME = Pattern.compile("(?i).*(password|passwd|pwd|secret|token|api[_-]?key|credential).*");
-    /** JSON 의 "이름" : "값" 한 쌍(값은 글자열만, 이스케이프 포함). */
-    private static final Pattern JSON_PAIR = Pattern.compile("(\"([^\"\\\\]*)\"\\s*:\\s*\")((?:[^\"\\\\]|\\\\.)*)(\")");
+    /** JSON 의 "이름" : "값" 한 쌍(값은 글자열만, 이스케이프 포함). 소유 수량자: 긴 값에서 되짚기 재귀로 스택이 넘치지 않게 한다. */
+    private static final Pattern JSON_PAIR = Pattern.compile("(\"([^\"\\\\]*+)\"\\s*+:\\s*+\")((?:[^\"\\\\]++|\\\\.)*+)(\")");
     /** 폼 본문 · 주소 쿼리(a=1&b=2)의 한 쌍. */
     private static final Pattern FORM_PAIR = Pattern.compile("(^|&)([^=&]+)=([^&#]*)");
     /** 비밀 값 맵의 키 앞머리: 쿼리 줄 · 헤더 줄은 이름(소문자), 본문 · 주소 쿼리는 비밀 쌍의 차례(0부터). */
@@ -169,7 +171,7 @@ final class ApiSaved {
 
     /**
      * 코드에서 온 줄(fresh)을 바탕으로 같은 이름(대소문자 무시) 줄은 저장한 값 · 체크로 바꾸고, 저장에만 있는 줄(사용자가 더한 줄)은 뒤에 붙인다.
-     * 같은 이름이 여럿이면(ids=1&ids=2) 나온 차례대로 짝짓는다. 저장한 비밀 값이 비었으면(되살리지 못함) 코드의 값을 둔다.
+     * 같은 이름이 여럿이면(ids=1&ids=2) 나온 차례대로 짝짓는다. 비밀 이름 줄은 저장한 빈 값을 그대로 둔다: 저장소 값을 채우고, 없을 때만 코드 값으로 채우는 일은 부르는 쪽이 한다.
      * 코드에서 빠진 줄을 지우지 않는 것은 사용자가 더한 줄과 가릴 수 없어서다. 반환은 fresh 의 순서를 지킨다.
      */
     static List<Line> merge(List<Line> fresh, List<Line> saved) {
@@ -184,8 +186,7 @@ final class ApiSaved {
             if (s == null) {
                 out.add(f);
             } else {
-                boolean lostSecret = s.value().isEmpty() && isSecretName(s.name());
-                out.add(new Line(f.name(), lostSecret ? f.value() : s.value(), s.on()));
+                out.add(new Line(f.name(), s.value(), s.on()));
             }
         }
         for (ArrayDeque<Line> rest : byName.values()) {

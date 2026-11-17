@@ -8,6 +8,7 @@ import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.fileTypes.PlainTextFileType;
 import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.progress.ProgressManager;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import org.jetbrains.annotations.Nullable;
 
@@ -30,6 +31,7 @@ import java.util.concurrent.ExecutionException;
  * 요청 탭과 같은 코드(ApiHttp)로 보낸다. 기준 응답은 accept 로만 바뀐다.
  */
 public final class ApiReplay {
+    private static final Logger LOG = Logger.getInstance(ApiReplay.class);
     private ApiReplay() {
     }
 
@@ -103,11 +105,20 @@ public final class ApiReplay {
         int code = ApiSaved.NO_CODE;
         String now = null;
         CompletableFuture<HttpResponse<ApiHttp.Received>> future = null;
+        String url = e.url;
+        String body = e.body;
         try {
-            HttpRequest request = ApiHttp.build(e.method, ApiSaved.restore(e.url, ApiSaved.URL, secrets).strip(),
+            url = ApiSaved.restore(e.url, ApiSaved.URL, secrets);
+            body = ApiSaved.restore(e.body, ApiSaved.BODY, secrets);
+        } catch (RuntimeException | StackOverflowError ex) {
+            // 되살리지 못하면 저장한 글(비밀은 빈 값)로 보낸다. 결과는 그대로 판정된다.
+            LOG.warn("API 요청 비밀 값을 되살리지 못함", ex);
+        }
+        try {
+            HttpRequest request = ApiHttp.build(e.method, url.strip(),
                     checked(ApiSaved.restore(ApiStore.lines(e.query), ApiSaved.QUERY, secrets)),
                     checked(ApiSaved.restore(ApiStore.lines(e.headers), ApiSaved.HEADER, secrets)),
-                    e.auth ? ApiHttp.savedAuth(project) : null, ApiSaved.restore(e.body, ApiSaved.BODY, secrets));
+                    e.auth ? ApiHttp.savedAuth(project) : null, body);
             future = ApiHttp.send(project, request);
             HttpResponse<ApiHttp.Received> response = await(future);
             code = response.statusCode();

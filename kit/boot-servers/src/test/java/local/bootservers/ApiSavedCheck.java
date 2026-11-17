@@ -63,9 +63,15 @@ public final class ApiSavedCheck {
         check(plain.body().equals("plain text") && plain.url().equals("http://h/a") && plain.secrets().isEmpty(), "그 밖은 그대로");
         check(ApiSaved.scrub(List.of(), List.of(), null, null).body() == null, "null 본문");
         check(ApiSaved.withoutQuery("http://h/a?token=1").equals("http://h/a") && ApiSaved.withoutQuery("http://h/a").equals("http://h/a"), "key 에서 쿼리 떼기");
-        // 비밀을 되살리지 못한 줄은 합칠 때 코드 값을 둔다.
+        // 비밀 줄은 합칠 때 저장한 빈 값을 둔다(저장소 값 → 없으면 코드 값으로 채우는 일은 에디터가 한다).
         List<ApiSaved.Line> merged = ApiSaved.merge(List.of(new ApiSaved.Line("password", "test1234", true)), List.of(new ApiSaved.Line("password", "", false)));
-        check(merged.get(0).value().equals("test1234") && !merged.get(0).on(), "빈 비밀은 코드 값, 체크는 저장한 것: " + merged);
+        check(merged.get(0).value().isEmpty() && !merged.get(0).on(), "빈 비밀은 빈 값 그대로, 체크는 저장한 것: " + merged);
+        // 긴 JSON 글 값(파일 base64 등)에서도 스택이 넘치지 않는다.
+        String longValue = "A".repeat(100_000);
+        String longBody = "{\"img\":\"" + longValue + "\",\"password\":\"p\\\"q\"}";
+        ApiSaved.Scrubbed big = ApiSaved.scrub(List.of(), List.of(), "http://h/a", longBody);
+        check(big.body().equals("{\"img\":\"" + longValue + "\",\"password\":\"\"}"), "긴 값 옆 비밀만 비운다");
+        check(ApiSaved.restore(big.body(), ApiSaved.BODY, big.secrets()).equals(longBody), "긴 값 본문 되살림");
         // 같은 이름 여러 줄은 차례대로 짝짓는다.
         List<ApiSaved.Line> ids = ApiSaved.merge(List.of(new ApiSaved.Line("ids", "1", true)),
                 List.of(new ApiSaved.Line("ids", "7", true), new ApiSaved.Line("ids", "8", true)));
