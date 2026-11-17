@@ -205,7 +205,7 @@ public class HistoryCheck {
     }
     git(repo, "checkout", "--ours", "app/f");
     git(repo, "add", "app/f");
-    kim(repo, "합치기 - 내 것 택함");
+    kim(repo, "머지 - 내 것 택함");
     write(repo, "app/h", "old\n");
     kim(repo, "옛 작업본 올림");
     write(repo, "app/other", "y\n");
@@ -229,7 +229,7 @@ public class HistoryCheck {
       for (History.Clash c : found) parts.add(c.change().path() + " " + (c.others() ? "남 " : "") + c.kind() + " " + c.owner().subject());
       bySubject.put(e.subject(), String.join(", ", parts));
     }
-    eq(bySubject, java.util.Map.of("kim 작업", "f EDITED base, g EDITED base", "합치기 - 내 것 택함", "f OVERWRITTEN 내 작업",
+    eq(bySubject, java.util.Map.of("kim 작업", "f EDITED base, g EDITED base", "머지 - 내 것 택함", "f OVERWRITTEN 내 작업",
                                    "옛 작업본 올림", "h REVERTED 내 작업", "상관없는 파일", "other EDITED base",
                                    "내가 남의 것", "f 남 EDITED kim 작업, other 남 REVERTED 상관없는 파일"));
     eq(History.strongest(clashes.get(log.get(0).id())), History.ClashKind.REVERTED);

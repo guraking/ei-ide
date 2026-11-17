@@ -30,7 +30,7 @@ public final class JoinStyleConvert {
     if (from == null) throw new IllegalArgumentException("FROM 이 없습니다.");
     List<SqlParts.Source> sources = SqlParts.sources(from.body());
     for (SqlParts.Source s : sources) if (s.join() != null) throw new IllegalArgumentException("이미 표준 방식(JOIN)입니다.");
-    if (sources.size() < 2) throw new IllegalArgumentException("표가 하나라 바꿀 연결이 없습니다.");
+    if (sources.size() < 2) throw new IllegalArgumentException("테이블이 하나라 바꿀 연결이 없습니다.");
     Map<String, Integer> index = new HashMap<>();
     for (int i = 0; i < sources.size(); i++) index.put(sources.get(i).ref().replace("\"", "").toUpperCase(Locale.ROOT), i);
 
@@ -60,7 +60,7 @@ public final class JoinStyleConvert {
           kind[refs.get(0)] = "LEFT";
         } else {
           rest.add(SqlParts.oneLine(cond).equals("1 = 1") ? "1 = 1" : cond.strip());
-          if (refs.size() > 2) notes.add("세 표 이상을 한꺼번에 잇는 조건은 WHERE 에 남겼습니다: " + SqlParts.oneLine(cond));
+          if (refs.size() > 2) notes.add("세 테이블 이상을 한꺼번에 잇는 조건은 WHERE 에 남겼습니다: " + SqlParts.oneLine(cond));
         }
       }
     }

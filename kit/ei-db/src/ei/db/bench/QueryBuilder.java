@@ -537,10 +537,10 @@ public final class QueryBuilder {
     if (s.tables.size() > 1) {
       Set<String> reached = reach(graph, s.tables.get(0).alias());
       for (Table t : s.tables) {
-        if (!reached.contains(t.alias())) out.add("표 " + t.name() + " (" + t.alias() + ") 가 다른 표와 이어지지 않았습니다. 「연결」 단계에서 조건을 넣지 않으면 모든 조합(곱하기)이 나옵니다.");
+        if (!reached.contains(t.alias())) out.add("테이블 " + t.name() + " (" + t.alias() + ") 가 다른 테이블과 이어지지 않았습니다. 「연결」 단계에서 조건을 넣지 않으면 모든 조합(곱하기)이 나옵니다.");
       }
     }
-    if (guessed) out.add("「추정」 연결은 외래 키 없이 칼럼 이름으로 짐작한 것입니다. 맞는지 확인하세요.");
+    if (guessed) out.add("「추정」 연결은 FK 없이 칼럼 이름으로 짐작한 것입니다. 맞는지 확인하세요.");
     for (Col c : s.cols) {
       if (c.agg() != null && !"*".equals(c.column()) && !c.agg().fits(kindOf(c.type()))) {
         out.add(c.alias() + "." + c.column() + " 는 숫자 칼럼이 아니라 " + c.agg().label + " 를 낼 수 없습니다.");

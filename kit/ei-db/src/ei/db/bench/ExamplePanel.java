@@ -95,12 +95,12 @@ final class ExamplePanel {
   void refresh() {
     Examples.Example e = list.getSelectedValue();
     if (e == null) {
-      description.setText("왼쪽에서 예제를 고르세요(위 찾기 칸에 낱말을 치면 거릅니다). 예제 " + Examples.ALL.size() + "개. 표 이름(ORDERS · CUSTOMER 등)은 보기입니다.");
+      description.setText("왼쪽에서 예제를 고르세요(위 찾기 칸에 낱말을 치면 거릅니다). 예제 " + Examples.ALL.size() + "개. 테이블 이름(ORDERS · CUSTOMER 등)은 보기입니다.");
       bench.show("", List.of());
       return;
     }
     description.setText(e.title() + "\n" + e.description());
-    List<String> notes = new ArrayList<>(List.of("보기 표 이름을 실제 표로 바꿔 쓰세요."));
+    List<String> notes = new ArrayList<>(List.of("보기 테이블 이름을 실제 테이블로 바꿔 쓰세요."));
     String sql = e.sql(bench.kind());
     if (bench.style() == QueryBuilder.JoinStyle.OLD) {
       JoinStyleConvert.Result old = JoinStyleConvert.toOldOrSame(sql, bench.kind() == DbKind.ORACLE);

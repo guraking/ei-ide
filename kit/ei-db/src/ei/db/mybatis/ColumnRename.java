@@ -50,7 +50,7 @@ final class ColumnRename {
     if (!NAME.matcher(n).matches()) return "새 칼럼 이름은 영문자 · 밑줄로 시작하고 영문자 · 숫자 · _ $ # 만 쓸 수 있습니다.";
     if (o.equalsIgnoreCase(n)) return "옛 이름과 새 이름이 같습니다.";
     String t = table == null ? "" : table.trim();
-    if (!t.isEmpty() && !NAME.matcher(t).matches()) return "표 이름은 영문자 · 밑줄로 시작하고 영문자 · 숫자 · _ $ # 만 쓸 수 있습니다.";
+    if (!t.isEmpty() && !NAME.matcher(t).matches()) return "테이블 이름은 영문자 · 밑줄로 시작하고 영문자 · 숫자 · _ $ # 만 쓸 수 있습니다.";
     return null;
   }
 

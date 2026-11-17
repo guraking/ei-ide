@@ -94,7 +94,7 @@ public final class ThemeMigration implements AppLifecycleListener {
                 moved = true;
                 if ((USER_SCHEME_PREFIX + oldName).equals(active)) activeNew = USER_SCHEME_PREFIX + newName;
             } catch (Exception e) {
-                LOG.warn("편집기 색 구성표 옮기기 실패: " + oldFile, e);
+                LOG.warn("에디터 색 구성표 옮기기 실패: " + oldFile, e);
             }
         }
         if (!moved) return;

@@ -67,7 +67,7 @@ public final class SqlLint {
     Graph g = graph(parts);
     List<String> loose = unlinked(g);
     for (String ref : loose) {
-      out.add(new Issue(at + "이어지지 않은 표 " + ref, ref + " 가 다른 표와 잇는 조건이 없어 두 표의 모든 조합(곱하기)이 나옵니다. 행 수가 크게 늘어납니다."));
+      out.add(new Issue(at + "이어지지 않은 테이블 " + ref, ref + " 가 다른 테이블과 잇는 조건이 없어 두 테이블의 모든 조합(곱하기)이 나옵니다. 행 수가 크게 늘어납니다."));
     }
     groupCheck(sel.body(), SqlParts.find(parts, "GROUP BY"), at, out);
     outerCheck(g, SqlParts.find(parts, "WHERE"), at, out);
@@ -184,7 +184,7 @@ public final class SqlLint {
       String r = refs.iterator().next();
       if (outer.contains(r)) {
         out.add(new Issue(at + "바깥 조인이 풀림", SqlParts.oneLine(c) + " 에 (+) 가 없어 " + r.toLowerCase(Locale.ROOT)
-            + " 표에 맞는 행이 없는 줄이 빠집니다(안쪽 조인처럼 됨). 빠지면 안 되면 칼럼 뒤에 (+) 를 붙이세요."));
+            + " 테이블에 맞는 행이 없는 줄이 빠집니다(안쪽 조인처럼 됨). 빠지면 안 되면 칼럼 뒤에 (+) 를 붙이세요."));
       }
     }
   }

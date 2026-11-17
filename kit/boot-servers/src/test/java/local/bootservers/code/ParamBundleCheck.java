@@ -31,13 +31,13 @@ public final class ParamBundleCheck {
         eq("searchKeyword", ParamBundle.defaultFieldName(p("k", STRING, "search.keyword", null)), "점 요청 이름");
         eq("pageNo", ParamBundle.defaultFieldName(p("pageNo", INTEGER, "pageNo", null)), "카멜 그대로");
         eq("page", ParamBundle.defaultFieldName(p("page", INTEGER, null, null)), "요청 이름 없음");
-        eq("p1", ParamBundle.defaultFieldName(p("p1", INTEGER, "1st", null)), "자바 이름 안 되면 매개변수 이름");
+        eq("p1", ParamBundle.defaultFieldName(p("p1", INTEGER, "1st", null)), "자바 이름 안 되면 파라미터 이름");
         eq("req", ParamBundle.variableName(Set.of("id")), "변수 이름");
         eq("req3", ParamBundle.variableName(Set.of("req", "req2")), "변수 이름 겹침");
         eq("getUserId", ParamBundle.getter("userId"), "getter");
         eq("req.getUserId()", ParamBundle.access("req", "userId"), "참조 식");
         eq("@org.springframework.web.bind.annotation.ModelAttribute a.b.ListRequest req",
-                ParamBundle.parameter("a.b.ListRequest", "req"), "매개변수 글");
+                ParamBundle.parameter("a.b.ListRequest", "req"), "파라미터 글");
         List<ParamBundle.Field> fields = List.of(
                 new ParamBundle.Field("userId", p("id", STRING, "user_id", null)),
                 new ParamBundle.Field("page", p("page", INTEGER, "page", null)),
@@ -63,7 +63,7 @@ public final class ParamBundleCheck {
         eq(null, ParamBundle.initializer("boolean", "Y"), "boolean 아닌 글");
         eq("java.time.LocalDate.parse(\"2024-01-01\")", ParamBundle.initializer(LOCAL_DATE, "2024-01-01"), "LocalDate");
         eq("new java.math.BigDecimal(\"0.1\")", ParamBundle.initializer("java.math.BigDecimal", "0.1"), "BigDecimal");
-        eq(null, ParamBundle.initializer("com.x.Kind", "A"), "모르는 형");
+        eq(null, ParamBundle.initializer("com.x.Kind", "A"), "모르는 타입");
         eq(null, ParamBundle.initializer(STRING, null), "기본값 없음");
     }
 
@@ -117,7 +117,7 @@ public final class ParamBundleCheck {
         throwsIae(() -> ParamBundle.dto("a", "class", List.of(new ParamBundle.Field("a", p("a", STRING, null, null)))), "키워드 클래스 이름");
         throwsIae(() -> ParamBundle.dto("a", "A", List.of()), "필드 없음");
         throwsIae(() -> new ParamBundle.Field("1a", p("a", STRING, null, null)), "필드 이름");
-        throwsIae(() -> p("", STRING, null, null), "빈 매개변수 이름");
+        throwsIae(() -> p("", STRING, null, null), "빈 파라미터 이름");
         throwsIae(() -> ParamBundle.className(" "), "빈 메서드 이름");
     }
 

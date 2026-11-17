@@ -38,7 +38,7 @@ final class ParamBundleDialog extends DialogWrapper {
     ParamBundleDialog(Project project, String defaultClassName, List<String> labels, List<String> fieldNames) {
         super(project);
         if (labels.size() != fieldNames.size() || labels.size() < MIN_SELECTED) {
-            throw new IllegalArgumentException("매개변수가 둘 이상이고 필드 이름과 개수가 같아야 합니다");
+            throw new IllegalArgumentException("파라미터가 둘 이상이고 필드 이름과 개수가 같아야 합니다");
         }
         this.labels = List.copyOf(labels);
         this.fieldNames = new ArrayList<>(fieldNames);

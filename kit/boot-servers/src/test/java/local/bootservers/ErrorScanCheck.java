@@ -60,7 +60,7 @@ public final class ErrorScanCheck {
     private static void rules() {
         check(ErrorRules.size() >= 100, "설명 규칙 100개 이상");
         ErrorRules.Explain e = ErrorRules.match("java.sql.SQLSyntaxErrorException: ORA-00942: table or view does not exist", "");
-        check(e != null && e.title().equals("표 없음"), "ORA-00942");
+        check(e != null && e.title().equals("테이블 없음"), "ORA-00942");
         e = ErrorRules.match("Cannot invoke \"String.length()\" because \"name\" is null", "");
         check(e != null && e.text().startsWith("name 이(가) null 이라서 String.length()"), "NPE 변수 이름: " + e);
         e = ErrorRules.match("Invalid bound statement (not found): com.x.UserMapper.selectUser", "");
@@ -137,7 +137,7 @@ public final class ErrorScanCheck {
         scan.feed("\tat oracle.jdbc.Foo.bar(Foo.java:1)\n");
         scan.flush();
         ErrorReport r = scan.items().get(0).last();
-        check(r.explain() != null && r.explain().title().equals("표 없음"), "ORA-00942 설명: " + r.explain());
+        check(r.explain() != null && r.explain().title().equals("테이블 없음"), "ORA-00942 설명: " + r.explain());
         check("SELECT * FROM TB_USR WHERE ID = ? AND NM = ?".equals(r.sql()) && "7(Long), 홍길동(String)".equals(r.sqlParams()), "같은 스레드 SQL · 값: " + r.sqlParams());
         check("SELECT * FROM TB_USR WHERE ID = 7 AND NM = '홍길동'".equals(SqlFill.fill(r.sql(), r.sqlParams())), "채운 SQL");
         check("GET".equals(r.method()) && "/user/list".equals(r.path()) && "id:[7]".equals(r.params()), "요청 · 파라미터");

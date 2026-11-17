@@ -19,12 +19,12 @@ import java.util.Set;
 final class TableSpec {
   private TableSpec() {}
 
-  static final List<String> HEADER = List.of("표", "구분", "표 주석", "No", "칼럼", "형", "길이", "NULL", "PK", "기본값", "주석");
+  static final List<String> HEADER = List.of("테이블", "구분", "테이블 주석", "No", "칼럼", "타입", "길이", "NULL", "PK", "기본값", "주석");
   static final String YES = "Y";
   static final String NO = "N";
   /** 이 형 이름으로 끝나는 TABLE_TYPE(VIEW · MATERIALIZED VIEW)은 「뷰」. 정의서에 싣는 형은 Meta.tableAndViewTypes. */
   private static final String VIEW_TYPE = "VIEW";
-  static final String KIND_TABLE = "표";
+  static final String KIND_TABLE = "테이블";
   static final String KIND_VIEW = "뷰";
 
   /** columns 는 칼럼 순서대로, defaults 는 칼럼 이름 → 기본값(없는 칼럼은 빈 칸). */

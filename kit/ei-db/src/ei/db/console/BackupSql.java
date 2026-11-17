@@ -23,17 +23,23 @@ public final class BackupSql {
 
   /** 백업이 만들어진 곳. label 은 파일 머리에 쓰는 글이자 목록에 보이는 글이다. */
   public enum Origin {
-    CONSOLE("콘솔"), GRID_EDIT("결과 표에서 고침"), GRID_DELETE("결과 표에서 지움"), MAPPER("매퍼 실행");
+    CONSOLE("콘솔", null), GRID_EDIT("결과 테이블에서 고침", "결과 표에서 고침"), GRID_DELETE("결과 테이블에서 지움", "결과 표에서 지움"),
+    MAPPER("매퍼 실행", null);
 
     private final String label;
+    /** 1121 전 판이 파일 머리에 쓰던 글. 그 판이 만든 백업도 목록에 보이도록 읽을 때만 쓴다. 없으면 null. */
+    private final String oldLabel;
 
-    Origin(String label) { this.label = label; }
+    Origin(String label, String oldLabel) {
+      this.label = label;
+      this.oldLabel = oldLabel;
+    }
 
     public String label() { return label; }
 
     static Origin ofLabel(String label) {
       for (Origin o : values()) {
-        if (o.label.equals(label)) return o;
+        if (o.label.equals(label) || label.equals(o.oldLabel)) return o;
       }
       return null;
     }
@@ -75,7 +81,7 @@ public final class BackupSql {
 
   static final String R_MERGE = "MERGE 문은 백업하지 않습니다";
   static final String R_WRAPPED = "WITH · EXPLAIN ANALYZE 로 감싼 변경 문장은 백업하지 않습니다";
-  static final String R_SHAPE = "표 하나짜리 단순 UPDATE · DELETE 가 아닙니다(조인 · 서브쿼리 대상 · ONLY · DB 링크 · 파티션 지정 등)";
+  static final String R_SHAPE = "테이블 하나짜리 단순 UPDATE · DELETE 가 아닙니다(조인 · 서브쿼리 대상 · ONLY · DB 링크 · 파티션 지정 등)";
   static final String R_CLAUSE = "FROM · USING · RETURNING · ORDER BY · LIMIT · WHERE CURRENT OF 가 있는 문장은 백업하지 않습니다";
   static final String R_BINDS = "? 자리 수와 값 수가 달라 WHERE 쪽 값을 가를 수 없습니다";
   static final String R_BLOCK = "PL/SQL 블록 · 프로시저 호출(BEGIN · DECLARE · DO · CALL · EXEC)은 안에서 무엇을 바꾸는지 알 수 없어 백업하지 않습니다";
@@ -396,7 +402,9 @@ public final class BackupSql {
   private static final String K_TIME = "-- 시각: ";
   private static final String K_CONNECTION = "-- 접속: ";
   private static final String K_ORIGIN = "-- 종류: ";
-  private static final String K_TABLE = "-- 표: ";
+  private static final String K_TABLE = "-- 테이블: ";
+  /** 1121 전 판이 쓰던 K_TABLE. 그 판이 만든 백업 파일을 읽을 때만 쓴다. */
+  private static final String K_TABLE_OLD = "-- 표: ";
   private static final String K_ROWS = "-- 행 수: ";
   private static final String K_EXCLUDED = "-- 뺀 칼럼(LOB · 이진): ";
   private static final String K_MODE = "-- 되돌리는 문장: ";
@@ -457,6 +465,8 @@ public final class BackupSql {
         origin = Origin.ofLabel(line.substring(K_ORIGIN.length()));
       } else if (line.startsWith(K_TABLE)) {
         table = line.substring(K_TABLE.length());
+      } else if (line.startsWith(K_TABLE_OLD)) {
+        table = line.substring(K_TABLE_OLD.length());
       } else if (line.startsWith(K_ROWS)) {
         try {
           rows = Integer.parseInt(line.substring(K_ROWS.length()));

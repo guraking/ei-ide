@@ -88,7 +88,7 @@ final class BuilderPanel {
 
   private final Rows<ColRow> cols = new Rows<>(List.of(
       new Rows.Column<ColRow>("고름", Boolean.class, r -> r.selected, (r, v) -> r.selected = (Boolean) v),
-      new Rows.Column<ColRow>("표", String.class, r -> r.table + " (" + r.alias + ")", null),
+      new Rows.Column<ColRow>("테이블", String.class, r -> r.table + " (" + r.alias + ")", null),
       new Rows.Column<ColRow>("칼럼", String.class, r -> r.col.name(), null),
       new Rows.Column<ColRow>("형식", String.class, r -> r.col.typeLabel(), null),
       new Rows.Column<ColRow>("설명", String.class, r -> r.col.comment(), null),
@@ -98,13 +98,13 @@ final class BuilderPanel {
 
   private final Rows<JoinRow> joins = new Rows<>(List.of(
       new Rows.Column<JoinRow>("사용", Boolean.class, r -> r.use, (r, v) -> r.use = (Boolean) v),
-      new Rows.Column<JoinRow>("왼쪽 (앞 표)", String.class, r -> r.j.leftAlias() + "." + r.j.leftColumn(), null),
-      new Rows.Column<JoinRow>("오른쪽 (뒤 표)", String.class, r -> r.j.rightAlias() + "." + r.j.rightColumn(), null),
+      new Rows.Column<JoinRow>("왼쪽 (앞 테이블)", String.class, r -> r.j.leftAlias() + "." + r.j.leftColumn(), null),
+      new Rows.Column<JoinRow>("오른쪽 (뒤 테이블)", String.class, r -> r.j.rightAlias() + "." + r.j.rightColumn(), null),
       new Rows.Column<JoinRow>("방식", Object.class, r -> r.outer ? OUTER : INNER, (r, v) -> r.outer = OUTER.equals(v)),
-      new Rows.Column<JoinRow>("근거", String.class, r -> r.j.guessed() ? "추정 (이름이 같음) — 확인하세요" : r.manual ? "직접 넣음" : "외래 키", null)), this::changed);
+      new Rows.Column<JoinRow>("근거", String.class, r -> r.j.guessed() ? "추정 (이름이 같음) — 확인하세요" : r.manual ? "직접 넣음" : "FK", null)), this::changed);
   private final JBTable joinTable = new JBTable(joins);
   private static final String INNER = "양쪽에 다 있는 것만 (안쪽 조인)";
-  private static final String OUTER = "앞 표는 모두 남기기 (바깥 조인)";
+  private static final String OUTER = "앞 테이블은 모두 남기기 (바깥 조인)";
 
   private final Rows<CondRow> conds = new Rows<>(List.of(
       new Rows.Column<CondRow>("칼럼", Object.class, r -> r.ref(), (r, v) -> r.column(String.valueOf(v))),
@@ -272,7 +272,7 @@ final class BuilderPanel {
         if (!t.comment().isEmpty()) append("  " + t.comment(), SimpleTextAttributes.GRAYED_ATTRIBUTES);
       }
     });
-    tableList.getEmptyText().setText("접속을 고르면 표 목록을 읽습니다");
+    tableList.getEmptyText().setText("접속을 고르면 테이블 목록을 읽습니다");
     tableList.addMouseListener(new MouseAdapter() {
       @Override
       public void mouseClicked(MouseEvent e) {
@@ -289,7 +289,7 @@ final class BuilderPanel {
       @Override
       protected void textChanged(@NotNull DocumentEvent e) { filter(); }
     });
-    search.getTextEditor().getEmptyText().setText("표 이름 · 설명으로 찾기");
+    search.getTextEditor().getEmptyText().setText("테이블 이름 · 설명으로 찾기");
     chosenList.setCellRenderer(new ColoredListCellRenderer<>() {
       @Override
       protected void customizeCellRenderer(@NotNull JList<? extends QueryBuilder.Table> list, QueryBuilder.Table t, int index, boolean selected, boolean focus) {
@@ -298,16 +298,16 @@ final class BuilderPanel {
         append("  " + t.alias(), SimpleTextAttributes.GRAYED_BOLD_ATTRIBUTES);
       }
     });
-    chosenList.getEmptyText().setText("위 목록에서 두 번 눌러 표를 더하세요");
-    JButton add = new JButton("표 더하기", AllIcons.General.Add);
+    chosenList.getEmptyText().setText("위 목록에서 두 번 눌러 테이블을 더하세요");
+    JButton add = new JButton("테이블 더하기", AllIcons.General.Add);
     add.addActionListener(e -> addSelectedTables());
-    JButton remove = new JButton("표 빼기", AllIcons.General.Remove);
+    JButton remove = new JButton("테이블 빼기", AllIcons.General.Remove);
     remove.addActionListener(e -> removeSelectedTable());
     JPanel tableButtons = buttons(add, remove);
 
     JPanel left = new JPanel(new BorderLayout(0, JBUI.scale(4)));
     JPanel top = new JPanel(new BorderLayout(0, JBUI.scale(4)));
-    top.add(new JBLabel("1. 표 고르기"), BorderLayout.NORTH);
+    top.add(new JBLabel("1. 테이블 고르기"), BorderLayout.NORTH);
     top.add(search, BorderLayout.CENTER);
     JBSplitter tablesSplit = new JBSplitter(true, TABLES_SPLIT);
     tablesSplit.setSplitterProportionKey(KEY + "tablesSplit");
@@ -325,7 +325,7 @@ final class BuilderPanel {
     // 2. 칼럼
     colTable.setDefaultRenderer(Object.class, new DefaultTableCellRenderer());
     colTable.getColumnModel().getColumn(5).setCellEditor(new DefaultCellEditor(new ComboBox<>(aggChoices())));
-    colTable.getEmptyText().setText("표를 더하면 칼럼이 여기에 나옵니다. 안 고르면 모든 칼럼(*)");
+    colTable.getEmptyText().setText("테이블을 더하면 칼럼이 여기에 나옵니다. 안 고르면 모든 칼럼(*)");
     Rows.widths(colTable, KEY + "cols", 1, 2, 4, 3, 5, 3, 3);
     countAll.addActionListener(e -> changed());
     distinct.addActionListener(e -> changed());
@@ -343,7 +343,7 @@ final class BuilderPanel {
 
     // 3. 연결
     joinTable.getColumnModel().getColumn(3).setCellEditor(new DefaultCellEditor(new ComboBox<>(new String[]{INNER, OUTER})));
-    joinTable.getEmptyText().setText("표를 둘 이상 고르면 외래 키를 따라 연결을 추천합니다");
+    joinTable.getEmptyText().setText("테이블을 둘 이상 고르면 FK를 따라 연결을 추천합니다");
     Rows.widths(joinTable, KEY + "joins", 1, 4, 4, 5, 4);
     JButton suggest = new JButton("다시 추천", AllIcons.Actions.Refresh);
     suggest.addActionListener(e -> suggestJoins(true));
@@ -412,7 +412,7 @@ final class BuilderPanel {
     orderPanel.add(limitRow, BorderLayout.SOUTH);
 
     sections.add(new Section("2. 칼럼 고르기", "결과에 보일 칼럼에 체크하세요. 아무것도 안 고르면 모든 칼럼(*)입니다. 「집계」 에서 건수 · 합계 · 평균을 고르면 묶기는 자동으로 맞춥니다.", colPanel, true));
-    sections.add(new Section("3. 표 잇기 (JOIN)", "표가 둘 이상이면 어떤 칼럼으로 이을지 정합니다. 외래 키를 따라 자동으로 넣고, 「추정」 은 이름으로 짐작한 것이라 맞는지 보세요.", joinPanel, false));
+    sections.add(new Section("3. 테이블 잇기 (JOIN)", "테이블이 둘 이상이면 어떤 칼럼으로 이을지 정합니다. FK를 따라 자동으로 넣고, 「추정」 은 이름으로 짐작한 것이라 맞는지 보세요.", joinPanel, false));
     sections.add(new Section("4. 거를 조건 (WHERE)", "「조건 넣기」 → 칼럼 · 조건 · 값을 고릅니다. 값을 비우면 실행할 때 묻고, 넣으면 건수 세기에 씁니다. 여러 값은 쉼표로, 날짜는 " + QueryBuilder.DATE_FORMAT + ".", condPanel, true));
     sections.add(new Section("5. 묶기 (GROUP BY)", "「묶을 칼럼 더하기…」 로 값마다 묶을 칼럼(예: 고객, 상태)을 고르면 SELECT 와 GROUP BY 에 들어가고, 집계를 안 골랐으면 건수(CNT)가 붙습니다. 2단계에서 집계를 고른 경우 집계 아닌 칼럼은 저절로 묶입니다(「자동」).", groupPanel, false));
     sections.add(new Section("6. 정렬 · 건수 자르기", "어떤 순서로 볼지, 몇 건만 볼지 정합니다.", orderPanel, false));
@@ -474,11 +474,11 @@ final class BuilderPanel {
     DbConfig c = bench.config();
     autoCount.setSelected(c != null && !c.production && PropertiesComponent.getInstance().getBoolean(AUTO_COUNT_KEY, true));
     if (c == null) return;
-    tableList.getEmptyText().setText("표 목록을 읽는 중…");
+    tableList.getEmptyText().setText("테이블 목록을 읽는 중…");
     bench.tables(list -> {
       loadedTables.clear();
       loadedTables.addAll(list);
-      tableList.getEmptyText().setText(list.isEmpty() ? "이 스키마에 표가 없습니다" : "찾는 표가 없습니다");
+      tableList.getEmptyText().setText(list.isEmpty() ? "이 스키마에 테이블이 없습니다" : "찾는 테이블이 없습니다");
       filter();
     });
   }
@@ -556,7 +556,7 @@ final class BuilderPanel {
   private void addJoin() {
     List<String> refs = columnRefs();
     if (chosen.getSize() < 2 || refs.isEmpty()) {
-      tableStatus.setText("표를 둘 이상 고른 뒤 넣으세요.");
+      tableStatus.setText("테이블을 둘 이상 고른 뒤 넣으세요.");
       return;
     }
     ComboBox<String> leftBox = new ComboBox<>(refs.toArray(new String[0]));
@@ -571,8 +571,8 @@ final class BuilderPanel {
       @Override
       protected JComponent createCenterPanel() {
         return FormBuilder.createFormBuilder()
-            .addLabeledComponent("앞 표 칼럼", leftBox)
-            .addLabeledComponent("뒤 표 칼럼", rightBox)
+            .addLabeledComponent("앞 테이블 칼럼", leftBox)
+            .addLabeledComponent("뒤 테이블 칼럼", rightBox)
             .addComponent(outer)
             .getPanel();
       }
@@ -583,7 +583,7 @@ final class BuilderPanel {
     String la = l.substring(0, l.indexOf('.'));
     String ra = r.substring(0, r.indexOf('.'));
     if (la.equals(ra)) {
-      tableStatus.setText("서로 다른 두 표의 칼럼을 고르세요.");
+      tableStatus.setText("서로 다른 두 테이블의 칼럼을 고르세요.");
       return;
     }
     if (index(la) > index(ra)) {
@@ -604,7 +604,7 @@ final class BuilderPanel {
   private void addCond() {
     List<String> refs = columnRefs();
     if (refs.isEmpty()) {
-      tableStatus.setText("표를 먼저 고르세요.");
+      tableStatus.setText("테이블을 먼저 고르세요.");
       return;
     }
     CondRow r = new CondRow();
@@ -631,7 +631,7 @@ final class BuilderPanel {
   private void addOrder() {
     List<String> c = orderCandidates();
     if (c.isEmpty()) {
-      tableStatus.setText("표를 먼저 고르세요.");
+      tableStatus.setText("테이블을 먼저 고르세요.");
       return;
     }
     OrderRow r = new OrderRow();
@@ -731,7 +731,7 @@ final class BuilderPanel {
     groupLabel.setText(group.isEmpty() ? "지금은 묶지 않습니다." : auto.isEmpty() ? "GROUP BY: " + String.join(", ", group)
         : "GROUP BY: " + String.join(", ", group) + "   (자동: " + String.join(", ", auto) + " — 2단계에서 집계 없이 고른 칼럼)");
     if (s.tables.isEmpty()) {
-      bench.show("", List.of("왼쪽에서 표를 고르면 SQL 이 여기에 만들어집니다."));
+      bench.show("", List.of("왼쪽에서 테이블을 고르면 SQL 이 여기에 만들어집니다."));
       return;
     }
     List<String> notes = new ArrayList<>(QueryBuilder.problems(s));
@@ -833,7 +833,7 @@ final class BuilderPanel {
         countLabel.setForeground(got == null ? UIUtil.getErrorForeground() : UIUtil.getLabelForeground());
         String jump = "";
         if (got != null && lastCount != null && shape != lastShape && got > lastCount && lastCount > 0) {
-          jump = String.format(Locale.ROOT, "  ⚠ 표 · 연결을 바꾼 뒤 %,d건 → %,d건 (%.1f배). 연결 조건이 빠졌거나 1:N 관계입니다.", lastCount, got, (double) got / lastCount);
+          jump = String.format(Locale.ROOT, "  ⚠ 테이블 · 연결을 바꾼 뒤 %,d건 → %,d건 (%.1f배). 연결 조건이 빠졌거나 1:N 관계입니다.", lastCount, got, (double) got / lastCount);
           countLabel.setForeground(UIUtil.getErrorForeground());
         }
         countLabel.setText(shown + extra + jump);
@@ -869,7 +869,7 @@ final class BuilderPanel {
       choices.add(r.col.comment() == null || r.col.comment().isBlank() ? ref : ref + "  — " + r.col.comment());
     }
     if (choices.isEmpty()) {
-      bench.show(QueryBuilder.render(spec()), List.of(cols.rows.isEmpty() ? "왼쪽에서 표를 먼저 더하세요." : "더 고를 칼럼이 없습니다."));
+      bench.show(QueryBuilder.render(spec()), List.of(cols.rows.isEmpty() ? "왼쪽에서 테이블을 먼저 더하세요." : "더 고를 칼럼이 없습니다."));
       return;
     }
     com.intellij.openapi.ui.popup.JBPopupFactory.getInstance().createPopupChooserBuilder(choices)
@@ -892,7 +892,7 @@ final class BuilderPanel {
       return;
     }
     List<String> choices = new ArrayList<>();
-    choices.add("모든 표의 칼럼");
+    choices.add("모든 테이블의 칼럼");
     for (QueryBuilder.Table t : items) choices.add(t.name() + " (" + t.alias() + ") 칼럼만");
     com.intellij.openapi.ui.popup.JBPopupFactory.getInstance().createPopupChooserBuilder(choices)
         .setItemChosenCallback(c -> mark(c.equals(choices.get(0)) ? null : items.get(choices.indexOf(c) - 1).alias()))

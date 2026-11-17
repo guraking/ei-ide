@@ -19,7 +19,7 @@ public final class Patterns {
 
   /** 채울 칸. 무늬마다 필요한 칸만 화면에 보인다. */
   public enum Field {
-    TABLE("표"), TABLE2("비교할 표 · 다른 표"), KEYS("기준 칼럼 (같은 값이면 같은 것)"), COLS("함께 볼 · 바꿀 칼럼"),
+    TABLE("테이블"), TABLE2("비교할 테이블 · 다른 테이블"), KEYS("기준 칼럼 (같은 값이면 같은 것)"), COLS("함께 볼 · 바꿀 칼럼"),
     GROUP("묶을 칼럼 (예: 상태, 부서)"), VALUE("값 칼럼 (금액 · 수량)"), ORDER("최신 · 순서를 가를 칼럼"),
     PARENT("부모를 가리키는 칼럼"), STATUS("상태 칼럼"), STATUS_VALUES("상태 값들 (쉼표로)");
 
@@ -33,12 +33,12 @@ public final class Patterns {
     DUPLICATES("중복 찾기", "기준 칼럼 값이 같은 행이 2건 이상인 값과 건수를 봅니다.", EnumSet.of(Field.TABLE, Field.KEYS)),
     DUPLICATE_ROWS("중복 행 전체 보기", "중복된 행을 지우기 전에 한 줄씩 다 봅니다. 같은 값끼리 순번(RN)을 매겨 2 이상이 지울 대상입니다.", EnumSet.of(Field.TABLE, Field.KEYS, Field.ORDER)),
     LATEST("그룹별 최신 1건", "기준 칼럼마다 순서 칼럼이 가장 큰(최신) 행 하나만 봅니다.", EnumSet.of(Field.TABLE, Field.KEYS, Field.ORDER)),
-    EXISTS("있는지 확인 (EXISTS)", "다른 표에 짝이 있는 행만 봅니다. 짝이 여러 개여도 한 번만 나옵니다(JOIN 과 달리 늘어나지 않음).", EnumSet.of(Field.TABLE, Field.TABLE2, Field.KEYS)),
-    NOT_EXISTS("없는 것 찾기 (NOT EXISTS)", "다른 표에 짝이 없는 행만 봅니다. NOT IN 과 달리 NULL 이 있어도 맞게 나옵니다.", EnumSet.of(Field.TABLE, Field.TABLE2, Field.KEYS)),
+    EXISTS("있는지 확인 (EXISTS)", "다른 테이블에 짝이 있는 행만 봅니다. 짝이 여러 개여도 한 번만 나옵니다(JOIN 과 달리 늘어나지 않음).", EnumSet.of(Field.TABLE, Field.TABLE2, Field.KEYS)),
+    NOT_EXISTS("없는 것 찾기 (NOT EXISTS)", "다른 테이블에 짝이 없는 행만 봅니다. NOT IN 과 달리 NULL 이 있어도 맞게 나옵니다.", EnumSet.of(Field.TABLE, Field.TABLE2, Field.KEYS)),
     CTE("WITH 로 나눠 쓰기", "긴 쿼리를 이름 붙인 단계(base → summary)로 나눕니다. 단계마다 따로 실행해 볼 수 있습니다(도구 → 조각 실행).", EnumSet.of(Field.TABLE, Field.GROUP)),
     HIERARCHY("계층 (부모-자식) 조회", "메뉴 · 조직 · 부품 구성처럼 부모를 가리키는 칼럼으로 위에서 아래로 펼칩니다.", EnumSet.of(Field.TABLE, Field.KEYS, Field.PARENT)),
     RANK("누적 합 · 순위", "줄마다 앞에서부터 쌓인 합과 값 순위를 붙입니다(행 수는 그대로).", EnumSet.of(Field.TABLE, Field.VALUE, Field.ORDER)),
-    DIFF("두 표 차이 비교", "두 표의 기준 칼럼 값 중 한쪽에만 있는 것을 봅니다(이관 · 백업 비교).", EnumSet.of(Field.TABLE, Field.TABLE2, Field.KEYS)),
+    DIFF("두 테이블 차이 비교", "두 테이블의 기준 칼럼 값 중 한쪽에만 있는 것을 봅니다(이관 · 백업 비교).", EnumSet.of(Field.TABLE, Field.TABLE2, Field.KEYS)),
     PIVOT("세로 → 가로 바꾸기", "상태 값마다 칸을 하나씩 만들어 한 줄에 놓습니다.", EnumSet.of(Field.TABLE, Field.GROUP, Field.STATUS, Field.STATUS_VALUES, Field.VALUE)),
     UPSERT("있으면 수정, 없으면 넣기", "기준 칼럼으로 찾아 있으면 UPDATE, 없으면 INSERT 합니다(Oracle MERGE, PostgreSQL ON CONFLICT).", EnumSet.of(Field.TABLE, Field.KEYS, Field.COLS));
 
@@ -61,8 +61,8 @@ public final class Patterns {
       case HIERARCHY -> f == Field.KEYS ? "자기 ID 칼럼 (예: MENU_ID)" : f == Field.PARENT ? "부모 ID 칼럼 (예: PARENT_MENU_ID)" : null;
       case LATEST -> f == Field.KEYS ? "이 값마다 1건 (예: CUST_ID)" : f == Field.ORDER ? "최신을 가를 칼럼 (예: REG_DT)" : null;
       case DUPLICATE_ROWS -> f == Field.ORDER ? "남길 행을 가를 칼럼 (큰 것 = RN 1)" : null;
-      case EXISTS, NOT_EXISTS -> f == Field.TABLE2 ? "짝을 찾을 표" : f == Field.KEYS ? "두 표에 같은 이름으로 있는 칼럼" : null;
-      case DIFF -> f == Field.TABLE2 ? "비교할 표 (예: 백업 표)" : f == Field.KEYS ? "비교할 칼럼 (두 표에 같은 이름)" : null;
+      case EXISTS, NOT_EXISTS -> f == Field.TABLE2 ? "짝을 찾을 테이블" : f == Field.KEYS ? "두 테이블에 같은 이름으로 있는 칼럼" : null;
+      case DIFF -> f == Field.TABLE2 ? "비교할 테이블 (예: 백업 테이블)" : f == Field.KEYS ? "비교할 칼럼 (두 테이블에 같은 이름)" : null;
       case UPSERT -> f == Field.KEYS ? "찾을 칼럼 (PK)" : f == Field.COLS ? "넣을 · 고칠 칼럼" : null;
       case PIVOT -> f == Field.GROUP ? "줄로 둘 칼럼" : f == Field.STATUS ? "칸으로 펼칠 칼럼" : f == Field.STATUS_VALUES ? "칸이 될 값들 (쉼표로)" : f == Field.VALUE ? "더할 값 칼럼" : null;
       case RANK -> f == Field.VALUE ? "순위 · 누적할 값 칼럼" : f == Field.ORDER ? "누적 순서 칼럼 (예: 날짜)" : null;
@@ -147,7 +147,7 @@ public final class Patterns {
           + "     , RANK() OVER (ORDER BY " + a + "." + value + " DESC) AS RNK\n  FROM " + t + " " + a + "\n ORDER BY\n       " + a + "." + order;
       case DIFF -> {
         String minus = oracle ? "MINUS" : "EXCEPT";
-        yield "-- 두 표 차이: 한쪽에만 있는 " + String.join(", ", keys) + " (WHERE 칸 = 어느 표에만 있는지)\n"
+        yield "-- 두 테이블 차이: 한쪽에만 있는 " + String.join(", ", keys) + " (WHERE 칸 = 어느 테이블에만 있는지)\n"
             + "SELECT\n       '" + bare(f.table()) + " 에만' AS WHERE_ONLY\n" + list(keys).replaceFirst("^       ", "     , ")
             + "  FROM (\n        SELECT " + String.join(", ", keys) + " FROM " + t + "\n        " + minus + "\n        SELECT " + String.join(", ", keys) + " FROM " + t2 + "\n       ) x\n"
             + "UNION ALL\nSELECT\n       '" + bare(f.table2()) + " 에만' AS WHERE_ONLY\n" + list(keys).replaceFirst("^       ", "     , ")

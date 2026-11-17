@@ -30,8 +30,8 @@ Error setting null for parameter|Invalid column type|부적합한 열 유형|jdb
 No constructor found in ([\w$.]+)	결과 담을 생성자 없음	결과를 담을 $1 에 맞는 생성자가 없어요. 기본 생성자를 넣거나 칼럼 수에 맞추세요.	@NoArgsConstructor
 Error parsing Mapper XML|Error creating document instance|XML document structures must start and end	매퍼 XML 문법 오류	매퍼 XML 에 문법 오류가 있어요. 닫히지 않은 태그나 < > 를 보세요. 부등호는 CDATA 로 감싸세요.	<![CDATA[ A < B ]]>
 Error evaluating expression '([^']+)'	동적 SQL 식 오류	동적 SQL 식 $1 을 계산하지 못했어요. 필드 이름 오타나 null 인 값의 메서드를 불렀는지 보세요.	<if test="list != null and list.size() > 0">
-ORA-00942	표 없음	표(또는 뷰)가 없거나 볼 권한이 없어요. 표 이름 · 스키마(OWNER.TABLE) · 권한을 확인하세요.	SELECT * FROM TB_USER → 다른 스키마면 HR.TB_USER
-ORA-00904: ?([^\r\n]*)	칼럼 이름 틀림	칼럼 이름이 틀렸어요: $1. 표에 없는 칼럼이거나 오타, 별칭을 잘못 붙였어요.	USER_NM → 실제 칼럼이 USER_NAME 인지
+ORA-00942	테이블 없음	테이블(또는 뷰)이 없거나 볼 권한이 없어요. 테이블 이름 · 스키마(OWNER.TABLE) · 권한을 확인하세요.	SELECT * FROM TB_USER → 다른 스키마면 HR.TB_USER
+ORA-00904: ?([^\r\n]*)	칼럼 이름 틀림	칼럼 이름이 틀렸어요: $1. 테이블에 없는 칼럼이거나 오타, 별칭을 잘못 붙였어요.	USER_NM → 실제 칼럼이 USER_NAME 인지
 ORA-00001	중복 키	같은 키 값이 이미 있어요. 기본 키나 UNIQUE 칼럼에 같은 값을 또 넣었어요.	INSERT 전에 같은 ID 가 있는지 보거나 시퀀스 값을 확인
 ORA-01400: [^(\r\n]*\(([^)]*)\)	빈 값 넣음(NOT NULL)	꼭 넣어야 하는 칼럼 $1 에 값이 비어 있어요.	#{userNm} 이 null 로 넘어갔는지
 ORA-01407: [^(\r\n]*\(([^)]*)\)	빈 값으로 바꿈(NOT NULL)	꼭 있어야 하는 칼럼 $1 을 null 로 바꾸려 했어요.	UPDATE ... SET USER_NM = NULL
@@ -39,13 +39,13 @@ ORA-12899	값이 너무 김	칼럼에 넣는 값이 칼럼 길이보다 길어�
 ORA-01722	숫자가 아님	숫자 칼럼에 숫자가 아닌 글자를 넣거나 비교했어요.	WHERE NUM_COL = 'A01' 또는 '1,000'
 ORA-01438	숫자 자리 넘침	숫자 칼럼의 자리수보다 큰 값을 넣었어요.	NUMBER(5,2) 에 1000
 ORA-0(?:1861|1858|1843|1847|1830|1839|1841)	날짜 형식 틀림	날짜 글자가 형식과 맞지 않아요. TO_DATE 의 형식을 값에 맞추세요.	TO_DATE('2026-11-14', 'YYYY-MM-DD')
-ORA-02291	부모 값 없음(외래 키)	참조하는 부모 표에 없는 값을 넣었어요. 부모 행을 먼저 넣으세요.	DEPT 에 없는 DEPT_ID 로 EMP INSERT
-ORA-02292	자식 행 있음(외래 키)	이 행을 참조하는 자식 행이 있어 지울 수 없어요. 자식 행을 먼저 지우세요.	EMP 가 남은 DEPT 를 DELETE
+ORA-02291	부모 값 없음(FK)	참조하는 부모 테이블에 없는 값을 넣었어요. 부모 행을 먼저 넣으세요.	DEPT 에 없는 DEPT_ID 로 EMP INSERT
+ORA-02292	자식 행 있음(FK)	이 행을 참조하는 자식 행이 있어 지울 수 없어요. 자식 행을 먼저 지우세요.	EMP 가 남은 DEPT 를 DELETE
 ORA-00933	SQL 끝이 이상함	SQL 문장 끝이 이상해요. 쉼표 · 괄호, 동적 SQL 로 붙은 AND · ORDER BY 자리를 보세요. MyBatis SQL 끝의 ; 도 이 오류를 내요.	SELECT ... ORDER BY A; ← ; 빼기
 ORA-00936	식 빠짐	식이 빠졌어요. 쉼표가 겹쳤거나 WHERE · AND 뒤가 비었어요(동적 SQL 조건이 다 빠짐).	SELECT A, , B · WHERE AND
 ORA-00907	괄호 안 닫힘	괄호가 안 닫혔거나 괄호 안 문법이 틀렸어요.	IN ('A', 'B'
 ORA-00911	쓸 수 없는 글자	SQL 에 쓸 수 없는 글자가 있어요. 끝의 ; 이나 전각 기호(，　)를 보세요.	SELECT * FROM A;
-ORA-00918	칼럼이 어느 표 것인지 모름	두 표에 같은 이름의 칼럼이 있어 어느 것인지 몰라요. 별칭을 붙이세요.	SELECT a.USER_ID FROM TB_A a, TB_B b
+ORA-00918	칼럼이 어느 테이블 것인지 모름	두 테이블에 같은 이름의 칼럼이 있어 어느 것인지 몰라요. 별칭을 붙이세요.	SELECT a.USER_ID FROM TB_A a, TB_B b
 ORA-00979	GROUP BY 빠짐	GROUP BY 에 없는 칼럼을 SELECT 했어요.	SELECT DEPT, NAME, COUNT(*) ... GROUP BY DEPT → NAME 도 GROUP BY 에
 ORA-00937	집계 섞임	집계 함수와 보통 칼럼을 GROUP BY 없이 같이 썼어요.	SELECT DEPT, COUNT(*) FROM EMP → GROUP BY DEPT
 ORA-01427	서브쿼리가 여러 행	한 행만 나와야 하는 서브쿼리가 여러 행을 돌려줬어요.	= (SELECT ...) → IN (SELECT ...)
@@ -59,28 +59,28 @@ ORA-12541	DB 리스너 없음	DB 서버 주소 · 포트에서 받는 곳(리스
 ORA-12514	DB 서비스 이름 틀림	DB 서비스 이름이 틀렸어요. SID 와 서비스 이름을 헷갈리지 않았는지 보세요.	@host:1521/서비스 · @host:1521:SID
 ORA-12505	DB SID 틀림	DB SID 가 틀렸어요.	@host:1521:ORCL
 ORA-12170|ORA-12541|IO Error: The Network Adapter could not establish the connection|IO 오류: The Network Adapter	DB 연결 안 됨	DB 까지 연결이 안 돼요. 주소 · 포트 · VPN · 방화벽을 보세요.	사내망이면 VPN 연결 확인
-ORA-00060	교착(데드락)	두 작업이 서로의 잠금을 기다리다 멈췄어요. 같은 표를 다른 순서로 고치는 곳을 보세요.	A→B 와 B→A 순서로 UPDATE
-ORA-00054	잠겨 있음	다른 세션이 이 행 · 표를 잠그고 있어요. 커밋 안 한 세션(DB 콘솔 포함)이 있는지 보세요.	DB 콘솔에서 UPDATE 뒤 커밋 안 함
+ORA-00060	교착(데드락)	두 작업이 서로의 잠금을 기다리다 멈췄어요. 같은 테이블을 다른 순서로 고치는 곳을 보세요.	A→B 와 B→A 순서로 UPDATE
+ORA-00054	잠겨 있음	다른 세션이 이 행 · 테이블을 잠그고 있어요. 커밋 안 한 세션(DB 콘솔 포함)이 있는지 보세요.	DB 콘솔에서 UPDATE 뒤 커밋 안 함
 ORA-01013	쿼리 시간 넘김	쿼리가 제한 시간을 넘겨 취소됐어요. 실행 계획을 보거나 시간 한도를 늘리세요.	@Transactional(timeout = 30)
 ORA-01031	권한 없음	DB 권한이 없어요. DBA 에게 권한(GRANT)을 받으세요.	GRANT SELECT ON HR.TB_USER TO APP
 ORA-01000	커서 너무 많음	열린 커서가 한도를 넘었어요. 닫지 않은 ResultSet · Statement 가 있어요.	try-with-resources 로 닫기
 ORA-01555	스냅샷 너무 오래됨	오래 도는 조회 중에 데이터가 많이 바뀌어 옛 값을 읽지 못했어요. 쿼리를 짧게 나누세요.	
-ORA-04091	트리거가 자기 표를 읽음	트리거가 지금 바뀌는 자기 표를 읽거나 고치려 했어요.	
+ORA-04091	트리거가 자기 테이블을 읽음	트리거가 지금 바뀌는 자기 테이블을 읽거나 고치려 했어요.	
 ORA-06502	PL/SQL 값 오류	PL/SQL 변수 크기보다 큰 값이거나 형이 맞지 않아요.	VARCHAR2(10) 변수에 긴 글
 ORA-06550	PL/SQL 문법 오류	PL/SQL 블록이나 프로시저를 부르는 문장이 틀렸어요(이름 · 인자 수 · 형).	{call PKG.PROC(#{a}, #{b})}
 ORA-01652	임시 공간 모자람	정렬 · 조인에 쓰는 임시 공간이 모자라요. 조건을 좁히거나 DBA 에게 알리세요.	
-ORA-01653|ORA-01654|ORA-01688	표 공간 모자람	표를 늘릴 공간이 모자라요. DBA 에게 알리세요.	
+ORA-01653|ORA-01654|ORA-01688	테이블 공간 모자람	테이블을 늘릴 공간이 모자라요. DBA 에게 알리세요.	
 (ORA-\d{5}): ?([^\r\n]*)	Oracle 오류	Oracle 오류 $1 이에요: $2	오류 번호로 찾아보면 원인이 나와요
-relation \"([^\"]+)\" does not exist	표 없음	표 $1 이 없어요. 스키마(search_path) · 이름 · 따옴표 대소문자를 확인하세요.	SELECT * FROM app.tb_user
+relation \"([^\"]+)\" does not exist	테이블 없음	테이블 $1 이 없어요. 스키마(search_path) · 이름 · 따옴표 대소문자를 확인하세요.	SELECT * FROM app.tb_user
 column \"([^\"]+)\"(?: of relation \"[^\"]+\")? does not exist	칼럼 이름 틀림	칼럼 $1 이 없어요. 오타나 대소문자(따옴표로 만든 칼럼)를 보세요.	"userNm" 은 따옴표 없이 쓰면 usernm
 duplicate key value violates unique constraint \"([^\"]+)\"	중복 키	같은 키 값이 이미 있어요(제약 $1).	INSERT 전에 같은 값이 있는지
 null value in column \"([^\"]+)\"	빈 값 넣음(NOT NULL)	꼭 넣어야 하는 칼럼 $1 에 값이 비어 있어요.	#{$1} 이 null 로 넘어갔는지
-violates foreign key constraint \"([^\"]+)\"	외래 키 위반	외래 키 $1 에 걸렸어요. 부모 행이 없거나, 지우려는 행을 자식이 참조하고 있어요.	
+violates foreign key constraint \"([^\"]+)\"	FK 위반	FK $1 에 걸렸어요. 부모 행이 없거나, 지우려는 행을 자식이 참조하고 있어요.	
 invalid input syntax for (?:type )?(\w+(?: \w+)?)	형 맞지 않음	$1 형 칼럼에 맞지 않는 값을 넣거나 비교했어요.	숫자 칼럼에 '' 또는 'abc'
-operator does not exist: ([^\r\n]+)	형이 다른 값 비교	형이 다른 값끼리 비교했어요: $1. 한쪽을 형 변환하세요.	WHERE user_id = CAST(#{id} AS INTEGER)
+operator does not exist: ([^\r\n]+)	형이 다른 값 비교	형이 다른 값끼리 비교했어요: $1. 한쪽을 타입 변환하세요.	WHERE user_id = CAST(#{id} AS INTEGER)
 syntax error at or near \"([^\"]*)\"	SQL 문법 틀림	SQL 문법이 틀렸어요. "$1" 근처를 보세요.	Oracle 문법((+) · ROWNUM)을 PG 에서 씀
 value too long for type ([^\r\n]+)	값이 너무 김	칼럼 길이($1)보다 긴 값을 넣었어요.	varchar(10) 에 11 글자
-deadlock detected	교착(데드락)	두 작업이 서로의 잠금을 기다리다 멈췄어요. 같은 표를 다른 순서로 고치는 곳을 보세요.	
+deadlock detected	교착(데드락)	두 작업이 서로의 잠금을 기다리다 멈췄어요. 같은 테이블을 다른 순서로 고치는 곳을 보세요.	
 canceling statement due to statement timeout	쿼리 시간 넘김	쿼리가 제한 시간을 넘겨 취소됐어요.	
 password authentication failed for user \"([^\"]+)\"	DB 비밀번호 틀림	DB 사용자 $1 의 비밀번호가 틀렸어요.	
 database \"([^\"]+)\" does not exist	DB 이름 틀림	DB $1 이 없어요. 접속 url 의 DB 이름을 보세요.	jdbc:postgresql://host:5432/appdb
@@ -89,7 +89,7 @@ current transaction is aborted	트랜잭션 멈춤	앞에서 쿼리 하나가 �
 division by zero	0 으로 나눔	0 으로 나눴어요.	a / NULLIF(b, 0)
 more than one row returned by a subquery	서브쿼리가 여러 행	한 행만 나와야 하는 서브쿼리가 여러 행을 돌려줬어요.	= (SELECT ...) → IN (SELECT ...)
 could not serialize access	동시 수정 충돌	다른 트랜잭션이 같은 행을 먼저 바꿨어요. 다시 시도하세요.	
-Table '([^']+)' doesn't exist	표 없음	표 $1 이 없어요.	
+Table '([^']+)' doesn't exist	테이블 없음	테이블 $1 이 없어요.	
 Unknown column '([^']+)'	칼럼 이름 틀림	칼럼 $1 이 없어요.	
 Duplicate entry '([^']*)'	중복 키	같은 값 '$1' 이 이미 있어요.	
 Connection is not available, request timed out after (\d+)ms	DB 연결 모자람	DB 연결 풀이 모자라요. $1ms 동안 빈 연결이 없었어요. 연결을 오래 잡는 쿼리나 닫지 않는 곳을 보세요.	spring.datasource.hikari.maximum-pool-size
@@ -119,8 +119,8 @@ LazyInitializationException	지연 로딩 실패	DB 세션이 닫힌 뒤 지연 
 EmptyResultDataAccessException	결과 없음	한 행을 기대했는데 0 행이 나왔어요.	queryForObject → query 로 받고 비었는지 확인
 IncorrectResultSizeDataAccessException|TooManyResultsException|NonUniqueResultException	결과 행 수 틀림	기대한 행 수와 실제 결과 수가 달라요.	selectOne 인데 여러 행
 DuplicateKeyException|SQLIntegrityConstraintViolationException.*[Dd]uplicate	중복 키	같은 키 값이 이미 있어요.	
-DataIntegrityViolationException|SQLIntegrityConstraintViolationException|org\.hibernate\.exception\.ConstraintViolationException	DB 제약 걸림	DB 제약(중복 · NOT NULL · 길이 · 외래 키)에 걸렸어요. 아래 원인에 어느 칼럼인지 나와요.	
-BadSqlGrammarException|SQLSyntaxErrorException	SQL 문법 틀림	SQL 문법이나 표 · 칼럼 이름이 틀렸어요. 아래 SQL 을 DB 콘솔에서 돌려 보세요.	
+DataIntegrityViolationException|SQLIntegrityConstraintViolationException|org\.hibernate\.exception\.ConstraintViolationException	DB 제약 걸림	DB 제약(중복 · NOT NULL · 길이 · FK)에 걸렸어요. 아래 원인에 어느 칼럼인지 나와요.	
+BadSqlGrammarException|SQLSyntaxErrorException	SQL 문법 틀림	SQL 문법이나 테이블 · 칼럼 이름이 틀렸어요. 아래 SQL 을 DB 콘솔에서 돌려 보세요.	
 QueryTimeoutException|SQLTimeoutException	쿼리 시간 넘김	쿼리가 제한 시간을 넘겼어요.	
 Cannot invoke \"([^\"]+)\" because \"([^\"]+)\" is null	빈 값(null) 사용	$2 이(가) null 이라서 $1 을 부를 수 없어요.	if ($2 != null) 로 먼저 보거나 값이 왜 비었는지 보세요
 Cannot invoke \"([^\"]+)\" because the return value of \"([^\"]+)\" is null	빈 값(null) 사용	$2 가 null 을 돌려줘서 $1 을 부를 수 없어요.	
@@ -131,7 +131,7 @@ IndexOutOfBoundsException: Index:? (-?\d+),? (?:out of bounds for length|Size:) 
 StringIndexOutOfBoundsException	글자 범위 넘음	글자 길이를 넘어 잘랐어요(substring · charAt).	"ab".substring(0, 5)
 NumberFormatException: For input string: \"([^\"]*)\"	숫자로 못 바꿈	"$1" 은 숫자로 바꿀 수 없어요.	Integer.parseInt("$1")
 NumberFormatException	숫자로 못 바꿈	숫자로 바꿀 수 없는 글을 숫자로 바꾸려 했어요.	Integer.parseInt("")
-ClassCastException: (?:class )?([\w$.]+) cannot be cast to (?:class )?([\w$.]+)	형 변환 실패	$1 을 $2 로 바꿀 수 없어요.	Map 결과의 BigDecimal 을 Integer 로 받음 → ((Number) v).intValue()
+ClassCastException: (?:class )?([\w$.]+) cannot be cast to (?:class )?([\w$.]+)	타입 변환 실패	$1 을 $2 로 바꿀 수 없어요.	Map 결과의 BigDecimal 을 Integer 로 받음 → ((Number) v).intValue()
 ConcurrentModificationException	도는 중에 목록 바꿈	목록을 도는 중에 그 목록을 바꿨어요.	for 안에서 list.remove → removeIf
 UnsupportedOperationException	바꿀 수 없는 목록	바꿀 수 없는 목록(List.of · Arrays.asList · 읽기 전용)을 바꾸려 했어요.	new ArrayList<>(List.of(...)) 로 복사해 쓰기
 DateTimeParseException: Text '([^']*)' could not be parsed	날짜 읽기 실패	"$1" 을 날짜로 읽지 못했어요. 형식을 맞추세요.	LocalDate.parse("20261114", DateTimeFormatter.BASIC_ISO_DATE)

@@ -31,7 +31,7 @@ public final class Examples {
             FROM ORDERS o
            ORDER BY
                  o.STATUS"""),
-      new Example("기본 조회", "글자가 들어간 것 찾기 (대소문자 무시)", "이름에 친 글자가 들어간 고객. 앞에 % 가 붙으면 색인을 못 탑니다.",
+      new Example("기본 조회", "글자가 들어간 것 찾기 (대소문자 무시)", "이름에 친 글자가 들어간 고객. 앞에 % 가 붙으면 인덱스를 못 탑니다.",
           """
           SELECT
                  c.*
@@ -64,7 +64,7 @@ public final class Examples {
                  o.*
             FROM ORDERS o
            WHERE o.AMOUNT BETWEEN 10000 AND 100000"""),
-      new Example("기본 조회", "값 목록을 표처럼 쓰기", "표 없이 몇 줄짜리 값 목록을 만들어 조인 · 비교에 씁니다.",
+      new Example("기본 조회", "값 목록을 테이블처럼 쓰기", "테이블 없이 몇 줄짜리 값 목록을 만들어 조인 · 비교에 씁니다.",
           """
           SELECT 'NEW' AS CODE, '접수' AS NAME FROM DUAL
            UNION ALL
@@ -149,7 +149,7 @@ public final class Examples {
                , i.PART_NO AS "부품"
                , i.QTY * i.PRICE AS "금액"
             FROM ORDER_ITEM i"""),
-      new Example("기본 조회", "LIKE 로 시작 · 끝 · 포함", "'A%' 는 A 로 시작, '%A' 는 A 로 끝, '%A%' 는 A 가 들어간 것입니다. 앞이 % 면 색인을 못 탑니다.",
+      new Example("기본 조회", "LIKE 로 시작 · 끝 · 포함", "'A%' 는 A 로 시작, '%A' 는 A 로 끝, '%A%' 는 A 가 들어간 것입니다. 앞이 % 면 인덱스를 못 탑니다.",
           """
           SELECT
                  p.PART_NO
@@ -256,7 +256,7 @@ public final class Examples {
             LEFT OUTER JOIN USERS u
               ON p.OWNER_ID = u.USER_ID
            WHERE p.PROJ_ID = CAST(:projId AS INTEGER)"""),
-      new Example("화면 기본 쿼리 (목록 · 상세 · 저장)", "등록 (새 번호 = 지금 가장 큰 번호 + 1)", "시퀀스가 없는 표에서 새 번호를 만들어 넣습니다. 동시에 누르면 같은 번호가 날 수 있어 키 제약이 꼭 있어야 합니다.",
+      new Example("화면 기본 쿼리 (목록 · 상세 · 저장)", "등록 (새 번호 = 지금 가장 큰 번호 + 1)", "시퀀스가 없는 테이블에서 새 번호를 만들어 넣습니다. 동시에 누르면 같은 번호가 날 수 있어 키 제약이 꼭 있어야 합니다.",
           """
           INSERT INTO ISSUE (ISSUE_ID, PROJ_ID, TITLE, STATUS, OWNER_ID, REG_DT)
           SELECT
@@ -299,7 +299,7 @@ public final class Examples {
           UPDATE USERS u
              SET USE_YN = 'N'
            WHERE u.USER_ID = CAST(:userId AS INTEGER)"""),
-      new Example("화면 기본 쿼리 (목록 · 상세 · 저장)", "고치기 전 값 이력 남기기 (INSERT … SELECT)", "UPDATE 바로 앞에 지금 값을 이력 표에 떠 둡니다. 둘을 같은 트랜잭션에서 실행하세요.",
+      new Example("화면 기본 쿼리 (목록 · 상세 · 저장)", "고치기 전 값 이력 남기기 (INSERT … SELECT)", "UPDATE 바로 앞에 지금 값을 이력 테이블에 떠 둡니다. 둘을 같은 트랜잭션에서 실행하세요.",
           """
           INSERT INTO PART_HIST (PART_NO, COL_NAME, OLD_VAL, NEW_VAL, CHG_DT, CHG_USER)
           SELECT
@@ -414,7 +414,7 @@ public final class Examples {
                  (SELECT COUNT(*) FROM BOM b WHERE b.CHILD_PART = :partNo OR b.PARENT_PART = :partNo) AS BOM_CNT
                , (SELECT COUNT(*) FROM ORDER_ITEM i WHERE i.PART_NO = :partNo) AS ORDER_CNT
                , (SELECT COUNT(*) FROM STOCK_TXN t WHERE t.PART_NO = :partNo) AS STOCK_CNT"""),
-      new Example("화면 기본 쿼리 (목록 · 상세 · 저장)", "엑셀 내려받기 (코드 이름 · 날짜 글자 · 숫자 꼴)", "엑셀에 그대로 붙도록 날짜는 글자로, 금액은 쉼표로, 코드는 이름으로 바꿔 냅니다.",
+      new Example("화면 기본 쿼리 (목록 · 상세 · 저장)", "엑셀 다운로드 (코드 이름 · 날짜 글자 · 숫자 꼴)", "엑셀에 그대로 붙도록 날짜는 글자로, 금액은 쉼표로, 코드는 이름으로 바꿔 냅니다.",
           """
           SELECT
                  o.ORDER_ID AS "주문번호"
@@ -514,7 +514,7 @@ public final class Examples {
            WHERE i.ORDER_ID = CAST(:orderId AS INTEGER)
            ORDER BY
                  i.LINE_NO"""),
-      new Example("화면 기본 쿼리 (목록 · 상세 · 저장)", "여러 줄 저장 (화면 표 → MERGE, 지운 줄은 DELETE)", "화면 표에서 넘어온 줄로 있으면 고치고 없으면 넣습니다. 화면에서 지운 줄은 따로 DELETE 합니다.",
+      new Example("화면 기본 쿼리 (목록 · 상세 · 저장)", "여러 줄 저장 (화면 테이블 → MERGE, 지운 줄은 DELETE)", "화면 테이블에서 넘어온 줄로 있으면 고치고 없으면 넣습니다. 화면에서 지운 줄은 따로 DELETE 합니다.",
           """
           MERGE INTO ORDER_ITEM t
           USING (
@@ -583,7 +583,7 @@ public final class Examples {
                  (SELECT COUNT(*) FROM APPROVAL a WHERE a.APPROVER_ID = CAST(:userId AS INTEGER) AND a.STATUS = 'WAIT') AS APPROVAL_CNT
                , (SELECT COUNT(*) FROM ISSUE i WHERE i.OWNER_ID = CAST(:userId AS INTEGER) AND i.STATUS <> 'CLOSE') AS ISSUE_CNT
                , (SELECT COUNT(*) FROM SCHEDULE s WHERE s.OWNER_ID = CAST(:userId AS INTEGER) AND s.ACT_END IS NULL AND s.PLAN_END < CAST(DATE_TRUNC('WEEK', CURRENT_DATE) AS DATE) + 7) AS SCH_CNT"""),
-      new Example("조인", "두 표 잇기 (짝 있는 것만)", "주문마다 고객 이름을 붙입니다. 고객이 없는 주문은 빠집니다.",
+      new Example("조인", "두 테이블 잇기 (짝 있는 것만)", "주문마다 고객 이름을 붙입니다. 고객이 없는 주문은 빠집니다.",
           """
           SELECT
                  o.ORDER_ID
@@ -613,7 +613,7 @@ public final class Examples {
             FROM ORDERS o
             LEFT JOIN CUSTOMER c
               ON c.CUST_ID = o.CUST_ID"""),
-      new Example("조인", "세 표 잇기", "주문 · 고객 · 주문 상세를 함께 봅니다. 상세가 여러 줄이면 주문도 여러 줄이 됩니다.",
+      new Example("조인", "세 테이블 잇기", "주문 · 고객 · 주문 상세를 함께 봅니다. 상세가 여러 줄이면 주문도 여러 줄이 됩니다.",
           """
           SELECT
                  o.ORDER_ID
@@ -634,7 +634,7 @@ public final class Examples {
               ON c.CUST_ID = o.CUST_ID
             JOIN ORDER_ITEM i
               ON i.ORDER_ID = o.ORDER_ID"""),
-      new Example("조인", "같은 표끼리 잇기 (자기 조인)", "메뉴마다 부모 메뉴 이름을 붙입니다. 같은 표를 다른 별칭으로 두 번 씁니다.",
+      new Example("조인", "같은 테이블끼리 잇기 (자기 조인)", "메뉴마다 부모 메뉴 이름을 붙입니다. 같은 테이블을 다른 별칭으로 두 번 씁니다.",
           """
           SELECT
                  m.MENU_ID
@@ -699,7 +699,7 @@ public final class Examples {
                          i.ORDER_ID
                  ) s
               ON s.ORDER_ID = o.ORDER_ID"""),
-      new Example("조인", "양쪽 다 보기 (FULL OUTER JOIN)", "주문 표와 백업 표 어느 한쪽에만 있어도 다 나옵니다. 옛 방식 (+) 로는 쓸 수 없습니다.",
+      new Example("조인", "양쪽 다 보기 (FULL OUTER JOIN)", "주문 테이블과 백업 테이블 어느 한쪽에만 있어도 다 나옵니다. 옛 방식 (+) 로는 쓸 수 없습니다.",
           """
           SELECT
                  NVL(o.ORDER_ID, b.ORDER_ID) AS ORDER_ID
@@ -743,7 +743,7 @@ public final class Examples {
            GROUP BY
                  c.CUST_ID
                , s.STATUS"""),
-      new Example("조인", "아우터 조인에서 조건 자리 (ON 과 WHERE)", "짝 표의 조건을 WHERE 에 두면 짝 없는 행이 빠져 안쪽 조인이 됩니다. 짝 표 조건은 ON(옛 방식은 (+) 를 조건에도) 에 둡니다.",
+      new Example("조인", "아우터 조인에서 조건 자리 (ON 과 WHERE)", "짝 테이블의 조건을 WHERE 에 두면 짝 없는 행이 빠져 안쪽 조인이 됩니다. 짝 테이블 조건은 ON(옛 방식은 (+) 를 조건에도) 에 둡니다.",
           """
           SELECT
                  c.CUST_ID
@@ -797,7 +797,7 @@ public final class Examples {
                    LIMIT 1
                  ) o
               ON TRUE"""),
-      new Example("조인", "네 표 이상 잇기 (주문 · 고객 · 품목 · 부품)", "잇는 조건은 표 수 − 1 개가 있어야 합니다. 하나라도 빠지면 건수가 곱해집니다.",
+      new Example("조인", "네 테이블 이상 잇기 (주문 · 고객 · 품목 · 부품)", "잇는 조건은 테이블 수 − 1 개가 있어야 합니다. 하나라도 빠지면 건수가 곱해집니다.",
           """
           SELECT
                  o.ORDER_ID
@@ -847,7 +847,7 @@ public final class Examples {
               ON o.CUST_ID = c.CUST_ID
             LEFT OUTER JOIN ORDER_ITEM i
               ON o.ORDER_ID = i.ORDER_ID"""),
-      new Example("조인", "아우터 조인에 상수 조건 (짝 쪽 거르기)", "짝 표의 조건에도 (+) 를 붙여야 아우터가 유지됩니다. 빠뜨리면 짝 없는 줄이 사라집니다.",
+      new Example("조인", "아우터 조인에 상수 조건 (짝 쪽 거르기)", "짝 테이블의 조건에도 (+) 를 붙여야 아우터가 유지됩니다. 빠뜨리면 짝 없는 줄이 사라집니다.",
           """
           SELECT
                  p.PART_NO
@@ -868,7 +868,7 @@ public final class Examples {
               ON p.UNIT_CD = c.CODE
              AND c.GROUP_CD = 'UNIT'
              AND c.USE_YN = 'Y'"""),
-      new Example("조인", "같은 코드 표를 두 번 잇기 (상태 이름 · 등급 이름)", "한 표를 다른 별칭으로 두 번 씁니다. 각 별칭마다 코드 그룹 조건을 따로 겁니다.",
+      new Example("조인", "같은 코드 테이블을 두 번 잇기 (상태 이름 · 등급 이름)", "한 테이블을 다른 별칭으로 두 번 씁니다. 각 별칭마다 코드 그룹 조건을 따로 겁니다.",
           """
           SELECT
                  i.ISSUE_ID
@@ -919,7 +919,7 @@ public final class Examples {
             LEFT OUTER JOIN PART_PRICE_HIST h
               ON i.PART_NO = h.PART_NO
              AND o.ORDER_DT BETWEEN h.VALID_FROM AND h.VALID_TO"""),
-      new Example("조인", "조인이 건수를 늘렸는지 확인", "조인 전 건수와 조인 뒤 건수를 나란히 봅니다. 늘었으면 짝 표에 같은 키가 여러 줄입니다.",
+      new Example("조인", "조인이 건수를 늘렸는지 확인", "조인 전 건수와 조인 뒤 건수를 나란히 봅니다. 늘었으면 짝 테이블에 같은 키가 여러 줄입니다.",
           """
           SELECT
                  (SELECT COUNT(*) FROM ORDERS) AS BEFORE_CNT
@@ -929,7 +929,7 @@ public final class Examples {
           SELECT
                  (SELECT COUNT(*) FROM ORDERS) AS BEFORE_CNT
                , (SELECT COUNT(*) FROM ORDERS o, CUSTOMER c WHERE o.CUST_ID = c.CUST_ID) AS AFTER_CNT"""),
-      new Example("서브쿼리", "칸 하나를 다른 표에서 (스칼라 서브쿼리)", "줄마다 고객 이름을 한 칸으로 가져옵니다. 결과가 두 줄 이상이면 오류가 납니다.",
+      new Example("서브쿼리", "칸 하나를 다른 테이블에서 (스칼라 서브쿼리)", "줄마다 고객 이름을 한 칸으로 가져옵니다. 결과가 두 줄 이상이면 오류가 납니다.",
           """
           SELECT
                  o.ORDER_ID
@@ -940,7 +940,7 @@ public final class Examples {
                  o.ORDER_ID
                , (SELECT c.CUST_NAME FROM CUSTOMER c WHERE c.CUST_ID = o.CUST_ID) AS CUST_NAME
             FROM ORDERS o"""),
-      new Example("서브쿼리", "다른 표에 있는 것만 (EXISTS)", "상세가 한 줄이라도 있는 주문. 상세가 여러 줄이어도 주문은 한 번만 나옵니다.",
+      new Example("서브쿼리", "다른 테이블에 있는 것만 (EXISTS)", "상세가 한 줄이라도 있는 주문. 상세가 여러 줄이어도 주문은 한 번만 나옵니다.",
           """
           SELECT
                  o.*
@@ -989,7 +989,7 @@ public final class Examples {
                     FROM ORDERS x
                    WHERE x.CUST_ID = o.CUST_ID
                  )"""),
-      new Example("서브쿼리", "다른 표에 없는 것만 (NOT EXISTS)", "주문이 한 건도 없는 고객. 짝이 없는 행을 찾을 때는 NOT EXISTS 가 가장 안전합니다.",
+      new Example("서브쿼리", "다른 테이블에 없는 것만 (NOT EXISTS)", "주문이 한 건도 없는 고객. 짝이 없는 행을 찾을 때는 NOT EXISTS 가 가장 안전합니다.",
           """
           SELECT
                  c.*
@@ -1083,7 +1083,7 @@ public final class Examples {
             FROM ORDERS o
            WHERE EXISTS (SELECT 1 FROM ORDER_ITEM i WHERE i.ORDER_ID = o.ORDER_ID AND i.PART_NO = :partA)
              AND EXISTS (SELECT 1 FROM ORDER_ITEM i WHERE i.ORDER_ID = o.ORDER_ID AND i.PART_NO = :partB)"""),
-      new Example("서브쿼리", "FROM 안의 서브쿼리 (인라인 뷰)", "묶은 결과를 표처럼 놓고 다시 거릅니다. 고객별 합계가 100만 넘는 고객.",
+      new Example("서브쿼리", "FROM 안의 서브쿼리 (인라인 뷰)", "묶은 결과를 테이블처럼 놓고 다시 거릅니다. 고객별 합계가 100만 넘는 고객.",
           """
           SELECT
                  s.CUST_ID
@@ -1144,7 +1144,7 @@ public final class Examples {
                  o.*
             FROM ORDERS o
            WHERE o.AMOUNT = (SELECT MAX(x.AMOUNT) FROM ORDERS x)"""),
-      new Example("서브쿼리", "UPDATE 안의 서브쿼리 (다른 표 합계로 고치기)", "주문마다 품목 합계로 주문 금액을 맞춥니다. 품목이 없는 주문은 0 으로.",
+      new Example("서브쿼리", "UPDATE 안의 서브쿼리 (다른 테이블 합계로 고치기)", "주문마다 품목 합계로 주문 금액을 맞춥니다. 품목이 없는 주문은 0 으로.",
           """
           UPDATE ORDERS o
              SET o.AMOUNT = NVL((SELECT SUM(i.QTY * i.PRICE) FROM ORDER_ITEM i WHERE i.ORDER_ID = o.ORDER_ID), 0)
@@ -1728,7 +1728,7 @@ public final class Examples {
                , TO_CHAR(o.ORDER_DT, 'Dy')
            ORDER BY
                  DOW_NO"""),
-      new Example("기간별 통계", "요일 × 시간 표 (언제 몰리나)", "줄은 요일, 칸은 시간대. 몇 시에 몰리는지 한눈에 봅니다(앞 몇 칸만 적었습니다).",
+      new Example("기간별 통계", "요일 × 시간 테이블 (언제 몰리나)", "줄은 요일, 칸은 시간대. 몇 시에 몰리는지 한눈에 봅니다(앞 몇 칸만 적었습니다).",
           """
           SELECT
                  TO_CHAR(o.REG_DT, 'DY', 'NLS_DATE_LANGUAGE=KOREAN') AS DOW
@@ -1749,7 +1749,7 @@ public final class Examples {
             FROM ORDERS o
            GROUP BY
                  TO_CHAR(o.REG_DT, 'Dy')"""),
-      new Example("기간별 통계", "월별 가로 표 (1월 ~ 12월 칸)", "올해 고객마다 1월부터 12월까지 금액을 칸으로 펼치고 맨 끝에 합계.",
+      new Example("기간별 통계", "월별 가로 테이블 (1월 ~ 12월 칸)", "올해 고객마다 1월부터 12월까지 금액을 칸으로 펼치고 맨 끝에 합계.",
           """
           SELECT
                  o.CUST_ID
@@ -1944,7 +1944,7 @@ public final class Examples {
             FROM ORDERS o
            WHERE o.ORDER_DT >= CAST(:fromDt AS DATE)
              AND o.ORDER_DT < CAST(:toDt AS DATE) + 1"""),
-      new Example("기간별 통계", "기간의 영업일 수 (주말 빼고)", "시작일 ~ 끝일 중 토 · 일을 뺀 날 수. 공휴일 표가 있으면 NOT EXISTS 로 더 뺍니다.",
+      new Example("기간별 통계", "기간의 영업일 수 (주말 빼고)", "시작일 ~ 끝일 중 토 · 일을 뺀 날 수. 공휴일 테이블이 있으면 NOT EXISTS 로 더 뺍니다.",
           """
           SELECT
                  COUNT(*) AS WORK_DAYS
@@ -1992,7 +1992,7 @@ public final class Examples {
                  TO_CHAR(o.ORDER_DT, 'IW')
            ORDER BY
                  WK"""),
-      new Example("분석 함수", "순위 (RANK · DENSE_RANK · ROW_NUMBER)", "같은 금액일 때 RANK 는 1,1,3, DENSE_RANK 는 1,1,2, ROW_NUMBER 는 1,2,3.",
+      new Example("분석 펑션", "순위 (RANK · DENSE_RANK · ROW_NUMBER)", "같은 금액일 때 RANK 는 1,1,3, DENSE_RANK 는 1,1,2, ROW_NUMBER 는 1,2,3.",
           """
           SELECT
                  o.ORDER_ID
@@ -2009,7 +2009,7 @@ public final class Examples {
                , DENSE_RANK() OVER (ORDER BY o.AMOUNT DESC) AS DRNK
                , ROW_NUMBER() OVER (ORDER BY o.AMOUNT DESC) AS RN
             FROM ORDERS o"""),
-      new Example("분석 함수", "그룹 안에서 순위 (PARTITION BY)", "고객마다 금액 순위를 따로 매깁니다. 고객마다 1위만 보려면 바깥에서 RN = 1.",
+      new Example("분석 펑션", "그룹 안에서 순위 (PARTITION BY)", "고객마다 금액 순위를 따로 매깁니다. 고객마다 1위만 보려면 바깥에서 RN = 1.",
           """
           SELECT
                  o.CUST_ID
@@ -2024,7 +2024,7 @@ public final class Examples {
                , o.AMOUNT
                , ROW_NUMBER() OVER (PARTITION BY o.CUST_ID ORDER BY o.AMOUNT DESC) AS RN
             FROM ORDERS o"""),
-      new Example("분석 함수", "앞 줄 · 뒷 줄 값 (LAG · LEAD)", "주문마다 그 고객의 바로 앞 주문일과 며칠 만에 다시 주문했는지.",
+      new Example("분석 펑션", "앞 줄 · 뒷 줄 값 (LAG · LEAD)", "주문마다 그 고객의 바로 앞 주문일과 며칠 만에 다시 주문했는지.",
           """
           SELECT
                  o.CUST_ID
@@ -2041,7 +2041,7 @@ public final class Examples {
                , o.ORDER_DT - LAG(o.ORDER_DT) OVER (PARTITION BY o.CUST_ID ORDER BY o.ORDER_DT) AS GAP_DAYS
                , LEAD(o.ORDER_DT) OVER (PARTITION BY o.CUST_ID ORDER BY o.ORDER_DT) AS NEXT_DT
             FROM ORDERS o"""),
-      new Example("분석 함수", "누적 합", "주문일 순으로 금액을 쌓아 갑니다. 행 수는 그대로입니다.",
+      new Example("분석 펑션", "누적 합", "주문일 순으로 금액을 쌓아 갑니다. 행 수는 그대로입니다.",
           """
           SELECT
                  o.ORDER_DT
@@ -2054,7 +2054,7 @@ public final class Examples {
                , o.AMOUNT
                , SUM(o.AMOUNT) OVER (ORDER BY o.ORDER_DT, o.ORDER_ID ROWS UNBOUNDED PRECEDING) AS RUN_AMT
             FROM ORDERS o"""),
-      new Example("분석 함수", "이동 평균 (앞 2줄 + 지금 줄)", "줄마다 바로 앞 두 줄과 자기 줄의 평균. 추세를 볼 때 씁니다.",
+      new Example("분석 펑션", "이동 평균 (앞 2줄 + 지금 줄)", "줄마다 바로 앞 두 줄과 자기 줄의 평균. 추세를 볼 때 씁니다.",
           """
           SELECT
                  o.ORDER_DT
@@ -2067,7 +2067,7 @@ public final class Examples {
                , o.AMOUNT
                , ROUND(AVG(o.AMOUNT) OVER (ORDER BY o.ORDER_DT, o.ORDER_ID ROWS BETWEEN 2 PRECEDING AND CURRENT ROW), 2) AS MOVING_AVG
             FROM ORDERS o"""),
-      new Example("분석 함수", "전체 중 비율 (%)", "주문마다 전체 금액 중 차지하는 비율.",
+      new Example("분석 펑션", "전체 중 비율 (%)", "주문마다 전체 금액 중 차지하는 비율.",
           """
           SELECT
                  o.ORDER_ID
@@ -2080,7 +2080,7 @@ public final class Examples {
                , o.AMOUNT
                , ROUND(o.AMOUNT * 100.0 / NULLIF(SUM(o.AMOUNT) OVER (), 0), 2) AS PCT
             FROM ORDERS o"""),
-      new Example("분석 함수", "그룹의 첫 값 · 끝 값", "고객마다 첫 주문일과 마지막 주문일을 줄마다 붙입니다.",
+      new Example("분석 펑션", "그룹의 첫 값 · 끝 값", "고객마다 첫 주문일과 마지막 주문일을 줄마다 붙입니다.",
           """
           SELECT
                  o.CUST_ID
@@ -2095,7 +2095,7 @@ public final class Examples {
                , FIRST_VALUE(o.ORDER_DT) OVER (PARTITION BY o.CUST_ID ORDER BY o.ORDER_DT) AS FIRST_DT
                , LAST_VALUE(o.ORDER_DT) OVER (PARTITION BY o.CUST_ID ORDER BY o.ORDER_DT ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS LAST_DT
             FROM ORDERS o"""),
-      new Example("분석 함수", "몇 등분으로 나누기 (NTILE)", "금액 순으로 4묶음(사분위)으로 나눕니다. 1 이 가장 큰 묶음입니다.",
+      new Example("분석 펑션", "몇 등분으로 나누기 (NTILE)", "금액 순으로 4묶음(사분위)으로 나눕니다. 1 이 가장 큰 묶음입니다.",
           """
           SELECT
                  o.ORDER_ID
@@ -2108,7 +2108,7 @@ public final class Examples {
                , o.AMOUNT
                , NTILE(4) OVER (ORDER BY o.AMOUNT DESC) AS QUARTILE
             FROM ORDERS o"""),
-      new Example("분석 함수", "그룹 합계를 줄마다 붙이기 (SUM OVER PARTITION)", "GROUP BY 없이 줄은 그대로 두고, 고객별 합계와 그 안에서 차지하는 비율을 붙입니다.",
+      new Example("분석 펑션", "그룹 합계를 줄마다 붙이기 (SUM OVER PARTITION)", "GROUP BY 없이 줄은 그대로 두고, 고객별 합계와 그 안에서 차지하는 비율을 붙입니다.",
           """
           SELECT
                  o.ORDER_ID
@@ -2125,7 +2125,7 @@ public final class Examples {
                , SUM(o.AMOUNT) OVER (PARTITION BY o.CUST_ID) AS CUST_TOTAL
                , ROUND(o.AMOUNT * 100 / NULLIF(SUM(o.AMOUNT) OVER (PARTITION BY o.CUST_ID), 0), 1) AS PCT
             FROM ORDERS o"""),
-      new Example("분석 함수", "그룹 안에서 몇 번째 · 전체 몇 건", "고객마다 주문 순번과 그 고객의 전체 주문 수를 함께 봅니다(3건 중 2번째).",
+      new Example("분석 펑션", "그룹 안에서 몇 번째 · 전체 몇 건", "고객마다 주문 순번과 그 고객의 전체 주문 수를 함께 봅니다(3건 중 2번째).",
           """
           SELECT
                  o.CUST_ID
@@ -2140,7 +2140,7 @@ public final class Examples {
                , ROW_NUMBER() OVER (PARTITION BY o.CUST_ID ORDER BY o.ORDER_DT) AS SEQ
                , COUNT(*) OVER (PARTITION BY o.CUST_ID) AS CNT
             FROM ORDERS o"""),
-      new Example("분석 함수", "앞 줄과 차이 (간격 일수)", "같은 고객의 앞 주문과 며칠 떨어졌는지. 첫 주문은 비어 있습니다.",
+      new Example("분석 펑션", "앞 줄과 차이 (간격 일수)", "같은 고객의 앞 주문과 며칠 떨어졌는지. 첫 주문은 비어 있습니다.",
           """
           SELECT
                  o.CUST_ID
@@ -2153,7 +2153,7 @@ public final class Examples {
                , o.ORDER_DT
                , o.ORDER_DT - LAG(o.ORDER_DT) OVER (PARTITION BY o.CUST_ID ORDER BY o.ORDER_DT) AS GAP_DAYS
             FROM ORDERS o"""),
-      new Example("분석 함수", "그룹 안 누적 합 (고객별 누적)", "고객마다 날짜 순으로 쌓이는 금액. PARTITION BY 가 없으면 전체 누적입니다.",
+      new Example("분석 펑션", "그룹 안 누적 합 (고객별 누적)", "고객마다 날짜 순으로 쌓이는 금액. PARTITION BY 가 없으면 전체 누적입니다.",
           """
           SELECT
                  o.CUST_ID
@@ -2168,7 +2168,7 @@ public final class Examples {
                , o.AMOUNT
                , SUM(o.AMOUNT) OVER (PARTITION BY o.CUST_ID ORDER BY o.ORDER_DT, o.ORDER_ID) AS CUM_AMT
             FROM ORDERS o"""),
-      new Example("분석 함수", "백분위 순위 (상위 몇 %)", "PERCENT_RANK 는 0~1, CUME_DIST 는 나보다 작거나 같은 비율입니다.",
+      new Example("분석 펑션", "백분위 순위 (상위 몇 %)", "PERCENT_RANK 는 0~1, CUME_DIST 는 나보다 작거나 같은 비율입니다.",
           """
           SELECT
                  e.EMP_ID
@@ -2183,7 +2183,7 @@ public final class Examples {
                , ROUND(CAST(PERCENT_RANK() OVER (ORDER BY e.SAL DESC) AS NUMERIC) * 100, 1) AS TOP_PCT
                , ROUND(CAST(CUME_DIST() OVER (ORDER BY e.SAL) AS NUMERIC) * 100, 1) AS CUME_PCT
             FROM EMP e"""),
-      new Example("분석 함수", "그룹 안 최댓값 · 최솟값을 줄마다", "부서마다 가장 높은 · 낮은 급여를 줄마다 붙이고 차이를 봅니다.",
+      new Example("분석 펑션", "그룹 안 최댓값 · 최솟값을 줄마다", "부서마다 가장 높은 · 낮은 급여를 줄마다 붙이고 차이를 봅니다.",
           """
           SELECT
                  e.DEPT_ID
@@ -2202,7 +2202,7 @@ public final class Examples {
                , MIN(e.SAL) OVER (PARTITION BY e.DEPT_ID) AS MIN_SAL
                , MAX(e.SAL) OVER (PARTITION BY e.DEPT_ID) - e.SAL AS GAP
             FROM EMP e"""),
-      new Example("분석 함수", "값이 바뀌는 지점 찾기 (상태 바뀜)", "앞 줄 상태와 다르면 바뀐 지점입니다. 설비 상태 이력에서 바뀐 줄만.",
+      new Example("분석 펑션", "값이 바뀌는 지점 찾기 (상태 바뀜)", "앞 줄 상태와 다르면 바뀐 지점입니다. 설비 상태 이력에서 바뀐 줄만.",
           """
           SELECT
                  x.EQUIP_ID
@@ -2235,7 +2235,7 @@ public final class Examples {
                  ) x
            WHERE x.PREV_STATUS IS NULL
               OR x.PREV_STATUS <> x.STATUS"""),
-      new Example("분석 함수", "앞의 빈 값을 위 값으로 채우기", "엑셀에서 병합 셀을 풀었을 때처럼 비어 있는 칸을 바로 위 값으로 채웁니다.",
+      new Example("분석 펑션", "앞의 빈 값을 위 값으로 채우기", "엑셀에서 머지 셀을 풀었을 때처럼 비어 있는 칸을 바로 위 값으로 채웁니다.",
           """
           SELECT
                  u.ROW_NO
@@ -2255,7 +2255,7 @@ public final class Examples {
                        , COUNT(u.PART_NO) OVER (ORDER BY u.ROW_NO) AS GRP
                     FROM UPLOAD_TMP u
                  ) x"""),
-      new Example("분석 함수", "기간 창 합계 (최근 7일 이동 합)", "날짜로 범위를 잡는 창입니다. 줄 수가 아니라 날짜 차이로 앞 6일 + 오늘.",
+      new Example("분석 펑션", "기간 창 합계 (최근 7일 이동 합)", "날짜로 범위를 잡는 창입니다. 줄 수가 아니라 날짜 차이로 앞 6일 + 오늘.",
           """
           SELECT
                  d.DT
@@ -2309,7 +2309,7 @@ public final class Examples {
                  s.*
             FROM CUST_SUM s
            WHERE s.SUM_AMT >= 100000"""),
-      new Example("WITH · 재귀", "1 부터 10 까지 숫자 줄", "표 없이 번호 줄을 만듭니다. 빠진 번호 찾기 · 달력에 씁니다.",
+      new Example("WITH · 재귀", "1 부터 10 까지 숫자 줄", "테이블 없이 번호 줄을 만듭니다. 빠진 번호 찾기 · 달력에 씁니다.",
           """
           SELECT
                  LEVEL AS N
@@ -2808,7 +2808,7 @@ public final class Examples {
                  t.START_ID AS MENU_ID
             FROM t
            WHERE t.IS_CYCLE"""),
-      new Example("계층", "부모를 잃은 줄 찾기 (점검)", "부모 번호가 있는데 그 부모가 표에 없는 줄. 트리에서 빠져 화면에 안 나옵니다.",
+      new Example("계층", "부모를 잃은 줄 찾기 (점검)", "부모 번호가 있는데 그 부모가 테이블에 없는 줄. 트리에서 빠져 화면에 안 나옵니다.",
           """
           SELECT
                  m.*
@@ -3049,7 +3049,7 @@ public final class Examples {
             FROM ORDERS o
            GROUP BY
                  o.CUST_ID"""),
-      new Example("피벗", "요일을 가로 칸으로 (주간 표)", "부품마다 월~일 실적을 칸으로 놓습니다. 1 = 일요일 기준 꼴 차이에 주의합니다.",
+      new Example("피벗", "요일을 가로 칸으로 (주간 테이블)", "부품마다 월~일 실적을 칸으로 놓습니다. 1 = 일요일 기준 꼴 차이에 주의합니다.",
           """
           SELECT
                  r.WO_NO
@@ -3120,7 +3120,7 @@ public final class Examples {
                  b.ORDER_ID
                , 'BAK'
             FROM ORDERS_BAK b"""),
-      new Example("집합", "양쪽에 다 있는 것 (INTERSECT)", "주문 표와 백업 표에 둘 다 있는 주문 번호.",
+      new Example("집합", "양쪽에 다 있는 것 (INTERSECT)", "주문 테이블과 백업 테이블에 둘 다 있는 주문 번호.",
           """
           SELECT
                  o.ORDER_ID
@@ -3137,7 +3137,7 @@ public final class Examples {
           SELECT
                  b.ORDER_ID
             FROM ORDERS_BAK b"""),
-      new Example("집합", "한쪽에만 있는 것 (MINUS · EXCEPT)", "주문 표에는 있고 백업 표에는 없는 주문 번호. Oracle 은 MINUS, PostgreSQL 은 EXCEPT.",
+      new Example("집합", "한쪽에만 있는 것 (MINUS · EXCEPT)", "주문 테이블에는 있고 백업 테이블에는 없는 주문 번호. Oracle 은 MINUS, PostgreSQL 은 EXCEPT.",
           """
           SELECT
                  o.ORDER_ID
@@ -3171,7 +3171,7 @@ public final class Examples {
           SELECT
                  c.CUST_ID
             FROM CUSTOMER c"""),
-      new Example("집합", "두 결과 합쳐 다시 묶기", "올해 표와 작년 백업 표를 붙여 고객별 합계를 냅니다.",
+      new Example("집합", "두 결과 합쳐 다시 묶기", "올해 테이블과 작년 백업 테이블을 붙여 고객별 합계를 냅니다.",
           """
           SELECT
                  u.CUST_ID
@@ -3320,7 +3320,7 @@ public final class Examples {
            GROUP BY
                  UPPER(TRIM(p.PART_NAME))
           HAVING COUNT(*) > 1"""),
-      new Example("중복 · 정리", "중복 중 최신만 남기고 지우기 (분석 함수)", "같은 부품 · 협력사 · 시작일 중 가장 최근에 넣은 줄 하나만 남깁니다. 먼저 SELECT 로 건수를 확인하세요.",
+      new Example("중복 · 정리", "중복 중 최신만 남기고 지우기 (분석 펑션)", "같은 부품 · 협력사 · 시작일 중 가장 최근에 넣은 줄 하나만 남깁니다. 먼저 SELECT 로 건수를 확인하세요.",
           """
           DELETE FROM QUOTE q
            WHERE q.ROWID IN (
@@ -3451,7 +3451,7 @@ public final class Examples {
            ORDER BY
                  o.ORDER_ID DESC
           OFFSET 20 ROWS FETCH NEXT 10 ROWS ONLY"""),
-      new Example("페이징 · 개수", "아무거나 몇 건 뽑기 (샘플)", "무작위로 5건. 큰 표에서는 느립니다.",
+      new Example("페이징 · 개수", "아무거나 몇 건 뽑기 (샘플)", "무작위로 5건. 큰 테이블에서는 느립니다.",
           """
           SELECT *
             FROM (
@@ -3469,7 +3469,7 @@ public final class Examples {
            ORDER BY
                  RANDOM()
            LIMIT 5"""),
-      new Example("페이징 · 개수", "두 표 건수 한 줄로 비교", "이관 · 백업 뒤 건수가 맞는지 봅니다.",
+      new Example("페이징 · 개수", "두 테이블 건수 한 줄로 비교", "이관 · 백업 뒤 건수가 맞는지 봅니다.",
           """
           SELECT
                  (SELECT COUNT(*) FROM ORDERS) AS NOW_CNT
@@ -3514,7 +3514,7 @@ public final class Examples {
                    WHERE i.PROJ_ID = :projId
                  ) x
            WHERE x.ISSUE_ID = :issueId"""),
-      new Example("페이징 · 개수", "이전 글 · 다음 글 (MAX · MIN 으로, 큰 표에서 빠름)", "번호 순서일 때는 분석 함수 없이 바로 앞 · 뒤 번호를 찾는 편이 색인을 잘 탑니다.",
+      new Example("페이징 · 개수", "이전 글 · 다음 글 (MAX · MIN 으로, 큰 테이블에서 빠름)", "번호 순서일 때는 분석 펑션 없이 바로 앞 · 뒤 번호를 찾는 편이 인덱스를 잘 탑니다.",
           """
           SELECT
                  (SELECT MAX(i.ISSUE_ID) FROM ISSUE i WHERE i.ISSUE_ID < :issueId) AS PREV_ID
@@ -3698,7 +3698,7 @@ public final class Examples {
                     FROM ORDERS o
                  ) x
            WHERE x.RN <= 5"""),
-      new Example("페이징 · 개수", "정렬 칸을 화면에서 고르기 (동적 ORDER BY)", "정렬 칸 이름을 값으로 받아 CASE 로 고릅니다. 숫자 · 날짜 · 글자는 CASE 를 나눠야 형이 섞이지 않습니다.",
+      new Example("페이징 · 개수", "정렬 칸을 화면에서 고르기 (동적 ORDER BY)", "정렬 칸 이름을 값으로 받아 CASE 로 고릅니다. 숫자 · 날짜 · 글자는 CASE 를 나눠야 타입이 섞이지 않습니다.",
           """
           SELECT
                  o.ORDER_ID
@@ -3723,7 +3723,7 @@ public final class Examples {
                , CASE WHEN CAST(:sortCol AS VARCHAR) = 'ORDER_DT' THEN o.ORDER_DT END DESC
                , CASE WHEN CAST(:sortCol AS VARCHAR) = 'STATUS' THEN o.STATUS END
                , o.ORDER_ID DESC"""),
-      new Example("날짜", "오늘 들어온 것", "오늘 0시부터 내일 0시 전까지. 칼럼에 함수를 씌우지 않아 색인을 탈 수 있습니다.",
+      new Example("날짜", "오늘 들어온 것", "오늘 0시부터 내일 0시 전까지. 칼럼에 펑션을 씌우지 않아 인덱스를 탈 수 있습니다.",
           """
           SELECT
                  o.*
@@ -3882,7 +3882,7 @@ public final class Examples {
                , ROUND(CAST(EXTRACT(EPOCH FROM LOCALTIMESTAMP - o.REG_DT) / 3600 AS NUMERIC), 1) AS HOURS
                , ROUND(CAST(EXTRACT(EPOCH FROM LOCALTIMESTAMP - o.REG_DT) / 60 AS NUMERIC)) AS MINUTES
             FROM ORDERS o"""),
-      new Example("날짜", "'YYYYMMDD' 글자 칼럼을 날짜로", "글자로 둔 날짜 칼럼을 날짜로 바꿔 비교합니다. 색인을 타려면 반대로 비교 값을 글자로 바꾸세요.",
+      new Example("날짜", "'YYYYMMDD' 글자 칼럼을 날짜로", "글자로 둔 날짜 칼럼을 날짜로 바꿔 비교합니다. 인덱스를 타려면 반대로 비교 값을 글자로 바꾸세요.",
           """
           SELECT
                  o.YMD
@@ -3967,7 +3967,7 @@ public final class Examples {
                , CASE WHEN c.DUE_DT < CURRENT_DATE THEN '지남' WHEN c.DUE_DT = CURRENT_DATE THEN '오늘' ELSE '남음' END AS STATE
             FROM CAPA c
            WHERE c.CLOSE_DT IS NULL"""),
-      new Example("날짜", "영업일 N 일 뒤 (주말 건너뛰기)", "오늘부터 주말을 빼고 5 영업일 뒤 날짜. 휴일 표가 있으면 같이 뺍니다.",
+      new Example("날짜", "영업일 N 일 뒤 (주말 건너뛰기)", "오늘부터 주말을 빼고 5 영업일 뒤 날짜. 휴일 테이블이 있으면 같이 뺍니다.",
           """
           SELECT
                  MAX(d.DT) AS DUE_DT
@@ -4020,7 +4020,7 @@ public final class Examples {
                  i.*
             FROM ORDER_ITEM i
            WHERE (i.ORDER_ID, i.LINE_NO) IN ((1001, 1), (1001, 2), (1002, 1))"""),
-      new Example("조건", "서브쿼리로 IN", "다른 표에서 고른 값 목록으로 거릅니다.",
+      new Example("조건", "서브쿼리로 IN", "다른 테이블에서 고른 값 목록으로 거릅니다.",
           """
           SELECT
                  o.*
@@ -4071,7 +4071,7 @@ public final class Examples {
              AND (CAST(:fromDt AS DATE) IS NULL OR o.ORDER_DT >= CAST(:fromDt AS DATE))
              AND (CAST(:toDt AS DATE) IS NULL OR o.ORDER_DT < CAST(:toDt AS DATE) + 1)
              AND (CAST(:keyword AS VARCHAR) IS NULL OR o.MEMO LIKE '%' || :keyword || '%')"""),
-      new Example("조건", "CASE 로 조건 바꾸기 (구분 값에 따라 다른 칼럼으로 거르기)", "구분이 REG 면 등록일, 아니면 주문일로 거릅니다. 색인은 잘 못 탑니다.",
+      new Example("조건", "CASE 로 조건 바꾸기 (구분 값에 따라 다른 칼럼으로 거르기)", "구분이 REG 면 등록일, 아니면 주문일로 거릅니다. 인덱스는 잘 못 탑니다.",
           """
           SELECT
                  o.ORDER_ID
@@ -4403,7 +4403,7 @@ public final class Examples {
             FROM ORDERS o
            GROUP BY
                  o.CUST_ID"""),
-      new Example("문자", "한글 초성 · 첫 글자로 묶기", "이름 첫 글자로 묶어 가나다 색인처럼 셉니다.",
+      new Example("문자", "한글 초성 · 첫 글자로 묶기", "이름 첫 글자로 묶어 가나다 인덱스처럼 셉니다.",
           """
           SELECT
                  SUBSTR(c.CUST_NAME, 1, 1) AS FIRST_CHAR
@@ -4642,7 +4642,7 @@ public final class Examples {
                , COUNT(*) - COUNT(p.UNIT_CD) AS NULL_UNIT
                , COUNT(*) - COUNT(p.OWNER_ID) AS NULL_OWNER
             FROM PART p"""),
-      new Example("넣기 · 고치기", "다른 표에서 골라 넣기", "SELECT 결과를 그대로 다른 표에 넣습니다(백업 표 만들기 등).",
+      new Example("넣기 · 고치기", "다른 테이블에서 골라 넣기", "SELECT 결과를 그대로 다른 테이블에 넣습니다(백업 테이블 만들기 등).",
           """
           INSERT INTO ORDERS_BAK (ORDER_ID, CUST_ID, AMOUNT)
           SELECT
@@ -4659,7 +4659,7 @@ public final class Examples {
                , o.AMOUNT
             FROM ORDERS o
            WHERE o.ORDER_DT < DATE '2026-01-01'"""),
-      new Example("넣기 · 고치기", "다른 표 값으로 고치기", "고객 표의 등급을 주문 표에 옮겨 적습니다. 맞는 짝이 있는 행만 고칩니다.",
+      new Example("넣기 · 고치기", "다른 테이블 값으로 고치기", "고객 테이블의 등급을 주문 테이블에 옮겨 적습니다. 맞는 짝이 있는 행만 고칩니다.",
           """
           UPDATE ORDERS o
              SET o.GRADE = (
@@ -4677,7 +4677,7 @@ public final class Examples {
              SET GRADE = c.GRADE
             FROM CUSTOMER c
            WHERE c.CUST_ID = o.CUST_ID"""),
-      new Example("넣기 · 고치기", "한 줄 넣기", "칼럼 이름을 꼭 적습니다. 표에 칼럼이 늘어도 깨지지 않습니다.",
+      new Example("넣기 · 고치기", "한 줄 넣기", "칼럼 이름을 꼭 적습니다. 테이블에 칼럼이 늘어도 깨지지 않습니다.",
           """
           INSERT INTO ORDERS (
                  ORDER_ID
@@ -4727,14 +4727,14 @@ public final class Examples {
              SET STATUS = 'DONE'
            WHERE STATUS = 'WORK'
              AND ORDER_DT < CURRENT_DATE - 30"""),
-      new Example("넣기 · 고치기", "조건에 맞는 줄 지우기", "지우기 전에 같은 WHERE 로 건수를 먼저 보세요. WHERE 를 빼면 표 전체가 지워집니다.",
+      new Example("넣기 · 고치기", "조건에 맞는 줄 지우기", "지우기 전에 같은 WHERE 로 건수를 먼저 보세요. WHERE 를 빼면 테이블 전체가 지워집니다.",
           """
           DELETE FROM ORDERS_BAK
            WHERE ORDER_DT < ADD_MONTHS(TRUNC(SYSDATE), -12)""",
           """
           DELETE FROM ORDERS_BAK
            WHERE ORDER_DT < CURRENT_DATE - INTERVAL '12 MONTHS'"""),
-      new Example("넣기 · 고치기", "있으면 고치고 없으면 넣기 (MERGE)", "백업 표에 같은 주문이 있으면 금액을 고치고, 없으면 넣습니다. PostgreSQL 은 15 판부터 MERGE 가 됩니다(그 전 판은 ON CONFLICT 로, 기준 칼럼에 고유 키가 있어야 합니다).",
+      new Example("넣기 · 고치기", "있으면 고치고 없으면 넣기 (MERGE)", "백업 테이블에 같은 주문이 있으면 금액을 고치고, 없으면 넣습니다. PostgreSQL 은 15 판부터 MERGE 가 됩니다(그 전 판은 ON CONFLICT 로, 기준 칼럼에 고유 키가 있어야 합니다).",
           """
           MERGE INTO ORDERS_BAK b
           USING ORDERS o
@@ -4753,7 +4753,7 @@ public final class Examples {
            WHEN NOT MATCHED THEN
                 INSERT (ORDER_ID, CUST_ID, AMOUNT, STATUS, ORDER_DT)
                 VALUES (o.ORDER_ID, o.CUST_ID, o.AMOUNT, o.STATUS, o.ORDER_DT)"""),
-      new Example("넣기 · 고치기", "고치기 전에 표 통째로 복사해 두기", "작업 전 백업 표를 만듭니다. 색인 · 제약은 따라오지 않습니다.",
+      new Example("넣기 · 고치기", "고치기 전에 테이블 통째로 복사해 두기", "작업 전 백업 테이블을 만듭니다. 인덱스 · 제약은 따라오지 않습니다.",
           """
           CREATE TABLE ORDERS_BACKUP AS
           SELECT
@@ -4793,7 +4793,7 @@ public final class Examples {
                     FROM ORDERS_BAK b
                    WHERE b.ORDER_ID = o.ORDER_ID
                  )"""),
-      new Example("넣기 · 고치기", "다른 표에 없는 것 지우기", "주문 표에 없는 상세 줄(고아)을 지웁니다. 먼저 SELECT 로 건수를 보세요.",
+      new Example("넣기 · 고치기", "다른 테이블에 없는 것 지우기", "주문 테이블에 없는 상세 줄(고아)을 지웁니다. 먼저 SELECT 로 건수를 보세요.",
           """
           DELETE FROM ORDER_ITEM i
            WHERE NOT EXISTS (
@@ -4808,7 +4808,7 @@ public final class Examples {
                     FROM ORDERS o
                    WHERE o.ORDER_ID = i.ORDER_ID
                  )"""),
-      new Example("넣기 · 고치기", "다른 표 값으로 여러 칼럼 고치기 (MERGE)", "백업 표의 금액 · 상태로 주문 표를 고칩니다. 짝이 있는 행만 바뀝니다.",
+      new Example("넣기 · 고치기", "다른 테이블 값으로 여러 칼럼 고치기 (MERGE)", "백업 테이블의 금액 · 상태로 주문 테이블을 고칩니다. 짝이 있는 행만 바뀝니다.",
           """
           MERGE INTO ORDERS o
           USING ORDERS_BAK b
@@ -4853,12 +4853,12 @@ public final class Examples {
           UPDATE ORDERS
              SET STATUS = CASE STATUS WHEN 'A' THEN 'B' WHEN 'B' THEN 'A' END
            WHERE STATUS IN ('A', 'B')"""),
-      new Example("넣기 · 고치기", "TRUNCATE 와 DELETE 차이", "TRUNCATE 는 표를 통째로 비우고 되돌릴 수 없습니다(Oracle). 조건이 있으면 DELETE 를 씁니다.",
+      new Example("넣기 · 고치기", "TRUNCATE 와 DELETE 차이", "TRUNCATE 는 테이블을 통째로 비우고 되돌릴 수 없습니다(Oracle). 조건이 있으면 DELETE 를 씁니다.",
           """
           TRUNCATE TABLE UPLOAD_TMP""",
           """
           TRUNCATE TABLE UPLOAD_TMP"""),
-      new Example("넣기 · 고치기", "큰 표 나눠 고치기 (한 번에 1만 줄씩)", "한 번에 너무 많이 고치면 잠금 · 로그가 커집니다. 조건에 맞는 줄을 정해진 수만큼 나눠 고치고 커밋합니다.",
+      new Example("넣기 · 고치기", "큰 테이블 나눠 고치기 (한 번에 1만 줄씩)", "한 번에 너무 많이 고치면 잠금 · 로그가 커집니다. 조건에 맞는 줄을 정해진 수만큼 나눠 고치고 커밋합니다.",
           """
           UPDATE IF_PART f
              SET f.STATUS = 'ARCHIVED'
@@ -4875,7 +4875,7 @@ public final class Examples {
                      AND x.REG_DT < NOW() - INTERVAL '365 DAY'
                    LIMIT 10000
                  )"""),
-      new Example("넣기 · 고치기", "백업 표로 되돌리기 (지운 줄 다시 넣기)", "고치기 전에 떠 둔 백업 표에서 없어진 줄만 다시 넣습니다.",
+      new Example("넣기 · 고치기", "백업 테이블로 되돌리기 (지운 줄 다시 넣기)", "고치기 전에 떠 둔 백업 테이블에서 없어진 줄만 다시 넣습니다.",
           """
           INSERT INTO ORDERS (ORDER_ID, CUST_ID, AMOUNT, STATUS, ORDER_DT, PARENT_ID)
           SELECT
@@ -4898,7 +4898,7 @@ public final class Examples {
                , b.PARENT_ID
             FROM ORDERS_BAK b
            WHERE NOT EXISTS (SELECT 1 FROM ORDERS o WHERE o.ORDER_ID = b.ORDER_ID)"""),
-      new Example("넣기 · 고치기", "백업 표 값으로 고친 칼럼 되돌리기", "잘못 고친 칼럼만 백업 표 값으로 되돌립니다.",
+      new Example("넣기 · 고치기", "백업 테이블 값으로 고친 칼럼 되돌리기", "잘못 고친 칼럼만 백업 테이블 값으로 되돌립니다.",
           """
           UPDATE ORDERS o
              SET o.STATUS = (SELECT b.STATUS FROM ORDERS_BAK b WHERE b.ORDER_ID = o.ORDER_ID)
@@ -4920,12 +4920,12 @@ public final class Examples {
              SET SORT_NO = c.SORT_NO + 1
            WHERE c.GROUP_CD = :groupCd
              AND c.SORT_NO >= CAST(:insertAt AS INTEGER)"""),
-      new Example("넣기 · 고치기", "부모 지우면 자식도 (외래 키 ON DELETE CASCADE)", "부모 줄을 지울 때 자식 줄이 같이 지워지게 키를 겁니다. 실수로 많이 지워질 수 있어 조심해서 씁니다.",
+      new Example("넣기 · 고치기", "부모 지우면 자식도 (FK ON DELETE CASCADE)", "부모 줄을 지울 때 자식 줄이 같이 지워지게 키를 겁니다. 실수로 많이 지워질 수 있어 조심해서 씁니다.",
           """
           ALTER TABLE ORDER_ITEM ADD CONSTRAINT FK_ORDER_ITEM_ORDER FOREIGN KEY (ORDER_ID) REFERENCES ORDERS (ORDER_ID) ON DELETE CASCADE""",
           """
           ALTER TABLE ORDER_ITEM ADD CONSTRAINT FK_ORDER_ITEM_ORDER FOREIGN KEY (ORDER_ID) REFERENCES ORDERS (ORDER_ID) ON DELETE CASCADE"""),
-      new Example("표 만들기 · 바꾸기", "표 만들기 (기본 키 포함)", "칼럼 · 기본 키 · 기본값을 함께 정합니다.",
+      new Example("테이블 만들기 · 바꾸기", "테이블 만들기 (기본 키 포함)", "칼럼 · 기본 키 · 기본값을 함께 정합니다.",
           """
           CREATE TABLE ORDER_NOTE (
                  NOTE_ID      NUMBER(10)      NOT NULL
@@ -4942,7 +4942,7 @@ public final class Examples {
                , REG_DT       TIMESTAMP       DEFAULT CURRENT_TIMESTAMP NOT NULL
                , CONSTRAINT PK_ORDER_NOTE PRIMARY KEY (NOTE_ID)
           )"""),
-      new Example("표 만들기 · 바꾸기", "칼럼 더하기 · 길이 늘리기", "칼럼을 하나 더하고, 다른 칼럼의 길이를 늘립니다.",
+      new Example("테이블 만들기 · 바꾸기", "칼럼 더하기 · 길이 늘리기", "칼럼을 하나 더하고, 다른 칼럼의 길이를 늘립니다.",
           """
           ALTER TABLE ORDERS ADD (DELIVERY_DT DATE)
           ;
@@ -4951,12 +4951,12 @@ public final class Examples {
           ALTER TABLE ORDERS ADD COLUMN DELIVERY_DT DATE
           ;
           ALTER TABLE ORDERS ALTER COLUMN MEMO TYPE VARCHAR(2000)"""),
-      new Example("표 만들기 · 바꾸기", "색인 만들기", "자주 거르는 칼럼에 색인을 겁니다. 여러 칼럼이면 같다(=)로 거르는 칼럼을 앞에.",
+      new Example("테이블 만들기 · 바꾸기", "인덱스 만들기", "자주 거르는 칼럼에 인덱스를 겁니다. 여러 칼럼이면 같다(=)로 거르는 칼럼을 앞에.",
           """
           CREATE INDEX IX_ORDERS_CUST_DT ON ORDERS (CUST_ID, ORDER_DT)""",
           """
           CREATE INDEX IX_ORDERS_CUST_DT ON ORDERS (CUST_ID, ORDER_DT)"""),
-      new Example("표 만들기 · 바꾸기", "표 · 칼럼 설명 달기", "표와 칼럼에 한글 설명을 답니다. 작업대 · 자동 완성에 이 설명이 보입니다.",
+      new Example("테이블 만들기 · 바꾸기", "테이블 · 칼럼 설명 달기", "테이블과 칼럼에 한글 설명을 답니다. 작업대 · 자동 완성에 이 설명이 보입니다.",
           """
           COMMENT ON TABLE ORDERS IS '주문'
           ;
@@ -4965,42 +4965,42 @@ public final class Examples {
           COMMENT ON TABLE ORDERS IS '주문'
           ;
           COMMENT ON COLUMN ORDERS.ORDER_DT IS '주문일'"""),
-      new Example("표 만들기 · 바꾸기", "외래 키 걸기", "주문 상세의 주문 번호가 주문 표에 꼭 있도록 묶습니다.",
+      new Example("테이블 만들기 · 바꾸기", "FK 걸기", "주문 상세의 주문 번호가 주문 테이블에 꼭 있도록 묶습니다.",
           """
           ALTER TABLE ORDER_ITEM ADD CONSTRAINT FK_ORDER_ITEM_ORDER FOREIGN KEY (ORDER_ID) REFERENCES ORDERS (ORDER_ID)""",
           """
           ALTER TABLE ORDER_ITEM ADD CONSTRAINT FK_ORDER_ITEM_ORDER FOREIGN KEY (ORDER_ID) REFERENCES ORDERS (ORDER_ID)"""),
-      new Example("표 만들기 · 바꾸기", "기본 키 · 고유 제약 · 검사 제약 더하기", "있는 표에 키와 값 검사를 겁니다. 이미 어긋난 데이터가 있으면 실패하니 먼저 점검하세요.",
+      new Example("테이블 만들기 · 바꾸기", "기본 키 · 고유 제약 · 검사 제약 더하기", "있는 테이블에 키와 값 검사를 겁니다. 이미 어긋난 데이터가 있으면 실패하니 먼저 점검하세요.",
           """
           ALTER TABLE PART_VENDOR ADD CONSTRAINT UK_PART_VENDOR UNIQUE (PART_NO, VENDOR_ID)""",
           """
           ALTER TABLE PART_VENDOR ADD CONSTRAINT UK_PART_VENDOR UNIQUE (PART_NO, VENDOR_ID)"""),
-      new Example("표 만들기 · 바꾸기", "검사 제약 (값 범위 · 허용 값)", "수량은 0 이상, 상태는 정한 값만 들어가게 합니다.",
+      new Example("테이블 만들기 · 바꾸기", "검사 제약 (값 범위 · 허용 값)", "수량은 0 이상, 상태는 정한 값만 들어가게 합니다.",
           """
           ALTER TABLE ORDER_ITEM ADD CONSTRAINT CK_ORDER_ITEM_QTY CHECK (QTY >= 0)""",
           """
           ALTER TABLE ORDER_ITEM ADD CONSTRAINT CK_ORDER_ITEM_QTY CHECK (QTY >= 0)"""),
-      new Example("표 만들기 · 바꾸기", "칼럼 이름 바꾸기 · 지우기", "이름을 바꾸면 그 칼럼을 쓰는 쿼리 · 뷰가 모두 깨지니 먼저 찾아보세요(「뷰 · 함수 소스에서 글자 찾기」).",
+      new Example("테이블 만들기 · 바꾸기", "칼럼 이름 바꾸기 · 지우기", "이름을 바꾸면 그 칼럼을 쓰는 쿼리 · 뷰가 모두 깨지니 먼저 찾아보세요(「뷰 · 펑션 소스에서 글자 찾기」).",
           """
           ALTER TABLE PART RENAME COLUMN TAGS TO TAG_LIST""",
           """
           ALTER TABLE PART RENAME COLUMN TAGS TO TAG_LIST"""),
-      new Example("표 만들기 · 바꾸기", "기본값 주기 (넣을 때 비우면 이 값)", "등록일 칼럼에 기본값을 줍니다. 이미 들어간 줄은 바뀌지 않습니다.",
+      new Example("테이블 만들기 · 바꾸기", "기본값 주기 (넣을 때 비우면 이 값)", "등록일 칼럼에 기본값을 줍니다. 이미 들어간 줄은 바뀌지 않습니다.",
           """
           ALTER TABLE PART MODIFY (REG_DT DEFAULT SYSDATE)""",
           """
           ALTER TABLE PART ALTER COLUMN REG_DT SET DEFAULT CURRENT_DATE"""),
-      new Example("표 만들기 · 바꾸기", "NOT NULL 걸기 · 풀기", "비면 안 되는 칼럼에 NOT NULL. 빈 줄이 있으면 먼저 채워야 합니다.",
+      new Example("테이블 만들기 · 바꾸기", "NOT NULL 걸기 · 풀기", "비면 안 되는 칼럼에 NOT NULL. 빈 줄이 있으면 먼저 채워야 합니다.",
           """
           ALTER TABLE PART MODIFY (PART_NAME NOT NULL)""",
           """
           ALTER TABLE PART ALTER COLUMN PART_NAME SET NOT NULL"""),
-      new Example("표 만들기 · 바꾸기", "시퀀스 만들기 · 다음 번호 맞추기", "번호용 시퀀스. 이미 데이터가 있으면 가장 큰 번호 다음부터 시작하게 만듭니다.",
+      new Example("테이블 만들기 · 바꾸기", "시퀀스 만들기 · 다음 번호 맞추기", "번호용 시퀀스. 이미 데이터가 있으면 가장 큰 번호 다음부터 시작하게 만듭니다.",
           """
           CREATE SEQUENCE SEQ_ISSUE START WITH 1000 INCREMENT BY 1 NOCACHE""",
           """
           CREATE SEQUENCE SEQ_ISSUE START WITH 1000 INCREMENT BY 1"""),
-      new Example("표 만들기 · 바꾸기", "자동 번호 칼럼 (IDENTITY, 12c 이상)", "시퀀스 없이 넣을 때마다 번호가 붙는 칼럼.",
+      new Example("테이블 만들기 · 바꾸기", "자동 번호 칼럼 (IDENTITY, 12c 이상)", "시퀀스 없이 넣을 때마다 번호가 붙는 칼럼.",
           """
           CREATE TABLE TB_MEMO (
               MEMO_ID NUMBER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY
@@ -5013,7 +5013,7 @@ public final class Examples {
             , MEMO_TEXT VARCHAR(4000)
             , REG_DT DATE DEFAULT CURRENT_DATE
           )"""),
-      new Example("표 만들기 · 바꾸기", "임시 표 (세션 · 트랜잭션 동안만)", "중간 결과를 잠깐 담는 표. 커밋하면 비워집니다.",
+      new Example("테이블 만들기 · 바꾸기", "임시 테이블 (세션 · 트랜잭션 동안만)", "중간 결과를 잠깐 담는 테이블. 커밋하면 비워집니다.",
           """
           CREATE GLOBAL TEMPORARY TABLE TMP_PART_LIST (
               PART_NO VARCHAR2(30)
@@ -5022,17 +5022,17 @@ public final class Examples {
           CREATE TEMPORARY TABLE TMP_PART_LIST (
               PART_NO VARCHAR(30)
           ) ON COMMIT DELETE ROWS"""),
-      new Example("표 만들기 · 바꾸기", "여러 칼럼 색인 · 함수 색인", "자주 같이 거르는 칼럼 묶음, 또는 UPPER(이름) 처럼 함수를 씌워 거를 때의 색인.",
+      new Example("테이블 만들기 · 바꾸기", "여러 칼럼 인덱스 · 펑션 인덱스", "자주 같이 거르는 칼럼 묶음, 또는 UPPER(이름) 처럼 펑션을 씌워 거를 때의 인덱스.",
           """
           CREATE INDEX IX_ORDERS_CUST_DT ON ORDERS (CUST_ID, ORDER_DT)""",
           """
           CREATE INDEX IX_ORDERS_CUST_DT ON ORDERS (CUST_ID, ORDER_DT)"""),
-      new Example("표 만들기 · 바꾸기", "다른 이름으로 부르기 (동의어 · 검색 경로)", "다른 계정의 표를 계정 이름 없이 부르게 합니다.",
+      new Example("테이블 만들기 · 바꾸기", "다른 이름으로 부르기 (시노님 · 검색 경로)", "다른 계정의 테이블을 계정 이름 없이 부르게 합니다.",
           """
           CREATE SYNONYM ORDERS_REMOTE FOR APP_OWNER.ORDERS""",
           """
           SET SEARCH_PATH TO PUBLIC"""),
-      new Example("표 · 칼럼 정보", "표의 칼럼 목록과 설명", "표 이름을 바꿔 실행하면 칼럼 · 형식 · 설명을 봅니다.",
+      new Example("테이블 · 칼럼 정보", "테이블의 칼럼 목록과 설명", "테이블 이름을 바꿔 실행하면 칼럼 · 형식 · 설명을 봅니다.",
           """
           SELECT
                  c.COLUMN_ID
@@ -5060,7 +5060,7 @@ public final class Examples {
            WHERE c.TABLE_NAME = 'orders'
            ORDER BY
                  c.ORDINAL_POSITION"""),
-      new Example("표 · 칼럼 정보", "칼럼 이름으로 표 찾기", "칼럼 이름에 글자가 들어간 표를 모두 찾습니다.",
+      new Example("테이블 · 칼럼 정보", "칼럼 이름으로 테이블 찾기", "칼럼 이름에 글자가 들어간 테이블을 모두 찾습니다.",
           """
           SELECT
                  c.TABLE_NAME
@@ -5078,13 +5078,13 @@ public final class Examples {
              AND c.COLUMN_NAME LIKE '%cust%'
            ORDER BY
                  c.TABLE_NAME"""),
-      new Example("표 · 칼럼 정보", "다음 번호 (시퀀스)", "시퀀스에서 다음 번호를 받습니다.",
+      new Example("테이블 · 칼럼 정보", "다음 번호 (시퀀스)", "시퀀스에서 다음 번호를 받습니다.",
           """
           SELECT ORDERS_SEQ.NEXTVAL AS NEXT_ID
             FROM DUAL""",
           """
           SELECT NEXTVAL('orders_seq') AS NEXT_ID"""),
-      new Example("표 · 칼럼 정보", "표의 색인 목록", "표에 걸린 색인과 칼럼 순서.",
+      new Example("테이블 · 칼럼 정보", "테이블의 인덱스 목록", "테이블에 걸린 인덱스와 칼럼 순서.",
           """
           SELECT
                  ic.INDEX_NAME
@@ -5106,7 +5106,7 @@ public final class Examples {
              AND i.TABLENAME = LOWER(:tableName)
            ORDER BY
                  i.INDEXNAME"""),
-      new Example("표 · 칼럼 정보", "기본 키 · 외래 키 목록", "표에 걸린 제약 조건과 가리키는 표.",
+      new Example("테이블 · 칼럼 정보", "기본 키 · FK 목록", "테이블에 걸린 제약 조건과 가리키는 테이블.",
           """
           SELECT
                  c.CONSTRAINT_NAME
@@ -5139,7 +5139,7 @@ public final class Examples {
            ORDER BY
                  tc.CONSTRAINT_NAME
                , kcu.ORDINAL_POSITION"""),
-      new Example("표 · 칼럼 정보", "표 크기 (용량 큰 순)", "표가 디스크를 얼마나 쓰는지 큰 순으로.",
+      new Example("테이블 · 칼럼 정보", "테이블 크기 (용량 큰 순)", "테이블이 디스크를 얼마나 쓰는지 큰 순으로.",
           """
           SELECT
                  s.SEGMENT_NAME
@@ -5162,7 +5162,7 @@ public final class Examples {
              AND c.RELKIND = 'r'
            ORDER BY
                  MB DESC"""),
-      new Example("표 · 칼럼 정보", "표 건수 어림 (통계 기준)", "COUNT(*) 없이 통계에 적힌 건수를 봅니다. 통계를 모은 때 기준이라 정확하지 않습니다.",
+      new Example("테이블 · 칼럼 정보", "테이블 건수 어림 (통계 기준)", "COUNT(*) 없이 통계에 적힌 건수를 봅니다. 통계를 모은 때 기준이라 정확하지 않습니다.",
           """
           SELECT
                  t.TABLE_NAME
@@ -5179,7 +5179,7 @@ public final class Examples {
             FROM PG_STAT_USER_TABLES s
            ORDER BY
                  s.N_LIVE_TUP DESC"""),
-      new Example("표 · 칼럼 정보", "뷰 · 함수 소스에서 글자 찾기", "어느 뷰 · 프로시저가 이 표를 쓰는지 찾습니다.",
+      new Example("테이블 · 칼럼 정보", "뷰 · 펑션 소스에서 글자 찾기", "어느 뷰 · 프로시저가 이 테이블을 쓰는지 찾습니다.",
           """
           SELECT
                  s.NAME
@@ -5207,7 +5207,7 @@ public final class Examples {
             FROM PG_VIEWS v
            WHERE v.SCHEMANAME = CURRENT_SCHEMA()
              AND v.DEFINITION ILIKE '%' || :keyword || '%'"""),
-      new Example("표 · 칼럼 정보", "칼럼 설명(한글)으로 칼럼 찾기", "「납기」처럼 한글 설명에 든 낱말로 어느 표의 어느 칼럼인지 찾습니다.",
+      new Example("테이블 · 칼럼 정보", "칼럼 설명(한글)으로 칼럼 찾기", "「납기」처럼 한글 설명에 든 낱말로 어느 테이블의 어느 칼럼인지 찾습니다.",
           """
           SELECT
                  m.TABLE_NAME
@@ -5235,7 +5235,7 @@ public final class Examples {
            ORDER BY
                  t.RELNAME
                , a.ATTNAME"""),
-      new Example("표 · 칼럼 정보", "표 설명(한글)으로 표 찾기", "「부품」 「협력사」처럼 표 설명에 든 낱말로 표 · 뷰를 찾습니다.",
+      new Example("테이블 · 칼럼 정보", "테이블 설명(한글)으로 테이블 찾기", "「부품」 「협력사」처럼 테이블 설명에 든 낱말로 테이블 · 뷰를 찾습니다.",
           """
           SELECT
                  t.TABLE_NAME
@@ -5259,7 +5259,7 @@ public final class Examples {
              AND d.DESCRIPTION ILIKE '%' || :keyword || '%'
            ORDER BY
                  t.RELNAME"""),
-      new Example("표 · 칼럼 정보", "이 표를 가리키는 표 (외래 키 거꾸로)", "이 표의 줄을 지우거나 키를 바꾸기 전에, 어느 표가 이 표를 참조하는지 봅니다.",
+      new Example("테이블 · 칼럼 정보", "이 테이블을 가리키는 테이블 (FK 거꾸로)", "이 테이블의 줄을 지우거나 키를 바꾸기 전에, 어느 테이블이 이 테이블을 참조하는지 봅니다.",
           """
           SELECT
                  c.TABLE_NAME AS CHILD_TABLE
@@ -5290,7 +5290,7 @@ public final class Examples {
              AND c.CONFRELID = CAST(:tableName AS REGCLASS)
            ORDER BY
                  1, 2"""),
-      new Example("표 · 칼럼 정보", "고유 · 검사 제약 목록 (조건 글 포함)", "표에 걸린 UNIQUE 와 CHECK 제약, 조건 글. Oracle 은 NOT NULL 도 검사 제약(C)으로 나옵니다.",
+      new Example("테이블 · 칼럼 정보", "고유 · 검사 제약 목록 (조건 글 포함)", "테이블에 걸린 UNIQUE 와 CHECK 제약, 조건 글. Oracle 은 NOT NULL 도 검사 제약(C)으로 나옵니다.",
           """
           SELECT
                  c.CONSTRAINT_NAME
@@ -5313,7 +5313,7 @@ public final class Examples {
              AND c.CONTYPE IN ('u', 'c')
            ORDER BY
                  2, 1"""),
-      new Example("표 · 칼럼 정보", "트리거 목록 (표마다 · 켜짐 여부)", "INSERT · UPDATE 때 몰래 값이 바뀐다면 트리거부터 봅니다.",
+      new Example("테이블 · 칼럼 정보", "트리거 목록 (테이블마다 · 켜짐 여부)", "INSERT · UPDATE 때 몰래 값이 바뀐다면 트리거부터 봅니다.",
           """
           SELECT
                  t.TABLE_NAME
@@ -5338,7 +5338,7 @@ public final class Examples {
              AND c.RELNAMESPACE = CURRENT_SCHEMA()::REGNAMESPACE
            ORDER BY
                  1, 2"""),
-      new Example("표 · 칼럼 정보", "동의어가 가리키는 대상 (끊긴 동의어 찾기)", "OBJECT_TYPE 이 비면 대상이 없거나 볼 권한이 없습니다. PostgreSQL 은 동의어 대신 검색 경로를 봅니다.",
+      new Example("테이블 · 칼럼 정보", "시노님이 가리키는 대상 (끊긴 시노님 찾기)", "OBJECT_TYPE 이 비면 대상이 없거나 볼 권한이 없습니다. PostgreSQL 은 시노님 대신 검색 경로를 봅니다.",
           """
           SELECT
                  s.SYNONYM_NAME
@@ -5357,7 +5357,7 @@ public final class Examples {
           SELECT
                  CURRENT_SETTING('search_path') AS SEARCH_PATH
                , CURRENT_SCHEMA() AS NOW_SCHEMA"""),
-      new Example("표 · 칼럼 정보", "파티션 목록 (경계 값 · 건수 어림)", "파티션 표가 어떻게 나뉘어 있고 파티션마다 몇 건쯤인지.",
+      new Example("테이블 · 칼럼 정보", "파티션 목록 (경계 값 · 건수 어림)", "파티션 테이블이 어떻게 나뉘어 있고 파티션마다 몇 건쯤인지.",
           """
           SELECT
                  p.PARTITION_POSITION
@@ -5380,7 +5380,7 @@ public final class Examples {
              AND i.INHPARENT = CAST(:tableName AS REGCLASS)
            ORDER BY
                  c.RELNAME"""),
-      new Example("표 · 칼럼 정보", "표 만드는 문장 뽑기 (DDL)", "운영 표를 개발 DB 에 똑같이 만들 때. Oracle 은 'TABLE' 대신 'VIEW' · 'PROCEDURE' · 'INDEX' 도 됩니다. PostgreSQL 은 칼럼 · NOT NULL 만 만들고 키 · 색인은 pg_dump 로 봅니다.",
+      new Example("테이블 · 칼럼 정보", "테이블 만드는 문장 뽑기 (DDL)", "운영 테이블을 개발 DB 에 똑같이 만들 때. Oracle 은 'TABLE' 대신 'VIEW' · 'PROCEDURE' · 'INDEX' 도 됩니다. PostgreSQL 은 칼럼 · NOT NULL 만 만들고 키 · 인덱스는 pg_dump 로 봅니다.",
           """
           SELECT
                  DBMS_METADATA.GET_DDL('TABLE', UPPER(:tableName)) AS DDL
@@ -5396,7 +5396,7 @@ public final class Examples {
              AND NOT a.ATTISDROPPED
            GROUP BY
                  c.RELNAME"""),
-      new Example("표 · 칼럼 정보", "이 표가 마지막으로 바뀐 때", "Oracle 은 ORA_ROWSCN 으로 어림합니다(블록 단위, 며칠 넘게 지나면 ORA-08181). PostgreSQL 은 통계 수집 뒤 넣기 · 고치기 · 지우기 건수를 봅니다.",
+      new Example("테이블 · 칼럼 정보", "이 테이블이 마지막으로 바뀐 때", "Oracle 은 ORA_ROWSCN 으로 어림합니다(블록 단위, 며칠 넘게 지나면 ORA-08181). PostgreSQL 은 통계 수집 뒤 넣기 · 고치기 · 지우기 건수를 봅니다.",
           """
           SELECT
                  SCN_TO_TIMESTAMP(MAX(o.ORA_ROWSCN)) AS LAST_CHANGED
@@ -5411,7 +5411,7 @@ public final class Examples {
                , GREATEST(s.LAST_ANALYZE, s.LAST_AUTOANALYZE) AS LAST_ANALYZED
             FROM PG_STAT_USER_TABLES s
            WHERE s.RELNAME = LOWER(:tableName)"""),
-      new Example("표 · 칼럼 정보", "표 칼럼을 SELECT 문으로 펼치기", "SELECT * 대신 칼럼을 다 적은 문장을 만들어 매퍼에 붙입니다. 칼럼은 줄 앞 쉼표로 나옵니다.",
+      new Example("테이블 · 칼럼 정보", "테이블 칼럼을 SELECT 문으로 펼치기", "SELECT * 대신 칼럼을 다 적은 문장을 만들어 매퍼에 붙입니다. 칼럼은 줄 앞 쉼표로 나옵니다.",
           """
           SELECT
                  'SELECT' || CHR(10) || '       ' || LISTAGG(LOWER(:alias) || '.' || c.COLUMN_NAME, CHR(10) || '     , ') WITHIN GROUP (ORDER BY c.COLUMN_ID) || CHR(10) || '  FROM ' || c.TABLE_NAME || ' ' || LOWER(:alias) AS SELECT_SQL
@@ -5427,7 +5427,7 @@ public final class Examples {
              AND c.TABLE_NAME = LOWER(:tableName)
            GROUP BY
                  c.TABLE_NAME"""),
-      new Example("표 · 칼럼 정보", "칼럼 이름을 camelCase 로 (VO · DTO 필드 이름)", "PART_NO → partNo. resultMap · VO 를 손으로 만들 때 칼럼과 필드 이름을 나란히 봅니다.",
+      new Example("테이블 · 칼럼 정보", "칼럼 이름을 camelCase 로 (VO · DTO 필드 이름)", "PART_NO → partNo. resultMap · VO 를 손으로 만들 때 칼럼과 필드 이름을 나란히 봅니다.",
           """
           SELECT
                  c.COLUMN_NAME
@@ -5453,7 +5453,7 @@ public final class Examples {
              AND NOT a.ATTISDROPPED
            ORDER BY
                  a.ATTNUM"""),
-      new Example("표 · 칼럼 정보", "칼럼 값 종류 수 · 빈 값 비율 (색인 걸 만한가)", "값 종류가 많고 빈 값이 적을수록 색인이 잘 듣습니다. 통계 기준이라 통계가 오래되면 어긋납니다.",
+      new Example("테이블 · 칼럼 정보", "칼럼 값 종류 수 · 빈 값 비율 (인덱스 걸 만한가)", "값 종류가 많고 빈 값이 적을수록 인덱스가 잘 듣습니다. 통계 기준이라 통계가 오래되면 어긋납니다.",
           """
           SELECT
                  s.COLUMN_NAME
@@ -5479,7 +5479,7 @@ public final class Examples {
              AND s.TABLENAME = LOWER(:tableName)
            ORDER BY
                  s.N_DISTINCT DESC"""),
-      new Example("의존 관계 · 소스", "이 표를 쓰는 뷰 · 프로시저 · 패키지", "표를 고치거나 지우기 전에 영향받는 DB 객체를 봅니다. PostgreSQL 은 뷰만 기록되어 함수는 「뷰 · 함수 소스에서 글자 찾기」로 봅니다.",
+      new Example("의존 관계 · 소스", "이 테이블을 쓰는 뷰 · 프로시저 · 패키지", "테이블을 고치거나 지우기 전에 영향받는 DB 객체를 봅니다. PostgreSQL 은 뷰만 기록되어 펑션은 「뷰 · 펑션 소스에서 글자 찾기」로 봅니다.",
           """
           SELECT
                  d.TYPE
@@ -5503,7 +5503,7 @@ public final class Examples {
              AND v.OID <> d.REFOBJID
            ORDER BY
                  1, 2"""),
-      new Example("의존 관계 · 소스", "이 프로시저 · 뷰가 쓰는 표", "프로시저 · 패키지 · 뷰가 안에서 읽고 쓰는 표 · 시퀀스.",
+      new Example("의존 관계 · 소스", "이 프로시저 · 뷰가 쓰는 테이블", "프로시저 · 패키지 · 뷰가 안에서 읽고 쓰는 테이블 · 시퀀스.",
           """
           SELECT
                  d.REFERENCED_TYPE
@@ -5530,7 +5530,7 @@ public final class Examples {
              AND t.OID <> r.EV_CLASS
            ORDER BY
                  1, 2"""),
-      new Example("의존 관계 · 소스", "프로시저 · 함수 인자 목록", "부를 때 넣을 인자 이름 · 형 · IN/OUT. Oracle 은 POSITION 0 이 함수 돌려주는 값입니다.",
+      new Example("의존 관계 · 소스", "프로시저 · 펑션 인자 목록", "부를 때 넣을 인자 이름 · 타입 · IN/OUT. Oracle 은 POSITION 0 이 펑션 돌려주는 값입니다.",
           """
           SELECT
                  a.PACKAGE_NAME
@@ -5599,7 +5599,7 @@ public final class Examples {
           """
           SELECT
                  PG_GET_VIEWDEF(CAST(:viewName AS REGCLASS), TRUE) AS TEXT"""),
-      new Example("의존 관계 · 소스", "패키지 안 프로시저 · 함수 목록", "패키지에 들어 있는 프로시저 · 함수 이름. PostgreSQL 은 패키지가 없어 스키마의 함수 목록을 봅니다.",
+      new Example("의존 관계 · 소스", "패키지 안 프로시저 · 펑션 목록", "패키지에 들어 있는 프로시저 · 펑션 이름. PostgreSQL 은 패키지가 없어 스키마의 펑션 목록을 봅니다.",
           """
           SELECT
                  p.OBJECT_NAME AS PACKAGE_NAME
@@ -5713,7 +5713,7 @@ public final class Examples {
             FROM IF_PART f
            WHERE f.STATUS = 'READY'
              FOR UPDATE SKIP LOCKED"""),
-      new Example("세션 · 락", "잠긴 표 · 잠근 세션 보기", "어느 세션이 어떤 표를 잠그고 있는지.",
+      new Example("세션 · 락", "잠긴 테이블 · 잠근 세션 보기", "어느 세션이 어떤 테이블을 잠그고 있는지.",
           """
           SELECT
                  s.SID
@@ -5801,7 +5801,7 @@ public final class Examples {
              AND a.PID <> PG_BACKEND_PID()
            ORDER BY
                  a.XACT_START"""),
-      new Example("세션 · 락", "막힌 줄이 어느 표 어느 줄인지 (ROWID)", "기다리는 세션이 막힌 표와 줄 위치. 나온 ROWID 로 SELECT * FROM 표 WHERE ROWID = '…' 하면 그 줄이 보입니다. PostgreSQL 은 PAGE · TUPLE 로 WHERE CTID = '(page,tuple)'.",
+      new Example("세션 · 락", "막힌 줄이 어느 테이블 어느 줄인지 (ROWID)", "기다리는 세션이 막힌 테이블과 줄 위치. 나온 ROWID 로 SELECT * FROM 테이블 WHERE ROWID = '…' 하면 그 줄이 보입니다. PostgreSQL 은 PAGE · TUPLE 로 WHERE CTID = '(page,tuple)'.",
           """
           SELECT
                  w.SID AS WAITING_SID
@@ -5901,7 +5901,7 @@ public final class Examples {
              AND a.PID <> PG_BACKEND_PID()
            ORDER BY
                  a.QUERY_START"""),
-      new Example("세션 · 락", "오래 걸리는 작업 진행률 (몇 % · 남은 시간)", "큰 표 전체 읽기 · 색인 만들기 · 통계 수집이 얼마나 남았는지. PostgreSQL 은 색인 만들기 진행률이고, VACUUM 은 PG_STAT_PROGRESS_VACUUM 에 있습니다.",
+      new Example("세션 · 락", "오래 걸리는 작업 진행률 (몇 % · 남은 시간)", "큰 테이블 전체 읽기 · 인덱스 만들기 · 통계 수집이 얼마나 남았는지. PostgreSQL 은 인덱스 만들기 진행률이고, VACUUM 은 PG_STAT_PROGRESS_VACUUM 에 있습니다.",
           """
           SELECT
                  l.SID
@@ -5980,7 +5980,7 @@ public final class Examples {
                , a.CLIENT_ADDR
            ORDER BY
                  CONN_CNT DESC"""),
-      new Example("성능", "실행 계획 보기", "색인을 타는지, 전체를 읽는지 봅니다. 콘솔의 「실행 계획」 단추와 같습니다.",
+      new Example("성능", "실행 계획 보기", "인덱스를 타는지, 전체를 읽는지 봅니다. 콘솔의 「실행 계획」 단추와 같습니다.",
           """
           EXPLAIN PLAN FOR
           SELECT
@@ -6002,7 +6002,7 @@ public final class Examples {
           END;""",
           """
           ANALYZE ORDERS"""),
-      new Example("성능", "칼럼에 함수 씌우지 않기", "TO_CHAR(날짜) = '…' 는 색인을 못 탑니다. 범위로 바꿔 쓴 꼴입니다.",
+      new Example("성능", "칼럼에 펑션 씌우지 않기", "TO_CHAR(날짜) = '…' 는 인덱스를 못 탑니다. 범위로 바꿔 쓴 꼴입니다.",
           """
           SELECT
                  o.*
@@ -6017,7 +6017,7 @@ public final class Examples {
            WHERE o.ORDER_DT >= CAST(:day AS DATE)
              AND o.ORDER_DT < CAST(:day AS DATE) + 1
           -- 피할 꼴: WHERE TO_CHAR(o.ORDER_DT, 'YYYY-MM-DD') = :day"""),
-      new Example("성능", "색인을 타게 날짜 조건 쓰기", "TRUNC(칼럼) = 날짜 는 색인을 못 탑니다. 칼럼은 그대로 두고 범위로 씁니다.",
+      new Example("성능", "인덱스를 타게 날짜 조건 쓰기", "TRUNC(칼럼) = 날짜 는 인덱스를 못 탑니다. 칼럼은 그대로 두고 범위로 씁니다.",
           """
           SELECT
                  o.ORDER_ID
@@ -6030,7 +6030,7 @@ public final class Examples {
             FROM ORDERS o
            WHERE o.REG_DT >= CAST(:day AS DATE)
              AND o.REG_DT < CAST(:day AS DATE) + 1"""),
-      new Example("성능", "형 바뀜 막기 (숫자 칼럼에 글자 비교)", "칼럼 형과 값 형이 다르면 DB 가 칼럼 쪽을 바꿔 색인을 못 탈 수 있습니다. 값 쪽을 칼럼 형에 맞춥니다.",
+      new Example("성능", "타입 바뀜 막기 (숫자 칼럼에 글자 비교)", "칼럼 타입과 값 타입이 다르면 DB 가 칼럼 쪽을 바꿔 인덱스를 못 탈 수 있습니다. 값 쪽을 칼럼 타입에 맞춥니다.",
           """
           SELECT
                  o.ORDER_ID
@@ -6041,7 +6041,7 @@ public final class Examples {
                  o.ORDER_ID
             FROM ORDERS o
            WHERE o.ORDER_ID = CAST(:orderId AS INTEGER)"""),
-      new Example("성능", "OR 대신 UNION ALL (색인 둘을 각각 타게)", "서로 다른 칼럼의 OR 는 전체 훑기가 되기 쉽습니다. 둘로 나눠 붙이고 겹치는 줄은 뺍니다.",
+      new Example("성능", "OR 대신 UNION ALL (인덱스 둘을 각각 타게)", "서로 다른 칼럼의 OR 는 전체 훑기가 되기 쉽습니다. 둘로 나눠 붙이고 겹치는 줄은 뺍니다.",
           """
           SELECT
                  o.ORDER_ID
@@ -6099,7 +6099,7 @@ public final class Examples {
                  o.*
             FROM ORDERS o
            WHERE o.STATUS = 'NEW'"""),
-      new Example("성능", "글자로 SQL_ID 찾기 (매퍼 SQL 이 캐시에 있나)", "표 이름이나 매퍼 SQL 의 특이한 글자로 DB 에 남은 SQL 을 찾습니다. 찾은 SQL_ID 로 실행 계획 · 바인드 값을 봅니다.",
+      new Example("성능", "글자로 SQL_ID 찾기 (매퍼 SQL 이 캐시에 있나)", "테이블 이름이나 매퍼 SQL 의 특이한 글자로 DB 에 남은 SQL 을 찾습니다. 찾은 SQL_ID 로 실행 계획 · 바인드 값을 봅니다.",
           """
           SELECT
                  q.SQL_ID
@@ -6123,7 +6123,7 @@ public final class Examples {
            WHERE s.QUERY ILIKE '%' || :keyword || '%'
            ORDER BY
                  s.CALLS DESC"""),
-      new Example("성능", "디스크를 많이 읽는 SQL (상위 20)", "디스크 읽기 · 메모리 읽기가 많은 SQL 순. 색인이 없거나 범위가 넓은 쿼리가 위로 옵니다.",
+      new Example("성능", "디스크를 많이 읽는 SQL (상위 20)", "디스크 읽기 · 메모리 읽기가 많은 SQL 순. 인덱스가 없거나 범위가 넓은 쿼리가 위로 옵니다.",
           """
           SELECT *
             FROM (
@@ -6225,7 +6225,7 @@ public final class Examples {
                , s.UNIT
             FROM PG_SETTINGS s
            WHERE s.NAME IN ('log_min_duration_statement', 'log_statement', 'log_parameter_max_length')"""),
-      new Example("성능", "표 전체를 훑는 SQL (TABLE ACCESS FULL)", "실행 계획에 전체 읽기가 있는 SQL 을 실행 횟수 순으로. 큰 표가 나오면 색인을 볼 차례입니다.",
+      new Example("성능", "테이블 전체를 훑는 SQL (TABLE ACCESS FULL)", "실행 계획에 전체 읽기가 있는 SQL 을 실행 횟수 순으로. 큰 테이블이 나오면 인덱스를 볼 차례입니다.",
           """
           SELECT
                  p.OBJECT_NAME AS TABLE_NAME
@@ -6252,7 +6252,7 @@ public final class Examples {
             FROM PG_STAT_USER_TABLES s
            ORDER BY
                  s.SEQ_TUP_READ DESC"""),
-      new Example("성능", "이 표를 쓰는 SQL (캐시에서)", "표를 바꾸기 전에 지금 이 표를 읽는 SQL 과 횟수를 봅니다.",
+      new Example("성능", "이 테이블을 쓰는 SQL (캐시에서)", "테이블을 바꾸기 전에 지금 이 테이블을 읽는 SQL 과 횟수를 봅니다.",
           """
           SELECT
                  q.SQL_ID
@@ -6307,7 +6307,7 @@ public final class Examples {
            ORDER BY
                  s.TOTAL_EXEC_TIME DESC
            LIMIT 50"""),
-      new Example("정합성 점검", "부모 없는 자식 (고아 데이터)", "주문 표에 없는 주문 번호를 가진 상세 줄.",
+      new Example("정합성 점검", "부모 없는 자식 (고아 데이터)", "주문 테이블에 없는 주문 번호를 가진 상세 줄.",
           """
           SELECT
                  i.*
@@ -6382,7 +6382,7 @@ public final class Examples {
                  i.ORDER_ID
                , i.LINE_NO
           HAVING COUNT(*) > 1"""),
-      new Example("정합성 점검", "합계 표와 상세 표 합이 다른 것", "주문 금액과 품목 합계가 다른 주문. 이관 · 배치 뒤 점검에 씁니다.",
+      new Example("정합성 점검", "합계 테이블과 상세 테이블 합이 다른 것", "주문 금액과 품목 합계가 다른 주문. 이관 · 배치 뒤 점검에 씁니다.",
           """
           SELECT
                  o.ORDER_ID
@@ -6403,7 +6403,7 @@ public final class Examples {
                , (SELECT i.ORDER_ID, SUM(i.QTY * i.PRICE) AS ITEM_SUM FROM ORDER_ITEM i GROUP BY i.ORDER_ID) s
            WHERE o.ORDER_ID = s.ORDER_ID
              AND o.AMOUNT <> s.ITEM_SUM"""),
-      new Example("정합성 점검", "코드 표에 없는 코드 값", "부품 단위 칼럼에 코드 표에 없는(또는 안 쓰는) 값이 들어간 것.",
+      new Example("정합성 점검", "코드 테이블에 없는 코드 값", "부품 단위 칼럼에 코드 테이블에 없는(또는 안 쓰는) 값이 들어간 것.",
           """
           SELECT
                  p.PART_NO
@@ -6616,7 +6616,7 @@ public final class Examples {
                  , 'items', (SELECT JSON_AGG(JSON_BUILD_OBJECT('partNo', i.PART_NO, 'qty', i.QTY)) FROM ORDER_ITEM i WHERE i.ORDER_ID = o.ORDER_ID)
                  ) AS JSON_TEXT
             FROM ORDERS o"""),
-      new Example("JSON", "JSON 배열을 줄로 펼치기", "글자로 받은 JSON 배열을 표처럼 펼쳐 칸으로 씁니다.",
+      new Example("JSON", "JSON 배열을 줄로 펼치기", "글자로 받은 JSON 배열을 테이블처럼 펼쳐 칸으로 씁니다.",
           """
           SELECT
                  j.PART_NO
@@ -6828,7 +6828,7 @@ public final class Examples {
                  u.*
             FROM UP u
            WHERE u.PARENT_PART IS NOT NULL"""),
-      new Example("BOM · 부품", "레벨 번호 붙인 BOM 표 (1, 1.1, 1.1.2)", "BOM 을 펼치면서 화면에 보이는 번호(1.2.1)를 만듭니다. 형제 순서는 SEQ 로 정합니다.",
+      new Example("BOM · 부품", "레벨 번호 붙인 BOM 테이블 (1, 1.1, 1.1.2)", "BOM 을 펼치면서 화면에 보이는 번호(1.2.1)를 만듭니다. 형제 순서는 SEQ 로 정합니다.",
           """
           WITH t (LVL, PARENT_PART, CHILD_PART, QTY, NO_PATH, SORT_KEY) AS (
           SELECT
@@ -8393,7 +8393,7 @@ public final class Examples {
            WHERE EXISTS (SELECT 1 FROM BOM c WHERE c.PARENT_PART = t.CHILD_PART)
            ORDER BY
                  t.PATH"""),
-      new Example("BOM · Top 어셈블리", "Top BOM 점검 (수량 0 · 빈 수량 · 부품 마스터에 없는 품번)", "펼친 줄 중 수량이 비거나 0 이하, 또는 부품 표에 없는 품번. 출도 · 이관 전 점검.",
+      new Example("BOM · Top 어셈블리", "Top BOM 점검 (수량 0 · 빈 수량 · 부품 마스터에 없는 품번)", "펼친 줄 중 수량이 비거나 0 이하, 또는 부품 테이블에 없는 품번. 출도 · 이관 전 점검.",
           """
           WITH t (TOP_PART, PARENT_PART, CHILD_PART, QTY, LVL, TOT_QTY, PATH) AS (
           SELECT
@@ -8504,7 +8504,7 @@ public final class Examples {
                , t.CHILD_PART
             FROM t
            WHERE t.IS_CYCLE"""),
-      new Example("BOM · Top 어셈블리", "Top BOM 엑셀 내려받기용 (품명 · 단위 · 단가 · 금액 · 주 협력사)", "BOM 표 화면 · 엑셀에 그대로 쓰는 칸을 다 붙인 전개입니다.",
+      new Example("BOM · Top 어셈블리", "Top BOM 엑셀 다운로드용 (품명 · 단위 · 단가 · 금액 · 주 협력사)", "BOM 테이블 화면 · 엑셀에 그대로 쓰는 칸을 다 붙인 전개입니다.",
           """
           WITH t (TOP_PART, PARENT_PART, CHILD_PART, QTY, LVL, TOT_QTY, PATH) AS (
           SELECT
@@ -8895,7 +8895,7 @@ public final class Examples {
            WHERE r.PART_NO = :partNo
            ORDER BY
                  r.REV"""),
-      new Example("리비전 · 이력", "특정 날짜 시점의 값 (유효 기간 이력)", "VALID_FROM ~ VALID_TO 이력 표에서 기준일에 걸리는 한 줄. 단가 · 조직 · 담당자 이력에 다 씁니다.",
+      new Example("리비전 · 이력", "특정 날짜 시점의 값 (유효 기간 이력)", "VALID_FROM ~ VALID_TO 이력 테이블에서 기준일에 걸리는 한 줄. 단가 · 조직 · 담당자 이력에 다 씁니다.",
           """
           SELECT
                  h.PART_NO
@@ -9757,7 +9757,7 @@ public final class Examples {
             FROM APPROVAL a
            GROUP BY
                  a.DOC_ID"""),
-      new Example("채번 · 데이터 손질", "채번: 연월 + 일련번호 (그달 첫 번호 0001)", "R + YYYYMM + 4자리. 그달 가장 큰 번호 + 1, 없으면 1. 동시에 두 사람이 받으면 같은 번호가 나오므로 번호 표를 잠그거나 시퀀스와 함께 씁니다.",
+      new Example("채번 · 데이터 손질", "채번: 연월 + 일련번호 (그달 첫 번호 0001)", "R + YYYYMM + 4자리. 그달 가장 큰 번호 + 1, 없으면 1. 동시에 두 사람이 받으면 같은 번호가 나오므로 번호 테이블을 잠그거나 시퀀스와 함께 씁니다.",
           """
           SELECT
                  'R' || TO_CHAR(SYSDATE, 'YYYYMM')
@@ -9891,7 +9891,7 @@ public final class Examples {
                , s.EQUIP_ID
             FROM SCHEDULE s
            WHERE s.PROJ_ID = :srcProjId"""),
-      new Example("채번 · 데이터 손질", "자식부터 지우기 (부모 · 자식 함께 삭제)", "외래 키가 있으면 자식을 먼저 지워야 부모가 지워집니다. 같은 트랜잭션에서 순서대로.",
+      new Example("채번 · 데이터 손질", "자식부터 지우기 (부모 · 자식 함께 삭제)", "FK가 있으면 자식을 먼저 지워야 부모가 지워집니다. 같은 트랜잭션에서 순서대로.",
           """
           DELETE FROM ISSUE i
            WHERE i.PROJ_ID = :projId;
@@ -9910,7 +9910,7 @@ public final class Examples {
 
           DELETE FROM PROJECT p
            WHERE p.PROJ_ID = :projId"""),
-      new Example("채번 · 데이터 손질", "엑셀 업로드 점검 (없는 코드 · 중복 · 빈 값 · 음수)", "임시 표에 올린 줄을 마스터와 비교해 문제 있는 줄과 까닭을 한 번에 봅니다. 반영 전에 돌립니다.",
+      new Example("채번 · 데이터 손질", "엑셀 업로드 점검 (없는 코드 · 중복 · 빈 값 · 음수)", "임시 테이블에 올린 줄을 마스터와 비교해 문제 있는 줄과 까닭을 한 번에 봅니다. 반영 전에 돌립니다.",
           """
           SELECT
                  u.ROW_NO
@@ -10141,7 +10141,7 @@ public final class Examples {
            WHERE x.CUM - x.QTY < :needQty
            ORDER BY
                  x.TXN_DT"""),
-      new Example("재고 · 수불", "안전재고 미달 부품", "현재고가 기준 수량보다 적은 부품. 기준이 부품 표에 없으면 바인드로 넣습니다.",
+      new Example("재고 · 수불", "안전재고 미달 부품", "현재고가 기준 수량보다 적은 부품. 기준이 부품 테이블에 없으면 바인드로 넣습니다.",
           """
           SELECT
                  t.PART_NO
@@ -10747,7 +10747,7 @@ public final class Examples {
                          g.ACCT_CD
                        , TO_CHAR(g.ENTRY_DT, 'YYYY-MM')
                  ) x"""),
-      new Example("영업 · 구매 · 회계", "월별 매출 · 매입 · 차이", "수주 금액과 발주 금액을 달마다 나란히 놓습니다. 두 표를 붙인 뒤 묶습니다.",
+      new Example("영업 · 구매 · 회계", "월별 매출 · 매입 · 차이", "수주 금액과 발주 금액을 달마다 나란히 놓습니다. 두 테이블을 붙인 뒤 묶습니다.",
           """
           SELECT
                  u.YM
@@ -11987,7 +11987,7 @@ public final class Examples {
               ON d.DEPT_ID = e.DEPT_ID
            GROUP BY
                  d.DEPT_NAME"""),
-      new Example("인사 · 근태", "내 상사 이름 붙이기 (자기 조인)", "직원 표를 두 번 써서 상사 이름을 붙입니다. 상사가 없는 맨 위 사람도 나오게 아우터로.",
+      new Example("인사 · 근태", "내 상사 이름 붙이기 (자기 조인)", "직원 테이블을 두 번 써서 상사 이름을 붙입니다. 상사가 없는 맨 위 사람도 나오게 아우터로.",
           """
           SELECT
                  e.EMP_ID
@@ -12118,7 +12118,7 @@ public final class Examples {
                  END
            ORDER BY
                  SAL_BAND"""),
-      new Example("인사 · 근태", "관리자가 없는 직원 · 없는 관리자를 가리키는 직원", "상사 번호가 비었거나 직원 표에 없는 사람을 가리키는 줄(조직도 점검).",
+      new Example("인사 · 근태", "관리자가 없는 직원 · 없는 관리자를 가리키는 직원", "상사 번호가 비었거나 직원 테이블에 없는 사람을 가리키는 줄(조직도 점검).",
           """
           SELECT
                  e.EMP_ID
@@ -13039,7 +13039,7 @@ public final class Examples {
               OR e.PART_NO IS NULL
               OR p.PART_NAME <> e.PART_NAME
               OR p.UNIT_COST <> e.UNIT_COST"""),
-      new Example("인터페이스 · 배치 · 이관", "두 표 통째로 같은지 (MINUS / EXCEPT 양쪽)", "칼럼이 같은 두 표에서 한쪽에만 있는 줄. 이관 뒤 대조에 씁니다.",
+      new Example("인터페이스 · 배치 · 이관", "두 테이블 통째로 같은지 (MINUS / EXCEPT 양쪽)", "칼럼이 같은 두 테이블에서 한쪽에만 있는 줄. 이관 뒤 대조에 씁니다.",
           """
           SELECT 'OLD 에만' AS SIDE, a.* FROM (SELECT o.ORDER_ID, o.AMOUNT, o.STATUS FROM ORDERS_BAK o MINUS SELECT n.ORDER_ID, n.AMOUNT, n.STATUS FROM ORDERS n) a
            UNION ALL
@@ -13048,7 +13048,7 @@ public final class Examples {
           SELECT 'OLD 에만' AS SIDE, a.* FROM (SELECT o.ORDER_ID, o.AMOUNT, o.STATUS FROM ORDERS_BAK o EXCEPT SELECT n.ORDER_ID, n.AMOUNT, n.STATUS FROM ORDERS n) a
            UNION ALL
           SELECT 'NEW 에만', b.* FROM (SELECT n.ORDER_ID, n.AMOUNT, n.STATUS FROM ORDERS n EXCEPT SELECT o.ORDER_ID, o.AMOUNT, o.STATUS FROM ORDERS_BAK o) b"""),
-      new Example("인터페이스 · 배치 · 이관", "이관 점검 요약 (건수 · 합계 · 키 범위 비교)", "옛 표와 새 표의 건수, 금액 합, 최소 · 최대 키를 한 줄씩.",
+      new Example("인터페이스 · 배치 · 이관", "이관 점검 요약 (건수 · 합계 · 키 범위 비교)", "옛 테이블과 새 테이블의 건수, 금액 합, 최소 · 최대 키를 한 줄씩.",
           """
           SELECT
                  'OLD' AS SIDE
@@ -13194,7 +13194,7 @@ public final class Examples {
                    WHERE b.END_TS IS NOT NULL
                  ) x
            WHERE x.MINUTES > x.AVG_MIN * 2"""),
-      new Example("인터페이스 · 배치 · 이관", "인터페이스 일별 성공 · 실패 · 대기", "인터페이스 표의 상태를 날짜마다 칸으로.",
+      new Example("인터페이스 · 배치 · 이관", "인터페이스 일별 성공 · 실패 · 대기", "인터페이스 테이블의 상태를 날짜마다 칸으로.",
           """
           SELECT
                  TRUNC(f.REG_DT) AS DT
@@ -13240,7 +13240,7 @@ public final class Examples {
                  SUBSTR(f.ERR_MSG, 1, 60)
            ORDER BY
                  CNT DESC"""),
-      new Example("감사 · 로그", "누가 언제 무엇을 바꿨나 (감사 로그)", "표 · 키를 골라 바뀐 칼럼과 전후 값, 바꾼 사람.",
+      new Example("감사 · 로그", "누가 언제 무엇을 바꿨나 (감사 로그)", "테이블 · 키를 골라 바뀐 칼럼과 전후 값, 바꾼 사람.",
           """
           SELECT
                  l.LOG_TS
@@ -13270,7 +13270,7 @@ public final class Examples {
              AND l.PK_VAL = :pkVal
            ORDER BY
                  l.LOG_TS DESC"""),
-      new Example("감사 · 로그", "사람별 변경 건수 (최근 30일)", "누가 얼마나 고쳤는지 표 · 동작별로.",
+      new Example("감사 · 로그", "사람별 변경 건수 (최근 30일)", "누가 얼마나 고쳤는지 테이블 · 동작별로.",
           """
           SELECT
                  l.USER_ID
@@ -13394,7 +13394,7 @@ public final class Examples {
                , a.PK_VAL
                , CAST(a.LOG_TS AS DATE)
           HAVING COUNT(*) > 3"""),
-      new Example("감사 · 로그", "지운 데이터 이력 (누가 무엇을 지웠나)", "감사 로그에서 DELETE 만, 표 · 사람별로.",
+      new Example("감사 · 로그", "지운 데이터 이력 (누가 무엇을 지웠나)", "감사 로그에서 DELETE 만, 테이블 · 사람별로.",
           """
           SELECT
                  a.TABLE_NAME
@@ -13894,7 +13894,7 @@ public final class Examples {
                  CASE WHEN x.RN <= 5 THEN x.PART_NO ELSE '기타' END
            ORDER BY
                  MIN(x.RN)"""),
-      new Example("대시보드 통계", "등급 × 상태 가로표 (매트릭스 표)", "등급이 줄, 상태가 칸. 맨 끝 칸과 맨 아래 줄에 합계.",
+      new Example("대시보드 통계", "등급 × 상태 가로표 (매트릭스 테이블)", "등급이 줄, 상태가 칸. 맨 끝 칸과 맨 아래 줄에 합계.",
           """
           SELECT
                  NVL(i.SEVERITY, '합계') AS SEVERITY
@@ -14079,7 +14079,7 @@ public final class Examples {
                     FROM ISSUE i
                    WHERE i.REG_DT >= DATE_TRUNC('MONTH', CURRENT_DATE) - INTERVAL '1 MONTH'
                  ) x"""),
-      new Example("대시보드 통계", "부서 · 담당자 소계와 총계가 있는 표", "부서별 소계, 맨 아래 총계를 한 번에(ROLLUP). 소계 줄에는 「소계」 글자를.",
+      new Example("대시보드 통계", "부서 · 담당자 소계와 총계가 있는 테이블", "부서별 소계, 맨 아래 총계를 한 번에(ROLLUP). 소계 줄에는 「소계」 글자를.",
           """
           SELECT
                  CASE WHEN GROUPING(u.DEPT_ID) = 1 THEN '총계' ELSE TO_CHAR(u.DEPT_ID) END AS DEPT
@@ -14139,7 +14139,7 @@ public final class Examples {
                    WHERE s.DONE_DT IS NULL
                  ) x
            WHERE x.RN = 1"""),
-      new Example("대시보드 통계", "차종별 프로젝트 · 부품 · 열린 이슈 수", "차종 한 줄에 여러 표의 건수를 따로 묶어 붙입니다(먼저 묶고 붙여야 곱해지지 않음).",
+      new Example("대시보드 통계", "차종별 프로젝트 · 부품 · 열린 이슈 수", "차종 한 줄에 여러 테이블의 건수를 따로 묶어 붙입니다(먼저 묶고 붙여야 곱해지지 않음).",
           """
           SELECT
                  p.CAR_TYPE
@@ -14513,7 +14513,7 @@ public final class Examples {
                  up.PARENT_PART
            ORDER BY
                  2 DESC"""),
-      new Example("거슬러 올라가는 통계", "자식 표에서 부모를 찾아 맨 위까지 올라가 묶기", "메뉴 하나하나(자식)에서 출발해 부모를 거슬러 최상위 메뉴를 찾고, 최상위 메뉴별로 권한 수를 셉니다.",
+      new Example("거슬러 올라가는 통계", "자식 테이블에서 부모를 찾아 맨 위까지 올라가 묶기", "메뉴 하나하나(자식)에서 출발해 부모를 거슬러 최상위 메뉴를 찾고, 최상위 메뉴별로 권한 수를 셉니다.",
           """
           SELECT
                  x.TOP_MENU
@@ -14617,7 +14617,7 @@ public final class Examples {
                  x.ROOT_DEPT
            ORDER BY
                  x.ROOT_DEPT"""),
-      new Example("거슬러 올라가는 통계", "참조를 거꾸로 따라가 원천 찾기 (외래 키 역추적 집계)", "출하에서 수주로, 수주에서 고객으로 거꾸로 따라가 고객 등급별 출하량을 셉니다. 각 단계 키를 차례로 잇습니다.",
+      new Example("거슬러 올라가는 통계", "참조를 거꾸로 따라가 원천 찾기 (FK 역추적 집계)", "출하에서 수주로, 수주에서 고객으로 거꾸로 따라가 고객 등급별 출하량을 셉니다. 각 단계 키를 차례로 잇습니다.",
           """
           SELECT
                  c.GRADE
@@ -14644,7 +14644,7 @@ public final class Examples {
                  c.GRADE
            ORDER BY
                  SHIP_QTY DESC"""),
-      new Example("거슬러 올라가는 통계", "어느 표가 이 표를 참조하나 (외래 키 거꾸로 찾기)", "표 이름을 넣으면 그 표를 부모로 삼는 자식 표와 칼럼. 통계 쿼리를 짤 때 어디까지 따라갈지 고릅니다.",
+      new Example("거슬러 올라가는 통계", "어느 테이블이 이 테이블을 참조하나 (FK 거꾸로 찾기)", "테이블 이름을 넣으면 그 테이블을 부모로 삼는 자식 테이블과 칼럼. 통계 쿼리를 짤 때 어디까지 따라갈지 고릅니다.",
           """
           SELECT
                  c.TABLE_NAME AS CHILD_TABLE
@@ -14671,7 +14671,7 @@ public final class Examples {
              AND c.CONFRELID = CAST(LOWER(:tableName) AS REGCLASS)
            ORDER BY
                  1, 2"""),
-      new Example("거슬러 올라가는 통계", "외래 키 따라 위로 전부 (표 관계 계층)", "한 표에서 시작해 부모 표, 그 부모 표 … 끝까지. 통계를 어느 마스터까지 올려 묶을 수 있는지 봅니다.",
+      new Example("거슬러 올라가는 통계", "FK 따라 위로 전부 (테이블 관계 계층)", "한 테이블에서 시작해 부모 테이블, 그 부모 테이블 … 끝까지. 통계를 어느 마스터까지 올려 묶을 수 있는지 봅니다.",
           """
           SELECT
                  LEVEL AS UP
@@ -14706,7 +14706,7 @@ public final class Examples {
                , up.CHILD::REGCLASS AS CHILD_TABLE
                , up.PARENT::REGCLASS AS PARENT_TABLE
             FROM up"""),
-      new Example("Oracle 함수", "DECODE (값마다 다른 글자)", "DECODE(칼럼, 값1, 결과1, 값2, 결과2, 그 밖) — CASE 의 짧은 꼴. PostgreSQL 은 CASE 로 씁니다.",
+      new Example("Oracle 펑션", "DECODE (값마다 다른 글자)", "DECODE(칼럼, 값1, 결과1, 값2, 결과2, 그 밖) — CASE 의 짧은 꼴. PostgreSQL 은 CASE 로 씁니다.",
           """
           SELECT
                  p.PROJ_ID
@@ -14717,7 +14717,7 @@ public final class Examples {
                  p.PROJ_ID
                , CASE p.STATUS WHEN 'ING' THEN '진행' WHEN 'DONE' THEN '완료' WHEN 'HOLD' THEN '보류' ELSE '모름' END AS STATUS_NAME
             FROM PROJECT p"""),
-      new Example("Oracle 함수", "DECODE 로 세기 (조건부 COUNT · SUM)", "SUM(DECODE(상태, 'OPEN', 1, 0)) 은 옛 Oracle 쿼리에 아주 많이 나오는 꼴입니다.",
+      new Example("Oracle 펑션", "DECODE 로 세기 (조건부 COUNT · SUM)", "SUM(DECODE(상태, 'OPEN', 1, 0)) 은 옛 Oracle 쿼리에 아주 많이 나오는 꼴입니다.",
           """
           SELECT
                  i.PROJ_ID
@@ -14734,7 +14734,7 @@ public final class Examples {
             FROM ISSUE i
            GROUP BY
                  i.PROJ_ID"""),
-      new Example("Oracle 함수", "NVL2 · NULLIF · COALESCE", "NVL2(값, 있을 때, 없을 때). NULLIF(a, b) 는 같으면 NULL(0 으로 나누기 막기). COALESCE 는 앞에서부터 처음 NULL 아닌 값.",
+      new Example("Oracle 펑션", "NVL2 · NULLIF · COALESCE", "NVL2(값, 있을 때, 없을 때). NULLIF(a, b) 는 같으면 NULL(0 으로 나누기 막기). COALESCE 는 앞에서부터 처음 NULL 아닌 값.",
           """
           SELECT
                  s.SCH_ID
@@ -14749,7 +14749,7 @@ public final class Examples {
                , COALESCE(s.ACT_END, s.PLAN_END, s.PLAN_START) AS SOME_DT
                , 100 / NULLIF(s.STEP_SEQ - 1, 0) AS SAFE_DIV
             FROM SCHEDULE s"""),
-      new Example("Oracle 함수", "GREATEST · LEAST (여러 칸 중 큰 값 · 작은 값)", "줄 안의 여러 칼럼 중 가장 큰 · 작은 값. NULL 이 하나라도 있으면 Oracle 은 NULL, PostgreSQL 은 NULL 을 빼고 셉니다.",
+      new Example("Oracle 펑션", "GREATEST · LEAST (여러 칸 중 큰 값 · 작은 값)", "줄 안의 여러 칼럼 중 가장 큰 · 작은 값. NULL 이 하나라도 있으면 Oracle 은 NULL, PostgreSQL 은 NULL 을 빼고 셉니다.",
           """
           SELECT
                  s.SCH_ID
@@ -14762,7 +14762,7 @@ public final class Examples {
                , GREATEST(s.PLAN_END, s.ACT_END) AS LAST_DT
                , LEAST(s.PLAN_START, s.ACT_START) AS FIRST_DT
             FROM SCHEDULE s"""),
-      new Example("Oracle 함수", "PIVOT (줄을 칸으로)", "상태 값을 칸으로 펼칩니다. IN 안의 값이 칸 이름이 됩니다(11g 이상). PostgreSQL 은 FILTER 로 같은 결과.",
+      new Example("Oracle 펑션", "PIVOT (줄을 칸으로)", "상태 값을 칸으로 펼칩니다. IN 안의 값이 칸 이름이 됩니다(11g 이상). PostgreSQL 은 FILTER 로 같은 결과.",
           """
           SELECT
                  *
@@ -14782,7 +14782,7 @@ public final class Examples {
                  i.PROJ_ID
            ORDER BY
                  i.PROJ_ID"""),
-      new Example("Oracle 함수", "PIVOT 여러 값 (월이 칸, 수량 · 금액)", "월별 가로표를 PIVOT 으로. 집계를 둘 넣으면 칸 이름 뒤에 _QTY, _AMT 가 붙습니다.",
+      new Example("Oracle 펑션", "PIVOT 여러 값 (월이 칸, 수량 · 금액)", "월별 가로표를 PIVOT 으로. 집계를 둘 넣으면 칸 이름 뒤에 _QTY, _AMT 가 붙습니다.",
           """
           SELECT
                  *
@@ -14802,7 +14802,7 @@ public final class Examples {
             FROM SALES_ORDER o
            GROUP BY
                  o.PART_NO"""),
-      new Example("Oracle 함수", "UNPIVOT (칸을 줄로)", "가로로 놓인 칸(S1 · S2 …)을 줄로 세웁니다. 엑셀 꼴 표를 정규화할 때 씁니다.",
+      new Example("Oracle 펑션", "UNPIVOT (칸을 줄로)", "가로로 놓인 칸(S1 · S2 …)을 줄로 세웁니다. 엑셀 꼴 테이블을 정규화할 때 씁니다.",
           """
           SELECT
                  *
@@ -14836,7 +14836,7 @@ public final class Examples {
                  ) x
            CROSS JOIN LATERAL (VALUES ('1', x.S1), ('2', x.S2), ('3', x.S3)) AS v(STEP, PLAN_END)
            WHERE v.PLAN_END IS NOT NULL"""),
-      new Example("Oracle 함수", "NEXT_DAY · LAST_DAY (다음 월요일 · 그달 말일)", "NEXT_DAY 의 요일 이름은 DB 언어 설정을 따릅니다(한국어면 '월요일'). 숫자로 쓰려면 TRUNC(날짜, 'IW') + 7 이 안전합니다.",
+      new Example("Oracle 펑션", "NEXT_DAY · LAST_DAY (다음 월요일 · 그달 말일)", "NEXT_DAY 의 요일 이름은 DB 언어 설정을 따릅니다(한국어면 '월요일'). 숫자로 쓰려면 TRUNC(날짜, 'IW') + 7 이 안전합니다.",
           """
           SELECT
                  TRUNC(SYSDATE, 'IW') + 7 AS NEXT_MONDAY
@@ -14848,7 +14848,7 @@ public final class Examples {
                  CAST(DATE_TRUNC('WEEK', CURRENT_DATE) AS DATE) + 7 AS NEXT_MONDAY
                , CAST(DATE_TRUNC('MONTH', CURRENT_DATE) + INTERVAL '1 MONTH' AS DATE) - 1 AS MONTH_END
                , CAST(DATE_TRUNC('MONTH', CURRENT_DATE) AS DATE) - 1 AS LAST_MONTH_END"""),
-      new Example("Oracle 함수", "TO_TIMESTAMP · SYSTIMESTAMP · 밀리초", "초 아래까지 다룰 때. FF3 은 밀리초 세 자리.",
+      new Example("Oracle 펑션", "TO_TIMESTAMP · SYSTIMESTAMP · 밀리초", "초 아래까지 다룰 때. FF3 은 밀리초 세 자리.",
           """
           SELECT
                  SYSTIMESTAMP AS NOW_TS
@@ -14860,7 +14860,7 @@ public final class Examples {
                  CURRENT_TIMESTAMP AS NOW_TS
                , TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS.MS') AS NOW_MS
                , TO_TIMESTAMP('2026-11-07 13:05:01.123', 'YYYY-MM-DD HH24:MI:SS.MS') AS PARSED"""),
-      new Example("Oracle 함수", "날짜 빼서 시간 · 분 · 초로 (HH:MI:SS 꼴)", "Oracle 날짜끼리 빼면 일 단위 숫자. × 24 는 시간, × 1440 은 분. NUMTODSINTERVAL 로 보기 좋은 꼴로.",
+      new Example("Oracle 펑션", "날짜 빼서 시간 · 분 · 초로 (HH:MI:SS 꼴)", "Oracle 날짜끼리 빼면 일 단위 숫자. × 24 는 시간, × 1440 은 분. NUMTODSINTERVAL 로 보기 좋은 꼴로.",
           """
           SELECT
                  e.EQUIP_ID
@@ -14877,7 +14877,7 @@ public final class Examples {
                , e.END_TS - e.START_TS AS DURATION
                , TO_CHAR(e.END_TS - e.START_TS, 'HH24:MI:SS') AS HHMISS
             FROM EQUIP_LOG e"""),
-      new Example("Oracle 함수", "RPAD · LPAD · TRANSLATE (고정 길이 · 글자 바꾸기)", "고정 길이 파일을 만들 때 RPAD 로 오른쪽을 공백으로 채웁니다. TRANSLATE 는 글자 하나씩 바꿉니다(- 와 / 를 . 으로).",
+      new Example("Oracle 펑션", "RPAD · LPAD · TRANSLATE (고정 길이 · 글자 바꾸기)", "고정 길이 파일을 만들 때 RPAD 로 오른쪽을 공백으로 채웁니다. TRANSLATE 는 글자 하나씩 바꿉니다(- 와 / 를 . 으로).",
           """
           SELECT
                  RPAD(p.PART_NO, 20, ' ') || LPAD(TO_CHAR(p.UNIT_COST), 10, '0') AS FIXED_LINE
@@ -14888,7 +14888,7 @@ public final class Examples {
                  RPAD(p.PART_NO, 20, ' ') || LPAD(CAST(p.UNIT_COST AS VARCHAR), 10, '0') AS FIXED_LINE
                , TRANSLATE('2026-11/07', '-/', '..') AS DOTTED
             FROM PART p"""),
-      new Example("Oracle 함수", "REGEXP_COUNT · REGEXP_REPLACE (정규식 세기 · 바꾸기)", "쉼표 개수로 항목 수 세기, 연속 공백을 하나로.",
+      new Example("Oracle 펑션", "REGEXP_COUNT · REGEXP_REPLACE (정규식 세기 · 바꾸기)", "쉼표 개수로 항목 수 세기, 연속 공백을 하나로.",
           """
           SELECT
                  p.PART_NO
@@ -14903,7 +14903,7 @@ public final class Examples {
                , REGEXP_REPLACE('A   B    C', ' {2,}', ' ', 'g') AS ONE_SPACE
             FROM PART p
            WHERE p.TAGS IS NOT NULL"""),
-      new Example("Oracle 함수", "LENGTH vs LENGTHB (한글 칸 넘침 점검)", "VARCHAR2(100 BYTE) 칸에는 한글이 33~50자밖에 안 들어갑니다. 바이트로 넘칠 값을 미리 찾습니다.",
+      new Example("Oracle 펑션", "LENGTH vs LENGTHB (한글 칸 넘침 점검)", "VARCHAR2(100 BYTE) 칸에는 한글이 33~50자밖에 안 들어갑니다. 바이트로 넘칠 값을 미리 찾습니다.",
           """
           SELECT
                  p.PART_NO
@@ -14920,7 +14920,7 @@ public final class Examples {
                , OCTET_LENGTH(p.PART_NAME) AS BYTES
             FROM PART p
            WHERE OCTET_LENGTH(p.PART_NAME) > :maxBytes"""),
-      new Example("Oracle 함수", "LISTAGG 가 4000바이트를 넘을 때 (ON OVERFLOW · XMLAGG)", "LISTAGG 는 결과가 4000바이트를 넘으면 ORA-01489. 12.2 이상은 ON OVERFLOW TRUNCATE, 그 전은 XMLAGG 로 CLOB 을 만듭니다.",
+      new Example("Oracle 펑션", "LISTAGG 가 4000바이트를 넘을 때 (ON OVERFLOW · XMLAGG)", "LISTAGG 는 결과가 4000바이트를 넘으면 ORA-01489. 12.2 이상은 ON OVERFLOW TRUNCATE, 그 전은 XMLAGG 로 CLOB 을 만듭니다.",
           """
           SELECT
                  b.PARENT_PART
@@ -14936,7 +14936,7 @@ public final class Examples {
             FROM BOM b
            GROUP BY
                  b.PARENT_PART"""),
-      new Example("Oracle 함수", "위에서 n건 (FETCH FIRST · ROWNUM)", "12c 이상은 FETCH FIRST n ROWS ONLY. 11g 이하는 정렬을 안쪽에 두고 바깥에서 ROWNUM.",
+      new Example("Oracle 펑션", "위에서 n건 (FETCH FIRST · ROWNUM)", "12c 이상은 FETCH FIRST n ROWS ONLY. 11g 이하는 정렬을 안쪽에 두고 바깥에서 ROWNUM.",
           """
           SELECT
                  o.ORDER_ID
@@ -14953,7 +14953,7 @@ public final class Examples {
            ORDER BY
                  o.AMOUNT DESC
            FETCH FIRST 10 ROWS ONLY"""),
-      new Example("Oracle 함수", "같은 값이면 함께 (FETCH FIRST … WITH TIES)", "10등과 같은 값인 줄까지 다 가져옵니다.",
+      new Example("Oracle 펑션", "같은 값이면 함께 (FETCH FIRST … WITH TIES)", "10등과 같은 값인 줄까지 다 가져옵니다.",
           """
           SELECT
                  o.ORDER_ID
@@ -14970,7 +14970,7 @@ public final class Examples {
            ORDER BY
                  o.AMOUNT DESC
            FETCH FIRST 10 ROWS WITH TIES"""),
-      new Example("Oracle 함수", "KEEP (DENSE_RANK FIRST / LAST) — 가장 최근 줄의 다른 칸", "묶음마다 가장 최근(또는 처음) 줄의 다른 칼럼 값을 한 번에. 서브쿼리 없이 씁니다.",
+      new Example("Oracle 펑션", "KEEP (DENSE_RANK FIRST / LAST) — 가장 최근 줄의 다른 칸", "묶음마다 가장 최근(또는 처음) 줄의 다른 칼럼 값을 한 번에. 서브쿼리 없이 씁니다.",
           """
           SELECT
                  r.PART_NO
@@ -14989,7 +14989,7 @@ public final class Examples {
             FROM PART_REV r
            GROUP BY
                  r.PART_NO"""),
-      new Example("Oracle 함수", "ROWID 로 중복 지우기 · 한 줄 고치기", "키가 없는 표에서 같은 줄 중 하나만 남길 때 ROWID 를 씁니다. PostgreSQL 은 ctid.",
+      new Example("Oracle 펑션", "ROWID 로 중복 지우기 · 한 줄 고치기", "키가 없는 테이블에서 같은 줄 중 하나만 남길 때 ROWID 를 씁니다. PostgreSQL 은 ctid.",
           """
           DELETE FROM UPLOAD_TMP u
            WHERE u.ROWID NOT IN (
@@ -15006,7 +15006,7 @@ public final class Examples {
                     GROUP BY
                           x.PART_NO
                  )"""),
-      new Example("Oracle 함수", "ADD_MONTHS · MONTHS_BETWEEN · 말일 처리", "1월 31일 + 1달 = 2월 28(29)일. MONTHS_BETWEEN 은 소수로 나와 TRUNC 로 개월 수만.",
+      new Example("Oracle 펑션", "ADD_MONTHS · MONTHS_BETWEEN · 말일 처리", "1월 31일 + 1달 = 2월 28(29)일. MONTHS_BETWEEN 은 소수로 나와 TRUNC 로 개월 수만.",
           """
           SELECT
                  ADD_MONTHS(DATE '2026-01-31', 1) AS FEB_END
@@ -15016,7 +15016,7 @@ public final class Examples {
           SELECT
                  DATE '2026-01-31' + INTERVAL '1 MONTH' AS FEB_END
                , EXTRACT(YEAR FROM AGE(DATE '2026-11-07', DATE '2025-03-15')) * 12 + EXTRACT(MONTH FROM AGE(DATE '2026-11-07', DATE '2025-03-15')) AS MONTHS"""),
-      new Example("Oracle 함수", "TO_CHAR 숫자 꼴 (천 단위 쉼표 · 소수 · 퍼센트)", "FM 은 앞 공백을 없앱니다. 9 는 자리, 0 은 0 으로 채울 자리.",
+      new Example("Oracle 펑션", "TO_CHAR 숫자 꼴 (천 단위 쉼표 · 소수 · 퍼센트)", "FM 은 앞 공백을 없앱니다. 9 는 자리, 0 은 0 으로 채울 자리.",
           """
           SELECT
                  TO_CHAR(1234567.891, 'FM999,999,990.00') AS MONEY
@@ -15028,7 +15028,7 @@ public final class Examples {
                  TO_CHAR(1234567.891, 'FM999,999,990.00') AS MONEY
                , TO_CHAR(0.4567 * 100, 'FM990.0') || '%' AS PCT
                , TO_CHAR(7, 'FM000') AS PADDED"""),
-      new Example("Oracle 함수", "WM_CONCAT 대신 쓸 것 (옛 쿼리 고치기)", "WM_CONCAT 은 12c 에서 없어졌습니다. 같은 일을 LISTAGG 로.",
+      new Example("Oracle 펑션", "WM_CONCAT 대신 쓸 것 (옛 쿼리 고치기)", "WM_CONCAT 은 12c 에서 없어졌습니다. 같은 일을 LISTAGG 로.",
           """
           SELECT
                  b.PARENT_PART
@@ -15043,7 +15043,7 @@ public final class Examples {
             FROM BOM b
            GROUP BY
                  b.PARENT_PART"""),
-      new Example("Oracle 함수", "SUBSTR · INSTR 뒤에서부터 (음수 위치)", "SUBSTR(글, -3) 은 끝 3글자, INSTR(글, '-', -1) 은 마지막 '-' 위치. 파일 확장자 · 마지막 조각 꺼내기.",
+      new Example("Oracle 펑션", "SUBSTR · INSTR 뒤에서부터 (음수 위치)", "SUBSTR(글, -3) 은 끝 3글자, INSTR(글, '-', -1) 은 마지막 '-' 위치. 파일 확장자 · 마지막 조각 꺼내기.",
           """
           SELECT
                  p.PART_NO
@@ -15056,7 +15056,7 @@ public final class Examples {
                , RIGHT(p.PART_NO, 3) AS LAST3
                , SPLIT_PART(p.TAGS, ',', -1) AS LAST_TAG
             FROM PART p"""),
-      new Example("Oracle 함수", "REGEXP_SUBSTR n 번째 조각 · REGEXP_INSTR", "'A-B-C' 의 n 번째 조각과 숫자가 처음 나오는 위치.",
+      new Example("Oracle 펑션", "REGEXP_SUBSTR n 번째 조각 · REGEXP_INSTR", "'A-B-C' 의 n 번째 조각과 숫자가 처음 나오는 위치.",
           """
           SELECT
                  REGEXP_SUBSTR('A-B-C', '[^-]+', 1, 3) AS THIRD
@@ -15066,7 +15066,7 @@ public final class Examples {
           SELECT
                  SPLIT_PART('A-B-C', '-', 3) AS THIRD
                , POSITION(SUBSTRING('ABC123' FROM '[0-9]') IN 'ABC123') AS FIRST_DIGIT_POS"""),
-      new Example("Oracle 함수", "TRIM LEADING · LTRIM · RTRIM (앞 0 · 뒤 공백 지우기)", "앞에 붙은 0 을 지우거나 오른쪽 공백 · 점을 지웁니다.",
+      new Example("Oracle 펑션", "TRIM LEADING · LTRIM · RTRIM (앞 0 · 뒤 공백 지우기)", "앞에 붙은 0 을 지우거나 오른쪽 공백 · 점을 지웁니다.",
           """
           SELECT
                  TRIM(LEADING '0' FROM '000123') AS NO_ZERO
@@ -15078,7 +15078,7 @@ public final class Examples {
                  TRIM(LEADING '0' FROM '000123') AS NO_ZERO
                , LTRIM('  abc') AS LEFT_TRIM
                , RTRIM('abc...', '.') AS RIGHT_TRIM"""),
-      new Example("Oracle 함수", "INITCAP · CONCAT · CHR · ASCII", "첫 글자 대문자, 두 글 잇기, 글자 ↔ 번호.",
+      new Example("Oracle 펑션", "INITCAP · CONCAT · CHR · ASCII", "첫 글자 대문자, 두 글 잇기, 글자 ↔ 번호.",
           """
           SELECT
                  INITCAP('hello world') AS CAP
@@ -15092,7 +15092,7 @@ public final class Examples {
                , CONCAT('A', 'B') AS JOINED
                , CHR(65) AS CH
                , ASCII('A') AS CODE"""),
-      new Example("Oracle 함수", "TRUNC · ROUND 숫자 (자리 · 음수 자리)", "ROUND(123456, -3) 은 천 단위 반올림, TRUNC(12.345, 1) 은 소수 한 자리 버림.",
+      new Example("Oracle 펑션", "TRUNC · ROUND 숫자 (자리 · 음수 자리)", "ROUND(123456, -3) 은 천 단위 반올림, TRUNC(12.345, 1) 은 소수 한 자리 버림.",
           """
           SELECT
                  ROUND(123456, -3) AS R_THOUSAND
@@ -15106,7 +15106,7 @@ public final class Examples {
                , TRUNC(12.345, 1) AS T1
                , CEIL(12.1) AS UP
                , FLOOR(12.9) AS DOWN"""),
-      new Example("Oracle 함수", "MOD · ABS · SIGN · POWER · SQRT", "나머지, 절댓값, 부호(-1 · 0 · 1), 거듭제곱, 제곱근.",
+      new Example("Oracle 펑션", "MOD · ABS · SIGN · POWER · SQRT", "나머지, 절댓값, 부호(-1 · 0 · 1), 거듭제곱, 제곱근.",
           """
           SELECT
                  MOD(10, 3) AS M
@@ -15122,7 +15122,7 @@ public final class Examples {
                , SIGN(-3) AS S
                , POWER(2, 10) AS P
                , SQRT(16) AS Q"""),
-      new Example("Oracle 함수", "TRUNC · ROUND 날짜 (일 · 월 · 연 · 주 시작)", "TRUNC(날짜, 'MM') 은 그달 1일, 'IW' 는 그 주 월요일, ROUND 는 가까운 쪽으로.",
+      new Example("Oracle 펑션", "TRUNC · ROUND 날짜 (일 · 월 · 연 · 주 시작)", "TRUNC(날짜, 'MM') 은 그달 1일, 'IW' 는 그 주 월요일, ROUND 는 가까운 쪽으로.",
           """
           SELECT
                  TRUNC(SYSDATE) AS TODAY
@@ -15138,7 +15138,7 @@ public final class Examples {
                , CAST(DATE_TRUNC('YEAR', CURRENT_DATE) AS DATE) AS YEAR_START
                , CAST(DATE_TRUNC('WEEK', CURRENT_DATE) AS DATE) AS WEEK_MON
                , CAST(DATE_TRUNC('QUARTER', CURRENT_DATE) AS DATE) AS QUARTER_START"""),
-      new Example("Oracle 함수", "TO_CHAR 날짜 꼴 모음 (요일 · 분기 · 주 · 오전/오후)", "자주 쓰는 날짜 꼴: 요일 이름, 분기, 연중 몇째 주, 24시 · 12시.",
+      new Example("Oracle 펑션", "TO_CHAR 날짜 꼴 모음 (요일 · 분기 · 주 · 오전/오후)", "자주 쓰는 날짜 꼴: 요일 이름, 분기, 연중 몇째 주, 24시 · 12시.",
           """
           SELECT
                  TO_CHAR(SYSDATE, 'YYYY-MM-DD HH24:MI:SS') AS FULL_DT
@@ -15156,7 +15156,7 @@ public final class Examples {
                , TO_CHAR(NOW(), 'Q') AS QUARTER
                , TO_CHAR(NOW(), 'IW') AS ISO_WEEK
                , TO_CHAR(NOW(), 'AM HH:MI') AS AMPM"""),
-      new Example("Oracle 함수", "EXTRACT (연 · 월 · 일 · 시 숫자로)", "날짜에서 숫자 하나만 꺼냅니다. 시 · 분은 TIMESTAMP 에서만 됩니다.",
+      new Example("Oracle 펑션", "EXTRACT (연 · 월 · 일 · 시 숫자로)", "날짜에서 숫자 하나만 꺼냅니다. 시 · 분은 TIMESTAMP 에서만 됩니다.",
           """
           SELECT
                  EXTRACT(YEAR FROM SYSDATE) AS Y
@@ -15170,7 +15170,7 @@ public final class Examples {
                , EXTRACT(MONTH FROM NOW()) AS M
                , EXTRACT(DAY FROM NOW()) AS D
                , EXTRACT(HOUR FROM NOW()) AS H"""),
-      new Example("Oracle 함수", "NUMTODSINTERVAL · NUMTOYMINTERVAL (숫자를 기간으로)", "분 · 시간 · 달 수를 칸 값으로 받아 날짜에 더할 때.",
+      new Example("Oracle 펑션", "NUMTODSINTERVAL · NUMTOYMINTERVAL (숫자를 기간으로)", "분 · 시간 · 달 수를 칸 값으로 받아 날짜에 더할 때.",
           """
           SELECT
                  SYSTIMESTAMP + NUMTODSINTERVAL(90, 'MINUTE') AS AFTER_90M
@@ -15180,7 +15180,7 @@ public final class Examples {
           SELECT
                  NOW() + MAKE_INTERVAL(MINS => 90) AS AFTER_90M
                , CURRENT_DATE + MAKE_INTERVAL(MONTHS => 2) AS AFTER_2M"""),
-      new Example("Oracle 함수", "CAST · TO_NUMBER · TO_DATE 형 바꾸기", "글자 ↔ 숫자 ↔ 날짜. 꼴이 틀리면 오류가 나므로 먼저 거르세요(「숫자인지 확인」).",
+      new Example("Oracle 펑션", "CAST · TO_NUMBER · TO_DATE 타입 바꾸기", "글자 ↔ 숫자 ↔ 날짜. 꼴이 틀리면 오류가 나므로 먼저 거르세요(「숫자인지 확인」).",
           """
           SELECT
                  TO_NUMBER('1,234', '9,999') AS N
@@ -15194,7 +15194,7 @@ public final class Examples {
                , TO_DATE('20261107', 'YYYYMMDD') AS D
                , CAST('123' AS NUMERIC) AS C
                , CAST(CURRENT_DATE AS TIMESTAMP) AS TS"""),
-      new Example("Oracle 함수", "SYS_GUID · ORA_HASH · STANDARD_HASH (고유 값 · 해시)", "겹치지 않는 키 만들기, 값 비교용 해시, 나눠 처리할 때 몫 정하기.",
+      new Example("Oracle 펑션", "SYS_GUID · ORA_HASH · STANDARD_HASH (고유 값 · 해시)", "겹치지 않는 키 만들기, 값 비교용 해시, 나눠 처리할 때 몫 정하기.",
           """
           SELECT
                  SYS_GUID() AS GUID
@@ -15206,7 +15206,7 @@ public final class Examples {
                  GEN_RANDOM_UUID() AS GUID
                , MOD(ABS(HASHTEXT('P001')), 10) AS BUCKET
                , MD5('P001') AS SHA"""),
-      new Example("Oracle 함수", "SYS_CONTEXT · USER (접속 정보)", "지금 계정, 접속 PC, IP, 프로그램 이름. 감사 로그에 남길 때 씁니다.",
+      new Example("Oracle 펑션", "SYS_CONTEXT · USER (접속 정보)", "지금 계정, 접속 PC, IP, 프로그램 이름. 감사 로그에 남길 때 씁니다.",
           """
           SELECT
                  USER AS DB_USER
@@ -15220,7 +15220,7 @@ public final class Examples {
                  CURRENT_USER AS DB_USER
                , INET_CLIENT_ADDR() AS IP
                , CURRENT_SETTING('application_name') AS MODULE"""),
-      new Example("Oracle 함수", "NULLS FIRST · NULLS LAST", "빈 값을 맨 앞 · 맨 뒤로. Oracle 은 오름차순이면 NULL 이 뒤, 내림차순이면 앞이 기본입니다.",
+      new Example("Oracle 펑션", "NULLS FIRST · NULLS LAST", "빈 값을 맨 앞 · 맨 뒤로. Oracle 은 오름차순이면 NULL 이 뒤, 내림차순이면 앞이 기본입니다.",
           """
           SELECT
                  c.CAPA_NO
@@ -15235,7 +15235,7 @@ public final class Examples {
             FROM CAPA c
            ORDER BY
                  c.DUE_DT DESC NULLS LAST"""),
-      new Example("Oracle 함수", "INSERT ALL (한 번에 여러 표 · 여러 줄)", "한 SELECT 결과를 조건에 따라 여러 표에 나눠 넣습니다. PostgreSQL 은 INSERT 를 나눠 씁니다.",
+      new Example("Oracle 펑션", "INSERT ALL (한 번에 여러 테이블 · 여러 줄)", "한 SELECT 결과를 조건에 따라 여러 테이블에 나눠 넣습니다. PostgreSQL 은 INSERT 를 나눠 씁니다.",
           """
           INSERT ALL
             WHEN STATUS = '완료' THEN INTO ORDERS_BAK (ORDER_ID, CUST_ID, AMOUNT, STATUS, ORDER_DT) VALUES (ORDER_ID, CUST_ID, AMOUNT, STATUS, ORDER_DT)
@@ -15258,7 +15258,7 @@ public final class Examples {
             FROM ORDERS o
            WHERE o.STATUS = '완료'
              AND NOT EXISTS (SELECT 1 FROM ORDERS_BAK b WHERE b.ORDER_ID = o.ORDER_ID)"""),
-      new Example("Oracle 함수", "MERGE 에 DELETE 절 (고치면서 조건 맞는 줄 지우기)", "MERGE 로 고친 뒤 상태가 STOP 이 된 줄은 지웁니다. PostgreSQL 15 이상은 WHEN MATCHED AND … THEN DELETE.",
+      new Example("Oracle 펑션", "MERGE 에 DELETE 절 (고치면서 조건 맞는 줄 지우기)", "MERGE 로 고친 뒤 상태가 STOP 이 된 줄은 지웁니다. PostgreSQL 15 이상은 WHEN MATCHED AND … THEN DELETE.",
           """
           MERGE INTO ERP_PART e
           USING PART p
@@ -15276,7 +15276,7 @@ public final class Examples {
            WHEN MATCHED THEN
                 UPDATE
                    SET PART_NAME = p.PART_NAME"""),
-      new Example("Oracle 함수", "RATIO_TO_REPORT (전체 중 비율 짧게)", "SUM OVER () 로 나누는 것과 같습니다. 0~1 값이라 100 을 곱합니다.",
+      new Example("Oracle 펑션", "RATIO_TO_REPORT (전체 중 비율 짧게)", "SUM OVER () 로 나누는 것과 같습니다. 0~1 값이라 100 을 곱합니다.",
           """
           SELECT
                  o.STATUS
@@ -15293,7 +15293,7 @@ public final class Examples {
             FROM ORDERS o
            GROUP BY
                  o.STATUS"""),
-      new Example("Oracle 함수", "FIRST_VALUE · LAST_VALUE · NTH_VALUE", "그룹 안 첫 값 · 끝 값 · n 번째 값. LAST_VALUE 는 창 범위를 끝까지 넓혀야 맞게 나옵니다.",
+      new Example("Oracle 펑션", "FIRST_VALUE · LAST_VALUE · NTH_VALUE", "그룹 안 첫 값 · 끝 값 · n 번째 값. LAST_VALUE 는 창 범위를 끝까지 넓혀야 맞게 나옵니다.",
           """
           SELECT
                  o.CUST_ID
@@ -15310,7 +15310,7 @@ public final class Examples {
                , LAST_VALUE(o.AMOUNT) OVER (PARTITION BY o.CUST_ID ORDER BY o.ORDER_DT ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS LAST_AMT
                , NTH_VALUE(o.AMOUNT, 2) OVER (PARTITION BY o.CUST_ID ORDER BY o.ORDER_DT ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS SECOND_AMT
             FROM ORDERS o"""),
-      new Example("Oracle 함수", "LISTAGG DISTINCT (겹친 값 빼고 잇기, 19c 이상)", "같은 값이 여러 번 나와도 한 번만 잇습니다. 18c 이하는 안쪽에서 DISTINCT 로 먼저 거릅니다.",
+      new Example("Oracle 펑션", "LISTAGG DISTINCT (겹친 값 빼고 잇기, 19c 이상)", "같은 값이 여러 번 나와도 한 번만 잇습니다. 18c 이하는 안쪽에서 DISTINCT 로 먼저 거릅니다.",
           """
           SELECT
                  i.ORDER_ID
@@ -15325,7 +15325,7 @@ public final class Examples {
             FROM ORDER_ITEM i
            GROUP BY
                  i.ORDER_ID"""),
-      new Example("Oracle 함수", "MEDIAN · STATS_MODE · PERCENTILE_CONT", "중앙값, 가장 많이 나온 값, 90% 지점 값.",
+      new Example("Oracle 펑션", "MEDIAN · STATS_MODE · PERCENTILE_CONT", "중앙값, 가장 많이 나온 값, 90% 지점 값.",
           """
           SELECT
                  MEDIAN(o.AMOUNT) AS MED
@@ -15338,7 +15338,7 @@ public final class Examples {
                , MODE() WITHIN GROUP (ORDER BY o.STATUS) AS MODE_STATUS
                , PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY o.AMOUNT) AS P90
             FROM ORDERS o"""),
-      new Example("Oracle 함수", "STDDEV · VARIANCE · CORR (흩어짐 · 상관)", "표준편차, 분산, 두 값의 상관(-1 ~ 1).",
+      new Example("Oracle 펑션", "STDDEV · VARIANCE · CORR (흩어짐 · 상관)", "표준편차, 분산, 두 값의 상관(-1 ~ 1).",
           """
           SELECT
                  ROUND(STDDEV(i.PRICE), 2) AS SD
@@ -15351,7 +15351,7 @@ public final class Examples {
                , ROUND(VARIANCE(i.PRICE), 2) AS VAR
                , ROUND(CAST(CORR(i.QTY, i.PRICE) AS NUMERIC), 3) AS QTY_PRICE_CORR
             FROM ORDER_ITEM i"""),
-      new Example("Oracle 함수", "APPROX_COUNT_DISTINCT (큰 표 겹치지 않는 수 어림)", "정확한 COUNT(DISTINCT) 보다 훨씬 빠른 어림값. 대시보드 숫자에 씁니다.",
+      new Example("Oracle 펑션", "APPROX_COUNT_DISTINCT (큰 테이블 겹치지 않는 수 어림)", "정확한 COUNT(DISTINCT) 보다 훨씬 빠른 어림값. 대시보드 숫자에 씁니다.",
           """
           SELECT
                  APPROX_COUNT_DISTINCT(l.USER_ID) AS APPROX_USERS
@@ -15361,7 +15361,7 @@ public final class Examples {
           SELECT
                  COUNT(DISTINCT l.USER_ID) AS EXACT_USERS
             FROM LOGIN_LOG l"""),
-      new Example("Oracle 함수", "XMLTABLE · XMLAGG (XML 꺼내기 · 만들기)", "XML 글에서 값을 칸으로 꺼내거나 줄을 XML 로 묶습니다.",
+      new Example("Oracle 펑션", "XMLTABLE · XMLAGG (XML 꺼내기 · 만들기)", "XML 글에서 값을 칸으로 꺼내거나 줄을 XML 로 묶습니다.",
           """
           SELECT
                  x.PART_NO
@@ -15374,7 +15374,7 @@ public final class Examples {
                , x.QTY
             FROM XMLTABLE('/items/item' PASSING XMLPARSE(DOCUMENT '<items><item><no>P001</no><qty>2</qty></item></items>')
                    COLUMNS PART_NO VARCHAR(30) PATH 'no', QTY NUMERIC PATH 'qty') x"""),
-      new Example("Oracle 함수", "CONNECT BY 로 글자 나누기 (쉼표 글자 → 줄)", "11g 에서 자주 쓰는 꼴. 쉼표 수 + 1 만큼 줄을 만들어 n 번째 조각을 꺼냅니다.",
+      new Example("Oracle 펑션", "CONNECT BY 로 글자 나누기 (쉼표 글자 → 줄)", "11g 에서 자주 쓰는 꼴. 쉼표 수 + 1 만큼 줄을 만들어 n 번째 조각을 꺼냅니다.",
           """
           SELECT
                  p.PART_NO
@@ -15390,7 +15390,7 @@ public final class Examples {
             FROM PART p
            CROSS JOIN LATERAL REGEXP_SPLIT_TO_TABLE(p.TAGS, ',') AS t(TAG)
            WHERE p.TAGS IS NOT NULL"""),
-      new Example("Oracle 함수", "DUMP · VSIZE · LENGTHB (보이지 않는 글자 · 실제 크기)", "같아 보이는데 비교가 안 맞을 때 글자 코드를 그대로 봅니다.",
+      new Example("Oracle 펑션", "DUMP · VSIZE · LENGTHB (보이지 않는 글자 · 실제 크기)", "같아 보이는데 비교가 안 맞을 때 글자 코드를 그대로 봅니다.",
           """
           SELECT
                  p.PART_NAME
@@ -15405,7 +15405,7 @@ public final class Examples {
                , OCTET_LENGTH(p.PART_NAME) AS BYTE_SIZE
             FROM PART p
            WHERE p.PART_NO = :partNo"""),
-      new Example("Oracle 함수", "BITAND (권한 · 옵션 비트 값 보기)", "숫자 하나에 여러 켜짐/꺼짐을 담은 칸에서 한 자리만 봅니다.",
+      new Example("Oracle 펑션", "BITAND (권한 · 옵션 비트 값 보기)", "숫자 하나에 여러 켜짐/꺼짐을 담은 칸에서 한 자리만 봅니다.",
           """
           SELECT
                  r.ROLE_ID
@@ -15416,7 +15416,7 @@ public final class Examples {
                  r.ROLE_ID
                , CASE WHEN (8 & 4) = 4 THEN 'Y' ELSE 'N' END AS HAS_FLAG_4
             FROM ROLE_USER r"""),
-      new Example("Oracle 함수", "FROM_TZ · SYS_EXTRACT_UTC (시간대 바꾸기)", "한국 시각 ↔ 세계 표준시. 해외 법인 · 인터페이스 시각 맞출 때.",
+      new Example("Oracle 펑션", "FROM_TZ · SYS_EXTRACT_UTC (시간대 바꾸기)", "한국 시각 ↔ 세계 표준시. 해외 법인 · 인터페이스 시각 맞출 때.",
           """
           SELECT
                  FROM_TZ(CAST(SYSDATE AS TIMESTAMP), 'Asia/Seoul') AT TIME ZONE 'UTC' AS UTC_TIME
@@ -15426,7 +15426,7 @@ public final class Examples {
           SELECT
                  (CAST(NOW() AS TIMESTAMP) AT TIME ZONE 'Asia/Seoul') AT TIME ZONE 'UTC' AS UTC_TIME
                , NOW() AT TIME ZONE 'UTC' AS UTC_NOW"""),
-      new Example("Oracle 함수", "ROWNUM 함정 (정렬보다 먼저 붙음)", "ROWNUM 은 ORDER BY 전에 붙어서 바깥에서 자르면 엉뚱한 10건이 나옵니다. 안쪽에서 정렬 후 바깥에서 자릅니다.",
+      new Example("Oracle 펑션", "ROWNUM 함정 (정렬보다 먼저 붙음)", "ROWNUM 은 ORDER BY 전에 붙어서 바깥에서 자르면 엉뚱한 10건이 나옵니다. 안쪽에서 정렬 후 바깥에서 자릅니다.",
           """
           SELECT
                  x.*
@@ -15447,7 +15447,7 @@ public final class Examples {
            ORDER BY
                  o.AMOUNT DESC
            LIMIT 10"""),
-      new Example("Oracle 함수", "DBMS_RANDOM (아무 값 · 섞기)", "아무 숫자 · 아무 글자, 그리고 순서 섞기.",
+      new Example("Oracle 펑션", "DBMS_RANDOM (아무 값 · 섞기)", "아무 숫자 · 아무 글자, 그리고 순서 섞기.",
           """
           SELECT
                  p.PART_NO
@@ -15464,7 +15464,7 @@ public final class Examples {
             FROM PART p
            ORDER BY
                  RANDOM()"""),
-      new Example("Oracle 함수", "WITH 안에 함수 (WITH FUNCTION, 12c 이상)", "쿼리 안에서만 쓰는 작은 함수를 바로 정의합니다. 함수를 만들 권한이 없을 때 씁니다.",
+      new Example("Oracle 펑션", "WITH 안에 펑션 (WITH FUNCTION, 12c 이상)", "쿼리 안에서만 쓰는 작은 펑션을 바로 정의합니다. 펑션을 만들 권한이 없을 때 씁니다.",
           """
           WITH
             FUNCTION FN_GRADE(P_AMT NUMBER) RETURN VARCHAR2 IS
@@ -15480,7 +15480,7 @@ public final class Examples {
                  o.ORDER_ID
                , CASE WHEN o.AMOUNT >= 100000 THEN 'A' WHEN o.AMOUNT >= 10000 THEN 'B' ELSE 'C' END AS GRADE
             FROM ORDERS o"""),
-      new Example("Oracle 함수", "PL/SQL 결과 찍기 (DBMS_OUTPUT · RAISE NOTICE)", "블록 안에서 값을 출력 창에 찍어 확인합니다.",
+      new Example("Oracle 펑션", "PL/SQL 결과 찍기 (DBMS_OUTPUT · RAISE NOTICE)", "블록 안에서 값을 출력 창에 찍어 확인합니다.",
           """
           DECLARE
             V_CNT NUMBER;
@@ -15496,7 +15496,7 @@ public final class Examples {
             V_CNT := (SELECT COUNT(*) FROM ORDERS);
             RAISE NOTICE '주문 수: %', V_CNT;
           END $$"""),
-      new Example("Oracle 함수", "RETURNING INTO (넣은 번호 받기, PL/SQL)", "INSERT 한 줄의 새 번호를 변수로 받습니다.",
+      new Example("Oracle 펑션", "RETURNING INTO (넣은 번호 받기, PL/SQL)", "INSERT 한 줄의 새 번호를 변수로 받습니다.",
           """
           DECLARE
             V_ID NUMBER;
@@ -15510,7 +15510,7 @@ public final class Examples {
           INSERT INTO ORDERS (ORDER_ID, CUST_ID, STATUS, ORDER_DT, AMOUNT)
           VALUES (NEXTVAL('seq_order'), 1, '접수', CURRENT_DATE, 0)
           RETURNING ORDER_ID"""),
-      new Example("Oracle 함수", "CASE 두 꼴 (값 비교 · 조건 비교)", "CASE 칼럼 WHEN 값 … 은 = 비교만, CASE WHEN 조건 … 은 아무 조건이나 됩니다.",
+      new Example("Oracle 펑션", "CASE 두 꼴 (값 비교 · 조건 비교)", "CASE 칼럼 WHEN 값 … 은 = 비교만, CASE WHEN 조건 … 은 아무 조건이나 됩니다.",
           """
           SELECT
                  o.ORDER_ID
@@ -15523,7 +15523,7 @@ public final class Examples {
                , CASE o.STATUS WHEN '접수' THEN 1 WHEN '진행' THEN 2 ELSE 3 END AS STEP
                , CASE WHEN o.AMOUNT >= 100000 THEN '큰 주문' WHEN o.AMOUNT IS NULL THEN '금액 없음' ELSE '보통' END AS SIZE_TEXT
             FROM ORDERS o"""),
-      new Example("Oracle 함수", "LNNVL · NANVL (NULL · 숫자 아님 처리)", "LNNVL(조건) 은 조건이 거짓이거나 NULL 이면 참. NOT 과 달리 NULL 줄도 고릅니다.",
+      new Example("Oracle 펑션", "LNNVL · NANVL (NULL · 숫자 아님 처리)", "LNNVL(조건) 은 조건이 거짓이거나 NULL 이면 참. NOT 과 달리 NULL 줄도 고릅니다.",
           """
           SELECT
                  o.ORDER_ID
@@ -15536,7 +15536,7 @@ public final class Examples {
                , o.STATUS
             FROM ORDERS o
            WHERE o.STATUS IS DISTINCT FROM '완료'"""),
-      new Example("Oracle 함수", "PRIOR · LEVEL · CONNECT_BY_ROOT 함께 (부모 이름 붙여 펼치기)", "CONNECT BY 안에서 PRIOR 칼럼으로 부모 줄 값을 꺼냅니다.",
+      new Example("Oracle 펑션", "PRIOR · LEVEL · CONNECT_BY_ROOT 함께 (부모 이름 붙여 펼치기)", "CONNECT BY 안에서 PRIOR 칼럼으로 부모 줄 값을 꺼냅니다.",
           """
           SELECT
                  LEVEL AS LVL
@@ -15574,7 +15574,7 @@ public final class Examples {
                , t.PARENT_NAME
                , t.ROOT_NAME
             FROM t"""),
-      new Example("Oracle 함수", "TABLE(시스템 함수) · 컬렉션 펼치기", "SYS.ODCIVARCHAR2LIST 로 값 목록을 표처럼 씁니다. IN 목록을 하나의 값으로 받을 때.",
+      new Example("Oracle 펑션", "TABLE(시스템 펑션) · 컬렉션 펼치기", "SYS.ODCIVARCHAR2LIST 로 값 목록을 테이블처럼 씁니다. IN 목록을 하나의 값으로 받을 때.",
           """
           SELECT
                  COLUMN_VALUE AS PART_NO
@@ -15583,7 +15583,7 @@ public final class Examples {
           SELECT
                  X AS PART_NO
             FROM UNNEST(ARRAY['P001', 'P002', 'P003']) AS X"""),
-      new Example("Oracle 함수", "오라클 날짜 빼기 = 일 수 (소수는 시간)", "DATE − DATE 는 일 수입니다. 0.5 는 12시간. × 24 하면 시간, × 1440 하면 분.",
+      new Example("Oracle 펑션", "오라클 날짜 빼기 = 일 수 (소수는 시간)", "DATE − DATE 는 일 수입니다. 0.5 는 12시간. × 24 하면 시간, × 1440 하면 분.",
           """
           SELECT
                  b.JOB_NAME
@@ -15594,7 +15594,7 @@ public final class Examples {
                  b.JOB_NAME
                , ROUND(CAST(EXTRACT(EPOCH FROM (b.END_TS - b.START_TS)) / 60 AS NUMERIC), 1) AS MINUTES
             FROM BATCH_LOG b"""),
-      new Example("Oracle 함수", "TO_CHAR 로 0 채운 번호 · FM 으로 공백 빼기", "TO_CHAR(5, 'FM000') 은 '005'. FM 이 없으면 앞에 부호 자리 공백이 붙습니다.",
+      new Example("Oracle 펑션", "TO_CHAR 로 0 채운 번호 · FM 으로 공백 빼기", "TO_CHAR(5, 'FM000') 은 '005'. FM 이 없으면 앞에 부호 자리 공백이 붙습니다.",
           """
           SELECT
                  TO_CHAR(5, 'FM000') AS NO3
@@ -15606,7 +15606,7 @@ public final class Examples {
                  TO_CHAR(5, 'FM000') AS NO3
                , '[' || TO_CHAR(5, '000') || ']' AS WITH_SPACE
                , TO_CHAR(NOW(), 'FMMM/DD') AS NO_ZERO_DT"""),
-      new Example("Oracle 함수", "ROLLUP 에서 GROUPING_ID (어느 소계 줄인지)", "소계 · 총계 줄을 숫자 하나로 구분합니다. 0 은 상세, 1 은 소계, 3 은 총계.",
+      new Example("Oracle 펑션", "ROLLUP 에서 GROUPING_ID (어느 소계 줄인지)", "소계 · 총계 줄을 숫자 하나로 구분합니다. 0 은 상세, 1 은 소계, 3 은 총계.",
           """
           SELECT
                  s.DEPT_ID
@@ -15631,7 +15631,7 @@ public final class Examples {
                  s.DEPT_ID
                , GID
                , s.PART_NO"""),
-      new Example("Oracle 함수", "MODEL 대신 쓰는 이월 계산 (앞 달 잔액 + 이번 달)", "분석 함수 SUM OVER 로 앞 달까지 쌓은 값에 이번 달을 더해 잔액 줄을 만듭니다.",
+      new Example("Oracle 펑션", "MODEL 대신 쓰는 이월 계산 (앞 달 잔액 + 이번 달)", "분석 펑션 SUM OVER 로 앞 달까지 쌓은 값에 이번 달을 더해 잔액 줄을 만듭니다.",
           """
           SELECT
                  b.YM
@@ -15646,7 +15646,7 @@ public final class Examples {
                , b.BUDGET_AMT
                , SUM(b.BUDGET_AMT) OVER (PARTITION BY b.DEPT_ID ORDER BY b.YM ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS CARRIED
             FROM BUDGET b"""),
-      new Example("Oracle 함수", "SAMPLE (표에서 몇 % 만 뽑기)", "큰 표를 다 읽지 않고 일부만 뽑아 봅니다. 결과는 실행마다 다릅니다.",
+      new Example("Oracle 펑션", "SAMPLE (테이블에서 몇 % 만 뽑기)", "큰 테이블을 다 읽지 않고 일부만 뽑아 봅니다. 결과는 실행마다 다릅니다.",
           """
           SELECT
                  o.*
@@ -15655,7 +15655,7 @@ public final class Examples {
           SELECT
                  o.*
             FROM ORDERS o TABLESAMPLE BERNOULLI (10)"""),
-      new Example("Oracle 함수", "AS OF TIMESTAMP (지운 · 고친 데이터 되살려 보기)", "언두가 남아 있으면 몇 분 전 모습을 볼 수 있습니다(플래시백). PostgreSQL 에는 없습니다.",
+      new Example("Oracle 펑션", "AS OF TIMESTAMP (지운 · 고친 데이터 되살려 보기)", "언두가 남아 있으면 몇 분 전 모습을 볼 수 있습니다(플래시백). PostgreSQL 에는 없습니다.",
           """
           SELECT
                  o.*
@@ -15666,7 +15666,7 @@ public final class Examples {
                  o.*
             FROM ORDERS o
            WHERE o.ORDER_ID = CAST(:orderId AS INTEGER)"""),
-      new Example("트랜잭션 · 처리 순서", "부모 먼저 넣고 자식 넣기", "외래 키가 있으면 부모(주문)를 먼저 넣고, 그 번호로 자식(품목)을 넣은 뒤 COMMIT 합니다. 이 문장은 부모 한 줄입니다.",
+      new Example("트랜잭션 · 처리 순서", "부모 먼저 넣고 자식 넣기", "FK가 있으면 부모(주문)를 먼저 넣고, 그 번호로 자식(품목)을 넣은 뒤 COMMIT 합니다. 이 문장은 부모 한 줄입니다.",
           """
           INSERT INTO ORDERS (ORDER_ID, CUST_ID, STATUS, ORDER_DT, AMOUNT)
           VALUES (:orderId, :custId, '접수', TRUNC(SYSDATE), 0)""",
@@ -15724,7 +15724,7 @@ public final class Examples {
           SELECT
                  'P' || LPAD(CAST(g AS VARCHAR), 4, '0') AS PART_NO
             FROM GENERATE_SERIES(1, 20) g"""),
-      new Example("시험 데이터 만들기", "운영 데이터 일부만 복사해 시험 표 만들기", "구조와 일부 데이터만 떠서 시험용 표를 만듭니다. 개인 정보 칸은 가립니다.",
+      new Example("시험 데이터 만들기", "운영 데이터 일부만 복사해 시험 테이블 만들기", "구조와 일부 데이터만 떠서 시험용 테이블을 만듭니다. 개인 정보 칸은 가립니다.",
           """
           CREATE TABLE CUSTOMER_TEST AS
           SELECT
@@ -15803,12 +15803,12 @@ public final class Examples {
             FROM ORDERS o
             LEFT OUTER JOIN CUSTOMER c
               ON o.CUST_ID = c.CUST_ID"""),
-      new Example("뷰 · 권한", "다른 계정에 읽기 권한 주기", "표를 다른 계정이 읽게 합니다. 쓰기까지 주려면 INSERT · UPDATE · DELETE 를 더합니다.",
+      new Example("뷰 · 권한", "다른 계정에 읽기 권한 주기", "테이블을 다른 계정이 읽게 합니다. 쓰기까지 주려면 INSERT · UPDATE · DELETE 를 더합니다.",
           """
           GRANT SELECT ON ORDERS TO REPORT_USER""",
           """
           GRANT SELECT ON ORDERS TO REPORT_USER"""),
-      new Example("뷰 · 권한", "내가 가진 권한 보기", "지금 계정이 받은 표 권한 목록.",
+      new Example("뷰 · 권한", "내가 가진 권한 보기", "지금 계정이 받은 테이블 권한 목록.",
           """
           SELECT
                  p.OWNER
@@ -15848,7 +15848,7 @@ public final class Examples {
                WHERE IF_ID = r.IF_ID;
             END LOOP;
           END $$"""),
-      new Example("프로시저 · 블록", "값 하나 돌려주는 함수 만들기 (코드 → 이름)", "자주 쓰는 코드 이름 찾기를 함수로. 큰 쿼리에서 줄마다 부르면 느릴 수 있습니다.",
+      new Example("프로시저 · 블록", "값 하나 돌려주는 펑션 만들기 (코드 → 이름)", "자주 쓰는 코드 이름 찾기를 펑션으로. 큰 쿼리에서 줄마다 부르면 느릴 수 있습니다.",
           """
           CREATE OR REPLACE FUNCTION FN_CODE_NAME(P_GROUP IN VARCHAR2, P_CODE IN VARCHAR2) RETURN VARCHAR2 IS
             V_NAME COMMON_CODE.CODE_NAME%TYPE;
@@ -15901,7 +15901,7 @@ public final class Examples {
               END;
             END LOOP;
           END $$"""),
-      new Example("PostgreSQL 함수", "STRING_AGG (여러 줄을 한 칸에)", "Oracle LISTAGG 와 같습니다. 순서는 안쪽 ORDER BY 로.",
+      new Example("PostgreSQL 펑션", "STRING_AGG (여러 줄을 한 칸에)", "Oracle LISTAGG 와 같습니다. 순서는 안쪽 ORDER BY 로.",
           """
           SELECT
                  i.ORDER_ID
@@ -15916,7 +15916,7 @@ public final class Examples {
             FROM ORDER_ITEM i
            GROUP BY
                  i.ORDER_ID"""),
-      new Example("PostgreSQL 함수", "FILTER (조건부 집계를 짧게)", "SUM(CASE WHEN …) 대신 COUNT(*) FILTER (WHERE …). Oracle 은 CASE 로 씁니다.",
+      new Example("PostgreSQL 펑션", "FILTER (조건부 집계를 짧게)", "SUM(CASE WHEN …) 대신 COUNT(*) FILTER (WHERE …). Oracle 은 CASE 로 씁니다.",
           """
           SELECT
                  o.CUST_ID
@@ -15935,7 +15935,7 @@ public final class Examples {
             FROM ORDERS o
            GROUP BY
                  o.CUST_ID"""),
-      new Example("PostgreSQL 함수", "DISTINCT ON (그룹마다 첫 줄 하나)", "고객마다 가장 최근 주문 한 줄. ORDER BY 앞 칼럼이 DISTINCT ON 칼럼과 같아야 합니다.",
+      new Example("PostgreSQL 펑션", "DISTINCT ON (그룹마다 첫 줄 하나)", "고객마다 가장 최근 주문 한 줄. ORDER BY 앞 칼럼이 DISTINCT ON 칼럼과 같아야 합니다.",
           """
           SELECT
                  x.*
@@ -15953,7 +15953,7 @@ public final class Examples {
            ORDER BY
                  o.CUST_ID
                , o.ORDER_DT DESC"""),
-      new Example("PostgreSQL 함수", ":: 로 형 바꾸기 · TO_CHAR · TO_DATE", "PostgreSQL 은 '2026-01-01'::date 처럼 :: 로 형을 바꿀 수 있습니다. CAST(… AS …) 와 같습니다.",
+      new Example("PostgreSQL 펑션", ":: 로 타입 바꾸기 · TO_CHAR · TO_DATE", "PostgreSQL 은 '2026-01-01'::date 처럼 :: 로 타입을 바꿀 수 있습니다. CAST(… AS …) 와 같습니다.",
           """
           SELECT
                  TO_DATE('2026-01-01', 'YYYY-MM-DD') AS D
@@ -15965,7 +15965,7 @@ public final class Examples {
                  '2026-01-01'::DATE AS D
                , '123'::NUMERIC AS N
                , TO_CHAR(NOW(), 'YYYY-MM-DD HH24:MI') AS NOW_TEXT"""),
-      new Example("PostgreSQL 함수", "INTERVAL 로 날짜 계산", "PostgreSQL 은 날짜 + INTERVAL '3 month'. Oracle 은 ADD_MONTHS · 숫자 더하기.",
+      new Example("PostgreSQL 펑션", "INTERVAL 로 날짜 계산", "PostgreSQL 은 날짜 + INTERVAL '3 month'. Oracle 은 ADD_MONTHS · 숫자 더하기.",
           """
           SELECT
                  ADD_MONTHS(TRUNC(SYSDATE), 3) AS AFTER_3M
@@ -15977,7 +15977,7 @@ public final class Examples {
                  CURRENT_DATE + INTERVAL '3 MONTH' AS AFTER_3M
                , CURRENT_DATE - INTERVAL '7 DAY' AS BEFORE_7D
                , NOW() + INTERVAL '2 HOUR' AS AFTER_2H"""),
-      new Example("PostgreSQL 함수", "AGE · EXTRACT (나이 · 경과 기간)", "두 날짜 사이를 년 · 월 · 일로. EXTRACT 로 한 부분만 꺼냅니다.",
+      new Example("PostgreSQL 펑션", "AGE · EXTRACT (나이 · 경과 기간)", "두 날짜 사이를 년 · 월 · 일로. EXTRACT 로 한 부분만 꺼냅니다.",
           """
           SELECT
                  p.PROJ_ID
@@ -15991,7 +15991,7 @@ public final class Examples {
                , EXTRACT(YEAR FROM AGE(CURRENT_DATE, p.START_DT)) * 12 + EXTRACT(MONTH FROM AGE(CURRENT_DATE, p.START_DT)) AS MONTHS
                , EXTRACT(YEAR FROM p.START_DT) AS START_YEAR
             FROM PROJECT p"""),
-      new Example("PostgreSQL 함수", "RETURNING (넣은 · 고친 줄 바로 받기)", "INSERT · UPDATE · DELETE 뒤 바뀐 줄을 바로 돌려받습니다. Oracle 은 PL/SQL 의 RETURNING INTO.",
+      new Example("PostgreSQL 펑션", "RETURNING (넣은 · 고친 줄 바로 받기)", "INSERT · UPDATE · DELETE 뒤 바뀐 줄을 바로 돌려받습니다. Oracle 은 PL/SQL 의 RETURNING INTO.",
           """
           UPDATE IF_PART f
              SET f.STATUS = 'READY'
@@ -16001,7 +16001,7 @@ public final class Examples {
              SET STATUS = 'READY'
            WHERE f.STATUS = 'ERROR'
           RETURNING f.IF_ID, f.PART_NO"""),
-      new Example("PostgreSQL 함수", "UPDATE … FROM (다른 표와 이어 고치기)", "PostgreSQL 은 UPDATE 에 FROM 을 붙여 다른 표 값으로 고칩니다. Oracle 은 MERGE 나 서브쿼리.",
+      new Example("PostgreSQL 펑션", "UPDATE … FROM (다른 테이블과 이어 고치기)", "PostgreSQL 은 UPDATE 에 FROM 을 붙여 다른 테이블 값으로 고칩니다. Oracle 은 MERGE 나 서브쿼리.",
           """
           MERGE INTO ERP_PART e
           USING PART p
@@ -16014,7 +16014,7 @@ public final class Examples {
              SET UNIT_COST = p.UNIT_COST
             FROM PART p
            WHERE e.PART_NO = p.PART_NO"""),
-      new Example("PostgreSQL 함수", "DELETE … USING (다른 표와 이어 지우기)", "PostgreSQL 은 DELETE 에 USING 으로 다른 표를 붙입니다.",
+      new Example("PostgreSQL 펑션", "DELETE … USING (다른 테이블과 이어 지우기)", "PostgreSQL 은 DELETE 에 USING 으로 다른 테이블을 붙입니다.",
           """
           DELETE FROM ORDERS_BAK b
            WHERE EXISTS (SELECT 1 FROM ORDERS o WHERE o.ORDER_ID = b.ORDER_ID)""",
@@ -16022,7 +16022,7 @@ public final class Examples {
           DELETE FROM ORDERS_BAK b
            USING ORDERS o
            WHERE o.ORDER_ID = b.ORDER_ID"""),
-      new Example("PostgreSQL 함수", "ARRAY · ANY (값 목록을 배열로)", "IN 대신 = ANY(배열). 화면에서 받은 여러 값을 배열 하나로 넘길 때 씁니다.",
+      new Example("PostgreSQL 펑션", "ARRAY · ANY (값 목록을 배열로)", "IN 대신 = ANY(배열). 화면에서 받은 여러 값을 배열 하나로 넘길 때 씁니다.",
           """
           SELECT
                  p.PART_NO
@@ -16033,7 +16033,7 @@ public final class Examples {
                  p.PART_NO
             FROM PART p
            WHERE p.PART_NO = ANY (ARRAY['P001', 'P002', 'P003'])"""),
-      new Example("PostgreSQL 함수", "LATERAL (줄마다 서브쿼리 결과 여러 칸)", "고객마다 최근 주문 3건을 붙입니다. Oracle 12c 이상은 CROSS APPLY · LATERAL.",
+      new Example("PostgreSQL 펑션", "LATERAL (줄마다 서브쿼리 결과 여러 칸)", "고객마다 최근 주문 3건을 붙입니다. Oracle 12c 이상은 CROSS APPLY · LATERAL.",
           """
           SELECT
                  c.CUST_ID
@@ -16066,7 +16066,7 @@ public final class Examples {
                          o.ORDER_DT DESC
                    LIMIT 3
                  ) r"""),
-      new Example("PostgreSQL 함수", "SPLIT_PART · REGEXP_SPLIT_TO_TABLE (글자 나누기)", "'A-B-C' 의 두 번째 조각, 또는 쉼표 글자를 줄로 펼치기.",
+      new Example("PostgreSQL 펑션", "SPLIT_PART · REGEXP_SPLIT_TO_TABLE (글자 나누기)", "'A-B-C' 의 두 번째 조각, 또는 쉼표 글자를 줄로 펼치기.",
           """
           SELECT
                  REGEXP_SUBSTR('A-B-C', '[^-]+', 1, 2) AS SECOND_PART
@@ -16075,7 +16075,7 @@ public final class Examples {
           SELECT
                  SPLIT_PART('A-B-C', '-', 2) AS SECOND_PART
                , (SELECT STRING_AGG(x, '|') FROM REGEXP_SPLIT_TO_TABLE('a,b,c', ',') x) AS SPLIT_JOINED"""),
-      new Example("PostgreSQL 함수", "GENERATE_SERIES (번호 · 날짜 줄 만들기)", "Oracle 의 CONNECT BY LEVEL 과 같은 일을 합니다.",
+      new Example("PostgreSQL 펑션", "GENERATE_SERIES (번호 · 날짜 줄 만들기)", "Oracle 의 CONNECT BY LEVEL 과 같은 일을 합니다.",
           """
           SELECT
                  TRUNC(SYSDATE) + LEVEL - 1 AS DT
@@ -16085,7 +16085,7 @@ public final class Examples {
           SELECT
                  CAST(g AS DATE) AS DT
             FROM GENERATE_SERIES(CURRENT_DATE, CURRENT_DATE + 6, INTERVAL '1 DAY') g"""),
-      new Example("PostgreSQL 함수", "COALESCE · NULLIF · GREATEST (NVL 대신)", "PostgreSQL 에는 NVL · NVL2 · DECODE 가 없습니다. COALESCE · CASE 로 씁니다.",
+      new Example("PostgreSQL 펑션", "COALESCE · NULLIF · GREATEST (NVL 대신)", "PostgreSQL 에는 NVL · NVL2 · DECODE 가 없습니다. COALESCE · CASE 로 씁니다.",
           """
           SELECT
                  NVL(p.UNIT_COST, 0) AS COST
@@ -16098,7 +16098,7 @@ public final class Examples {
                , CASE WHEN p.OWNER_ID IS NOT NULL THEN 'Y' ELSE 'N' END AS HAS_OWNER
                , CASE p.STATUS WHEN 'USE' THEN '사용' ELSE '중지' END AS STATUS_NAME
             FROM PART p"""),
-      new Example("PostgreSQL 함수", "ILIKE (대소문자 무시 LIKE)", "PostgreSQL 은 ILIKE 로 대소문자를 무시합니다. Oracle 은 UPPER 를 양쪽에.",
+      new Example("PostgreSQL 펑션", "ILIKE (대소문자 무시 LIKE)", "PostgreSQL 은 ILIKE 로 대소문자를 무시합니다. Oracle 은 UPPER 를 양쪽에.",
           """
           SELECT
                  p.PART_NO
@@ -16109,7 +16109,7 @@ public final class Examples {
                  p.PART_NO
             FROM PART p
            WHERE p.PART_NAME ILIKE '%bolt%'"""),
-      new Example("PostgreSQL 함수", "시퀀스 다음 번호 (NEXTVAL)", "Oracle 은 시퀀스.NEXTVAL, PostgreSQL 은 NEXTVAL('시퀀스').",
+      new Example("PostgreSQL 펑션", "시퀀스 다음 번호 (NEXTVAL)", "Oracle 은 시퀀스.NEXTVAL, PostgreSQL 은 NEXTVAL('시퀀스').",
           """
           SELECT
                  SEQ_ORDER.NEXTVAL AS NEXT_ID
@@ -16181,7 +16181,7 @@ public final class Examples {
                  PG_TERMINATE_BACKEND(a.PID)
             FROM PG_STAT_ACTIVITY a
            WHERE a.PID = :pid"""),
-      new Example("DB 운영", "안 쓰는 색인 (한 번도 안 읽힘)", "PostgreSQL 은 통계에서 읽힌 횟수 0 인 색인. Oracle 은 ALTER INDEX … MONITORING USAGE 를 켠 뒤 USER_OBJECT_USAGE 로 봅니다(12.2 이상은 DBA_INDEX_USAGE).",
+      new Example("DB 운영", "안 쓰는 인덱스 (한 번도 안 읽힘)", "PostgreSQL 은 통계에서 읽힌 횟수 0 인 인덱스. Oracle 은 ALTER INDEX … MONITORING USAGE 를 켠 뒤 USER_OBJECT_USAGE 로 봅니다(12.2 이상은 DBA_INDEX_USAGE).",
           """
           SELECT
                  u.INDEX_NAME
@@ -16203,7 +16203,7 @@ public final class Examples {
              AND NOT i.INDISUNIQUE
            ORDER BY
                  PG_RELATION_SIZE(s.INDEXRELID) DESC"""),
-      new Example("DB 운영", "통계가 오래된 표", "통계를 모은 뒤 많이 바뀐 표는 실행 계획이 틀어집니다.",
+      new Example("DB 운영", "통계가 오래된 테이블", "통계를 모은 뒤 많이 바뀐 테이블은 실행 계획이 틀어집니다.",
           """
           SELECT
                  s.TABLE_NAME
@@ -16226,7 +16226,7 @@ public final class Examples {
               OR GREATEST(s.LAST_ANALYZE, s.LAST_AUTOANALYZE) IS NULL
            ORDER BY
                  s.N_MOD_SINCE_ANALYZE DESC"""),
-      new Example("DB 운영", "깨진 객체 (INVALID 뷰 · 프로시저)", "Oracle 은 표가 바뀌면 그것을 쓰는 뷰 · 패키지가 INVALID 가 됩니다. PostgreSQL 은 이런 상태가 없어 의존 객체 목록을 봅니다.",
+      new Example("DB 운영", "깨진 객체 (INVALID 뷰 · 프로시저)", "Oracle 은 테이블이 바뀌면 그것을 쓰는 뷰 · 패키지가 INVALID 가 됩니다. PostgreSQL 은 이런 상태가 없어 의존 객체 목록을 봅니다.",
           """
           SELECT
                  o.OBJECT_TYPE
@@ -16248,7 +16248,7 @@ public final class Examples {
              AND v.RELKIND = 'v'
            ORDER BY
                  1, 2"""),
-      new Example("DB 운영", "표 공간 · DB 크기", "공간이 얼마나 찼는지. Oracle 은 DBA 권한이 있어야 DBA_ 뷰가 보입니다.",
+      new Example("DB 운영", "테이블 공간 · DB 크기", "공간이 얼마나 찼는지. Oracle 은 DBA 권한이 있어야 DBA_ 뷰가 보입니다.",
           """
           SELECT
                  f.TABLESPACE_NAME
@@ -16266,7 +16266,7 @@ public final class Examples {
             FROM PG_DATABASE d
            ORDER BY
                  PG_DATABASE_SIZE(d.DATNAME) DESC"""),
-      new Example("DB 운영", "많이 읽고 많이 쓰는 표 (전체 훑기 많은 표)", "색인 없이 표를 통째로 읽은 횟수가 많은 표. 색인을 볼 후보입니다.",
+      new Example("DB 운영", "많이 읽고 많이 쓰는 테이블 (전체 훑기 많은 테이블)", "인덱스 없이 테이블을 통째로 읽은 횟수가 많은 테이블. 인덱스를 볼 후보입니다.",
           """
           SELECT
                  s.OBJECT_NAME
@@ -16289,7 +16289,7 @@ public final class Examples {
            ORDER BY
                  s.SEQ_TUP_READ DESC
            LIMIT 20"""),
-      new Example("DB 운영", "표 · 칼럼 설명 한 번에 보기 (표 정의서)", "표 정의서를 만들 때: 칼럼 순서 · 형 · 길이 · 빈 값 허용 · 설명.",
+      new Example("DB 운영", "테이블 · 칼럼 설명 한 번에 보기 (테이블 정의서)", "테이블 정의서를 만들 때: 칼럼 순서 · 타입 · 길이 · 빈 값 허용 · 설명.",
           """
           SELECT
                  c.TABLE_NAME
@@ -16318,7 +16318,7 @@ public final class Examples {
              AND c.TABLE_NAME = LOWER(:tableName)
            ORDER BY
                  c.ORDINAL_POSITION"""),
-      new Example("DB 운영", "칼럼 이름이 같은데 형이 다른 곳 (표끼리 비교)", "같은 이름 칼럼이 표마다 다른 형 · 길이면 조인에서 형 바뀜이 생깁니다.",
+      new Example("DB 운영", "칼럼 이름이 같은데 타입이 다른 곳 (테이블끼리 비교)", "같은 이름 칼럼이 테이블마다 다른 타입 · 길이면 조인에서 타입 바뀜이 생깁니다.",
           """
           SELECT
                  c.COLUMN_NAME
@@ -16338,7 +16338,7 @@ public final class Examples {
            GROUP BY
                  c.COLUMN_NAME
           HAVING COUNT(DISTINCT c.DATA_TYPE || '(' || COALESCE(c.CHARACTER_MAXIMUM_LENGTH, c.NUMERIC_PRECISION, 0) || ')') > 1"""),
-      new Example("DB 운영", "기본 키가 없는 표", "키가 없으면 중복이 쌓이고 MERGE · 수정이 어렵습니다.",
+      new Example("DB 운영", "기본 키가 없는 테이블", "키가 없으면 중복이 쌓이고 MERGE · 수정이 어렵습니다.",
           """
           SELECT
                  t.TABLE_NAME
@@ -16362,7 +16362,7 @@ public final class Examples {
                      AND c.TABLE_NAME = t.TABLE_NAME
                      AND c.CONSTRAINT_TYPE = 'PRIMARY KEY'
                  )"""),
-      new Example("DB 운영", "외래 키 칼럼에 색인이 없는 것", "자식 표의 외래 키 칼럼에 색인이 없으면 부모 수정 · 삭제 때 잠금이 커집니다.",
+      new Example("DB 운영", "FK 칼럼에 인덱스가 없는 것", "자식 테이블의 FK 칼럼에 인덱스가 없으면 부모 수정 · 삭제 때 잠금이 커집니다.",
           """
           SELECT
                  c.TABLE_NAME
@@ -16395,7 +16395,7 @@ public final class Examples {
                    WHERE i.INDRELID = c.CONRELID
                      AND i.INDKEY[0] = c.CONKEY[1]
                  )"""),
-      new Example("DB 운영", "표마다 정확한 건수 (모든 표 한 번에)", "통계 어림이 아니라 실제로 셉니다. 큰 DB 에서는 오래 걸립니다.",
+      new Example("DB 운영", "테이블마다 정확한 건수 (모든 테이블 한 번에)", "통계 어림이 아니라 실제로 셉니다. 큰 DB 에서는 오래 걸립니다.",
           """
           SELECT
                  t.TABLE_NAME
@@ -16412,7 +16412,7 @@ public final class Examples {
              AND t.TABLE_TYPE = 'BASE TABLE'
            ORDER BY
                  ROW_CNT DESC"""),
-      new Example("DB 운영", "최근에 바뀐 객체 (표 · 뷰 · 프로시저)", "누가 무엇을 고쳤는지 모를 때 최근 7일 바뀐 DB 객체.",
+      new Example("DB 운영", "최근에 바뀐 객체 (테이블 · 뷰 · 프로시저)", "누가 무엇을 고쳤는지 모를 때 최근 7일 바뀐 DB 객체.",
           """
           SELECT
                  o.OBJECT_TYPE
@@ -16432,7 +16432,7 @@ public final class Examples {
            WHERE c.OID = s.RELID
            ORDER BY
                  s.LAST_ANALYZE DESC NULLS LAST"""),
-      new Example("DB 운영", "시퀀스 지금 값과 표 최대 번호 비교", "시퀀스가 표의 최대 번호보다 작으면 다음 INSERT 에서 키가 겹칩니다.",
+      new Example("DB 운영", "시퀀스 지금 값과 테이블 최대 번호 비교", "시퀀스가 테이블의 최대 번호보다 작으면 다음 INSERT 에서 키가 겹칩니다.",
           """
           SELECT
                  s.SEQUENCE_NAME
@@ -16447,7 +16447,7 @@ public final class Examples {
                , (SELECT MAX(o.ORDER_ID) FROM ORDERS o) AS MAX_ID
             FROM PG_SEQUENCES s
            WHERE s.SEQUENCENAME = 'seq_order'"""),
-      new Example("DB 운영", "표 공간 사용률 (% · 자동 늘림 최대)", "표 공간이 몇 % 찼는지, 자동으로 늘어날 수 있는 최대까지 보면 얼마나 남았는지. DBA 권한이 있어야 합니다. PostgreSQL 은 표 공간마다 크기만 보입니다.",
+      new Example("DB 운영", "테이블 공간 사용률 (% · 자동 늘림 최대)", "테이블 공간이 몇 % 찼는지, 자동으로 늘어날 수 있는 최대까지 보면 얼마나 남았는지. DBA 권한이 있어야 합니다. PostgreSQL 은 테이블 공간마다 크기만 보입니다.",
           """
           SELECT
                  d.TABLESPACE_NAME
@@ -16484,7 +16484,7 @@ public final class Examples {
             FROM PG_TABLESPACE t
            ORDER BY
                  PG_TABLESPACE_SIZE(t.OID) DESC"""),
-      new Example("DB 운영", "용량 큰 것 (표 · 색인 · LOB 를 표 이름으로)", "색인 · LOB 세그먼트도 어느 표 것인지 붙여 큰 순으로 30개. PostgreSQL 은 표 · 색인 · TOAST 크기를 나눠 봅니다.",
+      new Example("DB 운영", "용량 큰 것 (테이블 · 인덱스 · LOB 를 테이블 이름으로)", "인덱스 · LOB 세그먼트도 어느 테이블 것인지 붙여 큰 순으로 30개. PostgreSQL 은 테이블 · 인덱스 · TOAST 크기를 나눠 봅니다.",
           """
           SELECT *
             FROM (
@@ -16515,7 +16515,7 @@ public final class Examples {
            ORDER BY
                  PG_TOTAL_RELATION_SIZE(c.OID) DESC
            LIMIT 30"""),
-      new Example("DB 운영", "깨진 색인 (UNUSABLE) 과 다시 만드는 문장", "파티션을 지우거나 표를 옮긴 뒤 색인이 UNUSABLE 이 되면 그 색인을 쓰는 SQL 이 오류 · 느려집니다. FIX_SQL 을 돌리면 다시 만듭니다.",
+      new Example("DB 운영", "깨진 인덱스 (UNUSABLE) 과 다시 만드는 문장", "파티션을 지우거나 테이블을 옮긴 뒤 인덱스가 UNUSABLE 이 되면 그 인덱스를 쓰는 SQL 이 오류 · 느려집니다. FIX_SQL 을 돌리면 다시 만듭니다.",
           """
           SELECT
                  i.INDEX_NAME
@@ -16614,7 +16614,7 @@ public final class Examples {
              AND r.ROLVALIDUNTIL < NOW() + INTERVAL '30 days'
            ORDER BY
                  r.ROLVALIDUNTIL"""),
-      new Example("DB 운영", "휴지통에서 지운 표 되살리기 (FLASHBACK TO BEFORE DROP)", "DROP 한 표가 휴지통에 남아 있으면 FIX_SQL 로 되살립니다. PURGE 로 지웠으면 없습니다. PostgreSQL 은 휴지통이 없어 백업에서만 되살립니다.",
+      new Example("DB 운영", "휴지통에서 지운 테이블 되살리기 (FLASHBACK TO BEFORE DROP)", "DROP 한 테이블이 휴지통에 남아 있으면 FIX_SQL 로 되살립니다. PURGE 로 지웠으면 없습니다. PostgreSQL 은 휴지통이 없어 백업에서만 되살립니다.",
           """
           SELECT
                  r.ORIGINAL_NAME
@@ -16628,7 +16628,7 @@ public final class Examples {
                  r.DROPTIME DESC""",
           """
           SELECT
-                 'PostgreSQL 은 휴지통이 없어 DROP 한 표는 백업(pg_dump)에서만 되살립니다.' AS NOTE"""),
+                 'PostgreSQL 은 휴지통이 없어 DROP 한 테이블은 백업(pg_dump)에서만 되살립니다.' AS NOTE"""),
       new Example("DB 운영", "DB 버전 · 문자셋 (한글이 몇 바이트인가)", "AL32UTF8 은 한글 한 자 3바이트, KO16MSWIN949 는 2바이트. 칼럼 길이 · 한글 깨짐을 볼 때 먼저 확인합니다.",
           """
           SELECT
@@ -16667,7 +16667,7 @@ public final class Examples {
            WHERE s.SRVFDW = w.OID
            ORDER BY
                  s.SRVNAME"""),
-      new Example("DB 운영", "통계 뒤로 많이 바뀐 표 · 정리(VACUUM) 필요한 표", "Oracle 은 통계 수집 뒤 넣기 · 고치기 · 지우기 건수(바로 보려면 DBMS_STATS.FLUSH_DATABASE_MONITORING_INFO 먼저). PostgreSQL 은 지운 줄 찌꺼기(dead tuple)가 많은 표.",
+      new Example("DB 운영", "통계 뒤로 많이 바뀐 테이블 · 정리(VACUUM) 필요한 테이블", "Oracle 은 통계 수집 뒤 넣기 · 고치기 · 지우기 건수(바로 보려면 DBMS_STATS.FLUSH_DATABASE_MONITORING_INFO 먼저). PostgreSQL 은 지운 줄 찌꺼기(dead tuple)가 많은 테이블.",
           """
           SELECT
                  m.TABLE_NAME
@@ -16747,7 +16747,7 @@ public final class Examples {
             FROM PG_EXTENSION e
            ORDER BY
                  e.EXTNAME"""),
-      new Example("개발 · 배포 점검", "개발 · 운영 표 구조 비교 (칼럼 다른 것)", "개발 DB 에서 운영 DB 링크(PROD_LINK)로 칼럼 · 형 · 길이 · NULL 허용을 맞대어 한쪽에만 있거나 다른 줄만 봅니다. PostgreSQL 은 같은 DB 의 두 스키마를 비교합니다.",
+      new Example("개발 · 배포 점검", "개발 · 운영 테이블 구조 비교 (칼럼 다른 것)", "개발 DB 에서 운영 DB 링크(PROD_LINK)로 칼럼 · 타입 · 길이 · NULL 허용을 맞대어 한쪽에만 있거나 다른 줄만 봅니다. PostgreSQL 은 같은 DB 의 두 스키마를 비교합니다.",
           """
           SELECT
                  'DEV 에만' AS SIDE
@@ -16840,7 +16840,7 @@ public final class Examples {
                  ) y
            ORDER BY
                  2, 3, 1"""),
-      new Example("개발 · 배포 점검", "개발 · 운영 객체 비교 (표 · 뷰 · 프로시저가 한쪽에만)", "배포 빠짐을 찾습니다. 운영 DB 링크(PROD_LINK)로 객체 이름 · 종류를 맞댑니다. PostgreSQL 은 두 스키마의 표 · 뷰를 맞댑니다.",
+      new Example("개발 · 배포 점검", "개발 · 운영 객체 비교 (테이블 · 뷰 · 프로시저가 한쪽에만)", "배포 빠짐을 찾습니다. 운영 DB 링크(PROD_LINK)로 객체 이름 · 종류를 맞댑니다. PostgreSQL 은 두 스키마의 테이블 · 뷰를 맞댑니다.",
           """
           SELECT
                  'DEV 에만' AS SIDE
@@ -16945,7 +16945,7 @@ public final class Examples {
             FROM ORDERS o
            WHERE o.QTY_TEXT IS NOT NULL
              AND o.QTY_TEXT !~ '^ *-?[0-9]+([.][0-9]+)? *$'"""),
-      new Example("개발 · 배포 점검", "깨진 객체 다시 컴파일하는 문장 만들기", "배포 뒤 INVALID 객체마다 컴파일 문장을 만듭니다. 한 번에 하려면 EXEC DBMS_UTILITY.COMPILE_SCHEMA(USER, FALSE). PostgreSQL 은 INVALID 상태가 없어 깨진 뷰가 없습니다(표를 바꿀 때 막힘).",
+      new Example("개발 · 배포 점검", "깨진 객체 다시 컴파일하는 문장 만들기", "배포 뒤 INVALID 객체마다 컴파일 문장을 만듭니다. 한 번에 하려면 EXEC DBMS_UTILITY.COMPILE_SCHEMA(USER, FALSE). PostgreSQL 은 INVALID 상태가 없어 깨진 뷰가 없습니다(테이블을 바꿀 때 막힘).",
           """
           SELECT
                  o.OBJECT_TYPE
@@ -16958,8 +16958,8 @@ public final class Examples {
                , o.OBJECT_NAME""",
           """
           SELECT
-                 'PostgreSQL 은 표를 바꿀 때 뷰가 깨지지 않게 막아 INVALID 객체가 없습니다.' AS NOTE"""),
-      new Example("개발 · 배포 점검", "설명이 빈 칼럼 (표 정의서 빠짐)", "칼럼 설명을 안 단 곳. 산출물 · 표 정의서 내기 전에 채웁니다.",
+                 'PostgreSQL 은 테이블을 바꿀 때 뷰가 깨지지 않게 막아 INVALID 객체가 없습니다.' AS NOTE"""),
+      new Example("개발 · 배포 점검", "설명이 빈 칼럼 (테이블 정의서 빠짐)", "칼럼 설명을 안 단 곳. 산출물 · 테이블 정의서 내기 전에 채웁니다.",
           """
           SELECT
                  c.TABLE_NAME
@@ -16995,7 +16995,7 @@ public final class Examples {
            ORDER BY
                  t.RELNAME
                , a.ATTNUM"""),
-      new Example("개발 · 배포 점검", "표 데이터로 INSERT 문 만들기 (코드 표 옮길 때)", "개발 DB 의 코드 표를 운영에 넣을 INSERT 문을 줄마다 만듭니다. 작은따옴표는 두 번으로 바꿉니다.",
+      new Example("개발 · 배포 점검", "테이블 데이터로 INSERT 문 만들기 (코드 테이블 옮길 때)", "개발 DB 의 코드 테이블을 운영에 넣을 INSERT 문을 줄마다 만듭니다. 작은따옴표는 두 번으로 바꿉니다.",
           """
           SELECT
                  'INSERT INTO CODE_DTL (GRP_CD, CD, CD_NM, SORT_SEQ, USE_YN) VALUES ('
@@ -17015,7 +17015,7 @@ public final class Examples {
            WHERE d.GRP_CD = :grpCd
            ORDER BY
                  d.SORT_SEQ"""),
-      new Example("개발 · 배포 점검", "배포 전 오늘 바꾼 객체 목록 (배포 대상 뽑기)", "오늘(또는 기준일 뒤) 만들거나 고친 표 · 뷰 · 프로시저를 배포 목록으로. PostgreSQL 은 객체 변경 시각을 남기지 않아 DDL 로그 · 이벤트 트리거가 있어야 합니다.",
+      new Example("개발 · 배포 점검", "배포 전 오늘 바꾼 객체 목록 (배포 대상 뽑기)", "오늘(또는 기준일 뒤) 만들거나 고친 테이블 · 뷰 · 프로시저를 배포 목록으로. PostgreSQL 은 객체 변경 시각을 남기지 않아 DDL 로그 · 이벤트 트리거가 있어야 합니다.",
           """
           SELECT
                  o.OBJECT_TYPE
