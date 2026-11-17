@@ -18,9 +18,13 @@ public final class ApiSavedCheck {
         check(ApiSaved.isSecretHeader(" authorization "), "Authorization 은 비밀");
         check(ApiSaved.isSecretHeader("Cookie") && ApiSaved.isSecretHeader("Proxy-Authorization"), "Cookie · Proxy-Authorization 은 비밀");
         check(!ApiSaved.isSecretHeader("Accept") && !ApiSaved.isSecretHeader(null), "다른 헤더 · null 은 비밀 아님");
-        List<ApiSaved.Line> kept = ApiSaved.savableHeaders(List.of(new ApiSaved.Line("Accept", "*/*", true),
-                new ApiSaved.Line("authorization", "Bearer x", true), new ApiSaved.Line(" ", "v", true), new ApiSaved.Line("X-A", "1", false)));
-        check(kept.size() == 2 && kept.get(0).name().equals("Accept") && !kept.get(1).on(), "비밀 · 빈 이름만 빠지고 체크 상태는 남는다: " + kept);
+        ApiSaved.Scrubbed s = ApiSaved.scrub(List.of(), List.of(new ApiSaved.Line("Accept", "*/*", true),
+                new ApiSaved.Line("authorization", "Bearer x", true), new ApiSaved.Line(" ", "v", true), new ApiSaved.Line("X-A", "1", false),
+                new ApiSaved.Line("X-Auth-Token", "tok", true)), "http://h/a", "");
+        List<ApiSaved.Line> kept = s.headers();
+        check(kept.size() == 3 && kept.get(0).name().equals("Accept") && !kept.get(1).on(), "Authorization · 빈 이름만 빠지고 체크 상태는 남는다: " + kept);
+        check(kept.get(2).value().isEmpty() && "tok".equals(s.secrets().get(ApiSaved.HEADER + "x-auth-token")) && s.droppedHeader(),
+                "비밀 이름 헤더는 값만 비우고 비밀로 옮긴다: " + s);
         check(!ApiSaved.changesData("get") && !ApiSaved.changesData("HEAD") && !ApiSaved.changesData("OPTIONS"), "GET · HEAD · OPTIONS 는 안전");
         check(ApiSaved.changesData("POST") && ApiSaved.changesData("DELETE") && ApiSaved.changesData(null), "그 밖은 데이터를 바꿀 수 있음");
     }
@@ -37,13 +41,35 @@ public final class ApiSavedCheck {
     }
 
     private static void scrub() {
-        List<ApiSaved.Line> q = ApiSaved.savableQuery(List.of(new ApiSaved.Line("userPwd", "p@ss", true), new ApiSaved.Line("page", "1", false)));
-        check(q.get(0).value().isEmpty() && q.get(0).on() && q.get(1).value().equals("1"), "비밀 이름 파라미터 값만 비운다: " + q);
-        String json = ApiSaved.savableBody("{\"userId\":\"kim\", \"password\" : \"a\\\"b\", \"accessToken\":\"t\", \"n\":1}");
-        check(json.equals("{\"userId\":\"kim\", \"password\" : \"\", \"accessToken\":\"\", \"n\":1}"), "JSON 비밀 값만 비운다: " + json);
-        String form = ApiSaved.savableBody("id=kim&passwd=1%262&x=");
-        check(form.equals("id=kim&passwd=&x="), "폼 비밀 값만 비운다: " + form);
-        check(ApiSaved.savableBody("plain text") .equals("plain text") && ApiSaved.savableBody(null) == null, "그 밖은 그대로");
+        List<ApiSaved.Line> query = List.of(new ApiSaved.Line("userPwd", "p@ss", true), new ApiSaved.Line("page", "1", false),
+                new ApiSaved.Line("emptyToken", "", true));
+        String body = "{\"userId\":\"kim\", \"password\" : \"a\\\"b$1\", \"accessToken\":\"t\", \"n\":1}";
+        String url = "http://h/x?access_token=abc&page=2&apikey=k#frag";
+        ApiSaved.Scrubbed s = ApiSaved.scrub(query, List.of(), url, body);
+        check(s.query().get(0).value().isEmpty() && s.query().get(0).on() && s.query().get(1).value().equals("1"), "비밀 이름 파라미터 값만 비운다: " + s.query());
+        check(!s.secrets().containsKey(ApiSaved.QUERY + "emptytoken"), "빈 비밀은 옮기지 않는다");
+        check(s.body().equals("{\"userId\":\"kim\", \"password\" : \"\", \"accessToken\":\"\", \"n\":1}"), "JSON 비밀 값만 비운다: " + s.body());
+        check(s.url().equals("http://h/x?access_token=&page=2&apikey=#frag"), "주소 쿼리 비밀 값만 비운다: " + s.url());
+        check(!s.droppedHeader(), "뺀 헤더 없음");
+        // 되살리기
+        check(ApiSaved.restore(s.body(), ApiSaved.BODY, s.secrets()).equals(body), "본문 되살림: " + ApiSaved.restore(s.body(), ApiSaved.BODY, s.secrets()));
+        check(ApiSaved.restore(s.url(), ApiSaved.URL, s.secrets()).equals(url), "주소 되살림");
+        check(ApiSaved.restore(s.query(), ApiSaved.QUERY, s.secrets()).get(0).value().equals("p@ss"), "쿼리 되살림");
+        check(ApiSaved.restore(s.body(), ApiSaved.BODY, java.util.Map.of()).equals(s.body()), "비밀이 없으면 그대로");
+        ApiSaved.Scrubbed form = ApiSaved.scrub(List.of(), List.of(), "", "id=kim&passwd=1%262&x=");
+        check(form.body().equals("id=kim&passwd=&x=") && ApiSaved.restore(form.body(), ApiSaved.BODY, form.secrets()).equals("id=kim&passwd=1%262&x="),
+                "폼 비밀 값 비우고 되살림: " + form.body());
+        ApiSaved.Scrubbed plain = ApiSaved.scrub(List.of(), List.of(), "http://h/a", "plain text");
+        check(plain.body().equals("plain text") && plain.url().equals("http://h/a") && plain.secrets().isEmpty(), "그 밖은 그대로");
+        check(ApiSaved.scrub(List.of(), List.of(), null, null).body() == null, "null 본문");
+        check(ApiSaved.withoutQuery("http://h/a?token=1").equals("http://h/a") && ApiSaved.withoutQuery("http://h/a").equals("http://h/a"), "key 에서 쿼리 떼기");
+        // 비밀을 되살리지 못한 줄은 합칠 때 코드 값을 둔다.
+        List<ApiSaved.Line> merged = ApiSaved.merge(List.of(new ApiSaved.Line("password", "test1234", true)), List.of(new ApiSaved.Line("password", "", false)));
+        check(merged.get(0).value().equals("test1234") && !merged.get(0).on(), "빈 비밀은 코드 값, 체크는 저장한 것: " + merged);
+        // 같은 이름 여러 줄은 차례대로 짝짓는다.
+        List<ApiSaved.Line> ids = ApiSaved.merge(List.of(new ApiSaved.Line("ids", "1", true)),
+                List.of(new ApiSaved.Line("ids", "7", true), new ApiSaved.Line("ids", "8", true)));
+        check(ids.size() == 2 && ids.get(0).value().equals("7") && ids.get(1).value().equals("8"), "같은 이름 둘째 줄도 남는다: " + ids);
     }
 
     private static void body() {

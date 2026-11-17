@@ -253,6 +253,14 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
     /** 저장소에서 읽은(또는 마지막으로 쓴) 값. 바뀐 것만 다시 쓴다. 읽기 전에는 null. */
     private volatile Map<String, String> savedSecrets;
     private CompletableFuture<HttpResponse<ApiHttp.Received>> pending;
+    /** 인증 줄을 새로 넣을 때의 체크(저장한 요청이 인증을 끄고 보냈으면 false). 줄이 있는 동안은 그 줄의 체크를 따른다. */
+    private boolean authWanted = true;
+    /** fill 차례. 비밀 값을 백그라운드에서 읽는 사이 다시 채웠으면 늦게 온 값은 버린다. */
+    private int fillGeneration;
+
+    /** 보낸 요청의 저장할 값과 따로 둘 비밀 값. */
+    private record Sent(ApiStore.Entry entry, Map<String, String> secrets) {
+    }
 
     /** 같은 요청(key)의 탭이 열려 있으면 그 탭에 새 값을 넣어 다시 채우고, 아니면 새 탭을 연다. */
     static void open(Project project, Request request) {
@@ -272,6 +280,23 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         LightVirtualFile file = new LightVirtualFile(request.title());
         file.putUserData(REQUEST, request);
         manager.openFile(file, true);
+    }
+
+    /** key 가 같은 요청 탭이 열려 있으면 앞으로 가져와 저장한 값으로 다시 채우고 true. 그 탭의 코드 시험 값(REQUEST)은 그대로 둔다. */
+    static boolean focus(Project project, String key) {
+        FileEditorManager manager = FileEditorManager.getInstance(project);
+        for (VirtualFile open : manager.getOpenFiles()) {
+            Request shown = open.getUserData(REQUEST);
+            if (shown != null && shown.key().equals(key)) {
+                for (FileEditor editor : manager.openFile(open, true)) {
+                    if (editor instanceof ApiRequestEditor api) {
+                        api.fill(true);
+                    }
+                }
+                return true;
+            }
+        }
+        return false;
     }
 
     /** REQUEST 가 붙은 가상 파일만 받는다. */
@@ -857,7 +882,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
      * 그 줄의 체크 상태는 값이 바뀌어도 유지한다.
      */
     private void refreshAuthRow() {
-        boolean checked = true;
+        boolean checked = authWanted;
         if (authRowShown) {
             checked = Boolean.TRUE.equals(headerModel.getValueAt(0, ENABLED_COLUMN));
             authRowShown = false;
@@ -886,12 +911,55 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         urlField.setText(saved == null ? request.url() : saved.url);
         setRows(queryModel, request.query(), saved == null ? null : ApiStore.lines(saved.query));
         authRowShown = false;
+        authWanted = saved == null || saved.auth;
         setRows(headerModel, request.headers(), saved == null ? null : ApiStore.lines(saved.headers));
         refreshAuthRow();
-        if (saved != null && !saved.auth && isAuthRow(0)) {
-            headerModel.setValueAt(false, 0, ENABLED_COLUMN);
-        }
         bodyField.setText(saved == null ? request.body() : saved.body);
+        int generation = ++fillGeneration;
+        if (saved != null) {
+            restoreSecrets(saved, generation);
+        }
+    }
+
+    /**
+     * 저장할 때 비운 비밀 값(ApiSaved.scrub)을 비밀번호 저장소에서 읽어(백그라운드) 채운다.
+     * 그 사이 다시 채웠거나 사용자가 고친 칸(비어 있지 않은 칸, 저장한 글과 달라진 주소 · 본문)은 덮지 않는다.
+     */
+    private void restoreSecrets(ApiStore.Entry saved, int generation) {
+        ApplicationManager.getApplication().executeOnPooledThread(() -> {
+            Map<String, String> secrets = ApiStore.getInstance(project).secrets(saved.key);
+            if (secrets.isEmpty()) {
+                return;
+            }
+            ApplicationManager.getApplication().invokeLater(() -> {
+                if (generation != fillGeneration) {
+                    return;
+                }
+                restoreRows(queryModel, 0, ApiSaved.QUERY, secrets);
+                restoreRows(headerModel, authRowShown ? 1 : 0, ApiSaved.HEADER, secrets);
+                if (urlField.getText().equals(saved.url)) {
+                    urlField.setText(ApiSaved.restore(saved.url, ApiSaved.URL, secrets));
+                }
+                if (bodyField.getText().equals(saved.body)) {
+                    bodyField.setText(ApiSaved.restore(saved.body, ApiSaved.BODY, secrets));
+                }
+            }, ModalityState.defaultModalityState(), project.getDisposed());
+        });
+    }
+
+    /** from 번째 줄부터 비어 있는 비밀 값 칸을 채운다. */
+    private static void restoreRows(DefaultTableModel model, int from, String prefix, Map<String, String> secrets) {
+        for (int i = from; i < model.getRowCount(); i++) {
+            Object name = model.getValueAt(i, NAME_COLUMN);
+            Object value = model.getValueAt(i, VALUE_COLUMN);
+            if (name == null || (value != null && !value.toString().isEmpty())) {
+                continue;
+            }
+            List<ApiSaved.Line> one = ApiSaved.restore(List.of(new ApiSaved.Line(name.toString(), "", true)), prefix, secrets);
+            if (!one.get(0).value().isEmpty()) {
+                model.setValueAt(one.get(0).value(), i, VALUE_COLUMN);
+            }
+        }
     }
 
     /** 코드의 시험 값 줄(fresh)을 넣는다. saved 가 있으면 같은 이름 줄은 저장한 값 · 체크로, 저장에만 있는 줄은 뒤에 붙인다. */
@@ -912,19 +980,27 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         }
     }
 
-    /** 보낼 때의 값: 쿼리 · 헤더는 체크 상태까지(인증 줄 · 비밀 헤더는 빼고), authOn 은 인증을 붙였는지(인증이 없던 때는 참). */
-    private ApiStore.Entry snapshot(String method, String url, boolean authOn, String body) {
+    /**
+     * 보낼 때의 값: 쿼리 · 헤더는 체크 상태까지(인증 줄은 빼고), authOn 은 인증을 붙였는지(인증이 없던 때는 참).
+     * 비밀은 ApiSaved.scrub 으로 떼어 secrets 로 둔다. 요청 본문이 ApiSaved.BODY_LIMIT 를 넘으면 workspace.xml 이 커지지 않게 저장하지 않는다(null).
+     */
+    private @Nullable Sent snapshot(String method, String url, boolean authOn, String body) {
+        if (body != null && body.length() > ApiSaved.BODY_LIMIT) {
+            return null;
+        }
         Request request = file.getUserData(REQUEST);
+        ApiSaved.Scrubbed s = ApiSaved.scrub(tableLines(queryModel, 0), tableLines(headerModel, authRowShown ? 1 : 0), url, body);
         ApiStore.Entry e = new ApiStore.Entry();
         e.key = request == null ? file.getName() : request.key();
         e.title = request == null ? file.getName() : request.title();
         e.method = method;
-        e.url = url;
-        e.query = ApiStore.beans(ApiSaved.savableQuery(tableLines(queryModel, 0)));
-        e.headers = ApiStore.beans(ApiSaved.savableHeaders(tableLines(headerModel, authRowShown ? 1 : 0)));
+        e.url = s.url();
+        e.query = ApiStore.beans(s.query());
+        e.headers = ApiStore.beans(s.headers());
         e.auth = authOn;
-        e.body = ApiSaved.savableBody(body);
-        return e;
+        e.body = s.body() == null ? "" : s.body();
+        e.droppedHeader = s.droppedHeader();
+        return new Sent(e, s.secrets());
     }
 
     /** from 번째 줄부터 이름이 있는 줄(체크 상태 포함). */
@@ -1033,7 +1109,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
             return;
         }
         saveAuth(kind, secrets);
-        ApiStore.Entry sent = snapshot(method, url, auth != null || !authRowShown, body);
+        Sent sent = snapshot(method, url, auth != null || !authRowShown, body);
         long start = System.nanoTime();
         sendStart = start;
         statusPill.clear();
@@ -1116,7 +1192,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         return new Shown(response.statusCode(), headerText.toString(), headers, cookies, meta, shown, shownType, body);
     }
 
-    private void finish(CompletableFuture<HttpResponse<ApiHttp.Received>> future, ApiStore.Entry sent, @Nullable Shown response, Throwable error,
+    private void finish(CompletableFuture<HttpResponse<ApiHttp.Received>> future, @Nullable Sent sent, @Nullable Shown response, Throwable error,
                         long elapsedMs) {
         if (future != pending) {
             return;
@@ -1134,7 +1210,9 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         }
         int code = response.code();
         // 받은 응답은 상태 코드가 무엇이든 이 요청의 기준으로 저장한다(다시 보내기 창이 이것과 견준다).
-        ApiStore.getInstance(project).saveSent(sent, code, response.raw());
+        if (sent != null) {
+            ApiStore.getInstance(project).saveSent(sent.entry(), sent.secrets(), code, response.raw());
+        }
         boolean failed = code >= HTTP_ERROR_STATUS;
         String reason = REASONS.get(code);
         statusPill.show(reason == null ? String.valueOf(code) : code + " " + reason,
@@ -1208,6 +1286,8 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
 
     @Override
     public void dispose() {
+        // 닫힌 탭에 늦게 온 비밀 값을 넣지 않는다(restoreSecrets).
+        fillGeneration++;
         elapsedTimer.stop();
         if (pending != null) {
             pending.cancel(true);

@@ -87,22 +87,29 @@ public final class ApiReplay {
         return e == null || ApiSaved.changesData(e.method);
     }
 
-    /** 백그라운드에서만. 저장한 값으로 다시 보내고 결과를 돌려준다(막힘, 시간 제한은 에디터와 같음). 기준 응답은 바꾸지 않는다. */
+    /**
+     * 백그라운드에서만. 저장한 값(비밀은 비밀번호 저장소에서 되살림)으로 다시 보내고 결과를 돌려준다(막힘, 시간 제한은 에디터와 같음). 기준 응답은 바꾸지 않는다.
+     * 비교 지문은 받은 본문 전체로 구하고, 결과에 두는 본문은 줄맞춤 · 줄인 것이다(비교 창이 화면 스레드에서 큰 글을 다루지 않게).
+     */
     public static Result resend(Project project, String key) {
         ApiStore store = ApiStore.getInstance(project);
         ApiStore.Entry e = store.get(key);
         if (e == null) {
-            return new Result(key, key, "", ApiSaved.NO_CODE, ApiSaved.NO_CODE, null, null,
-                    BootServersBundle.message("api.resend.gone"), "", "", 0);
+            return failed(key, key, "", BootServersBundle.message("api.resend.gone"));
         }
         String before = e.code == ApiSaved.NO_CODE ? null : store.body(key);
+        Map<String, String> secrets = store.secrets(key);
         String error = null;
         int code = ApiSaved.NO_CODE;
         String now = null;
+        CompletableFuture<HttpResponse<ApiHttp.Received>> future = null;
         try {
-            HttpRequest request = ApiHttp.build(e.method, e.url.strip(), checked(e.query), checked(e.headers),
-                    e.auth ? ApiHttp.savedAuth(project) : null, e.body);
-            HttpResponse<ApiHttp.Received> response = await(ApiHttp.send(project, request));
+            HttpRequest request = ApiHttp.build(e.method, ApiSaved.restore(e.url, ApiSaved.URL, secrets).strip(),
+                    checked(ApiSaved.restore(ApiStore.lines(e.query), ApiSaved.QUERY, secrets)),
+                    checked(ApiSaved.restore(ApiStore.lines(e.headers), ApiSaved.HEADER, secrets)),
+                    e.auth ? ApiHttp.savedAuth(project) : null, ApiSaved.restore(e.body, ApiSaved.BODY, secrets));
+            future = ApiHttp.send(project, request);
+            HttpResponse<ApiHttp.Received> response = await(future);
             code = response.statusCode();
             now = ApiHttp.text(response);
         } catch (IllegalArgumentException ex) {
@@ -110,34 +117,49 @@ public final class ApiReplay {
         } catch (ExecutionException | CancellationException ex) {
             error = ApiHttp.responseErrorMessage(ex instanceof ExecutionException && ex.getCause() != null ? ex.getCause() : ex);
         } catch (InterruptedException ex) {
+            future.cancel(true);
             Thread.currentThread().interrupt();
             error = ApiHttp.responseErrorMessage(new CancellationException());
         }
-        return new Result(key, e.title, e.method, e.code, code, before, now, error, e.print,
+        return new Result(key, e.title, e.method, e.code, code, before == null ? null : ApiText.prettyJson(before),
+                now == null ? null : ApiSaved.cap(ApiText.prettyJson(now)), error, e.print,
                 now == null ? "" : ApiSaved.fingerprint(now), e.savedAt);
     }
 
-    /** 화면 스레드에서. 저장한 응답 · 이번 응답 본문을 IntelliJ 비교 창으로 보인다. */
+    /** 보내지 못한 결과(message 는 화면 글). */
+    static Result failed(String key, String title, String method, String message) {
+        return new Result(key, title, method, ApiSaved.NO_CODE, ApiSaved.NO_CODE, null, null, message, "", "", 0);
+    }
+
+    /** accept 로 기준이 된 뒤의 결과: 기준 = 이번 응답이라 판정은 같음. */
+    static Result accepted(Result r) {
+        return new Result(r.key(), r.title(), r.method(), r.nowCode(), r.nowCode(), r.nowBody(), r.nowBody(), null,
+                r.nowPrint(), r.nowPrint(), System.currentTimeMillis());
+    }
+
+    /** 화면 스레드에서. 저장한 응답 · 이번 응답 본문(resend 가 줄맞춤 · 줄여 둔 것)을 IntelliJ 비교 창으로 보인다. */
     public static void showDiff(Project project, Result result) {
         DiffContentFactory contents = DiffContentFactory.getInstance();
-        String left = ApiSaved.cap(ApiText.prettyJson(result.beforeBody() == null ? "" : result.beforeBody()));
-        String right = ApiSaved.cap(ApiText.prettyJson(result.nowBody() == null ? "" : result.nowBody()));
+        String left = result.beforeBody() == null ? "" : result.beforeBody();
+        String right = result.nowBody() == null ? "" : result.nowBody();
         // 둘 중 하나라도 JSON 으로 보이면 JSON 색칠, 아니면 일반 글.
         boolean json = left.stripLeading().startsWith("{") || left.stripLeading().startsWith("[")
                 || right.stripLeading().startsWith("{") || right.stripLeading().startsWith("[");
         FileType type = json ? FileTypeManager.getInstance().getFileTypeByExtension("json") : PlainTextFileType.INSTANCE;
         String savedAt = result.savedAt() == 0 ? "" : DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.MEDIUM).format(new Date(result.savedAt()));
+        String beforeTitle = result.beforeCode() == ApiSaved.NO_CODE ? BootServersBundle.message("api.resend.diff.before.none")
+                : BootServersBundle.message("api.resend.diff.before", result.beforeCode(), savedAt);
+        String nowTitle = result.nowCode() == ApiSaved.NO_CODE ? BootServersBundle.message("api.resend.diff.now.none")
+                : BootServersBundle.message("api.resend.diff.now", result.nowCode());
         SimpleDiffRequest request = new SimpleDiffRequest(result.title(),
-                contents.create(project, left, type), contents.create(project, right, type),
-                BootServersBundle.message("api.resend.diff.before", result.beforeCode(), savedAt),
-                BootServersBundle.message("api.resend.diff.now", result.nowCode()));
+                contents.create(project, left, type), contents.create(project, right, type), beforeTitle, nowTitle);
         DiffManager.getInstance().showDiff(project, request);
     }
 
     /** 이번 응답을 기준으로 저장한다. 보내지 못한 결과면 아무것도 안 한다. */
     public static void accept(Project project, Result result) {
         if (result.error() == null && result.nowBody() != null) {
-            ApiStore.getInstance(project).accept(result.key(), result.nowCode(), result.nowBody());
+            ApiStore.getInstance(project).accept(result.key(), result.nowCode(), result.nowPrint(), result.nowBody());
         }
     }
 
@@ -157,11 +179,11 @@ public final class ApiReplay {
         }
     }
 
-    private static List<Map.Entry<String, String>> checked(List<ApiStore.LineBean> lines) {
+    private static List<Map.Entry<String, String>> checked(List<ApiSaved.Line> lines) {
         List<Map.Entry<String, String>> out = new ArrayList<>();
-        for (ApiStore.LineBean l : lines) {
-            if (l.on && l.name != null && !l.name.isBlank()) {
-                out.add(Map.entry(l.name.strip(), l.value == null ? "" : l.value));
+        for (ApiSaved.Line l : lines) {
+            if (l.on() && l.name() != null && !l.name().isBlank()) {
+                out.add(Map.entry(l.name().strip(), l.value() == null ? "" : l.value()));
             }
         }
         return out;

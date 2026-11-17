@@ -1,5 +1,11 @@
 package local.bootservers;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.intellij.credentialStore.CredentialAttributes;
+import com.intellij.credentialStore.CredentialAttributesKt;
+import com.intellij.ide.passwordSafe.PasswordSafe;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.components.PersistentStateComponent;
@@ -18,14 +24,18 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 
 /**
  * Send API Request 로 보낸 요청(마지막 값)과 그 응답(기준)을 요청 key 마다 하나씩 기억한다.
  * 요청 값 · 상태 코드 · 본문 지문은 workspace.xml(리포지토리에 안 올라감)에, 응답 본문(ApiSaved.cap 으로 줄인 것)은 IDE 시스템 폴더
- * moa-api/&lt;프로젝트 위치 해시&gt;/&lt;key 지문&gt;.txt 에 둔다(workspace.xml 이 커지지 않게). 비밀 헤더는 저장하지 않는다(ApiSaved.savableHeaders).
+ * moa-api/&lt;프로젝트 위치 해시&gt;/&lt;key 지문&gt;.txt 에 둔다(workspace.xml 이 커지지 않게). Authorization 따위 헤더는 저장하지 않고,
+ * 비밀처럼 보이는 값(ApiSaved.scrub)은 workspace.xml 에 빈 글로 두고 실제 값은 key 마다 IDE 비밀번호 저장소 한 항목(이름 → 값 JSON)에 둔다.
  * 목록은 화면 스레드에서만 바꾼다. 다른 스레드는 get · keys 로 읽기만 하며, 바꿀 때는 Entry 를 통째로 새로 넣는다.
  */
 @Service(Service.Level.PROJECT)
@@ -34,6 +44,9 @@ public final class ApiStore implements PersistentStateComponent<ApiStore.StateBe
     private static final Logger LOG = Logger.getInstance(ApiStore.class);
     private static final String FOLDER = "moa-api";
     private static final String BODY_EXTENSION = ".txt";
+    private static final String TEMP_SUFFIX = ".tmp";
+    /** 비밀번호 저장소의 서비스 이름 앞부분. 뒤에 프로젝트 위치 해시와 key 지문이 붙는다. */
+    private static final String SECRET_SERVICE = "Moa API 저장 요청";
 
     /** 직렬화를 위해 공개 필드와 기본 생성자를 쓴다. */
     public static final class LineBean {
@@ -58,6 +71,8 @@ public final class ApiStore implements PersistentStateComponent<ApiStore.StateBe
         public String print = "";
         /** 기준을 저장한 때(에포크 ms). */
         public long savedAt;
+        /** 헤더 칸에 직접 적은 Authorization · Cookie 따위를 저장하지 않고 뺐는지(다시 보내면 설정의 인증으로 나간다). */
+        public boolean droppedHeader;
     }
 
     public static final class StateBean {
@@ -108,8 +123,9 @@ public final class ApiStore implements PersistentStateComponent<ApiStore.StateBe
     }
 
     /** 보낸 요청 값과 받은 응답을 기준으로 저장한다. 본문 파일 쓰기 · 지문 계산은 백그라운드에서 하고 끝나면 목록에 넣는다. */
-    void saveSent(Entry sent, int code, String responseBody) {
+    void saveSent(Entry sent, Map<String, String> secrets, int code, String responseBody) {
         io.execute(() -> {
+            writeSecrets(sent.key, secrets);
             sent.code = code;
             sent.print = ApiSaved.fingerprint(responseBody);
             sent.savedAt = System.currentTimeMillis();
@@ -118,19 +134,25 @@ public final class ApiStore implements PersistentStateComponent<ApiStore.StateBe
         });
     }
 
-    /** 다시 보낸 응답을 기준으로 삼는다(요청 값은 그대로). 그 사이 지운 요청이면 아무것도 안 한다. */
-    void accept(String key, int code, String responseBody) {
+    /** 다시 보낸 응답을 기준으로 삼는다(요청 값은 그대로). print 는 받은 본문 전체의 지문, shownBody 는 줄인 본문. 그 사이 지운 요청이면 아무것도 안 한다. */
+    void accept(String key, int code, String print, String shownBody) {
         io.execute(() -> {
-            Entry old = get(key);
-            if (old == null) {
+            if (get(key) == null) {
                 return;
             }
-            Entry e = copy(old);
-            e.code = code;
-            e.print = ApiSaved.fingerprint(responseBody);
-            e.savedAt = System.currentTimeMillis();
-            writeBody(key, ApiSaved.cap(responseBody));
-            ApplicationManager.getApplication().invokeLater(() -> put(e), project.getDisposed());
+            writeBody(key, ApiSaved.cap(shownBody));
+            ApplicationManager.getApplication().invokeLater(() -> {
+                // 본문을 쓰는 사이 지웠으면 되살리지 않는다.
+                Entry old = get(key);
+                if (old == null) {
+                    return;
+                }
+                Entry e = copy(old);
+                e.code = code;
+                e.print = print;
+                e.savedAt = System.currentTimeMillis();
+                put(e);
+            }, project.getDisposed());
         });
     }
 
@@ -141,7 +163,10 @@ public final class ApiStore implements PersistentStateComponent<ApiStore.StateBe
             next.removeIf(e -> e.key.equals(key));
             state.entries = next;
         }
-        io.execute(() -> deleteBody(key));
+        io.execute(() -> {
+            deleteBody(key);
+            writeSecrets(key, Map.of());
+        });
     }
 
     /** 화면 스레드에서. 같은 key 는 바꾸고, MAX_SAVED 를 넘으면 저장이 가장 이른 것부터 버린다. */
@@ -167,6 +192,7 @@ public final class ApiStore implements PersistentStateComponent<ApiStore.StateBe
             io.execute(() -> {
                 for (String key : dropped) {
                     deleteBody(key);
+                    writeSecrets(key, Map.of());
                 }
             });
         }
@@ -184,15 +210,56 @@ public final class ApiStore implements PersistentStateComponent<ApiStore.StateBe
         }
     }
 
+    /** 임시 파일에 쓴 뒤 옮겨, 읽는 쪽이 반쯤 쓴 본문을 보지 않게 한다. */
     private void writeBody(String key, String text) {
         try {
             Path path = bodyPath(key);
             Files.createDirectories(path.getParent());
-            Files.writeString(path, text, StandardCharsets.UTF_8);
+            Path temp = Files.createTempFile(path.getParent(), path.getFileName().toString(), TEMP_SUFFIX);
+            try {
+                Files.writeString(temp, text, StandardCharsets.UTF_8);
+                Files.move(temp, path, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } finally {
+                Files.deleteIfExists(temp);
+            }
         } catch (IOException e) {
             // 본문 파일이 없어도 비교(지문)는 되고 비교 창의 왼쪽만 빈다.
             LOG.warn("API 기준 응답을 저장하지 못함", e);
         }
+    }
+
+    /** 저장해 둔 비밀 값(ApiSaved.scrub 의 secrets). 없거나 읽지 못하면 빈 맵. 비밀번호 저장소를 읽으므로 화면 스레드에서 부르지 않는다. */
+    Map<String, String> secrets(String key) {
+        String text = PasswordSafe.getInstance().getPassword(secretKey(key));
+        if (text == null || text.isEmpty()) {
+            return Map.of();
+        }
+        try {
+            Map<String, String> out = new HashMap<>();
+            JsonObject json = JsonParser.parseString(text).getAsJsonObject();
+            for (Map.Entry<String, JsonElement> e : json.entrySet()) {
+                out.put(e.getKey(), e.getValue().getAsString());
+            }
+            return out;
+        } catch (RuntimeException e) {
+            // 값은 로그에 남기지 않는다.
+            LOG.warn("API 요청의 저장한 비밀 값을 읽지 못함: " + e.getClass().getSimpleName());
+            return Map.of();
+        }
+    }
+
+    /** 비밀 값을 저장한다. 비었으면 지운다. 백그라운드에서. */
+    private void writeSecrets(String key, Map<String, String> secrets) {
+        JsonObject json = new JsonObject();
+        for (Map.Entry<String, String> e : secrets.entrySet()) {
+            json.addProperty(e.getKey(), e.getValue());
+        }
+        PasswordSafe.getInstance().setPassword(secretKey(key), secrets.isEmpty() ? null : json.toString());
+    }
+
+    private CredentialAttributes secretKey(String key) {
+        return new CredentialAttributes(CredentialAttributesKt.generateServiceName(SECRET_SERVICE,
+                project.getLocationHash() + "/" + ApiSaved.fingerprint(key)));
     }
 
     private void deleteBody(String key) {
@@ -220,13 +287,15 @@ public final class ApiStore implements PersistentStateComponent<ApiStore.StateBe
         c.code = e.code;
         c.print = e.print;
         c.savedAt = e.savedAt;
+        c.droppedHeader = e.droppedHeader;
         return c;
     }
 
     static List<ApiSaved.Line> lines(List<LineBean> beans) {
         List<ApiSaved.Line> out = new ArrayList<>();
         for (LineBean b : beans) {
-            out.add(new ApiSaved.Line(b.name, b.value, b.on));
+            // 직렬화로 읽은 빈 글은 null 일 수 있다.
+            out.add(new ApiSaved.Line(b.name == null ? "" : b.name, b.value == null ? "" : b.value, b.on));
         }
         return out;
     }

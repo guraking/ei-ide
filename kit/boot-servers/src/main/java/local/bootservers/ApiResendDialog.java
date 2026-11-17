@@ -2,6 +2,7 @@ package local.bootservers;
 
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.progress.EmptyProgressIndicator;
 import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.progress.ProgressIndicator;
@@ -41,6 +42,7 @@ import java.util.concurrent.ExecutorService;
  */
 final class ApiResendDialog extends DialogWrapper {
     /** 동시에 보내는 요청 수(서버 · 보안 프로그램에 한꺼번에 몰리지 않게). */
+    private static final Logger LOG = Logger.getInstance(ApiResendDialog.class);
     private static final int SEND_THREADS = 2;
     private static final double FIRST_WIDTH_RATIO = 0.5;
     private static final double FIRST_HEIGHT_RATIO = 0.45;
@@ -70,8 +72,9 @@ final class ApiResendDialog extends DialogWrapper {
         final String title;
         final String method;
         final String url;
-        final int beforeCode;
+        int beforeCode;
         final boolean changesData;
+        final boolean droppedHeader;
         boolean checked;
         boolean sending;
         ApiReplay.Result result;
@@ -83,6 +86,7 @@ final class ApiResendDialog extends DialogWrapper {
             url = e.url;
             beforeCode = e.code;
             changesData = ApiSaved.changesData(e.method);
+            droppedHeader = e.droppedHeader;
             checked = !changesData;
         }
     }
@@ -206,16 +210,22 @@ final class ApiResendDialog extends DialogWrapper {
         for (Item item : todo) {
             pool.execute(() -> {
                 ApiReplay.Result result = null;
-                if (!indicator.isCanceled() && !project.isDisposed()) {
-                    try {
+                try {
+                    if (!indicator.isCanceled() && !project.isDisposed()) {
                         result = ProgressManager.getInstance().runProcess(() -> ApiReplay.resend(project, item.key), indicator);
-                    } catch (ProcessCanceledException cancelled) {
-                        // 취소: 결과 없이 다음으로(남은 것도 곧 취소를 본다).
                     }
+                } catch (ProcessCanceledException cancelled) {
+                    // 취소: 결과 없이 다음으로(남은 것도 곧 취소를 본다).
+                } catch (RuntimeException unexpected) {
+                    // 보내기 밖의 예외(프로젝트 닫는 중 등)도 이 줄의 실패로 보여 「보내는 중」에 멈추지 않게 한다.
+                    LOG.warn("API 다시 보내기 실패", unexpected);
+                    result = ApiReplay.failed(item.key, item.title, item.method,
+                            BootServersBundle.message("api.resend.error.unexpected", String.valueOf(unexpected.getMessage())));
+                } finally {
+                    ApiReplay.Result done = result;
+                    ApplicationManager.getApplication().invokeLater(() -> finished(indicator, item, done), ModalityState.any(),
+                            o -> isDisposed() || project.isDisposed());
                 }
-                ApiReplay.Result done = result;
-                ApplicationManager.getApplication().invokeLater(() -> finished(indicator, item, done), ModalityState.any(),
-                        o -> isDisposed() || project.isDisposed());
             });
         }
     }
@@ -237,19 +247,29 @@ final class ApiResendDialog extends DialogWrapper {
         refreshButtons();
     }
 
+    /** 체크한 줄 가운데 이번 응답이 있는 것을 확인받은 뒤 기준으로 저장하고, 그 줄의 지난 상태 · 결과를 바꾼다. */
     private void acceptChecked() {
-        int count = 0;
+        List<Item> ready = new ArrayList<>();
         for (Item item : items) {
             if (item.checked && item.result != null && item.result.error() == null && item.result.nowBody() != null) {
-                ApiReplay.accept(project, item.result);
-                count++;
+                ready.add(item);
             }
         }
-        if (count == 0) {
+        if (ready.isEmpty()) {
             Messages.showInfoMessage(getContentPanel(), BootServersBundle.message("api.resend.accept.none"), getTitle());
-        } else {
-            Messages.showInfoMessage(getContentPanel(), BootServersBundle.message("api.resend.accept.done", count), getTitle());
+            return;
         }
+        if (Messages.showYesNoDialog(getContentPanel(), BootServersBundle.message("api.resend.accept.confirm", ready.size()), getTitle(),
+                Messages.getQuestionIcon()) != Messages.YES) {
+            return;
+        }
+        for (Item item : ready) {
+            ApiReplay.accept(project, item.result);
+            item.result = ApiReplay.accepted(item.result);
+            item.beforeCode = item.result.beforeCode();
+        }
+        model.fireTableDataChanged();
+        Messages.showInfoMessage(getContentPanel(), BootServersBundle.message("api.resend.accept.done", ready.size()), getTitle());
     }
 
     private void openSelected() {
@@ -258,11 +278,16 @@ final class ApiResendDialog extends DialogWrapper {
             Messages.showInfoMessage(getContentPanel(), BootServersBundle.message("api.resend.pick"), getTitle());
             return;
         }
-        ApiStore.Entry e = ApiStore.getInstance(project).get(items.get(table.convertRowIndexToModel(row)).key);
+        String key = items.get(table.convertRowIndexToModel(row)).key;
+        // 열린 탭이 있으면 그 탭의 코드 시험 값은 두고 저장한 값으로 다시 채운다.
+        if (ApiRequestEditor.focus(project, key)) {
+            return;
+        }
+        ApiStore.Entry e = ApiStore.getInstance(project).get(key);
         if (e == null) {
             return;
         }
-        // 탭은 저장한 값으로 채워진다(ApiRequestEditor.fill). 코드의 시험 값은 탭의 「처음 시험 값으로」로 되돌린다.
+        // 새 탭은 저장한 값으로 연다(비밀 값은 탭이 비밀번호 저장소에서 되살림). 코드의 시험 값을 모르므로 이 탭의 「처음 시험 값으로」는 저장한 값(비밀은 빈 칸)이다.
         String source = BootServersBundle.message("api.source.saved");
         ApiRequestEditor.open(project, new ApiRequestEditor.Request(e.title, e.key, e.method, e.url,
                 rows(e.query, source), rows(e.headers, source), e.body));
@@ -360,13 +385,19 @@ final class ApiResendDialog extends DialogWrapper {
     }
 
     private static String resultText(Item item) {
+        String text;
         if (item.sending) {
-            return BootServersBundle.message("api.resend.sending");
+            text = BootServersBundle.message("api.resend.sending");
+        } else if (item.result != null) {
+            text = item.result.verdictText();
+        } else {
+            text = item.changesData ? BootServersBundle.message("api.resend.changes.data") : "";
         }
-        if (item.result != null) {
-            return item.result.verdictText();
+        if (!item.droppedHeader) {
+            return text;
         }
-        return item.changesData ? BootServersBundle.message("api.resend.changes.data") : "";
+        String note = BootServersBundle.message("api.resend.header.dropped");
+        return text.isEmpty() ? note : text + " · " + note;
     }
 
     /** 결과가 같음이 아니면 경고 색, 보내기 전 안내 · 보내는 중은 흐린 색. */
