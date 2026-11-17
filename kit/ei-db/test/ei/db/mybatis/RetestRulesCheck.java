@@ -35,6 +35,21 @@ public class RetestRulesCheck {
     eq(RetestRules.keysByUrl(List.of("/x/{id}"), List.of(keyA)), java.util.Map.of("/x/{id}", List.of(keyA)));
     eq(RetestRules.keysByUrl(List.of("/a"), List.of()), java.util.Map.of("/a", List.of()));
 
+    // 다른 파일 조각을 거쳐 include 해도 바뀐 조각을 쓰는 것으로 본다. 같은 파일 조각 안의 include 도 따라간다.
+    MapperDoc common = MapperDoc.parse("<mapper namespace=\"p.Common\"><sql id=\"cols\">A, B</sql></mapper>");
+    MapperDoc mid = MapperDoc.parse("<mapper namespace=\"p.Mid\"><sql id=\"wrap\"><include refid=\"p.Common.cols\"/></sql></mapper>");
+    MapperDoc user = MapperDoc.parse("<mapper namespace=\"p.User\"><sql id=\"own\"><include refid=\"p.Mid.wrap\"/></sql>"
+        + "<select id=\"list\">SELECT <include refid=\"own\"/> FROM T</select><select id=\"other\">SELECT 1</select></mapper>");
+    java.util.Set<String> reach = RetestRules.reach(List.of(common, mid, user), java.util.Set.of("p.Common.cols"));
+    eq(reach.contains("p.Mid.wrap") && reach.contains("p.User.own"), true);
+    eq(RetestRules.includedFragment(user, user.statement("list"), reach), "p.User.own");
+    eq(RetestRules.includedFragment(user, user.statement("other"), reach), null);
+    eq(RetestRules.reach(List.of(common, mid, user), java.util.Set.of("p.Other.x")), java.util.Set.of("p.Other.x"));
+    // 자기 자신을 부르는 조각에서 멈춘다.
+    MapperDoc loop = MapperDoc.parse("<mapper namespace=\"p.L\"><sql id=\"a\"><include refid=\"a\"/></sql>"
+        + "<select id=\"s\"><include refid=\"a\"/></select></mapper>");
+    eq(RetestRules.includedFragment(loop, loop.statement("s"), java.util.Set.of("p.X.y")), null);
+
     System.out.println("RetestRulesCheck 통과");
   }
 }

@@ -409,7 +409,9 @@ public final class MyBatisRunDialog extends DialogWrapper {
       public void run(@NotNull ProgressIndicator indicator) {
         String before;
         try {
-          before = MapperCompare.beforeText(project, file);
+          MapperCompare.Before got = MapperCompare.beforeText(project, file);
+          if (got.stale()) Notify.warning(project, MapperCompare.staleMessage());
+          before = got.text();
         } catch (VcsException ex) {
           Notify.error(project, EiDbBundle.message("mappercompare.vcs.failed", String.valueOf(ex.getMessage())));
           return;

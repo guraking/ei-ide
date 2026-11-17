@@ -9,6 +9,7 @@ import com.intellij.openapi.fileEditor.OpenFileDescriptor;
 import com.intellij.openapi.fileEditor.impl.LoadTextUtil;
 import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.progress.ProgressIndicator;
+import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vcs.VcsException;
 import com.intellij.openapi.vcs.changes.Change;
@@ -48,6 +49,7 @@ import java.util.Set;
  * 저장하지 않은 열린 문서에서 바뀐 · 새 · 지운 매퍼 문장(바뀐 SELECT 는 결과 비교 항목, 새 SELECT 는 돌리지 않는 줄)과 바뀐 · 새 자바 메서드를 찾고,
  * 그 영향(CodeFlow.impact)이 닿는 API 의 저장한 요청을 모은다. 지금 글은 열린 문서면 문서 글이다(저장하지 않는다).
  * 고치기 전 글은 MapperCompare.knownBeforeText(VCS 마지막 커밋, Git · SVN 같음, 바뀐 파일 목록은 처음에 한 번 다시 읽힌다). 백그라운드에서 부른다. PSI 는 CodeFlow.read(읽기 · 색인 끝남) 안에서만 본다.
+ * 바뀐 · 지운 &lt;sql&gt; 조각을 다른 매퍼 파일의 문장이 include 하면(다른 파일 조각을 거쳐도) 그 문장도 바뀐 것으로 본다(MAX_INCLUDERS 까지).
  */
 final class RetestCollect {
   private RetestCollect() {}
@@ -58,10 +60,13 @@ final class RetestCollect {
   static final int MAX_ROOTS = 40;
   /** 볼 바뀐 파일(자바 · XML) 수 상한. 파일마다 VCS 에서 고치기 전 글을 읽는다. */
   static final int MAX_FILES = 300;
+  /** 바뀐 조각을 include 하는 다른 파일 문장 수 상한. 문장마다 결과 비교 항목 · 영향 뿌리가 된다. */
+  static final int MAX_INCLUDERS = 50;
   private static final String XML = "xml";
   private static final String JAVA = "java";
   private static final String SELECT = "select";
   private static final String ID = "id";
+  private static final String DATABASE_ID = "databaseId";
 
   /** MAPPER_NEW(고치기 전 문장 없음) · API_NONE(저장한 요청 없음)은 돌릴 수 없어 이동만 한다. */
   enum Kind {
@@ -103,9 +108,15 @@ final class RetestCollect {
 
   /**
    * 모은 것. skippedRoots · skippedFiles 는 상한에 걸려 보지 않은 수, failedFiles 는 고치기 전 글을 못 읽은 파일 수,
-   * partialRoots 는 영향 찾기가 마디 · 참조 상한에 걸리거나 실패해 일부만 본 뿌리 수.
+   * partialRoots 는 영향 찾기가 마디 · 참조 상한에 걸리거나 실패해 일부만 본 뿌리 수, skippedIncluders 는 MAX_INCLUDERS 에 걸려 보지 않은
+   * 조각 사용 문장 수. stale 이면 바뀐 파일 목록을 MapperCompare.UPDATE_WAIT_SEC 안에 다 읽지 못해 그때까지 아는 목록으로 모았다.
    */
-  record Gathered(List<Item> items, int skippedRoots, int skippedFiles, int failedFiles, int partialRoots) {}
+  record Gathered(List<Item> items, int skippedRoots, int skippedFiles, int failedFiles, int partialRoots, int skippedIncluders,
+                  boolean stale) {}
+
+  /** 바뀐 조각(fragment, 「네임스페이스.id」)을 include 하는 다른 파일의 문장. start 는 여는 태그 위치. */
+  private record Includer(VirtualFile file, String namespace, String shortNamespace, String id, int start, boolean select,
+                          String fragment) {}
 
   /** 영향 뿌리: 바뀐 메서드(또는 바뀐 문장의 매퍼 메서드). key 는 같은 뿌리를 한 번만 보려는 것, added 는 새로 생긴 메서드. */
   private record Root(String key, SmartPsiElementPointer<PsiMethod> method, String why, boolean added) {}
@@ -117,8 +128,11 @@ final class RetestCollect {
   private record Reach(List<ApiRef> apis, boolean partial) {}
 
   static Gathered gather(Project project, ProgressIndicator indicator) {
-    MapperCompare.refreshChanges(project);
+    boolean stale = !MapperCompare.refreshChanges(project);
     List<Item> mappers = new ArrayList<>();
+    // 항목으로 넣은 매퍼 문장(listedKey)과 바뀐 조각(「네임스페이스.id」).
+    Set<String> listed = new HashSet<>();
+    Set<String> changedFragments = new LinkedHashSet<>();
     // 먼저 볼 뿌리(매퍼 메서드 · 바뀐 메서드)와 나중 뿌리(새 메서드). 상한에 걸리면 나중 것부터 빠진다.
     Map<String, Root> firstRoots = new LinkedHashMap<>();
     Map<String, Root> laterRoots = new LinkedHashMap<>();
@@ -146,12 +160,18 @@ final class RetestCollect {
       }
       if (before == null) continue;
       if (xml) {
-        mapperChanges(project, file, before, now, mappers, firstRoots);
+        mapperChanges(project, file, before, now, mappers, firstRoots, listed, changedFragments);
       } else {
         for (Root r : CodeFlow.read(project, () -> javaChanges(project, file, before))) {
           (r.added() ? laterRoots : firstRoots).putIfAbsent(r.key(), r);
         }
       }
+    }
+    int skippedIncluders = 0;
+    if (!changedFragments.isEmpty()) {
+      List<Includer> found = CodeFlow.read(project, () -> includers(project, changedFragments, listed));
+      skippedIncluders = Math.max(0, found.size() - MAX_INCLUDERS);
+      failed += includerItems(project, found.subList(0, Math.min(MAX_INCLUDERS, found.size())), mappers, firstRoots, indicator);
     }
     List<Root> all = new ArrayList<>(firstRoots.values());
     for (Root r : laterRoots.values()) {
@@ -191,7 +211,7 @@ final class RetestCollect {
     List<Item> items = new ArrayList<>(mappers);
     items.addAll(apis.values());
     items.addAll(unsaved.values());
-    return new Gathered(items, all.size() - seen.size(), skippedFiles, failed, partial);
+    return new Gathered(items, all.size() - seen.size(), skippedFiles, failed, partial, skippedIncluders, stale);
   }
 
   /**
@@ -229,23 +249,29 @@ final class RetestCollect {
     return d != null ? d.getImmutableCharSequence() : LoadTextUtil.loadText(file);
   }
 
-  /** 지금 글의 문장 가운데 고치기 전과 글이 다르거나 새로 생긴 것. SELECT 는 결과 비교 항목, 모두 매퍼 메서드를 영향 뿌리로. */
-  private static void mapperChanges(Project project, VirtualFile file, String before, CharSequence now, List<Item> out, Map<String, Root> roots) {
+  /**
+   * 지금 글의 문장 가운데 고치기 전과 글이 다르거나 새로 생긴 것과 지운 것. 같은 id 를 databaseId 로 나눈 문장은 (id, databaseId) 마다 견준다.
+   * SELECT 는 id 마다 결과 비교 항목 하나(돌릴 때 접속 종류로 문장을 고른다), 모두 매퍼 메서드를 영향 뿌리로.
+   * listed 에 항목으로 넣은 문장을, fragments 에 바뀌거나 지운 &lt;sql&gt; 조각(「네임스페이스.id」)을 더한다.
+   */
+  private static void mapperChanges(Project project, VirtualFile file, String before, CharSequence now, List<Item> out, Map<String, Root> roots,
+                                    Set<String> listed, Set<String> fragments) {
     MapperDoc nowDoc = MapperDoc.parse(now);
     if (nowDoc.namespace == null) return;
     MapperDoc beforeDoc = MapperDoc.parse(before);
-    Set<String> done = new LinkedHashSet<>();
+    Set<String> done = new HashSet<>();
     List<String[]> changed = new ArrayList<>();
     for (MapperDoc.Node s : nowDoc.statements) {
       String id = s.attr(ID);
-      // 쓰는 중이라 id 가 빈 문장은 건너뛴다. databaseId 로 같은 id 가 여럿이면 첫 문장만 본다(비교는 접속 종류로 다시 고른다).
-      if (id == null || id.isBlank() || !done.add(id)) continue;
-      MapperDoc.Node old = beforeDoc.statement(id);
+      // 쓰는 중이라 id 가 빈 문장은 건너뛴다.
+      if (id == null || id.isBlank() || !done.add(variantKey(s))) continue;
+      MapperDoc.Node old = variant(beforeDoc, id, databaseIdOf(s));
       String nowText = RetestRules.statementText(now, CodeFlow.ranges(nowDoc, s));
       if (old != null && nowText.equals(RetestRules.statementText(before, CodeFlow.ranges(beforeDoc, old)))) continue;
-      String why = EiDbBundle.message(old == null ? "retest.why.statement.added" : "retest.why.statement.changed", file.getName(), id);
-      if (SELECT.equals(s.name)) {
-        out.add(new Item(old == null ? Kind.MAPPER_NEW : Kind.MAPPER, nowDoc.shortNamespace() + "." + id, why,
+      String why = EiDbBundle.message(old == null ? "retest.why.statement.added" : "retest.why.statement.changed", file.getName(), label(s));
+      if (SELECT.equals(s.name) && listed.add(listedKey(file, id))) {
+        // databaseId 가 다른 문장이라도 고치기 전에 같은 id 가 있으면 견줄 수 있다(돌릴 때 접속 종류로 고른다).
+        out.add(new Item(beforeDoc.statement(id) == null ? Kind.MAPPER_NEW : Kind.MAPPER, nowDoc.shortNamespace() + "." + id, why,
             new OpenFileDescriptor(project, file, s.start), file, before, id, null, false));
       }
       changed.add(new String[]{id, why});
@@ -253,11 +279,122 @@ final class RetestCollect {
     // 지운 문장: 매퍼 메서드가 남아 있으면 실행 때 깨지므로 그 메서드를 부르는 곳도 본다.
     for (MapperDoc.Node s : beforeDoc.statements) {
       String id = s.attr(ID);
-      if (id == null || id.isBlank() || nowDoc.statement(id) != null || !done.add(id)) continue;
-      changed.add(new String[]{id, EiDbBundle.message("retest.why.statement.removed", file.getName(), id)});
+      if (id == null || id.isBlank() || variant(nowDoc, id, databaseIdOf(s)) != null || !done.add(variantKey(s))) continue;
+      changed.add(new String[]{id, EiDbBundle.message("retest.why.statement.removed", file.getName(), label(s))});
+    }
+    Set<String> fragmentIds = new LinkedHashSet<>(nowDoc.fragments.keySet());
+    fragmentIds.addAll(beforeDoc.fragments.keySet());
+    for (String id : fragmentIds) {
+      MapperDoc.Node nowFragment = nowDoc.fragments.get(id);
+      MapperDoc.Node oldFragment = beforeDoc.fragments.get(id);
+      if (nowFragment != null && oldFragment != null && RetestRules.statementText(now, CodeFlow.ranges(nowDoc, nowFragment))
+          .equals(RetestRules.statementText(before, CodeFlow.ranges(beforeDoc, oldFragment)))) continue;
+      fragments.add(nowDoc.namespace + "." + id);
     }
     if (changed.isEmpty()) return;
     for (Root r : CodeFlow.read(project, () -> mapperMethods(project, nowDoc.namespace, changed))) roots.putIfAbsent(r.key(), r);
+  }
+
+  /** 같은 id · 같은 databaseId(없으면 빈 글) 문장. 없으면 null. */
+  private static @Nullable MapperDoc.Node variant(MapperDoc doc, String id, String databaseId) {
+    for (MapperDoc.Node s : doc.statements) {
+      if (id.equals(s.attr(ID)) && databaseId.equals(databaseIdOf(s))) return s;
+    }
+    return null;
+  }
+
+  private static String databaseIdOf(MapperDoc.Node s) {
+    String db = s.attr(DATABASE_ID);
+    return db == null ? "" : db.trim();
+  }
+
+  private static String variantKey(MapperDoc.Node s) {
+    return s.attr(ID) + "\n" + databaseIdOf(s);
+  }
+
+  /** 까닭 글에 보일 문장 이름: id, databaseId 가 있으면 「id [databaseId]」. */
+  private static String label(MapperDoc.Node s) {
+    String db = databaseIdOf(s);
+    return db.isEmpty() ? s.attr(ID) : s.attr(ID) + " [" + db + "]";
+  }
+
+  /** listed 의 키: 파일 URL + 줄바꿈 + 문장 id. */
+  private static String listedKey(VirtualFile file, String id) {
+    return file.getUrl() + "\n" + id;
+  }
+
+  /**
+   * 프로젝트 매퍼 문장 가운데 changed 조각을 include 하는 것(같은 파일 조각 · 다른 파일 조각을 거쳐도). listed 에 있는 문장은 뺀다.
+   * 다른 파일 조각을 include 하는 조각도 바뀐 것으로 보아 더 늘지 않을 때까지 넓힌다. 같은 id 는 한 번만. 읽기 접근 안.
+   */
+  private static List<Includer> includers(Project project, Set<String> changed, Set<String> listed) {
+    Map<VirtualFile, MapperDoc> docs = new LinkedHashMap<>();
+    for (MapperIndex.Entry e : MapperIndex.all(project)) {
+      ProgressManager.checkCanceled();
+      MapperDoc d = LayerCode.load(e.file());
+      if (d != null && d.namespace != null) docs.put(e.file(), d);
+    }
+    Set<String> reach = RetestRules.reach(docs.values(), changed);
+    List<Includer> out = new ArrayList<>();
+    for (Map.Entry<VirtualFile, MapperDoc> e : docs.entrySet()) {
+      MapperDoc d = e.getValue();
+      Set<String> done = new HashSet<>();
+      for (MapperDoc.Node s : d.statements) {
+        String id = s.attr(ID);
+        if (id == null || id.isBlank() || done.contains(id) || listed.contains(listedKey(e.getKey(), id))) continue;
+        // databaseId 로 나뉜 같은 id 문장 가운데 하나라도 조각을 쓰면 그 id 를 넣는다.
+        String fragment = RetestRules.includedFragment(d, s, reach);
+        if (fragment == null) continue;
+        done.add(id);
+        out.add(new Includer(e.getKey(), d.namespace, d.shortNamespace(), id, s.start, SELECT.equals(s.name), fragment));
+      }
+    }
+    return out;
+  }
+
+  /**
+   * 조각 사용 문장을 항목(SELECT) · 영향 뿌리로 넣는다. 고치기 전 글은 그 파일의 것(버전 관리 밖 · 새 파일이면 지금 글: 문장은 그대로이고
+   * 비교는 조각 파일의 고치기 전 글로 푼다). 고치기 전 글을 못 읽은 파일 수를 돌려준다. 백그라운드에서 부른다.
+   */
+  private static int includerItems(Project project, List<Includer> found, List<Item> out, Map<String, Root> roots, ProgressIndicator indicator) {
+    int failed = 0;
+    Map<VirtualFile, String> befores = new HashMap<>();
+    Set<VirtualFile> unreadable = new HashSet<>();
+    Map<String, List<String[]>> byNamespace = new LinkedHashMap<>();
+    for (Includer in : found) {
+      indicator.checkCanceled();
+      if (unreadable.contains(in.file())) continue;
+      String before = befores.get(in.file());
+      if (before == null) {
+        try {
+          before = MapperCompare.knownBeforeText(project, in.file());
+        } catch (VcsException e) {
+          LOG.info("바꾼 것 다시 시험: 고치기 전 글을 못 읽음 " + in.file().getPath(), e);
+          unreadable.add(in.file());
+          failed++;
+          continue;
+        }
+        if (before == null || before.isEmpty()) {
+          CharSequence now = ReadAction.compute(() -> in.file().isValid() ? currentText(in.file()) : null);
+          if (now == null) {
+            unreadable.add(in.file());
+            continue;
+          }
+          before = now.toString();
+        }
+        befores.put(in.file(), before);
+      }
+      String why = EiDbBundle.message("retest.why.fragment.changed", in.file().getName(), in.id(), in.fragment());
+      if (in.select()) {
+        out.add(new Item(Kind.MAPPER, in.shortNamespace() + "." + in.id(), why, new OpenFileDescriptor(project, in.file(), in.start()),
+            in.file(), before, in.id(), null, false));
+      }
+      byNamespace.computeIfAbsent(in.namespace(), k -> new ArrayList<>()).add(new String[]{in.id(), why});
+    }
+    for (Map.Entry<String, List<String[]>> e : byNamespace.entrySet()) {
+      for (Root r : CodeFlow.read(project, () -> mapperMethods(project, e.getKey(), e.getValue()))) roots.putIfAbsent(r.key(), r);
+    }
+    return failed;
   }
 
   /** namespace 클래스(프로젝트 안)의 메서드 가운데 이름이 바뀐 문장 id 인 것. 읽기 접근 안. */

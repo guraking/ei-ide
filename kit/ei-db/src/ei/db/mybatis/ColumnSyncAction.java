@@ -157,8 +157,12 @@ public final class ColumnSyncAction extends AnAction {
         try {
           Connection conn = sessions.connection(c);
           cols = SchemaCache.reloadColumns(conn, c, sch, table);
+          // SQL 에 적힌 이름으로 없으면 DB 가 담는 꼴(Oracle 대문자 · PostgreSQL 소문자)로 스키마 · 테이블을 함께 바꿔 한 번 더 읽는다.
+          String storedSchema = schema == null || schema.isBlank() ? sch : Meta.storedName(c, sch);
           String stored = Meta.storedName(c, table);
-          if (cols.isEmpty() && !stored.equals(table)) cols = SchemaCache.reloadColumns(conn, c, sch, stored);
+          if (cols.isEmpty() && (!stored.equals(table) || !storedSchema.equals(sch))) {
+            cols = SchemaCache.reloadColumns(conn, c, storedSchema, stored);
+          }
         } catch (SQLException ex) {
           Notify.error(project, EiDbBundle.message("columnsync.db.failed", table, String.valueOf(ex.getMessage())));
           return;

@@ -91,7 +91,7 @@ public final class ResultCompare extends DialogWrapper {
     }
   }
 
-  /** 결과 탭 없이 두 조회 결과를 견주는 창을 연다. 기준 칼럼 기본값은 첫 공통 칼럼. 화면 스레드에서 부른다. */
+  /** 결과 탭 없이 두 조회 결과를 견주는 창을 연다. 기준 칼럼 기본값은 없음(행 순서, sameRows 와 같은 기준). 화면 스레드에서 부른다. */
   public static void show(Project project, QueryResult left, String leftLabel, QueryResult right, String rightLabel) {
     new ResultCompare(project, left, leftLabel, right, rightLabel, List.of()).show();
   }
@@ -144,7 +144,7 @@ public final class ResultCompare extends DialogWrapper {
     this(project, left.result(), leftLabel, right.result(), rightLabel, List.of(left, right));
   }
 
-  /** pkSources 는 기준 칼럼 기본값(PK)을 물을 결과 탭. 비었으면 첫 공통 칼럼. */
+  /** pkSources 는 기준 칼럼 기본값(PK)을 물을 결과 탭. 비었으면 기준 칼럼 없음(행 순서). */
   private ResultCompare(Project project, QueryResult left, String leftLabel, QueryResult right, String rightLabel, List<ResultPanel> pkSources) {
     super(project, false);
     this.left = left;
@@ -162,8 +162,12 @@ public final class ResultCompare extends DialogWrapper {
     refresh();
   }
 
-  /** 기준 칼럼 기본값: 한쪽 결과가 PK 를 알고 그 칼럼이 모두 공통이면 PK, 아니면 첫 공통 칼럼. 공통 칼럼이 없으면 없음(행 순서). */
+  /**
+   * 기준 칼럼 기본값: 한쪽 결과가 PK 를 알고 그 칼럼이 모두 공통이면 PK, 아니면 첫 공통 칼럼. 공통 칼럼이 없으면 없음(행 순서).
+   * 결과 탭이 없으면(show) 없음(행 순서): 목록 표의 「같다 · 다르다」 판정(sameRows)과 창이 같은 기준으로 보이게.
+   */
   private List<String> defaultKeys(List<ResultPanel> pkSources) {
+    if (pkSources.isEmpty()) return List.of();
     for (ResultPanel p : pkSources) {
       boolean[] pk = p.knownPkColumns();
       if (pk == null) continue;

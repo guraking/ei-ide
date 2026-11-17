@@ -2,8 +2,6 @@ package ei.db.mybatis;
 
 import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ReadAction;
-import com.intellij.openapi.editor.Document;
-import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.project.Project;
@@ -31,6 +29,7 @@ import java.io.IOException;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -47,7 +46,8 @@ import java.util.regex.Pattern;
 /**
  * 매퍼 SELECT 문장 하나를 고치기 전(VCS 의 마지막 커밋 글)과 지금 글로 각각 풀어 같은 값 · 같은 접속으로 돌리고 결과를 견준다.
  * 값 · 접속은 부르는 쪽이 주거나(실행 창의 지금 값), 주지 않으면 실행 창이 기억한 값(빈 값은 null) · 마지막 접속(없으면 하나뿐인 접속).
- * 다른 매퍼 파일의 조각(include)은 고치기 전 쪽은 그 파일의 고치기 전 글로 푼다. 찾지 못한 조각이 있으면 돌리지 않는다.
+ * 다른 매퍼 파일의 조각(include)은 고치기 전 쪽은 그 파일의 고치기 전 글로 푼다(문장 파일이 그대로여도 조각 파일이 바뀌었으면 결과가 다를 수 있다).
+ * 찾지 못한 조각이 있으면 돌리지 않는다.
  * SELECT 가 아니거나 풀린 SQL 이 쓰는 문장 · 잠그는 SELECT(FOR UPDATE · FOR SHARE)면 돌리지 않는다. 두 SQL 이 같으면 DB 를 부르지 않는다.
  */
 final class MapperCompare {
@@ -56,7 +56,7 @@ final class MapperCompare {
   /** 실행 중 취소를 살피는 간격. JDBC 실행은 막혀 있어 진행 표시가 스스로 취소를 알 수 없다. */
   private static final long CANCEL_POLL_MS = 200;
   /** 바뀐 파일 목록을 다시 볼 때 기다리는 한도(초). 넘으면 그때까지 아는 상태로 판단한다. */
-  private static final long UPDATE_WAIT_SEC = 10;
+  static final long UPDATE_WAIT_SEC = 10;
   private static final String SELECT = "select";
   private static final String ID = "id";
   private static final String DATABASE_ID = "databaseId";
@@ -64,8 +64,12 @@ final class MapperCompare {
   /** 행을 잠그는 SELECT. 비교는 결과만 보고 트랜잭션을 남기지 않아야 한다(Oracle · PostgreSQL 자동 커밋 꺼짐에서 잠금이 남음). */
   private static final Pattern LOCKING = Pattern.compile("(?i)\\bFOR\\s+(NO\\s+KEY\\s+)?UPDATE\\b|\\bFOR\\s+(KEY\\s+)?SHARE\\b");
 
-  /** 결과. message 가 null 이 아니면 비교하지 못한 까닭(화면 글). sameSql 이면 고치기 전과 지금 SQL 이 같다. */
-  record Outcome(String title, @Nullable QueryResult before, @Nullable QueryResult now, @Nullable String message, boolean sameSql) {
+  /**
+   * 결과. message 가 null 이 아니면 비교하지 못한 까닭(화면 글). sameSql 이면 고치기 전과 지금 SQL 이 같다.
+   * stale 이면 바뀐 파일 목록을 UPDATE_WAIT_SEC 안에 다 읽지 못해 그때까지 아는 상태의 고치기 전 글로 풀었다.
+   */
+  record Outcome(String title, @Nullable QueryResult before, @Nullable QueryResult now, @Nullable String message, boolean sameSql,
+                 boolean stale) {
     boolean ok() { return message == null; }
 
     /** before · now 가 모두 있고 다른 행이 하나도 없으면 true(칼럼이 다르거나 한쪽이라도 건수 한도에서 잘렸으면 false). */
@@ -78,26 +82,26 @@ final class MapperCompare {
       return before != null && now != null && (before.truncated() || now.truncated());
     }
 
-    static Outcome failed(String title, String message) { return new Outcome(title, null, null, message, false); }
+    static Outcome failed(String title, String message) { return new Outcome(title, null, null, message, false, false); }
   }
 
+  /** beforeText 의 결과. text 는 knownBeforeText 와 같은 뜻, stale 이면 바뀐 파일 목록을 UPDATE_WAIT_SEC 안에 다 읽지 못했다. */
+  record Before(@Nullable String text, boolean stale) {}
+
   /**
-   * VCS 의 고치기 전(마지막 커밋) 글. 바뀐 것이 없거나 버전 관리 밖이면 null, 새 파일이면 "". 백그라운드에서 부른다.
+   * VCS 의 고치기 전(마지막 커밋) 글(knownBeforeText 와 같은 뜻). 백그라운드에서 부른다.
    * 바뀐 파일 목록에 없으면 막 저장해 아직 못 본 것일 수 있어 그 파일만 다시 보게 하고 UPDATE_WAIT_SEC 까지 기다린다(취소하면 멈춤).
    */
-  static @Nullable String beforeText(Project project, VirtualFile file) throws VcsException {
-    if (!versioned(project, file)) return null;
-    ChangeListManager clm = ChangeListManager.getInstance(project);
-    if (clm.getChange(file) == null && !clm.isUnversioned(file) && !clm.isIgnoredFile(file)) {
-      VcsDirtyScopeManager.getInstance(project).fileDirty(file);
-      awaitUpdate(clm);
-    }
-    return knownBeforeText(project, file);
+  static Before beforeText(Project project, VirtualFile file) throws VcsException {
+    if (!versioned(project, file)) return new Before(null, false);
+    boolean stale = !awaitFiles(project, List.of(file));
+    return new Before(knownBeforeText(project, file), stale);
   }
 
   /**
-   * 바뀐 파일 목록을 기다리지 않고 지금 아는 대로 본 고치기 전 글(beforeText 와 같은 뜻). 백그라운드에서 부른다.
-   * 목록에 없는데 편집기에 저장하지 않은 글이 있으면 디스크 글(= 마지막 커밋 글)을 고치기 전 글로 쓴다.
+   * 바뀐 파일 목록을 기다리지 않고 지금 아는 대로 본 고치기 전 글. 백그라운드에서 부른다.
+   * 버전 관리 밖(VCS 루트 밖 · 아직 넣지 않음 · 무시)이면 null, 마지막 커밋 뒤 새 파일이면 "".
+   * 목록에 없는 버전 관리 파일은 고친 것이 없으므로 디스크 글(= 마지막 커밋 글, 편집기에서 저장하지 않은 글은 빼고)이다.
    */
   static @Nullable String knownBeforeText(Project project, VirtualFile file) throws VcsException {
     if (!versioned(project, file)) return null;
@@ -105,11 +109,6 @@ final class MapperCompare {
     Change change = clm.getChange(file);
     if (change == null) {
       if (clm.isUnversioned(file) || clm.isIgnoredFile(file)) return null;
-      boolean unsaved = ReadAction.compute(() -> {
-        Document d = FileDocumentManager.getInstance().getCachedDocument(file);
-        return d != null && FileDocumentManager.getInstance().isDocumentUnsaved(d);
-      });
-      if (!unsaved) return null;
       try {
         return VfsUtilCore.loadText(file);
       } catch (IOException e) {
@@ -123,22 +122,45 @@ final class MapperCompare {
     return text;
   }
 
-  /** 프로젝트의 바뀐 파일 목록을 모두 다시 보게 하고 UPDATE_WAIT_SEC 까지 기다린다(취소하면 멈춤). 백그라운드에서 부른다. */
-  static void refreshChanges(Project project) {
+  /**
+   * 프로젝트의 바뀐 파일 목록을 모두 다시 보게 하고 UPDATE_WAIT_SEC 까지 기다린다(취소하면 멈춤). 백그라운드에서 부른다.
+   * 시간 안에 다 읽었으면 true, 넘었으면 false(목록은 그때까지 아는 상태).
+   */
+  static boolean refreshChanges(Project project) {
     VcsDirtyScopeManager.getInstance(project).markEverythingDirty();
-    awaitUpdate(ChangeListManager.getInstance(project));
+    return awaitUpdate(ChangeListManager.getInstance(project));
   }
 
-  private static void awaitUpdate(ChangeListManager clm) {
+  /**
+   * files 가운데 바뀐 파일 목록에 없는 버전 관리 파일(막 저장해 아직 못 본 것일 수 있음)만 다시 보게 하고 한 번 기다린다.
+   * 볼 것이 없거나 시간 안에 다 읽었으면 true. 백그라운드에서 부른다.
+   */
+  private static boolean awaitFiles(Project project, Collection<VirtualFile> files) {
+    ChangeListManager clm = ChangeListManager.getInstance(project);
+    VcsDirtyScopeManager dirty = VcsDirtyScopeManager.getInstance(project);
+    boolean any = false;
+    for (VirtualFile file : files) {
+      if (!versioned(project, file) || clm.getChange(file) != null || clm.isUnversioned(file) || clm.isIgnoredFile(file)) continue;
+      dirty.fileDirty(file);
+      any = true;
+    }
+    return !any || awaitUpdate(clm);
+  }
+
+  /** 다음 목록 갱신이 끝날 때까지 UPDATE_WAIT_SEC 까지 기다린다(취소하면 멈춤). 끝났으면 true. */
+  private static boolean awaitUpdate(ChangeListManager clm) {
     CountDownLatch updated = new CountDownLatch(1);
     clm.invokeAfterUpdate(false, updated::countDown);
     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(UPDATE_WAIT_SEC);
     try {
-      while (!updated.await(CANCEL_POLL_MS, TimeUnit.MILLISECONDS) && System.nanoTime() < deadline) {
+      while (!updated.await(CANCEL_POLL_MS, TimeUnit.MILLISECONDS)) {
+        if (System.nanoTime() >= deadline) return false;
         ProgressManager.checkCanceled();
       }
+      return true;
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
+      return false;
     }
   }
 
@@ -147,7 +169,7 @@ final class MapperCompare {
     return file.isInLocalFileSystem() && ProjectLevelVcsManager.getInstance(project).getVcsFor(file) != null;
   }
 
-  /** beforeText 가 null 일 때 알릴 글: 버전 관리 밖이면 그 말, 아니면 고친 것이 없다는 말. 백그라운드에서 부른다. */
+  /** beforeText 의 글이 null 일 때 알릴 글: 버전 관리 밖이면 그 말, 아니면 고친 것이 없다는 말. 백그라운드에서 부른다. */
   static String noChangeMessage(Project project, VirtualFile file) {
     ChangeListManager clm = ChangeListManager.getInstance(project);
     FileStatus status = clm.getStatus(file);
@@ -156,17 +178,27 @@ final class MapperCompare {
     return EiDbBundle.message(outside ? "mappercompare.unversioned" : "mappercompare.unchanged");
   }
 
-  /** 백그라운드에서. 기억된 값 · 접속으로 돌린다(「바꾼 것 다시 시험」). */
+  /**
+   * 백그라운드에서. 기억된 값 · 접속으로 돌린다(「바꾼 것 다시 시험」). 바뀐 파일 목록은 모을 때 다시 읽혔으므로
+   * 조각 파일을 다시 보게 하지 않는다(문장마다 VCS 를 부르지 않게).
+   */
   static Outcome run(Project project, String beforeText, CharSequence nowText, String statementId, ProgressIndicator indicator) {
-    return run(project, beforeText, nowText, statementId, null, null, indicator);
+    return run(project, beforeText, nowText, statementId, null, null, false, indicator);
+  }
+
+  /** 백그라운드에서. 실행 창의 접속 · 값으로 돌린다(조각 파일도 바뀐 파일 목록에서 다시 보게 한다). */
+  static Outcome run(Project project, String beforeText, CharSequence nowText, String statementId, @Nullable DbConfig given,
+                     @Nullable Map<String, Object> values, ProgressIndicator indicator) {
+    return run(project, beforeText, nowText, statementId, given, values, true, indicator);
   }
 
   /**
    * 백그라운드에서. statementId 의 고치기 전 · 지금 SQL 을 풀어 둘 다 돌린다.
    * given · values 가 null 이면 실행 창이 기억한 접속 · 값을 쓴다. values 에 없는 이름은 null 이다.
+   * awaitOthers 면 include 하는 다른 매퍼 파일 가운데 바뀐 파일 목록에 없는 것을 다시 보게 하고 기다린다.
    */
-  static Outcome run(Project project, String beforeText, CharSequence nowText, String statementId, @Nullable DbConfig given,
-                     @Nullable Map<String, Object> values, ProgressIndicator indicator) {
+  private static Outcome run(Project project, String beforeText, CharSequence nowText, String statementId, @Nullable DbConfig given,
+                             @Nullable Map<String, Object> values, boolean awaitOthers, ProgressIndicator indicator) {
     MapperDoc nowDoc = MapperDoc.parse(nowText);
     String title = nowDoc.shortNamespace() + "." + statementId;
     DbConfig c = given != null ? given : connection(project);
@@ -186,6 +218,8 @@ final class MapperCompare {
     Map<String, MapperDoc> beforeMappers = ReadAction.nonBlocking(() -> otherMappers(project, beforeDoc, before, otherFiles))
         .inSmartMode(project).wrapProgress(indicator).executeSynchronously();
     // 다른 매퍼 파일도 바뀌었으면 고치기 전 쪽은 그 파일의 고치기 전 조각으로 푼다. VCS 읽기라 읽기 접근 밖에서.
+    // 막 저장해 바뀐 파일 목록에 아직 없는 조각 파일도 있을 수 있어 한 번 다시 보게 하고 기다린다.
+    boolean stale = awaitOthers && !awaitFiles(project, otherFiles.values());
     for (Map.Entry<String, VirtualFile> e : otherFiles.entrySet()) {
       indicator.checkCanceled();
       String text;
@@ -202,7 +236,7 @@ final class MapperCompare {
     Set<String> missing = new LinkedHashSet<>(beforeSql.missingIncludes);
     missing.addAll(nowSql.missingIncludes);
     if (!missing.isEmpty()) return Outcome.failed(title, EiDbBundle.message("mappercompare.missing.include", String.join(", ", missing)));
-    if (sameSql(beforeSql, nowSql)) return new Outcome(title, null, null, null, true);
+    if (sameSql(beforeSql, nowSql)) return new Outcome(title, null, null, null, true, stale);
     for (DynamicSql.Result r : List.of(beforeSql, nowSql)) {
       if (SqlGuard.isWrite(r.sql) || SqlGuard.hasSeveralStatements(r.sql, c.kind)) {
         return Outcome.failed(title, EiDbBundle.message("mappercompare.not.select"));
@@ -215,7 +249,7 @@ final class MapperCompare {
       QueryResult b = query(sessions, c, beforeSql, indicator);
       indicator.setText2(EiDbBundle.message("mappercompare.running.now"));
       QueryResult n = query(sessions, c, nowSql, indicator);
-      return new Outcome(title, b, n, null, false);
+      return new Outcome(title, b, n, null, false, stale);
     } catch (DbSessions.CancelledException e) {
       return Outcome.failed(title, EiDbBundle.message("mappercompare.cancelled"));
     } catch (SQLException | RuntimeException e) {
@@ -304,6 +338,11 @@ final class MapperCompare {
     }
   }
 
+  /** 바뀐 파일 목록을 시간 안에 다 읽지 못해 그때까지 아는 상태로 비교했다는 알림 글. */
+  static String staleMessage() {
+    return EiDbBundle.message("mappercompare.stale", UPDATE_WAIT_SEC);
+  }
+
   /** 따옴표('...', "...") 밖의 공백(줄바꿈 · 들여쓰기) 차이만 있고 바인드 값이 같으면 같은 SQL 이다. */
   static boolean sameSql(DynamicSql.Result a, DynamicSql.Result b) {
     return squeeze(a.sql).equals(squeeze(b.sql)) && Objects.equals(a.binds, b.binds);
@@ -329,8 +368,12 @@ final class MapperCompare {
     return out.toString();
   }
 
-  /** 화면 스레드에서. 결과 비교 창(왼쪽 고치기 전, 오른쪽 지금)을 연다. 비교하지 못했으면 까닭을, SQL 이 같으면 그 말을 알린다. */
+  /**
+   * 화면 스레드에서. 결과 비교 창(왼쪽 고치기 전, 오른쪽 지금)을 연다. 비교하지 못했으면 까닭을, SQL 이 같으면 그 말을 알린다.
+   * stale 이면 바뀐 파일 목록을 다 읽지 못했다는 말도 알린다.
+   */
   static void show(Project project, Outcome outcome) {
+    if (outcome.stale()) Notify.warning(project, staleMessage());
     if (!outcome.ok()) {
       Notify.warning(project, outcome.title() + " · " + outcome.message());
     } else if (outcome.sameSql()) {

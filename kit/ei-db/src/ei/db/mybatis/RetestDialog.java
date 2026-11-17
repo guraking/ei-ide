@@ -205,7 +205,7 @@ final class RetestDialog extends DialogWrapper {
         }
         CharSequence now = ReadAction.compute(() -> RetestCollect.currentText(file));
         MapperCompare.Outcome o = MapperCompare.run(project, item.before, now, item.statementId, indicator);
-        show(item, mapperText(o), o);
+        show(item, o.stale() ? mapperText(o) + " · " + MapperCompare.staleMessage() : mapperText(o), o);
       } else {
         ApiBridge.Result r = ApiBridge.resend(project, item.apiKey);
         show(item, apiText(r), r);
@@ -311,6 +311,8 @@ final class RetestDialog extends DialogWrapper {
     if (g.skippedFiles() > 0) out.append(" · ").append(EiDbBundle.message("retest.cap.files", RetestCollect.MAX_FILES));
     if (g.failedFiles() > 0) out.append(" · ").append(EiDbBundle.message("retest.files.failed", g.failedFiles()));
     if (g.partialRoots() > 0) out.append(" · ").append(EiDbBundle.message("retest.partial", g.partialRoots()));
+    if (g.skippedIncluders() > 0) out.append(" · ").append(EiDbBundle.message("retest.cap.includes", RetestCollect.MAX_INCLUDERS));
+    if (g.stale()) out.append(" · ").append(EiDbBundle.message("retest.stale", MapperCompare.UPDATE_WAIT_SEC));
     return out.toString();
   }
 

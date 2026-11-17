@@ -1,9 +1,13 @@
 package ei.db.mybatis;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -15,6 +19,9 @@ final class RetestRules {
 
   private static final Pattern XML_COMMENT = Pattern.compile("<!--.*?-->", Pattern.DOTALL);
   private static final Pattern SPACES = Pattern.compile("\\s+");
+  private static final String ID = "id";
+  private static final String INCLUDE = "include";
+  private static final String REFID = "refid";
 
   /** API 다시 보내기 결과의 갈래. */
   enum ApiVerdict { FAILED, NO_BASE, STATUS, BODY, SAME }
@@ -66,5 +73,57 @@ final class RetestRules {
     if (beforeCode < 0) return ApiVerdict.NO_BASE;
     if (beforeCode != nowCode) return ApiVerdict.STATUS;
     return same ? ApiVerdict.SAME : ApiVerdict.BODY;
+  }
+
+  /**
+   * changed(바뀐 조각 「네임스페이스.id」)에 docs 의 조각 가운데 바뀐 조각을 (같은 파일 · 다른 파일 조각을 거쳐) include 하는 것을
+   * 더 늘지 않을 때까지 더한 것. 네임스페이스가 없는 문서는 docs 에 넣지 않는다.
+   */
+  static Set<String> reach(Collection<MapperDoc> docs, Set<String> changed) {
+    Set<String> reach = new LinkedHashSet<>(changed);
+    boolean grew = true;
+    while (grew) {
+      grew = false;
+      for (MapperDoc d : docs) {
+        for (Map.Entry<String, MapperDoc.Node> f : d.fragments.entrySet()) {
+          String name = d.namespace + "." + f.getKey();
+          if (!reach.contains(name) && includedFragment(d, f.getValue(), reach) != null) {
+            reach.add(name);
+            grew = true;
+          }
+        }
+      }
+    }
+    return reach;
+  }
+
+  /** n 이 (같은 파일 조각을 따라가며) include 하는 조각 가운데 reach 에 있는 첫 이름(「네임스페이스.id」). 없으면 null. */
+  static String includedFragment(MapperDoc doc, MapperDoc.Node n, Set<String> reach) {
+    return includedFragment(doc, n, reach, new HashSet<>());
+  }
+
+  private static String includedFragment(MapperDoc doc, MapperDoc.Node n, Set<String> reach, Set<MapperDoc.Node> seen) {
+    for (MapperDoc.Node c : n.children) {
+      if (c.name == null) continue;
+      if (!INCLUDE.equals(c.name)) {
+        String found = includedFragment(doc, c, reach, seen);
+        if (found != null) return found;
+        continue;
+      }
+      String refid = c.attr(REFID);
+      if (refid == null) continue;
+      MapperDoc.Node own = doc.fragment(refid);
+      if (own == null) {
+        if (reach.contains(refid)) return refid;
+        continue;
+      }
+      String name = doc.namespace + "." + own.attr(ID);
+      if (reach.contains(name)) return name;
+      if (seen.add(own)) {
+        String found = includedFragment(doc, own, reach, seen);
+        if (found != null) return found;
+      }
+    }
+    return null;
   }
 }
