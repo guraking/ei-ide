@@ -36,7 +36,7 @@ import java.util.function.Consumer;
  */
 final class Bench {
   /** 한 칸에 문장이 둘 이상일 때의 거절 글. 뒤 문장은 위험 문장 · 운영 확인을 거치지 않으므로 보내지 않는다. */
-  static final String MANY_STATEMENTS = "문장이 둘 이상입니다. 한 문장만 두거나 「편집기에 넣기」 로 콘솔에서 돌리세요.";
+  static final String MANY_STATEMENTS = "문장이 둘 이상입니다. 한 문장만 두거나 「에디터에 넣기」 로 콘솔에서 돌리세요.";
   /** 건수는 한 행만 읽는다. */
   private static final int COUNT_ROWS = 1;
 

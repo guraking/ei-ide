@@ -63,7 +63,7 @@ public final class PasteRows {
   static final String EMPTY_NOT_NULL = "NOT NULL 인데 빔";
   static final String WIDTH_DIFFERS = "칸 수가 다름";
   static final String NO_COLUMN = "맞는 칼럼이 없어 넣지 않음";
-  static final String EXTRA_CELLS = "표 칼럼보다 칸이 많아 넣지 않음";
+  static final String EXTRA_CELLS = "테이블 칼럼보다 칸이 많아 넣지 않음";
   static final String SAME_COLUMN = "같은 칼럼을 두 번 고름";
   static final String MISSING_NOT_NULL = "NOT NULL 칼럼이 빠짐(기본값 없음)";
   static final String NOTHING_MAPPED = "넣을 칼럼이 없음";

@@ -177,15 +177,15 @@ public final class SqlTools {
       sources = SqlParts.sources(from.body());
     }
     if (SqlParts.mask(sql).contains("(+)")) throw new IllegalArgumentException("바깥 조인((+) · LEFT JOIN)이 있으면 뜻이 바뀌어 바꾸지 않았습니다.");
-    if (sources.get(0).subquery()) throw new IllegalArgumentException("첫 표가 서브쿼리라 바꿀 수 없습니다.");
+    if (sources.get(0).subquery()) throw new IllegalArgumentException("첫 테이블이 서브쿼리라 바꿀 수 없습니다.");
     SqlParts.Part where = SqlParts.find(parts, "WHERE");
     List<String> conds = new ArrayList<>();
     if (where != null) {
       for (String c : SqlParts.splitAnd(where.body())) if (!c.replaceAll("\\s+", "").equals("1=1")) conds.add(SqlParts.oneLine(c));
     }
     List<SqlParts.Source> others = sources.subList(1, sources.size());
-    if (!others.isEmpty()) note = "대상은 첫 표 " + SqlParts.simpleName(sources.get(0).name()) + " 입니다. 다른 표는 EXISTS 안의 조건으로 옮겼습니다.";
-    if (conds.isEmpty()) note = (note.isEmpty() ? "" : note + " ") + "조건이 없어 표 전체가 바뀝니다.";
+    if (!others.isEmpty()) note = "대상은 첫 테이블 " + SqlParts.simpleName(sources.get(0).name()) + " 입니다. 다른 테이블은 EXISTS 안의 조건으로 옮겼습니다.";
+    if (conds.isEmpty()) note = (note.isEmpty() ? "" : note + " ") + "조건이 없어 테이블 전체가 바뀝니다.";
     return new Target(sources.get(0), others, conds, SqlParts.find(parts, "SELECT").body(), note);
   }
 

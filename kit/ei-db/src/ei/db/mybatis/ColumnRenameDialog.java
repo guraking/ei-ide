@@ -76,7 +76,7 @@ final class ColumnRenameDialog extends DialogWrapper {
     String message = ColumnRename.validate(in.oldName(), in.newName(), in.table());
     if (message == null) return null;
     JComponent at = ColumnRename.NAME.matcher(in.oldName()).matches() ? newField : oldField;
-    if (message.startsWith("표")) at = tableField;
+    if (message.startsWith("테이블")) at = tableField;
     return new ValidationInfo(message, at);
   }
 

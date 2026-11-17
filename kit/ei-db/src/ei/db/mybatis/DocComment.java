@@ -300,7 +300,7 @@ public final class DocComment {
         for (Map.Entry<String, String> e : f.paramColumns().entrySet()) paramColumns.putIfAbsent(e.getKey(), e.getValue());
         labels.add(sql.label());
       }
-      if (!tables.isEmpty()) info.add("표: " + withComments(tables, tableComments, true));
+      if (!tables.isEmpty()) info.add("테이블: " + withComments(tables, tableComments, true));
       if (!conditions.isEmpty()) info.add("조건: " + withComments(conditions, columnComments, false));
       info.add("SQL: " + String.join(", ", labels));
     }

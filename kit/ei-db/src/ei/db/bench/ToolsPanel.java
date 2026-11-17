@@ -138,7 +138,7 @@ final class ToolsPanel {
       bench.count(dmlSource, t -> dmlCount.setText("바뀔 행: " + t));
     });
     dmlCount.setForeground(UIUtil.getContextHelpForeground());
-    return page("확인한 SELECT 를 같은 조건의 UPDATE · DELETE 로 바꿉니다. 실행 전에 「바뀔 건수 세기」 로 몇 건이 바뀌는지 먼저 보세요. 다른 표 조건은 EXISTS 로 옮깁니다.",
+    return page("확인한 SELECT 를 같은 조건의 UPDATE · DELETE 로 바꿉니다. 실행 전에 「바뀔 건수 세기」 로 몇 건이 바뀌는지 먼저 보세요. 다른 테이블 조건은 EXISTS 로 옮깁니다.",
         buttons(update, delete, count), dmlCount);
   }
 
@@ -149,7 +149,7 @@ final class ToolsPanel {
       dmlSource = select;
       dmlCount.setText("「바뀔 건수 세기」 로 먼저 확인하세요.");
       List<String> notes = new ArrayList<>();
-      notes.add("대상 표: " + d.table());
+      notes.add("대상 테이블: " + d.table());
       if (!d.note().isEmpty()) notes.add(d.note());
       bench.replace(d.sql(), notes);
     } catch (IllegalArgumentException ex) {

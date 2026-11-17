@@ -127,7 +127,7 @@ public final class QueryBenchDialog extends DialogWrapper {
   private final JBTabbedPane tabs = new JBTabbedPane();
   private final Deque<String> undo = new ArrayDeque<>();
   private final Action undoAction = action("되돌리기", this::undo);
-  private final Action insertAction = action("편집기에 넣기", this::insert);
+  private final Action insertAction = action("에디터에 넣기", this::insert);
   private final BuilderPanel builder;
   private final PatternPanel purpose;
   private final ExamplePanel examples;
@@ -230,7 +230,7 @@ public final class QueryBenchDialog extends DialogWrapper {
     binds.add(bindColon);
     binds.add(bindMybatis);
     binds.add(bindValue);
-    oldStyle.setToolTipText("FROM 에 표를 쉼표로 늘어놓고 WHERE 에 a.X = b.X(+) 로 잇습니다(Oracle 만).");
+    oldStyle.setToolTipText("FROM 에 테이블을 쉼표로 늘어놓고 WHERE 에 a.X = b.X(+) 로 잇습니다(Oracle 만).");
     ansiStyle.setToolTipText("FROM a JOIN b ON a.X = b.X 로 잇습니다(모든 DB).");
     bindColon.setToolTipText("WHERE X = :X  — 콘솔에서 실행할 때 값을 묻습니다.");
     bindMybatis.setToolTipText("WHERE X = #{X}  — 매퍼 XML 에 바로 붙여 넣습니다. < · > 는 CDATA 로 감쌉니다.");
@@ -529,7 +529,7 @@ public final class QueryBenchDialog extends DialogWrapper {
       tables.add(name);
     }
     if (tables.isEmpty()) {
-      setStatus("FROM 에 표가 없습니다.", true);
+      setStatus("FROM 에 테이블이 없습니다.", true);
       return;
     }
     List<Meta.ForeignKey> links = new ArrayList<>();
@@ -545,7 +545,7 @@ public final class QueryBenchDialog extends DialogWrapper {
       if (name != null) unlinked.add(name.toUpperCase(Locale.ROOT));
     }
     ErdView.openQuery(project, c, bench.schema(), new ArrayList<>(tables), links, unlinked);
-    setStatus(unlinked.isEmpty() ? "ERD 창에 그렸습니다." : "연결 조건이 없는 표(빨간 테두리): " + String.join(", ", unlinked), !unlinked.isEmpty());
+    setStatus(unlinked.isEmpty() ? "ERD 창에 그렸습니다." : "연결 조건이 없는 테이블(빨간 테두리): " + String.join(", ", unlinked), !unlinked.isEmpty());
   }
 
   /** 쿼리 속 이름 → 메타 이름. 따옴표로 감싼 이름은 그대로, 아니면 Oracle 대문자 · 그 밖은 소문자(DB 가 접어 두는 꼴). */

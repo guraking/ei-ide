@@ -130,7 +130,7 @@ public final class EnumGen {
     StringBuilder b = new StringBuilder();
     if (!pkg.isEmpty()) b.append("package ").append(pkg).append(";\n\n");
     b.append("/**\n");
-    b.append(" * 코드 표 enum. 편집기 우클릭 「enum 다시 맞추기」가 아래 SQL 을 다시 실행해 상수를 새로 만든다.\n");
+    b.append(" * 코드 테이블 enum. 에디터 우클릭 「enum 다시 맞추기」가 아래 SQL 을 다시 실행해 상수를 새로 만든다.\n");
     b.append(" *\n");
     b.append(" * ").append(SQL_TAG).append(' ').append(escape(oneLine(src.sql()))).append('\n');
     b.append(" * ").append(CONNECTION_TAG).append(' ').append(escape(src.connection().strip())).append('\n');

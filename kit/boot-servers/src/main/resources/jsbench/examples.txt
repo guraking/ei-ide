@@ -95,7 +95,7 @@ console.table(data.filter(r => r[key] !== value));
 ]
 
 ### 두 칸 키로 한 줄 빼기 (부품 + APQP 단계)
-> 일정 표는 품번 + 단계가 키입니다.
+> 일정 테이블은 품번 + 단계가 키입니다.
 const partNo = '52910-P2000';
 const stepCd = 'P2';
 console.table(data.filter(r => !(r.PART_NO === partNo && r.STEP_CD === stepCd)));
@@ -254,7 +254,7 @@ console.table(data.map(r => Object.fromEntries(Object.entries(r).filter(([k]) =>
 ]
 
 ### 응답에서 개인정보 칸 빼기 (전화 · 이메일)
-> 엑셀 내려받기 전에 칸 몇 개를 뺍니다.
+> 엑셀 다운로드 전에 칸 몇 개를 뺍니다.
 const hide = ['TEL_NO', 'EMAIL'];
 console.table(data.map(r => Object.fromEntries(Object.entries(r).filter(([k]) => !hide.includes(k)))));
 --- 데이터
@@ -1237,7 +1237,7 @@ console.log(before.length === after.length && before.every(p => after.includes(p
 
 ## 묶기 · 집계
 ### 차종별 부품 수 · 개발 완료 수
-> 대시보드 카드 표.
+> 대시보드 카드 테이블.
 const rows = {};
 for (const r of data) {
   const g = rows[r.CAR_TYPE] ??= { CAR_TYPE: r.CAR_TYPE, TOTAL: 0, DONE: 0 };
@@ -1384,7 +1384,7 @@ console.table(rows);
   }
 ]
 
-### 이슈 유형 × 등급 표 (피벗)
+### 이슈 유형 × 등급 테이블 (피벗)
 > 품질 · 일정 · 원가 × A · B · C 건수.
 const types = ['품질', '일정', '원가'];
 const grades = ['A', 'B', 'C'];
@@ -1568,7 +1568,7 @@ console.table(data.map(r => ({ ...r, ACC_AMT: acc += r.AMT })));
 ]
 
 ### 전월 대비 불량 건수 증감
-> 품질 현황 표.
+> 품질 현황 테이블.
 console.table(data.map((r, i) => {
   const prev = data[i - 1]?.NG_CNT;
   return { ...r, DIFF: prev == null ? '' : r.NG_CNT - prev, RATE: prev ? ((r.NG_CNT - prev) / prev * 100).toFixed(1) + '%' : '' };
@@ -2105,7 +2105,7 @@ console.log(new Date('2026-11-12T00:30:00Z').toLocaleString('sv-SE', { timeZone:
 const d = new Date(2026, 10, 12);
 console.log(`${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 (${'일월화수목금토'[d.getDay()]})`);
 
-### 월 목록 만들기 (실적 표 머리글)
+### 월 목록 만들기 (실적 테이블 머리글)
 > 시작 월부터 끝 월까지 'YYYY-MM'.
 const months = (from, to) => {
   const out = [];
@@ -2604,8 +2604,8 @@ const name = '도면_52910-P2000_Rev.B.pdf';
 const i = name.lastIndexOf('.');
 console.log({ base: name.slice(0, i), ext: name.slice(i + 1).toLowerCase() });
 
-### 내려받기 파일 이름 (화면명_날짜.xlsx, 금지 글자 빼기)
-> 엑셀 내려받기.
+### 다운로드 파일 이름 (화면명_날짜.xlsx, 금지 글자 빼기)
+> 엑셀 다운로드.
 const fileName = (title, date) => `${title}_${date.replaceAll('-', '')}.xlsx`.replace(/[\\/:*?"<>|]/g, '_');
 console.log(fileName('부품 개발 현황/NX4', '2026-11-12'));
 
@@ -3042,7 +3042,7 @@ const labels = { carType: '차종', statusNm: '상태', period: '기간' };
 const cond = { carType: 'NX4', statusNm: '개발중', period: '2026-10-13 ~ 2026-11-12', partNo: '' };
 console.log(Object.entries(labels).filter(([k]) => cond[k]).map(([k, l]) => `${l}: ${cond[k]}`).join(' · '));
 
-## 객체 · 형 변환
+## 객체 · 타입 변환
 ### 수정 팝업 열 때 원본 복사 (취소하면 원래대로)
 > 얕은 복사로 고치면 원본 줄까지 바뀝니다. 깊은 복사(structuredClone)를 씁니다.
 const row = { partNo: '52910-P2000', steps: [{ stepCd: 'P1', planDate: '2026-09-01' }] };
@@ -3087,7 +3087,7 @@ console.table(data.map(r => pick(r, ['PART_NO', 'PART_NM', 'STATUS_CD'])));
   }
 ]
 
-### 화면 칸 순서대로 다시 담기 (엑셀 내려받기)
+### 화면 칸 순서대로 다시 담기 (엑셀 다운로드)
 > 칸 순서를 머리글 순서에 맞춥니다.
 const cols = ['PART_NO', 'PART_NM', 'CAR_TYPE', 'STATUS_NM'];
 console.table(data.map(r => Object.fromEntries(cols.map(c => [c, r[c] ?? '']))));
@@ -3341,7 +3341,7 @@ console.log(cycle('86510-N9000')?.join(' → ') ?? '순환 없음');
 ]
 
 ### 트리 펼친 목록 (깊이 · 경로 붙여 그리드로)
-> 트리 그리드 · 엑셀 내려받기.
+> 트리 그리드 · 엑셀 다운로드.
 const flat = (nodes, depth = 0, path = '') => nodes.flatMap(n => [{ depth, path: path ? `${path} > ${n.name}` : n.name, name: '  '.repeat(depth) + n.name }, ...flat(n.children ?? [], depth + 1, path ? `${path} > ${n.name}` : n.name)]);
 console.table(flat(data));
 --- 데이터
@@ -3542,9 +3542,9 @@ console.log(data.map(n => [n.name, state(n)]));
   }
 ]
 
-## 엑셀 업로드 · 내려받기
-### 엑셀에서 붙인 표 → 객체 목록 (머리글 한글 → 칸 이름)
-> 붙여 넣은 표는 data 에 머리글 이름 그대로 들어옵니다. 저장 요청 칸 이름으로 바꿉니다.
+## 엑셀 업로드 · 다운로드
+### 엑셀에서 붙인 테이블 → 객체 목록 (머리글 한글 → 칸 이름)
+> 붙여 넣은 테이블은 data 에 머리글 이름 그대로 들어옵니다. 저장 요청 칸 이름으로 바꿉니다.
 const map = { '품번': 'partNo', '품명': 'partName', '차종': 'carType', '수량': 'qty' };
 console.table(data.map(r => Object.fromEntries(Object.entries(r).map(([h, v]) => [map[h] ?? h, v]))));
 --- 데이터
@@ -3653,7 +3653,7 @@ console.table(rows);
 const num = v => { const s = String(v ?? '').replaceAll(',', '').trim(); return s === '' || s === '-' ? null : Number(s); };
 console.log(['1,180', ' 2 ', '-', '', '32000.5'].map(num));
 
-### 내려받기 CSV 만들기 (따옴표 · 쉼표 · 줄바꿈 감싸기)
+### 다운로드 CSV 만들기 (따옴표 · 쉼표 · 줄바꿈 감싸기)
 > 엑셀에서 한글이 안 깨지게 앞에 BOM 을 붙입니다.
 const cols = [['partNo', '품번'], ['partName', '품명'], ['remark', '비고']];
 const cell = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s; };
@@ -3695,8 +3695,8 @@ const parse = text => {
 };
 console.log(parse('품번,비고\n52910-P2000,"도면 ""Rev.B"" 반영"\n86511-N9000,"색상, 질감\n확인"'));
 
-### 내려받기 행에 코드 이름 · 표시 형식 넣기
-> 화면과 같은 글로 내려받기(상태 코드 → 이름, 금액 쉼표).
+### 다운로드 행에 코드 이름 · 표시 형식 넣기
+> 화면과 같은 글로 다운로드(상태 코드 → 이름, 금액 쉼표).
 const status = { '10': '등록', '20': '개발중', '30': '승인' };
 console.table(data.map(r => ({ 품번: r.partNo, 상태: status[r.statusCd] ?? '', 단가: r.unitPrice.toLocaleString('ko-KR'), 등록일: r.regDt.slice(0, 10) })));
 --- 데이터
@@ -3726,7 +3726,7 @@ console.log(missing.length ? `양식이 다릅니다. 없는 칸: ${missing.join
 52910-P2000	프런트 범퍼 브래킷	NX4	2
 
 ### 업로드 빈 줄 · 합계 줄 버리기
-> 표에 섞인 빈 줄과 「합계」 줄.
+> 테이블에 섞인 빈 줄과 「합계」 줄.
 console.table(data.filter(r => Object.values(r).some(v => String(v).trim()) && r['품번'] !== '합계'));
 --- 데이터
 품번	수량
@@ -4461,7 +4461,7 @@ console.log('이번 주', open.filter(s => s.PLAN_DATE <= end(1)).map(s => s.PAR
   }
 ]
 
-### 일정 표 피벗 (부품 × 단계 → 계획일)
+### 일정 테이블 피벗 (부품 × 단계 → 계획일)
 > 가로로 단계가 펼쳐진 일정표.
 const steps = ['P1', 'P2', 'P3', 'P4'];
 const byPart = Object.groupBy(data, s => s.PART_NO);
@@ -4569,7 +4569,7 @@ console.log(`IS-${year}-${String(last + 1).padStart(4, '0')}`);
   "IS-2026-0013"
 ]
 
-### 유형 × 등급 건수 표
+### 유형 × 등급 건수 테이블
 > 품질 · 일정 · 원가 × A · B · C.
 const types = ['품질', '일정', '원가'];
 const grades = ['A', 'B', 'C'];
@@ -5396,8 +5396,8 @@ console.table(Object.entries(g).map(([VENDOR_NM, l]) => { const inQty = l.reduce
   }
 ]
 
-### 검사 수량 정하기 (로트 크기별 샘플 수 표)
-> 사내 샘플링 표에서 로트 크기 구간 찾기.
+### 검사 수량 정하기 (로트 크기별 샘플 수 테이블)
+> 사내 샘플링 테이블에서 로트 크기 구간 찾기.
 const table = [[90, 5], [280, 20], [1200, 32], [10000, 80], [Infinity, 125]];
 const sample = lot => table.find(([max]) => lot <= max)[1];
 console.log([50, 500, 1500, 40000].map(n => `${n}개 → ${sample(n)}개`));
@@ -6885,7 +6885,7 @@ const retry = async (fn, times = 3, wait = 100) => {
 console.log(await retry(call), `${n}번 시도`);
 
 ### 시간 제한 (5초 넘으면 실패 처리)
-> 엑셀 내려받기 같은 긴 요청.
+> 엑셀 다운로드 같은 긴 요청.
 const timeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(`${ms}ms 넘음`)), ms))]);
 try { await timeout(new Promise(r => setTimeout(r, 300)), 100); } catch (e) { console.log('실패:', e.message); }
 console.log(await timeout(Promise.resolve('응답'), 100));
@@ -6940,7 +6940,7 @@ const exp = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString())
 const now = new Date('2026-11-12T15:00:00Z').getTime() / 1000;
 console.log(exp - now < 60 ? '곧 만료 → 새로 받기' : '유효');
 
-### 권한 코드로 단추 보이기 (등록 · 수정 · 삭제 · 내려받기)
+### 권한 코드로 단추 보이기 (등록 · 수정 · 삭제 · 다운로드)
 > 사용자 권한 목록.
 const perms = new Set(['PART_READ', 'PART_WRITE']);
 const btn = { 등록: 'PART_WRITE', 삭제: 'PART_DELETE', 엑셀: 'PART_EXCEL' };
@@ -7237,7 +7237,7 @@ watch(keyword, q => {
 </template>
 
 ### 엑셀 붙여넣기 업로드 (검사 결과 표시)
-> 화면(Vue · React). 붙여 넣은 표를 줄마다 검사해 오류 줄만 빨갛게.
+> 화면(Vue · React). 붙여 넣은 테이블을 줄마다 검사해 오류 줄만 빨갛게.
 @보기만
 <script setup>
 import { ref, computed } from 'vue';
@@ -7289,7 +7289,7 @@ async function onFile(e) {
   <input type="file" @change="onFile" /> <progress :value="percent" max="100"></progress>
 </template>
 
-### 엑셀 내려받기 (조회 조건 그대로 · 파일 이름)
+### 엑셀 다운로드 (조회 조건 그대로 · 파일 이름)
 > 화면(Vue · React). blob 으로 받아 a 태그로 저장합니다.
 @보기만
 <script setup>
@@ -7974,7 +7974,7 @@ export default function PartSuggest() {
 }
 
 ### 엑셀 붙여넣기 업로드 (검사 결과 표시)
-> 화면(Vue · React). 붙여 넣은 표를 줄마다 검사해 오류 줄만 빨갛게.
+> 화면(Vue · React). 붙여 넣은 테이블을 줄마다 검사해 오류 줄만 빨갛게.
 @보기만
 import { useState } from 'react';
 
@@ -8025,7 +8025,7 @@ export default function DrawingUpload({ partNo }) {
   return <><input type="file" onChange={onFile} /> <progress value={percent} max={100} /></>;
 }
 
-### 엑셀 내려받기 (조회 조건 그대로 · 파일 이름)
+### 엑셀 다운로드 (조회 조건 그대로 · 파일 이름)
 > 화면(Vue · React). blob 으로 받아 a 태그로 저장합니다.
 @보기만
 import api from '@/api';
@@ -8508,7 +8508,7 @@ await api.post('/files', fd, {
 });
 
 ### 파일 받기 (blob · 파일 이름)
-> 엑셀 내려받기. 서버 Content-Disposition 의 파일 이름을 씁니다.
+> 엑셀 다운로드. 서버 Content-Disposition 의 파일 이름을 씁니다.
 @보기만
 const res = await api.get('/part/excel', { params: cond, responseType: 'blob' });
 const header = res.headers['content-disposition'] ?? '';
@@ -8610,7 +8610,7 @@ localStorage.setItem(KEY, JSON.stringify(cond));
 const saved = JSON.parse(localStorage.getItem(KEY) ?? 'null') ?? {};
 localStorage.removeItem(KEY);
 
-### 글을 파일로 내려받기 (Blob)
+### 글을 파일로 다운로드 (Blob)
 > CSV · JSON 을 서버 없이 파일로.
 @보기만
 function download(text, name, type = 'text/csv;charset=utf-8') {
