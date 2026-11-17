@@ -1,7 +1,5 @@
 package local.bootservers;
 
-import com.intellij.credentialStore.CredentialAttributes;
-import com.intellij.credentialStore.CredentialAttributesKt;
 import com.intellij.icons.AllIcons;
 import com.intellij.ide.passwordSafe.PasswordSafe;
 import com.intellij.ide.ui.UISettings;
@@ -66,7 +64,6 @@ import local.bootservers.ui.Pill;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import javax.net.ssl.SSLException;
 import javax.swing.BorderFactory;
 import javax.swing.ButtonGroup;
 import javax.swing.JButton;
@@ -100,20 +97,8 @@ import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.awt.font.TextAttribute;
 import java.beans.PropertyChangeListener;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.net.ConnectException;
-import java.net.CookieManager;
-import java.net.CookiePolicy;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpConnectTimeoutException;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.net.http.HttpTimeoutException;
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -121,11 +106,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
-import java.util.concurrent.CompletionStage;
-import java.util.concurrent.Flow;
 import java.util.concurrent.TimeUnit;
 import java.util.function.IntPredicate;
 import java.util.regex.Pattern;
@@ -154,19 +135,8 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
     }
 
     private static final Key<Request> REQUEST = Key.create("ei.api.request");
-    private static final Key<HttpClient> CLIENT = Key.create("ei.api.client");
-    private static final String AUTH_TYPE_KEY = "ei.api.auth.type";
-    private static final String AUTH_USER_KEY = "ei.api.auth.user";
-    /** 비밀번호 저장소의 서비스 이름 앞부분. 뒤에 프로젝트 위치 해시와 인증 방식이 붙는다. */
-    private static final String AUTH_SERVICE = "EI IDE API 인증";
-    private static final String[] SECRET_TYPES = {ApiText.AUTH_BEARER, ApiText.AUTH_BASIC, ApiText.AUTH_COOKIE};
-
-    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
-    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(60);
     /** 화면에 넣을 응답 본문 최대 글자 수. 넘으면 앞부분만 보인다. */
     private static final int MAX_SHOWN_CHARS = 2_000_000;
-    /** 응답 본문을 받는 최대 바이트 수. 넘으면 나머지는 받지 않고 끊었다고 알린다. */
-    private static final int MAX_RECEIVED_BYTES = 16 * 1024 * 1024;
     private static final int HTTP_ERROR_STATUS = 400;
     private static final float REQUEST_RESPONSE_SPLIT = 0.5f;
     /** 요청 영역에서 탭(왼쪽)이 차지하는 비율. 오른쪽은 보낼 요청 미리보기. */
@@ -282,7 +252,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
     private int cookieCount;
     /** 저장소에서 읽은(또는 마지막으로 쓴) 값. 바뀐 것만 다시 쓴다. 읽기 전에는 null. */
     private volatile Map<String, String> savedSecrets;
-    private CompletableFuture<HttpResponse<Received>> pending;
+    private CompletableFuture<HttpResponse<ApiHttp.Received>> pending;
 
     /** 같은 요청(key)의 탭이 열려 있으면 그 탭에 새 값을 넣어 다시 채우고, 아니면 새 탭을 연다. */
     static void open(Project project, Request request) {
@@ -293,7 +263,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
                 open.putUserData(REQUEST, request);
                 for (FileEditor editor : manager.openFile(open, true)) {
                     if (editor instanceof ApiRequestEditor api) {
-                        api.fill();
+                        api.fill(true);
                     }
                 }
                 return;
@@ -361,6 +331,9 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0));
         buttons.add(sendButton);
         buttons.add(reset);
+        JButton resend = new JButton(BootServersBundle.message("api.resend.button"), AllIcons.Actions.Rerun);
+        resend.setToolTipText(BootServersBundle.message("api.resend.tooltip"));
+        buttons.add(resend);
         top.add(buttons, BorderLayout.EAST);
         top.setBorder(JBUI.Borders.compound(JBUI.Borders.customLineBottom(JBColor.border()), JBUI.Borders.empty(10, 14)));
 
@@ -433,7 +406,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         JBPanelWithEmptyText empty = new JBPanelWithEmptyText().withEmptyText(BootServersBundle.message("api.response.empty"));
         empty.getEmptyText().appendSecondaryText(shortcut, SimpleTextAttributes.GRAYED_ATTRIBUTES, null);
         responseCards.add(empty, RESPONSE_EMPTY_CARD);
-        responseCards.add(new JBPanelWithEmptyText().withEmptyText(BootServersBundle.message("api.sending.wait", REQUEST_TIMEOUT.toSeconds())),
+        responseCards.add(new JBPanelWithEmptyText().withEmptyText(BootServersBundle.message("api.sending.wait", ApiHttp.REQUEST_TIMEOUT.toSeconds())),
                 RESPONSE_SENDING_CARD);
         errorTitle.setFont(JBFont.label().asBold());
         errorText.setAllowAutoWrapping(true);
@@ -480,9 +453,10 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         elapsedTimer.addActionListener(e -> gauge.setString(BootServersBundle.message("api.sending.elapsed",
                 String.format(Locale.ROOT, "%.1f", (System.nanoTime() - sendStart) / 1_000_000 / MS_PER_SECOND))));
         sendButton.addActionListener(e -> sendOrCancel());
-        reset.addActionListener(e -> fill());
+        reset.addActionListener(e -> fill(false));
+        resend.addActionListener(e -> new ApiResendDialog(project).show());
         urlField.addActionListener(e -> sendOrCancel());
-        fill();
+        fill(true);
         loadAuth();
     }
 
@@ -799,7 +773,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
             radio.addActionListener(e -> {
                 applyAuthKind();
                 // 방식은 고르는 즉시 남긴다. 아이디 · 비밀 값은 보낼 때 저장한다(saveAuth).
-                PropertiesComponent.getInstance(project).setValue(AUTH_TYPE_KEY, authKind(), ApiText.AUTH_NONE);
+                PropertiesComponent.getInstance(project).setValue(ApiHttp.AUTH_TYPE_KEY, authKind(), ApiText.AUTH_NONE);
             });
         }
         DocumentAdapter refresh = new DocumentAdapter() {
@@ -898,26 +872,73 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         }
     }
 
-    /** 처음 받은 값(시험 값)으로 방식 · 주소 · 쿼리 · 헤더 · 본문을 다시 채운다. 인증은 두고, 응답은 비운다. */
-    private void fill() {
+    /**
+     * 방식 · 주소 · 쿼리 · 헤더 · 본문을 채운다. 인증은 둔다.
+     * useSaved 가 참이고 이 요청(key)을 보낸 적이 있으면 마지막에 보낸 값으로(코드의 시험 값 줄 위에 ApiSaved.merge), 아니면 코드의 시험 값으로.
+     */
+    private void fill(boolean useSaved) {
         Request request = file.getUserData(REQUEST);
         if (request == null) {
             return;
         }
-        methodBox.setSelectedItem(request.method());
-        urlField.setText(request.url());
-        setRows(queryModel, request.query());
+        ApiStore.Entry saved = useSaved ? ApiStore.getInstance(project).get(request.key()) : null;
+        methodBox.setSelectedItem(saved == null ? request.method() : saved.method);
+        urlField.setText(saved == null ? request.url() : saved.url);
+        setRows(queryModel, request.query(), saved == null ? null : ApiStore.lines(saved.query));
         authRowShown = false;
-        setRows(headerModel, request.headers());
+        setRows(headerModel, request.headers(), saved == null ? null : ApiStore.lines(saved.headers));
         refreshAuthRow();
-        bodyField.setText(request.body());
+        if (saved != null && !saved.auth && isAuthRow(0)) {
+            headerModel.setValueAt(false, 0, ENABLED_COLUMN);
+        }
+        bodyField.setText(saved == null ? request.body() : saved.body);
     }
 
-    private static void setRows(DefaultTableModel model, List<Row> rows) {
+    /** 코드의 시험 값 줄(fresh)을 넣는다. saved 가 있으면 같은 이름 줄은 저장한 값 · 체크로, 저장에만 있는 줄은 뒤에 붙인다. */
+    private static void setRows(DefaultTableModel model, List<Row> fresh, @Nullable List<ApiSaved.Line> saved) {
         model.setRowCount(0);
-        for (Row row : rows) {
-            model.addRow(new Object[]{true, row.name(), row.value(), row.source()});
+        Map<String, String> sources = new HashMap<>();
+        List<ApiSaved.Line> lines = new ArrayList<>();
+        for (Row row : fresh) {
+            sources.putIfAbsent(row.name().toLowerCase(Locale.ROOT), row.source());
+            lines.add(new ApiSaved.Line(row.name(), row.value(), true));
         }
+        if (saved != null) {
+            lines = ApiSaved.merge(lines, saved);
+        }
+        for (ApiSaved.Line line : lines) {
+            String source = sources.get(line.name().toLowerCase(Locale.ROOT));
+            model.addRow(new Object[]{line.on(), line.name(), line.value(), source != null ? source : BootServersBundle.message("api.source.saved")});
+        }
+    }
+
+    /** 보낼 때의 값: 쿼리 · 헤더는 체크 상태까지(인증 줄 · 비밀 헤더는 빼고), authOn 은 인증을 붙였는지(인증이 없던 때는 참). */
+    private ApiStore.Entry snapshot(String method, String url, boolean authOn, String body) {
+        Request request = file.getUserData(REQUEST);
+        ApiStore.Entry e = new ApiStore.Entry();
+        e.key = request == null ? file.getName() : request.key();
+        e.title = request == null ? file.getName() : request.title();
+        e.method = method;
+        e.url = url;
+        e.query = ApiStore.beans(tableLines(queryModel, 0));
+        e.headers = ApiStore.beans(ApiSaved.savableHeaders(tableLines(headerModel, authRowShown ? 1 : 0)));
+        e.auth = authOn;
+        e.body = body;
+        return e;
+    }
+
+    /** from 번째 줄부터 이름이 있는 줄(체크 상태 포함). */
+    private static List<ApiSaved.Line> tableLines(DefaultTableModel model, int from) {
+        List<ApiSaved.Line> out = new ArrayList<>();
+        for (int i = from; i < model.getRowCount(); i++) {
+            Object name = model.getValueAt(i, NAME_COLUMN);
+            Object value = model.getValueAt(i, VALUE_COLUMN);
+            if (name != null && !name.toString().isBlank()) {
+                out.add(new ApiSaved.Line(name.toString().strip(), value == null ? "" : value.toString(),
+                        Boolean.TRUE.equals(model.getValueAt(i, ENABLED_COLUMN))));
+            }
+        }
+        return out;
     }
 
     /** from 번째 줄부터 체크한 줄의 이름 · 값. 이름이 빈 줄은 건너뛴다. */
@@ -933,24 +954,20 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         return result;
     }
 
-    private static CredentialAttributes secretKey(Project project, String kind) {
-        return new CredentialAttributes(CredentialAttributesKt.generateServiceName(AUTH_SERVICE, project.getLocationHash() + "/" + kind));
-    }
-
     /** 방식 · 아이디는 바로, 비밀 값은 백그라운드에서 읽어 채운다(비밀번호 저장소는 화면 스레드에서 읽지 않는다). */
     private void loadAuth() {
         PropertiesComponent settings = PropertiesComponent.getInstance(project);
-        String kind = settings.getValue(AUTH_TYPE_KEY, ApiText.AUTH_NONE);
+        String kind = settings.getValue(ApiHttp.AUTH_TYPE_KEY, ApiText.AUTH_NONE);
         authNone.setSelected(true);
         authBearer.setSelected(ApiText.AUTH_BEARER.equals(kind));
         authBasic.setSelected(ApiText.AUTH_BASIC.equals(kind));
         authCookie.setSelected(ApiText.AUTH_COOKIE.equals(kind));
-        userField.setText(settings.getValue(AUTH_USER_KEY, ""));
+        userField.setText(settings.getValue(ApiHttp.AUTH_USER_KEY, ""));
         applyAuthKind();
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
             Map<String, String> secrets = new HashMap<>();
-            for (String type : SECRET_TYPES) {
-                String value = PasswordSafe.getInstance().getPassword(secretKey(project, type));
+            for (String type : ApiHttp.SECRET_TYPES) {
+                String value = PasswordSafe.getInstance().getPassword(ApiHttp.secretKey(project, type));
                 secrets.put(type, value == null ? "" : value);
             }
             ApplicationManager.getApplication().invokeLater(() -> {
@@ -972,37 +989,21 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
     /** 방식 · 아이디를 설정에, 바뀐 비밀 값만 백그라운드에서 저장소에 쓴다. 빈 값이면 지운다. 읽기 전이면 비밀 값은 쓰지 않는다. */
     private void saveAuth(String kind, Map<String, String> secrets) {
         PropertiesComponent settings = PropertiesComponent.getInstance(project);
-        settings.setValue(AUTH_TYPE_KEY, kind, ApiText.AUTH_NONE);
-        settings.setValue(AUTH_USER_KEY, userField.getText().strip(), "");
+        settings.setValue(ApiHttp.AUTH_TYPE_KEY, kind, ApiText.AUTH_NONE);
+        settings.setValue(ApiHttp.AUTH_USER_KEY, userField.getText().strip(), "");
         Map<String, String> saved = savedSecrets;
         if (saved == null) {
             return;
         }
         savedSecrets = secrets;
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
-            for (String type : SECRET_TYPES) {
+            for (String type : ApiHttp.SECRET_TYPES) {
                 String value = secrets.get(type);
                 if (!value.equals(saved.get(type))) {
-                    PasswordSafe.getInstance().setPassword(secretKey(project, type), value.isEmpty() ? null : value);
+                    PasswordSafe.getInstance().setPassword(ApiHttp.secretKey(project, type), value.isEmpty() ? null : value);
                 }
             }
         });
-    }
-
-    /** 프로젝트마다 하나(화면 스레드에서만 부른다). 쿠키 저장소를 두어 로그인으로 받은 세션 쿠키를 이어 보낸다. */
-    private static HttpClient client(Project project) {
-        HttpClient client = project.getUserData(CLIENT);
-        if (client == null) {
-            client = HttpClient.newBuilder()
-                    .connectTimeout(CONNECT_TIMEOUT)
-                    .followRedirects(HttpClient.Redirect.NORMAL)
-                    // 개발 서버가 h2c 올리기 요청을 잘못 받는 일이 있어 HTTP/1.1 로 고정한다.
-                    .version(HttpClient.Version.HTTP_1_1)
-                    .cookieHandler(new CookieManager(null, CookiePolicy.ACCEPT_ALL))
-                    .build();
-            project.putUserData(CLIENT, client);
-        }
-        return client;
     }
 
     /** 「보내기」: 보내는 중이면 취소한다. */
@@ -1026,26 +1027,13 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         String body = bodyField.getText();
         HttpRequest request;
         try {
-            HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(ApiText.withQuery(url, checkedRows(queryModel, 0))))
-                    .timeout(REQUEST_TIMEOUT);
-            boolean authInHeaders = false;
-            for (Map.Entry<String, String> header : headers) {
-                builder.header(header.getKey(), header.getValue());
-                authInHeaders |= auth != null && header.getKey().equalsIgnoreCase(auth.getKey());
-            }
-            // 헤더 칸에 직접 적은 값이 인증 칸보다 앞선다.
-            if (auth != null && !authInHeaders) {
-                builder.header(auth.getKey(), auth.getValue());
-            }
-            builder.method(method, body.isBlank()
-                    ? HttpRequest.BodyPublishers.noBody()
-                    : HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));
-            request = builder.build();
+            request = ApiHttp.build(method, url, checkedRows(queryModel, 0), headers, auth, body);
         } catch (IllegalArgumentException e) {
-            showError(BootServersBundle.message("api.error.title.request"), buildErrorMessage(e));
+            showError(BootServersBundle.message("api.error.title.request"), ApiHttp.buildErrorMessage(e));
             return;
         }
         saveAuth(kind, secrets);
+        ApiStore.Entry sent = snapshot(method, url, auth != null || !authRowShown, body);
         long start = System.nanoTime();
         sendStart = start;
         statusPill.clear();
@@ -1055,7 +1043,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         viewsToolbar.getComponent().setVisible(false);
         showCard(RESPONSE_SENDING_CARD);
         elapsedTimer.start();
-        CompletableFuture<HttpResponse<Received>> future = client(project).sendAsync(request, info -> new CappedBytes(MAX_RECEIVED_BYTES));
+        CompletableFuture<HttpResponse<ApiHttp.Received>> future = ApiHttp.send(project, request);
         pending = future;
         sendButton.setText(BootServersBundle.message("api.cancel"));
         future.whenComplete((response, error) -> {
@@ -1072,73 +1060,18 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
             }
             Shown result = shown;
             Throwable problem = failure;
-            ApplicationManager.getApplication().invokeLater(() -> finish(future, result, problem, elapsedMs),
+            ApplicationManager.getApplication().invokeLater(() -> finish(future, sent, result, problem, elapsedMs),
                     ModalityState.defaultModalityState(), project.getDisposed());
         });
     }
 
-    /** 받은 응답 본문 바이트와 MAX_RECEIVED_BYTES 에서 끊었는지. */
-    private record Received(byte[] bytes, boolean cut) {
-    }
-
-    /** 화면에 넣을 응답. body 가 null 이면 본문이 비었다. */
+    /** 화면에 넣을 응답. body 가 null 이면 본문이 비었다. raw 는 줄맞춤 · 자르기 전 본문 글(저장 · 비교용). */
     private record Shown(int code, String headerText, int headerCount, List<String> cookies, String meta,
-                         @Nullable String body, String bodyType) {
-    }
-
-    /** 응답 본문을 limit 바이트까지만 모은다. 넘으면 나머지는 받지 않고 연결을 끊는다. */
-    private static final class CappedBytes implements HttpResponse.BodySubscriber<Received> {
-        private final int limit;
-        private final ByteArrayOutputStream out = new ByteArrayOutputStream();
-        private final CompletableFuture<Received> result = new CompletableFuture<>();
-        private Flow.Subscription subscription;
-
-        CappedBytes(int limit) {
-            this.limit = limit;
-        }
-
-        @Override
-        public CompletionStage<Received> getBody() {
-            return result;
-        }
-
-        @Override
-        public void onSubscribe(Flow.Subscription subscription) {
-            this.subscription = subscription;
-            subscription.request(Long.MAX_VALUE);
-        }
-
-        @Override
-        public void onNext(List<ByteBuffer> items) {
-            if (result.isDone()) {
-                return;
-            }
-            for (ByteBuffer item : items) {
-                int take = Math.min(item.remaining(), limit - out.size());
-                byte[] chunk = new byte[take];
-                item.get(chunk);
-                out.write(chunk, 0, take);
-                if (item.hasRemaining()) {
-                    result.complete(new Received(out.toByteArray(), true));
-                    subscription.cancel();
-                    return;
-                }
-            }
-        }
-
-        @Override
-        public void onError(Throwable throwable) {
-            result.completeExceptionally(throwable);
-        }
-
-        @Override
-        public void onComplete() {
-            result.complete(new Received(out.toByteArray(), false));
-        }
+                         @Nullable String body, String bodyType, String raw) {
     }
 
     /** 백그라운드에서 부른다. 응답을 화면에 넣을 글로 만든다(IntelliJ 화면 부품은 건드리지 않는다). */
-    private static Shown shown(HttpResponse<Received> response, long elapsedMs) {
+    private static Shown shown(HttpResponse<ApiHttp.Received> response, long elapsedMs) {
         StringBuilder headerText = new StringBuilder();
         List<String> cookies = new ArrayList<>();
         String contentType = "";
@@ -1157,7 +1090,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
                 cookies.addAll(header.getValue());
             }
         }
-        Received received = response.body() == null ? new Received(new byte[0], false) : response.body();
+        ApiHttp.Received received = ApiHttp.received(response);
         String body = ApiText.decode(received.bytes(), contentType, received.cut());
         String size = StringUtil.formatFileSize(received.bytes().length);
         String mediaType = contentType.split(";")[0].strip();
@@ -1177,13 +1110,14 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
             if (shown.length() > MAX_SHOWN_CHARS) {
                 shown = shown.substring(0, MAX_SHOWN_CHARS) + "\n" + BootServersBundle.message("api.truncated", MAX_SHOWN_CHARS);
             } else if (received.cut()) {
-                shown = shown + "\n" + BootServersBundle.message("api.received.cut", StringUtil.formatFileSize(MAX_RECEIVED_BYTES));
+                shown = shown + "\n" + BootServersBundle.message("api.received.cut", StringUtil.formatFileSize(ApiHttp.MAX_RECEIVED_BYTES));
             }
         }
-        return new Shown(response.statusCode(), headerText.toString(), headers, cookies, meta, shown, shownType);
+        return new Shown(response.statusCode(), headerText.toString(), headers, cookies, meta, shown, shownType, body);
     }
 
-    private void finish(CompletableFuture<HttpResponse<Received>> future, @Nullable Shown response, Throwable error, long elapsedMs) {
+    private void finish(CompletableFuture<HttpResponse<ApiHttp.Received>> future, ApiStore.Entry sent, @Nullable Shown response, Throwable error,
+                        long elapsedMs) {
         if (future != pending) {
             return;
         }
@@ -1195,10 +1129,12 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         footLabel.setText(BootServersBundle.message("api.foot.last", LocalTime.now().format(SENT_TIME), elapsedMs));
         if (error != null || response == null) {
             metaLabel.setText(BootServersBundle.message("api.meta.time", elapsedMs));
-            showError(BootServersBundle.message("api.error.title"), responseErrorMessage(error));
+            showError(BootServersBundle.message("api.error.title"), ApiHttp.responseErrorMessage(error));
             return;
         }
         int code = response.code();
+        // 받은 응답은 상태 코드가 무엇이든 이 요청의 기준으로 저장한다(다시 보내기 창이 이것과 견준다).
+        ApiStore.getInstance(project).saveSent(sent, code, response.raw());
         boolean failed = code >= HTTP_ERROR_STATUS;
         String reason = REASONS.get(code);
         statusPill.show(reason == null ? String.valueOf(code) : code + " " + reason,
@@ -1226,40 +1162,6 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         errorText.setText(UIUtil.toHtml(StringUtil.escapeXmlEntities(message)));
         viewsToolbar.getComponent().setVisible(false);
         showCard(RESPONSE_ERROR_CARD);
-    }
-
-    private static String buildErrorMessage(IllegalArgumentException e) {
-        String detail = String.valueOf(e.getMessage());
-        if (detail.contains("Illegal character")) {
-            return BootServersBundle.message("api.error.char");
-        }
-        if (detail.contains("restricted header")) {
-            return BootServersBundle.message("api.error.header", detail);
-        }
-        return BootServersBundle.message("api.error.build", detail);
-    }
-
-    private static String responseErrorMessage(Throwable error) {
-        Throwable cause = error instanceof CompletionException && error.getCause() != null ? error.getCause() : error;
-        if (cause instanceof CancellationException) {
-            return BootServersBundle.message("api.error.cancelled");
-        }
-        if (cause instanceof HttpConnectTimeoutException) {
-            return BootServersBundle.message("api.error.connect.timeout", CONNECT_TIMEOUT.toSeconds());
-        }
-        if (cause instanceof HttpTimeoutException) {
-            return BootServersBundle.message("api.error.timeout", REQUEST_TIMEOUT.toSeconds());
-        }
-        if (cause instanceof ConnectException) {
-            return BootServersBundle.message("api.error.connect");
-        }
-        if (cause instanceof SSLException) {
-            return BootServersBundle.message("api.error.ssl", String.valueOf(cause.getMessage()));
-        }
-        if (cause instanceof IOException) {
-            return BootServersBundle.message("api.error.io", cause.getMessage() != null ? cause.getMessage() : cause.getClass().getSimpleName());
-        }
-        return BootServersBundle.message("api.error.io", String.valueOf(cause));
     }
 
     @Override

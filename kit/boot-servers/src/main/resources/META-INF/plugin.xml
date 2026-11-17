@@ -161,6 +161,10 @@
         <action id="KingGura.ApiRequest" class="local.bootservers.ApiRequestAction" icon="AllIcons.Nodes.PpWeb">
             <add-to-group group-id="EditorPopupMenu" anchor="first"/>
         </action>
+        <!-- 도구 메뉴: Send API Request 로 보낸 요청들을 한꺼번에 다시 보내 저장한 응답과 견준다(API 요청 탭 머리 줄 단추와 같은 창). -->
+        <action id="KingGura.ApiResend" class="local.bootservers.ApiResendAction" icon="AllIcons.Actions.Rerun">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
         <!-- Project 메뉴 · 프로젝트 창 우클릭: 소스 · 리소스 · 웹 폴더의 전체 파일과 URL 매핑을 엑셀 한 파일로 저장한다(프로그램 사양서용). -->
         <action id="KingGura.ExportProgramList" class="local.bootservers.ProgramListAction" icon="AllIcons.ToolbarDecorator.Export">
             <add-to-group group-id="KG.ProjectMenu" anchor="last"/>
