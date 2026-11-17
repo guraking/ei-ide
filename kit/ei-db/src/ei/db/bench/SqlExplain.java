@@ -19,6 +19,8 @@ public final class SqlExplain {
   private static final int SQL_PREVIEW = 120;
   private static final Pattern AGG = Pattern.compile("(?<![\\w$#])(COUNT|SUM|AVG|MIN|MAX|LISTAGG|STRING_AGG)\\s*\\(", Pattern.CASE_INSENSITIVE);
   private static final Pattern WINDOW = Pattern.compile("(?<![\\w$#])(ROW_NUMBER|RANK|DENSE_RANK|LAG|LEAD|SUM|COUNT|AVG|MAX|MIN)\\s*\\([^()]*\\)\\s*OVER\\s*\\(", Pattern.CASE_INSENSITIVE);
+  /** CONCAT('%', 값, '%') · CONCAT(값, '%') · CONCAT('%', 값). 1 은 앞 %, 2 는 뒤 %. */
+  private static final Pattern LIKE_CONCAT = Pattern.compile("(?i)\\bLIKE\\s+CONCAT\\s*\\(\\s*('%'\\s*,)?[^)]*?(,\\s*'%')?\\s*\\)");
   private static final Pattern BIND = Pattern.compile("(:[A-Za-z_]\\w*|#\\{[^}]+}|\\$\\{[^}]+}|\\?)");
 
   public static List<Step> explain(String sql) {
@@ -151,8 +153,17 @@ public final class SqlExplain {
     else if (u.matches("(?s).*\\bIS\\s+NULL\\b.*")) notes.add("값이 비어 있는(NULL) 것");
     if (u.matches("(?s).*\\bLIKE\\b.*")) {
       String lit = c.replaceAll("(?s).*?'(.*)'.*", "$1");
-      if (c.contains("'%' ||") && c.contains("|| '%'") || lit.startsWith("%") && lit.endsWith("%")) notes.add("글자가 들어 있는 것(앞에 % 가 있어 인덱스를 못 씁니다)");
-      else if (c.contains("'%' ||") || lit.startsWith("%")) notes.add("글자로 끝나는 것(앞에 % 가 있어 인덱스를 못 씁니다)");
+      // MySQL 은 CONCAT('%', 값, '%') 꼴이다(QueryBuilder). 따옴표 사이를 한 글로 읽으면 '%' 하나도 앞뒤 % 로 보이므로 따로 본다.
+      Matcher concat = LIKE_CONCAT.matcher(c);
+      boolean front = c.contains("'%' ||");
+      boolean back = c.contains("|| '%'");
+      if (concat.find()) {
+        front = concat.group(1) != null;
+        back = concat.group(2) != null;
+        lit = "";
+      }
+      if (front && back || lit.startsWith("%") && lit.endsWith("%")) notes.add("글자가 들어 있는 것(앞에 % 가 있어 인덱스를 못 씁니다)");
+      else if (front || lit.startsWith("%")) notes.add("글자로 끝나는 것(앞에 % 가 있어 인덱스를 못 씁니다)");
       else notes.add("글자로 시작하는 것");
     }
     if (u.matches("(?s).*\\bROWNUM\\s*<.*")) notes.add("앞의 몇 건만(정렬 전에 자르므로 정렬과 함께 쓰려면 바깥에서 감싸야 합니다)");

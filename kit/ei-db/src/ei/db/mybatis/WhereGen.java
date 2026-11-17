@@ -27,9 +27,6 @@ public final class WhereGen {
 
   static final String INDENT = "  ";
   private static final String WHERE_TAG = "where";
-  /** 접속 종류를 모르므로 Oracle 꼴로 고정한다. */
-  private static final String LIKE_PREFIX = "'%' || ";
-  private static final String LIKE_SUFFIX = " || '%'";
   private static final Set<String> TEXT_TYPES = Set.of("java.lang.String", "String");
   private static final Pattern NAME = Pattern.compile("[A-Za-z_][A-Za-z0-9_$#]*");
   /** 첫 FROM(또는 UPDATE) 뒤 표 이름과 그 뒤 낱말. 낱말이 SQL 키워드면 별칭이 아니다. */
@@ -70,14 +67,17 @@ public final class WhereGen {
     return NOT_ALIAS.contains(word.toUpperCase(Locale.ROOT)) ? "" : word;
   }
 
-  /** &lt;if&gt; 하나(줄 끝 \n 포함). alias 가 비면 칼럼 앞에 붙이지 않는다. */
-  public static String ifBlock(Cond c, String alias, String indent) {
+  /**
+   * &lt;if&gt; 하나(줄 끝 \n 포함). alias 가 비면 칼럼 앞에 붙이지 않는다.
+   * mysql 이면 LIKE 값을 CONCAT 으로 잇는다(기본 설정에서 || 는 OR). 아니면 Oracle · PostgreSQL 의 ||.
+   */
+  public static String ifBlock(Cond c, String alias, String indent, boolean mysql) {
     String test = c.field() + " != null" + (isText(c.type()) ? " and " + c.field() + " != ''" : "");
     String col = (alias == null || alias.isBlank() ? "" : alias.trim() + ".") + c.column();
     String value = "#{" + c.field() + "}";
     String cond = switch (c.op()) {
       case EQ -> col + " = " + value;
-      case LIKE -> col + " LIKE " + LIKE_PREFIX + value + LIKE_SUFFIX;
+      case LIKE -> col + " LIKE " + (mysql ? "CONCAT('%', " + value + ", '%')" : "'%' || " + value + " || '%'");
       case GE, LE -> col + " <![CDATA[ " + c.op() + " ]]> " + value;
       default -> throw new IllegalArgumentException("모르는 비교 방식: " + c.op());
     };
@@ -87,9 +87,9 @@ public final class WhereGen {
   }
 
   /** &lt;where&gt; 로 감싼 조건들(줄 끝 \n 포함). */
-  public static String whereBlock(List<Cond> conds, String alias, String indent) {
+  public static String whereBlock(List<Cond> conds, String alias, String indent, boolean mysql) {
     StringBuilder b = new StringBuilder(indent).append("<where>\n");
-    for (Cond c : conds) b.append(ifBlock(c, alias, indent + INDENT));
+    for (Cond c : conds) b.append(ifBlock(c, alias, indent + INDENT, mysql));
     return b.append(indent).append("</where>\n").toString();
   }
 
@@ -97,7 +97,7 @@ public final class WhereGen {
    * 문장 statement 에 넣을 자리와 글. 문장 안에 &lt;where&gt; 가 있으면 그 닫는 태그 앞에 &lt;if&gt; 만,
    * 없으면 caret 줄에 &lt;where&gt; 를 넣는다(caret 앞이 빈칸뿐이면 그 줄 앞에, 아니면 그 줄 뒤에). 자리는 문장 본문 안으로 좁힌다.
    */
-  public static Insert insertion(String text, MapperDoc.Node statement, int caret, List<Cond> conds, String alias) {
+  public static Insert insertion(String text, MapperDoc.Node statement, int caret, List<Cond> conds, String alias, boolean mysql) {
     if (conds.isEmpty()) throw new IllegalArgumentException("고른 조건이 없습니다.");
     int bodyStart = openEnd(text, statement.start);
     int bodyEnd = closeStart(text, statement);
@@ -108,10 +108,10 @@ public final class WhereGen {
       if (close < 0) throw new IllegalArgumentException("<where> 의 닫는 태그를 찾지 못했습니다.");
       String indent = indentAt(text, where.start) + INDENT;
       StringBuilder b = new StringBuilder();
-      for (Cond c : conds) b.append(ifBlock(c, alias, indent));
+      for (Cond c : conds) b.append(ifBlock(c, alias, indent, mysql));
       return place(text, close, b.toString(), indentAt(text, where.start));
     }
-    String block = whereBlock(conds, alias, indentAt(text, statement.start) + INDENT);
+    String block = whereBlock(conds, alias, indentAt(text, statement.start) + INDENT, mysql);
     int at = Math.max(bodyStart, Math.min(caret, bodyEnd));
     if (!blankBefore(text, at)) {
       int lineEnd = text.indexOf('\n', at);

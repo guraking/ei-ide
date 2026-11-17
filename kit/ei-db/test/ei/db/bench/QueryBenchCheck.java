@@ -26,6 +26,7 @@ public class QueryBenchCheck {
     errors();
     context();
     fixes();
+    mysql();
     for (Examples.Example e : Examples.ALL) yes(!e.oracle().isBlank() && !e.postgres().isBlank() && !e.oracle().contains("\t"), e.title());
     System.out.println("QueryBenchCheck 통과");
   }
@@ -48,6 +49,11 @@ public class QueryBenchCheck {
     eq(SqlParts.split("SELECT \"A(B\" FROM T WHERE X = 1").get(1).body(), "T");
     eq(SqlParts.split("SELECT q'[it's (FROM]' FROM T WHERE X = 1").get(1).body(), "T");
     eq(SqlParts.mask("SELECT \"a--b\", 1 FROM T"), "SELECT \"a__b\", 1 FROM T");
+    // 따옴표 · 백틱으로 감싼 이름 안의 키워드 · 괄호 · 작은따옴표는 문장을 가르지 않는다.
+    eq(SqlParts.split("SELECT \"FROM\", b FROM T t WHERE x = 1").get(1).body(), "T t");
+    eq(SqlParts.split("SELECT `it's`, `a(b` FROM T WHERE x = 1").get(1).body(), "T");
+    eq(SqlParts.unquote("`ORDERS`"), "ORDERS");
+    eq(SqlParts.sources("`ORDERS` o, \"CUSTOMER\" c").get(1).alias(), "c");
   }
 
   static void builder() {
@@ -301,5 +307,62 @@ public class QueryBenchCheck {
     g.cols.add(new QueryBuilder.Col("o", "AMOUNT", "NUMBER", "", QueryBuilder.Agg.SUM, null));
     eq(QueryBuilder.groupBy(g), List.of("o.STATUS", "o.CUST_ID"));
     yes(!QueryBuilder.render(g).contains("COUNT(*)"), "no auto count when aggregated");
+  }
+
+  /** MySQL: || 는 OR, DATE + 1 은 숫자라 CONCAT · DATE_ADD · INTERVAL 로 만든다. Oracle · PostgreSQL 글은 그대로다. */
+  static void mysql() {
+    QueryBuilder.Spec s = new QueryBuilder.Spec();
+    s.tables.add(new QueryBuilder.Table("ORDERS", "o"));
+    s.cols.add(new QueryBuilder.Col("o", "ORDER_ID", "INT", "", null, null));
+    for (QueryBuilder.Op op : new QueryBuilder.Op[]{QueryBuilder.Op.CONTAINS, QueryBuilder.Op.STARTS, QueryBuilder.Op.ENDS}) {
+      s.conds.add(new QueryBuilder.Cond("o", "MEMO", QueryBuilder.ColKind.TEXT, op, "", null));
+    }
+    s.conds.add(new QueryBuilder.Cond("o", "ORDER_DT", QueryBuilder.ColKind.DATE, QueryBuilder.Op.DATE_RANGE, "", ""));
+    for (DbKind kind : DbKind.values()) {
+      s.kind = kind;
+      String sql = QueryBuilder.render(s);
+      if (kind == DbKind.MYSQL) {
+        yes(!sql.contains("||") && sql.contains("CONCAT(") && sql.contains("INTERVAL 1 DAY)") && !sql.contains(") + 1"), sql);
+      } else {
+        yes(sql.contains("||") && sql.contains(" + 1") && !sql.contains("CONCAT("), sql);
+      }
+    }
+    eq(QueryBuilder.nextDay(DbKind.MYSQL, "d"), "DATE_ADD(d, INTERVAL 1 DAY)");
+    yes(SqlExplain.condition("o.MEMO LIKE CONCAT('%', :memo, '%')").contains("들어 있는"), "explain contains");
+    yes(SqlExplain.condition("o.MEMO LIKE CONCAT(:memo, '%')").contains("시작하는"), "explain starts");
+    yes(SqlExplain.condition("o.MEMO LIKE CONCAT('%', :memo)").contains("끝나는"), "explain ends");
+    yes(SqlExplain.condition("o.MEMO LIKE '%' || :memo || '%'").contains("들어 있는"), "explain ||");
+    eq(QueryBuilder.nextDay(DbKind.POSTGRES, "d"), "d + 1");
+
+    String hier = Patterns.render(Patterns.Kind.HIERARCHY, fill(DbKind.MYSQL));
+    yes(hier.contains("WITH RECURSIVE") && hier.contains("CONCAT(") && hier.contains("CHAR(4000)") && !hier.contains("||") && !hier.contains("VARCHAR(4000)"), hier);
+    String up = Patterns.render(Patterns.Kind.UPSERT, fill(DbKind.MYSQL));
+    yes(up.contains("ON DUPLICATE KEY UPDATE") && !up.contains("ON CONFLICT"), up);
+    for (Patterns.Kind k : Patterns.Kind.values()) {
+      String sql = Patterns.render(k, fill(DbKind.MYSQL));
+      yes(sql.startsWith("--") && !sql.contains("null") && !SqlParts.mask(sql).contains("||"), k + "\n" + sql);
+    }
+
+    eq(MysqlConvert.convert("SELECT CURRENT_DATE - 30, a.ORDER_DT - b.DUE_DT, r.FIRST_RCV - p.PO_DT, NOW() - a.QUERY_START"),
+        "SELECT CURRENT_DATE - INTERVAL 30 DAY, DATEDIFF(a.ORDER_DT, b.DUE_DT), DATEDIFF(r.FIRST_RCV, p.PO_DT), NOW() - a.QUERY_START");
+    eq(MysqlConvert.convert("SELECT a || '-' || b, x::NUMERIC FROM T WHERE n ILIKE '%' || :k || '%'"),
+        "SELECT CONCAT(a, '-', b), CAST(x AS DECIMAL(38, 10)) FROM T WHERE n LIKE CONCAT('%', :k, '%')");
+    eq(MysqlConvert.convert("SELECT 'a||b' AS \"별칭\""), "SELECT 'a||b' AS `별칭`");
+
+    // 모든 예제의 MySQL 글에 PostgreSQL 전용 문법이 남지 않는다(MySQL 8.0 실행 확인은 따로 했다).
+    String[] pgOnly = {"||", "::", "ILIKE", "INTERVAL '", "DATE_TRUNC", "STRING_AGG", "GENERATE_SERIES", "FULL OUTER JOIN", "PG_", "CURRENT_SCHEMA", "RETURNING", "NULLS LAST", "NULLS FIRST", "FILTER (WHERE"};
+    for (Examples.Example e : Examples.ALL) {
+      eq(e.sql(DbKind.ORACLE), e.oracle());
+      eq(e.sql(DbKind.POSTGRES), e.postgres());
+      String my = e.sql(DbKind.MYSQL);
+      String code = SqlParts.mask(my).toUpperCase(java.util.Locale.ROOT).replaceAll("--[^\n]*", "");
+      for (String bad : pgOnly) yes(!code.contains(bad), e.title() + ": " + bad + "\n" + my);
+      yes(!my.isBlank() && !my.contains("\t"), e.title());
+    }
+    for (String title : MysqlExamples.BY_TITLE.keySet()) {
+      boolean found = false;
+      for (Examples.Example e : Examples.ALL) if (e.title().equals(title)) found = true;
+      yes(found, "MySQL 글의 제목이 예제에 없음: " + title);
+    }
   }
 }

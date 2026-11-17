@@ -40,7 +40,7 @@ public final class Patterns {
     RANK("누적 합 · 순위", "줄마다 앞에서부터 쌓인 합과 값 순위를 붙입니다(행 수는 그대로).", EnumSet.of(Field.TABLE, Field.VALUE, Field.ORDER)),
     DIFF("두 테이블 차이 비교", "두 테이블의 기준 칼럼 값 중 한쪽에만 있는 것을 봅니다(이관 · 백업 비교).", EnumSet.of(Field.TABLE, Field.TABLE2, Field.KEYS)),
     PIVOT("세로 → 가로 바꾸기", "상태 값마다 칸을 하나씩 만들어 한 줄에 놓습니다.", EnumSet.of(Field.TABLE, Field.GROUP, Field.STATUS, Field.STATUS_VALUES, Field.VALUE)),
-    UPSERT("있으면 수정, 없으면 넣기", "기준 칼럼으로 찾아 있으면 UPDATE, 없으면 INSERT 합니다(Oracle MERGE, PostgreSQL ON CONFLICT).", EnumSet.of(Field.TABLE, Field.KEYS, Field.COLS));
+    UPSERT("있으면 수정, 없으면 넣기", "기준 칼럼으로 찾아 있으면 UPDATE, 없으면 INSERT 합니다(Oracle MERGE, PostgreSQL ON CONFLICT, MySQL ON DUPLICATE KEY).", EnumSet.of(Field.TABLE, Field.KEYS, Field.COLS));
 
     public final String label;
     public final String description;
@@ -141,7 +141,7 @@ public final class Patterns {
           + "WITH base AS (\n    SELECT\n           " + a + ".*\n      FROM " + t + " " + a + "\n     WHERE 1 = 1\n)\n"
           + ", summary AS (\n    SELECT\n           " + group + "\n         , COUNT(*) AS CNT\n      FROM base\n     GROUP BY\n           " + group + "\n)\n"
           + "SELECT\n       s.*\n  FROM summary s\n ORDER BY\n       s.CNT DESC";
-      case HIERARCHY -> hierarchy(f, t, a, keys.get(0), name(db, f.parent()), oracle);
+      case HIERARCHY -> hierarchy(db, t, a, keys.get(0), name(db, f.parent()));
       case RANK -> "-- 누적 합 · 순위: " + order + " 순서로 쌓인 " + value + " 합계와 " + value + " 큰 순위(같은 값은 같은 순위)\n"
           + "SELECT\n       " + a + ".*\n     , SUM(" + a + "." + value + ") OVER (ORDER BY " + a + "." + order + ") AS CUM_" + bare(value) + "\n"
           + "     , RANK() OVER (ORDER BY " + a + "." + value + " DESC) AS RNK\n  FROM " + t + " " + a + "\n ORDER BY\n       " + a + "." + order;
@@ -162,30 +162,37 @@ public final class Patterns {
         yield "-- 세로 → 가로: " + group + " 마다 " + f.status() + " 값별 " + (value == null ? "건수" : value + " 합계") + "를 칸으로\n"
             + "SELECT\n" + list(items) + "  FROM " + t + " " + a + "\n GROUP BY\n       " + a + "." + group + "\n ORDER BY\n       " + a + "." + group;
       }
-      case UPSERT -> upsert(f, t, keys, cols(db, f.cols(), ""), oracle);
+      case UPSERT -> upsert(db, f, t, keys, cols(db, f.cols(), ""));
     };
   }
 
-  private static String hierarchy(Fill f, String t, String a, String id, String parent, boolean oracle) {
+  private static String hierarchy(DbKind db, String t, String a, String id, String parent) {
     String head = "-- 계층: " + parent + " 가 비어 있는 행(맨 위)부터 아래로. LVL 은 깊이, PATH 는 위에서부터의 경로\n";
-    if (oracle) {
+    if (db == DbKind.ORACLE) {
       return head + "SELECT\n       LEVEL AS LVL\n     , SYS_CONNECT_BY_PATH(" + a + "." + id + ", ' > ') AS PATH\n     , " + a + ".*\n  FROM " + t + " " + a + "\n"
           + " START WITH " + a + "." + parent + " IS NULL\n CONNECT BY PRIOR " + a + "." + id + " = " + a + "." + parent + "\n ORDER SIBLINGS BY\n       " + a + "." + id;
     }
     // 고리(자기 자신 · 서로를 부모로 가리키는 행)가 있으면 WITH RECURSIVE 는 끝없이 돈다. 경로에 이미 있는 ID 는 다시 펼치지 않는다.
     // Oracle CONNECT BY 는 고리에서 ORA-01436 으로 멈추므로 그대로 둔다.
+    // MySQL 은 CAST 에 VARCHAR 를 받지 않고(CHAR), 기본 설정에서 || 가 OR 라 CONCAT 으로 잇는다.
     String p = other(a, "p");
-    return head.replace("\n", "(고리는 한 번만 펼침)\n") + "WITH RECURSIVE tree AS (\n    SELECT\n           1 AS LVL\n         , CAST(" + a + "." + id + " AS VARCHAR(4000)) AS PATH\n         , " + a + ".*\n"
+    String text = db == DbKind.MYSQL ? "CHAR(4000)" : "VARCHAR(4000)";
+    return head.replace("\n", "(고리는 한 번만 펼침)\n") + "WITH RECURSIVE tree AS (\n    SELECT\n           1 AS LVL\n         , CAST(" + a + "." + id + " AS " + text + ") AS PATH\n         , " + a + ".*\n"
         + "      FROM " + t + " " + a + "\n     WHERE " + a + "." + parent + " IS NULL\n    UNION ALL\n    SELECT\n           " + p + ".LVL + 1\n"
-        + "         , CAST(" + p + ".PATH || ' > ' || " + a + "." + id + " AS VARCHAR(4000))\n         , " + a + ".*\n      FROM " + t + " " + a + "\n     INNER JOIN tree " + p + "\n        ON " + a + "." + parent + " = " + p + "." + id + "\n"
-        + "     WHERE (' > ' || " + p + ".PATH || ' > ') NOT LIKE ('% > ' || " + a + "." + id + " || ' > %')\n)\n"
+        + "         , CAST(" + concat(db, p + ".PATH", "' > '", a + "." + id) + " AS " + text + ")\n         , " + a + ".*\n      FROM " + t + " " + a + "\n     INNER JOIN tree " + p + "\n        ON " + a + "." + parent + " = " + p + "." + id + "\n"
+        + "     WHERE (" + concat(db, "' > '", p + ".PATH", "' > '") + ") NOT LIKE (" + concat(db, "'% > '", a + "." + id, "' > %'") + ")\n)\n"
         + "SELECT\n       tr.*\n  FROM tree tr\n ORDER BY\n       tr.PATH";
   }
 
-  private static String upsert(Fill f, String t, List<String> keys, List<String> cols, boolean oracle) {
+  /** 글 잇기. MySQL 은 CONCAT(기본 설정에서 || 는 OR), 그 밖에는 ||. */
+  private static String concat(DbKind db, String... parts) {
+    return db == DbKind.MYSQL ? "CONCAT(" + String.join(", ", parts) + ")" : String.join(" || ", parts);
+  }
+
+  private static String upsert(DbKind db, Fill f, String t, List<String> keys, List<String> cols) {
     List<String> all = new ArrayList<>(keys);
     all.addAll(cols);
-    if (oracle) {
+    if (db == DbKind.ORACLE) {
       List<String> src = new ArrayList<>();
       for (String c : all) src.add(place(f, c) + " AS " + c);
       List<String> set = new ArrayList<>();
@@ -197,6 +204,14 @@ public final class Patterns {
     }
     List<String> vals = new ArrayList<>();
     for (String c : all) vals.add(place(f, c));
+    if (db == DbKind.MYSQL) {
+      // 넣으려던 값은 VALUES(칼럼) 으로 부른다(8.0.20 부터 경고만 나오고 그대로 된다. 행 별칭 꼴은 8.0.19 미만에서 안 된다).
+      List<String> set = new ArrayList<>();
+      for (String c : cols) set.add(c + " = VALUES(" + c + ")");
+      return "-- 있으면 수정, 없으면 넣기: " + String.join(", ", keys) + " 로 찾습니다. 기준 칼럼에 PK 나 UNIQUE 제약이 있어야 합니다\n"
+          + "INSERT INTO " + t + " (" + String.join(", ", all) + ")\nVALUES (" + String.join(", ", vals) + ")\n"
+          + "    ON DUPLICATE KEY UPDATE\n       " + String.join("\n     , ", set);
+    }
     List<String> set = new ArrayList<>();
     for (String c : cols) set.add(c + " = EXCLUDED." + c);
     return "-- 있으면 수정, 없으면 넣기: " + String.join(", ", keys) + " 로 찾습니다. 기준 칼럼에 PK 나 UNIQUE 제약이 있어야 합니다\n"

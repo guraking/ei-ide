@@ -449,13 +449,13 @@ public final class QueryBuilder {
       case GE -> col + " >= " + value(kind, bind, c.kind(), name, c.value());
       case LT -> col + " < " + value(kind, bind, c.kind(), name, c.value());
       case LE -> col + " <= " + value(kind, bind, c.kind(), name, c.value());
-      case CONTAINS -> col + " LIKE " + like(bind, name, c.value(), true, true);
-      case STARTS -> col + " LIKE " + like(bind, name, c.value(), false, true);
-      case ENDS -> col + " LIKE " + like(bind, name, c.value(), true, false);
+      case CONTAINS -> col + " LIKE " + like(kind, bind, name, c.value(), true, true);
+      case STARTS -> col + " LIKE " + like(kind, bind, name, c.value(), false, true);
+      case ENDS -> col + " LIKE " + like(kind, bind, name, c.value(), true, false);
       case BETWEEN -> col + " BETWEEN " + value(kind, bind, c.kind(), name + FROM_SUFFIX, c.value())
           + " AND " + value(kind, bind, c.kind(), name + TO_SUFFIX, c.value2());
       case DATE_RANGE -> col + " >= " + value(kind, bind, ColKind.DATE, name + FROM_SUFFIX, c.value())
-          + "\n" + AND + col + " < " + value(kind, bind, ColKind.DATE, name + TO_SUFFIX, c.value2()) + " + 1";
+          + "\n" + AND + col + " < " + nextDay(kind, value(kind, bind, ColKind.DATE, name + TO_SUFFIX, c.value2()));
       case IN, NOT_IN -> col + (c.op() == Op.NOT_IN ? " NOT IN " : " IN ") + list(kind, bind, c.kind(), name + LIST_SUFFIX, c.value());
       case IS_NULL -> col + " IS NULL";
       case NOT_NULL -> col + " IS NOT NULL";
@@ -494,12 +494,19 @@ public final class QueryBuilder {
     return NUMBER.matcher(v).matches() ? v : quote(v);
   }
 
-  private static String like(Bind bind, String name, String raw, boolean before, boolean after) {
+  /** 날짜 식의 다음 날. MySQL 은 DATE + 1 이 숫자(20261130 + 1)가 되므로 DATE_ADD 를 쓴다. */
+  static String nextDay(DbKind kind, String date) {
+    return kind == DbKind.MYSQL ? "DATE_ADD(" + date + ", INTERVAL 1 DAY)" : date + " + 1";
+  }
+
+  /** LIKE 값. 이름 자리에 % 를 붙일 때 MySQL 은 CONCAT 을 쓴다(기본 설정에서 || 는 OR 다). */
+  private static String like(DbKind kind, Bind bind, String name, String raw, boolean before, boolean after) {
     if (bind == Bind.VALUE) {
       String v = raw == null ? "" : raw.strip();
       return quote((before ? "%" : "") + v + (after ? "%" : ""));
     }
     String place = bind == Bind.MYBATIS ? "#{" + name + "}" : ":" + name;
+    if (kind == DbKind.MYSQL) return "CONCAT(" + (before ? "'%', " : "") + place + (after ? ", '%'" : "") + ")";
     return (before ? "'%' || " : "") + place + (after ? " || '%'" : "");
   }
 
