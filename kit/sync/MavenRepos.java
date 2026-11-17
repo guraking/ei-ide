@@ -37,7 +37,7 @@ final class MavenRepos {
   private static final int RETRY_LIMIT = 100;
   // 처음 쓰는 Maven 의 첫 pom 연결(신뢰 확인 · pom 읽기 · 부모 pom 받기)을 기다리는 횟수(합쳐 30분). 느린 사내망 · 인터넷 없는 PC 를 덮는다.
   private static final int LINK_RETRY_LIMIT = 600;
-  // 닫을 때 우리가 Maven 무시 목록에 넣은 pom 경로(프로젝트 설정). 열 때 이것만 푼다(open).
+  // 닫을 때 우리가 Maven 무시 목록에 넣은 pom 경로와 새로 닫은 저장소 폴더(markClosed)(프로젝트 설정). 열 때 이 안의 pom 만 푼다(open).
   private static final String IGNORED_KEY = "kinggura.sync.mavenIgnored";
 
   private MavenRepos() {
@@ -55,6 +55,20 @@ final class MavenRepos {
   /** 폴더가 없어져 지운 닫은 저장소의 Maven 무시를 푼다(CloseRepoAction.forgetClosed). 열기와 같되 「다시 읽는 중」 알림은 띄우지 않는다. */
   static void forget(Project project, Collection<String> roots) {
     setClosed(project, List.copyOf(roots), false, false, 0);
+  }
+
+  /**
+   * 새로 닫은 저장소 폴더를 우리 기록(IGNORED_KEY)에 넣는다. setClosed 보다 먼저 부른다. EDT.
+   * 그 안 pom 을 사용자가 이미 모두 무시했거나 Maven 목록이 늦게 읽혀 setClosed 가 pom 을 하나도 기록하지 못해도,
+   * 열 때 이 폴더를 「기록 없음(옛 판에서 닫음)」으로 보지 않아 사용자가 무시한 pom 을 풀지 않는다(toUnignore). 폴더 기록은 열 때 pom 기록과 함께 지운다.
+   */
+  static void markClosed(Project project, Collection<String> roots) {
+    if (roots.isEmpty()) return;
+    List<String> ours = ignoredByUs(project);
+    for (String root : roots) {
+      if (!containsPath(ours, root)) ours.add(root);
+    }
+    PropertiesComponent.getInstance(project).setList(IGNORED_KEY, ours);
   }
 
   private static void setClosed(Project project, List<String> roots, boolean closed, boolean notify, int attempt) {
@@ -97,7 +111,7 @@ final class MavenRepos {
 
   /**
    * 이 폴더들 안의 pom 무시를 푼다. 닫을 때 우리가 무시한 pom(IGNORED_KEY)만 풀고, 사용자가 Maven 창에서 직접 무시한 pom 은 그대로 둔다.
-   * 우리 기록이 하나도 없는 폴더(기록을 남기기 전 판에서 닫음)는 그 안의 무시를 모두 푼다.
+   * 우리 기록(pom 이나 닫은 폴더 표시)이 하나도 없는 폴더(기록을 남기기 전 판에서 닫음)는 그 안의 무시를 모두 푼다.
    * Maven 목록이 아니라 무시 경로 목록을 보므로, 폴더를 지워 Maven 목록에서 빠진 pom 도 풀린다(같은 자리에 다시 받은 경우).
    */
   private static void open(Project project, MavenProjectsManager manager, List<String> roots, boolean notify) {
@@ -170,7 +184,7 @@ final class MavenRepos {
     if (!still.isEmpty()) manager.addManagedFilesOrUnignore(still);
   }
 
-  /** 무시 경로(ignored) 중 열 폴더(roots) 안이고, 우리가 무시한 것(ours)이거나 그 폴더에 우리 기록이 없는 것. */
+  /** 무시 경로(ignored) 중 열 폴더(roots) 안이고, 우리가 무시한 것(ours)이거나 그 폴더(자신 포함)에 우리 기록이 없는 것. */
   static List<String> toUnignore(List<String> ignored, List<String> ours, List<String> roots) {
     List<String> result = new ArrayList<>();
     for (String path : ignored) {
