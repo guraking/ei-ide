@@ -106,7 +106,7 @@
       <add-to-group group-id="Git.ContextMenu" anchor="after" relative-to-action="KingGura.SynchronizeWorkspace"/>
     </action>
     <!-- 지금 브랜치로 GitLab 새 Merge Request 페이지를 연다(받는 쪽은 설정 → 동기화 창). 동기화 창 저장소 줄 우클릭에도 있다. -->
-    <action id="KingGura.MergeRequest" class="kinggura.sync.MergeRequest" icon="AllIcons.Vcs.Vendors.Gitlab">
+    <action id="KingGura.MergeRequest" class="kinggura.sync.MergeRequest">
       <add-to-group group-id="Git.MainMenu" anchor="after" relative-to-action="KingGura.ReverseMerge"/>
     </action>
   </actions>
