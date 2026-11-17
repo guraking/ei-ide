@@ -86,6 +86,13 @@
     <applicationConfigurable parentId="tools" instance="ei.db.console.Backups$Page" id="ei.db.backup"
                              key="backup.settings.title" bundle="messages.EiDbBundle"/>
     <!-- ERD 도구 창은 ErdView 가 처음 열 때 등록한다. -->
+    <!-- DTO 필드 전구 「매퍼에 이 필드 넣기」 -->
+    <intentionAction>
+      <language>JAVA</language>
+      <className>ei.db.mybatis.ColumnSyncIntention</className>
+      <category>MyBatis</category>
+      <skipBeforeAfter>true</skipBeforeAfter>
+    </intentionAction>
   </extensions>
 
   <applicationListeners>
@@ -200,6 +207,11 @@
     </action>
     <action id="ei.db.CodeFlow.Impact" class="ei.db.mybatis.CodeFlowAction$Impact" icon="AllIcons.Hierarchy.Supertypes">
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="ei.db.CodeFlow.Flow"/>
+    </action>
+    <!-- 매퍼 편집기 우클릭(테이블 이름 위): DB 바뀐 것 코드에 맞추기 -->
+    <action id="EiDb.MyBatis.ColumnSync" class="ei.db.mybatis.ColumnSyncAction" icon="AllIcons.Actions.Refresh">
+      <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EiDb.MyBatis.ColumnRename"/>
+      <add-to-group group-id="KG.SourceMenu" anchor="last"/>
     </action>
   </actions>
 </idea-plugin>

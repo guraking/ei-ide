@@ -304,7 +304,7 @@ final class ColumnRename {
   }
 
   /** 요소 여는 태그 안 key 속성 값의 원래 글자 범위 [시작, 끝). 없으면 null. */
-  private static int[] attrRange(CharSequence text, Node el, String key) {
+  static int[] attrRange(CharSequence text, Node el, String key) {
     int i = el.start + 1 + el.name.length();
     int limit = text.length();
     while (i < limit) {
