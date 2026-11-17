@@ -416,7 +416,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
       where.add(name);
       where.add(dim(root.getPath()));
 
-      // 단계 1: From ⇄ Into. 두 상자가 창 너비를 반씩 나눈다. From 은 원격 브랜치를 합치고, Into 는 원격에 맞춘 로컬 브랜치에 합친 뒤 같은 원격 브랜치로 푸시한다.
+      // 단계 1: From → Into. 두 상자가 창 너비를 반씩 나눈다. From 은 원격 브랜치를 합치고, Into 는 원격에 맞춘 로컬 브랜치에 합친 뒤 같은 원격 브랜치로 푸시한다.
       fromBox.setToolTipText(SyncBundle.message("rmerge.from"));
       intoBox.setToolTipText(SyncBundle.message("rmerge.into"));
       JPanel branches = new JPanel(new GridBagLayout());
@@ -426,16 +426,22 @@ public final class ReverseMergeAction extends DumbAwareAction {
       branches.add(fromBox, c);
       c.weightx = 0;
       c.insets = JBUI.insets(0, GAP);
-      // 가운데 단추: From 과 Into 를 맞바꾸고 바로 다시 비교한다.
+      // 가운데 화살표: 왼쪽(From)에서 오른쪽(Into)으로 가져온다는 방향.
+      JBLabel arrow = new JBLabel(AllIcons.General.ArrowRight);
+      arrow.setToolTipText(SyncBundle.message("rmerge.direction"));
+      branches.add(arrow, c);
+      c.weightx = 1;
+      c.insets = JBUI.emptyInsets();
+      branches.add(intoBox, c);
+      // Into 뒤 단추: From 과 Into 를 맞바꾸고 바로 다시 비교한다.
+      c.weightx = 0;
+      c.insets = JBUI.insetsLeft(GAP);
       branches.add(new InplaceButton(SyncBundle.message("rmerge.swap"), AllIcons.Actions.SwapPanels, e -> {
         Object from = fromBox.getSelectedItem();
         fromBox.setSelectedItem(intoBox.getSelectedItem());
         intoBox.setSelectedItem(from);
         reload(true);
       }), c);
-      c.weightx = 1;
-      c.insets = JBUI.emptyInsets();
-      branches.add(intoBox, c);
       // Compare 는 브랜치 줄 오른쪽 끝, 저장소 띠와 같은 파랑 바탕으로 눈에 띄게.
       JButton compare = new JButton(SyncBundle.message("rmerge.compare"));
       SyncPanel.tint(compare, STEP_COLOR);
