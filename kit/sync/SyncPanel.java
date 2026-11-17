@@ -994,6 +994,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     if (git) {
       items.add(Separator.getInstance());
       items.add(item(SyncBundle.message("sync.menu.merge"), AllIcons.Vcs.Branch, () -> openReverseMerge(repo)));
+      addStock(items, List.of(MergeRequest.ID));
       items.add(undoItem(repo));
     }
     items.add(Separator.getInstance());
