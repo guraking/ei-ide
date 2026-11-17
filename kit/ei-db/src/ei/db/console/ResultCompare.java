@@ -38,8 +38,8 @@ import java.awt.Dimension;
 import java.util.ArrayList;
 import java.util.List;
 
-/** 「결과」 창의 두 조회 탭을 비교하는 창. 탭 우클릭 「다른 결과와 비교…」로 연다. 불러온 행만 비교한다. */
-final class ResultCompare extends DialogWrapper {
+/** 「결과」 창의 두 조회 탭을 비교하는 창. 탭 우클릭 「다른 결과와 비교…」로 연다(매퍼 「고치기 전과 비교」는 show). 불러온 행만 비교한다. */
+public final class ResultCompare extends DialogWrapper {
 
   /** 처음 열 때 화면에 대한 크기 몫. 사용자가 바꾼 크기는 DIMENSION_KEY 로 기억한다. */
   private static final double FIRST_WIDTH_RATIO = 0.55;
@@ -91,6 +91,19 @@ final class ResultCompare extends DialogWrapper {
     }
   }
 
+  /** 결과 탭 없이 두 조회 결과를 견주는 창을 연다. 기준 칼럼 기본값은 첫 공통 칼럼. 화면 스레드에서 부른다. */
+  public static void show(Project project, QueryResult left, String leftLabel, QueryResult right, String rightLabel) {
+    new ResultCompare(project, left, leftLabel, right, rightLabel, List.of()).show();
+  }
+
+  /** 칼럼 이름이 모두 같고(대소문자 무시) 행 순서대로 모든 값이 같으면 true. */
+  public static boolean sameRows(QueryResult a, QueryResult b) {
+    List<String> common = ResultDiff.commonColumns(a.columns(), b.columns());
+    if (common.size() != a.columns().size() || common.size() != b.columns().size()) return false;
+    ResultDiff.Outcome o = ResultDiff.compare(a.columns(), a.rows(), b.columns(), b.rows(), List.of());
+    return o.count(ResultDiff.Kind.SAME) == o.rows().size();
+  }
+
   private static ResultPanel queryPanel(Content content) {
     return content != null && content.getComponent() instanceof ResultPanel p && p.result().isQuery() ? p : null;
   }
@@ -127,13 +140,18 @@ final class ResultCompare extends DialogWrapper {
   };
 
   private ResultCompare(Project project, ResultPanel left, String leftLabel, ResultPanel right, String rightLabel) {
+    this(project, left.result(), leftLabel, right.result(), rightLabel, List.of(left, right));
+  }
+
+  /** pkSources 는 기준 칼럼 기본값(PK)을 물을 결과 탭. 비었으면 첫 공통 칼럼. */
+  private ResultCompare(Project project, QueryResult left, String leftLabel, QueryResult right, String rightLabel, List<ResultPanel> pkSources) {
     super(project, false);
-    this.left = left.result();
-    this.right = right.result();
+    this.left = left;
+    this.right = right;
     this.leftLabel = leftLabel;
     this.rightLabel = rightLabel;
     this.common = ResultDiff.commonColumns(this.left.columns(), this.right.columns());
-    List<String> keys = defaultKeys(left, right);
+    List<String> keys = defaultKeys(pkSources);
     keyList.setItems(common, name -> name);
     for (String k : keys) keyList.setItemSelected(k, true);
     keyList.setCheckBoxListListener((index, value) -> refresh());
@@ -144,8 +162,8 @@ final class ResultCompare extends DialogWrapper {
   }
 
   /** 기준 칼럼 기본값: 한쪽 결과가 PK 를 알고 그 칼럼이 모두 공통이면 PK, 아니면 첫 공통 칼럼. 공통 칼럼이 없으면 없음(행 순서). */
-  private List<String> defaultKeys(ResultPanel a, ResultPanel b) {
-    for (ResultPanel p : List.of(a, b)) {
+  private List<String> defaultKeys(List<ResultPanel> pkSources) {
+    for (ResultPanel p : pkSources) {
       boolean[] pk = p.knownPkColumns();
       if (pk == null) continue;
       List<String> keys = new ArrayList<>();
