@@ -29,7 +29,6 @@ import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.wm.WindowManager;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.ui.ComboboxSpeedSearch;
-import com.intellij.ui.InplaceButton;
 import com.intellij.ui.JBColor;
 import com.intellij.ui.ScreenUtil;
 import com.intellij.ui.ScrollPaneFactory;
@@ -436,12 +435,14 @@ public final class ReverseMergeAction extends DumbAwareAction {
       // Into 뒤 단추: From 과 Into 를 맞바꾸고 바로 다시 비교한다.
       c.weightx = 0;
       c.insets = JBUI.insetsLeft(GAP);
-      branches.add(new InplaceButton(SyncBundle.message("rmerge.swap"), AllIcons.Actions.SwapPanels, e -> {
+      JButton swap = new JButton(SyncBundle.message("rmerge.swap"), AllIcons.Actions.SwapPanels);
+      swap.addActionListener(e -> {
         Object from = fromBox.getSelectedItem();
         fromBox.setSelectedItem(intoBox.getSelectedItem());
         intoBox.setSelectedItem(from);
         reload(true);
-      }), c);
+      });
+      branches.add(swap, c);
       // Compare 는 브랜치 줄 오른쪽 끝, 저장소 띠와 같은 파랑 바탕으로 눈에 띄게.
       JButton compare = new JButton(SyncBundle.message("rmerge.compare"));
       SyncPanel.tint(compare, STEP_COLOR);
