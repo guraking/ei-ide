@@ -436,7 +436,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
       // Into 뒤 단추: From 과 Into 를 맞바꾸고 바로 다시 비교한다.
       c.weightx = 0;
       c.insets = JBUI.insetsLeft(GAP);
-      JButton swap = new JButton(SyncBundle.message("rmerge.swap"), IconUtil.colorize(AllIcons.Actions.SwapPanels, Color.WHITE));
+      JButton swap = new JButton(SyncBundle.message("rmerge.swap"), IconUtil.colorize(AllIcons.Actions.SwapPanels, Color.WHITE, false, false));
       SyncPanel.tint(swap, SyncPanel.RESOLVE_BG);
       swap.addActionListener(e -> {
         Object from = fromBox.getSelectedItem();
