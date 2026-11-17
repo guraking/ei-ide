@@ -10,6 +10,8 @@
 
   <depends>com.intellij.modules.platform</depends>
   <depends>com.intellij.java</depends>
+  <!-- 고치기 전(마지막 커밋) 글 읽기 · 바뀐 파일 목록(ChangeListManager). Git · SVN 같음. -->
+  <depends>com.intellij.modules.vcs</depends>
   <!-- 정규식 작업대(boot-servers) 옆에 붙는 메뉴. boot-servers 가 먼저 읽혀야 그 자리를 찾는다. -->
   <depends optional="true" config-file="ei-db-bootservers.xml">local.bootservers</depends>
 
