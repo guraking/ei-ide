@@ -28,17 +28,28 @@ public final class SqlParts {
     public String ref() { return alias != null ? alias : simpleName(name); }
   }
 
+  /**
+   * 이름 하나: 맨 이름 · "따옴표 이름" · `백틱 이름`(MySQL). 정규식 조각이다(묶음 없음).
+   * 가린 글(mask)에서는 따옴표 안이 이름 글자뿐이라 이 꼴로 잡힌다.
+   */
+  public static final String NAME = "(?:[A-Za-z_][\\w$#]*|\"[^\"]+\"|`[^`]+`)";
+  /**
+   * 키워드 앞에 오면 키워드가 아닌 글자. " · ` 는 따옴표 이름의 첫 낱말("FROM" · `order`)을 키워드로 보지 않게 한다.
+   * 따옴표 안의 공백은 mask 가 QUOTED_FILL 로 바꾸므로 둘째 낱말부터는 이름 글자 뒤라 걸리지 않는다.
+   */
+  private static final String NOT_BEFORE_KEYWORD = "(?<![\\w$#.\"`])";
+
   private static final Pattern KEYWORD = Pattern.compile(
-      "(?<![\\w$#.])(GROUP\\s+BY|ORDER\\s+(?:SIBLINGS\\s+)?BY|CONNECT\\s+BY|START\\s+WITH|UNION\\s+ALL|UNION|MINUS|EXCEPT|INTERSECT"
+      NOT_BEFORE_KEYWORD + "(GROUP\\s+BY|ORDER\\s+(?:SIBLINGS\\s+)?BY|CONNECT\\s+BY|START\\s+WITH|UNION\\s+ALL|UNION|MINUS|EXCEPT|INTERSECT"
       + "|FETCH|LIMIT|OFFSET|FOR\\s+UPDATE|WITH|SELECT|FROM|WHERE|HAVING|UPDATE|DELETE|INSERT|MERGE|SET|VALUES|INTO|USING)(?![\\w$#])");
   /** 문장 맨 앞에서만 절로 보는 키워드(START WITH · FOR UPDATE · DO UPDATE 와 가르려고). */
   private static final Set<String> LEADING = Set.of("WITH", "UPDATE", "DELETE", "INSERT", "MERGE");
   public static final Set<String> SET_OPERATORS = Set.of("UNION", "UNION ALL", "MINUS", "EXCEPT", "INTERSECT");
   private static final Pattern BLANKS = Pattern.compile("\\s+");
   private static final Pattern JOIN = Pattern.compile(
-      "(?<![\\w$#])(?:NATURAL\\s+)?(INNER\\s+|CROSS\\s+|(?:LEFT|RIGHT|FULL)(?:\\s+OUTER)?\\s+)?JOIN(?![\\w$#])");
-  private static final Pattern ON = Pattern.compile("(?<![\\w$#])ON(?![\\w$#])");
-  private static final Pattern AND = Pattern.compile("(?<![\\w$#])(AND|BETWEEN)(?![\\w$#])");
+      NOT_BEFORE_KEYWORD + "(?:NATURAL\\s+)?(INNER\\s+|CROSS\\s+|(?:LEFT|RIGHT|FULL)(?:\\s+OUTER)?\\s+)?JOIN(?![\\w$#])");
+  private static final Pattern ON = Pattern.compile(NOT_BEFORE_KEYWORD + "ON(?![\\w$#])");
+  private static final Pattern AND = Pattern.compile(NOT_BEFORE_KEYWORD + "(AND|BETWEEN)(?![\\w$#])");
   private static final Pattern NESTED_SELECT = Pattern.compile("\\(\\s*(SELECT|WITH)\\b");
   private static final Pattern FUNCTION_CALL = Pattern.compile("(?:([A-Za-z_]+)\\s+)?(?<![\\w$#.\"])([A-Za-z_][\\w$#]*(?:\\s*\\.\\s*[A-Za-z_][\\w$#]*)*)\\s*\\(");
   private static final Set<String> NOT_FUNCTION = Set.of("IN", "EXISTS", "VALUES", "AS", "ON", "USING", "OVER", "AND", "OR", "NOT", "WHEN", "THEN",
@@ -46,7 +57,7 @@ public final class SqlParts {
       "BETWEEN", "UNION", "MINUS", "EXCEPT", "INTERSECT", "RETURN", "RETURNING", "CASE", "END", "SET", "PIVOT", "UNPIVOT", "FOR", "WITH", "PRIOR");
   private static final Set<String> TABLE_BEFORE = Set.of("INTO", "TABLE", "VIEW", "INDEX", "REFERENCES", "ON");
   private static final Pattern COLUMN_REF = Pattern.compile("(?<![\\w$#.\"])[A-Za-z_][\\w$#]*\\s*\\.\\s*([A-Za-z_][\\w$#]*)(?![\\w$#])(?!\\s*\\()");
-  private static final Pattern REF = Pattern.compile("(?<![\\w$#.\"])([A-Za-z_][\\w$#]*|\"[^\"]+\")\\s*\\.\\s*(?=[A-Za-z_\"*])");
+  private static final Pattern REF = Pattern.compile("(?<![\\w$#.\"`])(" + NAME + ")\\s*\\.\\s*(?=[A-Za-z_\"`*])");
   private static final Set<String> NOT_ALIAS = Set.of("ON", "WHERE", "USING", "LEFT", "RIGHT", "INNER", "OUTER", "FULL", "CROSS",
       "JOIN", "NATURAL", "GROUP", "ORDER", "CONNECT", "START", "UNION", "MINUS", "EXCEPT", "INTERSECT", "FETCH", "LIMIT", "OFFSET", "FOR",
       "SET", "PARTITION", "SAMPLE", "WITH", "HAVING", "WINDOW", "LATERAL", "PIVOT", "UNPIVOT");
@@ -54,13 +65,14 @@ public final class SqlParts {
   /** Oracle q'[ ]' 글의 여는 구분자와 짝인 닫는 구분자. 그 밖의 구분자는 자신이 닫는다. */
   private static final String Q_OPEN = "([{<";
   private static final String Q_CLOSE = ")]}>";
-  /** 따옴표 이름 안에서 괄호 · 따옴표 · 주석 표시 대신 놓는 글자(이름 글자로 보여 절 · 괄호 깊이를 바꾸지 않는다). */
+  /** 따옴표 이름 안에서 괄호 · 따옴표 · 주석 표시 · 공백 대신 놓는 글자(이름 글자로 보여 절 · 괄호 깊이를 바꾸지 않는다). */
   private static final char QUOTED_FILL = '_';
-  private static final String QUOTED_SPECIAL = "()'-/*;,";
+  private static final String QUOTED_SPECIAL = "()'-/*;,\"` \t\r";
 
   /**
    * 문자열('' 이스케이프 · Oracle q'[ ]') · 줄 주석 · 블록 주석을 공백으로 가린다. 따옴표 문자와 줄바꿈은 남겨 위치 · 줄이 같다.
-   * 따옴표 이름("A(B")은 그대로 두되 안의 괄호 · 따옴표 · 주석 표시 · ; · , 만 QUOTED_FILL 로 바꾼다.
+   * 따옴표 이름("A(B") · MySQL 백틱 이름(`a(b`)은 이름 글자를 그대로 두되 안의 괄호 · 따옴표 · 주석 표시 · ; · , · 공백을 QUOTED_FILL 로 바꾼다.
+   * 이름 안에 겹쳐 쓴 따옴표("A""B" · `a``b`)는 이름의 일부다. 줄바꿈은 남긴다.
    */
   public static String mask(String sql) {
     char[] out = sql.toCharArray();
@@ -76,11 +88,11 @@ public final class SqlParts {
         int stop = end < 0 ? n : end + 1;
         for (i += 2; i < stop; i++) if (out[i] != '\n') out[i] = ' ';
         i++;
-      } else if (ch == '"') {
+      } else if (ch == '"' || ch == '`') {
         i++;
         while (i < n) {
-          if (sql.charAt(i) == '"') {
-            if (i + 1 < n && sql.charAt(i + 1) == '"') { i += 2; continue; }
+          if (sql.charAt(i) == ch) {
+            if (i + 1 < n && sql.charAt(i + 1) == ch) { out[i] = QUOTED_FILL; out[i + 1] = QUOTED_FILL; i += 2; continue; }
             break;
           }
           if (QUOTED_SPECIAL.indexOf(out[i]) >= 0) out[i] = QUOTED_FILL;
@@ -334,7 +346,7 @@ public final class SqlParts {
     String masked = blankNested(mask(cond));
     Set<String> out = new java.util.LinkedHashSet<>();
     Matcher m = REF.matcher(masked);
-    while (m.find()) out.add(m.group(1).replace("\"", "").toUpperCase(Locale.ROOT));
+    while (m.find()) out.add(unquote(m.group(1)).toUpperCase(Locale.ROOT));
     return out;
   }
 
@@ -353,7 +365,7 @@ public final class SqlParts {
   /** 문장에 나온 표 하나. schema 는 「스키마.표」 의 스키마(없으면 null), name 은 쓴 그대로(따옴표 포함), alias 는 별칭(없으면 null). */
   public record TableRef(String schema, String name, String alias) {
     /** 따옴표를 뗀 표 이름. */
-    public String bare() { return name.replace("\"", ""); }
+    public String bare() { return unquote(name); }
   }
 
   /**
@@ -424,8 +436,13 @@ public final class SqlParts {
 
   /** 스키마 · 따옴표를 뗀 이름. */
   public static String simpleName(String name) {
-    String n = name.replace("\"", "");
+    String n = unquote(name);
     return n.substring(n.lastIndexOf('.') + 1);
+  }
+
+  /** 따옴표 · 백틱을 뗀 이름. */
+  public static String unquote(String name) {
+    return name.replace("\"", "").replace("`", "");
   }
 
   private static boolean isWordChar(char c) { return Character.isLetterOrDigit(c) || c == '_' || c == '$' || c == '#'; }

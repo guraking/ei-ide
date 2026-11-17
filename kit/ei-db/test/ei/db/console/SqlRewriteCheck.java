@@ -28,6 +28,7 @@ public class SqlRewriteCheck {
 
     // SUBSTR 앞부분 = 값 → LIKE. 문자 길이가 다르면 뜻이 달라 그대로.
     eq(fix("WHERE SUBSTR(CODE, 1, 3) = 'ABC'"), "WHERE CODE LIKE 'ABC' || '%'");
+    eq(SqlRewrite.rewrite("WHERE SUBSTRING(CODE, 1, 3) = 'ABC'", DbKind.MYSQL).sql(), "WHERE CODE LIKE CONCAT('ABC', '%')");
     eq(fix("WHERE SUBSTR(CODE, 1, 3) = 'AB'"), "WHERE SUBSTR(CODE, 1, 3) = 'AB'");
     eq(fix("WHERE SUBSTR(CODE, 2, 3) = 'ABC'"), "WHERE SUBSTR(CODE, 2, 3) = 'ABC'");
 

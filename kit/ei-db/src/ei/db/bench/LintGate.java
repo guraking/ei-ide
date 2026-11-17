@@ -1,6 +1,5 @@
 package ei.db.bench;
 
-import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DoNotAskOption;
 import com.intellij.openapi.ui.MessageDialogBuilder;
@@ -10,7 +9,7 @@ import java.util.List;
 
 /**
  * 실행 전 쿼리 점검(SqlLint)을 실행 확인창에 붙인다. 걸리는 것이 없으면 묻지 않는다.
- * 「다시 묻지 않기」 를 고르면 KEY 를 끄고, 쿼리 작업대의 「실행 전 쿼리 점검」 으로 다시 켠다.
+ * 「다시 묻지 않기」 를 고르면 그 프로젝트의 KEY 를 끄고, 쿼리 작업대의 「실행 전 쿼리 점검」 으로 다시 켠다.
  */
 public final class LintGate {
   private LintGate() {}
@@ -18,13 +17,13 @@ public final class LintGate {
   /** 켜짐(기본) · 꺼짐 저장 열쇠. */
   static final String KEY = "ei.db.bench.lintBeforeRun";
 
-  static boolean enabled() { return PropertiesComponent.getInstance().getBoolean(KEY, true); }
+  static boolean enabled(Project project) { return BenchSettings.getBoolean(project, KEY, true); }
 
-  static void setEnabled(boolean on) { PropertiesComponent.getInstance().setValue(KEY, on, true); }
+  static void setEnabled(Project project, boolean on) { BenchSettings.set(project, KEY, on); }
 
   /** 실행해도 되면 true. 점검이 꺼졌거나 걸린 것이 없으면 묻지 않고 true. */
   public static boolean confirm(Project project, String sql) {
-    if (!enabled()) return true;
+    if (!enabled(project)) return true;
     List<SqlLint.Issue> issues;
     try {
       issues = SqlLint.check(sql);
@@ -41,7 +40,7 @@ public final class LintGate {
         .doNotAsk(new DoNotAskOption.Adapter() {
           @Override
           public void rememberChoice(boolean isSelected, int exitCode) {
-            if (isSelected) setEnabled(false);
+            if (isSelected) setEnabled(project, false);
           }
         })
         .ask(project);

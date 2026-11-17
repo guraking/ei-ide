@@ -31,10 +31,10 @@ public final class SqlLint {
   private static final Pattern OVER = Pattern.compile("(?<![\\w$#])OVER\\s*\\(");
   private static final Pattern EQ_NULL = Pattern.compile("(=|<>|!=)\\s*NULL(?![\\w$#])");
   private static final Pattern NOT_IN_SELECT = Pattern.compile("(?<![\\w$#])NOT\\s+IN\\s*\\(\\s*SELECT\\b");
-  private static final Pattern SIMPLE_COLUMN = Pattern.compile("((?:[A-Za-z_][\\w$#]*|\"[^\"]+\")\\s*\\.\\s*)?([A-Za-z_][\\w$#]*|\"[^\"]+\")");
-  private static final Pattern AS_ALIAS = Pattern.compile("(?is)^(.*?)(?:\\s+AS)?\\s+([A-Za-z_][\\w$#]*|\"[^\"]+\")$");
-  private static final Pattern PLUS_OWNER = Pattern.compile("([A-Za-z_][\\w$#]*|\"[^\"]+\")\\s*\\.\\s*[A-Za-z_\"][\\w$#\"]*\\s*\\(\\s*\\+\\s*\\)");
-  private static final Pattern EQUALS = Pattern.compile("^\\s*([A-Za-z_][\\w$#]*|\"[^\"]+\")\\s*\\.\\s*([A-Za-z_][\\w$#]*|\"[^\"]+\")\\s*(?:\\(\\s*\\+\\s*\\))?\\s*=\\s*([A-Za-z_][\\w$#]*|\"[^\"]+\")\\s*\\.\\s*([A-Za-z_][\\w$#]*|\"[^\"]+\")\\s*(?:\\(\\s*\\+\\s*\\))?\\s*$");
+  private static final Pattern SIMPLE_COLUMN = Pattern.compile("(" + SqlParts.NAME + "\\s*\\.\\s*)?(" + SqlParts.NAME + ")");
+  private static final Pattern AS_ALIAS = Pattern.compile("(?is)^(.*?)(?:\\s+AS)?\\s+(" + SqlParts.NAME + ")$");
+  private static final Pattern PLUS_OWNER = Pattern.compile("(" + SqlParts.NAME + ")\\s*\\.\\s*[A-Za-z_\"`][\\w$#\"`]*\\s*\\(\\s*\\+\\s*\\)");
+  private static final Pattern EQUALS = Pattern.compile("^\\s*(" + SqlParts.NAME + ")\\s*\\.\\s*(" + SqlParts.NAME + ")\\s*(?:\\(\\s*\\+\\s*\\))?\\s*=\\s*(" + SqlParts.NAME + ")\\s*\\.\\s*(" + SqlParts.NAME + ")\\s*(?:\\(\\s*\\+\\s*\\))?\\s*$");
   private static final Set<String> CONSTANTS = Set.of("NULL", "SYSDATE", "SYSTIMESTAMP", "CURRENT_DATE", "CURRENT_TIMESTAMP", "ROWNUM", "LEVEL", "USER");
 
   public static List<Issue> check(String sql) {
@@ -104,7 +104,7 @@ public final class SqlLint {
   }
 
   private static String unquote(String c, Matcher m, int group) {
-    return c.substring(m.start(group), m.end(group)).replace("\"", "");
+    return SqlParts.unquote(c.substring(m.start(group), m.end(group)));
   }
 
   /** 첫 표에서 잇는 조건을 따라 닿지 않는 표의 이름(별칭). CROSS JOIN 은 일부러 쓴 것이라, LATERAL · 표 함수는 잇는 조건이 안쪽(인자)에 있어 뺀다. 표가 하나면 빈 목록. */
@@ -200,7 +200,7 @@ public final class SqlLint {
   }
 
   private static String key(String s) {
-    return s.replaceAll("\\s+", "").replace("\"", "").toUpperCase(Locale.ROOT);
+    return SqlParts.unquote(s.replaceAll("\\s+", "")).toUpperCase(Locale.ROOT);
   }
 
   private static String last(String s) {
@@ -208,6 +208,6 @@ public final class SqlLint {
   }
 
   private static String norm(String ref) {
-    return ref.replace("\"", "").toUpperCase(Locale.ROOT);
+    return SqlParts.unquote(ref).toUpperCase(Locale.ROOT);
   }
 }

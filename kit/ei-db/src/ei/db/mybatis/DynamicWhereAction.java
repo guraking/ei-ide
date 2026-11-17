@@ -1,5 +1,6 @@
 package ei.db.mybatis;
 
+import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.ide.util.TreeClassChooser;
 import com.intellij.ide.util.TreeClassChooserFactory;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
@@ -18,6 +19,9 @@ import com.intellij.psi.PsiClassType;
 import com.intellij.psi.PsiField;
 import com.intellij.psi.PsiMethod;
 import com.intellij.psi.PsiParameter;
+import ei.db.DbConfig;
+import ei.db.DbKind;
+import ei.db.DbSettings;
 import ei.db.EiDbBundle;
 import ei.db.Notify;
 import org.jetbrains.annotations.NotNull;
@@ -88,9 +92,12 @@ public final class DynamicWhereAction extends AnAction {
       Notify.error(project, EiDbBundle.message("dynamicwhere.document.changed"));
       return;
     }
+    // 매퍼만 봐서는 DB 를 모른다. 마지막으로 MyBatis 실행에 쓴 접속이 MySQL 이면 MySQL 꼴, 아니면 Oracle · PostgreSQL 꼴(PagingAction 과 같다).
+    DbConfig last = DbSettings.getInstance().find(PropertiesComponent.getInstance(project).getValue(MyBatisRunDialog.CONNECTION_KEY, ""));
+    boolean mysql = last != null && last.kind == DbKind.MYSQL;
     WhereGen.Insert in;
     try {
-      in = WhereGen.insertion(now, target, caret, dialog.conds(), dialog.alias());
+      in = WhereGen.insertion(now, target, caret, dialog.conds(), dialog.alias(), mysql);
     } catch (IllegalArgumentException ex) {
       Notify.error(project, ex.getMessage());
       return;
