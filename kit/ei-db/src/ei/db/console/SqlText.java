@@ -356,9 +356,9 @@ public final class SqlText {
     if (SELECT.matcher(s).results().count() != 1) return "하위 조회가 있는 결과는 고칠 수 없습니다.";
     if (GROUPED.matcher(s).find()) return "묶거나(GROUP BY · DISTINCT) 계층 조회(CONNECT BY)한 결과는 고칠 수 없습니다.";
     Matcher m = SELECT_FROM.matcher(s);
-    if (!m.matches()) return "표 하나를 조회한 SELECT 결과만 고칠 수 있습니다.";
+    if (!m.matches()) return "테이블 하나를 조회한 SELECT 결과만 고칠 수 있습니다.";
     if (!SELECT_LIST.matcher(m.group(1)).matches()) return "SELECT 목록이 * 이거나 별칭 없는 칼럼 이름일 때만 고칠 수 있습니다.";
-    if (!FROM_REST.matcher(m.group(2)).matches()) return "여러 표를 조인한 결과는 고칠 수 없습니다(표 하나만).";
+    if (!FROM_REST.matcher(m.group(2)).matches()) return "여러 테이블을 조인한 결과는 고칠 수 없습니다(테이블 하나만).";
     return null;
   }
 

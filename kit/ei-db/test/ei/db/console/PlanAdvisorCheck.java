@@ -76,7 +76,7 @@ public class PlanAdvisorCheck {
         row(n(2), n(1), n(2), "TABLE ACCESS", "FULL", "HR", "CODE", n(300), n(20), null, null),
         row(n(3), n(1), n(2), "TABLE ACCESS", "BY INDEX ROWID", "HR", "ORD", n(9700), n(5), null, null)));
     fs = analyze(mid, Map.of());
-    ok(!has(fs, "fullnowhere") && !has(fs, "fullnoindex"), "작은 표 전체 읽기는 지적하지 않는다: " + fs);
+    ok(!has(fs, "fullnowhere") && !has(fs, "fullnoindex"), "작은 테이블 전체 읽기는 지적하지 않는다: " + fs);
     eq(rule(fs, "cost").args(), List.of(97L));
 
     // 헛경고 사례: 아래는 아무 지적도 나오면 안 된다.
@@ -123,7 +123,7 @@ public class PlanAdvisorCheck {
     List<Step> fnPlan = PlanParse.oracle(ORACLE_COLS, List.of(
         row(n(0), null, n(0), "SELECT STATEMENT", null, null, null, n(5000), n(90000), null, null),
         row(n(1), n(0), n(1), "TABLE ACCESS", "FULL", "HR", "ORD", n(5000), n(90000), null, "NVL(\"O\".\"STATUS\",'A')='A'")));
-    ok(!has(analyze(fnPlan, Map.of("ORD", List.of())), "fn.nvl"), "인덱스 없는 칼럼은 함수 탓이 아니다");
+    ok(!has(analyze(fnPlan, Map.of("ORD", List.of())), "fn.nvl"), "인덱스 없는 칼럼은 펑션 탓이 아니다");
     eq(rule(analyze(fnPlan, Map.of("ORD", List.of(new Index("IX_ORD_STATUS", List.of("STATUS"))))), "fn.nvl").level(), Level.DANGER);
 
     // 중첩 반복 안쪽의 전체 읽기, 곱하기 조인, 정렬.
@@ -186,7 +186,7 @@ public class PlanAdvisorCheck {
     int converts = 0;
     for (Finding f : fs) if (f.rule().equals("fn.convert")) converts++;
     eq(converts, 1);
-    ok(!has(fs, "fullnowhere"), "dept 는 작은 표");
+    ok(!has(fs, "fullnowhere"), "dept 는 작은 테이블");
 
     // MySQL 표: type=ALL, Extra.
     List<Step> my = PlanParse.mysql(List.of("id", "select_type", "table", "type", "possible_keys", "key", "rows", "Extra"), List.of(

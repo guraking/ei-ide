@@ -27,7 +27,7 @@ public final class MyBatisTags {
     DELETE(0, "<delete>", Kind.BLOCK, "", "<delete id=\"{caret}\" parameterType=\"map\">", "\t{body}", "</delete>"),
     MERGE(0, "MERGE INTO", Kind.BLOCK, "",
         "<update id=\"{caret}\" parameterType=\"map\">",
-        "\tMERGE INTO 표 t",
+        "\tMERGE INTO 테이블 t",
         "\tUSING DUAL",
         "\t   ON (t.키칼럼 = #{키})",
         "\t WHEN MATCHED THEN",

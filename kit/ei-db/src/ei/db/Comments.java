@@ -62,7 +62,7 @@ public final class Comments {
       refs = SqlParts.tables(sql);
     } catch (RuntimeException e) {
       // 주석은 덧붙이는 정보라 문장 나누기에 실패해도 결과는 보인다.
-      LOG.warn("결과 칼럼 주석용 표 이름을 읽지 못했습니다", e);
+      LOG.warn("결과 칼럼 주석용 테이블 이름을 읽지 못했습니다", e);
       return out;
     }
     for (SqlParts.TableRef t : refs) {

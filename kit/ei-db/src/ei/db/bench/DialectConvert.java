@@ -315,7 +315,7 @@ public final class DialectConvert {
       s = s.substring(0, start) + "CAST(" + expr + " AS " + oracleType(s.substring(m.start(2), m.end(2))) + ")" + s.substring(m.end());
       count++;
     }
-    if (count > 0) notes.add(":: 형 바꾸기 → CAST " + count + "곳");
+    if (count > 0) notes.add(":: 타입 바꾸기 → CAST " + count + "곳");
     return s;
   }
 

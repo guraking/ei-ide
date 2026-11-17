@@ -84,7 +84,7 @@ public final class SqlCompletion extends CompletionContributor {
         boolean near = related.contains(t.name().toUpperCase(Locale.ROOT));
         LookupElementBuilder e = LookupElementBuilder.create(cased(t.name(), lower))
             .withIcon("VIEW".equals(t.type()) ? AllIcons.Nodes.DataSchema : AllIcons.Nodes.DataTables)
-            .withTypeText(near ? "외래 키로 이어짐  " + t.comment() : t.comment(), true);
+            .withTypeText(near ? "FK로 이어짐  " + t.comment() : t.comment(), true);
         rs.addElement(near ? PrioritizedLookupElement.withPriority(e.bold(), RELATED_PRIORITY) : e);
       }
     }
@@ -142,7 +142,7 @@ public final class SqlCompletion extends CompletionContributor {
       String cond = j.leftAlias() + "." + cased(j.leftColumn(), lower) + " = " + j.rightAlias() + "." + cased(j.rightColumn(), lower);
       rs.addElement(PrioritizedLookupElement.withPriority(LookupElementBuilder.create(cond).bold()
           .withIcon(AllIcons.Nodes.DataColumn)
-          .withTypeText(j.guessed() ? "추정 (이름이 같음)" : "외래 키", true), CONDITION_PRIORITY));
+          .withTypeText(j.guessed() ? "추정 (이름이 같음)" : "FK", true), CONDITION_PRIORITY));
     }
   }
 

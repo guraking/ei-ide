@@ -544,7 +544,7 @@ public class SyncCheck {
     sh(mine, "echo dirty >> B.java");
     try {
       merge(mine, "origin", "develop", "feature/kim", "feature/kim", true, false);
-      throw new AssertionError("커밋 안 한 변경이 있으면 합치지 않아야 한다");
+      throw new AssertionError("커밋 안 한 변경이 있으면 머지하지 않아야 한다");
     }
     catch (ReverseMerge.DirtyException expected) {
       eq(ReverseMerge.conflicts(mine), Set.of());
@@ -595,7 +595,7 @@ public class SyncCheck {
     sh(mine, "echo dirty >> A.java && git add A.java");
     try {
       merge(mine, "origin", "develop", "feature/kim", "feature/kim", false, false);
-      throw new AssertionError("올려 둔 변경이 있으면 합치지 않아야 한다");
+      throw new AssertionError("올려 둔 변경이 있으면 머지하지 않아야 한다");
     }
     catch (ReverseMerge.DirtyException expected) {
       sh(mine, "git reset -q");
@@ -656,7 +656,7 @@ public class SyncCheck {
     sh(mine, "git config core.ignorecase true");
     try {
       merge(mine, "origin", "develop", "feature/kim", "feature/kim", true, false);
-      throw new AssertionError("대소문자만 바뀐 이름이 있으면 묻기 전에 합치지 않아야 한다");
+      throw new AssertionError("대소문자만 바뀐 이름이 있으면 묻기 전에 머지하지 않아야 한다");
     }
     catch (ReverseMerge.CaseRenameException expected) {
       eq(expected.renames, java.util.Map.of("Big.vue", "big.vue", "ui/X.vue", "UI/X.vue"));
@@ -764,7 +764,7 @@ public class SyncCheck {
     sh(r, "touch .git/MERGE_HEAD");
     try {
       GitUndo.read(r);
-      throw new AssertionError("합치기 중에는 되돌리지 않아야 한다");
+      throw new AssertionError("머지 중에는 되돌리지 않아야 한다");
     }
     catch (IOException expected) {
       sh(r, "rm .git/MERGE_HEAD");

@@ -151,7 +151,7 @@ final class PatternPanel {
       if (meta == null) {
         columnNames.clear();
         loadedTable = "";
-        warn("표 " + name + " 를 이 접속의 기본 스키마에서 찾지 못했습니다. 이름을 확인하거나 목록에서 고르세요. SQL 은 친 이름 그대로 만듭니다.");
+        warn("테이블 " + name + " 를 이 접속의 기본 스키마에서 찾지 못했습니다. 이름을 확인하거나 목록에서 고르세요. SQL 은 친 이름 그대로 만듭니다.");
         return;
       }
       String found = meta;
@@ -161,7 +161,7 @@ final class PatternPanel {
         for (Meta.Column c : list) columnNames.add(c.name());
         loadedTable = key;
         if (list.isEmpty()) {
-          warn("표 " + found + " 의 칼럼을 읽지 못했습니다(권한이 없거나 빈 표 정의). 칼럼 이름을 직접 치세요.");
+          warn("테이블 " + found + " 의 칼럼을 읽지 못했습니다(권한이 없거나 빈 테이블 정의). 칼럼 이름을 직접 치세요.");
         } else {
           tableStatus.setText("칼럼 " + list.size() + "개를 읽었습니다. 칼럼 칸의 목록에서 고르세요.");
           tableStatus.setForeground(UIUtil.getContextHelpForeground());

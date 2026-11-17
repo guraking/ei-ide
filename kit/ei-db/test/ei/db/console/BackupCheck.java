@@ -95,7 +95,7 @@ public class BackupCheck {
     eq(ok("UPDATE T SET MEMO = 'no WHERE here' WHERE ID = 1").where(), "ID = 1");
     eq(ok("UPDATE T SET A = (SELECT MAX(B) FROM U WHERE U.X = T.X) WHERE ID = 1").where(), "ID = 1");
     eq(ok("UPDATE T SET A = (SELECT MAX(B) FROM U WHERE U.X = T.X)").where(), null);
-    eq(ok("UPDATE /*+ INDEX(T PK_T) */ T -- 표\n SET A = 1 /* WHERE X */ WHERE ID = 1").where(), "ID = 1");
+    eq(ok("UPDATE /*+ INDEX(T PK_T) */ T -- 테이블\n SET A = 1 /* WHERE X */ WHERE ID = 1").where(), "ID = 1");
     eq(ok("UPDATE T SET A = 'it''s' WHERE B = 'x;y'").where(), "B = 'x;y'");
     eq(ok("UPDATE T SET A = q'[it's WHERE]' WHERE ID = 1").where(), "ID = 1");
     eq(ok("UPDATE t SET a = E'it\\'s WHERE' WHERE id = 1", 0, DbKind.POSTGRES).where(), "id = 1");
@@ -270,7 +270,7 @@ public class BackupCheck {
     // 남는 칼럼이 없으면 만들지 못한다.
     try {
       BackupSql.restore(true, "T", List.of("B"), List.of("BLOB"), List.of(List.of(new QueryResult.BinaryValue(1))), Set.of(), DbKind.ORACLE);
-      throw new AssertionError("LOB 뿐인 표는 예외여야 합니다");
+      throw new AssertionError("LOB 뿐인 테이블은 예외여야 합니다");
     } catch (IllegalArgumentException expected) {
       // 호출부가 「백업 실패」로 묻는다.
     }
@@ -347,6 +347,11 @@ public class BackupCheck {
     for (BackupSql.Origin o : BackupSql.Origin.values()) {
       eq(BackupSql.parseHeader(List.of(BackupSql.format(new BackupSql.Header(at, "c", o, "T", 1, List.of(), BackupSql.Mode.INSERT, "X")).split("\n"))).origin(), o);
     }
+
+    // 「표」 로 쓰던 판이 만든 파일도 읽는다.
+    String old = BackupSql.format(none).replace("-- 테이블: ", "-- 표: ").replace("결과 테이블에서 지움", "결과 표에서 지움");
+    if (old.contains("테이블")) throw new AssertionError("옛 머리 만들기: " + old);
+    eq(BackupSql.parseHeader(List.of(old.split("\n"))), read);
 
     // 우리 파일이 아니거나 머리가 끊긴 파일.
     eq(BackupSql.parseHeader(List.of()), null);

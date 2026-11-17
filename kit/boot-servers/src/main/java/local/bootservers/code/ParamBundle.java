@@ -28,7 +28,7 @@ public final class ParamBundle {
     public record Param(String name, String type, String requestName, String defaultValue, List<String> annotations) {
         public Param {
             if (name == null || name.isBlank() || type == null || type.isBlank()) {
-                throw new IllegalArgumentException("매개변수 이름 · 형이 비었습니다");
+                throw new IllegalArgumentException("파라미터 이름 · 타입이 비었습니다");
             }
             annotations = annotations == null ? List.of() : List.copyOf(annotations);
         }

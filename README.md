@@ -5,5 +5,5 @@
 <p align="center">
   <a href="https://raw.githack.com/guraking/ei-ide/main/docs/index.html"><b>사용 설명서</b></a>
   &nbsp;·&nbsp;
-  <a href="https://github.com/guraking/ei-ide/releases/latest"><b>내려받기(릴리스)</b></a>
+  <a href="https://github.com/guraking/ei-ide/releases/latest"><b>다운로드(릴리스)</b></a>
 </p>

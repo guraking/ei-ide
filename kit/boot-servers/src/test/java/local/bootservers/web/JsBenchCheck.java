@@ -101,7 +101,7 @@ public final class JsBenchCheck {
     private static void columns() {
         check(JsBench.columns("[{\"A\":1,\"B\":2},{\"C\":3,\"A\":4}]").equals(List.of("A", "B", "C")), "객체 배열 칸");
         check(JsBench.columns("{\"X\":1}").equals(List.of("X")), "객체 칸");
-        check(JsBench.columns("이름\t금액\t\n홍\t1\t").equals(List.of("이름", "금액", "COL3")), "탭 표 칸");
+        check(JsBench.columns("이름\t금액\t\n홍\t1\t").equals(List.of("이름", "금액", "COL3")), "탭 테이블 칸");
         check(JsBench.columns("").isEmpty() && JsBench.columns("그냥 글").isEmpty() && JsBench.columns("[1,2]").isEmpty(), "칸 없음");
     }
 
@@ -168,7 +168,7 @@ public final class JsBenchCheck {
         check(r.truncated() && r.failed(), "출력 넘침: " + r.truncated() + " " + r.timedOut());
         r = run(node, JsBench.Mode.RUN_JS, "process.stdout.write('날것\\n'); console.table(data)", "이름\t금액\n홍\t1,200\n김\t007");
         check(!r.failed() && r.events().get(0).text().equals("날것") && r.events().get(1).rows().get(0).get(2).equals("1200")
-                && r.events().get(1).rows().get(1).get(2).equals("007"), "엑셀 표 데이터: " + r.events());
+                && r.events().get(1).rows().get(1).get(2).equals("007"), "엑셀 테이블 데이터: " + r.events());
         r = run(node, JsBench.Mode.TS, "", "[{\"ID\":1,\"NM\":\"a\"},{\"ID\":2}]");
         check(!r.failed() && r.events().get(0).text().contains("NM?: string;"), "TS 타입: " + r.events());
         r = run(node, JsBench.Mode.PROPS, "", "{\"USER_NM\":\"a\",\"AGE\":3,\"TAGS\":[]}");

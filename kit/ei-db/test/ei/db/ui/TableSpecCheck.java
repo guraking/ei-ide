@@ -86,8 +86,8 @@ public class TableSpecCheck {
 
     List<List<Object>> rows = TableSpec.rows(List.of(item, log, empty));
     eq(rows.size(), 3);
-    eq(rows.get(0), List.of("ITEM", "표", "상품", 1, "ID", "NUMBER", "12", "N", "Y", "", "번호"));
-    eq(rows.get(1), List.of("ITEM", "표", "상품", 2, "NAME", "VARCHAR2", "100", "Y", "", "'없음'", "이름"));
+    eq(rows.get(0), List.of("ITEM", "테이블", "상품", 1, "ID", "NUMBER", "12", "N", "Y", "", "번호"));
+    eq(rows.get(1), List.of("ITEM", "테이블", "상품", 2, "NAME", "VARCHAR2", "100", "Y", "", "'없음'", "이름"));
     eq(rows.get(2), List.of("V_LOG", "뷰", "", 1, "REG_DT", "DATE", "", "N", "", "", "등록일"));
     for (List<Object> row : rows) eq(row.size(), TableSpec.HEADER.size());
 

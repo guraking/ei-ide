@@ -487,7 +487,7 @@ public final class CodeFlowView {
         tree.show(null, EiDbBundle.message("codeflow.table.need"));
         return;
       }
-      searchFound("표에서 찾기", () -> CodeFlow.tableUsers(project, t, c));
+      searchFound("테이블에서 찾기", () -> CodeFlow.tableUsers(project, t, c));
     }
   }
 
