@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 저장한 API 요청의 순수 논리(IntelliJ 클래스 없음): 저장할 헤더 거르기, 코드 시험 값과 저장 값 합치기, 응답 본문 줄이기 · 비교.
@@ -37,6 +39,43 @@ final class ApiSaved {
     private static final Set<String> SECRET_HEADERS = Set.of("authorization", "cookie", "proxy-authorization");
     /** 데이터를 바꾸지 않는 방식(RFC 9110 9.2.1). 다시 보내기에서 처음부터 체크한다. */
     private static final Set<String> SAFE_METHODS = Set.of("GET", "HEAD", "OPTIONS");
+
+    /** 비밀번호 · 토큰처럼 보이는 파라미터 · 본문 필드 이름. 그 값은 workspace.xml 에 남기지 않고 빈 글로 저장한다. */
+    private static final Pattern SECRET_NAME = Pattern.compile("(?i).*(password|passwd|pwd|secret|token|api[_-]?key|credential).*");
+    /** JSON 의 "이름" : "값" 한 쌍(값은 글자열만, 이스케이프 포함). */
+    private static final Pattern JSON_PAIR = Pattern.compile("(\"([^\"\\\\]*)\"\\s*:\\s*\")((?:[^\"\\\\]|\\\\.)*)(\")");
+    /** 폼 본문(a=1&b=2)의 한 쌍. */
+    private static final Pattern FORM_PAIR = Pattern.compile("(^|&)([^=&]+)=([^&]*)");
+
+    static boolean isSecretName(String name) {
+        return name != null && SECRET_NAME.matcher(name.strip()).matches();
+    }
+
+    /** 이름이 비밀처럼 보이는 줄은 값을 비운다(줄 · 체크는 남긴다). */
+    static List<Line> savableQuery(List<Line> query) {
+        List<Line> out = new ArrayList<>();
+        for (Line q : query) {
+            out.add(isSecretName(q.name()) ? new Line(q.name(), "", q.on()) : q);
+        }
+        return out;
+    }
+
+    /** 본문에서 이름이 비밀처럼 보이는 JSON 글자열 값 · 폼 값을 비운다. JSON 도 폼도 아니면 그대로. */
+    static String savableBody(String body) {
+        if (body == null || body.isBlank()) {
+            return body;
+        }
+        String trimmed = body.strip();
+        Matcher m = (trimmed.startsWith("{") || trimmed.startsWith("[") ? JSON_PAIR : FORM_PAIR).matcher(body);
+        boolean json = m.pattern() == JSON_PAIR;
+        StringBuilder out = new StringBuilder();
+        while (m.find()) {
+            String replaced = !isSecretName(m.group(2)) ? m.group() : json ? m.group(1) + m.group(4) : m.group(1) + m.group(2) + "=";
+            m.appendReplacement(out, Matcher.quoteReplacement(replaced));
+        }
+        m.appendTail(out);
+        return out.toString();
+    }
 
     static boolean isSecretHeader(String name) {
         return name != null && SECRET_HEADERS.contains(name.strip().toLowerCase(Locale.ROOT));

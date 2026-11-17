@@ -8,6 +8,7 @@ public final class ApiSavedCheck {
     public static void main(String[] args) {
         secrets();
         merge();
+        scrub();
         body();
         verdict();
         System.out.println("ApiSavedCheck 통과");
@@ -33,6 +34,16 @@ public final class ApiSavedCheck {
         check(out.get(1).value().equals("a") && out.get(1).on(), "저장에 없는 코드 줄은 시험 값 그대로");
         check(out.get(2).name().equals("mine"), "사용자가 더한 줄은 뒤에");
         check(ApiSaved.merge(fresh, List.of()).equals(fresh), "저장이 비면 코드 줄 그대로");
+    }
+
+    private static void scrub() {
+        List<ApiSaved.Line> q = ApiSaved.savableQuery(List.of(new ApiSaved.Line("userPwd", "p@ss", true), new ApiSaved.Line("page", "1", false)));
+        check(q.get(0).value().isEmpty() && q.get(0).on() && q.get(1).value().equals("1"), "비밀 이름 파라미터 값만 비운다: " + q);
+        String json = ApiSaved.savableBody("{\"userId\":\"kim\", \"password\" : \"a\\\"b\", \"accessToken\":\"t\", \"n\":1}");
+        check(json.equals("{\"userId\":\"kim\", \"password\" : \"\", \"accessToken\":\"\", \"n\":1}"), "JSON 비밀 값만 비운다: " + json);
+        String form = ApiSaved.savableBody("id=kim&passwd=1%262&x=");
+        check(form.equals("id=kim&passwd=&x="), "폼 비밀 값만 비운다: " + form);
+        check(ApiSaved.savableBody("plain text") .equals("plain text") && ApiSaved.savableBody(null) == null, "그 밖은 그대로");
     }
 
     private static void body() {

@@ -920,10 +920,10 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         e.title = request == null ? file.getName() : request.title();
         e.method = method;
         e.url = url;
-        e.query = ApiStore.beans(tableLines(queryModel, 0));
+        e.query = ApiStore.beans(ApiSaved.savableQuery(tableLines(queryModel, 0)));
         e.headers = ApiStore.beans(ApiSaved.savableHeaders(tableLines(headerModel, authRowShown ? 1 : 0)));
         e.auth = authOn;
-        e.body = body;
+        e.body = ApiSaved.savableBody(body);
         return e;
     }
 
