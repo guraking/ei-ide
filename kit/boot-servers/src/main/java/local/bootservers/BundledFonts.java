@@ -84,7 +84,7 @@ public final class BundledFonts implements AppLifecycleListener {
         prefs.setRegularSubFamily(rename(prefs.getRegularSubFamily()));
         prefs.setBoldSubFamily(rename(prefs.getBoldSubFamily()));
         options.update(prefs);
-        LOG.info("글꼴 이름을 옮김: " + OLD_FAMILY + " → " + FAMILY);
+        LOG.info("폰트 이름을 옮김: " + OLD_FAMILY + " → " + FAMILY);
     }
 
     private static boolean isOld(String name) {
@@ -135,12 +135,12 @@ public final class BundledFonts implements AppLifecycleListener {
     private static void register(String file) {
         try (InputStream in = BundledFonts.class.getResourceAsStream("/fonts/" + file)) {
             if (in == null) {
-                LOG.warn("글꼴 자원이 없음: " + file);
+                LOG.warn("폰트 자원이 없음: " + file);
                 return;
             }
             GraphicsEnvironment.getLocalGraphicsEnvironment().registerFont(Font.createFont(Font.TRUETYPE_FONT, in));
         } catch (Exception e) {
-            LOG.warn("글꼴 등록 실패: " + file, e);
+            LOG.warn("폰트 등록 실패: " + file, e);
         }
     }
 }

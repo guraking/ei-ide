@@ -40,7 +40,7 @@ public final class ApiTextCheck {
         eq(TODAY + "T00:00:00", ApiText.sample("regDt", Schema.of(OpenApiSpec.TYPE_STRING, "date-time"), null, TODAY), "시각");
         eq("1", ApiText.sample("ids", Schema.array(Schema.of(OpenApiSpec.TYPE_INTEGER)), null, TODAY), "배열은 항목 하나");
         eq("테스트", ApiText.sample("x", null, null, TODAY), "모양 없음");
-        eq("RED", ApiText.sample("color", Schema.of(OpenApiSpec.TYPE_STRING, ApiText.FORMAT_ENUM_PREFIX + "RED,BLUE"), null, TODAY), "열거형 첫 상수");
+        eq("RED", ApiText.sample("color", Schema.of(OpenApiSpec.TYPE_STRING, ApiText.FORMAT_ENUM_PREFIX + "RED,BLUE"), null, TODAY), "enum 첫 상수");
         eq("00:00:00", ApiText.sample("startTm", Schema.of(OpenApiSpec.TYPE_STRING, ApiText.FORMAT_TIME), null, TODAY), "LocalTime");
         eq("2026-10", ApiText.sample("ym", Schema.of(OpenApiSpec.TYPE_STRING, ApiText.FORMAT_YEAR_MONTH), null, TODAY), "YearMonth");
         eq("2026", ApiText.sample("yr", Schema.of(OpenApiSpec.TYPE_STRING, ApiText.FORMAT_YEAR), null, TODAY), "Year");

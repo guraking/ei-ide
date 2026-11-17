@@ -6695,7 +6695,7 @@ console.log(['52910p2000', '52910-P2', '5291'].map(fmt));
 const fmt = s => { const d = s.replace(/\D/g, '').slice(0, 8); return [d.slice(0, 4), d.slice(4, 6), d.slice(6, 8)].filter(Boolean).join('-'); };
 console.log(['20261112', '202611', '2026-1', '2026/11/12'].map(fmt));
 
-### 사람 찾기 자동완성 (이름 · 사번 · 초성)
+### 사람 찾기 코드 컴플리션 (이름 · 사번 · 초성)
 > 「ㄱㅁ」 → 김민수.
 const cho = s => [...s].map(c => { const n = c.charCodeAt(0) - 0xac00; return n >= 0 && n < 11172 ? 'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ'[Math.floor(n / 588)] : c; }).join('');
 const find = q => data.filter(u => u.USER_NM.includes(q) || u.EMP_NO.includes(q.toUpperCase()) || cho(u.USER_NM).includes(q));
@@ -6862,7 +6862,7 @@ await Promise.all([search('범퍼', 120), search('범퍼 브래킷', 30)]);
 console.log('화면 결과:', shown);
 
 ### 입력 멈추면 조회 (디바운스 300ms)
-> 자동완성.
+> 코드 컴플리션.
 const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
 const calls = [];
 const search = debounce(q => calls.push(q), 300);
@@ -7208,7 +7208,7 @@ load();
   <button :disabled="page.number + 1 >= page.totalPages" @click="load(page.number + 1)">다음</button>
 </template>
 
-### 품번 자동완성 (입력 멈추면 조회 · 늦은 응답 버리기)
+### 품번 코드 컴플리션 (입력 멈추면 조회 · 늦은 응답 버리기)
 > 화면(Vue · React). 300ms 디바운스, 마지막 요청만 반영.
 @보기만
 <script setup>
@@ -7945,7 +7945,7 @@ export default function PartPage() {
   );
 }
 
-### 품번 자동완성 (입력 멈추면 조회 · 늦은 응답 버리기)
+### 품번 코드 컴플리션 (입력 멈추면 조회 · 늦은 응답 버리기)
 > 화면(Vue · React). 300ms 디바운스, 마지막 요청만 반영.
 @보기만
 import { useEffect, useState } from 'react';

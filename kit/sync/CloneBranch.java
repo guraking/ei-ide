@@ -69,13 +69,13 @@ final class CloneBranch {
     try {
       remote = remote(dir);
       if (remote == null || remote.branches().size() < 2) {
-        if (remote != null) LOG.info("받은 서버 브랜치가 하나라(얕은 Clone · 한 브랜치 저장소) 받을 브랜치 창을 띄우지 않습니다: " + dir);
+        if (remote != null) LOG.info("받은 서버 브랜치가 하나라(얕은 Clone · 한 브랜치 리포지토리) 받을 브랜치 창을 띄우지 않습니다: " + dir);
         return;
       }
       mine = mine(remote.branches(), nameParts(dir));
     }
     catch (IOException e) {
-      LOG.warn("받은 저장소의 서버 브랜치를 읽지 못해 기본 브랜치로 둡니다: " + dir, e);
+      LOG.warn("받은 리포지토리의 서버 브랜치를 읽지 못해 기본 브랜치로 둡니다: " + dir, e);
       return;
     }
     catch (InterruptedException e) {

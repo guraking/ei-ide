@@ -10,7 +10,7 @@ public final class ThemeMigrationCheck {
         String renamed = ThemeMigration.renameScheme(old, "EI Graphite", "Moa Graphite");
         check(renamed.contains("name=\"_@user_Moa Graphite\""), "이름 " + renamed);
         check(renamed.contains(">Moa Graphite<"), "원래 구성표 " + renamed);
-        check(renamed.contains("value=\"Moa Mono\""), "글꼴 " + renamed);
+        check(renamed.contains("value=\"Moa Mono\""), "폰트 " + renamed);
         check(renamed.contains("parent_scheme=\"Darcula\""), "부모는 그대로 " + renamed);
         check(!renamed.contains("EI "), "옛 이름이 남음 " + renamed);
         check(ThemeMigration.hasCustomValues(old), "고친 값 있음");

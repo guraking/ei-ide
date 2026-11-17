@@ -34,7 +34,7 @@ public final class ProgramListCheck {
         yes(ProgramList.inScope("C:/ws/basic/A.java", none) && ProgramList.reachesScope("C:/ws/basic", none), "고른 것이 없으면 전체");
         yes(ProgramList.inScope("C:/ws/dash-demo/demo-api/src/A.java", picked) && ProgramList.inScope("C:/ws/dash-demo", picked), "고른 폴더 안 · 그 폴더");
         yes(ProgramList.inScope("C:/ws/vue/src/App.vue", picked) && !ProgramList.inScope("C:/ws/vue/src/Main.vue", picked), "고른 파일만");
-        yes(!ProgramList.inScope("C:/ws/dash-demo-2/A.java", picked) && !ProgramList.inScope("C:/ws/basic/A.java", picked), "이름이 앞부분만 같은 폴더 · 다른 저장소는 뺌");
+        yes(!ProgramList.inScope("C:/ws/dash-demo-2/A.java", picked) && !ProgramList.inScope("C:/ws/basic/A.java", picked), "이름이 앞부분만 같은 폴더 · 다른 리포지토리는 뺌");
         yes(ProgramList.reachesScope("C:/ws/vue/src", picked) && ProgramList.reachesScope("C:/ws/dash-demo/demo-api/src/main/java", picked)
                 && !ProgramList.reachesScope("C:/ws/basic/src", picked) && !ProgramList.reachesScope("C:/ws/vue/server", picked), "훑을 루트");
     }

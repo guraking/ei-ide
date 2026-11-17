@@ -8,7 +8,7 @@
 }</code></pre>
 <p>「고침」은 매퍼 XML 문장이 insert · update · delete 인 매퍼 메서드, @Insert · @Update · @Delete 매퍼 메서드,
 SqlSession · 전자정부 DAO 의 insert · update · delete, JdbcTemplate 의 update · batchUpdate 입니다. 반복문 안에서 한 번 고치면 두 번으로 셉니다.</p>
-<p>메서드 · 클래스 · 상위 클래스 · 인터페이스에 @Transactional 이 있거나, 메서드 안에서 TransactionTemplate 를 쓰면 표시하지 않습니다.
+<p>메서드 · 클래스 · 슈퍼클래스 · 인터페이스에 @Transactional 이 있거나, 메서드 안에서 TransactionTemplate 를 쓰면 표시하지 않습니다.
 프로젝트에 XML 트랜잭션 설정(tx:advice)이나 TransactionInterceptor 설정이 있으면 이 검사는 아무것도 표시하지 않습니다.
 private · static 메서드와 테스트 소스는 보지 않습니다.</p>
 </body>

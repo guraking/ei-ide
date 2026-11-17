@@ -274,12 +274,12 @@ final class History {
     Element doc = parse(xml, "svn info");
     String root = text(doc, "root");
     String relative = text(doc, "relative-url");
-    if (root.isEmpty() || !relative.startsWith("^")) throw new IOException("svn info 결과에 저장소 경로가 없습니다.");
+    if (root.isEmpty() || !relative.startsWith("^")) throw new IOException("svn info 결과에 리포지토리 경로가 없습니다.");
     try {
       return new String[]{root, URLDecoder.decode(relative.substring(1).replace("+", "%2B"), StandardCharsets.UTF_8)};
     }
     catch (IllegalArgumentException e) {
-      throw new IOException("svn info 저장소 경로를 풀지 못했습니다: " + relative);
+      throw new IOException("svn info 리포지토리 경로를 풀지 못했습니다: " + relative);
     }
   }
 
