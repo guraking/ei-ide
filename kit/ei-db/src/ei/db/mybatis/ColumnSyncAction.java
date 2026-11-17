@@ -32,12 +32,14 @@ import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiLiteralExpression;
 import com.intellij.psi.PsiMethod;
 import com.intellij.psi.PsiModifier;
+import com.intellij.psi.PsiParameter;
 import com.intellij.psi.SmartPointerManager;
 import com.intellij.psi.SmartPsiElementPointer;
 import com.intellij.psi.codeStyle.JavaCodeStyleManager;
 import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.search.searches.ReferencesSearch;
 import com.intellij.psi.util.PropertyUtilBase;
+import com.intellij.psi.util.PsiUtil;
 import ei.db.DbConfig;
 import ei.db.DbSessions;
 import ei.db.EiDbBundle;
@@ -59,8 +61,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * 「DB 바뀐 것 코드에 맞추기…」: 테이블의 지금 칼럼(DB 에서 새로 읽음)과 그 테이블을 쓰는 매퍼 문장 · resultMap · DTO 를 견줘
@@ -70,19 +70,31 @@ import java.util.regex.Pattern;
  */
 public final class ColumnSyncAction extends AnAction {
 
-  /** 「새 칼럼」 판정에 쓰는 낱말(SQL 식별자). */
-  private static final Pattern WORD = Pattern.compile("[A-Za-z_][A-Za-z0-9_$#]*");
   private static final Set<String> LOMBOK_ACCESSORS = Set.of("lombok.Data", "lombok.Getter", "lombok.Setter", "lombok.Value");
   private static final Set<String> LENGTH_ANNOTATIONS = Set.of("jakarta.validation.constraints.Size", "javax.validation.constraints.Size",
       "org.hibernate.validator.constraints.Length");
   private static final String MAX_ATTR = "max";
   private static final String RESULT_MAP_TAG = "resultMap";
+  private static final String PARAMETER_TYPE_ATTR = "parameterType";
+  private static final String RESULT_TYPE_ATTR = "resultType";
+  private static final String TYPE_ATTR = "type";
+  private static final String COLUMN_ATTR = "column";
+  private static final String ID_ATTR = "id";
+  private static final String JAVA_PACKAGE = "java.";
+  /** 길이 주석 이름을 읽지 못할 때 미리보기에 쓰는 이름. */
+  private static final String SIZE_NAME = "Size";
+  /** 길이 맞추기를 내는 DB 형식: 이름에 CHAR 가 든 것(CHAR · VARCHAR · VARCHAR2 · NCHAR …). CLOB 은 길이가 아니라 뺀다. */
+  private static final String CHAR_TYPE = "CHAR";
+  private static final String CLOB_TYPE = "CLOB";
   /** 미리보기에서 고친 곳 앞뒤로 함께 보이는 줄 수. */
   private static final int PREVIEW_CONTEXT_LINES = 2;
-  /** jdbcType: TypeMap 의 자바 형식 → MyBatis JdbcType 이름. 없는 형식은 jdbcType 을 뗀다. */
+  /**
+   * jdbcType: TypeMap 의 자바 형식 → MyBatis JdbcType 이름. DB 형식이 CLOB 이면 CLOB_TYPE.
+   * 없는 형식은 모르는 것으로 두어, 본보기 줄에 jdbcType 이 있으면 복제하지 않고 「직접 넣으세요」 가 된다.
+   */
   private static final Map<String, String> JDBC_TYPES = Map.of(
       TypeMap.STRING, "VARCHAR", TypeMap.LONG, "NUMERIC", TypeMap.INTEGER, "NUMERIC", TypeMap.DECIMAL, "NUMERIC",
-      TypeMap.DATE_TIME, "TIMESTAMP", "LocalDate", "DATE", TypeMap.BYTES, "BLOB");
+      TypeMap.DATE_TIME, "TIMESTAMP", TypeMap.TIME, "TIME", TypeMap.OFFSET_DATE_TIME, "TIMESTAMP_WITH_TIMEZONE", TypeMap.BYTES, "BLOB");
 
   @Override
   public @NotNull ActionUpdateThread getActionUpdateThread() { return ActionUpdateThread.BGT; }
@@ -169,8 +181,8 @@ public final class ColumnSyncAction extends AnAction {
             Notify.info(project, EiDbBundle.message("columnsync.in.sync", table));
             return;
           }
-          ColumnSyncDialog dialog = new ColumnSyncDialog(project, plan);
-          if (dialog.showAndGet()) apply(project, dialog.chosen());
+          // 모달이 아니다: 확인하면 창이 apply 를 부른다.
+          new ColumnSyncDialog(project, plan).show();
         }, project.getDisposed());
       }
     }.queue();
@@ -198,7 +210,11 @@ public final class ColumnSyncAction extends AnAction {
   private record Mapper(VirtualFile file, Document doc, CharSequence text, MapperDoc parsed, MapperSqlScan.Result scan,
                         List<MapperDoc.Node> statements, Set<MapperDoc.Node> fragments, Set<MapperDoc.Node> resultMaps) {}
 
-  /** 읽기 접근 · 색인 끝난 상태에서 부른다. */
+  /**
+   * 읽기 접근 · 색인 끝난 상태에서 부른다.
+   * 「새 칼럼」 은 이 테이블을 쓰는 어떤 문장(테이블에 붙은 칼럼)도, 이 테이블 resultMap 의 column 도 쓰지 않는 DB 칼럼이다(DTO 필드는 보지 않는다).
+   * 목록마다 그 목록이 갖지 않은 칼럼은 ColumnSync 가 판단하고, 넣기의 기본 체크는 값을 나르는 클래스가 그 필드를 가지거나 이번에 얻을 때만 남긴다.
+   */
   static Plan collect(Project project, String schema, String table, List<Meta.Column> cols, @Nullable String onlyColumn) {
     Set<String> db = new LinkedHashSet<>();
     List<String> names = new ArrayList<>();
@@ -208,8 +224,8 @@ public final class ColumnSyncAction extends AnAction {
     }
     Map<String, String> fields = Names.uniqueCamel(names);
     List<Mapper> mappers = new ArrayList<>();
-    Set<String> known = new HashSet<>();
     Set<String> usedInCode = new LinkedHashSet<>();
+    Set<String> inMaps = new HashSet<>();
     Map<String, VirtualFile> dtoTypes = new LinkedHashMap<>();
     for (MapperIndex.Entry entry : sourceEntries(project)) {
       ProgressManager.checkCanceled();
@@ -218,68 +234,153 @@ public final class ColumnSyncAction extends AnAction {
       mappers.add(m);
       for (MapperDoc.Node st : m.statements()) {
         List<int[]> ranges = CodeFlow.ranges(m.parsed(), st);
-        for (int[] r : ranges) {
-          Matcher w = WORD.matcher(m.text().subSequence(r[0], Math.min(r[1], m.text().length())));
-          while (w.find()) known.add(w.group().toUpperCase(Locale.ROOT));
-        }
         for (MapperSqlScan.Column col : m.scan().columns()) {
           if (inside(ranges, col.start()) && MapperSqlScan.bare(col.table().name()).equalsIgnoreCase(table)) {
             usedInCode.add(MapperSqlScan.bare(col.name()).toUpperCase(Locale.ROOT));
           }
         }
-        addType(dtoTypes, st.attr("parameterType"), m.file());
-        addType(dtoTypes, st.attr("resultType"), m.file());
+        addType(dtoTypes, st.attr(PARAMETER_TYPE_ATTR), m.file());
+        addType(dtoTypes, st.attr(RESULT_TYPE_ATTR), m.file());
       }
       for (MapperDoc.Node rm : m.resultMaps()) {
-        addType(dtoTypes, rm.attr("type"), m.file());
+        addType(dtoTypes, rm.attr(TYPE_ATTR), m.file());
         for (MapperDoc.Node c : rm.children) {
-          if (c.name != null && c.attr("column") != null) known.add(c.attr("column").trim().toUpperCase(Locale.ROOT));
+          if (c.name != null && c.attr(COLUMN_ATTR) != null) inMaps.add(c.attr(COLUMN_ATTR).trim().toUpperCase(Locale.ROOT));
         }
       }
     }
-    List<PsiClass> dtos = new ArrayList<>();
-    Set<String> seen = new HashSet<>();
-    for (Map.Entry<String, VirtualFile> t : dtoTypes.entrySet()) {
-      PsiClass c = DtoFields.find(project, t.getKey(), t.getValue());
-      if (c == null || DtoFields.isMap(c) || c.getQualifiedName() == null || !seen.add(c.getQualifiedName())) continue;
-      dtos.add(c);
-    }
-    Set<String> dtoFieldNames = new HashSet<>();
-    for (PsiClass c : dtos) dtoFieldNames.addAll(DtoFields.of(c));
-    Set<String> globalNew = new LinkedHashSet<>();
-    for (String name : names) {
-      String up = name.toUpperCase(Locale.ROOT);
-      if (!known.contains(up) && !dtoFieldNames.contains(fields.get(name))) globalNew.add(up);
-    }
+    Map<String, PsiClass> dtos = new LinkedHashMap<>();
+    for (Map.Entry<String, VirtualFile> t : dtoTypes.entrySet()) addDto(dtos, DtoFields.find(project, t.getKey(), t.getValue()));
 
+    // candidates 는 목록마다 견줄 칼럼(칼럼 하나만이면 그것), fresh · adds 는 새 칼럼.
+    List<ColumnSync.NewColumn> candidates = new ArrayList<>();
     List<ColumnSync.NewColumn> adds = new ArrayList<>();
-    Set<String> missingOk = new HashSet<>(globalNew);
-    Set<String> dropped = new LinkedHashSet<>();
+    Set<String> fresh = new LinkedHashSet<>();
     for (Meta.Column col : cols) {
       String up = col.name().toUpperCase(Locale.ROOT);
-      boolean add = onlyColumn == null ? globalNew.contains(up) : col.name().equalsIgnoreCase(onlyColumn);
-      if (add) adds.add(newColumn(col, fields.get(col.name())));
+      boolean isFresh = onlyColumn == null ? !usedInCode.contains(up) && !inMaps.contains(up) : col.name().equalsIgnoreCase(onlyColumn);
+      if (onlyColumn != null && !isFresh) continue;
+      ColumnSync.NewColumn nc = newColumn(col, fields.get(col.name()));
+      candidates.add(nc);
+      if (isFresh) {
+        fresh.add(up);
+        adds.add(nc);
+      }
     }
-    if (onlyColumn != null) {
-      missingOk.add(onlyColumn.toUpperCase(Locale.ROOT));
-    } else {
+    Set<String> dropped = new LinkedHashSet<>();
+    if (onlyColumn == null) {
       for (String used : usedInCode) if (!db.contains(used)) dropped.add(used);
     }
 
+    // needed 는 이번에 필드를 넣을 DTO(기본 체크), checkedMaps 는 체크된 SELECT 의 결과를 받는 resultMap id.
+    Set<String> needed = new HashSet<>();
+    Set<String> checkedMaps = new HashSet<>();
     List<Row> rows = new ArrayList<>();
     for (Mapper m : mappers) {
-      List<ColumnSync.Change> changes = new ArrayList<>();
-      for (MapperDoc.Node st : m.statements()) changes.addAll(ColumnSync.forStatement(m.text(), st, m.scan(), table, db, adds, missingOk, dropped));
-      for (MapperDoc.Node f : m.fragments()) changes.addAll(ColumnSync.forStatement(m.text(), f, m.scan(), table, db, List.of(), Set.of(), dropped));
-      for (MapperDoc.Node rm : m.resultMaps()) changes.addAll(ColumnSync.forResultMap(m.text(), rm, db, adds, dropped));
-      for (ColumnSync.Change c : changes) rows.add(mapperRow(m, c));
+      for (MapperDoc.Node st : m.statements()) {
+        PsiClass carrier = carrier(project, m, st);
+        addDto(dtos, carrier);
+        for (ColumnSync.Change c : ColumnSync.forStatement(m.text(), m.parsed(), st, m.scan(), table, db, candidates, fresh, dropped)) {
+          boolean checked = c.checked();
+          if (checked && c.kind() == ColumnSync.Kind.ADD && c.part() == ColumnSync.Part.SELECT) {
+            resultTargets(project, m, st, needed, checkedMaps);
+          } else if (checked && c.kind() == ColumnSync.Kind.ADD) {
+            checked = carries(carrier, fields.get(c.column()), fresh.contains(c.column().toUpperCase(Locale.ROOT)), needed);
+          }
+          rows.add(mapperRow(m, c, checked));
+        }
+      }
+      for (MapperDoc.Node f : m.fragments()) {
+        for (ColumnSync.Change c : ColumnSync.forFragment(m.text(), m.parsed(), f, m.scan(), table, db, candidates, fresh, dropped)) {
+          boolean checked = c.checked();
+          // 조각의 SELECT 목록은 그 조각을 부르는 문장들의 결과로 간다. INSERT · UPDATE 넣기는 나르는 클래스를 가릴 수 없어 끈다.
+          if (checked && c.kind() == ColumnSync.Kind.ADD && c.part() == ColumnSync.Part.SELECT) {
+            for (MapperDoc.Node st : m.statements()) {
+              if (inside(CodeFlow.ranges(m.parsed(), st), f.start)) resultTargets(project, m, st, needed, checkedMaps);
+            }
+          } else if (c.kind() == ColumnSync.Kind.ADD) {
+            checked = false;
+          }
+          rows.add(mapperRow(m, c, checked));
+        }
+      }
+      // resultMap 은 문장을 다 본 뒤에: 체크된 SELECT 가 받는 것만, 형식 클래스가 그 필드를 가지거나 얻을 때만 체크한다.
+      for (MapperDoc.Node rm : m.resultMaps()) {
+        String type = rm.attr(TYPE_ATTR);
+        PsiClass owner = type == null ? null : usable(DtoFields.find(project, type, m.file()));
+        boolean wanted = checkedMaps.contains(rm.attr(ID_ATTR));
+        for (ColumnSync.Change c : ColumnSync.forResultMap(m.text(), rm, db, adds, dropped)) {
+          boolean checked = c.checked();
+          if (checked && c.kind() == ColumnSync.Kind.ADD) checked = wanted && carries(owner, fields.get(c.column()), true, needed);
+          rows.add(mapperRow(m, c, checked));
+        }
+      }
     }
     int sizes = 0;
     if (onlyColumn == null) {
-      for (PsiClass c : dtos) sizes += dtoRows(project, c, cols, fields, adds, dropped, rows);
+      for (PsiClass c : dtos.values()) sizes += dtoRows(project, c, cols, fields, adds, dropped, needed, rows);
     }
     String summary = EiDbBundle.message("columnsync.summary", table, adds.size(), dropped.size(), sizes);
     return new Plan(table, summary, rows);
+  }
+
+  /** 쓸 수 있는 DTO(Map 이 아닌 프로젝트 클래스)면 넣는다. */
+  private static void addDto(Map<String, PsiClass> dtos, @Nullable PsiClass c) {
+    PsiClass u = usable(c);
+    if (u != null) dtos.putIfAbsent(u.getQualifiedName(), u);
+  }
+
+  private static @Nullable PsiClass usable(@Nullable PsiClass c) {
+    return c == null || DtoFields.isMap(c) || c.getQualifiedName() == null || c.getQualifiedName().startsWith(JAVA_PACKAGE) ? null : c;
+  }
+
+  /**
+   * 문장 값을 나르는 클래스: parameterType, 없으면 namespace 인터페이스의 같은 이름 메서드(하나뿐이고 파라미터가 하나일 때)의 파라미터 형식.
+   * Map · 자바 기본 클래스이거나 가릴 수 없으면 null.
+   */
+  private static @Nullable PsiClass carrier(Project project, Mapper m, MapperDoc.Node st) {
+    String pt = st.attr(PARAMETER_TYPE_ATTR);
+    if (pt != null && !pt.isBlank()) return usable(DtoFields.find(project, pt, m.file()));
+    String id = st.attr(ID_ATTR);
+    PsiClass ns = m.parsed().namespace == null || id == null ? null
+        : JavaPsiFacade.getInstance(project).findClass(m.parsed().namespace, GlobalSearchScope.allScope(project));
+    if (ns == null) return null;
+    PsiMethod[] methods = ns.findMethodsByName(id, true);
+    if (methods.length != 1 || methods[0].getParameterList().getParametersCount() != 1) return null;
+    PsiParameter p = methods[0].getParameterList().getParameters()[0];
+    return usable(PsiUtil.resolveClassInType(p.getType()));
+  }
+
+  /**
+   * 클래스 c 가 field 를 가지거나(getter 포함), 새 칼럼이고 c 가 이번에 필드를 얻을 수 있으면 true.
+   * 얻을 수 있어 true 면 c 를 needed 에 넣는다(그 DTO 의 필드 넣기 줄이 기본 체크로 나온다).
+   */
+  private static boolean carries(@Nullable PsiClass c, @Nullable String field, boolean isFresh, Set<String> needed) {
+    if (c == null || field == null) return false;
+    if (DtoFields.properties(c).contains(field)) return true;
+    if (!isFresh || !canGain(c)) return false;
+    needed.add(c.getQualifiedName());
+    return true;
+  }
+
+  /** 필드를 넣을 수 있는 클래스: 소스에 있고 쓸 수 있으며 record · 인터페이스 · enum · 주석 형식이 아닌 것. */
+  private static boolean canGain(PsiClass c) {
+    return !(c instanceof PsiCompiledElement) && c.isWritable() && !c.isRecord() && !c.isInterface() && !c.isEnum() && !c.isAnnotationType();
+  }
+
+  /** SELECT 문장의 결과를 받는 곳: resultType 클래스는 needed 로(새 칼럼 필드를 받게), resultMap id 는 checkedMaps 로. */
+  private static void resultTargets(Project project, Mapper m, MapperDoc.Node st, Set<String> needed, Set<String> checkedMaps) {
+    String type = st.attr(RESULT_TYPE_ATTR);
+    PsiClass rt = type == null ? null : usable(DtoFields.find(project, type, m.file()));
+    if (rt != null && canGain(rt)) needed.add(rt.getQualifiedName());
+    String rm = st.attr(RESULT_MAP_TAG);
+    if (rm == null) return;
+    for (String id : rm.split(",")) checkedMaps.add(localId(m.parsed(), id));
+  }
+
+  private static String localId(MapperDoc doc, String id) {
+    String local = id.trim();
+    return doc.namespace != null && local.startsWith(doc.namespace + ".") ? local.substring(doc.namespace.length() + 1) : local;
   }
 
   /** 소스 쪽 매퍼 XML 들. 같은 namespace 에 소스 · 리소스 폴더의 것이 있으면 빌드 출력 복사본은 뺀다(CodeFlow 와 같은 규칙). */
@@ -326,11 +427,7 @@ public final class ColumnSyncAction extends AnAction {
       }
       String rm = st.attr(RESULT_MAP_TAG);
       if (rm != null) {
-        for (String id : rm.split(",")) {
-          String local = id.trim();
-          if (doc.namespace != null && local.startsWith(doc.namespace + ".")) local = local.substring(doc.namespace.length() + 1);
-          mapIds.add(local);
-        }
+        for (String id : rm.split(",")) mapIds.add(localId(doc, id));
       }
     }
     if (statements.isEmpty()) return null;
@@ -338,7 +435,7 @@ public final class ColumnSyncAction extends AnAction {
     for (MapperDoc.Node root : doc.root.children) {
       if (!"mapper".equals(root.name)) continue;
       for (MapperDoc.Node c : root.children) {
-        if (RESULT_MAP_TAG.equals(c.name) && mapIds.contains(c.attr("id"))) maps.add(c);
+        if (RESULT_MAP_TAG.equals(c.name) && mapIds.contains(c.attr(ID_ATTR))) maps.add(c);
       }
     }
     return new Mapper(file, d, text, doc, scan, statements, fragments, maps);
@@ -355,14 +452,15 @@ public final class ColumnSyncAction extends AnAction {
 
   private static ColumnSync.NewColumn newColumn(Meta.Column col, String field) {
     String java = TypeMap.forColumn(col.type(), col.size(), col.scale());
-    return new ColumnSync.NewColumn(col.name(), field, col.comment() == null ? "" : col.comment(), JDBC_TYPES.get(java));
+    boolean clob = col.type() != null && col.type().toUpperCase(Locale.ROOT).contains(CLOB_TYPE);
+    return new ColumnSync.NewColumn(col.name(), field, col.comment() == null ? "" : col.comment(), clob ? CLOB_TYPE : JDBC_TYPES.get(java));
   }
 
-  private static Row mapperRow(Mapper m, ColumnSync.Change c) {
+  private static Row mapperRow(Mapper m, ColumnSync.Change c, boolean checked) {
     String part = EiDbBundle.message("columnsync.part." + c.part().name().toLowerCase(Locale.ROOT));
     String label = EiDbBundle.message("columnsync.row." + c.kind().name().toLowerCase(Locale.ROOT), c.column(), c.owner(), part);
     boolean checkable = !c.edits().isEmpty();
-    return new Row(label, checkable, checkable && c.checked(), m.file(), m.file().getName(), c.at(), preview(m.text(), c), m.doc(),
+    return new Row(label, checkable, checkable && checked, m.file(), m.file().getName(), c.at(), preview(m.text(), c), m.doc(),
         m.doc().getModificationStamp(), c, null);
   }
 
@@ -395,23 +493,28 @@ public final class ColumnSyncAction extends AnAction {
     return text.subSequence(a, b).toString().replace("\r", "");
   }
 
-  /** DTO 하나의 필드 넣기 · 길이 맞추기 · 없어진 칼럼 필드 알림 줄. 길이 줄 수를 돌려준다. */
+  /**
+   * DTO 하나의 필드 넣기 · 길이 맞추기 · 없어진 칼럼 필드 알림 줄. 길이 줄 수를 돌려준다.
+   * 필드 넣기는 새 칼럼만, 기본 체크는 매퍼 쪽 체크된 고칠 것이 그 필드를 쓰는 클래스(needed)만. record 는 필드를 넣지 않는다.
+   * 길이 맞추기는 문자 칼럼만, 체크 끈 채로 낸다(길이를 일부러 다르게 둔 곳이 있어서).
+   */
   private static int dtoRows(Project project, PsiClass c, List<Meta.Column> cols, Map<String, String> fields,
-                             List<ColumnSync.NewColumn> adds, Set<String> dropped, List<Row> rows) {
+                             List<ColumnSync.NewColumn> adds, Set<String> dropped, Set<String> needed, List<Row> rows) {
     PsiFile file = c.getContainingFile();
     VirtualFile vf = file == null ? null : file.getVirtualFile();
-    if (vf == null || c instanceof PsiCompiledElement || !c.isWritable()) return 0;
+    if (vf == null || c instanceof PsiCompiledElement || !c.isWritable() || c.isInterface() || c.isEnum() || c.isAnnotationType()) return 0;
     SmartPointerManager pointers = SmartPointerManager.getInstance(project);
     SmartPsiElementPointer<PsiClass> owner = pointers.createSmartPsiElementPointer(c);
     long stamp = file.getModificationStamp();
     String group = c.getName() + ".java";
     boolean accessors = hasAccessors(c);
-    for (ColumnSync.NewColumn nc : adds) {
+    boolean checked = needed.contains(c.getQualifiedName());
+    for (ColumnSync.NewColumn nc : c.isRecord() ? List.<ColumnSync.NewColumn>of() : adds) {
       if (c.findFieldByName(nc.field(), true) != null) continue;
       Meta.Column col = find(cols, nc.name());
       String text = fieldText(nc, col);
       String label = EiDbBundle.message(accessors ? "columnsync.row.dto.add.accessors" : "columnsync.row.dto.add", nc.field(), typeOf(col));
-      rows.add(new Row(label, true, true, vf, group, c.getTextOffset(), text, null, 0, null,
+      rows.add(new Row(label, true, checked, vf, group, c.getTextOffset(), text, null, 0, null,
           new DtoEdit(owner, stamp, text, accessors, null, 0)));
     }
     int sizes = 0;
@@ -419,13 +522,13 @@ public final class ColumnSyncAction extends AnAction {
       if (f.hasModifierProperty(PsiModifier.STATIC)) continue;
       Meta.Column col = null;
       for (Meta.Column k : cols) if (f.getName().equals(fields.get(k.name()))) col = k;
-      if (col == null || col.size() <= 0 || !TypeMap.STRING.equals(TypeMap.forColumn(col.type(), col.size(), col.scale()))) continue;
+      if (col == null || col.size() <= 0 || !isChar(col)) continue;
       for (PsiAnnotation a : f.getAnnotations()) {
         if (a.getQualifiedName() == null || !LENGTH_ANNOTATIONS.contains(a.getQualifiedName())) continue;
         PsiAnnotationMemberValue v = a.findDeclaredAttributeValue(MAX_ATTR);
         if (!(v instanceof PsiLiteralExpression lit) || !(lit.getValue() instanceof Integer max) || max == col.size()) continue;
-        String name = a.getNameReferenceElement() == null ? "Size" : a.getNameReferenceElement().getReferenceName();
-        rows.add(new Row(EiDbBundle.message("columnsync.row.dto.size", f.getName(), name, max, col.size()), true, true, vf, group,
+        String name = a.getNameReferenceElement() == null ? SIZE_NAME : a.getNameReferenceElement().getReferenceName();
+        rows.add(new Row(EiDbBundle.message("columnsync.row.dto.size", f.getName(), name, max, col.size()), true, false, vf, group,
             v.getTextOffset(), "@" + name + "(max = " + max + ")  →  @" + name + "(max = " + col.size() + ")", null, 0, null,
             new DtoEdit(owner, stamp, null, false, pointers.createSmartPsiElementPointer(v), col.size())));
         sizes++;
@@ -439,6 +542,11 @@ public final class ColumnSyncAction extends AnAction {
           f.getText(), null, 0, null, null));
     }
     return sizes;
+  }
+
+  private static boolean isChar(Meta.Column col) {
+    String t = col.type() == null ? "" : col.type().toUpperCase(Locale.ROOT);
+    return t.contains(CHAR_TYPE) && !t.contains(CLOB_TYPE);
   }
 
   /** Lombok 으로 접근자를 만들지 않고, 필드 가운데 하나라도 소스에 getter 가 있으면 true. */

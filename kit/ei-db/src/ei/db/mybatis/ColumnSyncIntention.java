@@ -3,6 +3,8 @@ package ei.db.mybatis;
 import com.intellij.codeInsight.intention.IntentionAction;
 import com.intellij.codeInsight.intention.preview.IntentionPreviewInfo;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ModalityState;
+import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
@@ -19,6 +21,7 @@ import com.intellij.psi.PsiJavaFile;
 import com.intellij.psi.PsiModifier;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.util.IncorrectOperationException;
+import com.intellij.util.concurrency.AppExecutorUtil;
 import ei.db.DbConfig;
 import ei.db.EiDbBundle;
 import ei.db.Meta;
@@ -73,23 +76,31 @@ public final class ColumnSyncIntention implements IntentionAction {
 
   @Override
   public boolean isAvailable(@NotNull Project project, Editor editor, PsiFile file) {
-    return editor != null && hit(project, editor, file) != null;
+    return editor != null && hit(project, file, editor.getCaretModel().getOffset()) != null;
   }
 
+  /** 화면 스레드에서 불린다. 매퍼를 훑는 판단은 백그라운드 읽기로 하고 창은 화면 스레드에서 연다. */
   @Override
   public void invoke(@NotNull Project project, Editor editor, PsiFile file) throws IncorrectOperationException {
-    Hit h = editor == null ? null : hit(project, editor, file);
-    DbConfig c = MapperSqlInspection.connection(project);
-    if (h == null || c == null) {
-      Notify.warning(project, EiDbBundle.message("columnsync.intention.gone"));
-      return;
-    }
-    ColumnSyncAction.open(project, c, null, h.table(), h.column());
+    if (editor == null) return;
+    int offset = editor.getCaretModel().getOffset();
+    ReadAction.nonBlocking(() -> file.isValid() ? hit(project, file, offset) : null)
+        .inSmartMode(project)
+        .expireWith(project)
+        .finishOnUiThread(ModalityState.defaultModalityState(), h -> {
+          DbConfig c = MapperSqlInspection.connection(project);
+          if (h == null || c == null) {
+            Notify.warning(project, EiDbBundle.message("columnsync.intention.gone"));
+            return;
+          }
+          ColumnSyncAction.open(project, c, null, h.table(), h.column());
+        })
+        .submit(AppExecutorUtil.getAppExecutorService());
   }
 
-  private static @Nullable Hit hit(Project project, Editor editor, PsiFile file) {
+  private static @Nullable Hit hit(Project project, PsiFile file, int offset) {
     if (!(file instanceof PsiJavaFile) || DumbService.isDumb(project)) return null;
-    PsiField f = PsiTreeUtil.getParentOfType(file.findElementAt(editor.getCaretModel().getOffset()), PsiField.class, false);
+    PsiField f = PsiTreeUtil.getParentOfType(file.findElementAt(offset), PsiField.class, false);
     PsiClass owner = f == null ? null : f.getContainingClass();
     if (owner == null || owner.getQualifiedName() == null || f.hasModifierProperty(PsiModifier.STATIC)) return null;
     DbConfig c = MapperSqlInspection.connection(project);
@@ -100,6 +111,9 @@ public final class ColumnSyncIntention implements IntentionAction {
     Set<String> names = Set.of(owner.getQualifiedName().toLowerCase(Locale.ROOT), String.valueOf(owner.getName()).toLowerCase(Locale.ROOT));
     Set<String> tables = new HashSet<>();
     boolean used = false;
+    // 지운 · 옮긴 매퍼의 요약이 쌓이지 않게 지금 없는 파일 것은 버린다.
+    Map<VirtualFile, Summary> cache = project.getUserData(SUMMARIES);
+    if (cache != null) cache.keySet().removeIf(k -> !k.isValid());
     for (MapperIndex.Entry e : MapperIndex.all(project)) {
       if (e.namespace() == null) continue;
       Summary s = summary(project, e.file());

@@ -15,14 +15,18 @@ public class ColumnSyncCheck {
   static final List<ColumnSync.NewColumn> ADD = List.of(new ColumnSync.NewColumn("NEW_COL", "newCol", "새 칼럼", "VARCHAR"));
   static final Set<String> NEW = Set.of("NEW_COL");
 
-  /** mapper 안의 문장 · resultMap 마다 forStatement · forResultMap 을 부르고 모든 바꿀 것을 반영한 글과 결과를 준다. */
-  static List<ColumnSync.Change> run(String xml, Set<String> db, List<ColumnSync.NewColumn> adds, Set<String> missingOk, Set<String> dropped) {
+  /** mapper 안의 문장 · 조각 · resultMap 마다 forStatement · forFragment · forResultMap 을 부른다. adds 는 견줄 칼럼, fresh 는 새 칼럼. */
+  static List<ColumnSync.Change> run(String xml, Set<String> db, List<ColumnSync.NewColumn> adds, Set<String> fresh, Set<String> dropped) {
     MapperDoc doc = MapperDoc.parse(xml);
     MapperSqlScan.Result scan = MapperSqlScan.scan(xml, doc);
     List<ColumnSync.Change> out = new ArrayList<>();
-    for (MapperDoc.Node s : doc.statements) out.addAll(ColumnSync.forStatement(xml, s, scan, "PRODUCT", db, adds, missingOk, dropped));
+    for (MapperDoc.Node s : doc.statements) out.addAll(ColumnSync.forStatement(xml, doc, s, scan, "PRODUCT", db, adds, fresh, dropped));
+    // resultMap 에는 새 칼럼만 넣는다(ColumnSyncAction 과 같음).
+    List<ColumnSync.NewColumn> freshOnly = new ArrayList<>();
+    for (ColumnSync.NewColumn nc : adds) if (fresh.contains(nc.name())) freshOnly.add(nc);
+    for (MapperDoc.Node f : doc.fragments.values()) out.addAll(ColumnSync.forFragment(xml, doc, f, scan, "PRODUCT", db, adds, fresh, dropped));
     for (MapperDoc.Node c : doc.root.children.get(0).children) {
-      if ("resultMap".equals(c.name)) out.addAll(ColumnSync.forResultMap(xml, c, db, adds, dropped));
+      if ("resultMap".equals(c.name)) out.addAll(ColumnSync.forResultMap(xml, c, db, freshOnly, dropped));
     }
     return out;
   }
@@ -212,9 +216,9 @@ public class ColumnSyncCheck {
     eq(oc.size(), 1);
     eq(oc.get(0).kind(), ColumnSync.Kind.ADD_BY_HAND);
 
-    // 9 jdbcType 을 모르면 뗀다, 여러 새 칼럼은 DB 순서대로
-    List<ColumnSync.NewColumn> two = List.of(new ColumnSync.NewColumn("NEW_COL", "newCol", "", null),
-        new ColumnSync.NewColumn("NEW_TWO", "newTwo", "", null));
+    // 9 jdbcType 은 새 칼럼 것으로, 여러 새 칼럼은 DB 순서대로
+    List<ColumnSync.NewColumn> two = List.of(new ColumnSync.NewColumn("NEW_COL", "newCol", "", "VARCHAR"),
+        new ColumnSync.NewColumn("NEW_TWO", "newTwo", "", "NUMERIC"));
     Set<String> db3 = Set.of("PRODUCT_ID", "PRODUCT_NAME", "UNIT_PRICE", "USE_YN", "NEW_COL", "NEW_TWO");
     String jt = mapper("""
           <insert id="i">
@@ -230,7 +234,12 @@ public class ColumnSyncCheck {
     out = applied(jt, run(jt, db3, two, Set.of("NEW_COL", "NEW_TWO"), Set.of()));
     if (args.length > 0) System.out.println(out);
     ok(out.contains("         , UNIT_PRICE   /* 단가 */\n         , NEW_COL\n         , NEW_TWO\n    ) VALUES"), "주석 떼고 차례대로\n" + out);
-    ok(out.contains("         , #{newCol}\n         , #{newTwo}\n    )"), "jdbcType 뗌\n" + out);
+    ok(out.contains("         , #{newCol, jdbcType=VARCHAR}\n         , #{newTwo, jdbcType=NUMERIC}\n    )"), "jdbcType 새 칼럼 것\n" + out);
+    // jdbcType 을 모르면 jdbcType 있는 줄을 복제하지 않고 손으로 넣기
+    String jt2 = jt.replace("#{productId}", "#{productId, jdbcType=NUMERIC}");
+    List<ColumnSync.Change> unknown = run(jt2, db3, List.of(new ColumnSync.NewColumn("NEW_COL", "newCol", "", null)), Set.of("NEW_COL"), Set.of());
+    eq(unknown.size(), 1);
+    eq(unknown.get(0).kind(), ColumnSync.Kind.ADD_BY_HAND);
 
     // 10 CRLF 줄 끝은 그대로
     String crlf = gen.replace("\n", "\r\n");
@@ -253,6 +262,126 @@ public class ColumnSyncCheck {
         """);
     out = applied(batch, run(batch, DB, ADD, NEW, Set.of()));
     ok(out.contains("         , #{item.useYn}\n         , #{item.newCol}\n"), "item.필드\n" + out);
+
+    // 12 UNION: 목록이 여럿이라 고치지 않고 손으로 넣기
+    String union = mapper("""
+          <select id="un">
+            SELECT PRODUCT_ID
+                 , PRODUCT_NAME
+              FROM PRODUCT
+            UNION ALL
+            SELECT PRODUCT_ID
+                 , PRODUCT_NAME
+              FROM PRODUCT
+          </select>
+        """);
+    List<ColumnSync.Change> uc = run(union, DB, ADD, NEW, Set.of());
+    eq(uc.size(), 1);
+    eq(uc.get(0).kind(), ColumnSync.Kind.ADD_BY_HAND);
+    eq(applied(union, uc), union);
+
+    // 13 include 칼럼 목록 조각: 조각에 넣고, 조각을 부르는 문장에는 넣지 않는다 · 다른 파일 조각이면 손으로
+    String inc = mapper("""
+          <sql id="Base_Column_List">
+                   PRODUCT_ID
+                 , PRODUCT_NAME
+                 , UNIT_PRICE
+                 , USE_YN
+          </sql>
+          <select id="inc">
+            SELECT <include refid="Base_Column_List"/>
+              FROM PRODUCT
+          </select>
+          <select id="far">
+            SELECT p.PRODUCT_ID
+                 , <include refid="other.Mapper.cols"/>
+              FROM PRODUCT p
+          </select>
+        """);
+    List<ColumnSync.Change> ic = run(inc, DB, ADD, NEW, Set.of());
+    out = applied(inc, ic);
+    if (args.length > 0) System.out.println(out);
+    ok(out.contains("         , USE_YN\n         , NEW_COL\n  </sql>"), "조각 목록에 넣기\n" + out);
+    eq(out.split("NEW_COL", -1).length - 1, 1);
+    int byHand = 0;
+    for (ColumnSync.Change c : ic) if (c.kind() == ColumnSync.Kind.ADD_BY_HAND) byHand++;
+    eq(byHand, 1);
+
+    // 14 <trim prefix="SET"> UPDATE · insertSelective <trim prefix="("> INSERT: 목록 모양을 몰라 손으로
+    String trim = mapper("""
+          <update id="ut">
+            UPDATE PRODUCT
+            <trim prefix="SET" suffixOverrides=",">
+              <if test="productName != null">PRODUCT_NAME = #{productName},</if>
+              <if test="useYn != null">USE_YN = #{useYn},</if>
+            </trim>
+             WHERE PRODUCT_ID = #{productId}
+          </update>
+          <insert id="is">
+            INSERT INTO PRODUCT
+            <trim prefix="(" suffix=")" suffixOverrides=",">
+              <if test="productId != null">PRODUCT_ID,</if>
+              <if test="useYn != null">USE_YN,</if>
+            </trim>
+            <trim prefix="VALUES (" suffix=")" suffixOverrides=",">
+              <if test="productId != null">#{productId},</if>
+              <if test="useYn != null">#{useYn},</if>
+            </trim>
+          </insert>
+        """);
+    List<ColumnSync.Change> trc = run(trim, DB, ADD, NEW, Set.of());
+    eq(trc.size(), 2);
+    for (ColumnSync.Change c : trc) eq(c.kind(), ColumnSync.Kind.ADD_BY_HAND);
+
+    // 15 CDATA 끝 표시가 있는 줄은 복제 · 지우기를 하지 않는다
+    String cdata = mapper("""
+          <update id="cd">
+            <![CDATA[
+            UPDATE PRODUCT SET
+                   PRODUCT_NAME = #{productName}
+                 , UNIT_PRICE = #{unitPrice}
+                 , USE_YN = #{useYn} ]]>
+             WHERE PRODUCT_ID = #{productId}
+          </update>
+        """);
+    out = applied(cdata, run(cdata, DB, ADD, NEW, Set.of("USE_YN")));
+    if (args.length > 0) System.out.println(out);
+    ok(out.contains("         , USE_YN = #{useYn} ]]>\n"), "CDATA 끝 줄 그대로\n" + out);
+    eq(out.split("]]>", -1).length - 1, 1);
+    ok(!out.contains("NEW_COL = #{newCol} ]]>"), "CDATA 끝 표시 복제 안 함\n" + out);
+
+    // 16 두 번째 실행: 이미 넣은 목록은 건너뛰고, 그 칼럼이 빠진 목록은 (새 칼럼이 아니므로) 체크 끈 채 낸다
+    List<ColumnSync.NewColumn> all = new ArrayList<>();
+    for (String c : List.of("PRODUCT_ID", "PRODUCT_NAME", "UNIT_PRICE", "USE_YN", "NEW_COL")) {
+      all.add(new ColumnSync.NewColumn(c, c.equals("NEW_COL") ? "newCol" : c.toLowerCase(), "", "VARCHAR"));
+    }
+    String once = applied(gen, run(gen, DB, ADD, NEW, Set.of()));
+    eq(String.valueOf(run(once, DB, all, Set.of(), Set.of())), "[]");
+    String half = mapper("""
+          <select id="s">
+            SELECT PRODUCT_ID
+                 , PRODUCT_NAME
+                 , UNIT_PRICE
+                 , USE_YN
+                 , NEW_COL
+              FROM PRODUCT
+          </select>
+          <update id="u">
+            UPDATE PRODUCT
+            <set>
+              <if test="productName != null">PRODUCT_NAME = #{productName},</if>
+              <if test="unitPrice != null">UNIT_PRICE = #{unitPrice},</if>
+              <if test="useYn != null">USE_YN = #{useYn},</if>
+            </set>
+             WHERE PRODUCT_ID = #{productId}
+          </update>
+        """);
+    boolean offered = false;
+    for (ColumnSync.Change c : run(half, DB, all, Set.of(), Set.of())) {
+      ok(c.part() == ColumnSync.Part.UPDATE && !c.checked(), "새 칼럼이 아니면 UPDATE 에만 체크 끔: " + c);
+      if (c.column().equals("NEW_COL") && c.kind() == ColumnSync.Kind.ADD) offered = true;
+    }
+    ok(offered, "UPDATE 에 빠진 NEW_COL");
 
     eq(ColumnSync.commentText("a */ <b> & c"), "a * / &lt;b&gt; &amp; c");
     System.out.println("ColumnSyncCheck 통과");

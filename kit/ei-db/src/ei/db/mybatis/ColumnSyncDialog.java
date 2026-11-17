@@ -37,7 +37,8 @@ import java.util.Map;
 
 /**
  * 「DB 바뀐 것 코드에 맞추기」 미리보기. 왼쪽은 파일 › 고칠 것 체크 나무(손으로 할 일 · 알림은 체크 없음), 오른쪽은 고른 줄의 고친 뒤 모습.
- * 두 번 누르면 그 자리로 간다. 확인하면 chosen() 이 체크된 줄들.
+ * 두 번 누르면 그 자리로 간다(창이 떠 있는 채로 에디터에서 볼 수 있게 모달이 아니다). 확인하면 체크된 줄들을 고친다.
+ * 연 뒤 파일이 바뀌었으면 고치지 않는다(ColumnSyncAction.apply 가 수정 표시로 확인).
  */
 final class ColumnSyncDialog extends DialogWrapper {
   /** 처음 열 때 화면에 대한 창 크기 몫. 사용자가 바꾼 크기는 DIMENSION_KEY 로 기억한다. */
@@ -54,7 +55,7 @@ final class ColumnSyncDialog extends DialogWrapper {
   private final JBTextArea preview = new JBTextArea();
 
   ColumnSyncDialog(Project project, ColumnSyncAction.Plan plan) {
-    super(project);
+    super(project, true, IdeModalityType.MODELESS);
     this.project = project;
     this.plan = plan;
     CheckedTreeNode root = new CheckedTreeNode(null);
@@ -150,6 +151,13 @@ final class ColumnSyncDialog extends DialogWrapper {
   public Dimension getInitialSize() {
     Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
     return new Dimension((int) (screen.width * FIRST_WIDTH_RATIO), (int) (screen.height * FIRST_HEIGHT_RATIO));
+  }
+
+  @Override
+  protected void doOKAction() {
+    List<ColumnSyncAction.Row> rows = chosen();
+    super.doOKAction();
+    ColumnSyncAction.apply(project, rows);
   }
 
   @Override

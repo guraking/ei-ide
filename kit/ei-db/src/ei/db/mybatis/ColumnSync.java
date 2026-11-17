@@ -33,52 +33,55 @@ final class ColumnSync {
   /** 고칠 것 하나. owner 는 문장 · resultMap id. edits 가 비면 손으로 할 일. order 는 같은 자리에 넣을 때 차례(DB 칼럼 순서). */
   record Change(Kind kind, Part part, String owner, String column, List<Edit> edits, boolean checked, int at, int order) {}
 
-  /** 넣을 칼럼: DB 이름, DTO 필드 이름, 주석(없으면 빈 글), jdbcType(모르면 null: #{} 의 jdbcType 을 뗀다). */
+  /** 넣을 칼럼: DB 이름, DTO 필드 이름, 주석(없으면 빈 글), jdbcType(모르면 null: 본보기 줄에 jdbcType 이 있으면 복제하지 않는다). */
   record NewColumn(String name, String field, String comment, String jdbcType) {}
 
+  /** 「거의 다 가진 목록」: 새 칼럼 말고 빠진 칼럼이 이 수 이하이거나 */
+  private static final int NEAR_FULL_MIN_GAP = 2;
+  /** 테이블 칼럼 수를 이 값으로 나눈 수 이하면, 새 칼럼이 아닌 빠진 칼럼도 (체크 끈 채) 넣기로 낸다. 일부만 고른 조회에 칼럼을 늘어놓지 않으려는 것. */
+  private static final int NEAR_FULL_DIVISOR = 5;
+  /** SELECT 결과를 합치는 낱말. 깊이 0 에 있으면 목록이 여럿이라 고치지 않는다. */
+  private static final Set<String> SET_OPERATORS = Set.of("UNION", "INTERSECT", "MINUS", "EXCEPT");
+  private static final String INCLUDE_TAG = "include";
+  private static final Pattern REFID = Pattern.compile("\\brefid\\s*=\\s*([\"'])(.*?)\\1");
+
   /**
-   * 문장 하나에서 고칠 것. table 은 따옴표 없는 테이블 이름, dbColumns 는 DB 칼럼(대문자), adds 는 넣을 칼럼(DB 순서),
-   * missingOk 는 「모두 가진 목록」을 따질 때 없어도 되는 칼럼(대문자, 새 칼럼들), dropped 는 지울 칼럼(대문자).
-   * scan 은 이 문서의 MapperSqlScan 결과. 문장을 확실히 읽을 수 없으면 빈 목록.
+   * 문장 하나에서 고칠 것. table 은 따옴표 없는 테이블 이름, dbColumns 는 DB 칼럼(대문자), candidates 는 넣을 수 있는 칼럼(DB 순서),
+   * fresh 는 그 가운데 「새 칼럼」(대문자: 이 테이블을 쓰는 어떤 문장 · resultMap 도 쓰지 않는 칼럼), dropped 는 지울 칼럼(대문자).
+   * 목록(SELECT 목록 · INSERT 칼럼 · UPDATE SET)마다 그 목록이 갖지 않은 칼럼으로 판단한다:
+   * 새 칼럼은 늘 내고(기본 체크는 INSERT 이거나 목록이 새 칼럼 말고는 다 가질 때), 새 칼럼이 아닌 빠진 칼럼은 목록이 거의 다 가질 때만 체크 끈 채 낸다.
+   * 목록 모양을 읽을 수 없는 이 테이블 대상 INSERT · UPDATE · 합친 SELECT · 다른 파일 조각을 include 한 SELECT 목록은 새 칼럼마다 손으로 넣기를 내고,
+   * 같은 파일 조각을 include 한 SELECT 목록에는 넣지 않는다(그 조각을 forFragment 가 따로 본다).
+   * doc 은 include 가 같은 파일 조각인지 보는 데, scan 은 이 문서의 MapperSqlScan 결과. 문장을 확실히 읽을 수 없으면 빈 목록.
    */
-  static List<Change> forStatement(CharSequence text, Node st, MapperSqlScan.Result scan, String table, Set<String> dbColumns,
-                                   List<NewColumn> adds, Set<String> missingOk, Set<String> dropped) {
+  static List<Change> forStatement(CharSequence text, MapperDoc doc, Node st, MapperSqlScan.Result scan, String table, Set<String> dbColumns,
+                                   List<NewColumn> candidates, Set<String> fresh, Set<String> dropped) {
     List<Change> out = new ArrayList<>();
     List<Tok> toks = tokenize(text, st.start, Math.min(st.end, text.length()));
     if (toks == null) return out;
     String id = st.attr("id") == null ? "" : st.attr("id");
     Set<Integer> certain = new HashSet<>();
-    List<Integer> certainAll = new ArrayList<>();
+    Set<String> used = new HashSet<>();
     for (MapperSqlScan.Column c : scan.columns()) {
       if (c.start() >= st.start && c.end() <= st.end && MapperSqlScan.bare(c.table().name()).equalsIgnoreCase(table)) {
         certain.add(c.start());
-        certainAll.add(c.start());
+        used.add(MapperSqlScan.bare(c.name()).toUpperCase(Locale.ROOT));
       }
     }
-    Clause clause = clause(toks, table);
+    Clause clause = clause(toks, table, doc);
     Set<Integer> handled = new HashSet<>();
     if (clause != null) {
-      Set<String> covered = new HashSet<>();
-      for (MapperSqlScan.Column c : scan.columns()) {
-        if (certain.contains(c.start())) covered.add(MapperSqlScan.bare(c.name()).toUpperCase(Locale.ROOT));
+      listChanges(text, clause, certain, used, dbColumns, candidates, fresh, dropped, id, handled, out);
+    } else if (unreadableTarget(toks, table)) {
+      for (int k = 0; k < candidates.size(); k++) {
+        NewColumn nc = candidates.get(k);
+        String up = nc.name().toUpperCase(Locale.ROOT);
+        if (fresh.contains(up) && !used.contains(up)) out.add(new Change(Kind.ADD_BY_HAND, Part.OTHER, id, nc.name(), List.of(), false, st.start, k));
       }
-      for (Item it : clause.cols()) {
-        if (it.column != null && (clause.part() != Part.SELECT || certain.contains(it.columnStart))) covered.add(it.column);
-      }
-      Set<String> need = new HashSet<>(dbColumns);
-      need.removeAll(missingOk);
-      boolean full = clause.part() == Part.INSERT || covered.containsAll(need);
-      for (int k = 0; k < adds.size(); k++) {
-        NewColumn nc = adds.get(k);
-        if (covered.contains(nc.name().toUpperCase(Locale.ROOT))) continue;
-        Change c = add(text, clause, certain, dbColumns, nc, id, full, k);
-        if (c != null) out.add(c);
-      }
-      for (String d : dropped) removes(text, clause, certain, d, id, handled, out);
     }
     for (String d : dropped) {
       for (MapperSqlScan.Column c : scan.columns()) {
-        if (certainAll.contains(c.start()) && !handled.contains(c.start()) && MapperSqlScan.bare(c.name()).equalsIgnoreCase(d)) {
+        if (certain.contains(c.start()) && !handled.contains(c.start()) && MapperSqlScan.bare(c.name()).equalsIgnoreCase(d)) {
           out.add(new Change(Kind.FIX_BY_HAND, Part.OTHER, id, d, List.of(), false, c.start(), 0));
           break;
         }
@@ -88,25 +91,121 @@ final class ColumnSync {
   }
 
   /**
+   * &lt;sql&gt; 조각 하나. 칼럼 이름만 쉼표로 늘어놓은 조각(Base_Column_List 따위, 절반 이상이 이 테이블 칼럼)은 SELECT 목록처럼 넣기 · 지우기를 내고,
+   * 그 밖의 조각은 문장과 같이 본다.
+   */
+  static List<Change> forFragment(CharSequence text, MapperDoc doc, Node frag, MapperSqlScan.Result scan, String table, Set<String> dbColumns,
+                                  List<NewColumn> candidates, Set<String> fresh, Set<String> dropped) {
+    List<Tok> toks = tokenize(text, frag.start, Math.min(frag.end, text.length()));
+    List<Item> items = toks == null ? null : items(toks, 0);
+    if (items != null && !items.isEmpty()) {
+      int known = 0;
+      Set<Integer> certain = new HashSet<>();
+      for (Item it : items) {
+        selectShape(it);
+        if (it.column != null && (dbColumns.contains(it.column) || dropped.contains(it.column))) {
+          known++;
+          certain.add(it.columnStart);
+        }
+      }
+      if (known * 2 >= items.size() && onlyItems(toks)) {
+        List<Change> out = new ArrayList<>();
+        String id = frag.attr("id") == null ? "" : frag.attr("id");
+        listChanges(text, new Clause(Part.SELECT, items, null, toks, frag.start, false, false), certain, Set.of(), dbColumns, candidates, fresh, dropped, id,
+            new HashSet<>(), out);
+        return out;
+      }
+    }
+    return forStatement(text, doc, frag, scan, table, dbColumns, candidates, fresh, dropped);
+  }
+
+  /** toks 가 태그 · 주석 · 낱말 · 쉼표 · 점 붙은 낱말뿐(SQL 낱말 · 괄호 없음)이면 true. */
+  private static boolean onlyItems(List<Tok> toks) {
+    for (Tok t : toks) {
+      if (t.type == Type.TAG || t.type == Type.COMMENT || t.type == Type.COMMA) continue;
+      if (t.type != Type.WORD || isKeyword(t.text)) return false;
+    }
+    return true;
+  }
+
+  /**
+   * 한 목록의 넣기 · 지우기(forStatement 설명대로). used 는 문장이 쓰는 이 테이블 칼럼(대문자):
+   * UPDATE 는 WHERE 의 키 칼럼을 SET 에 두지 않으므로 문장 어디서든 쓰는 칼럼을 가진 것으로 본다.
+   */
+  private static void listChanges(CharSequence text, Clause clause, Set<Integer> certain, Set<String> used, Set<String> dbColumns,
+                                  List<NewColumn> candidates, Set<String> fresh, Set<String> dropped, String id, Set<Integer> handled,
+                                  List<Change> out) {
+    Set<String> covered = new HashSet<>(clause.part() == Part.UPDATE ? used : Set.of());
+    for (Item it : clause.cols()) {
+      if (it.column != null && (clause.part() != Part.SELECT || certain.contains(it.columnStart))) covered.add(it.column);
+    }
+    int gap = 0;
+    for (String col : dbColumns) if (!covered.contains(col) && !fresh.contains(col)) gap++;
+    boolean nearlyFull = gap <= Math.max(NEAR_FULL_MIN_GAP, dbColumns.size() / NEAR_FULL_DIVISOR);
+    boolean full = clause.part() == Part.INSERT || gap == 0;
+    for (int k = 0; k < candidates.size(); k++) {
+      NewColumn nc = candidates.get(k);
+      String up = nc.name().toUpperCase(Locale.ROOT);
+      if (covered.contains(up)) continue;
+      boolean isFresh = fresh.contains(up);
+      if (!isFresh && !nearlyFull) continue;
+      // 같은 파일 조각을 include 한 목록은 그 조각이 따로 판단된다(forFragment). 여기서도 넣으면 두 번 들어간다.
+      if (clause.local()) continue;
+      if (clause.foreign()) {
+        if (isFresh) out.add(byHand(clause, nc, id, k));
+        continue;
+      }
+      Change c = add(text, clause, certain, dbColumns, nc, id, isFresh && full, k, isFresh);
+      if (c != null) out.add(c);
+    }
+    for (String d : dropped) removes(text, clause, certain, d, id, handled, out);
+  }
+
+  /** 이 테이블에 넣는 INSERT · 이 테이블을 고치는 UPDATE · 결과를 합치는 SELECT 이면 true(목록을 읽지 못했을 때 손으로 넣기를 낼 곳). */
+  private static boolean unreadableTarget(List<Tok> toks, String table) {
+    int first = nextSql(toks, 0);
+    if (first < 0 || toks.get(first).type != Type.WORD) return false;
+    String kw = toks.get(first).text.toUpperCase(Locale.ROOT);
+    if ("SELECT".equals(kw)) return setOperator(toks, first + 1);
+    int name = nextSql(toks, first + 1);
+    if ("INSERT".equals(kw)) {
+      if (name < 0 || !"INTO".equalsIgnoreCase(toks.get(name).text)) return false;
+      name = nextSql(toks, name + 1);
+    } else if (!"UPDATE".equals(kw)) {
+      return false;
+    }
+    return name >= 0 && sameTable(toks.get(name), table);
+  }
+
+  private static boolean setOperator(List<Tok> toks, int from) {
+    for (int i = from; i < toks.size(); i++) {
+      Tok t = toks.get(i);
+      if (t.type == Type.WORD && t.depth == 0 && SET_OPERATORS.contains(t.text.toUpperCase(Locale.ROOT))) return true;
+    }
+    return false;
+  }
+
+  /**
    * resultMap 하나에서 고칠 것. 바로 아래 id · result 요소만 본다(association · collection 안은 보지 않는다).
-   * 테이블 칼럼(dbColumns)을 하나도 쓰지 않는 resultMap 은 이 테이블 것이 아니라 보고 넣지 않는다.
+   * 테이블 칼럼(dbColumns)을 MIN_TABLE_COLUMNS 개 넘게 쓰거나 칼럼이 모두 테이블 칼럼인 resultMap 만 이 테이블 것으로 본다
+   * (FK · 등록일처럼 이름이 겹치는 칼럼 하나로 다른 테이블 resultMap 에 넣지 않게).
    */
   static List<Change> forResultMap(CharSequence text, Node rm, Set<String> dbColumns, List<NewColumn> adds, Set<String> dropped) {
     List<Change> out = new ArrayList<>();
     String id = rm.attr("id") == null ? "" : rm.attr("id");
     Set<String> have = new HashSet<>();
     Node anchor = null;
-    boolean anyTable = false;
+    int tableColumns = 0;
     for (Node c : rm.children) {
       if (c.name == null || !RESULT_TAGS.contains(c.name) || c.attr(COLUMN_ATTR) == null) continue;
       String col = c.attr(COLUMN_ATTR).trim().toUpperCase(Locale.ROOT);
       have.add(col);
       if (dbColumns.contains(col)) {
-        anyTable = true;
+        tableColumns++;
         if (RESULT_TAG.equals(c.name) && lineOnly(text, c.start, c.end)) anchor = c;
       }
     }
-    if (anyTable) {
+    if (tableColumns >= MIN_TABLE_COLUMNS || (tableColumns > 0 && tableColumns == have.size())) {
       for (int k = 0; k < adds.size(); k++) {
         NewColumn nc = adds.get(k);
         if (have.contains(nc.name().toUpperCase(Locale.ROOT))) continue;
@@ -131,6 +230,9 @@ final class ColumnSync {
     }
     return out;
   }
+
+  /** resultMap 을 이 테이블 것으로 보는 겹치는 칼럼 수. */
+  private static final int MIN_TABLE_COLUMNS = 2;
 
   /** edits 를 반영한 글. 같은 자리에 넣는 것은 주어진 차례대로 들어간다. 겹치면 IllegalArgumentException. */
   static String apply(CharSequence text, List<Edit> edits) {
@@ -162,10 +264,11 @@ final class ColumnSync {
 
   // ---------------------------------------------------------------- 넣기
 
+  /** 넣기 하나. 복제할 줄을 못 찾으면 byHandOk 일 때 손으로 넣기, 아니면 null. */
   private static Change add(CharSequence text, Clause clause, Set<Integer> certain, Set<String> dbColumns, NewColumn nc, String id,
-                            boolean full, int order) {
+                            boolean full, int order, boolean byHandOk) {
     if (clause.part() == Part.INSERT) {
-      if (clause.vals() == null || clause.vals().size() != clause.cols().size()) return byHand(clause, nc, id, order);
+      if (clause.vals() == null || clause.vals().size() != clause.cols().size()) return byHandOk ? byHand(clause, nc, id, order) : null;
       for (int i = clause.cols().size() - 1; i >= 0; i--) {
         Item c = clause.cols().get(i);
         Item v = clause.vals().get(i);
@@ -175,10 +278,10 @@ final class ColumnSync {
         String cc = clone(text, c, nc, after, null);
         String vc = clone(text, v, nc, after, v.field);
         if (cc == null || vc == null) continue;
-        return new Change(Kind.ADD, Part.INSERT, id, nc.name(), List.of(insert(text, c, cc, after), insert(text, v, vc, after)), true,
+        return new Change(Kind.ADD, Part.INSERT, id, nc.name(), List.of(insert(text, c, cc, after), insert(text, v, vc, after)), full,
             c.start, order);
       }
-      return byHand(clause, nc, id, order);
+      return byHandOk ? byHand(clause, nc, id, order) : null;
     }
     boolean any = false;
     for (int i = clause.cols().size() - 1; i >= 0; i--) {
@@ -192,7 +295,7 @@ final class ColumnSync {
       if (cc == null) continue;
       return new Change(Kind.ADD, clause.part(), id, nc.name(), List.of(insert(text, c, cc, after)), full, c.start, order);
     }
-    return any ? byHand(clause, nc, id, order) : null;
+    return any && byHandOk ? byHand(clause, nc, id, order) : null;
   }
 
   private static Change byHand(Clause clause, NewColumn nc, String id, int order) {
@@ -246,7 +349,8 @@ final class ColumnSync {
           while (from > ls && (text.charAt(from - 1) == ' ' || text.charAt(from - 1) == '\t')) from--;
           edits.add(new Edit(from - ls, t.end - ls, ""));
         } else {
-          edits.add(new Edit(t.start - ls, t.end - ls, t.text.startsWith("--") ? "-- " + c : "/* " + c + " */"));
+          edits.add(new Edit(t.start - ls, t.end - ls, t.text.startsWith(XML_COMMENT_OPEN) ? xmlComment(nc.comment())
+              : t.text.startsWith("--") ? "-- " + c : "/* " + c + " */"));
         }
       }
     }
@@ -255,8 +359,19 @@ final class ColumnSync {
   }
 
   private static final Pattern JDBC_TYPE = Pattern.compile("(?i)jdbcType");
+  private static final String XML_COMMENT_OPEN = "<!--";
+  private static final String XML_COMMENT_CLOSE = "-->";
+  private static final String CDATA_OPEN = "<![CDATA[";
+  private static final String CDATA_CLOSE = "]]>";
 
-  /** #{경로, 선택} 의 경로 마지막 마디를 새 필드로. jdbcType 은 새 칼럼 것으로(모르면 뗌), 다른 선택이 있거나 ${} 면 null. */
+  /** XML 주석 &lt;!-- 글 --&gt;. 주석 안에 둘 수 없는 「--」 는 벌린다. */
+  private static String xmlComment(String comment) {
+    String c = comment.replace("\r", " ").replace("\n", " ").trim();
+    while (c.contains("--")) c = c.replace("--", "- -");
+    return XML_COMMENT_OPEN + " " + c + " " + XML_COMMENT_CLOSE;
+  }
+
+  /** #{경로, 선택} 의 경로 마지막 마디를 새 필드로. jdbcType 은 새 칼럼 것으로, 새 칼럼 jdbcType 을 모르거나 다른 선택이 있거나 ${} 면 null. */
   private static String placeholder(String raw, NewColumn nc) {
     if (!raw.startsWith("#{") || !raw.endsWith("}")) return null;
     String body = raw.substring(2, raw.length() - 1);
@@ -266,8 +381,8 @@ final class ColumnSync {
     StringBuilder b = new StringBuilder("#{").append(dot < 0 ? "" : path.substring(0, dot + 1)).append(nc.field());
     for (int i = 1; i < parts.length; i++) {
       String[] kv = parts[i].split("=", 2);
-      if (kv.length != 2 || !JDBC_TYPE.matcher(kv[0].trim()).matches()) return null;
-      if (nc.jdbcType() != null) b.append(", ").append(kv[0].trim()).append('=').append(nc.jdbcType());
+      if (kv.length != 2 || !JDBC_TYPE.matcher(kv[0].trim()).matches() || nc.jdbcType() == null) return null;
+      b.append(", ").append(kv[0].trim()).append('=').append(nc.jdbcType());
     }
     return b.append('}').toString();
   }
@@ -308,7 +423,7 @@ final class ColumnSync {
     return tag.substring(0, m.start(2)) + b + tag.substring(m.end(2));
   }
 
-  /** resultMap 의 result 한 줄을 nc 로. column · property 만 바꾸고 jdbcType 은 새 칼럼 것으로(모르면 뗌). 다른 형식 속성이 있으면 null. */
+  /** resultMap 의 result 한 줄을 nc 로. column · property 만 바꾸고 jdbcType 은 새 칼럼 것으로(모르면 null). 다른 형식 속성이 있으면 null. */
   private static String cloneResult(CharSequence text, Node el, NewColumn nc) {
     for (String a : el.attrs.keySet()) {
       if (!COLUMN_ATTR.equals(a) && !PROPERTY_ATTR.equals(a) && !JDBC_TYPE.matcher(a).matches()) return null;
@@ -324,15 +439,8 @@ final class ColumnSync {
     for (String a : el.attrs.keySet()) {
       if (!JDBC_TYPE.matcher(a).matches()) continue;
       int[] r = ColumnRename.attrRange(text, el, a);
-      if (r == null) return null;
-      if (nc.jdbcType() != null) {
-        edits.add(new Edit(r[0] - ls, r[1] - ls, nc.jdbcType()));
-      } else {
-        // 속성 통째(앞 빈칸 · 이름 · = · 따옴표)를 뗀다.
-        int from = r[0] - 1;
-        while (from > el.start && text.charAt(from) != ' ' && text.charAt(from) != '\t' && text.charAt(from) != '\n') from--;
-        edits.add(new Edit(from - ls, r[1] + 1 - ls, ""));
-      }
+      if (r == null || nc.jdbcType() == null) return null;
+      edits.add(new Edit(r[0] - ls, r[1] - ls, nc.jdbcType()));
     }
     return apply(text.subSequence(ls, le), edits);
   }
@@ -448,23 +556,37 @@ final class ColumnSync {
     boolean simple() { return simpleShape; }
   }
 
-  /** 한 절의 목록. INSERT 면 cols 가 칼럼, vals 가 VALUES 값. all 은 문장의 모든 토큰(같은 줄에 다른 것이 있는지 볼 때). */
-  private record Clause(Part part, List<Item> cols, List<Item> vals, List<Tok> all, int at) {}
+  /**
+   * 한 절의 목록. INSERT 면 cols 가 칼럼, vals 가 VALUES 값. all 은 문장의 모든 토큰(같은 줄에 다른 것이 있는지 볼 때).
+   * local 은 목록 안에서 같은 파일 조각을, foreign 은 다른 파일(찾지 못한) 조각을 include 하는지.
+   */
+  private record Clause(Part part, List<Item> cols, List<Item> vals, List<Tok> all, int at, boolean foreign, boolean local) {}
 
-  /** 문장의 첫 낱말로 SELECT · INSERT · UPDATE 목록을 나눈다. 대상 테이블이 table 이 아니거나 모양을 모르면 null. */
-  private static Clause clause(List<Tok> toks, String table) {
+  /** 문장의 첫 낱말로 SELECT · INSERT · UPDATE 목록을 나눈다. 대상 테이블이 table 이 아니거나 결과를 합치는 SELECT 이거나 모양을 모르면 null. */
+  private static Clause clause(List<Tok> toks, String table, MapperDoc doc) {
     int first = nextSql(toks, 0);
     if (first < 0 || toks.get(first).type != Type.WORD) return null;
     String kw = toks.get(first).text.toUpperCase(Locale.ROOT);
     switch (kw) {
       case "SELECT" -> {
         int from = findWord(toks, first + 1, "FROM", 0);
-        if (from < 0) return null;
+        if (from < 0 || setOperator(toks, first + 1)) return null;
         List<Tok> region = toks.subList(first + 1, from);
         List<Item> items = items(region, 0);
         if (items == null) return null;
         for (Item it : items) selectShape(it);
-        return new Clause(Part.SELECT, items, null, toks, toks.get(first).start);
+        boolean foreign = false;
+        boolean local = false;
+        for (Tok t : region) {
+          if (t.type != Type.TAG || !INCLUDE_TAG.equals(t.tag)) continue;
+          Matcher m = REFID.matcher(t.text);
+          if (m.find() && doc.fragment(m.group(2)) != null) {
+            local = true;
+          } else {
+            foreign = true;
+          }
+        }
+        return new Clause(Part.SELECT, items, null, toks, toks.get(first).start, foreign, local);
       }
       case "INSERT" -> {
         int into = nextSql(toks, first + 1);
@@ -486,7 +608,7 @@ final class ColumnSync {
         if (cols == null || vals == null) return null;
         for (Item it : cols) wordShape(it);
         for (Item it : vals) valueShape(it);
-        return new Clause(Part.INSERT, cols, vals, toks, toks.get(first).start);
+        return new Clause(Part.INSERT, cols, vals, toks, toks.get(first).start, false, false);
       }
       case "UPDATE" -> {
         int name = nextSql(toks, first + 1);
@@ -510,7 +632,7 @@ final class ColumnSync {
         List<Item> items = items(region, 0);
         if (items == null) return null;
         for (Item it : items) setShape(it);
-        return new Clause(Part.UPDATE, items, null, toks, toks.get(first).start);
+        return new Clause(Part.UPDATE, items, null, toks, toks.get(first).start, false, false);
       }
       default -> {
         return null;
@@ -675,14 +797,17 @@ final class ColumnSync {
     int i = from;
     while (i < to) {
       char c = text.charAt(i);
-      if (startsWith(text, i, "<!--")) {
-        int e = indexOf(text, "-->", i + 4, to);
+      if (startsWith(text, i, XML_COMMENT_OPEN)) {
+        int e = indexOf(text, XML_COMMENT_CLOSE, i + XML_COMMENT_OPEN.length(), to);
         if (e < 0) return null;
-        i = e + 3;
-      } else if (startsWith(text, i, "<![CDATA[")) {
-        i += "<![CDATA[".length();
-      } else if (startsWith(text, i, "]]>")) {
-        i += "]]>".length();
+        int end = e + XML_COMMENT_CLOSE.length();
+        out.add(new Tok(Type.COMMENT, i, end, text.subSequence(i, end).toString(), depth, null, text));
+        i = end;
+      } else if (startsWith(text, i, CDATA_OPEN) || startsWith(text, i, CDATA_CLOSE)) {
+        // CDATA 표시는 태그로 둔다: 표시가 있는 줄은 항목만 있는 줄이 아니라 복제 · 지우기를 하지 않는다.
+        String mark = startsWith(text, i, CDATA_OPEN) ? CDATA_OPEN : CDATA_CLOSE;
+        out.add(new Tok(Type.TAG, i, i + mark.length(), mark, depth, mark, text));
+        i += mark.length();
       } else if (c == '<' && i + 1 < to && (Character.isLetter(text.charAt(i + 1)) || text.charAt(i + 1) == '/')) {
         int e = tagEnd(text, i, to);
         if (e < 0) return null;
@@ -706,7 +831,7 @@ final class ColumnSync {
         i = e + 2;
       } else if (startsWith(text, i, "--")) {
         int e = i;
-        while (e < to && text.charAt(e) != '\n' && !startsWith(text, e, "]]>") && text.charAt(e) != '<') e++;
+        while (e < to && text.charAt(e) != '\n' && !startsWith(text, e, CDATA_CLOSE) && text.charAt(e) != '<') e++;
         out.add(new Tok(Type.COMMENT, i, e, text.subSequence(i, e).toString(), depth, null, text));
         i = e;
       } else if (c == '\'') {
