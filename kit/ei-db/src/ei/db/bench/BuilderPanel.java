@@ -1,7 +1,6 @@
 package ei.db.bench;
 
 import com.intellij.icons.AllIcons;
-import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.ui.ComboBox;
@@ -472,7 +471,7 @@ final class BuilderPanel {
     countGeneration++;
     stopCount();
     DbConfig c = bench.config();
-    autoCount.setSelected(c != null && !c.production && PropertiesComponent.getInstance().getBoolean(AUTO_COUNT_KEY, true));
+    autoCount.setSelected(c != null && !c.production && BenchSettings.getBoolean(bench.project, AUTO_COUNT_KEY, true));
     if (c == null) return;
     tableList.getEmptyText().setText("테이블 목록을 읽는 중…");
     bench.tables(list -> {
@@ -745,7 +744,7 @@ final class BuilderPanel {
   /** 운영이 아닌 접속에서 고른 값만 기억한다. */
   private void autoCountChosen() {
     DbConfig c = bench.config();
-    if (c != null && !c.production) PropertiesComponent.getInstance().setValue(AUTO_COUNT_KEY, autoCount.isSelected(), true);
+    if (c != null && !c.production) BenchSettings.set(bench.project, AUTO_COUNT_KEY, autoCount.isSelected());
     if (autoCount.isSelected()) countTimer.restart();
     else countTimer.stop();
   }

@@ -103,7 +103,9 @@ public class QueryBenchCheck {
     eq(QueryBuilder.kindOf("VARCHAR2"), QueryBuilder.ColKind.TEXT);
     eq(QueryBuilder.kindOf("TIMESTAMP(6)"), QueryBuilder.ColKind.DATE);
     eq(QueryBuilder.kindOf("NUMBER"), QueryBuilder.ColKind.NUMBER);
-    eq(QueryBuilder.literal(QueryBuilder.ColKind.TEXT, "O'K"), "'O''K'");
+    eq(QueryBuilder.literal(DbKind.ORACLE, QueryBuilder.ColKind.TEXT, "O'K"), "'O''K'");
+    eq(QueryBuilder.literal(DbKind.POSTGRES, QueryBuilder.ColKind.TEXT, "C:\\temp"), "'C:\\temp'");
+    eq(QueryBuilder.literal(DbKind.MYSQL, QueryBuilder.ColKind.TEXT, "C:\\temp'"), "'C:\\\\temp'''");
   }
 
   /** (+) 가 없는 DB 의 옛 방식: 안쪽 조인은 콤마 · WHERE, 바깥 조인은 짝 표 뒤 LEFT OUTER JOIN. 짝이 여러 묶음에 걸치면 표준 JOIN. */
@@ -333,6 +335,12 @@ public class QueryBenchCheck {
     yes(SqlExplain.condition("o.MEMO LIKE CONCAT('%', :memo)").contains("끝나는"), "explain ends");
     yes(SqlExplain.condition("o.MEMO LIKE '%' || :memo || '%'").contains("들어 있는"), "explain ||");
     eq(QueryBuilder.nextDay(DbKind.POSTGRES, "d"), "d + 1");
+    QueryBuilder.Spec v = new QueryBuilder.Spec();
+    v.kind = DbKind.MYSQL;
+    v.bind = QueryBuilder.Bind.VALUE;
+    v.tables.add(new QueryBuilder.Table("ORDERS", "o"));
+    v.conds.add(new QueryBuilder.Cond("o", "MEMO", QueryBuilder.ColKind.TEXT, QueryBuilder.Op.CONTAINS, "a\\b", null));
+    yes(QueryBuilder.render(v).contains("o.MEMO LIKE '%a\\\\\\\\b%'"), QueryBuilder.render(v));
 
     String hier = Patterns.render(Patterns.Kind.HIERARCHY, fill(DbKind.MYSQL));
     yes(hier.contains("WITH RECURSIVE") && hier.contains("CONCAT(") && hier.contains("CHAR(4000)") && !hier.contains("||") && !hier.contains("VARCHAR(4000)"), hier);

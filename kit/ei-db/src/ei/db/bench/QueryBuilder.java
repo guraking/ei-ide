@@ -362,7 +362,7 @@ public final class QueryBuilder {
     }
     if (!s.havings.isEmpty()) {
       List<String> having = new ArrayList<>();
-      for (Having h : s.havings) having.add(h.col().expr(s.kind) + " " + h.op() + " " + number(h.value()));
+      for (Having h : s.havings) having.add(h.col().expr(s.kind) + " " + h.op() + " " + number(s.kind, h.value()));
       sb.append(" HAVING ").append(having.get(0)).append('\n');
       for (int i = 1; i < having.size(); i++) sb.append(AND).append(having.get(i)).append('\n');
     }
@@ -475,23 +475,25 @@ public final class QueryBuilder {
       if (ck != ColKind.DATE) return place;
       return kind == DbKind.ORACLE ? "TO_DATE(" + place + ", '" + DATE_FORMAT + "')" : "CAST(" + place + " AS DATE)";
     }
-    return literal(ck, raw == null ? "" : raw.strip());
+    return literal(kind, ck, raw == null ? "" : raw.strip());
   }
 
   /** 글자 그대로의 값. 숫자 칼럼의 숫자는 따옴표 없이, 날짜는 DATE 'YYYY-MM-DD'(꼴이 다르면 따옴표 글자), 나머지는 '' 로 감싼다. */
-  public static String literal(ColKind ck, String raw) {
+  public static String literal(DbKind kind, ColKind ck, String raw) {
     if (ck == ColKind.NUMBER && NUMBER.matcher(raw).matches()) return raw;
     if (ck == ColKind.DATE && DATE.matcher(raw).matches()) return "DATE '" + raw + "'";
-    return quote(raw);
+    return quote(kind, raw);
   }
 
-  public static String quote(String raw) {
-    return "'" + raw.replace("'", "''") + "'";
+  /** 글자 값. MySQL 은 기본 설정에서 \ 를 이스케이프로 읽으므로 \ 도 겹쳐 쓴다(C:\temp 의 \t 가 탭이 되지 않게). */
+  public static String quote(DbKind kind, String raw) {
+    String v = kind == DbKind.MYSQL ? raw.replace("\\", "\\\\") : raw;
+    return "'" + v.replace("'", "''") + "'";
   }
 
-  private static String number(String raw) {
+  private static String number(DbKind kind, String raw) {
     String v = raw == null ? "" : raw.strip();
-    return NUMBER.matcher(v).matches() ? v : quote(v);
+    return NUMBER.matcher(v).matches() ? v : quote(kind, v);
   }
 
   /** 날짜 식의 다음 날. MySQL 은 DATE + 1 이 숫자(20261130 + 1)가 되므로 DATE_ADD 를 쓴다. */
@@ -503,7 +505,9 @@ public final class QueryBuilder {
   private static String like(DbKind kind, Bind bind, String name, String raw, boolean before, boolean after) {
     if (bind == Bind.VALUE) {
       String v = raw == null ? "" : raw.strip();
-      return quote((before ? "%" : "") + v + (after ? "%" : ""));
+      // MySQL LIKE 는 \ 를 패턴 이스케이프로도 읽어, 글자 \ 하나를 찾으려면 패턴에 \\ 가 있어야 한다.
+      if (kind == DbKind.MYSQL) v = v.replace("\\", "\\\\");
+      return quote(kind, (before ? "%" : "") + v + (after ? "%" : ""));
     }
     String place = bind == Bind.MYBATIS ? "#{" + name + "}" : ":" + name;
     if (kind == DbKind.MYSQL) return "CONCAT(" + (before ? "'%', " : "") + place + (after ? ", '%'" : "") + ")";
@@ -514,7 +518,7 @@ public final class QueryBuilder {
   private static String list(DbKind kind, Bind bind, ColKind ck, String name, String raw) {
     List<String> values = new ArrayList<>();
     if (raw != null) {
-      for (String v : raw.split(",")) if (!v.isBlank()) values.add(literal(ck, v.strip()));
+      for (String v : raw.split(",")) if (!v.isBlank()) values.add(literal(kind, ck, v.strip()));
     }
     if (bind == Bind.MYBATIS) {
       return "<foreach collection=\"" + name + "\" item=\"item\" open=\"(\" separator=\", \" close=\")\">#{item}</foreach>";

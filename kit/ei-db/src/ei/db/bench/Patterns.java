@@ -157,7 +157,7 @@ public final class Patterns {
         List<String> items = new ArrayList<>(List.of(a + "." + group));
         for (String sv : f.statusValues()) {
           String then = value == null ? "1" : a + "." + value;
-          items.add("SUM(CASE WHEN " + a + "." + name(db, f.status()) + " = " + QueryBuilder.quote(sv) + " THEN " + then + " ELSE 0 END) AS " + label(sv));
+          items.add("SUM(CASE WHEN " + a + "." + name(db, f.status()) + " = " + QueryBuilder.quote(db, sv) + " THEN " + then + " ELSE 0 END) AS " + label(sv));
         }
         yield "-- 세로 → 가로: " + group + " 마다 " + f.status() + " 값별 " + (value == null ? "건수" : value + " 합계") + "를 칸으로\n"
             + "SELECT\n" + list(items) + "  FROM " + t + " " + a + "\n GROUP BY\n       " + a + "." + group + "\n ORDER BY\n       " + a + "." + group;
