@@ -22,7 +22,7 @@ public final class MyBatisLineMarker implements LineMarkerProvider {
     if (!isStatementTagName(element)) return null;
     return new LineMarkerInfo<>(element, element.getTextRange(), AllIcons.RunConfigurations.TestState.Run,
         e -> EiDbBundle.message("action.EiDb.MyBatis.Run.text"),
-        (mouse, e) -> MyBatisRunDialog.openAt(e.getProject(), e.getContainingFile().getViewProvider().getContents(), e.getTextOffset()),
+        (mouse, e) -> MyBatisRunDialog.openAt(e.getProject(), e.getContainingFile().getVirtualFile(), e.getContainingFile().getViewProvider().getContents(), e.getTextOffset()),
         GutterIconRenderer.Alignment.CENTER, () -> EiDbBundle.message("action.EiDb.MyBatis.Run.text"));
   }
 

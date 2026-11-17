@@ -4,8 +4,10 @@ import com.intellij.icons.AllIcons;
 import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.colors.EditorColorsManager;
 import com.intellij.openapi.editor.colors.EditorFontType;
+import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.ide.CopyPasteManager;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.Task;
@@ -13,6 +15,8 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.ComboBox;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.openapi.ui.ValidationInfo;
+import com.intellij.openapi.vcs.VcsException;
+import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiClass;
 import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.JBColor;
@@ -90,6 +94,8 @@ public final class MyBatisRunDialog extends DialogWrapper {
   private final Map<String, MapperDoc> mappers;
   /** 참이면 「느린 곳 찾기」 창: 확인 단추가 실행 대신 실행 계획 분석(ExplainPlan.analyze)을 한다. */
   private final boolean findSlow;
+  /** 문장이 든 매퍼 파일. 「고치기 전과 비교」 가 VCS 의 고치기 전 글을 찾는 데 쓴다(모르면 null, 단추를 두지 않음). */
+  private final @Nullable VirtualFile file;
   private DynamicSql.Result result;
 
   private static final class Row {
@@ -98,13 +104,13 @@ public final class MyBatisRunDialog extends DialogWrapper {
     final JBLabel type = new JBLabel();
   }
 
-  /** 문서 글자 text 에서 offset 을 감싸는 문장을 찾아 창을 연다. 화면 스레드에서 부른다. */
-  public static void openAt(Project project, CharSequence text, int offset) {
-    openAt(project, text, offset, false);
+  /** 문서 글자 text 에서 offset 을 감싸는 문장을 찾아 창을 연다. file 은 그 글의 파일(모르면 null). 화면 스레드에서 부른다. */
+  public static void openAt(Project project, @Nullable VirtualFile file, CharSequence text, int offset) {
+    openAt(project, file, text, offset, false);
   }
 
   /** findSlow 가 참이면 같은 창을 「느린 곳 찾기」로 연다. */
-  public static void openAt(Project project, CharSequence text, int offset, boolean findSlow) {
+  public static void openAt(Project project, @Nullable VirtualFile file, CharSequence text, int offset, boolean findSlow) {
     MapperDoc doc = MapperDoc.parse(text);
     MapperDoc.Node s = doc.statementAt(offset);
     if (s == null) {
@@ -115,15 +121,17 @@ public final class MyBatisRunDialog extends DialogWrapper {
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
         DtoFields.ForRun types = ReadAction.nonBlocking(() -> DtoFields.forRun(project, doc, s)).wrapProgress(indicator).executeSynchronously();
-        ApplicationManager.getApplication().invokeLater(() -> new MyBatisRunDialog(project, doc, s, types, findSlow).show(), project.getDisposed());
+        ApplicationManager.getApplication().invokeLater(() -> new MyBatisRunDialog(project, file, doc, s, types, findSlow).show(), project.getDisposed());
       }
     }.queue();
   }
 
   /** 값은 이 문장에서 지난번에 넣은 것으로 채운다. types 는 색인 · PSI 를 보는 일이라 화면 스레드 밖에서 DtoFields.forRun 으로 구해 넘긴다. */
-  private MyBatisRunDialog(Project project, MapperDoc doc, MapperDoc.Node statement, DtoFields.ForRun types, boolean findSlow) {
+  private MyBatisRunDialog(Project project, @Nullable VirtualFile file, MapperDoc doc, MapperDoc.Node statement, DtoFields.ForRun types,
+                           boolean findSlow) {
     super(project);
     this.findSlow = findSlow;
+    this.file = file;
     this.project = project;
     this.doc = doc;
     this.statement = statement;
@@ -132,7 +140,7 @@ public final class MyBatisRunDialog extends DialogWrapper {
     PropertiesComponent props = PropertiesComponent.getInstance(project);
     for (String name : DynamicSql.paramNames(doc, statement, mappers::get)) {
       Row row = new Row();
-      String text = props.getValue(valueKey(name), "");
+      String text = props.getValue(valueKey(doc.namespace, statement.attr("id"), name), "");
       row.value.setText(text);
       row.isNull.setSelected(text.isBlank());
       rows.put(name, row);
@@ -160,8 +168,28 @@ public final class MyBatisRunDialog extends DialogWrapper {
     return c.name + (schema.isEmpty() ? "" : " · " + schema) + (c.readOnly ? EiDbBundle.message("common.read.only.suffix") : "");
   }
 
-  private String valueKey(String name) {
-    return VALUE_KEY + doc.namespace + "." + statement.attr("id") + "." + name;
+  private static String valueKey(String namespace, String statementId, String name) {
+    return VALUE_KEY + namespace + "." + statementId + "." + name;
+  }
+
+  /** 넣은 글을 풀 값으로. null 이면(빈 값 · 「null」 체크) 그 값에 걸린 &lt;if&gt; 가 빠진다. */
+  private static Object value(String text, boolean isNull, boolean list, boolean asText) {
+    return isNull ? null : SqlValues.parse(text, list, asText);
+  }
+
+  /**
+   * 창을 열지 않고 namespace · statementId 문장에 기억된 값으로 names 를 채운다(빈 값은 null, 창의 「null」 체크와 같다).
+   * listNames 는 foreach 로 쓰는 이름, textParams 는 문자열로 받을 이름. 「바꾼 것 다시 시험」의 매퍼 비교가 쓴다.
+   */
+  static Map<String, Object> rememberedValues(Project project, String namespace, String statementId, List<String> names,
+                                              Set<String> listNames, Set<String> textParams) {
+    PropertiesComponent props = PropertiesComponent.getInstance(project);
+    Map<String, Object> out = new HashMap<>();
+    for (String name : names) {
+      String text = props.getValue(valueKey(namespace, statementId, name), "");
+      out.put(name, value(text, text.isBlank(), listNames.contains(name), textParams.contains(name)));
+    }
+    return out;
   }
 
   @Override
@@ -266,7 +294,7 @@ public final class MyBatisRunDialog extends DialogWrapper {
     for (Map.Entry<String, Row> e : rows.entrySet()) {
       Row row = e.getValue();
       String name = e.getKey();
-      out.put(name, row.isNull.isSelected() ? null : SqlValues.parse(row.value.getText(), listNames.contains(name), textParams.contains(name)));
+      out.put(name, value(row.value.getText(), row.isNull.isSelected(), listNames.contains(name), textParams.contains(name)));
     }
     return out;
   }
@@ -348,7 +376,66 @@ public final class MyBatisRunDialog extends DialogWrapper {
         ConsoleOpener.open(project, c, sql);
       }
     };
-    return new Action[] {getCancelAction(), toConsole, getOKAction()};
+    String id = statement.attr("id");
+    if (findSlow || file == null || !file.isInLocalFileSystem() || id == null || id.isBlank() || !"select".equals(statement.name)) {
+      return new Action[] {getCancelAction(), toConsole, getOKAction()};
+    }
+    Action compare = new AbstractAction(EiDbBundle.message("mappercompare.button")) {
+      @Override
+      public void actionPerformed(ActionEvent e) {
+        ValidationInfo invalid = doValidate();
+        if (invalid != null) {
+          setErrorText(invalid.message, invalid.component);
+          return;
+        }
+        // 창에 보이는 값 · 접속 그대로 돌린다(빈 글이지만 「null」 을 끈 값은 '' 이다). 실행과 같은 실행 전 점검을 먼저 받는다.
+        DbConfig c = selected();
+        Map<String, Object> values = values();
+        if (!ei.db.bench.LintGate.confirm(project, result.sql)) return;
+        close(NEXT_USER_EXIT_CODE);
+        compareWithBefore(project, file, id, c, values);
+      }
+    };
+    return new Action[] {getCancelAction(), compare, toConsole, getOKAction()};
+  }
+
+  /**
+   * 고치기 전(VCS 마지막 커밋) · 지금 글로 같은 문장을 c · values 로 돌려 결과 비교 창을 연다. 지금 글은 편집기 문서(저장 전 포함).
+   * VCS 읽기 · DB 실행은 백그라운드에서 한다. 화면 스레드에서 부른다.
+   */
+  private static void compareWithBefore(Project project, VirtualFile file, String statementId, DbConfig c, Map<String, Object> values) {
+    new Task.Backgroundable(project, EiDbBundle.message("mappercompare.progress"), true) {
+      @Override
+      public void run(@NotNull ProgressIndicator indicator) {
+        String before;
+        try {
+          MapperCompare.Before got = MapperCompare.beforeText(project, file);
+          if (got.stale()) Notify.warning(project, MapperCompare.staleMessage());
+          before = got.text();
+        } catch (VcsException ex) {
+          Notify.error(project, EiDbBundle.message("mappercompare.vcs.failed", String.valueOf(ex.getMessage())));
+          return;
+        }
+        if (before == null) {
+          Notify.info(project, MapperCompare.noChangeMessage(project, file));
+          return;
+        }
+        if (before.isEmpty()) {
+          Notify.info(project, EiDbBundle.message("mappercompare.new.file"));
+          return;
+        }
+        CharSequence now = ReadAction.compute(() -> {
+          Document d = FileDocumentManager.getInstance().getDocument(file);
+          return d != null ? d.getImmutableCharSequence() : null;
+        });
+        if (now == null) {
+          Notify.error(project, EiDbBundle.message("mappercompare.no.file"));
+          return;
+        }
+        MapperCompare.Outcome outcome = MapperCompare.run(project, before, now, statementId, c, values, indicator);
+        ApplicationManager.getApplication().invokeLater(() -> MapperCompare.show(project, outcome), project.getDisposed());
+      }
+    }.queue();
   }
 
   @Override
@@ -373,7 +460,7 @@ public final class MyBatisRunDialog extends DialogWrapper {
     PropertiesComponent props = PropertiesComponent.getInstance(project);
     for (Map.Entry<String, Row> e : rows.entrySet()) {
       Row row = e.getValue();
-      props.setValue(valueKey(e.getKey()), row.isNull.isSelected() ? "" : row.value.getText(), "");
+      props.setValue(valueKey(doc.namespace, statement.attr("id"), e.getKey()), row.isNull.isSelected() ? "" : row.value.getText(), "");
     }
     if (selected() != null) props.setValue(CONNECTION_KEY, selected().id);
     super.dispose();

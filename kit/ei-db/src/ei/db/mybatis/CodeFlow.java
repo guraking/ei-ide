@@ -159,7 +159,10 @@ final class CodeFlow {
    * 찾은 나무와, 그 뒤 따로 읽을 화면 찾기 재료. screens 가 true 면 {@link #screensGroup} 을 root 아래 붙인다.
    * 화면 파일 글 읽기를 앞 찾기와 나눠 쓰기 동작이 끼어도 처음부터 다시 도는 양을 줄인다.
    */
-  record Found(Item root, List<Api> apis, boolean screens) {}
+  record Found(Item root, List<Api> apis, boolean screens, boolean partial) {
+    /** partial 은 마디 · 참조 상한에 걸려 일부만 본 찾기. */
+    Found(Item root, List<Api> apis, boolean screens) { this(root, apis, screens, false); }
+  }
 
   /** 매퍼 문장 하나(읽기 접근 밖으로 넘길 때). */
   record Statement(VirtualFile file, String namespace, String id, String tag, int offset) {}
@@ -1127,7 +1130,7 @@ final class CodeFlow {
       Item api = group(root, EiDbBundle.message("codeflow.group.apis", list.size()), AllIcons.Nodes.PpWeb);
       for (Api a : list) add(api, new Item(a.label(), a.where(), AllIcons.Nodes.Method, new PsiNav(a.method())));
       if (list.isEmpty()) api.note = EiDbBundle.message("codeflow.note.none");
-      return new Found(finish(root), list, true);
+      return new Found(finish(root), list, true, cut || refsCut);
     }
 
     void addScreens(Item parent, List<Api> list, List<Front> fronts) {

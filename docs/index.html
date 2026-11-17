@@ -1946,6 +1946,18 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
     </div>
     <p class="lead" style="margin-top:18px">결과는 처음부터 모두 펼쳐 나와(1000줄을 넘으면 세 단계만) 문장 → 매퍼 → 서비스 → 컨트롤러(URL)가 한 줄로 이어져 보입니다. 탭마다 「전체 펼치기 · 전체 접기」 단추가 있습니다(접기는 결과 목록이 보이는 데까지만). 「테이블에서 찾기」 · 「바꾸면 영향」 결과 끝에는 거기 닿는 자바를 모은 「매퍼 (N개)」 · 「서비스 (N개)」 · 「API (N개)」 묶음이 붙습니다. 앞에서 이미 나온 메서드는 「위에 나옴」 옆에 그 메서드가 닿는 URL 만 적습니다.</p>
     <p class="lead" style="margin-top:18px">못 잡는 것: 리플렉션 · 문자열로 부르는 코드, <code>${}</code> 로 바뀌는 테이블 이름, 화면이 주소를 글자 조각으로 이어 붙여 부르는 경우(<code>'/user/' + id + '/detail'</code>). 화면 찾기는 node_modules · dist · bin · build · out · target 폴더와 1MB 넘는 파일을 건너뜁니다. 찾는 데 걸린 시간은 idea.log 에 「코드 흐름」으로 남습니다.</p>
+
+    <h3 id="retest">다시 시험 · 연쇄 수정 줄이기</h3>
+    <p class="lead">칼럼 하나 바꾸고 매퍼 · DTO 를 하나씩 고치거나, 고칠 때마다 같은 API · SQL 을 손으로 다시 돌리는 일을 줄입니다. 아무것도 저절로 돌지 않고, 누른 때만 뒤에서 돕니다.</p>
+    <table class="keys">
+      <tr><th>기능 · 여는 곳</th><th>하는 일</th></tr>
+      <tr><td>DB 바뀐 것 코드에 맞추기<br>DB 창 테이블 우클릭 · 매퍼 XML 우클릭 · Source 메뉴</td><td>그 테이블의 지금 칼럼과 그 테이블을 쓰는 매퍼 문장 · resultMap · DTO 를 견줍니다. <b>새 칼럼</b>은 INSERT · UPDATE · SELECT 목록 · resultMap 의 마지막 항목 줄을 본떠(쉼표 · 별칭 · 들여쓰기 그대로) 넣고 DTO 필드(주석 · getter · setter)도 더합니다. <b>없어진 칼럼</b>은 한 줄로 떨어지는 항목만 지우기를 내고(처음엔 체크 꺼짐), WHERE · 조인 조건처럼 손대기 어려운 곳은 「직접 고치세요」로 그 자리만 알려 줍니다. <b>길이 바뀜</b>은 DTO 의 <code>@Size</code> · <code>@Length</code> max 를 맞춥니다. 미리보기에서 고른 것만 한 번에(되돌리기 한 번) 고칩니다.</td></tr>
+      <tr><td>매퍼에 이 필드 넣기<br>DTO 필드에서 전구(<kbd>Alt</kbd>+<kbd>Enter</kbd>)</td><td>DTO 에 필드를 더했는데 같은 이름 칼럼이 DB 에 있으면, 그 DTO 를 쓰는 매퍼의 INSERT · UPDATE · SELECT · resultMap 에 넣을 곳을 같은 미리보기로 보여 줍니다. DB 를 부르지 않고 이미 읽어 둔 칼럼 목록만 봅니다.</td></tr>
+      <tr><td>고치기 전과 비교<br>MyBatis 쿼리 실행 창 단추</td><td>매퍼 SELECT 를 고친 뒤 누르면 마지막 커밋의 SQL 과 지금 SQL 을 창에 넣은 값 · 접속으로 둘 다 돌려 결과 비교 창(행 수 · 바뀐 행 · 한쪽에만 있는 행)으로 보여 줍니다. Git · SVN 모두 됩니다. SELECT 만 돌리고, <code>FOR UPDATE</code> 처럼 잠그는 문장은 돌리지 않습니다.</td></tr>
+      <tr><td>API 요청 저장 · 다시 보내기<br>API 요청 탭 「다시 보내기…」 · Tools → 「저장한 API 요청 다시 보내기…」</td><td>API 요청 탭에서 보내면 넣은 값과 응답이 저장되고, 다음에 그 컨트롤러에서 탭을 열면 그 값으로 채워집니다(「처음 시험 값으로」로 되돌림). 다시 보내기 창은 저장한 요청을 한꺼번에 보내 「같음 · 상태 바뀜 200 → 500 · 본문 바뀜 · 실패」를 보여 주고, 두 번 누르면 저장한 응답과 이번 응답을 나란히 견줍니다. GET 만 처음부터 체크되고 POST · PUT · DELETE 는 데이터를 바꿀 수 있어 꺼져 있습니다. 비밀번호 · 토큰처럼 보이는 값은 프로젝트 설정 파일이 아니라 IDE 비밀번호 저장소에 둡니다.</td></tr>
+      <tr><td>바꾼 것 다시 시험<br>Git 메뉴 · 커밋 창 툴바 · 커밋 창 우클릭</td><td>커밋하지 않은 변경(저장 안 한 에디터 글 포함)에서 바뀐 매퍼 문장과 자바 메서드를 찾고, 거기서 닿는 API(「바꾸면 영향」과 같은 찾기)를 모읍니다. 바뀐 SELECT 는 「고치기 전과 비교」, 닿는 API 는 저장한 요청 다시 보내기로 한 번에 돌려 달라진 것만 짚습니다. 저장한 요청이 없는 API 는 「API 요청 보내기로 한 번 보내 두세요」로 나옵니다.</td></tr>
+    </table>
+    <p class="lead" style="margin-top:18px">못 하는 것: <code>&lt;trim&gt;</code> 으로 만드는 동적 INSERT · UPDATE, MERGE, 여러 줄 <code>&lt;if&gt;</code> 덩이, UNION 은 「직접 고치세요」로만 알립니다. 다시 시험은 이 PC 의 쿠키 세션을 쓰므로 IDE 를 다시 켠 뒤에는 로그인 요청을 먼저 한 번 보내야 할 수 있습니다.</p>
   </div>
 </section>
 
