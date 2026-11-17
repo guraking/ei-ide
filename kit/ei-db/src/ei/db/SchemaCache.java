@@ -309,7 +309,7 @@ public final class SchemaCache {
         sessions.endReadTransaction(c);
       } catch (Exception e) {
         FAILED.put(c.id, System.currentTimeMillis());
-        LOG.info("자동완성 목록을 읽지 못했습니다(" + TimeUnit.MILLISECONDS.toSeconds(FAILURE_COOLDOWN_MS) + "초 동안 다시 읽지 않음): " + e.getMessage());
+        LOG.info("코드 컴플리션 목록을 읽지 못했습니다(" + TimeUnit.MILLISECONDS.toSeconds(FAILURE_COOLDOWN_MS) + "초 동안 다시 읽지 않음): " + e.getMessage());
       } finally {
         LOADING.remove(key);
       }

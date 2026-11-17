@@ -320,7 +320,7 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
       <a class="chip" id="ver" href="https://github.com/guraking/ei-ide/releases/latest">판 <b>최신</b></a>
       <span class="chip">바탕 <b>IntelliJ Community 2026.3</b></span>
       <a class="chip" href="https://github.com/guraking/ei-ide/releases/latest">최신 설치 파일 받기 →</a>
-      <a class="chip" href="https://github.com/guraking/ei-ide">저장소</a>
+      <a class="chip" href="https://github.com/guraking/ei-ide">리포지토리</a>
     </div>
   </div>
 </header>
@@ -372,7 +372,7 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
       <div class="step">
         <div class="n">3</div>
         <h4>플러그인설치.bat</h4>
-        <p>IDE 가 꺼진 상태에서 두 번 누릅니다. Claude Code · One Dark 를 넣고, JDK · DB 드라이버를 사용자 폴더에 풀어 둡니다. 시험용 본체 플러그인 사본은 치웁니다.</p>
+        <p>IDE 가 꺼진 상태에서 두 번 누릅니다. Claude Code · One Dark 를 넣고, JDK · DB 드라이버를 사용자 폴더에 풀어 둡니다. 테스트용 본체 플러그인 사본은 치웁니다.</p>
         <div class="file">release\플러그인설치.bat</div>
       </div>
       <div class="step">
@@ -385,8 +385,8 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
 
     <div class="notes">
       <div class="note warn"><b>IDE 가 켜져 있으면</b>3번 bat 은 「먼저 종료」만 띄우고 멈춥니다. 끄고 다시 실행하세요.</div>
-      <div class="note"><b>인터넷이 없을 때</b>bat 옆 <code>plugins</code> 폴더에 있는 것을 씁니다. 없을 때만 저장소 릴리스 · JetBrains 마켓에서 받습니다.</div>
-      <div class="note ok"><b>새 판 알림</b>IDE 를 켤 때 이 저장소의 최신 릴리스를 보고, 새 판이 있으면 오른쪽 아래에 「지금 업데이트」 풍선이 뜹니다. 누르면 설치 파일을 받고, IDE 를 닫은 뒤 설치 화면이 뜹니다.</div>
+      <div class="note"><b>인터넷이 없을 때</b>bat 옆 <code>plugins</code> 폴더에 있는 것을 씁니다. 없을 때만 리포지토리 릴리스 · JetBrains 마켓에서 받습니다.</div>
+      <div class="note ok"><b>새 판 알림</b>IDE 를 켤 때 이 리포지토리의 최신 릴리스를 보고, 새 판이 있으면 오른쪽 아래에 「지금 업데이트」 풍선이 뜹니다. 누르면 설치 파일을 받고, IDE 를 닫은 뒤 설치 화면이 뜹니다.</div>
     </div>
 
     <h3>release 폴더</h3>
@@ -412,10 +412,10 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
       <div class="card"><h4>메뉴까지 쉬운 한국어</h4><p>한국어를 고르면 메뉴 · 단추 · 알림 · 대화 상자 글이 모두 한국어로 나옵니다. 번역체(「~에 대한」 「~을(를)」)를 걷어 낸 우리 번역이 공식 팩 위에 덮입니다(기준: kit\ko\용어집.md, 아직 자주 보는 묶음부터). 이 설명서는 메뉴 이름을 영어로 적었습니다.</p><span class="was">메뉴는 영어, 안내만 한국어(어색한 팩 번역)</span></div>
       <div class="card"><h4>이클립스 단축키 · 메뉴</h4><p>File · Edit · Source · Refactor · Navigate · Search · Project · Run · Git · Window · Help</p><span class="was">Windows 단축키, View · Code · Build · Tools</span></div>
       <div class="card"><h4>저장하면 자동 빌드</h4><p>자바 import 정리, 바뀐 줄만 서식. Gradle 빌드 · 실행도 IDE 가 직접.</p><span class="was">끔, Gradle 에 위임</span></div>
-      <div class="card"><h4>한글 폭이 맞는 글꼴</h4><p>Moa Mono 내장(JetBrains Mono + Pretendard 한글 + Noto Sans CJK 한자 · 일본어). 에디터와 메뉴 · 창 글자를 모두 이 글꼴로 씁니다.</p><span class="was">JetBrains Mono, 한글 폭 어긋남</span></div>
+      <div class="card"><h4>한글 폭이 맞는 폰트</h4><p>Moa Mono 내장(JetBrains Mono + Pretendard 한글 + Noto Sans CJK 한자 · 일본어). 에디터와 메뉴 · 창 글자를 모두 이 폰트로 씁니다.</p><span class="was">JetBrains Mono, 한글 폭 어긋남</span></div>
       <div class="card"><h4>실행 설정 창</h4><p>VM 옵션 칸이 처음부터 보입니다.</p><span class="was">「Modify options」로 꺼내야 함</span></div>
       <div class="card"><h4>프론트 파일 색</h4><p>JS · JSX · TS · TSX · HTML · CSS · SCSS · LESS · JSON · Vue · Svelte · Astro</p><span class="was">Vue · Svelte · Astro 없음</span></div>
-      <div class="card"><h4>형상 관리</h4><p>Git · GitHub · GitLab · SVN. IDE 파일(<code>*.iml</code> · <code>.idea/</code> · <code>.project</code> · <code>.classpath</code> · <code>.settings/</code>)은 변경 목록에 안 뜸. 커밋 전 코드 분석 · TODO 검사 끔.</p><span class="was">SVN 없음, 커밋 전 검사 켬</span></div>
+      <div class="card"><h4>형상 관리</h4><p>Git · GitHub · GitLab · SVN. IDE 파일(<code>*.iml</code> · <code>.idea/</code> · <code>.project</code> · <code>.classpath</code> · <code>.settings/</code>)은 체인지리스트에 안 뜸. 커밋 전 코드 분석 · TODO 검사 끔.</p><span class="was">SVN 없음, 커밋 전 검사 켬</span></div>
       <div class="card"><h4>콘솔 검색</h4><p>실행 창 콘솔에서 <kbd>Ctrl</kbd>+<kbd>F</kbd>.</p><span class="was">이클립스 단축키에서는 없음</span></div>
       <div class="card"><h4>에디터</h4><p>오른쪽 「세로로 분할」 단추, 120자 여백선 숨김, 커밋 뒤 메시지 비움.</p><span class="was">분할 단추 없음, 여백선 보임</span></div>
       <div class="card"><h4>다른 프로젝트는 새 창</h4><p>Recent Projects · Open… 으로 고른 프로젝트를 지금 창은 둔 채 새 창에 엽니다. 최근 프로젝트 목록 관리(Manage Projects…)는 File 메뉴 Close Project 바로 위에 있습니다.</p><span class="was">매번 묻기</span></div>
@@ -445,24 +445,24 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
       <tr><td>Project → Export Program List to Excel…</td><td>파일 목록 · URL 목록 엑셀 (<a href="#servers">서버 창</a>)</td></tr>
       <tr><td>Git → Synchronize Workspace (맨 위)</td><td>Synchronize 창 열기 (<a href="#sync">Git · SVN</a>)</td></tr>
       <tr><td>Git → Merge Branches… (그 아래)</td><td>develop · main 같은 서버 브랜치를 내 개인 브랜치에 머지, 머지 전 미리 보기 (<a href="#sync">Git · SVN</a>)</td></tr>
-      <tr><td>Search → Regex Workbench…</td><td>정규식 만들기 · 시험 (<a href="#regex">코드 도구</a>)</td></tr>
+      <tr><td>Search → Regex Workbench…</td><td>정규식 만들기 · 테스트 (<a href="#regex">코드 도구</a>)</td></tr>
       <tr><td>Tools → Query Workbench… · JavaScript Workbench…</td><td>고르기만으로 쿼리 만들기 · 자바스크립트 예제 돌려 보기 (<a href="#db">데이터베이스</a> · <a href="#code">코드 도구</a>)</td></tr>
       <tr><td>Tools → 고치기 전 백업 보기…</td><td>UPDATE · DELETE 전에 남긴 백업으로 되살리기 (<a href="#backup">데이터베이스</a>)</td></tr>
-      <tr><td>Window → Show View</td><td>아래 「도구 창」 테이블의 창을 다시 열기</td></tr>
+      <tr><td>Window → Show View</td><td>아래 「툴 윈도우」 테이블의 창을 다시 열기</td></tr>
     </table>
 
     <h3>프로젝트 트리 우클릭</h3>
     <table class="keys map">
       <tr><th>항목</th><th>하는 일</th></tr>
-      <tr><td>Spring Boot Server ▸ Start Server · Start in Debug · Restart · Stop (맨 위)</td><td>고른 모듈의 스프링 부트 서버. 빌드 파일이 한 단계 아래인 저장소 폴더 줄에서도 보입니다 (<a href="#servers">서버 창</a>)</td></tr>
+      <tr><td>Spring Boot Server ▸ Start Server · Start in Debug · Restart · Stop (맨 위)</td><td>고른 모듈의 스프링 부트 서버. 빌드 파일이 한 단계 아래인 리포지토리 폴더 줄에서도 보입니다 (<a href="#servers">서버 창</a>)</td></tr>
       <tr><td>Workspace ▸ Module from Existing Sources · Get from Version Control · Create Git Repository · Manage Remotes</td><td>다른 프로젝트 추가 · Git 연결 (<a href="#project">Maven · Gradle</a>)</td></tr>
       <tr><td>Export Program List to Excel…</td><td>프로그램 목록 엑셀</td></tr>
       <tr><td>Generate DTO from JSON…</td><td>고른 패키지에 DTO 만들기</td></tr>
-      <tr><td>Git ▸ Synchronize Workspace · Subversion ▸ Synchronize Workspace</td><td>그 저장소만 비교하는 Synchronize 창</td></tr>
-      <tr><td>Git ▸ Merge Branches…</td><td>그 저장소로 역머지 창</td></tr>
-      <tr><td>Close Project · Open Project (맨 위, 저장소 폴더 줄)</td><td>이클립스처럼 저장소 하나만 닫기 · 다시 열기. 닫힌 저장소는 인덱스 · 검색 · 컴파일 · 동기화 창 · Git Log 에서 빠지고 트리에 닫힌 아이콘 줄로 남습니다. 파일은 그대로입니다. 빌드 파일이 한 단계 아래에 있는 저장소는 저장소 폴더 줄에서 닫으면 그 안 모듈이 모두 닫힙니다. 이 저장소를 쓰는 다른 Maven 모듈은 닫는 동안 로컬 Maven 저장소의 jar 를 씁니다(jar 가 없으면 닫기 전에 묻습니다)</td></tr>
-      <tr><td>Assume Unchanged · No Assume Unchanged (맨 아래)</td><td>내 PC 에서만 고친 파일을 변경 목록에서 숨기기 · 되돌리기</td></tr>
-      <tr><td>이 PC 에서만 무시 · 이 PC 에서만 무시 풀기 (맨 아래)</td><td>아직 Git 에 안 올린 새 파일 · 폴더를 <code>.git/info/exclude</code> 에 적어 커밋 목록에서 빼기 · 되돌리기. 저장소에는 안 올라갑니다</td></tr>
+      <tr><td>Git ▸ Synchronize Workspace · Subversion ▸ Synchronize Workspace</td><td>그 리포지토리만 비교하는 Synchronize 창</td></tr>
+      <tr><td>Git ▸ Merge Branches…</td><td>그 리포지토리로 역머지 창</td></tr>
+      <tr><td>Close Project · Open Project (맨 위, 리포지토리 폴더 줄)</td><td>이클립스처럼 리포지토리 하나만 닫기 · 다시 열기. 닫힌 리포지토리는 인덱스 · 검색 · 컴파일 · 동기화 창 · Git Log 에서 빠지고 트리에 닫힌 아이콘 줄로 남습니다. 파일은 그대로입니다. 빌드 파일이 한 단계 아래에 있는 리포지토리는 리포지토리 폴더 줄에서 닫으면 그 안 모듈이 모두 닫힙니다. 이 리포지토리를 쓰는 다른 Maven 모듈은 닫는 동안 로컬 Maven 리포지토리의 jar 를 씁니다(jar 가 없으면 닫기 전에 묻습니다)</td></tr>
+      <tr><td>Assume Unchanged · No Assume Unchanged (맨 아래)</td><td>내 PC 에서만 고친 파일을 체인지리스트에서 숨기기 · 되돌리기</td></tr>
+      <tr><td>이 PC 에서만 무시 · 이 PC 에서만 무시 풀기 (맨 아래)</td><td>아직 Git 에 안 올린 새 파일 · 폴더를 <code>.git/info/exclude</code> 에 적어 커밋 목록에서 빼기 · 되돌리기. 리포지토리에는 안 올라갑니다</td></tr>
       <tr><td><kbd>F5</kbd> (Reload from Disk)</td><td>고른 프로젝트 · 폴더 · 파일을 디스크에서 다시 읽기</td></tr>
     </table>
 
@@ -486,17 +486,17 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
       <tr><td>실행 · 서버 콘솔 → Filter Log (맨 위)</td><td>ERROR · WARN · 글자로 거른 줄 목록 (<a href="#servers">서버 창</a>)</td></tr>
       <tr><td>실행 · 서버 콘솔 → AI ▸ Find Cause of This Error (맨 아래)</td><td>고른 오류 글을 Claude Code 로</td></tr>
       <tr><td>실행 · 서버 콘솔 → <kbd>Ctrl</kbd>+<kbd>F</kbd> (Find in Console)</td><td>콘솔 출력 검색</td></tr>
-      <tr><td>커밋 창 · 변경 목록 파일 → Assume Unchanged (맨 아래)</td><td>그 파일을 변경 목록에서 숨기기</td></tr>
-      <tr><td>커밋 창 · 변경 목록 새 파일 → 이 PC 에서만 무시 (맨 아래)</td><td>새 파일을 이 PC 에서만 커밋 목록에서 빼기</td></tr>
+      <tr><td>커밋 창 · 체인지리스트 파일 → Assume Unchanged (맨 아래)</td><td>그 파일을 체인지리스트에서 숨기기</td></tr>
+      <tr><td>커밋 창 · 체인지리스트 새 파일 → 이 PC 에서만 무시 (맨 아래)</td><td>새 파일을 이 PC 에서만 커밋 목록에서 빼기</td></tr>
       <tr><td>Result 창 탭 → Compare with Another Result…</td><td>결과 두 개 비교 (<a href="#db">데이터베이스</a>)</td></tr>
     </table>
 
-    <h3>도구 창</h3>
+    <h3>툴 윈도우</h3>
     <table class="keys map">
       <tr><th>창 (자리)</th><th>단추 · 우클릭</th></tr>
       <tr><td>Servers (아래)</td><td>Start · Start in Debug · Restart · Stop · Stop All · Add WAS… · Server Groups(New Group… · Start Group · Stop Group) · ⋯ More(Duplicate Server · Publish (Rebuild) · Remove WAS · Show Log Files…) · Refresh Server List. 줄 우클릭에 Open in Browser · Show Console · Edit Settings… (<a href="#servers">서버 창</a>)</td></tr>
-      <tr><td>Synchronize (아래)</td><td>Show All · Incoming · Outgoing · Conflicts · Refresh All · Selected Repository Only, 아래 Pull All · Pull Selected · Push · Commit and Push… · Resolve Conflicts · Merge Branches. 목록 우클릭 Pull · Update Only These Files · Commit… · Push · Resolve Conflicts · Undo Last Git Action…, 저장소 줄 우클릭 Pull · Push · Refresh This Repository · Merge Branches… · Undo Last Git Action… · Show in Git Log · 탐색기에서 열기, 파일 우클릭 Add to .gitignore · 이 PC 에서만 무시 · Replace with HEAD · Unstage Only, Keep Files · Assume Unchanged · Jump to Source · Show History · Copy Absolute Path · Select in Project View, 도구줄 모두 펼치기 · 모두 접기 · 폴더별로 묶기 · 이전 · 다음 파일 (<a href="#sync">Git · SVN</a>)</td></tr>
-      <tr><td>Git Log (아래)</td><td>왼쪽 저장소 목록 · Refresh · 「?」 · 소스 건드린 커밋만 · 찾기 칸 (<a href="#sync">Git · SVN</a>)</td></tr>
+      <tr><td>Synchronize (아래)</td><td>Show All · Incoming · Outgoing · Conflicts · Refresh All · Selected Repository Only, 아래 Pull All · Pull Selected · Push · Commit and Push… · Resolve Conflicts · Merge Branches. 목록 우클릭 Pull · Update Only These Files · Commit… · Push · Resolve Conflicts · Undo Last Git Action…, 리포지토리 줄 우클릭 Pull · Push · Refresh This Repository · Merge Branches… · Undo Last Git Action… · Show in Git Log · 탐색기에서 열기, 파일 우클릭 Add to .gitignore · 이 PC 에서만 무시 · Replace with HEAD · Unstage Only, Keep Files · Assume Unchanged · Jump to Source · Show History · Copy Absolute Path · Select in Project View, 도구줄 모두 펼치기 · 모두 접기 · 폴더별로 묶기 · 이전 · 다음 파일 (<a href="#sync">Git · SVN</a>)</td></tr>
+      <tr><td>Git Log (아래)</td><td>왼쪽 리포지토리 목록 · Refresh · 「?」 · 소스 건드린 커밋만 · 찾기 칸 (<a href="#sync">Git · SVN</a>)</td></tr>
       <tr><td>Database (오른쪽)</td><td>Refresh · New Console · Connect · Disconnect · Edit · Delete · Find · More(Export · Import Connections). 테이블 우클릭 View Data · Generate SELECT · INSERT · UPDATE Statement · Generate Mapper Skeleton · Generate Feature Set… · Open ERD · Table Specification Excel… · DDL 보기 · 주석 고치기 · 시노님 · 권한 주기… · 엑셀 붙여 넣어 행 넣기… · 테스트 데이터 만들기…, 접속 우클릭 View Sessions · View Locks · Open ERD (All) · ERD 열기 (거른 테이블 N개)(찾기 칸으로 거른 뒤) · 고치기 전 백업 보기, 위 단추 줄 시계 단추(고치기 전 백업 보기), 펑션 우클릭 Open Source · View Compilation Errors · 시노님 · 권한 주기… (<a href="#db">데이터베이스</a>)</td></tr>
       <tr><td>Result (아래)</td><td>Fetch · Apply · Revert · 새로 고침 · CSV · Excel · JSON · DTO · 건수 · 중복 · 분석 · 피벗 · 트리 · 찾기(<kbd>Ctrl</kbd>+<kbd>F</kbd>, 조건 + <kbd>Enter</kbd>). 칸 우클릭 Copy Value · Copy Selected Rows · Copy as INSERT · Copy as UPDATE · Generate enum · Copy Column Values as IN List · Sort · 참조 따라가기 · 값 크게 보기(<kbd>F4</kbd>) · 행 지우기 (<a href="#db">데이터베이스</a>)</td></tr>
       <tr><td>Secure Memo (오른쪽)</td><td>Set New Password… · Lock · Change Password… · Preview · Reset… (<a href="#extras">메모 · 테마</a>)</td></tr>
@@ -508,7 +508,7 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
 <section id="keys">
   <div class="wrap">
     <h2><span class="no">04</span>단축키 모음</h2>
-    <p class="lead">Eclipse 키맵이 기본입니다. 아래 첫 테이블은 Moa IDE 가 더한 키(각 플러그인 <code>plugin.xml</code> 에 적힌 값)와 우리 기능에서 쓰는 마우스 · 자동 완성 동작입니다.</p>
+    <p class="lead">Eclipse 키맵이 기본입니다. 아래 첫 테이블은 Moa IDE 가 더한 키(각 플러그인 <code>plugin.xml</code> 에 적힌 값)와 우리 기능에서 쓰는 마우스 · 코드 컴플리션 동작입니다.</p>
     <table class="keys">
       <tr><th>키</th><th>하는 일</th><th class="where">어디서</th></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td><td>커서 문장(또는 선택 영역) 실행 (Run)</td><td class="where">SQL 콘솔</td></tr>
@@ -561,8 +561,8 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
     <h3>편집</h3>
     <table class="keys">
       <tr><th>키</th><th>하는 일</th></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>Space</kbd></td><td>자동 완성 †</td></tr>
-      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>Space</kbd></td><td>타입 맞춤 자동 완성</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Space</kbd></td><td>코드 컴플리션 †</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>Space</kbd></td><td>타입 맞춤 코드 컴플리션</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>1</kbd> · <kbd>Alt</kbd>+<kbd>Enter</kbd></td><td>빠른 수정 (Quick Fix)</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>줄 지우기</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>↓</kbd></td><td>줄 복제</td></tr>
@@ -570,7 +570,7 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
       <tr><td><kbd>Ctrl</kbd>+<kbd>/</kbd></td><td>줄 주석 †</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>/</kbd></td><td>블록 주석</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd> · <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>L</kbd></td><td>서식 맞추기 (SQL 콘솔 안에서는 SQL 정렬)</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>I</kbd></td><td>들여쓰기 맞추기</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>I</kbd></td><td>인덴트 맞추기</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd></td><td>import 정리</td></tr>
       <tr><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>↑</kbd> · <kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>↓</kbd></td><td>선택 넓히기 · 줄이기</td></tr>
       <tr><td><kbd>Alt</kbd>+<kbd>Y</kbd> · <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Y</kbd></td><td>같은 글 다음 것 · 모두 함께 고르기 (여러 커서)</td></tr>
@@ -630,8 +630,8 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
 
     <div class="steps">
       <div class="step"><div class="n">1</div><h4>상위 폴더 열기</h4><p>File → Open 에서 프로젝트들이 들어 있는 폴더를 고릅니다.</p><div class="file">C:\dev\workspace</div></div>
-      <div class="step"><div class="n">2</div><h4>자동 연결</h4><p>그 폴더에 빌드 파일이 없으면 열 때마다 아래 저장소 폴더를 모듈로 붙이고, 두 단계 아래까지의 <code>pom.xml</code> · <code>build.gradle</code> 중 연결 안 된 것을 연결합니다. 숨김 폴더 · 닫은 저장소는 건너뜁니다.</p></div>
-      <div class="step"><div class="n">3</div><h4>의존성 받기</h4><p>처음엔 몇 분 걸립니다. 멈춘 것 같으면 아래 「빌드」 창의 Sync 탭을 봅니다.</p></div>
+      <div class="step"><div class="n">2</div><h4>자동 연결</h4><p>그 폴더에 빌드 파일이 없으면 열 때마다 아래 리포지토리 폴더를 모듈로 붙이고, 두 단계 아래까지의 <code>pom.xml</code> · <code>build.gradle</code> 중 연결 안 된 것을 연결합니다. 숨김 폴더 · 닫은 리포지토리는 건너뜁니다.</p></div>
+      <div class="step"><div class="n">3</div><h4>디펜던시 받기</h4><p>처음엔 몇 분 걸립니다. 멈춘 것 같으면 아래 「빌드」 창의 Sync 탭을 봅니다.</p></div>
       <div class="step"><div class="n">4</div><h4>저장하면 빌드</h4><p>이클립스 Build Automatically 와 같습니다. 서버 창의 시작 · 재시작도 이 결과를 씁니다.</p></div>
     </div>
 
@@ -645,26 +645,26 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
     <h3>Maven 설정</h3>
     <div class="figure">
       <div class="dialog" style="max-width:none">
-        <div class="dh">설정 → 빌드, 실행, 배포 → 빌드 도구 → Maven</div>
+        <div class="dh">설정 → 빌드, 실행, 디플로이 → 빌드 도구 → Maven</div>
         <div class="db form" style="padding:14px">
           <label><span>Maven 홈 경로 <span class="mark">1</span></span><span class="f">번들 (Maven 3)</span></label>
           <label><span>사용자 설정 파일 <span class="mark">2</span></span><span class="f">C:\Users\나\.m2\settings.xml  ☑ 재정의</span></label>
-          <label><span>로컬 저장소 <span class="mark">2</span></span><span class="f">C:\Users\나\.m2\repository  ☑ 재정의</span></label>
+          <label><span>로컬 리포지토리 <span class="mark">2</span></span><span class="f">C:\Users\나\.m2\repository  ☑ 재정의</span></label>
           <div class="check">오프라인 작업 <span class="mark">3</span></div>
         </div>
       </div>
       <ol class="legend">
-        <li><span class="mark">1</span><div><b>Maven 은 따로 안 깔아도 됨</b> <span class="t">번들 Maven 3 을 그대로 씁니다. 저장소에 mvnw(Maven Wrapper)가 있어도 Wrapper 로 바꾸거나 인터넷에서 받지 않습니다. 회사에서 정한 판이 있으면 그 설치 폴더를 고릅니다.</span></div></li>
-        <li><span class="mark">2</span><div><b>이클립스와 같은 두 경로</b> <span class="t">이클립스 Preferences → Maven → User Settings 의 설정 파일 · 로컬 저장소를 그대로 적고 「재정의」를 켭니다. 이미 받아 둔 jar 를 써서 인터넷을 거의 타지 않고, 사내 mirror 도 settings.xml 에서 따라옵니다.</span></div></li>
-        <li><span class="mark">3</span><div><b>오프라인 작업</b> <span class="t">사내망 밖이거나 저장소에 못 닿을 때 켜면, 로컬 저장소에 있는 것만으로 읽습니다.</span></div></li>
-        <li><span class="mark">↻</span><div><b>pom.xml 을 고친 뒤</b> <span class="t">프로젝트 트리 우클릭 맨 위의 Maven 다시 읽기(고른 프로젝트만). pom.xml 이 한 단계 아래에 있는 저장소 폴더 줄에서도 보입니다. 이클립스 Maven → Update Project 와 같습니다.</span></div></li>
+        <li><span class="mark">1</span><div><b>Maven 은 따로 안 깔아도 됨</b> <span class="t">번들 Maven 3 을 그대로 씁니다. 리포지토리에 mvnw(Maven Wrapper)가 있어도 Wrapper 로 바꾸거나 인터넷에서 받지 않습니다. 회사에서 정한 판이 있으면 그 설치 폴더를 고릅니다.</span></div></li>
+        <li><span class="mark">2</span><div><b>이클립스와 같은 두 경로</b> <span class="t">이클립스 Preferences → Maven → User Settings 의 설정 파일 · 로컬 리포지토리를 그대로 적고 「재정의」를 켭니다. 이미 받아 둔 jar 를 써서 인터넷을 거의 타지 않고, 사내 mirror 도 settings.xml 에서 따라옵니다.</span></div></li>
+        <li><span class="mark">3</span><div><b>오프라인 작업</b> <span class="t">사내망 밖이거나 리포지토리에 못 닿을 때 켜면, 로컬 리포지토리에 있는 것만으로 읽습니다.</span></div></li>
+        <li><span class="mark">↻</span><div><b>pom.xml 을 고친 뒤</b> <span class="t">프로젝트 트리 우클릭 맨 위의 Maven 다시 읽기(고른 프로젝트만). pom.xml 이 한 단계 아래에 있는 리포지토리 폴더 줄에서도 보입니다. 이클립스 Maven → Update Project 와 같습니다.</span></div></li>
       </ol>
     </div>
 
     <h3>Gradle 설정</h3>
     <div class="figure">
       <div class="dialog" style="max-width:none">
-        <div class="dh">설정 → 빌드, 실행, 배포 → 빌드 도구 → Gradle</div>
+        <div class="dh">설정 → 빌드, 실행, 디플로이 → 빌드 도구 → Gradle</div>
         <div class="db form" style="padding:14px">
           <label><span>빌드 및 실행에 사용 <span class="mark">1</span></span><span class="f">IntelliJ IDEA   (Moa IDE 기본값)</span></label>
           <label><span>Gradle JVM <span class="mark">2</span></span><span class="f">프로젝트 SDK (17)</span></label>
@@ -674,8 +674,8 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
       <ol class="legend">
         <li><span class="mark">1</span><div><b>IDE 가 직접 빌드</b> <span class="t">원래 인텔리제이는 Gradle 에 맡기지만 Moa IDE 는 새 프로젝트를 「IntelliJ IDEA」 로 둡니다. 그래야 저장할 때 자동 빌드가 돌고 서버 재시작이 빠릅니다. 예전에 「Gradle」 로 정해 둔 프로젝트는 여기서 바꿉니다.</span></div></li>
         <li><span class="mark">2</span><div><b>Gradle JVM</b> <span class="t">build.gradle 을 읽을 때 쓰는 자바입니다. 프로젝트 JDK 와 같게 두는 것이 가장 덜 꼬입니다. 설치 3번에서 넣은 Temurin 17 · 21 · 27 이 목록에 있습니다.</span></div></li>
-        <li><span class="mark">G</span><div><b>언제나 내장 Gradle 9.9.1 · 8.14.7</b> <span class="t">사내망은 wrapper 가 Gradle 을 받지 못하므로, Moa IDE 는 저장소에 wrapper 가 있어도 설치 폴더 <code>plugins\boot-servers\gradle\gradle-9.9.1</code> 의 Gradle 로 Gradle 프로젝트를 읽고 빌드합니다. 저장소의 wrapper 가 9 보다 낮은 판(8.x 등)을 적었으면 함께 넣은 <code>gradle-8.14.7</code> 로 돌립니다. 사내 넥서스 등 저장소 설정은 build.gradle · init 스크립트를 그대로 따릅니다. Gradle 9 는 JVM 17 이상이 필요합니다. wrapper 가 없는 저장소는 9.9.1 로 돌아, 옛 플러그인 · 옛 문법(예: <code>compile</code>)은 오류가 납니다.</span></div></li>
-        <li><span class="mark">↻</span><div><b>build.gradle 을 고친 뒤</b> <span class="t">프로젝트 트리 우클릭 맨 위의 Gradle 다시 읽기(전체, Sync All Gradle Projects). 이클립스 Gradle → Refresh 와 같습니다. Gradle 프로젝트 안의 줄이나 그 저장소 폴더 줄에서만 보입니다.</span></div></li>
+        <li><span class="mark">G</span><div><b>언제나 내장 Gradle 9.9.1 · 8.14.7</b> <span class="t">사내망은 wrapper 가 Gradle 을 받지 못하므로, Moa IDE 는 리포지토리에 wrapper 가 있어도 설치 폴더 <code>plugins\boot-servers\gradle\gradle-9.9.1</code> 의 Gradle 로 Gradle 프로젝트를 읽고 빌드합니다. 리포지토리의 wrapper 가 9 보다 낮은 판(8.x 등)을 적었으면 함께 넣은 <code>gradle-8.14.7</code> 로 돌립니다. 사내 넥서스 등 리포지토리 설정은 build.gradle · init 스크립트를 그대로 따릅니다. Gradle 9 는 JVM 17 이상이 필요합니다. wrapper 가 없는 리포지토리는 9.9.1 로 돌아, 옛 플러그인 · 옛 문법(예: <code>compile</code>)은 오류가 납니다.</span></div></li>
+        <li><span class="mark">↻</span><div><b>build.gradle 을 고친 뒤</b> <span class="t">프로젝트 트리 우클릭 맨 위의 Gradle 다시 읽기(전체, Sync All Gradle Projects). 이클립스 Gradle → Refresh 와 같습니다. Gradle 프로젝트 안의 줄이나 그 리포지토리 폴더 줄에서만 보입니다.</span></div></li>
         <li><span class="mark">i</span><div><b>모듈이 셋으로 보여도 정상</b> <span class="t">Gradle 프로젝트는 <code>batch</code> · <code>batch.main</code> · <code>batch.test</code> 로 나뉩니다. 서버 창은 이것을 알아서 한 서버로 묶습니다.</span></div></li>
       </ol>
     </div>
@@ -683,10 +683,10 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
     <h3>막혔을 때</h3>
     <table class="keys">
       <tr><th>이런 글이 보이면</th><th>먼저 볼 것</th></tr>
-      <tr><td><code>Reading Maven projects…</code> 가 오래 감</td><td>처음엔 의존성을 확인하느라 몇 분 걸립니다. 아래 「빌드」 창 Sync 탭에서 진행을 봅니다.</td></tr>
-      <tr><td><code>Could not transfer artifact</code> · <code>Connection timed out</code></td><td>저장소에 못 닿는 것입니다. 위 Maven 설정의 settings.xml(사내 mirror) · 로컬 저장소가 이클립스와 같은지, 필요하면 오프라인 작업.</td></tr>
-      <tr><td><code>PKIX path building failed</code></td><td>사내 인증서를 자바가 모르는 것입니다. 이클립스와 같은 settings.xml · 로컬 저장소로 맞추면 대부분 받을 일이 없어집니다.</td></tr>
-      <tr><td>프로젝트가 트리에 일반 폴더로만 보임</td><td>Clone 은 받은 저장소와 그 아래 두 단계까지의 <code>pom.xml</code> · Gradle 파일을 저절로 연결합니다. 그보다 깊거나 다른 방법으로 붙인 폴더면 그 <code>pom.xml</code> 우클릭 → Add as Maven Project, <code>build.gradle</code> 우클릭 → Link Gradle Project.</td></tr>
+      <tr><td><code>Reading Maven projects…</code> 가 오래 감</td><td>처음엔 디펜던시를 확인하느라 몇 분 걸립니다. 아래 「빌드」 창 Sync 탭에서 진행을 봅니다.</td></tr>
+      <tr><td><code>Could not transfer artifact</code> · <code>Connection timed out</code></td><td>리포지토리에 못 닿는 것입니다. 위 Maven 설정의 settings.xml(사내 mirror) · 로컬 리포지토리가 이클립스와 같은지, 필요하면 오프라인 작업.</td></tr>
+      <tr><td><code>PKIX path building failed</code></td><td>사내 인증서를 자바가 모르는 것입니다. 이클립스와 같은 settings.xml · 로컬 리포지토리로 맞추면 대부분 받을 일이 없어집니다.</td></tr>
+      <tr><td>프로젝트가 트리에 일반 폴더로만 보임</td><td>Clone 은 받은 리포지토리와 그 아래 두 단계까지의 <code>pom.xml</code> · Gradle 파일을 저절로 연결합니다. 그보다 깊거나 다른 방법으로 붙인 폴더면 그 <code>pom.xml</code> 우클릭 → Add as Maven Project, <code>build.gradle</code> 우클릭 → Link Gradle Project.</td></tr>
     </table>
 
     <h3>다른 프로젝트 추가 · Git 연결 (트리 우클릭 → 작업공간)</h3>
@@ -694,13 +694,13 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
       <tr><th>메뉴</th><th>하는 일</th><th class="where">이클립스로 치면</th></tr>
       <tr><td>Module from Existing Sources…</td><td>추가할 프로젝트의 <code>pom.xml</code> · <code>build.gradle</code> 을 고르면 트리에 붙습니다.</td><td class="where">Import → Existing Projects</td></tr>
       <tr><td>Get from VCS…</td><td>Git 주소로 받아서 바로 추가합니다.</td><td class="where">Import → Projects from Git</td></tr>
-      <tr><td>Create Git Repository…</td><td>지금 폴더를 Git 저장소로 만듭니다.</td><td class="where">Team → Share Project</td></tr>
-      <tr><td>Manage Remotes…</td><td>원격 저장소 주소를 연결하거나 바꿉니다.</td><td class="where">Git 저장소의 Remote 설정</td></tr>
+      <tr><td>Create Git Repository…</td><td>지금 폴더를 Git 리포지토리로 만듭니다.</td><td class="where">Team → Share Project</td></tr>
+      <tr><td>Manage Remotes…</td><td>원격 리포지토리 주소를 연결하거나 바꿉니다.</td><td class="where">Git 리포지토리의 Remote 설정</td></tr>
     </table>
     <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note"><b>빼고 싶을 때</b>모듈 우클릭 → Remove Module. 트리에서만 빠지고 실제 파일은 그대로입니다.</div></div>
 
-    <h3>저장소 받기 · 닫기 · 다시 열기 (이클립스 작업공간처럼)</h3>
-    <p class="lead">상위 폴더 하나를 프로젝트로 열고, 그 안의 저장소마다 한 줄(모듈)로 붙여 씁니다. 맨 위에 프로젝트 줄이 따로 생기지 않고, 받은 저장소도 새 창이 아니라 지금 창에 붙습니다.</p>
+    <h3>리포지토리 받기 · 닫기 · 다시 열기 (이클립스 작업공간처럼)</h3>
+    <p class="lead">상위 폴더 하나를 프로젝트로 열고, 그 안의 리포지토리마다 한 줄(모듈)로 붙여 씁니다. 맨 위에 프로젝트 줄이 따로 생기지 않고, 받은 리포지토리도 새 창이 아니라 지금 창에 붙습니다.</p>
     <div class="figure">
       <div>
         <div class="scroll">
@@ -727,16 +727,16 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
         <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
       </div>
       <ol class="legend">
-        <li><span class="mark">1</span><div><b>받은 저장소가 한 줄로</b> <span class="t">Git → Clone 이 끝나면 받은 폴더를 지금 프로젝트에 모듈로 붙이고 Git 저장소로 바로 잡습니다. 저장소와 그 아래 두 단계까지의 <code>pom.xml</code> · Gradle 파일도 찾아 Maven · Gradle 프로젝트로 연결합니다(그림의 jpa-mybatis-multi). 안의 <code>target</code> · <code>bin</code> · <code>build</code> · <code>node_modules</code> 폴더는 저절로 인덱스에서 뺍니다. 최근 프로젝트 목록에는 따로 올리지 않습니다. 서버 브랜치가 여럿이면 붙이기 전에 「받을 브랜치」 창이 떠서 작업할 브랜치를 고릅니다(찾기 칸, 내 이름이 들어간 브랜치는 맨 위). 「받기」는 그 브랜치를 꺼내 서버 브랜치를 추적하게 하고, 「기본 브랜치로」는 서버 기본 브랜치 그대로 둡니다.</span></div></li>
-        <li><span class="mark">2</span><div><b>Close Project</b> <span class="t">저장소 줄 우클릭 맨 위. 이클립스처럼 그 저장소 하나만 닫습니다. 닫는 동안 인덱스 · 검색 · 컴파일 · 동기화 창 · Git Log 에서 빠지고, 파일은 그대로입니다. 이 저장소를 쓰는 다른 Maven 모듈은 로컬 Maven 저장소의 jar 를 씁니다(jar 가 없으면 닫기 전에 묻습니다).</span></div></li>
-        <li><span class="mark">3</span><div><b>닫힌 줄 · Open Project</b> <span class="t">닫은 저장소는 닫힌 아이콘의 흐린 줄로 남고, IDE 를 다시 켜도 닫힌 채입니다. 그 줄 우클릭 「Open Project」 로 다시 엽니다. Maven 저장소면 「Maven 다시 읽는 중」 알림이 뜨고, 그동안 줄이 잠깐 사라졌다가 돌아옵니다.</span></div></li>
+        <li><span class="mark">1</span><div><b>받은 리포지토리가 한 줄로</b> <span class="t">Git → Clone 이 끝나면 받은 폴더를 지금 프로젝트에 모듈로 붙이고 Git 리포지토리로 바로 잡습니다. 리포지토리와 그 아래 두 단계까지의 <code>pom.xml</code> · Gradle 파일도 찾아 Maven · Gradle 프로젝트로 연결합니다(그림의 jpa-mybatis-multi). 안의 <code>target</code> · <code>bin</code> · <code>build</code> · <code>node_modules</code> 폴더는 저절로 인덱스에서 뺍니다. 최근 프로젝트 목록에는 따로 올리지 않습니다. 서버 브랜치가 여럿이면 붙이기 전에 「받을 브랜치」 창이 떠서 작업할 브랜치를 고릅니다(찾기 칸, 내 이름이 들어간 브랜치는 맨 위). 「받기」는 그 브랜치를 꺼내 서버 브랜치를 추적하게 하고, 「기본 브랜치로」는 서버 기본 브랜치 그대로 둡니다.</span></div></li>
+        <li><span class="mark">2</span><div><b>Close Project</b> <span class="t">리포지토리 줄 우클릭 맨 위. 이클립스처럼 그 리포지토리 하나만 닫습니다. 닫는 동안 인덱스 · 검색 · 컴파일 · 동기화 창 · Git Log 에서 빠지고, 파일은 그대로입니다. 이 리포지토리를 쓰는 다른 Maven 모듈은 로컬 Maven 리포지토리의 jar 를 씁니다(jar 가 없으면 닫기 전에 묻습니다).</span></div></li>
+        <li><span class="mark">3</span><div><b>닫힌 줄 · Open Project</b> <span class="t">닫은 리포지토리는 닫힌 아이콘의 흐린 줄로 남고, IDE 를 다시 켜도 닫힌 채입니다. 그 줄 우클릭 「Open Project」 로 다시 엽니다. Maven 저장소면 「Maven 다시 읽는 중」 알림이 뜨고, 그동안 줄이 잠깐 사라졌다가 돌아옵니다.</span></div></li>
       </ol>
     </div>
     <table class="keys" style="margin-top:18px">
       <tr><th>하려는 일</th><th>이렇게</th><th class="where">이클립스로 치면</th></tr>
-      <tr><td>Git 저장소 받기</td><td>Git → Clone… 에서 주소를 넣습니다. 폴더 칸 기본값은 지금 프로젝트 폴더 안(저장소 안에서 열었으면 그 저장소 옆)이라 받은 폴더가 작업공간에 나란히 놓입니다.</td><td class="where">Import → Projects from Git</td></tr>
-      <tr><td>SVN 받기</td><td>File → New → Project from Version Control… 에서 Subversion 을 고릅니다. 받은 폴더를 붙인 뒤 SVN 저장소로 바로 잡아 동기화 창 · Subversion 메뉴에 보입니다. SVN 프로젝트에서 SVN Checkout · Git Clone 을 하면 새 창으로 엽니다.</td><td class="where">Checkout Projects from SVN</td></tr>
-      <tr><td>저장소 하나만 잠시 빼기</td><td>저장소 줄 우클릭 → Close Project. 다시 쓸 때 Open Project.</td><td class="where">Close Project · Open Project</td></tr>
+      <tr><td>Git 리포지토리 받기</td><td>Git → Clone… 에서 주소를 넣습니다. 폴더 칸 기본값은 지금 프로젝트 폴더 안(리포지토리 안에서 열었으면 그 리포지토리 옆)이라 받은 폴더가 작업공간에 나란히 놓입니다.</td><td class="where">Import → Projects from Git</td></tr>
+      <tr><td>SVN 받기</td><td>File → New → Project from Version Control… 에서 Subversion 을 고릅니다. 받은 폴더를 붙인 뒤 SVN 리포지토리로 바로 잡아 동기화 창 · Subversion 메뉴에 보입니다. SVN 프로젝트에서 SVN Checkout · Git Clone 을 하면 새 창으로 엽니다.</td><td class="where">Checkout Projects from SVN</td></tr>
+      <tr><td>리포지토리 하나만 잠시 빼기</td><td>리포지토리 줄 우클릭 → Close Project. 다시 쓸 때 Open Project.</td><td class="where">Close Project · Open Project</td></tr>
       <tr><td>트리에서 아주 빼기</td><td>모듈 우클릭 → Remove Module. 파일은 지우지 않습니다.</td><td class="where">Delete (내용은 남김)</td></tr>
       <tr><td>최근 프로젝트 정리</td><td>File → Manage Projects… (Close Project 바로 위). 다른 프로젝트는 Recent Projects 로 고르면 새 창에 열립니다.</td><td class="where">Switch Workspace</td></tr>
     </table>
@@ -794,13 +794,13 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
         <li><span class="mark">G</span><div><b>서버 묶음</b> <span class="t">도구 모음 · 우클릭 「Server Groups」 → 「New Group…」으로 서버와 순서를 정하고 「Start Group」. 앞 서버가 실행 중이 되면 다음 서버를 띄우고, 실패하면 멈추고 알립니다.</span></div></li>
         <li><span class="mark">F</span><div><b>로그 파일 보기</b> <span class="t">WAS 줄 우클릭 「Show Log Files…」 → 로그 파일을 골라 실행 창 탭으로 열고 끝을 따라 읽습니다. 「Filter Log」도 됩니다.</span></div></li>
         <li><span class="mark">U</span><div><b>URL 찾기</b> <span class="t">Navigate 또는 Search → 「Find URL…」(<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>U</kbd>). 스프링 <code>@RequestMapping</code> · <code>@GetMapping</code> … 을 모두 모아 HTTP 방식 · URL · 클래스.메서드로 보입니다. <code>/api/order/123</code> 처럼 실제 주소를 쳐도 <code>/api/order/{id}</code> 가 걸리고, Enter 로 그 메서드로 갑니다.</span></div></li>
-        <li><span class="mark">S</span><div><b>API 요청 보내기</b> <span class="t">컨트롤러 메서드에서 우클릭 「Send API Request」(또는 URL 찾기의 「요청 보내기」). 에디터 탭에 요청 화면이 뜨고, 주소 변수 · 쿼리 · 본문이 시험 값으로 채워져 있어 「보내기」만 누르면 실행 중인 서버로 갑니다. 인증(토큰 · 아이디 · 쿠키)은 프로젝트마다 한 번 넣으면 기억합니다.</span></div></li>
-        <li><span class="mark">J</span><div><b>JavaScript · TypeScript · Vue</b> <span class="t">.js · .ts · .tsx · .vue 를 열면 언어 서버가 붙어 자동 완성 · 정의로 이동 · 이름 바꾸기 · 오류 표시가 됩니다. Node.js 와 언어 서버는 설치본에 들어 있어 따로 받지 않습니다.</span></div></li>
+        <li><span class="mark">S</span><div><b>API 요청 보내기</b> <span class="t">컨트롤러 메서드에서 우클릭 「Send API Request」(또는 URL 찾기의 「요청 보내기」). 에디터 탭에 요청 화면이 뜨고, 주소 변수 · 쿼리 · 본문이 테스트 값으로 채워져 있어 「보내기」만 누르면 실행 중인 서버로 갑니다. 인증(토큰 · 아이디 · 쿠키)은 프로젝트마다 한 번 넣으면 기억합니다.</span></div></li>
+        <li><span class="mark">J</span><div><b>JavaScript · TypeScript · Vue</b> <span class="t">.js · .ts · .tsx · .vue 를 열면 언어 서버가 붙어 코드 컴플리션 · 정의로 이동 · 이름 바꾸기 · 오류 표시가 됩니다. Node.js 와 언어 서버는 설치본에 들어 있어 따로 받지 않습니다.</span></div></li>
         <li><span class="mark">A</span><div><b>AI(Claude Code)</b> <span class="t">에디터 우클릭 「AI」 → 「Explain」 · 「Fix」 · 「Ask…」, 콘솔에서 오류를 골라 우클릭 「AI」 → 「Find Cause of This Error」. 아래 터미널의 Claude Code 에 고른 코드와 위치를 넘깁니다.</span></div></li>
         <li><span class="mark">T</span><div><b>표기법 바꾸기</b> <span class="t">글을 골라 우클릭 「Change Case」 → 카멜 · 파스칼 · 스네이크 · 대문자 스네이크. 고른 글 안의 식별자만 바꾸고 문자열 · 주석 · 키워드 · 타입 이름은 둡니다.</span></div></li>
-        <li><span class="mark">R</span><div><b>정규식 작업대</b> <span class="t">Search → 「Regex Workbench…」 또는 에디터 우클릭 「작업대 ▸」(고른 글이 시험 글로). 맨 위 「만들기」 탭 넷 가운데 편한 것으로 패턴을 만듭니다. <b>자주 쓰는 것</b>: 연락처 · 개인정보, 웹 · 네트워크, 날짜 · 시간 · 숫자, 글자 검사, 글 다듬기, 개발 · SQL · 로그 여섯 묶음 63개 단추(이메일 · 휴대폰 · 번호 가리기 · 쿼리 값 · 날짜 바꾸기 · MyBatis <code>${…}</code> · 예외 이름 …)를 누르면 끝납니다. <b>질문 따라가기</b>: 어디에 쓰는지 · 어떤 글자인지 · 몇 자인지 · 띄어쓰기 · 꼭 들어갈 것에 답하면 바로 만들어집니다. <b>예시로 만들기</b>: 맞아야 할 글 · 틀려야 할 글을 한 줄에 하나씩 넣고 「패턴 만들기」(예: 홍길동 · 김 철수 → <code>^[가-힣]+(?:\s[가-힣]+)*$</code>). <b>직접 만들기</b>: 조각 · 묶음 · 반복 · 앞뒤 조건을 고르기만으로 조합합니다. 「JavaScript(프론트)」 · 「Java(백엔드)」 문법으로 시험하고, 「확인할 글」 에 낱말을 치면 맞음 · 일부만 · 안 맞음이 바로 보입니다. 플래그 · 그룹 테이블 · 바꾸기 결과는 「자세히 보기」 를 켤 때만 보입니다. 아래 「코드」 칸의 <code>/…/gm</code> · <code>Pattern.compile("…")</code> 을 「복사」. 1초 넘게 걸리는 패턴은 멈추고 알립니다.</span></div></li>
-        <li><span class="mark">C</span><div><b>주석 만들기</b> <span class="t">자바 에디터에서 메서드(또는 클래스) 안에 커서를 두고 우클릭 「주석 만들기」. 메서드 이름 · 파라미터 · 돌려주는 형식으로 한국어 설명(<code>selectUserList</code> → 「사용자 목록을 조회한다.」)과 <code>@param</code> · <code>@return</code> · <code>@throws</code> 를 채우고, 매퍼 메서드는 그 XML 문장, 컨트롤러 · 서비스는 부르는 매퍼 문장까지 따라가 「테이블: TB_USER(사용자)」 · 「조건: 부서 코드(DEPT_CD)」 · 「SQL: UserMapper.selectUserList」 줄을 넣습니다. 한글 테이블 · 칼럼 주석은 매퍼 쿼리 실행에 마지막으로 쓴 DB 접속에서 읽고, <code>@param</code> 설명도 그 칼럼 주석을 씁니다. 컨트롤러는 「주소: GET /user/list」 줄이 붙습니다. <code>@author</code> 는 그 저장소의 Git 사용자 이름, <code>@since</code> 는 오늘 날짜. 이미 주석이 있으면 바꿀지 묻습니다. <b>매퍼 XML</b> 에서 누르면 아이디 주석이 없는 모든 문장의 SQL 첫 줄 위에 <code>/* UserMapper.selectUserList */</code> 한 줄을 넣어 DB 로그 · 느린 쿼리 목록에서 어느 쿼리인지 보이게 합니다. 설정 → 도구 → 주석 만들기에서 작성자 · 날짜 넣기 · 회사 용어 사전(<code>word.gpm=개발 관리</code>)을 바꿉니다.</span></div></li>
-        <li><span class="mark">W</span><div><b>Swagger 주석 만들기</b> <span class="t">컨트롤러 메서드(<code>@GetMapping</code> · <code>@PostMapping</code> …) 안에 커서를 두고 우클릭 「Swagger 주석 만들기」. <code>//@formatter:off</code> ~ <code>//@formatter:on</code> 사이에 <code>@Operation</code>(summary · description · responses 200)을 「=」 자리를 맞춰 만듭니다. <code>@RequestBody</code> 파라미터는 <code>requestBody</code>(형식은 implementation 으로), <code>@RequestParam</code> · <code>@PathVariable</code> · <code>@RequestHeader</code> 는 <code>parameters</code> 의 <code>@Parameter</code>(이름 · 설명 · required · 형식)로 들어가고, 응답 형식은 <code>ResponseEntity&lt;List&lt;X&gt;&gt;</code> 를 벗긴 <code>X</code> 입니다. 넣기 전에 뜨는 창에서 요약 · 설명 · 파라미터 설명 · 예시 값 · 응답 설명을 고칩니다(미리 채운 글은 문서 주석 첫 줄, 없으면 메서드 이름을 「주석 만들기」 사전으로 푼 것). 메서드 밖(컨트롤러 클래스)에서 누르면 클래스 위 <code>@Tag(name, description)</code> 를 만듭니다. import 는 함께 들어가고, 이미 있으면 바꿀지 묻습니다. springdoc(swagger v3) 의존성이 있는 모듈에서만 됩니다.</span></div></li>
+        <li><span class="mark">R</span><div><b>정규식 작업대</b> <span class="t">Search → 「Regex Workbench…」 또는 에디터 우클릭 「작업대 ▸」(고른 글이 테스트 글로). 맨 위 「만들기」 탭 넷 가운데 편한 것으로 패턴을 만듭니다. <b>자주 쓰는 것</b>: 연락처 · 개인정보, 웹 · 네트워크, 날짜 · 시간 · 숫자, 글자 검사, 글 다듬기, 개발 · SQL · 로그 여섯 묶음 63개 단추(이메일 · 휴대폰 · 번호 가리기 · 쿼리 값 · 날짜 바꾸기 · MyBatis <code>${…}</code> · 예외 이름 …)를 누르면 끝납니다. <b>질문 따라가기</b>: 어디에 쓰는지 · 어떤 글자인지 · 몇 자인지 · 띄어쓰기 · 꼭 들어갈 것에 답하면 바로 만들어집니다. <b>예시로 만들기</b>: 맞아야 할 글 · 틀려야 할 글을 한 줄에 하나씩 넣고 「패턴 만들기」(예: 홍길동 · 김 철수 → <code>^[가-힣]+(?:\s[가-힣]+)*$</code>). <b>직접 만들기</b>: 조각 · 묶음 · 반복 · 앞뒤 조건을 고르기만으로 조합합니다. 「JavaScript(프론트)」 · 「Java(백엔드)」 문법으로 테스트하고, 「확인할 글」 에 낱말을 치면 맞음 · 일부만 · 안 맞음이 바로 보입니다. 플래그 · 그룹 테이블 · 바꾸기 결과는 「자세히 보기」 를 켤 때만 보입니다. 아래 「코드」 칸의 <code>/…/gm</code> · <code>Pattern.compile("…")</code> 을 「복사」. 1초 넘게 걸리는 패턴은 멈추고 알립니다.</span></div></li>
+        <li><span class="mark">C</span><div><b>주석 만들기</b> <span class="t">자바 에디터에서 메서드(또는 클래스) 안에 커서를 두고 우클릭 「주석 만들기」. 메서드 이름 · 파라미터 · 돌려주는 형식으로 한국어 설명(<code>selectUserList</code> → 「사용자 목록을 조회한다.」)과 <code>@param</code> · <code>@return</code> · <code>@throws</code> 를 채우고, 매퍼 메서드는 그 XML 문장, 컨트롤러 · 서비스는 부르는 매퍼 문장까지 따라가 「테이블: TB_USER(사용자)」 · 「조건: 부서 코드(DEPT_CD)」 · 「SQL: UserMapper.selectUserList」 줄을 넣습니다. 한글 테이블 · 칼럼 주석은 매퍼 쿼리 실행에 마지막으로 쓴 DB 접속에서 읽고, <code>@param</code> 설명도 그 칼럼 주석을 씁니다. 컨트롤러는 「주소: GET /user/list」 줄이 붙습니다. <code>@author</code> 는 그 리포지토리의 Git 사용자 이름, <code>@since</code> 는 오늘 날짜. 이미 주석이 있으면 바꿀지 묻습니다. <b>매퍼 XML</b> 에서 누르면 아이디 주석이 없는 모든 문장의 SQL 첫 줄 위에 <code>/* UserMapper.selectUserList */</code> 한 줄을 넣어 DB 로그 · 느린 쿼리 목록에서 어느 쿼리인지 보이게 합니다. 설정 → 도구 → 주석 만들기에서 작성자 · 날짜 넣기 · 회사 용어 사전(<code>word.gpm=개발 관리</code>)을 바꿉니다.</span></div></li>
+        <li><span class="mark">W</span><div><b>Swagger 주석 만들기</b> <span class="t">컨트롤러 메서드(<code>@GetMapping</code> · <code>@PostMapping</code> …) 안에 커서를 두고 우클릭 「Swagger 주석 만들기」. <code>//@formatter:off</code> ~ <code>//@formatter:on</code> 사이에 <code>@Operation</code>(summary · description · responses 200)을 「=」 자리를 맞춰 만듭니다. <code>@RequestBody</code> 파라미터는 <code>requestBody</code>(형식은 implementation 으로), <code>@RequestParam</code> · <code>@PathVariable</code> · <code>@RequestHeader</code> 는 <code>parameters</code> 의 <code>@Parameter</code>(이름 · 설명 · required · 형식)로 들어가고, 응답 형식은 <code>ResponseEntity&lt;List&lt;X&gt;&gt;</code> 를 벗긴 <code>X</code> 입니다. 넣기 전에 뜨는 창에서 요약 · 설명 · 파라미터 설명 · 예시 값 · 응답 설명을 고칩니다(미리 채운 글은 문서 주석 첫 줄, 없으면 메서드 이름을 「주석 만들기」 사전으로 푼 것). 메서드 밖(컨트롤러 클래스)에서 누르면 클래스 위 <code>@Tag(name, description)</code> 를 만듭니다. import 는 함께 들어가고, 이미 있으면 바꿀지 묻습니다. springdoc(swagger v3) 디펜던시가 있는 모듈에서만 됩니다.</span></div></li>
         <li><span class="mark">N</span><div><b>뷰 · 설정 이동</b> <span class="t">컨트롤러의 <code>return "order/list"</code> 를 <kbd>Ctrl</kbd>+클릭하면 그 JSP 로(prefix · suffix 는 설정에서, 없으면 <code>/WEB-INF/views/ … .jsp</code>). JSP 우클릭 「Go to Controller」은 반대로. <code>${db.url}</code> 을 <kbd>Ctrl</kbd>+클릭하면 application*.yml · properties 의 그 키로(프로필 파일마다 따로).</span></div></li>
         <li><span class="mark">X</span><div><b>프로그램 목록 엑셀</b> <span class="t">Project 메뉴 또는 프로젝트 트리 우클릭 「Export Program List to Excel…」. 소스 · 리소스 · 웹 폴더의 전체 파일(구분 · 경로 · 클래스 · 설명 · 줄 수 · 수정일)과 URL 목록을 시트 두 장으로 저장합니다. 트리에서 폴더를 골라 우클릭으로 누르면 그 폴더 안의 것만, Project 메뉴에서는 전체를 담습니다.</span></div></li>
         <li><span class="mark">4</span><div><b>오른쪽 칸에서 바로 고치기</b> <span class="t">프로필 · VM 옵션 · 포트를 고치고 「적용」. 프로젝트 트리의 모듈 옆에도 상태 · 포트가 나오고 우클릭으로 시작 · 중지할 수 있습니다.</span></div></li>
@@ -864,10 +864,10 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
       </div>
       <ol class="legend">
         <li><span class="mark">1</span><div><b>우클릭으로 바로 열기</b> <span class="t">컨트롤러 메서드나 <code>@GetMapping</code> · <code>@RequestMapping</code> 줄에서 우클릭 「Send API Request」. 에디터 탭으로 열리고, 같은 메서드를 다시 열면 그 탭으로 갑니다. 주소는 이 모듈을 올린 WAS(서버 창) → 실행 중인 스프링 부트 서버 → <code>server.port</code> 순으로 정합니다. 방식이 정해지지 않은 <code>@RequestMapping</code> 은 GET 으로 열고, 위 상자에서 바꿉니다.</span></div></li>
-        <li><span class="mark">2</span><div><b>시험 값 채우기</b> <span class="t"><code>@PathVariable</code> 은 주소에, <code>@RequestParam</code> · 주석 없는 VO 의 필드(<code>TestVo vo</code>)는 쿼리 테이블에, <code>@RequestHeader</code> 는 헤더 테이블에(<code>Accept</code> 는 늘, 본문이 있으면 <code>Content-Type</code> 도), <code>@RequestBody</code> DTO 는 JSON 본문에 넣습니다. defaultValue → 이름이 id · no · seq · cnt 로 끝나면 1 → email 은 test@test.com → Yn 은 Y → 숫자 1 · 참거짓 true · 날짜 오늘 · 글 「테스트」. 테이블의 체크를 끄면 그 줄은 보내지 않고, 「값 다시 채우기」로 처음 값으로 돌립니다.</span></div></li>
-        <li><span class="mark">3</span><div><b>인증</b> <span class="t">없음 · Bearer 토큰 · 아이디/비번(Basic) · 쿠키 중 고르면 이 프로젝트의 모든 요청에 붙습니다. 토큰 · 비밀번호 · 쿠키는 IDE 비밀번호 저장소에 둡니다. 로그인 API 를 한 번 보내면 받은 세션 쿠키(JSESSIONID 등)를 IDE 를 끌 때까지 이어 보냅니다. 고른 인증은 헤더 테이블 맨 위 흐린 줄로 보이고, 그 줄 체크를 끄면 그 요청만 빼고 보냅니다. 헤더 테이블에 직접 적은 Authorization · Cookie 가 앞섭니다.</span></div></li>
+        <li><span class="mark">2</span><div><b>테스트 값 채우기</b> <span class="t"><code>@PathVariable</code> 은 주소에, <code>@RequestParam</code> · 주석 없는 VO 의 필드(<code>TestVo vo</code>)는 쿼리 테이블에, <code>@RequestHeader</code> 는 헤더 테이블에(<code>Accept</code> 는 늘, 본문이 있으면 <code>Content-Type</code> 도), <code>@RequestBody</code> DTO 는 JSON 본문에 넣습니다. defaultValue → 이름이 id · no · seq · cnt 로 끝나면 1 → email 은 test@test.com → Yn 은 Y → 숫자 1 · 참거짓 true · 날짜 오늘 · 글 「테스트」. 테이블의 체크를 끄면 그 줄은 보내지 않고, 「값 다시 채우기」로 처음 값으로 돌립니다.</span></div></li>
+        <li><span class="mark">3</span><div><b>인증</b> <span class="t">없음 · Bearer 토큰 · 아이디/비번(Basic) · 쿠키 중 고르면 이 프로젝트의 모든 요청에 붙습니다. 토큰 · 비밀번호 · 쿠키는 IDE 비밀번호 리포지토리에 둡니다. 로그인 API 를 한 번 보내면 받은 세션 쿠키(JSESSIONID 등)를 IDE 를 끌 때까지 이어 보냅니다. 고른 인증은 헤더 테이블 맨 위 흐린 줄로 보이고, 그 줄 체크를 끄면 그 요청만 빼고 보냅니다. 헤더 테이블에 직접 적은 Authorization · Cookie 가 앞섭니다.</span></div></li>
         <li><span class="mark">4</span><div><b>응답</b> <span class="t">오른쪽 위 「보낼 요청」에 실제로 나갈 내용이 보입니다. 아래 응답은 상태 · 걸린 시간 · 크기와 본문 · 헤더 · 쿠키. JSON 은 줄맞춤, JSP 화면(HTML)은 HTML 색으로 보입니다.</span></div></li>
-        <li><span class="mark">Y</span><div><b>openapi.yaml 미리보기</b> <span class="t"><code>openapi</code> · <code>swagger</code> 사양 파일(.yaml · .yml · .json)을 열면 에디터 옆에 Swagger 화면이 붙고, 고치면 바로 다시 그립니다. OpenAPI 3.0 · Swagger 2.0 은 자동 완성 · 오류 표시가 됩니다.</span></div></li>
+        <li><span class="mark">Y</span><div><b>openapi.yaml 미리보기</b> <span class="t"><code>openapi</code> · <code>swagger</code> 사양 파일(.yaml · .yml · .json)을 열면 에디터 옆에 Swagger 화면이 붙고, 고치면 바로 다시 그립니다. OpenAPI 3.0 · Swagger 2.0 은 코드 컴플리션 · 오류 표시가 됩니다.</span></div></li>
       </ol>
     </div>
 
@@ -930,7 +930,7 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
       </div>
       <ol class="legend">
         <li><span class="mark">1</span><div><b>설치본에 들어 있음</b> <span class="t">Node.js 와 언어 서버(vtsls · Vue · TypeScript 5)는 설치 폴더 <code>plugins\boot-servers\web</code> 에 함께 들어 있습니다. 인터넷이 막힌 PC 에서도 .js · .jsx · .ts · .tsx · .vue 를 열면 바로 뜹니다.</span></div></li>
-        <li><span class="mark">2</span><div><b>쓰는 법</b> <span class="t">자동 완성 · 정의로 이동(import 경로 <kbd>Ctrl</kbd>+클릭) · 사용처 찾기 · 이름 바꾸기 · 오류 표시 · 빠른 수정. .vue 는 TypeScript 서버와 Vue 서버가 함께 뜹니다.</span></div></li>
+        <li><span class="mark">2</span><div><b>쓰는 법</b> <span class="t">코드 컴플리션 · 정의로 이동(import 경로 <kbd>Ctrl</kbd>+클릭) · 사용처 찾기 · 이름 바꾸기 · 오류 표시 · 빠른 수정. .vue 는 TypeScript 서버와 Vue 서버가 함께 뜹니다.</span></div></li>
         <li><span class="mark">!</span><div><b>설치본 폴더가 깨졌을 때</b> <span class="t">설치 폴더에 없으면 「Download Language Servers」 알림이 뜨고, 누르면 사용자 폴더 <code>.ei-web</code> 에 npm 으로 받습니다(인터넷 필요). 다시 설치해도 됩니다.</span></div></li>
       </ol>
     </div>
@@ -986,7 +986,7 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
     <table class="keys">
       <tr><th>알림</th><th>할 일</th></tr>
       <tr><td>인덱싱이 끝난 뒤 다시 시도하세요</td><td>프로젝트를 막 열었을 때입니다. 오른쪽 아래 진행 막대가 끝나면 다시 누릅니다.</td></tr>
-      <tr><td>프로젝트에 스프링 부트 의존성이 없습니다</td><td>Maven · Gradle 프로젝트로 연결이 안 된 것입니다. 05 의 「막혔을 때」 를 봅니다.</td></tr>
+      <tr><td>프로젝트에 스프링 부트 디펜던시가 없습니다</td><td>Maven · Gradle 프로젝트로 연결이 안 된 것입니다. 05 의 「막혔을 때」 를 봅니다.</td></tr>
       <tr><td>@SpringBootApplication 클래스가 없습니다</td><td>그 모듈은 서버가 아닙니다(라이브러리 모듈). 서버 모듈에서 누릅니다.</td></tr>
       <tr><td>@SpringBootApplication 클래스가 N개 있습니다</td><td>어느 것을 띄울지 모르는 경우입니다. 모듈 이름과 같은 이름으로 실행 설정을 직접 만들면 그 설정으로 시작합니다.</td></tr>
       <tr><td>상태가 「실패」, 이유 <code>Address already in use</code></td><td>포트를 다른 서버가 쓰고 있습니다. 포트 칸을 바꾸거나 떠 있는 서버를 중지합니다.</td></tr>
@@ -1030,7 +1030,7 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
       <tr><td>Tomcat</td><td><code>bin</code> · <code>lib</code> 가 있는 폴더</td><td>8090 · 종료 8005</td><td class="where">복사 없이 프로젝트 폴더를 그 자리에서 연결 (8.5 이상)</td></tr>
       <tr><td>JBoss / WildFly</td><td><code>jboss-modules.jar</code> 가 있는 폴더</td><td>8180 · 관리 9990</td><td class="where">펼친 war 폴더로 바뀐 파일만 복사</td></tr>
       <tr><td>WebLogic</td><td>개발 모드 도메인 폴더 <code>user_projects/domains/base_domain</code></td><td>7001</td><td class="where">펼친 war 로 복사. boot.properties 가 없으면 처음에 실행 창이 관리자 계정을 묻습니다</td></tr>
-      <tr><td>JEUS</td><td><code>bin/jeusadmin</code> 이 있는 폴더 + 도메인 · 서버 이름 · 계정</td><td>8088 · 관리 9736</td><td class="where">펼친 war 로 복사 후 jeusadmin 으로 배포. 비밀번호는 처음 시작 때 묻고 IDE 암호 저장소에 기억할 수 있음</td></tr>
+      <tr><td>JEUS</td><td><code>bin/jeusadmin</code> 이 있는 폴더 + 도메인 · 서버 이름 · 계정</td><td>8088 · 관리 9736</td><td class="where">펼친 war 로 복사 후 jeusadmin 으로 디플로이. 비밀번호는 처음 시작 때 묻고 IDE 암호 리포지토리에 기억할 수 있음</td></tr>
     </table>
     <div class="notes">
       <div class="note"><b>설치 폴더는 그대로</b>서버마다 IDE 시스템 폴더 안 <code>kinggura-was\서버 id</code> 에 실행 폴더를 따로 꾸립니다. 같은 Tomcat 으로 서버 여러 개를 띄워도 섞이지 않습니다.</div>
@@ -1038,7 +1038,7 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
       <div class="note warn"><b>JEUS 디버그</b>JEUS 는 JVM 옵션을 도메인 설정에서 읽어서, 서버 JVM 옵션에 <code>-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005</code> 를 직접 넣어야 디버거가 붙습니다.</div>
     </div>
 
-    <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note warn"><b>확인 범위</b>Tomcat 9 · WildFly 26 으로 시작 · 배포 · 반영 · 종료를 확인했습니다. WebLogic · JEUS 는 실제 서버로 아직 확인하지 못했습니다.</div></div>
+    <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note warn"><b>확인 범위</b>Tomcat 9 · WildFly 26 으로 시작 · 디플로이 · 반영 · 종료를 확인했습니다. WebLogic · JEUS 는 실제 서버로 아직 확인하지 못했습니다.</div></div>
   </div>
 </section>
 
@@ -1057,32 +1057,32 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
     <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note"><b>PC 에 Git 이 있으면</b>내장판 대신 PC 의 Git 을 씁니다. Synchronize 창은 Git 설치 폴더의 껍데기(<code>cmd\git.exe</code>)를 건너뛰고 안쪽 <code>mingw64\bin\git.exe</code> 를 바로 불러, 백신이 프로세스마다 검사하는 PC 에서 새로고침이 빨라집니다. 사내 서버 로그인은 Settings(설정) → Version Control(버전 관리) → Git 로그인 테이블에 넣습니다.</div></div>
 
     <h3>Synchronize · Git → Synchronize Workspace</h3>
-    <p class="lead">이클립스 Team → Synchronize Workspace 와 같은 창입니다. 프로젝트 안의 Git 저장소 여러 개와 SVN 을 저장소별로 묶어 들어올 변경(파랑) · 나갈 변경(보라) · 충돌(빨강)을 한눈에 봅니다. 커밋 · 올리기 뒤에는 자동으로 다시 비교합니다. 왼쪽 목록은 처음에 창 너비의 45% 를 차지하고, 끌어 바꾼 폭은 기억합니다. 프로젝트 트리 우클릭 → Git(SVN 은 Subversion) → Synchronize Workspace 로 열면 그 저장소만 비교합니다.</p>
+    <p class="lead">이클립스 Team → Synchronize Workspace 와 같은 창입니다. 프로젝트 안의 Git 리포지토리 여러 개와 SVN 을 리포지토리별로 묶어 들어올 변경(파랑) · 나갈 변경(보라) · 충돌(빨강)을 한눈에 봅니다. 커밋 · 올리기 뒤에는 자동으로 다시 비교합니다. 왼쪽 목록은 처음에 창 너비의 45% 를 차지하고, 끌어 바꾼 폭은 기억합니다. 프로젝트 트리 우클릭 → Git(SVN 은 Subversion) → Synchronize Workspace 로 열면 그 리포지토리만 비교합니다.</p>
     <table class="keys map" style="margin-bottom:18px">
       <tr><th>단추</th><th>하는 일</th></tr>
       <tr><td>Show All · Incoming · Outgoing · Conflicts</td><td>보기 거르기</td></tr>
       <tr><td>「나갈 변경」에 나오는 것</td><td>내 브랜치에서 직접 만든 커밋과 커밋 안 한 수정만 보입니다. Merge Branches 로 develop 을 머지한 뒤에도 남이 고친 파일은 내 변경처럼 나오지 않습니다. Push 단추의 숫자(올릴 커밋 수)에는 머지 커밋까지 들어갑니다</td></tr>
       <tr><td>오른쪽 비교 칸</td><td>파일을 고르면 왼쪽 「원격 (origin/…)」 · 오른쪽 「내 작업본」으로 비교합니다. 머리 오른쪽 × 로 닫으면 목록만 남고, 파일을 다시 고르면 열립니다</td></tr>
-      <tr><td>Refresh All · Selected Repository Only</td><td>모든 저장소 · 고른 저장소 하나만 원격과 다시 비교</td></tr>
+      <tr><td>Refresh All · Selected Repository Only</td><td>모든 리포지토리 · 고른 리포지토리 하나만 원격과 다시 비교</td></tr>
       
-      <tr><td>Pull All · Pull Selected (파랑)</td><td>아래 단추 줄. Pull All 은 고른 것과 상관없이 모든 저장소를 한 번에 받기(IDE 의 Update Project), Pull Selected 는 트리에서 고른 저장소만 받기. SVN 은 svn update</td></tr>
+      <tr><td>Pull All · Pull Selected (파랑)</td><td>아래 단추 줄. Pull All 은 고른 것과 상관없이 모든 리포지토리를 한 번에 받기(IDE 의 Update Project), Pull Selected 는 트리에서 고른 리포지토리만 받기. SVN 은 svn update</td></tr>
       <tr><td>Resolve Conflicts (빨강)</td><td>충돌 해결 창</td></tr>
-      <tr><td>Merge Branches (보라)</td><td>고른 저장소(없으면 지금 저장소)로 역머지 창</td></tr>
-      <tr><td>Push (초록)</td><td>고른 저장소(없으면 전부)를 올리는 Push 창</td></tr>
+      <tr><td>Merge Branches (보라)</td><td>고른 리포지토리(없으면 지금 리포지토리)로 역머지 창</td></tr>
+      <tr><td>Push (초록)</td><td>고른 리포지토리(없으면 전부)를 올리는 Push 창</td></tr>
       <tr><td>Commit and Push… (초록)</td><td>커밋 창을 엽니다. 파일을 체크하고 Commit and Push 로 커밋과 올리기를 한 번에</td></tr>
       <tr><td>목록 우클릭</td><td>「들어올 변경」 줄 · 그 파일: Pull(Pull Selected 와 같음), SVN 은 Update Only These Files 로 그 파일만 svn update. 「나갈 변경」 줄 · 그 파일: Commit…(그 파일만 체크된 커밋 창) · Push(Git 만) · Replace with HEAD(확인창, 이클립스 Replace With › HEAD Revision 과 같음). 「충돌」 줄: Resolve Conflicts</td></tr>
-      <tr><td>저장소 줄 우클릭</td><td>Pull · Push · Refresh This Repository(이 저장소만 원격 확인) · Merge Branches… · Undo Last Git Action… · Show in Git Log · 탐색기에서 열기</td></tr>
+      <tr><td>리포지토리 줄 우클릭</td><td>Pull · Push · Refresh This Repository(이 리포지토리만 원격 확인) · Merge Branches… · Undo Last Git Action… · Show in Git Log · 탐색기에서 열기</td></tr>
       <tr><td>파일 줄 우클릭 아래</td><td>IntelliJ 기본 Jump to Source · Show History · Copy Absolute Path · Select in Project View. 메뉴 키 · Shift+F10 으로도 뜹니다</td></tr>
-      <tr><td>알림 풍선</td><td>받기가 끝나면 「받기 끝: 저장소 · 커밋 · 파일 수」와 「커밋 보기」(Git Log 창). 원격 확인에 실패한 저장소가 하나면 그 저장소의 「다시 시도」 · 「자세히」, 여럿이면(인터넷 · VPN 끊김 등) 풍선 하나에 저장소 이름과 오류 첫 줄을 모으고 「다시 시도」는 전체 새로고침. 그 저장소 줄 끝에 빨간 「⚠ 원격 확인 실패」. 받기가 실패하면 갈라짐 · 덮어쓸 파일 · 충돌일 때만 IntelliJ 받기 창을 띄우고, 그 밖(서버 연결 · 인증 등)은 이유를 풍선과 위쪽 줄에 보입니다. 받아 온 브랜치 기록이 어긋나 실패하면(cannot lock ref … but expected, 윈도우에서 Feature/ · feature/ 가 겹칠 때 등) 그 기록만 지우고 저절로 한 번 더 받습니다</td></tr>
-      <tr><td>저장소 줄 주황 표시</td><td>머지 · rebase · cherry-pick 이 도중에 멈춰 있으면 「머지하는 중(커밋 안 함)」 등. 저장소에 대소문자만 다른 두 이름(Foo.vue · foo.vue)이 함께 커밋돼 윈도우에서 한 파일로 겹치면 「대소문자만 다른 파일 N개 겹침」(마우스를 올리면 목록). 그런 파일은 늘 바뀐 파일로 보이고 되돌려도 없어지지 않아, 한쪽 이름을 지우는 커밋이 필요합니다</td></tr>
-      <tr><td>받는 동안</td><td>Pull All · Pull Selected · 새로고침이 함께 꺼지고, 같은 저장소에서 Merge Branches · Undo 가 도는 중이면 그 저장소는 받지 않고 알립니다</td></tr>
+      <tr><td>알림 풍선</td><td>받기가 끝나면 「받기 끝: 리포지토리 · 커밋 · 파일 수」와 「커밋 보기」(Git Log 창). 원격 확인에 실패한 리포지토리가 하나면 그 리포지토리의 「다시 시도」 · 「자세히」, 여럿이면(인터넷 · VPN 끊김 등) 풍선 하나에 리포지토리 이름과 오류 첫 줄을 모으고 「다시 시도」는 전체 새로고침. 그 리포지토리 줄 끝에 빨간 「⚠ 원격 확인 실패」. 받기가 실패하면 갈라짐 · 덮어쓸 파일 · 충돌일 때만 IntelliJ 받기 창을 띄우고, 그 밖(서버 연결 · 인증 등)은 이유를 풍선과 위쪽 줄에 보입니다. 받아 온 브랜치 기록이 어긋나 실패하면(cannot lock ref … but expected, 윈도우에서 Feature/ · feature/ 가 겹칠 때 등) 그 기록만 지우고 저절로 한 번 더 받습니다</td></tr>
+      <tr><td>리포지토리 줄 주황 표시</td><td>머지 · rebase · cherry-pick 이 도중에 멈춰 있으면 「머지하는 중(커밋 안 함)」 등. 리포지토리에 대소문자만 다른 두 이름(Foo.vue · foo.vue)이 함께 커밋돼 윈도우에서 한 파일로 겹치면 「대소문자만 다른 파일 N개 겹침」(마우스를 올리면 목록). 그런 파일은 늘 바뀐 파일로 보이고 되돌려도 없어지지 않아, 한쪽 이름을 지우는 커밋이 필요합니다</td></tr>
+      <tr><td>받는 동안</td><td>Pull All · Pull Selected · 새로고침이 함께 꺼지고, 같은 리포지토리에서 Merge Branches · Undo 가 도는 중이면 그 리포지토리는 받지 않고 알립니다</td></tr>
       <tr><td>진행 · 멈추기</td><td>새로고침 · 받기가 IDE 아래 상태 표시줄에 진행 막대로 보이고 ✕ 로 멈춥니다</td></tr>
       <tr><td>단추 숫자</td><td>Pull Selected 끝에 받을 파일 수, Push 끝에 올릴 커밋 수. 충돌이 없으면 Resolve Conflicts 는 꺼집니다</td></tr>
       <tr><td>도구줄</td><td>모두 펼치기 · 모두 접기 · 폴더별로 묶기 · 이전 파일 · 다음 파일(Alt+← · Alt+→, 비교 화면에서도)</td></tr>
       <tr><td>git 읽기</td><td>서버 받기 · 받기(Pull)의 서버 단계 · 서버 브랜치 목록 · 커밋 수 · 파일 내용 읽기는 내장 JGit 으로 git 을 띄우지 않고 합니다(Pull 의 머지는 git). JGit 이 못 하는 경우(Git 로그인이 없는 서버 · ssh 등)와 작업본 비교 · 바꾸는 명령은 git 으로 합니다</td></tr>
-      <tr><td>조회</td><td>창을 열어도 저절로 서버에 묻지 않습니다. 가운데 「조회」 링크나 도구줄 ⟳ 를 눌러야 저장소 전체를 원격 확인합니다. 조회한 뒤 새 저장소가 생기면 주황 「새로고침 필요」</td></tr>
+      <tr><td>조회</td><td>창을 열어도 저절로 서버에 묻지 않습니다. 가운데 「조회」 링크나 도구줄 ⟳ 를 눌러야 리포지토리 전체를 원격 확인합니다. 조회한 뒤 새 리포지토리가 생기면 주황 「새로고침 필요」</td></tr>
       <tr><td>원격 확인 시각</td><td>위쪽 줄 「원격 확인 3분 전」, 30분이 지나면 주황 「새로고침 필요」. 설정 → 버전 관리 → 동기화 창에서 자동 확인 간격(분, 기본 끔)</td></tr>
-      <tr><td>Undo Last Git Action…</td><td>그 저장소의 마지막 Git 액션을 확인 창에 보이고 되돌립니다. 커밋 · amend 는 커밋만 없애고 파일은 남김, 머지 · 받기 · 리베이스 · reset 은 그 전 위치로(커밋 안 한 내 변경은 지키고, 겹치면 멈춤), 브랜치를 막 바꿨으면 앞 브랜치로. 이미 서버에 있는 커밋이면 빨간 글로 알립니다. 한 번 더 하면 되돌리기 전으로</td></tr>
+      <tr><td>Undo Last Git Action…</td><td>그 리포지토리의 마지막 Git 액션을 확인 창에 보이고 되돌립니다. 커밋 · amend 는 커밋만 없애고 파일은 남김, 머지 · 받기 · 리베이스 · reset 은 그 전 위치로(커밋 안 한 내 변경은 지키고, 겹치면 멈춤), 브랜치를 막 바꿨으면 앞 브랜치로. 이미 서버에 있는 커밋이면 빨간 글로 알립니다. 한 번 더 하면 되돌리기 전으로</td></tr>
       <tr><td>키보드</td><td>글자를 치면 파일 이름으로 찾기, 파일 줄 두 번 누르기 · F4 · Enter 는 에디터로 열기. 저장할 때 다시 비교해도 고른 줄 · 오른쪽 비교가 그대로입니다</td></tr>
     </table>
 
@@ -1091,7 +1091,7 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
         <div class="scroll">
           <div class="ide rel" style="min-width:680px">
             <div class="title"><span class="dots"><i></i><i></i><i></i></span>Synchronize</div>
-            <div class="bar"><span class="btn">⟳</span><span class="btn">⟳ 고른 저장소</span><span class="sepv"></span><span class="mark">1</span><span class="btn pri">Show All</span><span class="btn">Incoming</span><span class="btn">Outgoing</span><span class="btn">Conflicts</span><span class="sepv"></span><span class="btn">⇊</span><span class="btn">⇈</span><span class="btn">폴더</span><span class="key">저장소 2개 · 원격 확인 3분 전</span></div>
+            <div class="bar"><span class="btn">⟳</span><span class="btn">⟳ 고른 리포지토리</span><span class="sepv"></span><span class="mark">1</span><span class="btn pri">Show All</span><span class="btn">Incoming</span><span class="btn">Outgoing</span><span class="btn">Conflicts</span><span class="sepv"></span><span class="btn">⇊</span><span class="btn">⇈</span><span class="btn">폴더</span><span class="key">리포지토리 2개 · 원격 확인 3분 전</span></div>
             <div class="cols" style="grid-template-columns:45fr 55fr; min-height:300px">
               <div class="treeview" style="position:relative">
                 <div>▾ backend <span class="muted">feature/order ↔ origin/feature/order</span></div>
@@ -1131,16 +1131,16 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
       </div>
       <ol class="legend">
         <li><span class="mark">1</span><div><b>보기 거르기</b> <span class="t">Show All · Incoming · Outgoing · Conflicts 로 따로 볼 수 있습니다.</span></div></li>
-        <li><span class="mark">2</span><div><b>파일 우클릭</b> <span class="t">Commit… · Push · Replace with HEAD · Add to .gitignore · 이 PC 에서만 무시 · Assume Unchanged. 「??」 새 파일에는 Assume Unchanged 가 걸리지 않습니다(Git 이 아직 모르는 파일). 저장소에 안 올리고 나만 빼려면 「이 PC 에서만 무시」를 씁니다(<code>.git/info/exclude</code>, 풀기는 프로젝트 트리 우클릭). 새로 추가 · 이름 바꿈 · 복사한 파일은 지워지지 않게 Replace with HEAD 에서 빠지고 「Unstage Only, Keep Files」로 갑니다.</span></div></li>
+        <li><span class="mark">2</span><div><b>파일 우클릭</b> <span class="t">Commit… · Push · Replace with HEAD · Add to .gitignore · 이 PC 에서만 무시 · Assume Unchanged. 「??」 새 파일에는 Assume Unchanged 가 걸리지 않습니다(Git 이 아직 모르는 파일). 리포지토리에 안 올리고 나만 빼려면 「이 PC 에서만 무시」를 씁니다(<code>.git/info/exclude</code>, 풀기는 프로젝트 트리 우클릭). 새로 추가 · 이름 바꿈 · 복사한 파일은 지워지지 않게 Replace with HEAD 에서 빠지고 「Unstage Only, Keep Files」로 갑니다.</span></div></li>
         <li><span class="mark">3</span><div><b>Assume Unchanged</b> <span class="t"><code>application-local.yml</code> 처럼 내 PC 에서만 고친 파일이 커밋 목록에 계속 뜰 때 씁니다. 커밋 창 · 프로젝트 트리의 파일 우클릭에도 있습니다(프로젝트 트리에는 「No Assume Unchanged」도). 원격에서 그 파일이 바뀌면 받기(Pull)가 멈추니 그때는 먼저 No Assume Unchanged 로 푸세요.</span></div></li>
         <li><span class="mark">4</span><div><b>Assume Unchanged · 풀기</b> <span class="t">Assume Unchanged 로 둔 파일은 「모두 보기」 맨 아래 「Assume Unchanged」 묶음에 모입니다. 우클릭 「No Assume Unchanged」로 되돌리면 내 변경이 다시 나갈 변경으로 보입니다. 파일 내용은 그대로입니다.</span></div></li>
-        <li><span class="mark">5</span><div><b>역머지 안내</b> <span class="t">Merge Branches 를 한 번 한 저장소 줄에 「develop 보다 3개 뒤 · 내 파일 2개 겹침」(겹치면 주황), 아직 안 머지된 내 커밋이 있으면 「develop 에 안 머지된 내 커밋 N개」가 나옵니다(머지 커밋은 세지 않습니다).</span></div></li>
+        <li><span class="mark">5</span><div><b>역머지 안내</b> <span class="t">Merge Branches 를 한 번 한 리포지토리 줄에 「develop 보다 3개 뒤 · 내 파일 2개 겹침」(겹치면 주황), 아직 안 머지된 내 커밋이 있으면 「develop 에 안 머지된 내 커밋 N개」가 나옵니다(머지 커밋은 세지 않습니다).</span></div></li>
         <li><span class="mark">6</span><div><b>비교 칸</b> <span class="t">왼쪽 원격 · 오른쪽 내 작업본. × 로 닫을 수 있습니다.</span></div></li>
         <li><span class="mark">7</span><div><b>아래 단추 줄</b> <span class="t">받기는 파랑, 올리기는 초록, 충돌은 빨강, 머지는 보라입니다.</span></div></li>
-        <li><span class="mark">+</span><div><b>IDE 파일은 처음부터 안 뜸</b> <span class="t">프로젝트를 열면 저장소마다 <code>.git/info/exclude</code> 에 <code>*.iml</code> · <code>.idea/</code> · <code>.project</code> · <code>.classpath</code> · <code>.settings/</code> 를 넣습니다. 팀 <code>.gitignore</code> 와 서버에는 영향이 없습니다.</span></div></li>
+        <li><span class="mark">+</span><div><b>IDE 파일은 처음부터 안 뜸</b> <span class="t">프로젝트를 열면 리포지토리마다 <code>.git/info/exclude</code> 에 <code>*.iml</code> · <code>.idea/</code> · <code>.project</code> · <code>.classpath</code> · <code>.settings/</code> 를 넣습니다. 팀 <code>.gitignore</code> 와 서버에는 영향이 없습니다.</span></div></li>
       </ol>
     </div>
-    <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note"><b>SVN</b>svn 명령줄 도구(VisualSVN)가 본체에 같이 들어 있어 따로 설치하지 않아도 SVN 저장소가 함께 보입니다. SVN 은 Checkout 하면 새 창 프로젝트로 열립니다(Git 과 한 프로젝트에 섞이면 Commit 창 대신 커밋 대화상자가 뜸).</div></div>
+    <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note"><b>SVN</b>svn 명령줄 도구(VisualSVN)가 본체에 같이 들어 있어 따로 설치하지 않아도 SVN 리포지토리가 함께 보입니다. SVN 은 Checkout 하면 새 창 프로젝트로 열립니다(Git 과 한 프로젝트에 섞이면 Commit 창 대신 커밋 대화상자가 뜸).</div></div>
 
     <h3>역머지 · Git → Merge Branches… · Synchronize 창 아래 Merge Branches 단추</h3>
     <p class="lead">GitLab 사이트에서 하던 「develop → 내 개인 브랜치」 머지를 IDE 에서 합니다. 내 PC 가 개인 브랜치만 받도록 설정돼 있어도 서버에 직접 브랜치 목록을 물어 고르게 하고, 고른 브랜치만 받아 옵니다. 머지 전에 들어올 파일을 먼저 보여 주고, Merge 를 눌러야 머지합니다.</p>
@@ -1149,7 +1149,7 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
         <div class="scroll">
           <div class="ide">
             <div class="title"><span class="dots"><i></i><i></i><i></i></span>Merge Branches</div>
-            <div class="bar"><span class="mark">1</span>저장소: <b style="color:#c75450; font-size:1.1em">backend</b><span class="key">D:\work\backend</span></div>
+            <div class="bar"><span class="mark">1</span>리포지토리: <b style="color:#c75450; font-size:1.1em">backend</b><span class="key">D:\work\backend</span></div>
             <div class="sub"><b>가져올 브랜치</b></div>
             <div class="bar"><span class="mark">2</span><span class="combo" style="flex:1">origin/develop</span><span class="btn">⇄</span><span class="combo" style="flex:1">origin/feature/order</span><span class="btn fill blue">Compare</span></div>
             <div class="sub" style="display:flex; align-items:center; gap:6px"><span class="mark">3</span><b>미리보기</b><span class="tag in">커밋 3</span><span class="tag in">파일 4</span><span class="tag" style="color:var(--warn)">내 파일 1</span><span style="flex:1"></span>파일을 두 번 누르면 비교</div>
@@ -1166,7 +1166,7 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
         <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
       </div>
       <ol class="legend">
-        <li><span class="mark">1</span><div><b>저장소</b> <span class="t">머지할 저장소 이름을 창 맨 위에 빨간 굵은 글씨(Resolve Conflicts 단추 색)로 먼저 보여 줍니다. 옆은 그 폴더입니다.</span></div></li>
+        <li><span class="mark">1</span><div><b>리포지토리</b> <span class="t">머지할 리포지토리 이름을 창 맨 위에 빨간 굵은 글씨(Resolve Conflicts 단추 색)로 먼저 보여 줍니다. 옆은 그 폴더입니다.</span></div></li>
         <li><span class="mark">2</span><div><b>From ⇄ Into</b> <span class="t">왼쪽이 가져올 브랜치, 오른쪽이 머지할 곳입니다. 가운데 ⇄ 는 두 브랜치를 맞바꾸고 바로 다시 비교합니다.</span></div></li>
         <li><span class="mark">3</span><div><b>미리보기</b> <span class="t">Compare 를 누르면 두 브랜치를 서버에서 새로 받아 커밋 · 파일 · 내 파일 수와 들어올 파일이 나옵니다. 창을 열어 둔 채 다시 눌러도 새로 받습니다.</span></div></li>
         <li><span class="mark">4</span><div><b>주황 줄</b> <span class="t">내가 고친 파일을 다른 사람도 고친 것입니다. 먼저 두 번 눌러 비교해 보세요.</span></div></li>
@@ -1175,8 +1175,8 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
     </div>
     <table class="keys map" style="margin-bottom:18px">
       <tr><th>창의 칸</th><th>하는 일</th></tr>
-      <tr><td>저장소</td><td>창 맨 위 「저장소:」 줄에 머지할 저장소 이름(빨간 굵은 글씨), 옆에 폴더</td></tr>
-      <tr><td>From · Into</td><td>반대 방향(개인 브랜치 → develop)은 가운데 ⇄ 단추로 맞바꾸면 됩니다. 브랜치를 고른 뒤 줄 끝 Compare 로 비교합니다. From 은 가져올 서버 브랜치(develop · main 등), Into 는 머지할 곳(내 개인 브랜치)의 서버 브랜치입니다. 두 상자 모두 origin/ 을 붙여 보이고, 서버에서 지워진 브랜치는 목록에서 빠집니다. 아래 줄에 「서버(origin)의 From 브랜치를 Into 브랜치에 머지합니다. 아래 Push 가 켜져 있으면 머지한 결과를 서버로 올립니다」를 적습니다. From 브랜치에 내 PC 에만 있는 커밋이 있으면 빨간 줄로 먼저 Push 하라고 알립니다. 고른 값은 저장소마다 기억합니다. Into 가 지금 브랜치가 아니면 그 브랜치로 옮긴 뒤 머지합니다.</td></tr>
+      <tr><td>리포지토리</td><td>창 맨 위 「리포지토리:」 줄에 머지할 리포지토리 이름(빨간 굵은 글씨), 옆에 폴더</td></tr>
+      <tr><td>From · Into</td><td>반대 방향(개인 브랜치 → develop)은 가운데 ⇄ 단추로 맞바꾸면 됩니다. 브랜치를 고른 뒤 줄 끝 Compare 로 비교합니다. From 은 가져올 서버 브랜치(develop · main 등), Into 는 머지할 곳(내 개인 브랜치)의 서버 브랜치입니다. 두 상자 모두 origin/ 을 붙여 보이고, 서버에서 지워진 브랜치는 목록에서 빠집니다. 아래 줄에 「서버(origin)의 From 브랜치를 Into 브랜치에 머지합니다. 아래 Push 가 켜져 있으면 머지한 결과를 서버로 올립니다」를 적습니다. From 브랜치에 내 PC 에만 있는 커밋이 있으면 빨간 줄로 먼저 Push 하라고 알립니다. 고른 값은 리포지토리마다 기억합니다. Into 가 지금 브랜치가 아니면 그 브랜치로 옮긴 뒤 머지합니다.</td></tr>
       <tr><td>들어올 파일 테이블</td><td>파일 · 마지막으로 바꾼 사람 · 때 · 커밋 제목. 칸 너비는 창 너비에 맞춰 늘고, 머리글을 끌어 바꾼 너비와 창 크기는 기억합니다. 파일을 두 번 누르면 Into(왼쪽) ↔ From(오른쪽) 비교 창.</td></tr>
       <tr><td>주황 줄 · ⚠</td><td>내 파일을 다른 사람이 From 에서 고친 것. 충돌 없이 조용히 머지돼 내 소스가 바뀔 수 있으니 먼저 비교해 보세요. 내 파일은 개인 브랜치에서 바꾼 파일 · 고치는 중인 파일 · 최근 30일 안에 내 Git 이메일로 커밋한 파일입니다.</td></tr>
       <tr><td>Push to … after merge</td><td>켜 두면(기본) 머지한 뒤 서버의 개인 브랜치로 바로 올립니다.</td></tr>
@@ -1192,14 +1192,14 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
     <p class="lead">develop 에 바로 올릴 권한이 없을 때의 흐름입니다: 내 브랜치로 Push 하고, GitLab 사이트에서 내 브랜치 → develop 으로 Merge Request 를 만듭니다. 사이트에서 브랜치를 고르는 일을 Moa 가 대신 채워 줍니다.</p>
     <table class="keys map">
       <tr><th>어디서</th><th>하는 일</th></tr>
-      <tr><td>Push 가 끝난 알림의 「Merge Request 만들기」</td><td>방금 올린 내 브랜치를 보낼 쪽, 받는 쪽 브랜치(기본 develop)를 받는 쪽으로 채운 GitLab 새 Merge Request 페이지를 브라우저로 엽니다. 저장소를 여럿 올렸으면 저장소마다 단추가 하나씩입니다. 받는 쪽 브랜치 · main · master 로 올렸을 때는 붙지 않습니다.</td></tr>
-      <tr><td>Git → Merge Request 만들기… · Synchronize 창 저장소 줄 우클릭</td><td>지금 브랜치로 같은 페이지를 아무 때나 엽니다.</td></tr>
-      <tr><td>받는 쪽 브랜치</td><td>설정 → 버전 관리 → 동기화 창 → 「Merge Request 받는 쪽 브랜치」(기본 develop). 원격에 그 브랜치가 없으면 비워 두어 GitLab 이 그 저장소 기본 브랜치를 고릅니다.</td></tr>
+      <tr><td>Push 가 끝난 알림의 「Merge Request 만들기」</td><td>방금 올린 내 브랜치를 보낼 쪽, 받는 쪽 브랜치(기본 develop)를 받는 쪽으로 채운 GitLab 새 Merge Request 페이지를 브라우저로 엽니다. 리포지토리를 여럿 올렸으면 리포지토리마다 단추가 하나씩입니다. 받는 쪽 브랜치 · main · master 로 올렸을 때는 붙지 않습니다.</td></tr>
+      <tr><td>Git → Merge Request 만들기… · Synchronize 창 리포지토리 줄 우클릭</td><td>지금 브랜치로 같은 페이지를 아무 때나 엽니다.</td></tr>
+      <tr><td>받는 쪽 브랜치</td><td>설정 → 버전 관리 → 동기화 창 → 「Merge Request 받는 쪽 브랜치」(기본 develop). 원격에 그 브랜치가 없으면 비워 두어 GitLab 이 그 리포지토리 기본 브랜치를 고릅니다.</td></tr>
       <tr><td>「올릴 권한이 없어요」 알림</td><td>Push 가 「You are not allowed to upload code」(403)로 막히면 뜹니다. 토큰에 <code>write_repository</code> 권한이 있는지, develop 같은 보호된 브랜치가 아닌 내 브랜치로 올렸는지 보세요. 알림의 「Git 로그인 설정」으로 토큰을 바꿉니다.</td></tr>
     </table>
 
     <h3>Git Log · 아래쪽 「Git Log」 창</h3>
-    <p class="lead">왼쪽 저장소 목록에서 프로젝트(모듈)를 고르고 새로고침(⟳) 단추나 「조회」를 누르면 그 폴더를 바꾼 커밋을 IntelliJ 기본 Log 탭처럼 보여 줍니다. 창을 열거나 저장소를 고르기 · 브랜치를 바꾸기만 해서는 읽지 않습니다(저장소가 많아도 git 이 저절로 돌지 않습니다). Git · SVN(한 줄) 모두 되고, 기존 Git 로그 창은 그대로입니다. 다른 사람이 내 소스를(또는 내가 남의 소스를) 되돌리거나 · 머지하며 버리거나 · 이어 고친 커밋에는 빨강 · 주황 · 보라 꼬리표가 붙습니다.</p>
+    <p class="lead">왼쪽 리포지토리 목록에서 프로젝트(모듈)를 고르고 새로고침(⟳) 단추나 「조회」를 누르면 그 폴더를 바꾼 커밋을 IntelliJ 기본 Log 탭처럼 보여 줍니다. 창을 열거나 리포지토리를 고르기 · 브랜치를 바꾸기만 해서는 읽지 않습니다(리포지토리가 많아도 git 이 저절로 돌지 않습니다). Git · SVN(한 줄) 모두 되고, 기존 Git 로그 창은 그대로입니다. 다른 사람이 내 소스를(또는 내가 남의 소스를) 되돌리거나 · 머지하며 버리거나 · 이어 고친 커밋에는 빨강 · 주황 · 보라 꼬리표가 붙습니다.</p>
     <div class="figure">
       <div>
         <div class="scroll">
@@ -1229,18 +1229,18 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
         <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
       </div>
       <ol class="legend">
-        <li><span class="mark">1</span><div><b>저장소 · 브랜치</b> <span class="t">맨 왼쪽은 저장소 목록(이름 · Git/SVN · 현재 브랜치, 한 번 누르면 그 기록). 위쪽은 현재 브랜치 알약 · Refresh · 「?」 · 「소스 건드린 커밋만」 · 읽은 커밋 수.</span></div></li>
+        <li><span class="mark">1</span><div><b>리포지토리 · 브랜치</b> <span class="t">맨 왼쪽은 리포지토리 목록(이름 · Git/SVN · 현재 브랜치, 한 번 누르면 그 기록). 위쪽은 현재 브랜치 알약 · Refresh · 「?」 · 「소스 건드린 커밋만」 · 읽은 커밋 수.</span></div></li>
         <li><span class="mark">2</span><div><b>찾기 칸</b> <span class="t">오른쪽 끝의 넓은 칸입니다. 치는 대로 메시지 · 작성자로 거릅니다.</span></div></li>
         <li><span class="mark">3</span><div><b>오른쪽 칸</b> <span class="t">고른 커밋의 작성자 · 해시 · 메시지 · 바뀐 파일.</span></div></li>
       </ol>
     </div>
     <table class="keys map">
       <tr><th>자리</th><th>하는 일</th></tr>
-      <tr><td>저장소 목록</td><td>맨 왼쪽 칸. 프로젝트(모듈)마다 이름 · Git/SVN · 현재 브랜치, 한 번 누르면 그 저장소 기록. 칸 사이 경계를 끌어 폭을 바꿉니다.</td></tr>
+      <tr><td>리포지토리 목록</td><td>맨 왼쪽 칸. 프로젝트(모듈)마다 이름 · Git/SVN · 현재 브랜치, 한 번 누르면 그 리포지토리 기록. 칸 사이 경계를 끌어 폭을 바꿉니다.</td></tr>
       <tr><td>커밋 목록</td><td>최근 200개, 맨 아래까지 내리면 다음 200개를 이어 읽습니다. 가지마다 색이 다른 꺾인 선 위에 커밋 점(머지 커밋은 속이 빈 점 · 흐린 글자), 브랜치 · 태그는 알약, 오른쪽은 굵은 작성자와 날짜.</td></tr>
       <tr><td>위쪽 줄</td><td>왼쪽에 현재 브랜치 · Refresh · 「?」(점 · 선 · 색 설명) · 「소스 건드린 커밋만」(켜면 꼬리표 붙은 커밋만), 오른쪽 끝에 찾기 칸(메시지 · 작성자, 찾으면 한 줄로 그림). 커밋을 고르면 그 아래 줄에 그 커밋의 꺾인 선이 어느 커밋과 이어지는지(머지해 들인 커밋 · 여기서 갈라져 나간 가지 · 이 커밋을 머지해 간 커밋)가 한 줄로 보입니다.</td></tr>
       <tr><td>오른쪽 칸</td><td>작성자 · 해시(누르면 복사) · 전체 메시지 · 바뀐 파일. 파일을 두 번 누르면 커밋 전 · 후 비교 창.</td></tr>
-      <tr><td>소스 꼬리표</td><td>「내 소스 …」는 다른 사람이 내 파일을, 「남의 소스 …」는 내가 남의 파일을 건드린 커밋입니다. 빨강 되돌림: 커밋 전 내용으로 되돌림(옛 작업본을 그대로 올린 경우). 주황 덮어씀: 머지하며(Merge) 그 수정을 버리고 다른 쪽 판을 택함. 보라 이어 고침: 그 판을 받아 위에서 고침. 오른쪽 칸 「… 소스를 건드린 파일」에 파일마다 바뀌기 전 판을 만든 커밋(누구 · 해시 · 날짜)이 보이고, 두 번 누르면 그 판 ↔ 이 커밋 판 비교 창. 「나」는 그 저장소의 git user.email · user.name 이고, 내 다른 계정은 커밋 우클릭 「○○도 나로 보기」로 묶습니다. 읽어 온 커밋 안에서만 찾습니다(내리면 더 찾음). 이미 pull 받은 지난 일도 기록에 남아 있어 찾아집니다.</td></tr>
+      <tr><td>소스 꼬리표</td><td>「내 소스 …」는 다른 사람이 내 파일을, 「남의 소스 …」는 내가 남의 파일을 건드린 커밋입니다. 빨강 되돌림: 커밋 전 내용으로 되돌림(옛 작업본을 그대로 올린 경우). 주황 덮어씀: 머지하며(Merge) 그 수정을 버리고 다른 쪽 판을 택함. 보라 이어 고침: 그 판을 받아 위에서 고침. 오른쪽 칸 「… 소스를 건드린 파일」에 파일마다 바뀌기 전 판을 만든 커밋(누구 · 해시 · 날짜)이 보이고, 두 번 누르면 그 판 ↔ 이 커밋 판 비교 창. 「나」는 그 리포지토리의 git user.email · user.name 이고, 내 다른 계정은 커밋 우클릭 「○○도 나로 보기」로 묶습니다. 읽어 온 커밋 안에서만 찾습니다(내리면 더 찾음). 이미 pull 받은 지난 일도 기록에 남아 있어 찾아집니다.</td></tr>
     </table>
 
     <h3>Git 로그인 · 설정 → 버전 관리 → Git 로그인</h3>
@@ -1274,9 +1274,9 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
         <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
       </div>
       <ol class="legend">
-        <li><span class="mark">1</span><div><b>서버 목록</b> <span class="t">설정(<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd>) → 버전 관리(Version Control) → Git 로그인. 테이블에는 서버 · 방식 · 아이디만 보이고, 비밀번호 · 토큰은 IDE 비밀번호 저장소에 따로 둡니다.</span></div></li>
+        <li><span class="mark">1</span><div><b>서버 목록</b> <span class="t">설정(<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd>) → 버전 관리(Version Control) → Git 로그인. 테이블에는 서버 · 방식 · 아이디만 보이고, 비밀번호 · 토큰은 IDE 비밀번호 리포지토리에 따로 둡니다.</span></div></li>
         <li><span class="mark">2</span><div><b>추가 · 고치기</b> <span class="t">＋ 로 서버 주소(<code>https://</code> 로 시작)와 방식을 고릅니다. 토큰이면 아이디는 비워도 됩니다. 고칠 때 비밀번호 칸을 비워 두면 저장된 값을 그대로 씁니다.</span></div></li>
-        <li><span class="mark">!</span><div><b>서버 이름은 원격 주소와 똑같이</b> <span class="t">저장소 원격 주소의 서버 이름 · 포트가 같은 줄을 씁니다. 뒤의 경로 · 대소문자 · 기본 포트(443)는 따지지 않지만, <code>gitlab.example.com</code> 과 <code>www.gitlab.example.com</code> 은 다른 서버로 봅니다. ssh 원격(<code>git@…</code>)에는 쓰지 않습니다.</span></div></li>
+        <li><span class="mark">!</span><div><b>서버 이름은 원격 주소와 똑같이</b> <span class="t">리포지토리 원격 주소의 서버 이름 · 포트가 같은 줄을 씁니다. 뒤의 경로 · 대소문자 · 기본 포트(443)는 따지지 않지만, <code>gitlab.example.com</code> 과 <code>www.gitlab.example.com</code> 은 다른 서버로 봅니다. ssh 원격(<code>git@…</code>)에는 쓰지 않습니다.</span></div></li>
         <li><span class="mark">+</span><div><b>어디에 쓰이나</b> <span class="t">동기화 창의 받기 · 올리기, IntelliJ 기본 Push · Pull · Fetch · Update Project · Commit and Push 모두. 목록에 없으면 IntelliJ 가 기억한 비밀번호 · GitLab · GitHub 계정 토큰을 쓰고, 틀려서 실패하면 그 값을 지우고 로그인 창을 한 번 띄웁니다.</span></div></li>
       </ol>
     </div>
@@ -1321,8 +1321,8 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
         <p class="hint">← 그림을 옆으로 밀어서 보세요</p>
       </div>
       <ol class="legend">
-        <li><span class="mark">1</span><div><b>접속 추가</b> <span class="t">종류 · 주소 · 계정 · 스키마. 비밀번호는 IDE 암호 저장소에 둡니다. 운영 · 읽기 전용 표시도 여기서 켭니다.</span></div></li>
-        <li><span class="mark">D</span><div><b>드라이버는 알아서</b> <span class="t"><code>~/.m2</code> 에서 JDBC jar 를 찾고, 없으면 Maven 저장소(사내 mirror 가 있으면 그쪽)에서 받아 둡니다. 접속 창의 「다운로드」로 미리 받아도 됩니다.</span></div></li>
+        <li><span class="mark">1</span><div><b>접속 추가</b> <span class="t">종류 · 주소 · 계정 · 스키마. 비밀번호는 IDE 암호 리포지토리에 둡니다. 운영 · 읽기 전용 표시도 여기서 켭니다.</span></div></li>
+        <li><span class="mark">D</span><div><b>드라이버는 알아서</b> <span class="t"><code>~/.m2</code> 에서 JDBC jar 를 찾고, 없으면 Maven 리포지토리(사내 mirror 가 있으면 그쪽)에서 받아 둡니다. 접속 창의 「다운로드」로 미리 받아도 됩니다.</span></div></li>
         <li><span class="mark">2</span><div><b>테이블 우클릭</b> <span class="t">데이터 보기(더블클릭과 같음), SELECT · INSERT · UPDATE 문 만들기, 매퍼 뼈대, ERD.</span></div></li>
         <li><span class="mark">X</span><div><b>테이블 정의서 엑셀</b> <span class="t">테이블 · 뷰(여럿) 또는 스키마 우클릭 「테이블 정의서 엑셀…」 → 칼럼 · 형 · 길이 · NULL · PK · 기본값 · 주석을 엑셀 한 장으로 저장. 진행 막대에서 취소할 수 있습니다.</span></div></li>
         <li><span class="mark">4</span><div><b>찾기 · ⋯</b> <span class="t">「찾기」는 칼럼 이름 · 한글 주석 · 테이블 이름 · 테이블 주석으로 테이블과 칼럼을 찾습니다(최대 500건, 두 번 누르면 그 테이블로). 「⋯」 에는 접속 내보내기 · 가져오기(JSON, 비밀번호 빼고).</span></div></li>
@@ -1399,7 +1399,7 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
         <li><span class="mark">5</span><div><b>중지 · 실행 계획 · 기록</b> <span class="t">■ 는 실행 중인 쿼리를 끊습니다. 「계획」(<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd>)은 문장을 실행하지 않고 실행 계획을 단계 테이블로 보이며, 확연히 느린 단계를 빨강 · 노랑으로 칠하고 오른쪽 칸에 원인 · 고칠 법 · 예시 SQL 을 적습니다(DB 가 낸 글 그대로는 「원문」 탭). Oracle 은 「실제 시간 재기」로 조회를 한 번 실행해 단계마다 실제 건수 · 시간 · 읽은 블록을 잽니다. 「기록」은 최근 500개 실행 목록 — 고르면 콘솔에 붙이고 두 번 누르면 다시 실행.</span></div></li>
         <li><span class="mark">B</span><div><b>바인드 변수</b> <span class="t">문장에 <code>:name</code> · <code>#{name}</code> 이 있으면 실행 전에 값을 묻습니다. 비우면 NULL, 따옴표는 문자열, 숫자는 숫자. 마지막 값을 기억합니다.</span></div></li>
         <li><span class="mark">S</span><div><b>자동 저장</b> <span class="t">콘솔에 쓴 SQL 은 저절로 저장되고, IDE 를 닫을 때 열려 있던 콘솔 탭은 다시 켜면 같은 자리에 그대로 열립니다(DB 연결은 첫 실행 때).</span></div></li>
-        <li><span class="mark">+</span><div><b>자동완성</b> <span class="t">테이블 이름과 칼럼, 한글 주석을 함께 보여 줍니다. <code>t.</code> 를 치면 그 별칭 테이블의 칼럼만. 소문자로 치면 소문자로 넣습니다.</span></div></li>
+        <li><span class="mark">+</span><div><b>코드 컴플리션</b> <span class="t">테이블 이름과 칼럼, 한글 주석을 함께 보여 줍니다. <code>t.</code> 를 치면 그 별칭 테이블의 칼럼만. 소문자로 치면 소문자로 넣습니다.</span></div></li>
       </ol>
     </div>
 
@@ -1548,7 +1548,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       <div class="card"><h4>SQL 칸은 입력 칸 바로 밑</h4><p>어느 탭이든 SQL 칸이 그 탭의 입력 칸 바로 밑에 붙습니다. 그 밑 한 줄에 「채워 주세요」 · 바꾼 곳 같은 알림이 나오고, 알릴 것이 없으면 줄이 사라집니다. 「실행해 보기 (20건)」 을 누르면 SQL 칸 밑에 앞 20건이 테이블로 나옵니다(SELECT · WITH 만).</p></div>
       <div class="card"><h4>단계별 작성기 (한 장)</h4><p>왼쪽에서 테이블을 두 번 눌러 더하면 오른쪽 한 장에 2 칼럼 고르기 → 3 테이블 잇기 → 4 거를 조건 → 5 묶기 → 6 정렬 · 건수 자르기 가 차례로 놓입니다. 단계 이름을 눌러 접고 펴며, 단계마다 한 줄 안내와 「다음 ▸」 이 있습니다. 칼럼은 「모두 고르기」(테이블마다 · 전부) · 「모두 풀기」, 테이블 칸에는 <code>테이블 이름 (별칭)</code> 으로 나옵니다. 5 묶기에서 「묶을 칼럼 더하기…」 로 묶을 칼럼을 직접 고르면 SELECT · GROUP BY 에 들어가고, 집계를 안 골랐으면 건수(CNT)가 붙습니다.</p></div>
       <div class="card"><h4>목적으로 만들기</h4><p>칸 이름이 고른 일에 맞게 바뀝니다(계층이면 「자기 ID 칼럼」 · 「부모 ID 칼럼」). 칸은 줄 폭을 다 쓰는 목록 상자입니다. 테이블 칸은 테이블 목록, 칼럼 칸은 그 테이블의 칼럼 목록이 펼쳐지고, 글자를 치면 그 글을 담은 것만 남습니다. 여러 칼럼 칸은 고를 때마다 쉼표로 이어 붙습니다. 테이블 이름을 치거나 붙여 넣어도 칼럼을 읽고, 못 찾으면 까닭을 그 밑에 보입니다. PostgreSQL 계층은 고리 데이터에서도 끝없이 돌지 않습니다.</p></div>
-      <div class="card"><h4>예제 모음 731개 · 찾기</h4><p>기본 조회 · 조인 · 서브쿼리 · 집계(ROLLUP · CUBE · GROUPING SETS) · 기간별 통계(시간 · 일 · 주 · 월 · 분기 · 연 · 요일 · 전월 · 전년 대비 · 누적) · 분석 펑션 · WITH · 재귀 · 계층(CONNECT BY · 트리 · 조직도 · 메뉴 · BOM) · 피벗 · 집합 · 중복 · 정리 · 페이징 · 날짜 · 조건(EXISTS · NOT EXISTS) · 문자 · 숫자 · NULL · 넣기 · 고치기 · MERGE · 테이블 만들기 · 테이블 · 칼럼 정보 · 세션 · 락 · 성능 · 정합성 점검 · JSON · BOM · 부품(레벨 번호 · 리비전 비교 · 유효 일자 · 단종 영향 · 대체 부품) · 리비전 · 이력 · 일정 · 진행(지연 · 겹침 · 연속 구간 · 마일스톤) · 결재 · 권한 · 코드 · 채번 · 업로드 점검 · 재고 · 수불(선입선출) · 영업 · 구매 · 회계(잔량 · 미수 나이 · 환율 · 예산) · 생산 · 품질(MRP · 불량 파레토 · 가동률 · 로트 추적 · Cpk) · 인사 · 근태 · 설계 변경 · APQP · 문서 · 도면 · 협력사 · 인터페이스 · 이관 · 감사 · 대시보드 통계(건수 · 기간별 · 증감 · 비율 · 누적 · 상위 N · ROLLUP · 0 건 날짜 · 숫자 카드 · 번다운 · S 곡선) · 거슬러 올라가는 통계 · Oracle 펑션(DECODE · PIVOT · KEEP · XMLAGG …) · 트랜잭션(FOR UPDATE · SKIP LOCKED · 낙관적 잠금) · 시험 데이터 만들기 · 개인 정보 가리기 · 뷰 · 권한 · 프로시저 · 블록(반복 · 예외) · BOM · Top 어셈블리(Top 전개 · 단일 레벨 · N 레벨 · 여러 Top · Top 비교 공용/전용 · Top 재료비 · 경로 · 단종 · 대체 · 고리 · 부족 수량 · 리비전 복사) · 화면 기본 쿼리(목록 · 상세 · 등록 · 수정 · 논리 삭제 · 이력 · 콤보 · 자동 완성 · 중복 확인 · 엑셀 · 트리 · 마스터/디테일 · 여러 줄 저장) · 이전 글/다음 글 · 페이지 번호 · 이전 쪽 · PostgreSQL 펑션(STRING_AGG · FILTER · DISTINCT ON · LATERAL · RETURNING · UPDATE FROM …) · DB 운영(테이블 공간 % · 깨진 인덱스 · 배치 작업 이력 · 휴지통 · 문자셋 · DB 링크 · 설정값) · 의존 관계 · 소스(이 테이블을 쓰는 객체 · 인자 · 컴파일 오류) · 세션 · 락(막힌 줄 ROWID · 맨 앞 막는 세션 · 오래 열린 트랜잭션 · 대기 이벤트 · 진행률 · 열린 커서) · 느린 SQL(SQL_ID 실행 계획 · 바인드 값 · 디스크 · 횟수 상위) · 개발 · 배포 점검(개발 · 운영 구조 비교 · 넘치는 값 · INSERT 문 만들기). 왼쪽 위 찾기 칸에 낱말을 치면 거릅니다. 지금 접속 DB 의 문장이 나옵니다.</p></div>
+      <div class="card"><h4>예제 모음 731개 · 찾기</h4><p>기본 조회 · 조인 · 서브쿼리 · 집계(ROLLUP · CUBE · GROUPING SETS) · 기간별 통계(시간 · 일 · 주 · 월 · 분기 · 연 · 요일 · 전월 · 전년 대비 · 누적) · 분석 펑션 · WITH · 재귀 · 계층(CONNECT BY · 트리 · 조직도 · 메뉴 · BOM) · 피벗 · 집합 · 중복 · 정리 · 페이징 · 날짜 · 조건(EXISTS · NOT EXISTS) · 문자 · 숫자 · NULL · 넣기 · 고치기 · MERGE · 테이블 만들기 · 테이블 · 칼럼 정보 · 세션 · 락 · 성능 · 정합성 점검 · JSON · BOM · 부품(레벨 번호 · 리비전 비교 · 유효 일자 · 단종 영향 · 대체 부품) · 리비전 · 이력 · 일정 · 진행(지연 · 겹침 · 연속 구간 · 마일스톤) · 결재 · 권한 · 코드 · 채번 · 업로드 점검 · 재고 · 수불(선입선출) · 영업 · 구매 · 회계(잔량 · 미수 나이 · 환율 · 예산) · 생산 · 품질(MRP · 불량 파레토 · 가동률 · 로트 추적 · Cpk) · 인사 · 근태 · 설계 변경 · APQP · 문서 · 도면 · 협력사 · 인터페이스 · 이관 · 감사 · 대시보드 통계(건수 · 기간별 · 증감 · 비율 · 누적 · 상위 N · ROLLUP · 0 건 날짜 · 숫자 카드 · 번다운 · S 곡선) · 거슬러 올라가는 통계 · Oracle 펑션(DECODE · PIVOT · KEEP · XMLAGG …) · 트랜잭션(FOR UPDATE · SKIP LOCKED · 낙관적 잠금) · 테스트 데이터 만들기 · 개인 정보 가리기 · 뷰 · 권한 · 프로시저 · 블록(반복 · 예외) · BOM · Top 어셈블리(Top 전개 · 단일 레벨 · N 레벨 · 여러 Top · Top 비교 공용/전용 · Top 재료비 · 경로 · 단종 · 대체 · 고리 · 부족 수량 · 리비전 복사) · 화면 기본 쿼리(목록 · 상세 · 등록 · 수정 · 논리 삭제 · 이력 · 콤보 · 코드 컴플리션 · 중복 확인 · 엑셀 · 트리 · 마스터/디테일 · 여러 줄 저장) · 이전 글/다음 글 · 페이지 번호 · 이전 쪽 · PostgreSQL 펑션(STRING_AGG · FILTER · DISTINCT ON · LATERAL · RETURNING · UPDATE FROM …) · DB 운영(테이블 공간 % · 깨진 인덱스 · 배치 작업 이력 · 휴지통 · 문자셋 · DB 링크 · 설정값) · 의존 관계 · 소스(이 테이블을 쓰는 객체 · 인자 · 컴파일 오류) · 세션 · 락(막힌 줄 ROWID · 맨 앞 막는 세션 · 오래 열린 트랜잭션 · 대기 이벤트 · 진행률 · 열린 커서) · 느린 SQL(SQL_ID 실행 계획 · 바인드 값 · 디스크 · 횟수 상위) · 개발 · 디플로이 점검(개발 · 운영 구조 비교 · 넘치는 값 · INSERT 문 만들기). 왼쪽 위 찾기 칸에 낱말을 치면 거릅니다. 지금 접속 DB 의 문장이 나옵니다.</p></div>
       <div class="card"><h4>쉬운 설명 · 도구</h4><p>「쉬운 설명」 은 위 SQL 칸의 문장을 절마다 풉니다. 도구: 붙여 넣은 값으로 IN 목록 · Oracle ↔ PostgreSQL 바꿔 쓰기(NVL · DECODE · TRUNC → DATE_TRUNC · ROWNUM 페이지 → LIMIT/OFFSET · UPDATE 의 <code>SET 별칭.칼럼</code> 정리, 데이터 사전은 직접 확인 알림) · (+) ↔ JOIN ON · SELECT → UPDATE · DELETE · WITH 단계별 실행. 도구가 바꾼 문장은 「되돌리기」 로 돌아갑니다.</p></div>
       <div class="card"><h4>아래 단추 · 콘솔 연동</h4><p>왼쪽 복사 · 실행 · 실행해 보기 · 건수 보기 · 조인 그림(연결 조건이 없는 테이블은 빨간 테두리) · 되돌리기, 오른쪽 파란 「에디터에 넣기」 · 「닫기」. 콘솔에서 실행할 때 조인 빠짐 · <code>= NULL</code> · <code>NOT IN (SELECT …)</code> 같은 실수를 먼저 알리고(「실행할 때마다 쿼리 점검」 으로 켜고 끔), DB 오류 탭 위에 쉬운 설명과 「오류 위치로 가기」 가 붙습니다.</p></div>
     </div>
@@ -1650,8 +1650,8 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
     <table class="keys map">
       <tr><th>기능 · 자리</th><th>하는 일</th></tr>
       <tr><td>인터페이스 ↔ XML 이동<br>줄 옆 아이콘 · <kbd>Ctrl</kbd>+클릭</td><td>매퍼 메서드에서 같은 namespace XML 의 같은 id 문장으로, XML 문장에서 메서드로 갑니다. <code>&lt;include refid&gt;</code> · <code>resultMap</code> · <code>extends</code> 도 <kbd>Ctrl</kbd>+클릭으로 갑니다. XML 의 <code>parameterType</code> · <code>resultType</code> · <code>type</code> · <code>ofType</code> · <code>javaType</code> 은 그 클래스로, <code>namespace</code> 는 인터페이스로, 문장 <code>id</code> 는 메서드로 갑니다.</td></tr>
-      <tr><td><code>#{</code> 자동 완성 · 이동<br>매퍼 XML 문장 안</td><td><code>#{</code> · <code>${</code> 를 치면 parameterType DTO 필드, 없으면 매퍼 메서드 파라미터(<code>@Param</code> 이름 우선)와 bind · foreach 이름이 뜹니다. 이름에서 <kbd>Ctrl</kbd>+클릭 · <kbd>Ctrl</kbd>+<kbd>B</kbd> → 그 필드 · 파라미터로. DTO 에 없는 이름은 경고합니다.</td></tr>
-      <tr><td><code>AS</code> 별칭 자동 완성<br>매퍼 XML select 안</td><td><code>AS </code> 를 치면 resultType DTO 필드 가운데 SELECT 에 아직 없는 것이 뜹니다. <code>ORDER_ID</code> 처럼 쳐도 찾고, 필드 이름 그대로 넣습니다.</td></tr>
+      <tr><td><code>#{</code> 코드 컴플리션 · 이동<br>매퍼 XML 문장 안</td><td><code>#{</code> · <code>${</code> 를 치면 parameterType DTO 필드, 없으면 매퍼 메서드 파라미터(<code>@Param</code> 이름 우선)와 bind · foreach 이름이 뜹니다. 이름에서 <kbd>Ctrl</kbd>+클릭 · <kbd>Ctrl</kbd>+<kbd>B</kbd> → 그 필드 · 파라미터로. DTO 에 없는 이름은 경고합니다.</td></tr>
+      <tr><td><code>AS</code> 별칭 코드 컴플리션<br>매퍼 XML select 안</td><td><code>AS </code> 를 치면 resultType DTO 필드 가운데 SELECT 에 아직 없는 것이 뜹니다. <code>ORDER_ID</code> 처럼 쳐도 찾고, 필드 이름 그대로 넣습니다.</td></tr>
       <tr><td>Run MyBatis Query <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Enter</kbd><br>매퍼 XML 우클릭 · 문장 옆 ▶</td><td>파라미터를 넣으면 <code>&lt;if&gt;</code> · <code>&lt;foreach&gt;</code> 를 푼 SQL 을 보여 주고 실행해 결과 창에 띄웁니다.</td></tr>
       <tr><td>Run in Database Console · Send to Query Console<br>실행 · 서버 콘솔 우클릭 맨 위</td><td>MyBatis · log4jdbc 로그의 <code>?</code> 에 값을 채운 SQL 을 바로 실행하거나 콘솔에 붙입니다.</td></tr>
       <tr><td>Find Slow Spots<br>매퍼 XML 우클릭</td><td>Run MyBatis Query 와 같은 창에서 값을 받아 그 문장의 느린 단계 · 고칠 법을 결과 창에 보입니다. 실행하지 않습니다.</td></tr>
@@ -1663,7 +1663,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       <tr><td>Insert MyBatis Tag ▸<br>MyBatis 태그 넣기 · 매퍼 XML 우클릭</td><td>줄을 고르고 태그를 누르면 그 줄을 태그로 감싸 한 단계 들이고, 고른 것이 없으면 커서 자리에 빈 틀을 넣고 커서를 <code>id</code> · <code>test</code> 칸에 둡니다. select · insert · update · delete · MERGE 틀 · resultMap · sql · include · if · choose(when · otherwise) · when · otherwise · where · set · trim · foreach · bind · selectKey · CDATA. CDATA 는 고른 글자(예: <code>&lt;=</code>)만 감쌉니다.</td></tr>
       <tr><td>Copy Call Code<br>호출 코드 복사 · 매퍼 XML 문장 안</td><td>그 문장을 부르는 서비스 쪽 코드(파라미터 객체 채우기 + 호출 줄)를 클립보드에 복사합니다.</td></tr>
       <tr><td>Rename Column…<br>칼럼 이름 바꾸기 · 매퍼 XML 우클릭 · Source 메뉴</td><td>모든 매퍼 XML 에서 옛 칼럼 이름을 찾아 미리보기에서 골라 바꾸고, 짝인 DTO 필드 · getter · setter 와 <code>#{}</code> · property 도 함께 바꿉니다. <code>&lt;if test&gt;</code> 안 이름은 바꾸지 않습니다.</td></tr>
-      <tr><td>서비스 자동 완성 · 빠진 짝<br>서비스 클래스 · 매퍼 XML</td><td>서비스에서 매퍼 문장 이름을 치면 메서드가 통째로 들어갑니다. XML 문장과 인터페이스 메서드 짝이 없으면 노란 밑줄.</td></tr>
+      <tr><td>서비스 코드 컴플리션 · 빠진 짝<br>서비스 클래스 · 매퍼 XML</td><td>서비스에서 매퍼 문장 이름을 치면 메서드가 통째로 들어갑니다. XML 문장과 인터페이스 메서드 짝이 없으면 노란 밑줄.</td></tr>
     </table>
 
     <h3>MyBatis 인터페이스 ↔ XML</h3>
@@ -1677,9 +1677,9 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       <div class="box"><b>#{필드} 검사</b><span>parameterType DTO 에 없는 필드면 경고: 「ProductDto 에 productNm 필드가 없습니다」.</span></div>
     </div>
     <div class="flow" style="margin-bottom:8px">
-      <div class="box"><b>#{ 자동 완성 · 이동</b><span><code>#{</code> · <code>${</code> 를 치면 parameterType DTO 필드, 없으면 매퍼 메서드 파라미터(<code>@Param</code> 이름 우선)와 bind · foreach 이름이 목록으로 뜹니다. 이름에서 <kbd>Ctrl</kbd>+클릭 → 그 필드 · 파라미터로.</span></div>
+      <div class="box"><b>#{ 코드 컴플리션 · 이동</b><span><code>#{</code> · <code>${</code> 를 치면 parameterType DTO 필드, 없으면 매퍼 메서드 파라미터(<code>@Param</code> 이름 우선)와 bind · foreach 이름이 목록으로 뜹니다. 이름에서 <kbd>Ctrl</kbd>+클릭 → 그 필드 · 파라미터로.</span></div>
       <div class="arrow">·</div>
-      <div class="box"><b>AS 별칭 자동 완성</b><span>select 에서 <code>AS </code> 를 치면 resultType DTO 필드 중 SELECT 에 아직 없는 것이 뜹니다. <code>ORDER_ID</code> 처럼 쳐도 찾고, 필드 이름 그대로 넣습니다. Map · resultMap 문장은 내지 않습니다.</span></div>
+      <div class="box"><b>AS 별칭 코드 컴플리션</b><span>select 에서 <code>AS </code> 를 치면 resultType DTO 필드 중 SELECT 에 아직 없는 것이 뜹니다. <code>ORDER_ID</code> 처럼 쳐도 찾고, 필드 이름 그대로 넣습니다. Map · resultMap 문장은 내지 않습니다.</span></div>
     </div>
 
     <h3>매퍼 XML 우클릭 메뉴 · 무엇을 더할 수 있나</h3>
@@ -1726,7 +1726,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
     </div>
 
     <h3>매퍼 <kbd>Ctrl</kbd>+클릭 · 어디서 누르면 어디로 가나</h3>
-    <p class="lead"><kbd>Ctrl</kbd> 을 누른 채 이름에 마우스를 올리면 밑줄이 생기고, 누르면 갑니다(<kbd>F3</kbd> · <kbd>Ctrl</kbd>+<kbd>B</kbd> 도 같음). 매퍼 인터페이스에서는 「쓰는 곳」 목록 대신 바로 XML 문장으로 갑니다.</p>
+    <p class="lead"><kbd>Ctrl</kbd> 을 누른 채 이름에 마우스를 올리면 밑줄이 생기고, 누르면 갑니다(<kbd>F3</kbd> · <kbd>Ctrl</kbd>+<kbd>B</kbd> 도 같음). 매퍼 인터페이스에서는 「사용처」 목록 대신 바로 XML 문장으로 갑니다.</p>
     <div class="ba">
       <div class="side"><h5>매퍼 XML — 밑줄이 이동할 수 있는 이름</h5><pre>&lt;mapper namespace="<span class="uline">com.app.user.UserMapper</span>"&gt;  <span class="mark">1</span>
 &lt;select id="<span class="uline">selectUserList</span>"  <span class="mark">2</span>
@@ -1786,7 +1786,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       <div class="card"><h4>DTO 만들기</h4><p>결과 창 「DTO 만들기」 → 결과 칼럼으로 자바 DTO 와 resultMap. 칼럼 이름은 낙타 표기 필드로.</p></div>
       <div class="card"><h4>기능 한 벌 만들기</h4><p>테이블 우클릭 → DTO · 매퍼 XML · 매퍼 인터페이스 · 서비스(인터페이스 + Impl 선택) · 컨트롤러를 한 창에서 미리 보고 한 번에. 있는 파일은 덮어쓰지 않습니다.</p></div>
       <div class="card"><h4>계층 코드 · 부모-자식</h4><p>매퍼 문장 우클릭 「Generate Layer Code…」 → 컨트롤러 · 서비스 · 매퍼 코드를 복사하거나 넣기. 문장 두 개를 고르면 자식 목록을 부모에 넣는 코드.</p></div>
-      <div class="card"><h4>서비스 자동 완성 · 계층 이동</h4><p>서비스에서 매퍼 문장 이름을 치면 메서드 통째로. 컨트롤러 · 서비스 옆 아이콘 → 서비스 → 매퍼 → XML. 빠진 짝은 노란 밑줄.</p></div>
+      <div class="card"><h4>서비스 코드 컴플리션 · 계층 이동</h4><p>서비스에서 매퍼 문장 이름을 치면 메서드 통째로. 컨트롤러 · 서비스 옆 아이콘 → 서비스 → 매퍼 → XML. 빠진 짝은 노란 밑줄.</p></div>
       <div class="card"><h4>ERD</h4><p>테이블 카드(한글 주석) + FK 선(직각으로 꺾여 다른 테이블을 피해 돌고, 「FK:PK」 이름표). 끌어 옮기기 · 확대 · PNG 저장, 카드 더블클릭 → 데이터 보기. 스키마 우클릭 「ERD 열기 (전체)」는 테이블 수와 상관없이 모두 그린다(읽는 동안 아래 진행 막대에서 취소). 내 업무 테이블만 보려면 DB 창 찾기 칸에 이름 일부(예: <code>DG_</code>)를 넣어 거른 뒤 스키마 우클릭 「ERD 열기 (거른 테이블 N개)」.</p></div>
     </div>
 
@@ -1863,7 +1863,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
     </div>
     <p class="lead" style="margin-top:18px">매퍼 XML 문장이나 매퍼 인터페이스 메서드에서 우클릭합니다. 코드는 고쳐서 「복사」하거나 「이 클래스에 넣기…」로 고른 클래스에 넣습니다. 「부모-자식」은 자식 목록을 부모마다 채워 JSON 이 <code>{"orderId": 1, "items": [ … ]}</code> 모양으로 나가게 하고, 자식이 없는 부모는 빈 목록 <code>[]</code> 입니다.</p>
 
-    <h3>서비스 자동 완성 · 계층 이동 · 빠진 짝</h3>
+    <h3>서비스 코드 컴플리션 · 계층 이동 · 빠진 짝</h3>
     <div class="cols2">
       <div class="scroll">
         <div class="ide rel" style="min-width:560px; min-height:180px">
@@ -1881,7 +1881,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       </div>
     </div>
     <ol class="legend" style="grid-template-columns:repeat(3,minmax(0,1fr)); margin-top:14px">
-      <li><span class="mark">1</span><div><b>서비스 자동 완성</b> <span class="t">매퍼 필드를 가진 클래스에서 메서드 이름을 치면, 서비스에 아직 없는 매퍼 문장이 후보로 뜹니다. 고르면 서비스 메서드가 통째로 들어갑니다.</span></div></li>
+      <li><span class="mark">1</span><div><b>서비스 코드 컴플리션</b> <span class="t">매퍼 필드를 가진 클래스에서 메서드 이름을 치면, 서비스에 아직 없는 매퍼 문장이 후보로 뜹니다. 고르면 서비스 메서드가 통째로 들어갑니다.</span></div></li>
       <li><span class="mark">2</span><div><b>계층 이동</b> <span class="t">컨트롤러 · 서비스 메서드 옆 아이콘을 누르면 그 메서드가 부르는 서비스 → 매퍼 → XML 문장으로 갑니다.</span></div></li>
       <li><span class="mark">3</span><div><b>빠진 짝</b> <span class="t">XML 문장에 인터페이스 메서드가 없거나 그 반대면 노란 밑줄. 설정 → 검사 → MyBatis 에서 끌 수 있습니다.</span></div></li>
     </ol>
@@ -1935,7 +1935,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       <tr><th>탭 · 여는 곳</th><th>하는 일</th></tr>
       <tr><td>호출 흐름<br>「조회」 · 자바 메서드 우클릭 「호출 흐름 보기」</td><td>왼쪽에 이 프로젝트의 컨트롤러 URL 목록(찾기 칸으로 거름)이 나오고, 하나를 고르면 오른쪽에 컨트롤러 → 서비스(인터페이스면 구현) → 매퍼 메서드 → 매퍼 XML 문장 → 쓰는 테이블, 그리고 이 URL 을 부르는 화면(.vue · .js 등)이 나무로 나옵니다. 같은 클래스 안 메서드 호출은 따로 줄을 만들지 않고 그 안을 따라갑니다.</td></tr>
       <tr><td>바꾸면 영향<br>자바 메서드 · 필드 · 클래스 우클릭 「바꾸면 영향 보기」</td><td>부르는 곳을 거꾸로 따라 URL 까지 올라가고, 「매퍼 SQL」(그 DTO 를 형식으로 쓰고 필드 이름이 나오는 문장, 칼럼 이름 <code>USER_NM</code> 으로만 나오면 「추정」) · 「API」 · 「화면」 묶음을 보여 줍니다. 부모 VO 의 필드도 자식 VO 를 쓰는 문장까지 찾습니다.</td></tr>
-      <tr><td>테이블에서 찾기<br>테이블 · 칼럼 이름 넣고 「조회」 · DB 창 테이블 우클릭 「코드에서 쓰는 곳」</td><td>그 테이블(<code>스키마.테이블</code> 도 됨) · 칼럼을 쓰는 매퍼 문장(조회 · 넣기 · 고치기 · 지우기) → 매퍼 메서드 → 서비스 → URL · 화면을 보여 줍니다. SQL 을 확실히 읽지 못한 문장(<code>${}</code> 등)은 글자로 찾아 「글자로 찾음」 으로 적습니다.</td></tr>
+      <tr><td>테이블에서 찾기<br>테이블 · 칼럼 이름 넣고 「조회」 · DB 창 테이블 우클릭 「코드에서 사용처」</td><td>그 테이블(<code>스키마.테이블</code> 도 됨) · 칼럼을 쓰는 매퍼 문장(조회 · 넣기 · 고치기 · 지우기) → 매퍼 메서드 → 서비스 → URL · 화면을 보여 줍니다. SQL 을 확실히 읽지 못한 문장(<code>${}</code> 등)은 글자로 찾아 「글자로 찾음」 으로 적습니다.</td></tr>
       <tr><td>안 쓰는 것<br>「조회」</td><td>화면에서 안 부르는 API, 부르는 곳을 못 찾은 매퍼 SQL(인터페이스 · 메서드가 없으면 그렇게 적음), 아무도 안 쓰는 DTO(이름이 Dto · Vo 로 끝나는 클래스)를 모읍니다. 다른 시스템 · 문자열 · 리플렉션으로 부르는 것도 나올 수 있으니 지우기 전에 확인하세요.</td></tr>
     </table>
     <div class="scroll">
@@ -2077,7 +2077,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
 
 
     <h3 id="regex">정규식 작업대 · Search → 「Regex Workbench…」 · 에디터 우클릭 「작업대 ▸」</h3>
-    <p class="lead">정규식을 외우지 않아도 단추 · 질문 · 예시로 만들고, 시험 글에 바로 맞춰 보고, 코드에 붙일 글로 복사합니다. 에디터에서 글을 골라 열면 그 글이 시험 글이 되고, .js · .ts · .vue · .html · .jsp 에서 열면 JavaScript, 그 밖은 Java 문법으로 열립니다. 창 글은 IDE 언어와 상관없이 한국어입니다.</p>
+    <p class="lead">정규식을 외우지 않아도 단추 · 질문 · 예시로 만들고, 테스트 글에 바로 맞춰 보고, 코드에 붙일 글로 복사합니다. 에디터에서 글을 골라 열면 그 글이 테스트 글이 되고, .js · .ts · .vue · .html · .jsp 에서 열면 JavaScript, 그 밖은 Java 문법으로 열립니다. 창 글은 IDE 언어와 상관없이 한국어입니다.</p>
     <div class="figure wide">
       <div>
         <div class="scroll">
@@ -2096,7 +2096,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
               <label><span><span class="mark">3</span> 확인할 글:</span><span style="display:flex; gap:10px; align-items:center"><span class="f" style="flex:1">010-1234-5678</span><span style="color:var(--ok)">✓ 이 정규식에 맞습니다</span></span></label>
               <div class="statusline" style="border:0; padding:0"><span class="mark">4</span><span>2개 일치</span><span class="gap"></span><span class="check">자세히 보기(플래그 · 그룹 · 바꾸기)</span></div>
             </div>
-            <div class="sub"><span class="mark">5</span> 시험 글</div>
+            <div class="sub"><span class="mark">5</span> 테스트 글</div>
 <pre class="term" style="border-top:0; color:var(--fg)"><span class="hit">010-1234-5678</span>
 02-123-4567
 <span class="hit">01098765432</span></pre>
@@ -2107,10 +2107,10 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       </div>
       <ol class="legend" style="grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:14px">
         <li><span class="mark">1</span><div><b>만들기 탭 넷</b> <span class="t">아래 테이블처럼 편한 방법 하나로 만듭니다. 어느 탭에서 만들든 바로 아래 패턴 칸이 다시 채워집니다.</span></div></li>
-        <li><span class="mark">2</span><div><b>문법</b> <span class="t">JavaScript(프론트) · Java(백엔드). 플래그 이름 · 바꿀 글 표기(<code>$&lt;이름&gt;</code> · <code>${이름}</code>) · 코드 모양이 따라 바뀝니다. JavaScript 의 <code>\s</code> · 줄 끝 <code>^ $ .</code> · 그룹 이름 · <code>u</code> 없을 때 이모지 반쪽처럼 두 언어의 뜻이 다른 곳은 JavaScript 뜻대로 맞춰 시험하고, 패턴 오류 위치도 쓴 패턴 기준으로 알립니다.</span></div></li>
+        <li><span class="mark">2</span><div><b>문법</b> <span class="t">JavaScript(프론트) · Java(백엔드). 플래그 이름 · 바꿀 글 표기(<code>$&lt;이름&gt;</code> · <code>${이름}</code>) · 코드 모양이 따라 바뀝니다. JavaScript 의 <code>\s</code> · 줄 끝 <code>^ $ .</code> · 그룹 이름 · <code>u</code> 없을 때 이모지 반쪽처럼 두 언어의 뜻이 다른 곳은 JavaScript 뜻대로 맞춰 테스트하고, 패턴 오류 위치도 쓴 패턴 기준으로 알립니다.</span></div></li>
         <li><span class="mark">3</span><div><b>확인할 글</b> <span class="t">낱말 하나를 치면 「✓ 맞습니다」 · 「△ 일부만 맞습니다」 · 「✗ 맞지 않습니다」 로 글 전체가 맞는지 바로 알려 줍니다.</span></div></li>
-        <li><span class="mark">4</span><div><b>자세히 보기</b> <span class="t">켜면 플래그(전체 찾기 · 대소문자 무시 · 줄마다 …), 그룹 테이블(일치 · 그룹 · 이름 · 값 · 위치)와 「바꾸기」 탭이 보입니다. 켜 둔 것은 다음에도 이어집니다. 그룹 테이블의 줄을 누르면 시험 글의 그 부분을 다른 색으로 칠합니다.</span></div></li>
-        <li><span class="mark">5</span><div><b>시험 글</b> <span class="t">치는 대로 맞는 곳을 칠하고 일치 수를 셉니다. 처음 1000개까지 보이고, 1초 안에 끝나지 않는 패턴(같은 글을 여러 번 되짚는 꼴)은 멈추고 알립니다. 패턴 오류는 몇 번째 글자인지 함께 적습니다.</span></div></li>
+        <li><span class="mark">4</span><div><b>자세히 보기</b> <span class="t">켜면 플래그(전체 찾기 · 대소문자 무시 · 줄마다 …), 그룹 테이블(일치 · 그룹 · 이름 · 값 · 위치)와 「바꾸기」 탭이 보입니다. 켜 둔 것은 다음에도 이어집니다. 그룹 테이블의 줄을 누르면 테스트 글의 그 부분을 다른 색으로 칠합니다.</span></div></li>
+        <li><span class="mark">5</span><div><b>테스트 글</b> <span class="t">치는 대로 맞는 곳을 칠하고 일치 수를 셉니다. 처음 1000개까지 보이고, 1초 안에 끝나지 않는 패턴(같은 글을 여러 번 되짚는 꼴)은 멈추고 알립니다. 패턴 오류는 몇 번째 글자인지 함께 적습니다.</span></div></li>
         <li><span class="mark">6</span><div><b>코드 · 복사</b> <span class="t">지금 패턴을 코드에 붙일 글(<code>/…/gm</code>, <code>Pattern.compile("…")</code>)로 보이고 「복사」 로 클립보드에 넣습니다. 이 줄은 늘 보입니다.</span></div></li>
       </ol>
     </div>
@@ -2153,7 +2153,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       <tr><td>보안 메모<br>오른쪽 옆줄 「Secure Memo」</td><td>내가 정한 비밀번호로만 열리는 메모장 하나. 처음 열 때 비밀번호를 정하고(4자 이상), 내용은 그 비밀번호로 암호화해 설정 폴더 <code>ei-secure-memo.bin</code> 에 둡니다. 「Lock」 이나 IDE 를 닫으면 저장하고 잠깁니다. 비밀번호는 어디에도 저장하지 않으므로 잊으면 되살릴 수 없고, 「Reset…」 으로 지우고 새로 시작합니다. 「Preview」 는 메모를 Markdown(테이블 · 목록 · 코드 · 링크)으로 그려 보여 줍니다.</td></tr>
       <tr><td>테마 Moa Graphite · Moa White<br>Settings → Appearance → Theme</td><td>Moa Graphite(기본, 회색 판 · 흰 글자 · 회색 선택 줄)와 Moa White(흰 에디터 · 연회색 창 · 회색 선택 줄). 선택 줄은 회색으로 두고 탭 밑줄 · 입력 칸 테두리 · 주 단추만 파란 강조색을 쓴 글자 대비가 높은 테마이고, 에디터 색도 테마와 같은 이름으로 따라 바뀝니다. 코드 색은 둘 다 키워드 파랑 · 문자열 초록 · 숫자 주황 · 클래스 청록 · 함수 노랑(밝게는 갈색) · 변수 연보라(밝게는 보라) · @애너테이션 황토.</td></tr>
       <tr><td>테마 Moa Dusk · Steel · Ember · Ink · Slate<br>Settings → Appearance → Theme</td><td>판 색과 코드 색이 다른 테마 다섯. 어둡게 넷: Moa Dusk(남보라 저녁 판 · 보라 키워드 · 하늘색 함수) · Moa Steel(강철 회색 판 · 파랑 키워드 · 주황 함수) · Moa Ember(따뜻한 숯 판 · 금빛 키워드 · 하늘색 함수) · Moa Ink(먹빛 남색 판 · 파랑 키워드 · 살구색 함수). 밝게 하나: Moa Slate(푸른 회색 밝은 판 · 파랑 키워드 · 보라 함수). 선택 줄 · 오류 · 경고 · 바뀐 줄 표시는 Moa Graphite · Moa White 와 같은 방식이고, 에디터 색도 테마와 같은 이름으로 따라 바뀝니다.</td></tr>
-      <tr><td>새 판 알림<br>IDE 를 켤 때</td><td>이 저장소의 최신 릴리스를 보고 새 판이 있으면 오른쪽 아래에 「지금 업데이트」 풍선이 뜹니다. 누르면 설치 파일을 받고, IDE 를 닫은 뒤 설치 화면이 뜹니다. JetBrains 서버에는 묻지 않습니다.</td></tr>
+      <tr><td>새 판 알림<br>IDE 를 켤 때</td><td>이 리포지토리의 최신 릴리스를 보고 새 판이 있으면 오른쪽 아래에 「지금 업데이트」 풍선이 뜹니다. 누르면 설치 파일을 받고, IDE 를 닫은 뒤 설치 화면이 뜹니다. JetBrains 서버에는 묻지 않습니다.</td></tr>
       <tr><td>Change Case ▸<br>에디터 우클릭 붙여넣기 묶음 아래</td><td>고른 글 안의 식별자를 Camel(userName) · Pascal(UserName) · Snake(user_name) · Upper Snake(USER_NAME) 로. 문자열 · 주석 · 키워드 · 타입 이름은 둡니다.</td></tr>
       <tr><td>메뉴 · 폴더 · 파일 아이콘</td><td>아이콘이 없던 메뉴 · 우클릭 항목, 이름으로 고른 폴더 · 패키지(mapper · controller · service · dto …), 매퍼 XML · application.yml · 엑셀 · 한글 같은 파일에 아이콘이 붙습니다.</td></tr>
       <tr><td>바뀐 폴더 색<br>프로젝트 트리</td><td>바뀐 파일 · 새 파일이 아래에 있는 폴더 · 패키지는 이름과 아이콘이 그 색으로 칠해집니다.</td></tr>
@@ -2190,8 +2190,8 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       <tr><th>바꾸고 싶은 것</th><th>위치</th></tr>
       <tr><td>단축키</td><td>Keymap (Eclipse 를 복제한 뒤 고치기)</td></tr>
       <tr><td>언어</td><td>Appearance &amp; Behavior → System Settings → Language and Region</td></tr>
-      <tr><td>테마 · UI 글꼴</td><td>Appearance &amp; Behavior → Appearance. 우리 테마: Moa Graphite(기본, 어둡게) · Moa White(밝게) · Moa Dusk · Steel · Ember · Ink(어둡게) · Moa Slate(밝게). 에디터 색은 테마와 같은 이름으로 따라 바뀝니다.</td></tr>
-      <tr><td>에디터 글꼴</td><td>Editor → Font (Moa Mono)</td></tr>
+      <tr><td>테마 · UI 폰트</td><td>Appearance &amp; Behavior → Appearance. 우리 테마: Moa Graphite(기본, 어둡게) · Moa White(밝게) · Moa Dusk · Steel · Ember · Ink(어둡게) · Moa Slate(밝게). 에디터 색은 테마와 같은 이름으로 따라 바뀝니다.</td></tr>
+      <tr><td>에디터 폰트</td><td>Editor → Font (Moa Mono)</td></tr>
       <tr><td>여백선(120자)</td><td>Editor → General → Appearance 「시각적 안내선 표시」</td></tr>
       <tr><td>콘솔에 남는 글 양</td><td>Editor → General → Console 「Override console cycle buffer size」 (30720 KB)</td></tr>
       <tr><td>저장할 때 import 정리 · 서식</td><td>Tools → Actions on Save</td></tr>
@@ -2203,7 +2203,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       <tr><td>svn 경로</td><td>Version Control → Subversion</td></tr>
       <tr><td>properties 한글</td><td>Editor → File Encodings 「Transparent native-to-ascii conversion」</td></tr>
       <tr><td>JDK 등록</td><td>File → Project Structure → SDKs (<code>~\.jdks</code> 의 Temurin 은 자동 등록)</td></tr>
-      <tr><td>도구 창 배치 저장</td><td>Window → Layout → 현재 레이아웃에 변경 저장</td></tr>
+      <tr><td>툴 윈도우 배치 저장</td><td>Window → Layout → 현재 레이아웃에 변경 저장</td></tr>
     </table>
   </div>
 </section>
@@ -2219,9 +2219,9 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       <tr><td>SVN 이 「svn cleanup 하라」</td><td>트리 우클릭 Subversion → Cleanup 뒤 다시 받습니다.</td></tr>
       <tr><td>받기가 Assume Unchanged 파일 때문에 멈춤</td><td>동기화 창에서 그 파일을 No Assume Unchanged → 받기 → 다시 Assume Unchanged.</td></tr>
       <tr><td>API 요청이 「연결할 수 없습니다」</td><td>서버 창에서 서버가 떠 있는지, 요청 화면 주소의 포트 · 컨텍스트 경로가 맞는지 봅니다.</td></tr>
-      <tr><td>JS · Vue 자동 완성이 없음</td><td>설치 폴더 <code>plugins\boot-servers\web</code> 가 있는지 봅니다. 없으면 다시 설치하거나 알림의 받기 단추를 누릅니다.</td></tr>
+      <tr><td>JS · Vue 코드 컴플리션이 없음</td><td>설치 폴더 <code>plugins\boot-servers\web</code> 가 있는지 봅니다. 없으면 다시 설치하거나 알림의 받기 단추를 누릅니다.</td></tr>
       <tr><td>AI 메뉴를 눌러도 Claude 탭에서 오류</td><td>터미널에서 <code>claude</code> 가 실행되는지(PATH) 봅니다.</td></tr>
-      <tr><td>우리 메뉴가 안 보임</td><td>설정 → Plugins 에서 서버 창 · Moa Synchronize · Moa Database 가 켜져 있는지, 시험용 jar 가 두 판 겹쳐 있지 않은지 봅니다.</td></tr>
+      <tr><td>우리 메뉴가 안 보임</td><td>설정 → Plugins 에서 서버 창 · Moa Synchronize · Moa Database 가 켜져 있는지, 테스트용 jar 가 두 판 겹쳐 있지 않은지 봅니다.</td></tr>
     </table>
   </div>
 </section>
@@ -2281,7 +2281,7 @@ build-windows.bat
 </section>
 
 <footer>
-  <div class="wrap">개인 학습용 프로젝트 · 바탕 intellij-community(Apache 2.0) · 글꼴 Moa Mono(JetBrains Mono · Pretendard · Noto Sans CJK, SIL OFL 1.1) · IntelliJ · JetBrains 이름과 로고는 JetBrains 의 상표입니다.</div>
+  <div class="wrap">개인 학습용 프로젝트 · 바탕 intellij-community(Apache 2.0) · 폰트 Moa Mono(JetBrains Mono · Pretendard · Noto Sans CJK, SIL OFL 1.1) · IntelliJ · JetBrains 이름과 로고는 JetBrains 의 상표입니다.</div>
 </footer>
 
 <script>

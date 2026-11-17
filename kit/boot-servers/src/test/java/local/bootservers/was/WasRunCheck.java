@@ -161,7 +161,7 @@ public final class WasRunCheck {
                 "home", "/opt/jeus", "host", "localhost", "port", "9736", "user", "admin", "password", "pw",
                 "path", "/tmp/my apps/ROOT.war", "name", "ROOT", "server", "adminServer", "ctx", "/"), false);
         check(argv.get(argv.size() - 1).equals("deploy-application -path \"/tmp/my apps/ROOT.war\" -id ROOT -servers adminServer -cr /"),
-                "배포 경로를 안쪽 따옴표로 감쌈: " + argv);
+                "디플로이 경로를 안쪽 따옴표로 감쌈: " + argv);
     }
 
     private static void passwordFile() throws IOException {

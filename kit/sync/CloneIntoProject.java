@@ -259,7 +259,7 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
       }
     }
     if (stale.isEmpty()) return;
-    LOG.info("폴더가 없어진 닫은 저장소를 지웁니다: " + stale);
+    LOG.info("폴더가 없어진 닫은 리포지토리를 지웁니다: " + stale);
     WriteAction.run(() -> modules.removeUnloadedModules(stale));
     // 닫은 기록도 뺀다. 남으면 같은 자리에 다시 받은 저장소를 켤 때 다시 닫는다(CloseRepoAction.reclose).
     List<String> staleNames = new ArrayList<>();
@@ -352,7 +352,7 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
       throw e;
     }
     catch (RuntimeException e) {
-      LOG.warn("워크스페이스 저장소를 붙이지 못했습니다: " + project.getBasePath(), e);
+      LOG.warn("워크스페이스 리포지토리를 붙이지 못했습니다: " + project.getBasePath(), e);
     }
   }
 
@@ -523,7 +523,7 @@ public final class CloneIntoProject implements CheckoutListener, StartupActivity
       throw e;
     }
     catch (RuntimeException e) {
-      LOG.warn("워크스페이스의 저장소 폴더를 모듈로 붙이지 못했습니다: " + repo, e);
+      LOG.warn("워크스페이스의 리포지토리 폴더를 모듈로 붙이지 못했습니다: " + repo, e);
       if (created != null && !created.isDisposed()) disposeModule(project, created);
       if (mapped) CloseRepoAction.removeVcsMappings(project, List.of(repo.toString().replace('\\', '/')));
     }

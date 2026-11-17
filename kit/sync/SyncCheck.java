@@ -859,7 +859,7 @@ public class SyncCheck {
     sh(tmp.toFile(), "git init -q -b main r");
     try {
       GitUndo.read(r);
-      throw new AssertionError("커밋 없는 저장소는 되돌릴 것이 없어야 한다");
+      throw new AssertionError("커밋 없는 리포지토리는 되돌릴 것이 없어야 한다");
     }
     catch (IOException expected) {
       eq(expected.getMessage(), SyncBundle.message("undo.nothing", "main"));

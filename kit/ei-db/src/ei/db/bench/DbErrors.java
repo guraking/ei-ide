@@ -27,7 +27,7 @@ public final class DbErrors {
   private static final Pattern QUOTED = Pattern.compile("\"([^\"]+)\"");
 
   private static final Map<String, Entry> ORACLE = Map.ofEntries(
-      Map.entry("00904", new Entry("칼럼 이름이 틀렸습니다", "그 테이블에 없는 칼럼 이름이거나 오타입니다. 별칭(a.)이 다른 테이블을 가리키거나, SELECT 에서 붙인 별칭을 WHERE 에서 쓴 경우도 이렇게 납니다.", "칼럼 이름 · 별칭을 확인하세요. 자동완성(Ctrl+Space)으로 고르면 틀리지 않습니다.")),
+      Map.entry("00904", new Entry("칼럼 이름이 틀렸습니다", "그 테이블에 없는 칼럼 이름이거나 오타입니다. 별칭(a.)이 다른 테이블을 가리키거나, SELECT 에서 붙인 별칭을 WHERE 에서 쓴 경우도 이렇게 납니다.", "칼럼 이름 · 별칭을 확인하세요. 코드 컴플리션(Ctrl+Space)으로 고르면 틀리지 않습니다.")),
       Map.entry("00942", new Entry("테이블이나 뷰가 없습니다", "테이블 이름 오타, 다른 스키마의 테이블, 권한 없는 테이블입니다.", "스키마.테이블 로 쓰거나 이름을 확인하세요. 탐색기에서 테이블을 끌어다 쓰면 정확합니다.")),
       Map.entry("00936", new Entry("식이 빠졌습니다", "쉼표 뒤가 비었거나(SELECT 목록 끝의 쉼표), 조건의 값이 비었습니다.", "오류 위치 앞뒤의 쉼표 · 연산자 뒤를 보세요.")),
       Map.entry("00933", new Entry("문장 끝이 이상합니다", "절 순서가 틀렸거나(ORDER BY 뒤에 WHERE), Oracle 에 없는 LIMIT 을 썼거나, 끝에 ; 가 두 개입니다.", "절 순서는 SELECT → FROM → WHERE → GROUP BY → HAVING → ORDER BY 입니다.")),

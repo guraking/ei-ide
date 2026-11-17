@@ -1447,7 +1447,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
             }
           }
           catch (IOException ex) {
-            LOG.warn("저장소 작업 실패 [" + repo.root().getName() + "] " + ex.getMessage());
+            LOG.warn("리포지토리 작업 실패 [" + repo.root().getName() + "] " + ex.getMessage());
             failed.put(repo.root(), messageOf(ex));
           }
           finally {
@@ -1769,7 +1769,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
             }
           }
           catch (IOException failed) {
-            LOG.warn("저장소 다시 비교 실패 [" + repo.root().getName() + "] " + failed.getMessage());
+            LOG.warn("리포지토리 다시 비교 실패 [" + repo.root().getName() + "] " + failed.getMessage());
             error.set(messageOf(failed));
             failedRoots.add(repo.root());
             return List.<Change>of();
@@ -2701,7 +2701,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
             return new Scanned(repo, repo.vcs() == Vcs.GIT ? compare(repo, true, local) : compareSvn(repo, false), remote);
           }
           catch (IOException e) {
-            LOG.warn("저장소 정보 읽기 실패 [" + entry.getKey().getName() + "] " + e.getMessage());
+            LOG.warn("리포지토리 정보 읽기 실패 [" + entry.getKey().getName() + "] " + e.getMessage());
             failures.put(entry.getKey(), messageOf(e));
             return null;
           }
@@ -2713,7 +2713,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
           if (scanned == null) continue;
           // 매핑이 저장소 안쪽 폴더를 가리키거나(지우고 다시 받은 뒤 남은 매핑 등) 정션 · 링크로 연 경로면 맨 위 저장소가 한 번 더 온다. 한 줄만 둔다.
           if (found.stream().anyMatch(r -> sameDir(r.root(), scanned.repo().root()))) {
-            LOG.info("같은 저장소를 가리키는 VCS 매핑이 둘 이상입니다: " + scanned.repo().root());
+            LOG.info("같은 리포지토리를 가리키는 VCS 매핑이 둘 이상입니다: " + scanned.repo().root());
             continue;
           }
           scannedAll.add(scanned);
@@ -2768,7 +2768,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       boolean stopped = interrupted;
       Map<File, String> failed = new LinkedHashMap<>(failures);
       if (TIME_LOG.isDebugEnabled()) {
-        TIME_LOG.debug("새로고침 전체 " + (System.currentTimeMillis() - refreshStarted) + " ms, 저장소 " + roots.size() + "개");
+        TIME_LOG.debug("새로고침 전체 " + (System.currentTimeMillis() - refreshStarted) + " ms, 리포지토리 " + roots.size() + "개");
       }
       SwingUtilities.invokeLater(() -> {
         if (project.isDisposed()) return;
@@ -2872,12 +2872,12 @@ final class SyncPanel extends SimpleToolWindowPanel {
         }
       }
       catch (IOException e) {
-        LOG.warn("저장소 새로고침 실패 [" + name + "] " + e.getMessage());
+        LOG.warn("리포지토리 새로고침 실패 [" + name + "] " + e.getMessage());
         error = messageOf(e);
       }
       catch (RuntimeException e) {
         // 예상 못 한 오류도 그 저장소 실패로 보이고 busy 를 푼다. 빠져나가면 다시 새로고침할 수 없다.
-        LOG.warn("저장소 새로고침 실패 " + root, e);
+        LOG.warn("리포지토리 새로고침 실패 " + root, e);
         error = String.valueOf(e);
       }
       catch (InterruptedException e) {

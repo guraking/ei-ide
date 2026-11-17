@@ -366,7 +366,7 @@ public final class Examples {
                  ) x
            ORDER BY
                  x.SORT_NO"""),
-      new Example("화면 기본 쿼리 (목록 · 상세 · 저장)", "자동 완성 (친 글자로 시작하는 것 20건)", "검색 칸에 글자를 칠 때 아래에 띄울 목록. 앞에서부터 맞는 것을 먼저.",
+      new Example("화면 기본 쿼리 (목록 · 상세 · 저장)", "코드 컴플리션 (친 글자로 시작하는 것 20건)", "검색 칸에 글자를 칠 때 아래에 띄울 목록. 앞에서부터 맞는 것을 먼저.",
           """
           SELECT
                  p.PART_NO
@@ -4956,7 +4956,7 @@ public final class Examples {
           CREATE INDEX IX_ORDERS_CUST_DT ON ORDERS (CUST_ID, ORDER_DT)""",
           """
           CREATE INDEX IX_ORDERS_CUST_DT ON ORDERS (CUST_ID, ORDER_DT)"""),
-      new Example("테이블 만들기 · 바꾸기", "테이블 · 칼럼 설명 달기", "테이블과 칼럼에 한글 설명을 답니다. 작업대 · 자동 완성에 이 설명이 보입니다.",
+      new Example("테이블 만들기 · 바꾸기", "테이블 · 칼럼 설명 달기", "테이블과 칼럼에 한글 설명을 답니다. 작업대 · 코드 컴플리션에 이 설명이 보입니다.",
           """
           COMMENT ON TABLE ORDERS IS '주문'
           ;
@@ -6581,7 +6581,7 @@ public final class Examples {
                , CAST(o.MEMO AS JSONB) ->> 'channel' AS CHANNEL
             FROM ORDERS o
            WHERE o.MEMO IS JSON"""),
-      new Example("JSON", "줄을 JSON 으로 만들기", "주문 한 줄을 JSON 글자로 만듭니다. API 시험 값을 만들 때 씁니다.",
+      new Example("JSON", "줄을 JSON 으로 만들기", "주문 한 줄을 JSON 글자로 만듭니다. API 테스트 값을 만들 때 씁니다.",
           """
           SELECT
                  JSON_OBJECT('orderId' VALUE o.ORDER_ID, 'amount' VALUE o.AMOUNT, 'status' VALUE o.STATUS) AS JSON
@@ -7368,7 +7368,7 @@ public final class Examples {
                , d.DRAWING_NO
             FROM DRAWING d
            WHERE NOT EXISTS (SELECT 1 FROM PART p WHERE p.PART_NO = d.PART_NO)"""),
-      new Example("BOM · Top 어셈블리", "Top 하나 전개 (레벨 · 들여쓰기 · 누적 수량 · 경로)", "Top 어셈블리 하나 아래를 끝까지 펼칩니다. TOT_QTY 는 Top 1개에 드는 수량(위 수량을 곱해 내려감). 리비전을 쓰면 두 WHERE 에 AND b.REV = … 를 넣으세요.",
+      new Example("BOM · Top 어셈블리", "Top 하나 전개 (레벨 · 인덴트 · 누적 수량 · 경로)", "Top 어셈블리 하나 아래를 끝까지 펼칩니다. TOT_QTY 는 Top 1개에 드는 수량(위 수량을 곱해 내려감). 리비전을 쓰면 두 WHERE 에 AND b.REV = … 를 넣으세요.",
           """
           WITH t (TOP_PART, PARENT_PART, CHILD_PART, QTY, LVL, TOT_QTY, PATH) AS (
           SELECT
@@ -8772,7 +8772,7 @@ public final class Examples {
              AND b.REV = (SELECT MAX(x.REV) FROM BOM x WHERE x.PARENT_PART = b.PARENT_PART)
            ORDER BY
                  b.SEQ"""),
-      new Example("BOM · Top 어셈블리", "레벨을 칸으로 (1 레벨 · 2 레벨 · 3 레벨 칸)", "들여쓰기 대신 레벨마다 칸을 둡니다. 엑셀에서 레벨별로 거르기 쉬운 꼴.",
+      new Example("BOM · Top 어셈블리", "레벨을 칸으로 (1 레벨 · 2 레벨 · 3 레벨 칸)", "인덴트 대신 레벨마다 칸을 둡니다. 엑셀에서 레벨별로 거르기 쉬운 꼴.",
           """
           SELECT
                  DECODE(LEVEL, 1, b.CHILD_PART) AS LV1
@@ -12661,7 +12661,7 @@ public final class Examples {
               ON p.PART_NO = d.PART_NO
            GROUP BY
                  p.PART_NO"""),
-      new Example("문서 · 도면", "배포 뒤 수신까지 걸린 날 (부서별 평균)", "문서를 보낸 날부터 받은 날까지 며칠 걸렸는지 부서별로.",
+      new Example("문서 · 도면", "디플로이 뒤 수신까지 걸린 날 (부서별 평균)", "문서를 보낸 날부터 받은 날까지 며칠 걸렸는지 부서별로.",
           """
           SELECT
                  x.DEPT_ID
@@ -15686,7 +15686,7 @@ public final class Examples {
                , REG_DT = CURRENT_TIMESTAMP
            WHERE o.ORDER_ID = CAST(:orderId AS INTEGER)
              AND o.REG_DT = CAST(:readRegDt AS TIMESTAMP)"""),
-      new Example("시험 데이터 만들기", "번호 1 ~ N 줄 만들기", "시험 데이터의 뼈대. N 만큼 줄을 만듭니다.",
+      new Example("테스트 데이터 만들기", "번호 1 ~ N 줄 만들기", "테스트 데이터의 뼈대. N 만큼 줄을 만듭니다.",
           """
           SELECT
                  LEVEL AS N
@@ -15696,7 +15696,7 @@ public final class Examples {
           SELECT
                  g AS N
             FROM GENERATE_SERIES(1, 100) g"""),
-      new Example("시험 데이터 만들기", "가짜 주문 100건 만들기 (보기만)", "번호 · 아무 날짜 · 아무 금액 · 돌아가는 상태. INSERT … SELECT 앞에 붙이면 넣기가 됩니다.",
+      new Example("테스트 데이터 만들기", "가짜 주문 100건 만들기 (보기만)", "번호 · 아무 날짜 · 아무 금액 · 돌아가는 상태. INSERT … SELECT 앞에 붙이면 넣기가 됩니다.",
           """
           SELECT
                  100000 + LEVEL AS ORDER_ID
@@ -15714,7 +15714,7 @@ public final class Examples {
                , ROUND(CAST(1000 + RANDOM() * 99000 AS NUMERIC)) AS AMOUNT
                , CASE MOD(g, 3) WHEN 0 THEN '접수' WHEN 1 THEN '진행' ELSE '완료' END AS STATUS
             FROM GENERATE_SERIES(1, 100) g"""),
-      new Example("시험 데이터 만들기", "부품 번호 꼴 만들기 (P0001 ~)", "앞 글자 + 0 채운 번호. 채번 꼴을 미리 볼 때.",
+      new Example("테스트 데이터 만들기", "부품 번호 꼴 만들기 (P0001 ~)", "앞 글자 + 0 채운 번호. 채번 꼴을 미리 볼 때.",
           """
           SELECT
                  'P' || LPAD(LEVEL, 4, '0') AS PART_NO
@@ -15724,7 +15724,7 @@ public final class Examples {
           SELECT
                  'P' || LPAD(CAST(g AS VARCHAR), 4, '0') AS PART_NO
             FROM GENERATE_SERIES(1, 20) g"""),
-      new Example("시험 데이터 만들기", "운영 데이터 일부만 복사해 시험 테이블 만들기", "구조와 일부 데이터만 떠서 시험용 테이블을 만듭니다. 개인 정보 칸은 가립니다.",
+      new Example("테스트 데이터 만들기", "운영 데이터 일부만 복사해 테스트 테이블 만들기", "구조와 일부 데이터만 떠서 테스트용 테이블을 만듭니다. 개인 정보 칸은 가립니다.",
           """
           CREATE TABLE CUSTOMER_TEST AS
           SELECT
@@ -16747,7 +16747,7 @@ public final class Examples {
             FROM PG_EXTENSION e
            ORDER BY
                  e.EXTNAME"""),
-      new Example("개발 · 배포 점검", "개발 · 운영 테이블 구조 비교 (칼럼 다른 것)", "개발 DB 에서 운영 DB 링크(PROD_LINK)로 칼럼 · 타입 · 길이 · NULL 허용을 맞대어 한쪽에만 있거나 다른 줄만 봅니다. PostgreSQL 은 같은 DB 의 두 스키마를 비교합니다.",
+      new Example("개발 · 디플로이 점검", "개발 · 운영 테이블 구조 비교 (칼럼 다른 것)", "개발 DB 에서 운영 DB 링크(PROD_LINK)로 칼럼 · 타입 · 길이 · NULL 허용을 맞대어 한쪽에만 있거나 다른 줄만 봅니다. PostgreSQL 은 같은 DB 의 두 스키마를 비교합니다.",
           """
           SELECT
                  'DEV 에만' AS SIDE
@@ -16840,7 +16840,7 @@ public final class Examples {
                  ) y
            ORDER BY
                  2, 3, 1"""),
-      new Example("개발 · 배포 점검", "개발 · 운영 객체 비교 (테이블 · 뷰 · 프로시저가 한쪽에만)", "배포 빠짐을 찾습니다. 운영 DB 링크(PROD_LINK)로 객체 이름 · 종류를 맞댑니다. PostgreSQL 은 두 스키마의 테이블 · 뷰를 맞댑니다.",
+      new Example("개발 · 디플로이 점검", "개발 · 운영 객체 비교 (테이블 · 뷰 · 프로시저가 한쪽에만)", "디플로이 빠짐을 찾습니다. 운영 DB 링크(PROD_LINK)로 객체 이름 · 종류를 맞댑니다. PostgreSQL 은 두 스키마의 테이블 · 뷰를 맞댑니다.",
           """
           SELECT
                  'DEV 에만' AS SIDE
@@ -16911,7 +16911,7 @@ public final class Examples {
                  ) y
            ORDER BY
                  2, 3"""),
-      new Example("개발 · 배포 점검", "칼럼 길이를 줄이기 전에 넘치는 값 찾기", "VARCHAR2(200) → (100) 으로 줄이기 전에, 새 길이를 넘는 줄. Oracle 은 바이트(LENGTHB), PostgreSQL 은 글자 수로 셉니다.",
+      new Example("개발 · 디플로이 점검", "칼럼 길이를 줄이기 전에 넘치는 값 찾기", "VARCHAR2(200) → (100) 으로 줄이기 전에, 새 길이를 넘는 줄. Oracle 은 바이트(LENGTHB), PostgreSQL 은 글자 수로 셉니다.",
           """
           SELECT
                  o.ORDER_ID
@@ -16930,7 +16930,7 @@ public final class Examples {
            WHERE LENGTH(o.REMARK) > CAST(:newLength AS INTEGER)
            ORDER BY
                  CHAR_LEN DESC"""),
-      new Example("개발 · 배포 점검", "글자 칼럼을 숫자로 바꾸기 전에 안 바뀌는 값 찾기", "VARCHAR2 → NUMBER 로 바꾸거나 TO_NUMBER 로 비교하기 전에 숫자가 아닌 값. 날짜는 VALIDATE_CONVERSION(칼럼 AS DATE, 'YYYYMMDD'). Oracle 12.2 이상.",
+      new Example("개발 · 디플로이 점검", "글자 칼럼을 숫자로 바꾸기 전에 안 바뀌는 값 찾기", "VARCHAR2 → NUMBER 로 바꾸거나 TO_NUMBER 로 비교하기 전에 숫자가 아닌 값. 날짜는 VALIDATE_CONVERSION(칼럼 AS DATE, 'YYYYMMDD'). Oracle 12.2 이상.",
           """
           SELECT
                  o.ORDER_ID
@@ -16945,7 +16945,7 @@ public final class Examples {
             FROM ORDERS o
            WHERE o.QTY_TEXT IS NOT NULL
              AND o.QTY_TEXT !~ '^ *-?[0-9]+([.][0-9]+)? *$'"""),
-      new Example("개발 · 배포 점검", "깨진 객체 다시 컴파일하는 문장 만들기", "배포 뒤 INVALID 객체마다 컴파일 문장을 만듭니다. 한 번에 하려면 EXEC DBMS_UTILITY.COMPILE_SCHEMA(USER, FALSE). PostgreSQL 은 INVALID 상태가 없어 깨진 뷰가 없습니다(테이블을 바꿀 때 막힘).",
+      new Example("개발 · 디플로이 점검", "깨진 객체 다시 컴파일하는 문장 만들기", "디플로이 뒤 INVALID 객체마다 컴파일 문장을 만듭니다. 한 번에 하려면 EXEC DBMS_UTILITY.COMPILE_SCHEMA(USER, FALSE). PostgreSQL 은 INVALID 상태가 없어 깨진 뷰가 없습니다(테이블을 바꿀 때 막힘).",
           """
           SELECT
                  o.OBJECT_TYPE
@@ -16959,7 +16959,7 @@ public final class Examples {
           """
           SELECT
                  'PostgreSQL 은 테이블을 바꿀 때 뷰가 깨지지 않게 막아 INVALID 객체가 없습니다.' AS NOTE"""),
-      new Example("개발 · 배포 점검", "설명이 빈 칼럼 (테이블 정의서 빠짐)", "칼럼 설명을 안 단 곳. 산출물 · 테이블 정의서 내기 전에 채웁니다.",
+      new Example("개발 · 디플로이 점검", "설명이 빈 칼럼 (테이블 정의서 빠짐)", "칼럼 설명을 안 단 곳. 산출물 · 테이블 정의서 내기 전에 채웁니다.",
           """
           SELECT
                  c.TABLE_NAME
@@ -16995,7 +16995,7 @@ public final class Examples {
            ORDER BY
                  t.RELNAME
                , a.ATTNUM"""),
-      new Example("개발 · 배포 점검", "테이블 데이터로 INSERT 문 만들기 (코드 테이블 옮길 때)", "개발 DB 의 코드 테이블을 운영에 넣을 INSERT 문을 줄마다 만듭니다. 작은따옴표는 두 번으로 바꿉니다.",
+      new Example("개발 · 디플로이 점검", "테이블 데이터로 INSERT 문 만들기 (코드 테이블 옮길 때)", "개발 DB 의 코드 테이블을 운영에 넣을 INSERT 문을 줄마다 만듭니다. 작은따옴표는 두 번으로 바꿉니다.",
           """
           SELECT
                  'INSERT INTO CODE_DTL (GRP_CD, CD, CD_NM, SORT_SEQ, USE_YN) VALUES ('
@@ -17015,7 +17015,7 @@ public final class Examples {
            WHERE d.GRP_CD = :grpCd
            ORDER BY
                  d.SORT_SEQ"""),
-      new Example("개발 · 배포 점검", "배포 전 오늘 바꾼 객체 목록 (배포 대상 뽑기)", "오늘(또는 기준일 뒤) 만들거나 고친 테이블 · 뷰 · 프로시저를 배포 목록으로. PostgreSQL 은 객체 변경 시각을 남기지 않아 DDL 로그 · 이벤트 트리거가 있어야 합니다.",
+      new Example("개발 · 디플로이 점검", "디플로이 전 오늘 바꾼 객체 목록 (디플로이 대상 뽑기)", "오늘(또는 기준일 뒤) 만들거나 고친 테이블 · 뷰 · 프로시저를 디플로이 목록으로. PostgreSQL 은 객체 변경 시각을 남기지 않아 DDL 로그 · 이벤트 트리거가 있어야 합니다.",
           """
           SELECT
                  o.OBJECT_TYPE
