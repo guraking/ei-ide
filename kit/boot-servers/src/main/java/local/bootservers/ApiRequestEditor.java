@@ -264,6 +264,8 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
     private boolean authWanted = true;
     /** fill 차례. 비밀 값을 백그라운드에서 읽는 사이 다시 채웠으면 늦게 온 값은 버린다. */
     private int fillGeneration;
+    /** 저장한 비밀 값을 아직 읽는 중이면 true. 그동안 보낸 요청은 저장하지 않는다(빈 비밀 값이 저장소 값을 지우지 않게). */
+    private boolean secretsPending;
 
     /** 보낸 요청의 저장할 값과 따로 둘 비밀 값. */
     private record Sent(ApiStore.Entry entry, Map<String, String> secrets) {
@@ -923,6 +925,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
         refreshAuthRow();
         bodyField.setText(saved == null ? request.body() : saved.body);
         int generation = ++fillGeneration;
+        secretsPending = saved != null;
         if (saved != null) {
             restoreSecrets(saved, request, generation);
         }
@@ -939,6 +942,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
                 if (generation != fillGeneration) {
                     return;
                 }
+                secretsPending = false;
                 restoreRows(queryModel, 0, ApiSaved.QUERY, secrets, request.query());
                 restoreRows(headerModel, authRowShown ? 1 : 0, ApiSaved.HEADER, secrets, request.headers());
                 try {
@@ -1133,7 +1137,7 @@ final class ApiRequestEditor extends UserDataHolderBase implements FileEditor {
             return;
         }
         saveAuth(kind, secrets);
-        Sent sent = snapshot(method, url, auth != null || !authRowShown, body);
+        Sent sent = secretsPending ? null : snapshot(method, url, auth != null || !authRowShown, body);
         long start = System.nanoTime();
         sendStart = start;
         statusPill.clear();
