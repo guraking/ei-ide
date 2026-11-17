@@ -477,7 +477,15 @@ public class CloseRepoAction extends DumbAwareAction {
     if (!closing.isEmpty()) {
       configuration.addIgnoredUnregisteredRoots(closing);
       closeEditors(project, closing);
-      if (mavenEnabled()) MavenRepos.setClosed(project, closing, true);
+      if (mavenEnabled()) {
+        // CLOSED_KEY 에 없던 것만 새로 닫은 것이다. 켤 때 다시 닫기(syncClosed)는 옛 판에서 닫은 저장소를 새로 닫은 것으로 기록하지 않는다.
+        List<String> fresh = new ArrayList<>();
+        for (String root : closing) {
+          if (!containsPath(ours, root)) fresh.add(root);
+        }
+        MavenRepos.markClosed(project, fresh);
+        MavenRepos.setClosed(project, closing, true);
+      }
     }
     if (!opening.isEmpty()) {
       List<String> openedRepos = ignoredAbove(project, opening);

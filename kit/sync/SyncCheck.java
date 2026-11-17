@@ -790,13 +790,15 @@ public class SyncCheck {
     eq(SyncPanel.git(outer, "status", "--porcelain=v1", "-unormal").contains("?? inner/"), true);
   }
 
-  /** 열 때 Maven 무시 풀기: 우리가 무시한 pom 만, 우리 기록이 없는 저장소는 전부, 다른 저장소는 그대로. */
+  /** 열 때 Maven 무시 풀기: 우리가 무시한 pom 만, 우리 기록이 없는 저장소는 전부, 다른 저장소는 그대로, 닫은 폴더 표시만 있는 저장소(사용자가 모두 무시)는 그대로. */
   private static void checkMavenUnignore() {
     List<String> ignored = List.of("C:/git/a/pom.xml", "C:/git/a/sample/pom.xml", "C:/git/b/pom.xml", "C:/git/c/pom.xml", "C:/git/ab/pom.xml");
     eq(MavenRepos.toUnignore(ignored, List.of("C:/git/a/pom.xml"), List.of("C:/git/a")), List.of("C:/git/a/pom.xml"));
     eq(MavenRepos.toUnignore(ignored, List.of("C:/git/a/pom.xml"), List.of("C:/git/b")), List.of("C:/git/b/pom.xml"));
     eq(MavenRepos.toUnignore(ignored, List.of(), List.of("C:/git/a")), List.of("C:/git/a/pom.xml", "C:/git/a/sample/pom.xml"));
     eq(MavenRepos.toUnignore(ignored, List.of(), List.of("C:/git/x")), List.of());
+    eq(MavenRepos.toUnignore(ignored, List.of("C:/git/a"), List.of("C:/git/a")), List.of());
+    eq(MavenRepos.toUnignore(ignored, List.of("C:/git/a", "C:/git/a/sample/pom.xml"), List.of("C:/git/a")), List.of("C:/git/a/sample/pom.xml"));
   }
 
   /** 받을 브랜치: 서버 브랜치 읽기 · 내 브랜치 위로 · 찾기 · 추적 걸고 꺼내기. */
