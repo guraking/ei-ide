@@ -179,7 +179,7 @@ public final class MyBatisRunDialog extends DialogWrapper {
 
   /**
    * 창을 열지 않고 namespace · statementId 문장에 기억된 값으로 names 를 채운다(빈 값은 null, 창의 「null」 체크와 같다).
-   * listNames 는 foreach 로 쓰는 이름, textParams 는 문자열로 받을 이름. 「고치기 전과 비교」 가 쓴다.
+   * listNames 는 foreach 로 쓰는 이름, textParams 는 문자열로 받을 이름. 「바꾼 것 다시 시험」의 매퍼 비교가 쓴다.
    */
   static Map<String, Object> rememberedValues(Project project, String namespace, String statementId, List<String> names,
                                               Set<String> listNames, Set<String> textParams) {
@@ -376,7 +376,10 @@ public final class MyBatisRunDialog extends DialogWrapper {
         ConsoleOpener.open(project, c, sql);
       }
     };
-    if (findSlow || file == null || !"select".equals(statement.name)) return new Action[] {getCancelAction(), toConsole, getOKAction()};
+    String id = statement.attr("id");
+    if (findSlow || file == null || !file.isInLocalFileSystem() || id == null || id.isBlank() || !"select".equals(statement.name)) {
+      return new Action[] {getCancelAction(), toConsole, getOKAction()};
+    }
     Action compare = new AbstractAction(EiDbBundle.message("mappercompare.button")) {
       @Override
       public void actionPerformed(ActionEvent e) {
@@ -385,19 +388,22 @@ public final class MyBatisRunDialog extends DialogWrapper {
           setErrorText(invalid.message, invalid.component);
           return;
         }
-        // 닫을 때(dispose) 넣은 값과 고른 접속이 기억되므로 비교는 그 값으로 돈다.
+        // 창에 보이는 값 · 접속 그대로 돌린다(빈 글이지만 「null」 을 끈 값은 '' 이다). 실행과 같은 실행 전 점검을 먼저 받는다.
+        DbConfig c = selected();
+        Map<String, Object> values = values();
+        if (!ei.db.bench.LintGate.confirm(project, result.sql)) return;
         close(NEXT_USER_EXIT_CODE);
-        compareWithBefore(project, file, statement.attr("id"));
+        compareWithBefore(project, file, id, c, values);
       }
     };
     return new Action[] {getCancelAction(), compare, toConsole, getOKAction()};
   }
 
   /**
-   * 고치기 전(VCS 마지막 커밋) · 지금 글로 같은 문장을 돌려 결과 비교 창을 연다. 지금 글은 편집기 문서(저장 전 포함).
+   * 고치기 전(VCS 마지막 커밋) · 지금 글로 같은 문장을 c · values 로 돌려 결과 비교 창을 연다. 지금 글은 편집기 문서(저장 전 포함).
    * VCS 읽기 · DB 실행은 백그라운드에서 한다. 화면 스레드에서 부른다.
    */
-  private static void compareWithBefore(Project project, VirtualFile file, String statementId) {
+  private static void compareWithBefore(Project project, VirtualFile file, String statementId, DbConfig c, Map<String, Object> values) {
     new Task.Backgroundable(project, EiDbBundle.message("mappercompare.progress"), true) {
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
@@ -424,7 +430,7 @@ public final class MyBatisRunDialog extends DialogWrapper {
           Notify.error(project, EiDbBundle.message("mappercompare.no.file"));
           return;
         }
-        MapperCompare.Outcome outcome = MapperCompare.run(project, file, before, now, statementId, indicator);
+        MapperCompare.Outcome outcome = MapperCompare.run(project, before, now, statementId, c, values, indicator);
         ApplicationManager.getApplication().invokeLater(() -> MapperCompare.show(project, outcome), project.getDisposed());
       }
     }.queue();

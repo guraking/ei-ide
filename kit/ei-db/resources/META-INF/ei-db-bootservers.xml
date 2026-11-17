@@ -1,4 +1,5 @@
 <idea-plugin>
+  <depends optional="true" config-file="ei-db-bootservers-git.xml">Git4Idea</depends>
   <actions>
     <!-- 편집기 우클릭 「작업대」 묶음(서버 창 플러그인)에 쿼리 작업대를 넣는다. DB 콘솔에서만 보인다(QueryBenchAction$InConsole). -->
     <reference ref="ei.db.console.QueryBench">
@@ -12,9 +13,9 @@
     <reference ref="ei.db.SwaggerDoc">
       <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="ei.db.DocComment"/>
     </reference>
-    <!-- 「바꾼 것 다시 시험」: 서버 창의 저장한 API 요청을 다시 보내므로 서버 창 플러그인이 있을 때만. Git 메뉴 · 커밋 창 툴바 · 우클릭. -->
+    <!-- 「바꾼 것 다시 시험」: 서버 창의 저장한 API 요청을 다시 보내므로 서버 창 플러그인이 있을 때만. 커밋 창 툴바 · 우클릭(플랫폼 VCS, SVN 도 보임).
+         Git 메뉴 자리는 Git 플러그인이 있을 때만(ei-db-bootservers-git.xml). -->
     <action id="ei.db.RetestChanged" class="ei.db.mybatis.RetestDialog$OpenAction" icon="AllIcons.Actions.Rerun">
-      <add-to-group group-id="Git.MainMenu" anchor="last"/>
       <add-to-group group-id="ChangesViewToolbar" anchor="last"/>
       <add-to-group group-id="ChangesViewPopupMenu" anchor="last"/>
     </action>
