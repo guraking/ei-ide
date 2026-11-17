@@ -1188,6 +1188,16 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
     </table>
     <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note"><b>Synchronize 창 위쪽 줄</b>한 번 역머지하면 그 뒤로는 Synchronize 창을 새로 고칠 때 From 브랜치도 받아 와서 「develop 보다 3개 뒤 · 내 파일 2개 겹침」을 보여 줍니다(겹치면 주황). 그 글을 누르면 Merge Branches 창이 열립니다.</div></div>
 
+    <h3>Merge Request 만들기 · Push 알림 단추 · Git → Merge Request 만들기…</h3>
+    <p class="lead">develop 에 바로 올릴 권한이 없을 때의 흐름입니다: 내 브랜치로 Push 하고, GitLab 사이트에서 내 브랜치 → develop 으로 Merge Request 를 만듭니다. 사이트에서 브랜치를 고르는 일을 Moa 가 대신 채워 줍니다.</p>
+    <table class="keys map">
+      <tr><th>어디서</th><th>하는 일</th></tr>
+      <tr><td>Push 가 끝난 알림의 「Merge Request 만들기」</td><td>방금 올린 내 브랜치를 보낼 쪽, 받는 쪽 브랜치(기본 develop)를 받는 쪽으로 채운 GitLab 새 Merge Request 페이지를 브라우저로 엽니다. 저장소를 여럿 올렸으면 저장소마다 단추가 하나씩입니다. 받는 쪽 브랜치 · main · master 로 올렸을 때는 붙지 않습니다.</td></tr>
+      <tr><td>Git → Merge Request 만들기… · Synchronize 창 저장소 줄 우클릭</td><td>지금 브랜치로 같은 페이지를 아무 때나 엽니다.</td></tr>
+      <tr><td>받는 쪽 브랜치</td><td>설정 → 버전 관리 → 동기화 창 → 「Merge Request 받는 쪽 브랜치」(기본 develop). 원격에 그 브랜치가 없으면 비워 두어 GitLab 이 그 저장소 기본 브랜치를 고릅니다.</td></tr>
+      <tr><td>「올릴 권한이 없어요」 알림</td><td>Push 가 「You are not allowed to upload code」(403)로 막히면 뜹니다. 토큰에 <code>write_repository</code> 권한이 있는지, develop 같은 보호된 브랜치가 아닌 내 브랜치로 올렸는지 보세요. 알림의 「Git 로그인 설정」으로 토큰을 바꿉니다.</td></tr>
+    </table>
+
     <h3>Git Log · 아래쪽 「Git Log」 창</h3>
     <p class="lead">왼쪽 저장소 목록에서 프로젝트(모듈)를 고르고 새로고침(⟳) 단추나 「조회」를 누르면 그 폴더를 바꾼 커밋을 IntelliJ 기본 Log 탭처럼 보여 줍니다. 창을 열거나 저장소를 고르기 · 브랜치를 바꾸기만 해서는 읽지 않습니다(저장소가 많아도 git 이 저절로 돌지 않습니다). Git · SVN(한 줄) 모두 되고, 기존 Git 로그 창은 그대로입니다. 다른 사람이 내 소스를(또는 내가 남의 소스를) 되돌리거나 · 합치며 버리거나 · 이어 고친 커밋에는 빨강 · 주황 · 보라 꼬리표가 붙습니다.</p>
     <div class="figure">

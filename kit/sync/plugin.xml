@@ -43,6 +43,11 @@
     <treeStructureProvider implementation="kinggura.sync.CloneIntoProject$HideWorkspaceRoot"/>
   </extensions>
 
+  <!-- IntelliJ Push 결과 알림에 「Merge Request 만들기」 단추 · 올리기 권한 없음 안내(MergeRequest). -->
+  <extensions defaultExtensionNs="Git4Idea">
+    <gitPushNotificationCustomizer implementation="kinggura.sync.MergeRequest$PushActions"/>
+  </extensions>
+
   <projectListeners>
     <!-- 저장소 목록이 잡힐 때마다 .git/info/exclude 에 IDE · 이클립스 파일 줄을 넣는다.
          topic 은 VCS_CONFIGURATION_CHANGED 가 쓰는 VcsMappingListener 여야 한다(VcsListener 이름으로는 알림이 오지 않는다). -->
@@ -99,6 +104,10 @@
     <action id="KingGura.ReverseMerge" class="kinggura.sync.ReverseMergeAction" icon="AllIcons.Vcs.Merge">
       <add-to-group group-id="Git.MainMenu" anchor="after" relative-to-action="KingGura.SynchronizeWorkspace"/>
       <add-to-group group-id="Git.ContextMenu" anchor="after" relative-to-action="KingGura.SynchronizeWorkspace"/>
+    </action>
+    <!-- 지금 브랜치로 GitLab 새 Merge Request 페이지를 연다(받는 쪽은 설정 → 동기화 창). 동기화 창 저장소 줄 우클릭에도 있다. -->
+    <action id="KingGura.MergeRequest" class="kinggura.sync.MergeRequest" icon="AllIcons.Vcs.Vendors.Gitlab">
+      <add-to-group group-id="Git.MainMenu" anchor="after" relative-to-action="KingGura.ReverseMerge"/>
     </action>
   </actions>
 </idea-plugin>
