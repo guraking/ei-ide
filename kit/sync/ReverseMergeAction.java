@@ -436,7 +436,7 @@ public final class ReverseMergeAction extends DumbAwareAction {
       c.weightx = 0;
       c.insets = JBUI.insetsLeft(GAP);
       JButton swap = new JButton(SyncBundle.message("rmerge.swap"), AllIcons.Actions.SwapPanels);
-      SyncPanel.tint(swap, STEP_COLOR);
+      SyncPanel.tint(swap, SyncPanel.RESOLVE_BG);
       swap.addActionListener(e -> {
         Object from = fromBox.getSelectedItem();
         fromBox.setSelectedItem(intoBox.getSelectedItem());
