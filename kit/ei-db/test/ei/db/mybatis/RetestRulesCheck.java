@@ -28,6 +28,13 @@ public class RetestRulesCheck {
     eq(RetestRules.apiVerdict(null, 200, 200, false), RetestRules.ApiVerdict.BODY);
     eq(RetestRules.apiVerdict(null, 200, 200, true), RetestRules.ApiVerdict.SAME);
 
+    // URL 이 둘인 메서드에서 /a 만 저장했으면 /b 는 저장한 요청 없음.
+    String keyA = "GET p.C#m /a";
+    eq(RetestRules.keysByUrl(List.of("/a", "/b"), List.of(keyA)), java.util.Map.of("/a", List.of(keyA), "/b", List.of()));
+    // URL 모양이 달라 하나도 맞지 않으면 모든 URL 에 모든 key.
+    eq(RetestRules.keysByUrl(List.of("/x/{id}"), List.of(keyA)), java.util.Map.of("/x/{id}", List.of(keyA)));
+    eq(RetestRules.keysByUrl(List.of("/a"), List.of()), java.util.Map.of("/a", List.of()));
+
     System.out.println("RetestRulesCheck 통과");
   }
 }

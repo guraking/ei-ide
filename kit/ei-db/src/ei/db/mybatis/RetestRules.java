@@ -1,6 +1,9 @@
 package ei.db.mybatis;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
@@ -34,6 +37,27 @@ final class RetestRules {
   /** 메서드 짝짓기 키: 「클래스#이름(파라미터 형식,…)」. 클래스 이름이 없으면(익명 클래스) 빈 글. */
   static String methodKey(String owner, String name, List<String> paramTypes) {
     return (owner == null ? "" : owner) + "#" + name + "(" + String.join(",", paramTypes) + ")";
+  }
+
+  /**
+   * 한 메서드의 URL 마다 그 URL 로 저장한 요청 key(key 는 「METHOD 패키지.클래스#메서드 URL」). key 하나라도 끝이 「 URL」 로 맞으면
+   * 맞는 것만 주고(나머지 URL 은 빈 목록 = 저장한 요청 없음), 하나도 맞지 않으면 URL 적는 모양이 달라 가릴 수 없으므로 모든 URL 에 모든 key 를 준다.
+   */
+  static Map<String, List<String>> keysByUrl(List<String> urls, List<String> keys) {
+    Map<String, List<String>> out = new LinkedHashMap<>();
+    boolean exact = false;
+    for (String url : urls) {
+      List<String> mine = new ArrayList<>();
+      for (String key : keys) {
+        if (key.endsWith(" " + url)) mine.add(key);
+      }
+      exact |= !mine.isEmpty();
+      out.put(url, mine);
+    }
+    if (!exact) {
+      for (String url : urls) out.put(url, keys);
+    }
+    return out;
   }
 
   /** beforeCode 는 저장한 응답이 없으면 음수. */

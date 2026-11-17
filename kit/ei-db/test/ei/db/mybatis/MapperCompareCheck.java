@@ -34,6 +34,17 @@ public class MapperCompareCheck {
     // 조각(include) 안이 바뀌어도 다르다.
     String fragment = before.replace("ID, NAME", "ID, NAME, AGE");
     check(!MapperCompare.sameSql(resolve(before, values), resolve(fragment, values)), "조각이 바뀌면 다른 SQL");
+    // 따옴표 안 공백 차이는 다른 SQL 이다.
+    check(!MapperCompare.squeeze("SELECT 'A  B' FROM T").equals(MapperCompare.squeeze("SELECT 'A B' FROM T")), "따옴표 안 공백은 그대로");
+    check(MapperCompare.squeeze("  SELECT  'it''s  x'\n  FROM\tT ").equals("SELECT 'it''s  x' FROM T"), "따옴표 밖만 줄임: " + MapperCompare.squeeze("  SELECT  'it''s  x'\n  FROM\tT "));
+    check(MapperCompare.squeeze("").isEmpty(), "빈 글");
+    // databaseId: 접속 종류와 같은 것 먼저, 없으면 databaseId 없는 것.
+    MapperDoc dbs = MapperDoc.parse("<mapper namespace=\"a.B\"><select id=\"x\" databaseId=\"oracle\">O</select>"
+        + "<select id=\"x\">P</select><select id=\"x\" databaseId=\"postgresql\">G</select></mapper>");
+    check("postgresql".equals(MapperCompare.pick(dbs, "x", "postgresql").attr("databaseId")), "같은 databaseId");
+    check(MapperCompare.pick(dbs, "x", "mysql").attr("databaseId") == null, "없으면 databaseId 없는 문장");
+    check(MapperCompare.pick(dbs, null, "oracle") == null && MapperCompare.pick(dbs, " ", "oracle") == null && MapperCompare.pick(dbs, "y", "oracle") == null,
+        "id 가 없거나 비면 null");
     System.out.println("MapperCompareCheck 통과");
   }
 }

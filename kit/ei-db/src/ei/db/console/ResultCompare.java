@@ -96,8 +96,9 @@ public final class ResultCompare extends DialogWrapper {
     new ResultCompare(project, left, leftLabel, right, rightLabel, List.of()).show();
   }
 
-  /** 칼럼 이름이 모두 같고(대소문자 무시) 행 순서대로 모든 값이 같으면 true. */
+  /** 칼럼 이름이 모두 같고(대소문자 무시) 행 순서대로 모든 값이 같으면 true. 한쪽이라도 건수 한도에서 잘렸으면 앞부분만 본 것이라 false. */
   public static boolean sameRows(QueryResult a, QueryResult b) {
+    if (a.truncated() || b.truncated()) return false;
     List<String> common = ResultDiff.commonColumns(a.columns(), b.columns());
     if (common.size() != a.columns().size() || common.size() != b.columns().size()) return false;
     ResultDiff.Outcome o = ResultDiff.compare(a.columns(), a.rows(), b.columns(), b.rows(), List.of());

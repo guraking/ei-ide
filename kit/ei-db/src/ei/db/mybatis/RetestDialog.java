@@ -10,7 +10,9 @@ import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.progress.ProgressIndicator;
+import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
+import com.intellij.openapi.progress.impl.BackgroundableProcessIndicator;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
@@ -80,7 +82,7 @@ final class RetestDialog extends DialogWrapper {
   private final JBTable table = new JBTable(model);
   private final JBLabel status = new JBLabel();
   private final JButton recollect = new JButton(EiDbBundle.message("retest.recollect"), AllIcons.Actions.Refresh);
-  /** 돌고 있는 모으기 · 돌리기의 진행(없으면 null). 화면 스레드에서만 바꾼다. */
+  /** 돌고 있는 모으기 · 돌리기의 진행(없으면 null). 시작할 때 화면 스레드에서 넣어 두어 창을 일찍 닫아도 dispose 가 멈출 수 있다. */
   private @Nullable ProgressIndicator collecting;
   private @Nullable ProgressIndicator running;
   private boolean busy;
@@ -140,7 +142,7 @@ final class RetestDialog extends DialogWrapper {
     if (busy) return;
     List<RetestCollect.Item> todo = new ArrayList<>();
     for (RetestCollect.Item item : model.items) {
-      if (item.checked && item.kind != RetestCollect.Kind.API_NONE) todo.add(item);
+      if (item.checked && item.kind.runnable()) todo.add(item);
     }
     if (todo.isEmpty()) {
       setErrorText(EiDbBundle.message("retest.nothing.checked"), table);
@@ -152,14 +154,9 @@ final class RetestDialog extends DialogWrapper {
       item.outcome = null;
     }
     model.fireTableDataChanged();
-    setBusy(true);
-    new Task.Backgroundable(project, EiDbBundle.message("retest.progress.run"), true) {
+    Task.Backgroundable task = new Task.Backgroundable(project, EiDbBundle.message("retest.progress.run"), true) {
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
-        ApplicationManager.getApplication().invokeLater(() -> {
-          if (busy && !isDisposed()) running = indicator;
-          updateButtons();
-        }, ModalityState.any());
         indicator.setIndeterminate(false);
         for (int i = 0; i < todo.size(); i++) {
           indicator.checkCanceled();
@@ -186,7 +183,16 @@ final class RetestDialog extends DialogWrapper {
           setBusy(false);
         }
       }
-    }.queue();
+    };
+    running = start(task);
+    setBusy(true);
+  }
+
+  /** task 를 진행 표시와 함께 백그라운드로 돌리고 그 진행 표시를 돌려준다(화면 스레드에서). */
+  private static ProgressIndicator start(Task.Backgroundable task) {
+    ProgressIndicator indicator = new BackgroundableProcessIndicator(task);
+    ProgressManager.getInstance().runProcessWithProgressAsynchronously(task, indicator);
+    return indicator;
   }
 
   private void runOne(RetestCollect.Item item, ProgressIndicator indicator) {
@@ -198,7 +204,7 @@ final class RetestDialog extends DialogWrapper {
           return;
         }
         CharSequence now = ReadAction.compute(() -> RetestCollect.currentText(file));
-        MapperCompare.Outcome o = MapperCompare.run(project, file, item.before, now, item.statementId, indicator);
+        MapperCompare.Outcome o = MapperCompare.run(project, item.before, now, item.statementId, indicator);
         show(item, mapperText(o), o);
       } else {
         ApiBridge.Result r = ApiBridge.resend(project, item.apiKey);
@@ -218,6 +224,7 @@ final class RetestDialog extends DialogWrapper {
     if (o.sameSql()) return EiDbBundle.message("retest.result.sql.same");
     int before = o.before() == null ? 0 : o.before().rows().size();
     int now = o.now() == null ? 0 : o.now().rows().size();
+    if (o.truncated()) return EiDbBundle.message("retest.result.mapper.truncated", before, now);
     return o.same() ? EiDbBundle.message("retest.result.mapper.same", now) : EiDbBundle.message("retest.result.mapper.diff", before, now);
   }
 
@@ -248,16 +255,12 @@ final class RetestDialog extends DialogWrapper {
     model.set(List.of());
     table.getEmptyText().setText(EiDbBundle.message("retest.collecting"));
     status.setText("");
-    setBusy(true);
-    new Task.Backgroundable(project, EiDbBundle.message("retest.progress.collect"), true) {
+    Task.Backgroundable task = new Task.Backgroundable(project, EiDbBundle.message("retest.progress.collect"), true) {
       private RetestCollect.Gathered gathered;
       private String failure;
 
       @Override
       public void run(@NotNull ProgressIndicator indicator) {
-        ApplicationManager.getApplication().invokeLater(() -> {
-          if (!isDisposed()) collecting = indicator;
-        }, ModalityState.any());
         try {
           gathered = RetestCollect.gather(project, indicator);
         } catch (ProcessCanceledException e) {
@@ -282,11 +285,14 @@ final class RetestDialog extends DialogWrapper {
         for (RetestCollect.Item item : gathered.items()) {
           if (item.changesData) item.result = EiDbBundle.message("retest.data.change");
           if (item.kind == RetestCollect.Kind.API_NONE) item.result = EiDbBundle.message("retest.no.saved");
+          if (item.kind == RetestCollect.Kind.MAPPER_NEW) item.result = EiDbBundle.message("retest.new.statement");
         }
         model.set(gathered.items());
         status.setText(summary(gathered));
       }
-    }.queue();
+    };
+    collecting = start(task);
+    setBusy(true);
   }
 
   private static String summary(RetestCollect.Gathered g) {
@@ -295,7 +301,7 @@ final class RetestDialog extends DialogWrapper {
     int unsaved = 0;
     for (RetestCollect.Item item : g.items()) {
       switch (item.kind) {
-        case MAPPER -> mappers++;
+        case MAPPER, MAPPER_NEW -> mappers++;
         case API -> apis++;
         case API_NONE -> unsaved++;
       }
@@ -304,6 +310,7 @@ final class RetestDialog extends DialogWrapper {
     if (g.skippedRoots() > 0) out.append(" · ").append(EiDbBundle.message("retest.cap", RetestCollect.MAX_ROOTS));
     if (g.skippedFiles() > 0) out.append(" · ").append(EiDbBundle.message("retest.cap.files", RetestCollect.MAX_FILES));
     if (g.failedFiles() > 0) out.append(" · ").append(EiDbBundle.message("retest.files.failed", g.failedFiles()));
+    if (g.partialRoots() > 0) out.append(" · ").append(EiDbBundle.message("retest.partial", g.partialRoots()));
     return out.toString();
   }
 
@@ -364,7 +371,7 @@ final class RetestDialog extends DialogWrapper {
 
     @Override
     public boolean isCellEditable(int row, int column) {
-      return column == CHECK && !busy && items.get(row).kind != RetestCollect.Kind.API_NONE;
+      return column == CHECK && !busy && items.get(row).kind.runnable();
     }
 
     @Override
@@ -372,7 +379,8 @@ final class RetestDialog extends DialogWrapper {
       RetestCollect.Item item = items.get(row);
       return switch (column) {
         case CHECK -> item.checked;
-        case KIND -> EiDbBundle.message(item.kind == RetestCollect.Kind.MAPPER ? "retest.kind.mapper" : "retest.kind.api");
+        case KIND -> EiDbBundle.message(item.kind == RetestCollect.Kind.MAPPER || item.kind == RetestCollect.Kind.MAPPER_NEW
+                                        ? "retest.kind.mapper" : "retest.kind.api");
         case NAME -> item.name;
         case WHY -> item.why;
         default -> item.result;
@@ -388,13 +396,13 @@ final class RetestDialog extends DialogWrapper {
     }
   }
 
-  /** 저장한 요청이 없는 API 줄은 흐리게. */
+  /** 돌릴 수 없는 줄(새 문장 · 저장한 요청 없는 API)은 흐리게. */
   private final class Renderer extends DefaultTableCellRenderer {
     @Override
     public Component getTableCellRendererComponent(JTable t, Object value, boolean selected, boolean focused, int row, int column) {
       Component c = super.getTableCellRendererComponent(t, value, selected, focused, row, column);
       if (!selected && row < model.items.size()) {
-        c.setForeground(model.items.get(row).kind == RetestCollect.Kind.API_NONE ? UIUtil.getContextHelpForeground() : t.getForeground());
+        c.setForeground(model.items.get(row).kind.runnable() ? t.getForeground() : UIUtil.getContextHelpForeground());
       }
       return c;
     }
