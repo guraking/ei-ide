@@ -78,7 +78,7 @@ public final class DialectConvert {
   public static Result toOracle(String sql) {
     List<String> notes = new ArrayList<>();
     String s = sql;
-    s = casts(s, notes);
+    s = casts(s, DialectConvert::oracleType, notes);
     s = words(s, "NOW\\s*\\(\\s*\\)", "SYSDATE", "NOW() → SYSDATE", notes);
     s = words(s, "CURRENT_DATE", "TRUNC(SYSDATE)", "CURRENT_DATE → TRUNC(SYSDATE)", notes);
     s = regex(s, "([A-Za-z_][\\w$#.]*|'[^']*')\\s+ILIKE\\s+([A-Za-z_][\\w$#.]*|'[^']*'|:[A-Za-z_]\\w*)", m -> "UPPER(" + m.group(1) + ") LIKE UPPER(" + m.group(2) + ")", "ILIKE → UPPER LIKE UPPER", notes);
@@ -297,8 +297,8 @@ public final class DialectConvert {
       + "|(?:timestamp|time)" + TYPE_ARGS + "\\s+with(?:out)?\\s+time\\s+zone"
       + "|[A-Za-z]\\w*" + TYPE_ARGS + ")(?![\\w$#])");
 
-  /** x::type → CAST(x AS 오라클형). 괄호 식 뒤의 :: 는 괄호까지 감싼다. 바인드(:id::int)는 콜론까지 감싼다. */
-  private static String casts(String sql, List<String> notes) {
+  /** x::type → CAST(x AS type(바꾼 형)). 괄호 식 뒤의 :: 는 괄호까지 감싼다. 바인드(:id::int)는 콜론까지 감싼다. */
+  static String casts(String sql, Function<String, String> type, List<String> notes) {
     int count = 0;
     String s = sql;
     for (int pass = 0; pass < MAX_PASSES; pass++) {
@@ -312,14 +312,14 @@ public final class DialectConvert {
         while (start > 0 && (Character.isLetterOrDigit(masked.charAt(start - 1)) || masked.charAt(start - 1) == '_')) start--;
       } else if (start > 0 && masked.charAt(start - 1) == ':' && (start < 2 || masked.charAt(start - 2) != ':')) start--;
       String expr = s.substring(start, m.end(1));
-      s = s.substring(0, start) + "CAST(" + expr + " AS " + oracleType(s.substring(m.start(2), m.end(2))) + ")" + s.substring(m.end());
+      s = s.substring(0, start) + "CAST(" + expr + " AS " + type.apply(s.substring(m.start(2), m.end(2))) + ")" + s.substring(m.end());
       count++;
     }
     if (count > 0) notes.add(":: 타입 바꾸기 → CAST " + count + "곳");
     return s;
   }
 
-  private static int openOf(String masked, int close) {
+  static int openOf(String masked, int close) {
     int depth = 0;
     for (int i = close; i >= 0; i--) {
       if (masked.charAt(i) == ')') depth++;
@@ -344,12 +344,12 @@ public final class DialectConvert {
   }
 
   /** 낱말(가린 글에서 대소문자 무시) 바꾸기. 바뀐 곳이 있으면 「what n곳」. */
-  private static String words(String sql, String regex, String replacement, String what, List<String> notes) {
+  static String words(String sql, String regex, String replacement, String what, List<String> notes) {
     return regex(sql, "(?<![\\w$#.])(?:" + regex + ")(?![\\w$#])", m -> replacement, what, notes);
   }
 
   /** 가린 글에서 찾아 원문을 바꾼다. f 가 null 을 주면 그곳은 두고, what 이 비면 알리지 않는다. 그룹 값은 원문에서 읽는다. */
-  private static String regex(String sql, String regex, Function<Matcher, String> f, String what, List<String> notes) {
+  static String regex(String sql, String regex, Function<Matcher, String> f, String what, List<String> notes) {
     String masked = SqlParts.mask(sql);
     Matcher m = Pattern.compile("(?i)" + regex).matcher(masked);
     Matcher original = Pattern.compile("(?i)" + regex).matcher(sql);
@@ -370,10 +370,10 @@ public final class DialectConvert {
     return out.toString();
   }
 
-  private record Call(int start, int end, List<String> args) {}
+  record Call(int start, int end, List<String> args) {}
 
   /** limit 앞에서 가장 뒤에 있는 name( … ) 호출. */
-  private static Call lastCall(String sql, String name, int limit) {
+  static Call lastCall(String sql, String name, int limit) {
     String masked = SqlParts.mask(sql);
     Matcher m = Pattern.compile("(?i)(?<![\\w$#.])" + name + "\\s*\\(").matcher(masked);
     Call last = null;
@@ -387,7 +387,7 @@ public final class DialectConvert {
   }
 
   /** name( … ) 호출을 뒤에서부터 f 로 바꾼다(안쪽 같은 이름 호출도 바뀐다). f 가 null 이면 그 호출은 두고 직접 확인으로 알린다. */
-  private static String calls(String sql, String name, Function<List<String>, String> f, String what, List<String> notes) {
+  static String calls(String sql, String name, Function<List<String>, String> f, String what, List<String> notes) {
     String s = sql;
     int limit = Integer.MAX_VALUE;
     int count = 0;

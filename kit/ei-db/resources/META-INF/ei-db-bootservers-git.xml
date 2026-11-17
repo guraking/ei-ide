@@ -1,0 +1,8 @@
+<idea-plugin>
+  <actions>
+    <!-- 「바꾼 것 다시 시험」을 Git 메뉴 끝에도 둔다. Git 플러그인이 꺼져 있으면 이 파일은 읽히지 않는다. -->
+    <reference ref="ei.db.RetestChanged">
+      <add-to-group group-id="Git.MainMenu" anchor="last"/>
+    </reference>
+  </actions>
+</idea-plugin>

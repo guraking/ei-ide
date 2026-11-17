@@ -35,6 +35,6 @@ public class RunStatementAction extends AnAction {
   public void actionPerformed(@NotNull AnActionEvent e) {
     Editor editor = e.getData(CommonDataKeys.EDITOR);
     if (editor == null || e.getProject() == null) return;
-    MyBatisRunDialog.openAt(e.getProject(), editor.getDocument().getCharsSequence(), editor.getCaretModel().getOffset(), findSlow());
+    MyBatisRunDialog.openAt(e.getProject(), editor.getVirtualFile(), editor.getDocument().getCharsSequence(), editor.getCaretModel().getOffset(), findSlow());
   }
 }

@@ -704,7 +704,8 @@ final class ErrorPanel extends JPanel {
         String method = r.method() == null ? "GET" : r.method();
         String url = path.startsWith("http") ? path : HttpText.baseUrl(port, "") + path;
         String title = BootServersBundle.message("errors.api.title", method, path);
-        ApiRequestEditor.open(project, new ApiRequestEditor.Request(title, "errors " + method + " " + url, method, url, rows, List.of(), ""));
+        // key 에는 쿼리를 넣지 않는다(저장 목록 key 에 비밀 쿼리 값이 남지 않게).
+        ApiRequestEditor.open(project, new ApiRequestEditor.Request(title, "errors " + method + " " + ApiSaved.withoutQuery(url), method, url, rows, List.of(), "", false));
     }
 
     /** ei-db 「쿼리 콘솔로 보내기」 를 SQL 만 담은 임시 편집기(전체 선택)로 부른다. 고를 콘솔 · 접속은 ei-db 가 묻는다. */

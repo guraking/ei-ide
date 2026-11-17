@@ -61,7 +61,7 @@ public final class SqlTools {
       List<String> lits = new ArrayList<>();
       for (int c = 0; c < width; c++) {
         String v = c < r.size() ? r.get(c) : "";
-        lits.add(numeric[c] ? v : v.isEmpty() ? "NULL" : QueryBuilder.quote(v));
+        lits.add(numeric[c] ? v : v.isEmpty() ? "NULL" : QueryBuilder.quote(kind, v));
       }
       String item = width == 1 ? lits.get(0) : "(" + String.join(", ", lits) + ")";
       if (!seen.add(item)) dup++;

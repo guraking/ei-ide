@@ -6,13 +6,16 @@ import java.util.List;
 
 /**
  * 실무 쿼리 예제 모음. 인터넷 없이 쓰도록 플러그인 안에 둔다. 표 이름(ORDERS · CUSTOMER 등)은 보기이고 편집기에 넣은 뒤 바꿔 쓴다.
- * Oracle 과 PostgreSQL 글을 따로 두고, MySQL 은 PostgreSQL 글을 보인다(LIMIT · COALESCE 등이 같다).
+ * Oracle 과 PostgreSQL 글을 따로 두고, MySQL 은 MysqlExamples(따로 쓴 글, 없으면 PostgreSQL 글을 바꾼 것)를 보인다.
  */
 public final class Examples {
   private Examples() {}
 
   public record Example(String group, String title, String description, String oracle, String postgres) {
-    public String sql(DbKind kind) { return kind == DbKind.ORACLE ? oracle : postgres; }
+    public String sql(DbKind kind) {
+      if (kind == DbKind.ORACLE) return oracle;
+      return kind == DbKind.MYSQL ? MysqlExamples.sql(title, postgres) : postgres;
+    }
 
     @Override public String toString() { return title; }
   }

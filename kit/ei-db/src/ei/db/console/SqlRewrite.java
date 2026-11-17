@@ -78,7 +78,9 @@ public final class SqlRewrite {
       String value = m.group(3);
       // 문자 값이 자른 길이와 다르면 원래 조건은 어떤 행과도 맞지 않는다. 뜻이 달라지므로 바꾸지 않는다.
       if (value.startsWith("'") && value.length() - 2 != Integer.parseInt(m.group(2))) continue;
-      out.add(new Hit(m.start(), m.end(), "substr", m.group(1), m.group(1) + " LIKE " + value + " || '%'"));
+      // MySQL 기본 설정에서 || 는 OR 라 CONCAT 으로 잇는다.
+      String pattern = kind == DbKind.MYSQL ? "CONCAT(" + value + ", '%')" : value + " || '%'";
+      out.add(new Hit(m.start(), m.end(), "substr", m.group(1), m.group(1) + " LIKE " + pattern));
     }
     m = CASE.matcher(sql);
     while (m.find()) out.add(new Hit(m.start(), m.end(), "case", m.group(2), m.group(2) + " = " + m.group(1) + "(" + m.group(3) + ")"));

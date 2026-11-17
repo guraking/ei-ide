@@ -1,6 +1,5 @@
 package ei.db.bench;
 
-import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.ide.CopyPasteManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.ComboBox;
@@ -272,11 +271,11 @@ public final class QueryBenchDialog extends DialogWrapper {
     bindMybatis.addActionListener(e -> bindChosen());
     bindValue.addActionListener(e -> bindChosen());
     details.addActionListener(e -> {
-      PropertiesComponent.getInstance().setValue(DETAILS_KEY, details.isSelected());
+      BenchSettings.set(bench.project, DETAILS_KEY, details.isSelected());
       builder.setDetails(details.isSelected());
       refreshActive();
     });
-    lint.addActionListener(e -> LintGate.setEnabled(lint.isSelected()));
+    lint.addActionListener(e -> LintGate.setEnabled(bench.project, lint.isSelected()));
     sql.addDocumentListener(new com.intellij.openapi.editor.event.DocumentListener() {
       @Override
       public void documentChanged(@NotNull com.intellij.openapi.editor.event.DocumentEvent e) {
@@ -333,7 +332,7 @@ public final class QueryBenchDialog extends DialogWrapper {
   /** SQL 묶음을 지금 탭의 자리로 옮기고 그 탭의 SQL 을 다시 만든다. */
   private void tabChanged() {
     int i = tabs.getSelectedIndex();
-    PropertiesComponent.getInstance().setValue(TAB_KEY, i, 0);
+    BenchSettings.set(bench.project, TAB_KEY, i);
     if (i >= 0 && i < slots.length) {
       slots[i].add(preview, BorderLayout.CENTER);
       slots[i].revalidate();
@@ -344,32 +343,32 @@ public final class QueryBenchDialog extends DialogWrapper {
 
   /** 기억한 선택을 되살린다. 콘솔에서 열었으면 그 접속을 먼저 고른다. */
   private void restore(DbConfig preferred) {
-    PropertiesComponent props = PropertiesComponent.getInstance();
-    QueryBuilder.JoinStyle style = QueryBuilder.JoinStyle.OLD.name().equals(props.getValue(STYLE_KEY, QueryBuilder.JoinStyle.OLD.name()))
+    Project project = bench.project;
+    QueryBuilder.JoinStyle style = QueryBuilder.JoinStyle.OLD.name().equals(BenchSettings.get(project, STYLE_KEY, QueryBuilder.JoinStyle.OLD.name()))
         ? QueryBuilder.JoinStyle.OLD : QueryBuilder.JoinStyle.ANSI;
     QueryBuilder.Bind bind = QueryBuilder.Bind.COLON;
-    for (QueryBuilder.Bind b : QueryBuilder.Bind.values()) if (b.name().equals(props.getValue(BIND_KEY))) bind = b;
+    for (QueryBuilder.Bind b : QueryBuilder.Bind.values()) if (b.name().equals(BenchSettings.get(project, BIND_KEY, null))) bind = b;
     bench.setStyle(style);
     bench.setBind(bind);
     (bind == QueryBuilder.Bind.MYBATIS ? bindMybatis : bind == QueryBuilder.Bind.VALUE ? bindValue : bindColon).setSelected(true);
-    details.setSelected(props.getBoolean(DETAILS_KEY, false));
+    details.setSelected(BenchSettings.getBoolean(project, DETAILS_KEY, false));
     builder.setDetails(details.isSelected());
-    lint.setSelected(LintGate.enabled());
+    lint.setSelected(LintGate.enabled(project));
     DbConfig pick = preferred;
-    if (pick == null) pick = DbSettings.getInstance().find(props.getValue(CONFIG_KEY, ""));
+    if (pick == null) pick = DbSettings.getInstance().find(BenchSettings.get(project, CONFIG_KEY, ""));
     if (pick != null) {
       for (int i = 0; i < connection.getItemCount(); i++) {
         if (connection.getItemAt(i).id.equals(pick.id)) connection.setSelectedIndex(i);
       }
     }
     connectionChanged();
-    tabs.setSelectedIndex(Math.max(0, Math.min(tabs.getTabCount() - 1, props.getInt(TAB_KEY, 0))));
+    tabs.setSelectedIndex(Math.max(0, Math.min(tabs.getTabCount() - 1, BenchSettings.getInt(project, TAB_KEY, 0))));
     tabChanged();
   }
 
   private void connectionChanged() {
     DbConfig c = (DbConfig) connection.getSelectedItem();
-    if (c != null) PropertiesComponent.getInstance().setValue(CONFIG_KEY, c.id);
+    if (c != null) BenchSettings.set(bench.project, CONFIG_KEY, c.id);
     bench.setConfig(c);
     showStyle();
     builder.connectionChanged();
@@ -387,13 +386,13 @@ public final class QueryBenchDialog extends DialogWrapper {
 
   private void styleChosen() {
     QueryBuilder.JoinStyle s = oldStyle.isSelected() ? QueryBuilder.JoinStyle.OLD : QueryBuilder.JoinStyle.ANSI;
-    PropertiesComponent.getInstance().setValue(STYLE_KEY, s.name());
+    BenchSettings.set(bench.project, STYLE_KEY, s.name());
     bench.setStyle(s);
   }
 
   private void bindChosen() {
     QueryBuilder.Bind b = bindMybatis.isSelected() ? QueryBuilder.Bind.MYBATIS : bindValue.isSelected() ? QueryBuilder.Bind.VALUE : QueryBuilder.Bind.COLON;
-    PropertiesComponent.getInstance().setValue(BIND_KEY, b.name());
+    BenchSettings.set(bench.project, BIND_KEY, b.name());
     bench.setBind(b);
   }
 

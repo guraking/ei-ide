@@ -718,6 +718,8 @@ final class DbExplorer extends SimpleToolWindowPanel {
       g.add(new Act(EiDbBundle.message("explorer.erd"), null, () -> true, () -> ErdView.open(project, t.c, t.schema, picked)));
       g.add(new Act(EiDbBundle.message("explorer.code.users"), AllIcons.Hierarchy.Supertypes, () -> true,
           () -> ei.db.mybatis.CodeFlowView.findTable(project, t.schema == null || t.schema.isBlank() ? t.table.name() : t.schema + "." + t.table.name())));
+      g.add(new Act(EiDbBundle.message("explorer.column.sync"), null, () -> true,
+          () -> ei.db.mybatis.ColumnSyncAction.open(project, t.c, t.schema, t.table.name(), null)));
       g.add(new Act(EiDbBundle.message("explorer.spec"), AllIcons.ToolbarDecorator.Export, () -> true, () -> exportSpec(t.c, t.schema, picked)));
       return g;
     }
