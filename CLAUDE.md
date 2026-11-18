@@ -17,6 +17,7 @@
   - `kit/git-auth` IntelliJ Git 이 https 원격에 인증을 환경값으로 넘기는 손질(`apply_git_auth.py`), 점검 `EiGitAuthCheck.java`
   - `kit/defender` Microsoft Defender 알림의 「제외」 단추가 서명 없는 도우미 대본(`bin\defender-exclusions.ps1`)도 돌리게 하는 손질(`apply_defender.py`), 점검 `apply_defender_check.py`
   - `kit/git-retry` IntelliJ Git 의 서버 명령(Clone · Push · Fetch)이 보안 프로그램에 막혀 libcurl-4.dll 을 못 읽으면 1 · 2 · 3초 쉬고 세 번까지 다시 하는 손질(`apply_git_retry.py`), 점검 `apply_git_retry_check.py`
+  - `kit/intellij/make_plugin_zips.py` 보안 프로그램이 Moa 를 막을 때 IntelliJ IDEA(2026.3 이상)에 「디스크에서 설치」로 넣을 플러그인 zip 셋을 묶는다(plugin.xml 판 표시 · Moa 전용 메뉴를 IntelliJ 메뉴로), 점검 `make_plugin_zips_check.py`. IntelliJ 에서만 도는 코드는 `MoaProduct.isMoa()` 로 가린다
   - `kit/patchlib.py` 손질 대본 공용(원문 정확히 한 번 찾기 · 전부 아니면 아무것도 안 씀 · 백업), `kit/check_kit.py` 빌드 전에 손질이 다 들어갔는지 확인(build-windows.bat 이 부름), 점검 `*_check.py`
   - `kit/customize.py`(brand · slim) · `kit/menu/apply_menu.py` · `kit/defaults/apply_defaults.py` · `kit/brand/apply_brand.bat` · `kit/check_update.py`(새 판 점검) · `kit/compile_plugins.py`(플러그인 3개 동시 컴파일 · 점검 → 본체 jar)
 - `bundled-plugins/<이름>/lib/*.jar` 는 빌드 때 본체에 들어간다. `release/플러그인설치.bat` 은 노트북 설치 대본.

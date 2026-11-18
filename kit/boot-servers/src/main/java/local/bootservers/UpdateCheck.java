@@ -48,6 +48,8 @@ public final class UpdateCheck implements AppLifecycleListener {
 
     @Override
     public void appStarted() {
+        // IntelliJ 에 넣은 플러그인 판은 Moa 설치 파일로 바꾸지 않는다. 플러그인 새 판은 「디스크에서 설치」로 넣는다.
+        if (!MoaProduct.isMoa()) return;
         ApplicationManager.getApplication().executeOnPooledThread(this::check);
     }
 

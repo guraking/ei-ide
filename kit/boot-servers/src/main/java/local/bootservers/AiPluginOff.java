@@ -24,6 +24,8 @@ public final class AiPluginOff implements AppLifecycleListener {
 
     @Override
     public void appFrameCreated(@NotNull List<String> commandLineArgs) {
+        // IntelliJ 에서는 JetBrains AI 가 정식 기능이므로 건드리지 않는다.
+        if (!MoaProduct.isMoa()) return;
         PropertiesComponent properties = PropertiesComponent.getInstance();
         if (properties.getBoolean(APPLIED_KEY)) return;
         properties.setValue(APPLIED_KEY, true);
