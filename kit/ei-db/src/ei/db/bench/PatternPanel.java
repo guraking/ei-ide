@@ -13,15 +13,10 @@ import ei.db.Meta;
 import ei.db.console.SqlParams;
 import org.jetbrains.annotations.NotNull;
 
-import javax.swing.DefaultComboBoxModel;
 import javax.swing.JComponent;
 import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
-import javax.swing.SwingUtilities;
-import javax.swing.event.PopupMenuEvent;
-import javax.swing.event.PopupMenuListener;
-import java.awt.event.ItemEvent;
 import javax.swing.Timer;
 import javax.swing.event.DocumentEvent;
 import java.awt.BorderLayout;
@@ -30,18 +25,16 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.function.Supplier;
 
 /**
  * 「목적으로 만들기」 탭: 무늬를 고르면 그 무늬에 필요한 칸만 그 일에 맞는 이름으로 보이고, 칸을 채우는 대로 바로 아래 SQL 칸에 문장이 나온다.
- * 칸은 모두 줄 폭을 다 채우는 고칠 수 있는 목록 상자다. 표 칸은 표 목록, 칼럼 칸은 그 표의 칼럼 목록을 펼치고,
- * 치는 글을 담은 항목만 남긴다. 여러 칼럼 칸(KEYS · COLS)은 마지막 쉼표 뒤 글로 거르고, 고르면 쉼표로 이어 붙인다.
+ * 칸은 모두 줄 폭을 다 채우는 고르는 글 칸(PickField)이다. 표 칸은 표 목록, 칼럼 칸은 그 표의 칼럼 목록을 펼친다.
  * 표 이름은 치다가 LOAD_DELAY_MS 동안 멈추면 그 표의 칼럼을 읽는다. 못 읽거나 칼럼이 없으면 표 칸 아래에 까닭을 보인다.
  */
 final class PatternPanel {
   private static final int LOAD_DELAY_MS = 500;
-  /** 표 목록 항목에서 이름과 설명 사이. 고르면 앞 이름만 넣는다. */
-  private static final String COMMENT_GAP = "  — ";
+  private static final String NO_TABLES = "테이블 목록을 아직 읽지 못했습니다. 위에서 접속을 확인하세요. 이름을 직접 쳐도 됩니다.";
+  private static final String NO_COLUMNS = "칼럼 목록이 없습니다. 테이블을 먼저 고르세요. 이름을 직접 쳐도 됩니다.";
 
   private final Bench bench;
   private final JPanel form;
@@ -87,10 +80,11 @@ final class PatternPanel {
         c = t;
       } else {
         boolean table = f == Patterns.Field.TABLE || f == Patterns.Field.TABLE2;
-        PickBox box = new PickBox(f == Patterns.Field.KEYS || f == Patterns.Field.COLS, table ? () -> tableItems : () -> columnNames);
-        if (box.editor instanceof JBTextField jb) jb.getEmptyText().setText(Patterns.hint(f));
-        texts.put(f, box.editor);
-        c = full(box.box);
+        PickField pick = new PickField(f == Patterns.Field.KEYS || f == Patterns.Field.COLS, table ? () -> tableItems : () -> columnNames,
+            table ? NO_TABLES : NO_COLUMNS);
+        pick.field.getEmptyText().setText(Patterns.hint(f));
+        texts.put(f, pick.field);
+        c = pick.field;
       }
       JBLabel label = new JBLabel(f.label);
       labels.put(f, label);
@@ -125,7 +119,7 @@ final class PatternPanel {
     if (bench.config() != null) {
       bench.tables(all -> {
         tableItems.clear();
-        for (Meta.Table t : all) tableItems.add(t.comment().isEmpty() ? t.name() : t.name() + COMMENT_GAP + t.comment());
+        for (Meta.Table t : all) tableItems.add(t.comment().isEmpty() ? t.name() : t.name() + PickText.COMMENT_GAP + t.comment());
       });
     }
     loadColumns();
@@ -210,98 +204,6 @@ final class PatternPanel {
     List<String> notes = new ArrayList<>();
     if (!SqlParams.find(sql).isEmpty()) notes.add("값 자리(:이름 · #{이름})는 실행할 때 넣습니다.");
     bench.show(sql, notes);
-  }
-
-  /**
-   * 고칠 수 있는 목록 상자. 펼칠 때와 글을 칠 때 source 항목 중 치는 글(여러 값이면 마지막 쉼표 뒤)을 담은 것만 남긴다.
-   * 방향키로 움직여도 글은 바뀌지 않고(isTableCellEditor), Enter · 클릭으로 고를 때만 넣는다.
-   * 「이름  — 설명」 항목은 이름만 넣는다. 모델을 다시 채우는 동안(adjusting)에는 친 글 · 커서를 지킨다.
-   */
-  private static final class PickBox {
-    final ComboBox<String> box = new ComboBox<>();
-    final JTextField editor;
-    private final boolean many;
-    private final Supplier<List<String>> source;
-    private boolean adjusting;
-    /** 사용자가 마지막으로 친 글. 여러 값 칸에서 고른 항목을 이 글의 마지막 쉼표 뒤에 붙인다. */
-    private String typed = "";
-
-    PickBox(boolean many, Supplier<List<String>> source) {
-      this.many = many;
-      this.source = source;
-      box.setEditable(true);
-      box.putClientProperty("JComboBox.isTableCellEditor", Boolean.TRUE);
-      // shortcut: 테마를 바꾸면 상자가 글 칸을 새로 만들어 이 참조 · 감시가 끊긴다. 작업대를 다시 열면 된다.
-      editor = (JTextField) box.getEditor().getEditorComponent();
-      editor.getDocument().addDocumentListener(new DocumentAdapter() {
-        @Override
-        protected void textChanged(@NotNull DocumentEvent e) {
-          if (adjusting) return;
-          typed = editor.getText();
-          // 문서 알림 안에서는 글을 못 바꾸므로 거르기는 알림이 끝난 뒤에 한다.
-          SwingUtilities.invokeLater(() -> {
-            if (!editor.isFocusOwner()) return;
-            rebuild();
-            if (box.getItemCount() > 0) box.showPopup();
-            else box.hidePopup();
-          });
-        }
-      });
-      box.addPopupMenuListener(new PopupMenuListener() {
-        @Override
-        public void popupMenuWillBecomeVisible(PopupMenuEvent e) { if (!adjusting) rebuild(); }
-        @Override
-        public void popupMenuWillBecomeInvisible(PopupMenuEvent e) { }
-        @Override
-        public void popupMenuCanceled(PopupMenuEvent e) { }
-      });
-      box.addItemListener(e -> {
-        if (adjusting || e.getStateChange() != ItemEvent.SELECTED || e.getItem() == null) return;
-        String name = e.getItem().toString().split(COMMENT_GAP)[0].strip();
-        // 상자가 고른 항목으로 글을 덮은 뒤에 넣는다.
-        SwingUtilities.invokeLater(() -> put(name));
-      });
-    }
-
-    private void put(String name) {
-      String text = many ? head(typed) + name : name;
-      adjusting = true;
-      try {
-        editor.setText(text);
-        editor.setCaretPosition(text.length());
-      } finally {
-        adjusting = false;
-      }
-      typed = text;
-      box.hidePopup();
-    }
-
-    private void rebuild() {
-      String keep = editor.getText();
-      int caret = editor.getCaretPosition();
-      String needle = (many ? tail(typed) : typed).strip().toLowerCase(Locale.ROOT);
-      adjusting = true;
-      try {
-        DefaultComboBoxModel<String> model = (DefaultComboBoxModel<String>) box.getModel();
-        model.removeAllElements();
-        for (String item : source.get()) if (item.toLowerCase(Locale.ROOT).contains(needle)) model.addElement(item);
-        model.setSelectedItem(null);
-        editor.setText(keep);
-        editor.setCaretPosition(Math.min(caret, keep.length()));
-      } finally {
-        adjusting = false;
-      }
-    }
-
-    /** 마지막 쉼표까지(쉼표 뒤 한 칸 포함). 쉼표가 없으면 빈 글. */
-    private static String head(String text) {
-      int comma = text.lastIndexOf(',');
-      return comma < 0 ? "" : text.substring(0, comma + 1) + " ";
-    }
-
-    private static String tail(String text) {
-      return text.substring(text.lastIndexOf(',') + 1);
-    }
   }
 
   /** 상자를 그 줄 폭에 맞게 늘린다(FormBuilder 는 상자를 원래 폭으로 둔다). */

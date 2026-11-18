@@ -151,6 +151,32 @@ public class QueryBenchCheck {
         yes(sql.startsWith("--") && !sql.contains("null"), k + "\n" + sql);
       }
     }
+    yes(Patterns.render(Patterns.Kind.TOP_N, fill(DbKind.ORACLE)).contains("FETCH FIRST 10 ROWS ONLY") && Patterns.render(Patterns.Kind.TOP_N, fill(DbKind.MYSQL)).endsWith("LIMIT 10"), "top n");
+    yes(Patterns.render(Patterns.Kind.PERIOD, fill(DbKind.ORACLE)).contains("< TO_DATE(:toDt, 'YYYY-MM-DD') + 1"), "period");
+    yes(Patterns.render(Patterns.Kind.JOIN_LOOKUP, fill(DbKind.ORACLE)).contains("o.CUST_ID = ob.CUST_ID(+)") && Patterns.render(Patterns.Kind.JOIN_LOOKUP, fill(DbKind.POSTGRES)).contains("LEFT OUTER JOIN ORDERS_BAK ob"), "join lookup");
+    yes(Patterns.render(Patterns.Kind.DELETE_DUP, fill(DbKind.ORACLE)).contains("ROWID IN") && Patterns.render(Patterns.Kind.DELETE_DUP, fill(DbKind.POSTGRES)).contains("CTID IN")
+        && Patterns.render(Patterns.Kind.DELETE_DUP, fill(DbKind.MYSQL)).contains("o.order_dt < b.order_dt"), "delete dup");
+    yes(Patterns.render(Patterns.Kind.UPDATE_FROM, fill(DbKind.ORACLE)).contains("MERGE INTO ORDERS o") && Patterns.render(Patterns.Kind.UPDATE_FROM, fill(DbKind.MYSQL)).contains("INNER JOIN orders_bak ob"), "update from");
+    yes(Patterns.render(Patterns.Kind.UPDATE_ROW, fill(DbKind.POSTGRES)).endsWith("WHERE CUST_ID = :custId") && Patterns.render(Patterns.Kind.DELETE_ROW, fill(DbKind.POSTGRES)).contains("WHERE CUST_ID = :custId"), "update · delete 는 조건이 붙는다");
+    // 꼭 채워야 하는 칸만 채워도(비워도 되는 칸은 빈 채로) 문장이 나온다.
+    for (DbKind kind : DbKind.values()) {
+      for (Patterns.Kind k : Patterns.Kind.values()) {
+        Patterns.Fill full = fill(kind);
+        Patterns.Fill empty = new Patterns.Fill(kind, full.style(), full.bind(), "", "", List.of(), List.of(), "", "", "", "", "", List.of());
+        List<Patterns.Field> need = Patterns.missing(k, empty);
+        Patterns.Fill only = new Patterns.Fill(kind, full.style(), full.bind(), full.table(), need.contains(Patterns.Field.TABLE2) ? full.table2() : "",
+            need.contains(Patterns.Field.KEYS) ? full.keys() : List.of(), need.contains(Patterns.Field.COLS) ? full.cols() : List.of(),
+            need.contains(Patterns.Field.GROUP) ? full.group() : "", need.contains(Patterns.Field.VALUE) ? full.value() : "",
+            need.contains(Patterns.Field.ORDER) ? full.order() : "", need.contains(Patterns.Field.PARENT) ? full.parent() : "",
+            need.contains(Patterns.Field.STATUS) ? full.status() : "", need.contains(Patterns.Field.STATUS_VALUES) ? full.statusValues() : List.of());
+        yes(Patterns.missing(k, only).isEmpty() && !Patterns.render(k, only).contains("null"), "꼭 필요한 칸만: " + kind + " " + k);
+      }
+    }
+    List<String> items = List.of("ORDERS" + PickText.COMMENT_GAP + "주문", "ORDER_ITEM", "CUSTOMER");
+    yes(PickText.filter(items, "ord", false, false).size() == 2 && PickText.filter(items, "주문", false, false).size() == 1 && PickText.filter(items, "zz", false, false).isEmpty(), "pick filter");
+    yes(PickText.filter(items, "PART, cu", true, false).equals(List.of("CUSTOMER")) && PickText.filter(items, "ORDERS", false, true).size() == 3, "pick filter many · all");
+    yes(PickText.picked("ord", items.get(0), false, false).equals("ORDERS") && PickText.picked("A, cu", "CUSTOMER", true, false).equals("A, CUSTOMER"), "pick put");
+    yes(PickText.picked("A", "CUSTOMER", true, true).equals("A, CUSTOMER") && PickText.picked("A, ", "CUSTOMER", true, true).equals("A, CUSTOMER") && PickText.picked("", "CUSTOMER", true, true).equals("CUSTOMER"), "pick append");
     String dup = Patterns.render(Patterns.Kind.DUPLICATES, fill(DbKind.ORACLE));
     yes(dup.contains("HAVING COUNT(*) > 1") && dup.contains("GROUP BY\n       CUST_ID\n"), dup);
     yes(Patterns.render(Patterns.Kind.HIERARCHY, fill(DbKind.POSTGRES)).startsWith("-- 계층") && Patterns.render(Patterns.Kind.HIERARCHY, fill(DbKind.POSTGRES)).contains("WITH RECURSIVE"), "hier");
