@@ -773,7 +773,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
             if (!switchedRoots.contains(repo.root())) same.add(repo);
           }
           recompare(same, false, true);
-          if (!switchedRoots.isEmpty()) debounce.restart();
+          if (!switchedRoots.isEmpty() || refreshAgain || !queuedRepos.isEmpty()) debounce.restart();
         }
       }
     });
@@ -1677,6 +1677,28 @@ final class SyncPanel extends SimpleToolWindowPanel {
       stale = true;
       pendingRoots.clear();
       pendingPaths.clear();
+      return;
+    }
+    // 작업이 끝나길 기다리던 새로고침(refresh · refreshRepo). 전체 새로고침은 모든 저장소를 다시 읽으므로 모아 둔 알림 · 저장소 하나 새로고침은 버린다.
+    // 작업이 하나라도 도는 동안은 기다린다. 하나씩 꺼내고, 나머지는 그 새로고침이 끝날 때 endBusy 가 꺼낸다.
+    if (refreshAgain || !queuedRepos.isEmpty()) {
+      if (anyChanging()) {
+        debounce.restart();
+        return;
+      }
+      if (refreshAgain) {
+        refreshAgain = false;
+        queuedRepos.clear();
+        pendingRoots.clear();
+        pendingPaths.clear();
+        switchedRoots.clear();
+        refresh(refreshAgainAuto);
+        return;
+      }
+      Iterator<Map.Entry<File, Queued>> waiting = queuedRepos.entrySet().iterator();
+      Map.Entry<File, Queued> queued = waiting.next();
+      waiting.remove();
+      refreshRepo(queued.getKey(), queued.getValue().vcs(), queued.getValue().fetch());
       return;
     }
     // 작업본을 바꾸는 중인 저장소는 남겨 두고 끝난 뒤 정보부터 읽는다. 도중에 읽으면 Merge Branches 가 잠깐 옮겨 간 브랜치의 목록이 보였다 사라진다.
@@ -2693,9 +2715,15 @@ final class SyncPanel extends SimpleToolWindowPanel {
    */
   private void refresh(boolean auto) {
     // 새로고침 · 받기가 도는 동안 또 부르면(프로젝트 트리에서 창 열기 등) 끝난 뒤 한 번 한다. 같은 저장소 fetch 가 겹치지 않게 한다.
-    if (busy || pulling > 0) {
+    // 작업본을 바꾸는 중인 저장소가 있으면(Merge Branches · 체크아웃 등) 끝난 뒤 한다(recomparePending). 도중에 읽으면 파일이 잠깐 보였다 사라진다.
+    boolean changingNow = !busy && pulling == 0 && anyChanging();
+    if (busy || pulling > 0 || changingNow) {
       refreshAgainAuto = refreshAgain ? refreshAgainAuto && auto : auto;
       refreshAgain = true;
+      if (changingNow) {
+        showStatus(SyncBundle.message("sync.wait.work"));
+        debounce.restart();
+      }
       return;
     }
     List<Map.Entry<File, Vcs>> roots = vcsRoots();
@@ -2874,10 +2902,16 @@ final class SyncPanel extends SimpleToolWindowPanel {
 
   /** refreshRepo 와 같고, fetch 가 거짓이면 서버에 묻지 않는다(Git 은 받아 둔 원격 추적 브랜치, SVN 은 마지막 서버 확인 결과로 비교). */
   private void refreshRepo(File root, Vcs vcs, boolean fetch) {
-    if (busy || pulling > 0) {
+    // 작업본을 바꾸는 중인 저장소는 끝난 뒤 한다(recomparePending 이 기다린 것을 꺼낸다).
+    boolean changingNow = !busy && pulling == 0 && changing(root);
+    if (busy || pulling > 0 || changingNow) {
       // 같은 저장소가 이미 기다리면 한 번만 하고, 둘 중 하나라도 서버에 물어야 하면 묻는다.
       Queued before = queuedRepos.get(root);
       queuedRepos.put(root, new Queued(vcs, fetch || (before != null && before.fetch())));
+      if (changingNow) {
+        showStatus(SyncBundle.message("sync.wait.work"));
+        debounce.restart();
+      }
       return;
     }
     String name = root.getName();
