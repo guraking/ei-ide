@@ -185,6 +185,34 @@ public class QueryBenchCheck {
     yes(Patterns.render(Patterns.Kind.NOT_IN_LIST, fill(DbKind.ORACLE)).contains("NOT IN ('R', '진행')") && Patterns.render(Patterns.Kind.NOT_IN_LIST, fill(DbKind.ORACLE)).contains("IS NULL"), "not in");
     yes(Patterns.render(Patterns.Kind.TODAY, fill(DbKind.ORACLE)).contains("< TRUNC(SYSDATE) + 1") && Patterns.render(Patterns.Kind.RECENT_DAYS, fill(DbKind.POSTGRES)).contains(">= CURRENT_DATE - 7"), "today · recent");
     yes(Patterns.render(Patterns.Kind.DELETE_OLD, fill(DbKind.ORACLE)).contains("WHERE ORDER_DT < TO_DATE(:beforeDt") && Patterns.render(Patterns.Kind.DELETE_NOT_IN, fill(DbKind.ORACLE)).contains("WHERE ob.CUST_ID = ORDERS.CUST_ID"), "delete 는 조건이 붙는다");
+    yes(Patterns.from(Patterns.Kind.SET_MINUS, Patterns.Field.COLS) == Patterns.From.BOTH && Patterns.from(Patterns.Kind.EXISTS, Patterns.Field.KEYS) == Patterns.From.BOTH
+        && Patterns.from(Patterns.Kind.JOIN_LOOKUP, Patterns.Field.COLS) == Patterns.From.SECOND && Patterns.from(Patterns.Kind.JOIN_LOOKUP, Patterns.Field.KEYS) == Patterns.From.BOTH
+        && Patterns.from(Patterns.Kind.LIST, Patterns.Field.COLS) == Patterns.From.FIRST && Patterns.from(Patterns.Kind.PARENT_COLS, Patterns.Field.COLS) == Patterns.From.FIRST, "칼럼 목록의 테이블");
+    yes(Patterns.typeOf("VARCHAR2(100)") == Patterns.Type.TEXT && Patterns.typeOf("timestamp") == Patterns.Type.DATE && Patterns.typeOf("int4") == Patterns.Type.NUMBER
+        && Patterns.typeOf("NUMBER(12,2)") == Patterns.Type.NUMBER && Patterns.typeOf("bool") == Patterns.Type.ANY && Patterns.typeOf("bpchar") == Patterns.Type.TEXT, "형 갈래");
+    yes(Patterns.single(Patterns.Kind.HIERARCHY, Patterns.Field.KEYS) && Patterns.single(Patterns.Kind.LEAF, Patterns.Field.KEYS) && !Patterns.single(Patterns.Kind.DUPLICATES, Patterns.Field.KEYS), "하나만 받는 칸");
+    java.util.Map<String, String> t1 = java.util.Map.of("CUST_ID", "NUMBER", "AMOUNT", "NUMBER(12,2)", "STATUS", "VARCHAR2(10)", "ORDER_DT", "DATE", "YMD", "VARCHAR2(8)", "PARENT_ID", "NUMBER");
+    java.util.Map<String, String> t2 = java.util.Map.of("CUST_ID", "VARCHAR2(20)", "STATUS", "VARCHAR2(10)");
+    java.util.Map<String, String> none = java.util.Map.of();
+    for (Patterns.Kind k : Patterns.Kind.values()) {
+      if (Patterns.need(k, Patterns.Field.COLS) != Patterns.Type.TEXT && Patterns.need(k, Patterns.Field.VALUE) != Patterns.Type.TEXT) {
+        yes(Patterns.warnings(k, fill(DbKind.ORACLE), t1, none).isEmpty(), "맞는 칼럼이면 알림 없음: " + k + " " + Patterns.warnings(k, fill(DbKind.ORACLE), t1, none));
+      }
+      yes(Patterns.warnings(k, fill(DbKind.ORACLE), none, none).isEmpty(), "칼럼을 못 읽었으면 따지지 않음: " + k);
+    }
+    List<String> setWarn = Patterns.warnings(Patterns.Kind.SET_MINUS, fill(DbKind.ORACLE), t1, t2);
+    yes(setWarn.size() == 1 && setWarn.get(0).contains("amount") && setWarn.get(0).contains("orders_bak 에 없는"), "둘째 테이블에 없는 칼럼: " + setWarn);
+    List<String> typeWarn = Patterns.warnings(Patterns.Kind.EXISTS, fill(DbKind.ORACLE), t1, t2);
+    yes(typeWarn.size() == 1 && typeWarn.get(0).contains("형이 두 테이블에서 다릅니다"), "두 테이블 형 다름: " + typeWarn);
+    Patterns.Fill ymd = new Patterns.Fill(DbKind.ORACLE, QueryBuilder.JoinStyle.OLD, QueryBuilder.Bind.COLON, "orders", "", List.of("cust_id", "amount"), List.of("nope"), "status", "status", "ymd", "parent_id", "status", List.of("R"));
+    yes(Patterns.warnings(Patterns.Kind.TODAY, ymd, t1, none).toString().contains("날짜 형이 아닙니다(VARCHAR2(8))"), "날짜 형 아님");
+    yes(Patterns.warnings(Patterns.Kind.SUM_BY, ymd, t1, none).toString().contains("숫자 형이 아닙니다"), "숫자 형 아님");
+    yes(Patterns.warnings(Patterns.Kind.LIST, ymd, t1, none).toString().contains("nope 는 orders 에 없는 칼럼"), "없는 칼럼");
+    yes(Patterns.warnings(Patterns.Kind.HIERARCHY, ymd, t1, none).toString().contains("칼럼 하나만 씁니다"), "하나만");
+    yes(Patterns.warnings(Patterns.Kind.JOIN_LOOKUP, fill(DbKind.ORACLE), t1, java.util.Map.of("CUST_ID", "NUMBER", "NAME", "VARCHAR2(10)")).toString().contains("amount 는 orders_bak 에 없는"), "조인으로 붙일 칼럼은 둘째 테이블 것");
+    Patterns.Fill same = new Patterns.Fill(DbKind.ORACLE, QueryBuilder.JoinStyle.OLD, QueryBuilder.Bind.COLON, "orders", "orders_bak", List.of("cust_id"), List.of("CUST_ID", "amount"), "", "", "", "", "", List.of());
+    yes(Patterns.warnings(Patterns.Kind.UPSERT, same, none, none).size() == 1 && Patterns.warnings(Patterns.Kind.JOIN_LOOKUP, same, none, none).isEmpty(), "기준 칼럼과 겹침");
+    yes(!Patterns.render(Patterns.Kind.INSERT_MISSING, same).contains("(CUST_ID, CUST_ID"), "없는 것만 넣기는 겹친 칼럼을 한 번만");
     Patterns.Fill two = new Patterns.Fill(DbKind.ORACLE, QueryBuilder.JoinStyle.OLD, QueryBuilder.Bind.COLON, "orders", "", List.of(), List.of(), "status, cust_id", "amount", "", "", "", List.of());
     yes(Patterns.render(Patterns.Kind.COUNT_BY, two).contains("GROUP BY\n       o.STATUS\n     , o.CUST_ID") && Patterns.render(Patterns.Kind.SUM_BY, two).contains("o.STATUS\n     , o.CUST_ID\n     , COUNT(*) AS CNT"), "묶을 칼럼 여러 개");
     String dup = Patterns.render(Patterns.Kind.DUPLICATES, fill(DbKind.ORACLE));

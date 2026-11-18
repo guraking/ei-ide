@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -30,99 +31,102 @@ public final class Patterns {
 
   /** 무늬 하나. */
   public enum Kind {
-    LIST("칼럼 골라 조회", "고른 칼럼만 최신 순으로 봅니다.", EnumSet.of(Field.TABLE, Field.COLS, Field.ORDER)),
-    PERIOD("날짜 구간 조회", "시작일부터 끝일까지(끝일 하루 전체 포함) 들어온 행을 봅니다.", EnumSet.of(Field.TABLE, Field.ORDER)),
-    TOP_N("최신 10건만", "순서 칼럼이 큰(최신) 순으로 앞 10건만 봅니다.", EnumSet.of(Field.TABLE, Field.ORDER)),
-    PAGING("페이지 나누기", "화면 목록처럼 몇 번째부터 몇 건을 잘라 봅니다(건너뛸 건수 · 한 쪽 건수는 값 자리).", EnumSet.of(Field.TABLE, Field.ORDER)),
-    COUNT_BY("그룹별 건수", "묶을 칼럼 값마다 몇 건인지 많은 순으로 봅니다.", EnumSet.of(Field.TABLE, Field.GROUP)),
-    SUM_BY("그룹별 합계 · 평균 · 최대 · 최소", "묶을 칼럼 값마다 값 칼럼의 건수 · 합계 · 평균 · 최대 · 최소를 봅니다.", EnumSet.of(Field.TABLE, Field.GROUP, Field.VALUE)),
-    RATIO("그룹별 비율 (%)", "묶을 칼럼 값마다 건수와 전체 중 비율을 봅니다.", EnumSet.of(Field.TABLE, Field.GROUP)),
-    MONTHLY("월별 건수 · 합계", "날짜 칼럼을 달로 묶어 달마다 건수(값 칼럼을 넣으면 합계도)를 봅니다.", EnumSet.of(Field.TABLE, Field.ORDER, Field.VALUE)),
-    MIN_MAX("칼럼 값 훑어보기", "한 칼럼의 전체 건수 · 채워진 건수 · 서로 다른 값 수 · 최소 · 최대를 한 줄로 봅니다.", EnumSet.of(Field.TABLE, Field.VALUE)),
-    NULL_ROWS("빈 값(NULL)인 행 찾기", "고른 칼럼 중 하나라도 비어 있는 행을 봅니다.", EnumSet.of(Field.TABLE, Field.COLS)),
-    NULL_COUNT("칼럼별 빈 값 수", "고른 칼럼마다 비어 있는 행이 몇 건인지 한 줄로 봅니다.", EnumSet.of(Field.TABLE, Field.COLS)),
-    COUNT_ALL("전체 건수", "테이블에 행이 모두 몇 건인지 봅니다.", EnumSet.of(Field.TABLE)),
-    SAMPLE("아무거나 10건 보기", "어떤 값이 들어 있는지 앞에서 10건만 봅니다.", EnumSet.of(Field.TABLE)),
-    DISTINCT("서로 다른 값만 보기 (DISTINCT)", "고른 칼럼의 값을 겹치지 않게 한 번씩만 봅니다.", EnumSet.of(Field.TABLE, Field.COLS)),
-    COUNT_DISTINCT("칼럼별 서로 다른 값 수", "고른 칼럼마다 값의 종류가 몇 가지인지 한 줄로 봅니다.", EnumSet.of(Field.TABLE, Field.COLS)),
-    KEYWORD("글자가 들어간 행 찾기 (LIKE)", "고른 칼럼 중 하나에라도 찾는 글자가 들어 있는 행을 봅니다(찾는 글자는 값 자리).", EnumSet.of(Field.TABLE, Field.COLS)),
-    IN_LIST("여러 값 중 하나인 행 (IN)", "칼럼 값이 적어 준 값들 중 하나인 행을 봅니다.", EnumSet.of(Field.TABLE, Field.STATUS, Field.STATUS_VALUES)),
-    NOT_IN_LIST("여러 값이 아닌 행 (NOT IN)", "칼럼 값이 적어 준 값들에 들지 않는 행을 봅니다(빈 값도 함께).", EnumSet.of(Field.TABLE, Field.STATUS, Field.STATUS_VALUES)),
-    RANGE("값 범위로 찾기 (BETWEEN)", "칼럼 값이 최소부터 최대 사이인 행을 봅니다(최소 · 최대는 값 자리).", EnumSet.of(Field.TABLE, Field.VALUE)),
-    TODAY("오늘 들어온 행", "날짜 칼럼이 오늘인 행을 봅니다.", EnumSet.of(Field.TABLE, Field.ORDER)),
-    RECENT_DAYS("최근 7일", "날짜 칼럼이 7일 전부터 지금까지인 행을 최신 순으로 봅니다.", EnumSet.of(Field.TABLE, Field.ORDER)),
-    THIS_MONTH("이번 달", "날짜 칼럼이 이번 달 1일부터 말일까지인 행을 봅니다.", EnumSet.of(Field.TABLE, Field.ORDER)),
-    DAILY("일별 건수 · 합계", "날짜 칼럼을 날로 묶어 날마다 건수(값 칼럼을 넣으면 합계도)를 봅니다.", EnumSet.of(Field.TABLE, Field.ORDER, Field.VALUE)),
-    YEARLY("연도별 건수 · 합계", "날짜 칼럼을 해로 묶어 해마다 건수(값 칼럼을 넣으면 합계도)를 봅니다.", EnumSet.of(Field.TABLE, Field.ORDER, Field.VALUE)),
-    HAVING_MIN("N건 이상인 그룹만 (HAVING)", "묶을 칼럼 값마다 세어 건수가 기준 이상인 것만 봅니다(기준은 값 자리).", EnumSet.of(Field.TABLE, Field.GROUP)),
-    ROLLUP("소계 · 합계 붙이기 (ROLLUP)", "묶을 칼럼 값마다의 건수 · 합계 아래에 소계와 전체 합계 줄을 붙입니다.", EnumSet.of(Field.TABLE, Field.GROUP, Field.VALUE)),
-    FIRST_LAST("그룹별 처음 · 마지막 날짜", "묶을 칼럼 값마다 가장 이른 날짜 · 가장 늦은 날짜 · 건수를 봅니다.", EnumSet.of(Field.TABLE, Field.GROUP, Field.ORDER)),
-    KEEP_LAST("그룹별 가장 최근 값 한 칸", "묶을 칼럼 값마다 날짜가 가장 늦은 행의 값을 한 칸으로 봅니다.", EnumSet.of(Field.TABLE, Field.GROUP, Field.VALUE, Field.ORDER)),
-    MAX_ROW("값이 가장 큰 행", "칼럼 값이 테이블에서 가장 큰 행을 봅니다(같은 값이면 모두).", EnumSet.of(Field.TABLE, Field.VALUE)),
-    ABOVE_AVG("평균보다 큰 행", "칼럼 값이 전체 평균보다 큰 행을 큰 순으로 봅니다.", EnumSet.of(Field.TABLE, Field.VALUE)),
-    LENGTHS("글자 수 훑어보기", "칼럼 값의 가장 짧은 · 가장 긴 · 평균 글자 수를 봅니다.", EnumSet.of(Field.TABLE, Field.VALUE)),
-    TRIM_CHECK("앞뒤 공백이 붙은 값 찾기", "고른 칼럼 값의 앞이나 뒤에 빈칸이 붙어 있는 행을 봅니다.", EnumSet.of(Field.TABLE, Field.COLS)),
-    DUPLICATES("중복 찾기", "기준 칼럼 값이 같은 행이 2건 이상인 값과 건수를 봅니다.", EnumSet.of(Field.TABLE, Field.KEYS)),
-    DUPLICATE_ROWS("중복 행 전체 보기", "중복된 행을 지우기 전에 한 줄씩 다 봅니다. 같은 값끼리 순번(RN)을 매겨 2 이상이 지울 대상입니다.", EnumSet.of(Field.TABLE, Field.KEYS, Field.ORDER)),
-    LATEST("그룹별 최신 1건", "기준 칼럼마다 순서 칼럼이 가장 큰(최신) 행 하나만 봅니다.", EnumSet.of(Field.TABLE, Field.KEYS, Field.ORDER)),
-    EXISTS("있는지 확인 (EXISTS)", "다른 테이블에 짝이 있는 행만 봅니다. 짝이 여러 개여도 한 번만 나옵니다(JOIN 과 달리 늘어나지 않음).", EnumSet.of(Field.TABLE, Field.TABLE2, Field.KEYS)),
-    NOT_EXISTS("없는 것 찾기 (NOT EXISTS)", "다른 테이블에 짝이 없는 행만 봅니다. NOT IN 과 달리 NULL 이 있어도 맞게 나옵니다.", EnumSet.of(Field.TABLE, Field.TABLE2, Field.KEYS)),
-    CTE("WITH 로 나눠 쓰기", "긴 쿼리를 이름 붙인 단계(base → summary)로 나눕니다. 단계마다 따로 실행해 볼 수 있습니다(도구 → 조각 실행).", EnumSet.of(Field.TABLE, Field.GROUP)),
-    HIERARCHY("계층 (부모-자식) 조회", "메뉴 · 조직 · 부품 구성처럼 부모를 가리키는 칼럼으로 위에서 아래로 펼칩니다.", EnumSet.of(Field.TABLE, Field.KEYS, Field.PARENT)),
-    RANK("누적 합 · 순위", "줄마다 앞에서부터 쌓인 합과 값 순위를 붙입니다(행 수는 그대로).", EnumSet.of(Field.TABLE, Field.VALUE, Field.ORDER)),
-    DIFF("두 테이블 차이 비교", "두 테이블의 기준 칼럼 값 중 한쪽에만 있는 것을 봅니다(이관 · 백업 비교).", EnumSet.of(Field.TABLE, Field.TABLE2, Field.KEYS)),
-    PIVOT("세로 → 가로 바꾸기", "상태 값마다 칸을 하나씩 만들어 한 줄에 놓습니다.", EnumSet.of(Field.TABLE, Field.GROUP, Field.STATUS, Field.STATUS_VALUES, Field.VALUE)),
-    TOP_PER_GROUP("그룹별 최신 3건", "기준 칼럼마다 순서 칼럼이 큰(최신) 순으로 3건씩 봅니다.", EnumSet.of(Field.TABLE, Field.KEYS, Field.ORDER)),
-    PREV_DIFF("앞 줄과 차이", "순서대로 놓고 줄마다 바로 앞 줄 값과 그 차이를 붙입니다.", EnumSet.of(Field.TABLE, Field.VALUE, Field.ORDER)),
-    LIST_AGG("여러 줄을 한 칸에 합치기", "묶을 칼럼 값마다 값 칼럼을 쉼표로 이어 한 칸에 놓습니다.", EnumSet.of(Field.TABLE, Field.GROUP, Field.VALUE)),
-    JOIN_LOOKUP("다른 테이블 칼럼 붙이기 (조인)", "기준 칼럼으로 다른 테이블을 이어 그 테이블의 칼럼을 옆에 붙입니다. 짝이 없어도 줄은 남습니다.", EnumSet.of(Field.TABLE, Field.TABLE2, Field.KEYS, Field.COLS)),
-    GROUP_MAX_ROW("그룹별 값이 가장 큰 행", "기준 칼럼마다 값 칼럼이 가장 큰 행을 하나씩 봅니다.", EnumSet.of(Field.TABLE, Field.KEYS, Field.VALUE)),
-    ROW_NUM("줄 번호 붙이기 (ROW_NUMBER)", "순서대로 놓고 줄마다 1부터 번호를 붙입니다.", EnumSet.of(Field.TABLE, Field.ORDER)),
-    RUNNING_BY_GROUP("그룹별 누적 합", "기준 칼럼마다 따로, 순서대로 쌓인 합을 줄마다 붙입니다.", EnumSet.of(Field.TABLE, Field.KEYS, Field.VALUE, Field.ORDER)),
-    RANK_BY_GROUP("그룹 안 순위", "기준 칼럼마다 따로, 값이 큰 순위를 줄마다 붙입니다.", EnumSet.of(Field.TABLE, Field.KEYS, Field.VALUE)),
-    SHARE_IN_GROUP("그룹 안 비중 (%)", "줄마다 그 값이 자기 그룹 합계에서 차지하는 비율을 붙입니다.", EnumSet.of(Field.TABLE, Field.KEYS, Field.VALUE)),
-    FIRST_VALUE("그룹의 첫 값 붙이기", "기준 칼럼마다 순서상 첫 줄의 값을 그 그룹의 모든 줄에 붙입니다.", EnumSet.of(Field.TABLE, Field.KEYS, Field.VALUE, Field.ORDER)),
-    NEXT_ROW("다음 줄 값 붙이기 (LEAD)", "순서대로 놓고 줄마다 바로 다음 줄의 값을 붙입니다.", EnumSet.of(Field.TABLE, Field.VALUE, Field.ORDER)),
-    MOVING_AVG("이동 평균 (최근 3줄)", "순서대로 놓고 줄마다 자기와 앞 두 줄의 평균을 붙입니다.", EnumSet.of(Field.TABLE, Field.VALUE, Field.ORDER)),
-    NTILE("4등분 (상위 25% 찾기)", "값이 큰 순으로 네 묶음으로 나눠 줄마다 몇 번째 묶음인지 붙입니다.", EnumSet.of(Field.TABLE, Field.VALUE)),
-    GAP("빠진 번호 찾기", "번호 칼럼에서 이어지지 않고 건너뛴 구간을 봅니다.", EnumSet.of(Field.TABLE, Field.VALUE)),
-    CASE_LABEL("코드 값에 이름 붙이기 (CASE)", "칼럼 값마다 보여 줄 이름을 붙인 칸을 더합니다(이름은 만든 문장에서 고쳐 씁니다).", EnumSet.of(Field.TABLE, Field.STATUS, Field.STATUS_VALUES)),
-    STATUS_ROW("값별 건수를 한 줄에", "전체 건수와 적어 준 값마다의 건수를 한 줄로 봅니다.", EnumSet.of(Field.TABLE, Field.STATUS, Field.STATUS_VALUES)),
-    JOIN_INNER("두 테이블 모두에 있는 것만 (INNER JOIN)", "기준 칼럼이 두 테이블에 모두 있는 행만, 다른 테이블 칼럼을 옆에 붙여 봅니다.", EnumSet.of(Field.TABLE, Field.TABLE2, Field.KEYS, Field.COLS)),
-    FULL_JOIN("양쪽 다 보기 (FULL OUTER JOIN)", "기준 칼럼을 두 테이블에서 나란히 놓아, 한쪽에만 있는 것은 반대쪽이 비어 보이게 합니다.", EnumSet.of(Field.TABLE, Field.TABLE2, Field.KEYS)),
-    IN_SUBQUERY("다른 테이블에 있는 값만 (IN 서브쿼리)", "기준 칼럼 값이 다른 테이블에도 있는 행을 봅니다.", EnumSet.of(Field.TABLE, Field.TABLE2, Field.KEYS)),
-    JOIN_COUNT("다른 테이블 건수 붙이기", "줄마다 다른 테이블에 같은 기준 칼럼을 가진 행이 몇 건인지 붙입니다.", EnumSet.of(Field.TABLE, Field.TABLE2, Field.KEYS)),
-    COMPARE_VALUES("두 테이블 값이 다른 행", "기준 칼럼이 같은데 고른 칼럼 값이 서로 다른 행을 나란히 봅니다.", EnumSet.of(Field.TABLE, Field.TABLE2, Field.KEYS, Field.COLS)),
-    SET_MINUS("집합: 이 테이블에만 있는 값 (MINUS)", "고른 칼럼 값 묶음 중 이 테이블에는 있고 다른 테이블에는 없는 것을 봅니다.", EnumSet.of(Field.TABLE, Field.TABLE2, Field.COLS)),
-    SET_INTERSECT("집합: 두 테이블에 모두 있는 값 (INTERSECT)", "고른 칼럼 값 묶음 중 두 테이블에 모두 있는 것을 봅니다.", EnumSet.of(Field.TABLE, Field.TABLE2, Field.COLS)),
-    SET_UNION("집합: 겹치는 것 빼고 합치기 (UNION)", "두 테이블의 고른 칼럼을 합치되 같은 값은 한 번만 봅니다.", EnumSet.of(Field.TABLE, Field.TABLE2, Field.COLS)),
-    UNION_ALL("집합: 그대로 이어 붙이기 (UNION ALL)", "두 테이블의 같은 칼럼을 위아래로 이어 봅니다(어느 테이블인지 칸이 붙습니다).", EnumSet.of(Field.TABLE, Field.TABLE2, Field.COLS)),
-    COUNT_COMPARE("두 테이블 건수 비교", "두 테이블의 전체 건수를 나란히 봅니다.", EnumSet.of(Field.TABLE, Field.TABLE2)),
-    PARENT_COLS("부모 행의 칼럼 붙이기 (셀프 조인)", "같은 테이블에서 부모 행을 찾아 그 칼럼을 옆에 붙입니다.", EnumSet.of(Field.TABLE, Field.KEYS, Field.PARENT, Field.COLS)),
-    LEAF("자식이 없는 행 (맨 끝)", "자기를 부모로 둔 행이 하나도 없는 행을 봅니다.", EnumSet.of(Field.TABLE, Field.KEYS, Field.PARENT)),
-    ORPHAN("부모가 없는 행 (끊긴 것)", "부모 ID 가 적혀 있는데 그 부모 행이 없는 행을 봅니다.", EnumSet.of(Field.TABLE, Field.KEYS, Field.PARENT)),
-    CHILD_COUNT("자식 수 붙이기", "줄마다 자기를 부모로 둔 행이 몇 건인지 붙입니다.", EnumSet.of(Field.TABLE, Field.KEYS, Field.PARENT)),
-    INSERT_ROW("한 줄 넣기 (INSERT)", "고른 칼럼에 값을 넣는 INSERT 문을 만듭니다(값은 값 자리).", EnumSet.of(Field.TABLE, Field.COLS)),
-    UPDATE_ROW("조건으로 수정 (UPDATE)", "찾을 칼럼이 맞는 행의 칼럼을 고칩니다(값은 값 자리).", EnumSet.of(Field.TABLE, Field.KEYS, Field.COLS)),
-    DELETE_ROW("조건으로 삭제 (DELETE)", "찾을 칼럼이 맞는 행을 지웁니다(값은 값 자리).", EnumSet.of(Field.TABLE, Field.KEYS)),
-    DELETE_DUP("중복 지우기 (하나만 남김)", "기준 칼럼이 같은 행 중 순서 칼럼이 가장 큰 하나만 남기고 지웁니다. 먼저 「중복 행 전체 보기」 로 확인하세요.", EnumSet.of(Field.TABLE, Field.KEYS, Field.ORDER)),
-    UPDATE_FROM("다른 테이블 값으로 수정", "기준 칼럼이 같은 다른 테이블의 값으로 칼럼을 고칩니다.", EnumSet.of(Field.TABLE, Field.TABLE2, Field.KEYS, Field.COLS)),
-    INSERT_MISSING("다른 테이블에서 없는 것만 넣기", "다른 테이블의 행 중 이 테이블에 아직 없는 것만 넣습니다.", EnumSet.of(Field.TABLE, Field.TABLE2, Field.KEYS, Field.COLS)),
-    BACKUP("백업 테이블 만들기", "고치거나 지우기 전에 테이블을 통째로 _BAK 테이블로 복사해 둡니다.", EnumSet.of(Field.TABLE)),
-    UPDATE_NULL("빈 값 채우기 (UPDATE)", "고른 칼럼이 비어 있는 행만 값을 채웁니다(값은 값 자리).", EnumSet.of(Field.TABLE, Field.COLS)),
-    UPDATE_STATUS("상태 바꾸기 (UPDATE)", "찾을 칼럼이 맞는 행의 한 칼럼만 바꿉니다(값은 값 자리).", EnumSet.of(Field.TABLE, Field.KEYS, Field.STATUS)),
-    DELETE_OLD("오래된 행 지우기", "날짜 칼럼이 기준일보다 앞선 행을 지웁니다(기준일은 값 자리).", EnumSet.of(Field.TABLE, Field.ORDER)),
-    DELETE_NOT_IN("다른 테이블에 없는 행 지우기", "기준 칼럼이 다른 테이블에 없는 행을 지웁니다. 먼저 「없는 것 찾기」 로 확인하세요.", EnumSet.of(Field.TABLE, Field.TABLE2, Field.KEYS)),
-    INSERT_COPY("다른 테이블에서 옮겨 넣기 (INSERT SELECT)", "다른 테이블의 고른 칼럼을 통째로 이 테이블에 넣습니다.", EnumSet.of(Field.TABLE, Field.TABLE2, Field.COLS)),
-    COPY_STRUCT("빈 테이블로 복사 (구조만)", "칼럼 구조만 같은 빈 테이블을 _COPY 이름으로 만듭니다.", EnumSet.of(Field.TABLE)),
-    ADD_INDEX("인덱스 만들기", "자주 찾는 칼럼에 인덱스를 만듭니다.", EnumSet.of(Field.TABLE, Field.KEYS)),
-    UPSERT("있으면 수정, 없으면 넣기", "기준 칼럼으로 찾아 있으면 UPDATE, 없으면 INSERT 합니다(Oracle MERGE, PostgreSQL ON CONFLICT, MySQL ON DUPLICATE KEY).", EnumSet.of(Field.TABLE, Field.KEYS, Field.COLS));
+    COUNT_ALL("조회", "전체 건수", "테이블에 행이 모두 몇 건인지 봅니다.", EnumSet.of(Field.TABLE)),
+    SAMPLE("조회", "아무거나 10건 보기", "어떤 값이 들어 있는지 앞에서 10건만 봅니다.", EnumSet.of(Field.TABLE)),
+    LIST("조회", "칼럼 골라 조회", "고른 칼럼만 최신 순으로 봅니다.", EnumSet.of(Field.TABLE, Field.COLS, Field.ORDER)),
+    DISTINCT("조회", "서로 다른 값만 보기 (DISTINCT)", "고른 칼럼의 값을 겹치지 않게 한 번씩만 봅니다.", EnumSet.of(Field.TABLE, Field.COLS)),
+    TOP_N("조회", "최신 10건만", "순서 칼럼이 큰(최신) 순으로 앞 10건만 봅니다.", EnumSet.of(Field.TABLE, Field.ORDER)),
+    PAGING("조회", "페이지 나누기", "화면 목록처럼 몇 번째부터 몇 건을 잘라 봅니다(건너뛸 건수 · 한 쪽 건수는 값 자리).", EnumSet.of(Field.TABLE, Field.ORDER)),
+    KEYWORD("조회", "글자가 들어간 행 찾기 (LIKE)", "고른 칼럼 중 하나에라도 찾는 글자가 들어 있는 행을 봅니다(찾는 글자는 값 자리).", EnumSet.of(Field.TABLE, Field.COLS)),
+    IN_LIST("조회", "여러 값 중 하나인 행 (IN)", "칼럼 값이 적어 준 값들 중 하나인 행을 봅니다.", EnumSet.of(Field.TABLE, Field.STATUS, Field.STATUS_VALUES)),
+    NOT_IN_LIST("조회", "여러 값이 아닌 행 (NOT IN)", "칼럼 값이 적어 준 값들에 들지 않는 행을 봅니다(빈 값도 함께).", EnumSet.of(Field.TABLE, Field.STATUS, Field.STATUS_VALUES)),
+    RANGE("조회", "값 범위로 찾기 (BETWEEN)", "칼럼 값이 최소부터 최대 사이인 행을 봅니다(최소 · 최대는 값 자리).", EnumSet.of(Field.TABLE, Field.VALUE)),
+    MAX_ROW("조회", "값이 가장 큰 행", "칼럼 값이 테이블에서 가장 큰 행을 봅니다(같은 값이면 모두).", EnumSet.of(Field.TABLE, Field.VALUE)),
+    ABOVE_AVG("조회", "평균보다 큰 행", "칼럼 값이 전체 평균보다 큰 행을 큰 순으로 봅니다.", EnumSet.of(Field.TABLE, Field.VALUE)),
+    TODAY("날짜", "오늘 들어온 행", "날짜 칼럼이 오늘인 행을 봅니다.", EnumSet.of(Field.TABLE, Field.ORDER)),
+    RECENT_DAYS("날짜", "최근 7일", "날짜 칼럼이 7일 전부터 지금까지인 행을 최신 순으로 봅니다.", EnumSet.of(Field.TABLE, Field.ORDER)),
+    THIS_MONTH("날짜", "이번 달", "날짜 칼럼이 이번 달 1일부터 말일까지인 행을 봅니다.", EnumSet.of(Field.TABLE, Field.ORDER)),
+    PERIOD("날짜", "날짜 구간 조회", "시작일부터 끝일까지(끝일 하루 전체 포함) 들어온 행을 봅니다.", EnumSet.of(Field.TABLE, Field.ORDER)),
+    DAILY("날짜", "일별 건수 · 합계", "날짜 칼럼을 날로 묶어 날마다 건수(값 칼럼을 넣으면 합계도)를 봅니다.", EnumSet.of(Field.TABLE, Field.ORDER, Field.VALUE)),
+    MONTHLY("날짜", "월별 건수 · 합계", "날짜 칼럼을 달로 묶어 달마다 건수(값 칼럼을 넣으면 합계도)를 봅니다.", EnumSet.of(Field.TABLE, Field.ORDER, Field.VALUE)),
+    YEARLY("날짜", "연도별 건수 · 합계", "날짜 칼럼을 해로 묶어 해마다 건수(값 칼럼을 넣으면 합계도)를 봅니다.", EnumSet.of(Field.TABLE, Field.ORDER, Field.VALUE)),
+    COUNT_BY("집계", "그룹별 건수", "묶을 칼럼 값마다 몇 건인지 많은 순으로 봅니다.", EnumSet.of(Field.TABLE, Field.GROUP)),
+    SUM_BY("집계", "그룹별 합계 · 평균 · 최대 · 최소", "묶을 칼럼 값마다 값 칼럼의 건수 · 합계 · 평균 · 최대 · 최소를 봅니다.", EnumSet.of(Field.TABLE, Field.GROUP, Field.VALUE)),
+    RATIO("집계", "그룹별 비율 (%)", "묶을 칼럼 값마다 건수와 전체 중 비율을 봅니다.", EnumSet.of(Field.TABLE, Field.GROUP)),
+    HAVING_MIN("집계", "N건 이상인 그룹만 (HAVING)", "묶을 칼럼 값마다 세어 건수가 기준 이상인 것만 봅니다(기준은 값 자리).", EnumSet.of(Field.TABLE, Field.GROUP)),
+    ROLLUP("집계", "소계 · 합계 붙이기 (ROLLUP)", "묶을 칼럼 값마다의 건수 · 합계 아래에 소계와 전체 합계 줄을 붙입니다.", EnumSet.of(Field.TABLE, Field.GROUP, Field.VALUE)),
+    FIRST_LAST("집계", "그룹별 처음 · 마지막 날짜", "묶을 칼럼 값마다 가장 이른 날짜 · 가장 늦은 날짜 · 건수를 봅니다.", EnumSet.of(Field.TABLE, Field.GROUP, Field.ORDER)),
+    KEEP_LAST("집계", "그룹별 가장 최근 값 한 칸", "묶을 칼럼 값마다 날짜가 가장 늦은 행의 값을 한 칸으로 봅니다.", EnumSet.of(Field.TABLE, Field.GROUP, Field.VALUE, Field.ORDER)),
+    LIST_AGG("집계", "여러 줄을 한 칸에 합치기", "묶을 칼럼 값마다 값 칼럼을 쉼표로 이어 한 칸에 놓습니다.", EnumSet.of(Field.TABLE, Field.GROUP, Field.VALUE)),
+    STATUS_ROW("집계", "값별 건수를 한 줄에", "전체 건수와 적어 준 값마다의 건수를 한 줄로 봅니다.", EnumSet.of(Field.TABLE, Field.STATUS, Field.STATUS_VALUES)),
+    PIVOT("집계", "세로 → 가로 바꾸기", "상태 값마다 칸을 하나씩 만들어 한 줄에 놓습니다.", EnumSet.of(Field.TABLE, Field.GROUP, Field.STATUS, Field.STATUS_VALUES, Field.VALUE)),
+    CTE("집계", "WITH 로 나눠 쓰기", "긴 쿼리를 이름 붙인 단계(base → summary)로 나눕니다. 단계마다 따로 실행해 볼 수 있습니다(도구 → 조각 실행).", EnumSet.of(Field.TABLE, Field.GROUP)),
+    MIN_MAX("점검", "칼럼 값 훑어보기", "한 칼럼의 전체 건수 · 채워진 건수 · 서로 다른 값 수 · 최소 · 최대를 한 줄로 봅니다.", EnumSet.of(Field.TABLE, Field.VALUE)),
+    COUNT_DISTINCT("점검", "칼럼별 서로 다른 값 수", "고른 칼럼마다 값의 종류가 몇 가지인지 한 줄로 봅니다.", EnumSet.of(Field.TABLE, Field.COLS)),
+    NULL_ROWS("점검", "빈 값(NULL)인 행 찾기", "고른 칼럼 중 하나라도 비어 있는 행을 봅니다.", EnumSet.of(Field.TABLE, Field.COLS)),
+    NULL_COUNT("점검", "칼럼별 빈 값 수", "고른 칼럼마다 비어 있는 행이 몇 건인지 한 줄로 봅니다.", EnumSet.of(Field.TABLE, Field.COLS)),
+    LENGTHS("점검", "글자 수 훑어보기", "칼럼 값의 가장 짧은 · 가장 긴 · 평균 글자 수를 봅니다.", EnumSet.of(Field.TABLE, Field.VALUE)),
+    TRIM_CHECK("점검", "앞뒤 공백이 붙은 값 찾기", "고른 칼럼 값의 앞이나 뒤에 빈칸이 붙어 있는 행을 봅니다.", EnumSet.of(Field.TABLE, Field.COLS)),
+    GAP("점검", "빠진 번호 찾기", "번호 칼럼에서 이어지지 않고 건너뛴 구간을 봅니다.", EnumSet.of(Field.TABLE, Field.VALUE)),
+    DUPLICATES("점검", "중복 찾기", "기준 칼럼 값이 같은 행이 2건 이상인 값과 건수를 봅니다.", EnumSet.of(Field.TABLE, Field.KEYS)),
+    DUPLICATE_ROWS("점검", "중복 행 전체 보기", "중복된 행을 지우기 전에 한 줄씩 다 봅니다. 같은 값끼리 순번(RN)을 매겨 2 이상이 지울 대상입니다.", EnumSet.of(Field.TABLE, Field.KEYS, Field.ORDER)),
+    ROW_NUM("줄마다 붙이기", "줄 번호 붙이기 (ROW_NUMBER)", "순서대로 놓고 줄마다 1부터 번호를 붙입니다.", EnumSet.of(Field.TABLE, Field.ORDER)),
+    RANK("줄마다 붙이기", "누적 합 · 순위", "줄마다 앞에서부터 쌓인 합과 값 순위를 붙입니다(행 수는 그대로).", EnumSet.of(Field.TABLE, Field.VALUE, Field.ORDER)),
+    RANK_BY_GROUP("줄마다 붙이기", "그룹 안 순위", "기준 칼럼마다 따로, 값이 큰 순위를 줄마다 붙입니다.", EnumSet.of(Field.TABLE, Field.KEYS, Field.VALUE)),
+    RUNNING_BY_GROUP("줄마다 붙이기", "그룹별 누적 합", "기준 칼럼마다 따로, 순서대로 쌓인 합을 줄마다 붙입니다.", EnumSet.of(Field.TABLE, Field.KEYS, Field.VALUE, Field.ORDER)),
+    SHARE_IN_GROUP("줄마다 붙이기", "그룹 안 비중 (%)", "줄마다 그 값이 자기 그룹 합계에서 차지하는 비율을 붙입니다.", EnumSet.of(Field.TABLE, Field.KEYS, Field.VALUE)),
+    PREV_DIFF("줄마다 붙이기", "앞 줄과 차이", "순서대로 놓고 줄마다 바로 앞 줄 값과 그 차이를 붙입니다.", EnumSet.of(Field.TABLE, Field.VALUE, Field.ORDER)),
+    NEXT_ROW("줄마다 붙이기", "다음 줄 값 붙이기 (LEAD)", "순서대로 놓고 줄마다 바로 다음 줄의 값을 붙입니다.", EnumSet.of(Field.TABLE, Field.VALUE, Field.ORDER)),
+    FIRST_VALUE("줄마다 붙이기", "그룹의 첫 값 붙이기", "기준 칼럼마다 순서상 첫 줄의 값을 그 그룹의 모든 줄에 붙입니다.", EnumSet.of(Field.TABLE, Field.KEYS, Field.VALUE, Field.ORDER)),
+    MOVING_AVG("줄마다 붙이기", "이동 평균 (최근 3줄)", "순서대로 놓고 줄마다 자기와 앞 두 줄의 평균을 붙입니다.", EnumSet.of(Field.TABLE, Field.VALUE, Field.ORDER)),
+    NTILE("줄마다 붙이기", "4등분 (상위 25% 찾기)", "값이 큰 순으로 네 묶음으로 나눠 줄마다 몇 번째 묶음인지 붙입니다.", EnumSet.of(Field.TABLE, Field.VALUE)),
+    CASE_LABEL("줄마다 붙이기", "코드 값에 이름 붙이기 (CASE)", "칼럼 값마다 보여 줄 이름을 붙인 칸을 더합니다(이름은 만든 문장에서 고쳐 씁니다).", EnumSet.of(Field.TABLE, Field.STATUS, Field.STATUS_VALUES)),
+    LATEST("줄마다 붙이기", "그룹별 최신 1건", "기준 칼럼마다 순서 칼럼이 가장 큰(최신) 행 하나만 봅니다.", EnumSet.of(Field.TABLE, Field.KEYS, Field.ORDER)),
+    TOP_PER_GROUP("줄마다 붙이기", "그룹별 최신 3건", "기준 칼럼마다 순서 칼럼이 큰(최신) 순으로 3건씩 봅니다.", EnumSet.of(Field.TABLE, Field.KEYS, Field.ORDER)),
+    GROUP_MAX_ROW("줄마다 붙이기", "그룹별 값이 가장 큰 행", "기준 칼럼마다 값 칼럼이 가장 큰 행을 하나씩 봅니다.", EnumSet.of(Field.TABLE, Field.KEYS, Field.VALUE)),
+    JOIN_LOOKUP("두 테이블", "다른 테이블 칼럼 붙이기 (조인)", "기준 칼럼으로 다른 테이블을 이어 그 테이블의 칼럼을 옆에 붙입니다. 짝이 없어도 줄은 남습니다.", EnumSet.of(Field.TABLE, Field.TABLE2, Field.KEYS, Field.COLS)),
+    JOIN_INNER("두 테이블", "두 테이블 모두에 있는 것만 (INNER JOIN)", "기준 칼럼이 두 테이블에 모두 있는 행만, 다른 테이블 칼럼을 옆에 붙여 봅니다.", EnumSet.of(Field.TABLE, Field.TABLE2, Field.KEYS, Field.COLS)),
+    FULL_JOIN("두 테이블", "양쪽 다 보기 (FULL OUTER JOIN)", "기준 칼럼을 두 테이블에서 나란히 놓아, 한쪽에만 있는 것은 반대쪽이 비어 보이게 합니다.", EnumSet.of(Field.TABLE, Field.TABLE2, Field.KEYS)),
+    EXISTS("두 테이블", "있는지 확인 (EXISTS)", "다른 테이블에 짝이 있는 행만 봅니다. 짝이 여러 개여도 한 번만 나옵니다(JOIN 과 달리 늘어나지 않음).", EnumSet.of(Field.TABLE, Field.TABLE2, Field.KEYS)),
+    NOT_EXISTS("두 테이블", "없는 것 찾기 (NOT EXISTS)", "다른 테이블에 짝이 없는 행만 봅니다. NOT IN 과 달리 NULL 이 있어도 맞게 나옵니다.", EnumSet.of(Field.TABLE, Field.TABLE2, Field.KEYS)),
+    IN_SUBQUERY("두 테이블", "다른 테이블에 있는 값만 (IN 서브쿼리)", "기준 칼럼 값이 다른 테이블에도 있는 행을 봅니다.", EnumSet.of(Field.TABLE, Field.TABLE2, Field.KEYS)),
+    JOIN_COUNT("두 테이블", "다른 테이블 건수 붙이기", "줄마다 다른 테이블에 같은 기준 칼럼을 가진 행이 몇 건인지 붙입니다.", EnumSet.of(Field.TABLE, Field.TABLE2, Field.KEYS)),
+    COMPARE_VALUES("두 테이블", "두 테이블 값이 다른 행", "기준 칼럼이 같은데 고른 칼럼 값이 서로 다른 행을 나란히 봅니다.", EnumSet.of(Field.TABLE, Field.TABLE2, Field.KEYS, Field.COLS)),
+    DIFF("두 테이블", "두 테이블 차이 비교", "두 테이블의 기준 칼럼 값 중 한쪽에만 있는 것을 봅니다(이관 · 백업 비교).", EnumSet.of(Field.TABLE, Field.TABLE2, Field.KEYS)),
+    SET_MINUS("두 테이블", "집합: 이 테이블에만 있는 값 (MINUS)", "고른 칼럼 값 묶음 중 이 테이블에는 있고 다른 테이블에는 없는 것을 봅니다.", EnumSet.of(Field.TABLE, Field.TABLE2, Field.COLS)),
+    SET_INTERSECT("두 테이블", "집합: 두 테이블에 모두 있는 값 (INTERSECT)", "고른 칼럼 값 묶음 중 두 테이블에 모두 있는 것을 봅니다.", EnumSet.of(Field.TABLE, Field.TABLE2, Field.COLS)),
+    SET_UNION("두 테이블", "집합: 겹치는 것 빼고 합치기 (UNION)", "두 테이블의 고른 칼럼을 합치되 같은 값은 한 번만 봅니다.", EnumSet.of(Field.TABLE, Field.TABLE2, Field.COLS)),
+    UNION_ALL("두 테이블", "집합: 그대로 이어 붙이기 (UNION ALL)", "두 테이블의 같은 칼럼을 위아래로 이어 봅니다(어느 테이블인지 칸이 붙습니다).", EnumSet.of(Field.TABLE, Field.TABLE2, Field.COLS)),
+    COUNT_COMPARE("두 테이블", "두 테이블 건수 비교", "두 테이블의 전체 건수를 나란히 봅니다.", EnumSet.of(Field.TABLE, Field.TABLE2)),
+    HIERARCHY("계층", "계층 (부모-자식) 조회", "메뉴 · 조직 · 부품 구성처럼 부모를 가리키는 칼럼으로 위에서 아래로 펼칩니다.", EnumSet.of(Field.TABLE, Field.KEYS, Field.PARENT)),
+    PARENT_COLS("계층", "부모 행의 칼럼 붙이기 (셀프 조인)", "같은 테이블에서 부모 행을 찾아 그 칼럼을 옆에 붙입니다.", EnumSet.of(Field.TABLE, Field.KEYS, Field.PARENT, Field.COLS)),
+    LEAF("계층", "자식이 없는 행 (맨 끝)", "자기를 부모로 둔 행이 하나도 없는 행을 봅니다.", EnumSet.of(Field.TABLE, Field.KEYS, Field.PARENT)),
+    ORPHAN("계층", "부모가 없는 행 (끊긴 것)", "부모 ID 가 적혀 있는데 그 부모 행이 없는 행을 봅니다.", EnumSet.of(Field.TABLE, Field.KEYS, Field.PARENT)),
+    CHILD_COUNT("계층", "자식 수 붙이기", "줄마다 자기를 부모로 둔 행이 몇 건인지 붙입니다.", EnumSet.of(Field.TABLE, Field.KEYS, Field.PARENT)),
+    INSERT_ROW("고치기", "한 줄 넣기 (INSERT)", "고른 칼럼에 값을 넣는 INSERT 문을 만듭니다(값은 값 자리).", EnumSet.of(Field.TABLE, Field.COLS)),
+    UPDATE_ROW("고치기", "조건으로 수정 (UPDATE)", "찾을 칼럼이 맞는 행의 칼럼을 고칩니다(값은 값 자리).", EnumSet.of(Field.TABLE, Field.KEYS, Field.COLS)),
+    UPDATE_STATUS("고치기", "상태 바꾸기 (UPDATE)", "찾을 칼럼이 맞는 행의 한 칼럼만 바꿉니다(값은 값 자리).", EnumSet.of(Field.TABLE, Field.KEYS, Field.STATUS)),
+    UPDATE_NULL("고치기", "빈 값 채우기 (UPDATE)", "고른 칼럼이 비어 있는 행만 값을 채웁니다(값은 값 자리).", EnumSet.of(Field.TABLE, Field.COLS)),
+    UPDATE_FROM("고치기", "다른 테이블 값으로 수정", "기준 칼럼이 같은 다른 테이블의 값으로 칼럼을 고칩니다.", EnumSet.of(Field.TABLE, Field.TABLE2, Field.KEYS, Field.COLS)),
+    UPSERT("고치기", "있으면 수정, 없으면 넣기", "기준 칼럼으로 찾아 있으면 UPDATE, 없으면 INSERT 합니다(Oracle MERGE, PostgreSQL ON CONFLICT, MySQL ON DUPLICATE KEY).", EnumSet.of(Field.TABLE, Field.KEYS, Field.COLS)),
+    INSERT_MISSING("고치기", "다른 테이블에서 없는 것만 넣기", "다른 테이블의 행 중 이 테이블에 아직 없는 것만 넣습니다.", EnumSet.of(Field.TABLE, Field.TABLE2, Field.KEYS, Field.COLS)),
+    INSERT_COPY("고치기", "다른 테이블에서 옮겨 넣기 (INSERT SELECT)", "다른 테이블의 고른 칼럼을 통째로 이 테이블에 넣습니다.", EnumSet.of(Field.TABLE, Field.TABLE2, Field.COLS)),
+    DELETE_ROW("고치기", "조건으로 삭제 (DELETE)", "찾을 칼럼이 맞는 행을 지웁니다(값은 값 자리).", EnumSet.of(Field.TABLE, Field.KEYS)),
+    DELETE_OLD("고치기", "오래된 행 지우기", "날짜 칼럼이 기준일보다 앞선 행을 지웁니다(기준일은 값 자리).", EnumSet.of(Field.TABLE, Field.ORDER)),
+    DELETE_DUP("고치기", "중복 지우기 (하나만 남김)", "기준 칼럼이 같은 행 중 순서 칼럼이 가장 큰 하나만 남기고 지웁니다. 먼저 「중복 행 전체 보기」 로 확인하세요.", EnumSet.of(Field.TABLE, Field.KEYS, Field.ORDER)),
+    DELETE_NOT_IN("고치기", "다른 테이블에 없는 행 지우기", "기준 칼럼이 다른 테이블에 없는 행을 지웁니다. 먼저 「없는 것 찾기」 로 확인하세요.", EnumSet.of(Field.TABLE, Field.TABLE2, Field.KEYS)),
+    BACKUP("고치기", "백업 테이블 만들기", "고치거나 지우기 전에 테이블을 통째로 _BAK 테이블로 복사해 둡니다.", EnumSet.of(Field.TABLE)),
+    COPY_STRUCT("고치기", "빈 테이블로 복사 (구조만)", "칼럼 구조만 같은 빈 테이블을 _COPY 이름으로 만듭니다.", EnumSet.of(Field.TABLE)),
+    ADD_INDEX("고치기", "인덱스 만들기", "자주 찾는 칼럼에 인덱스를 만듭니다.", EnumSet.of(Field.TABLE, Field.KEYS));
 
+    /** 목록에서 비슷한 일끼리 모아 보이는 갈래 이름. 같은 갈래는 붙여 적는다. */
+    public final String group;
     public final String label;
     public final String description;
     public final Set<Field> fields;
 
-    Kind(String label, String description, Set<Field> fields) {
+    Kind(String group, String label, String description, Set<Field> fields) {
+      this.group = group;
       this.label = label;
       this.description = description;
       this.fields = fields;
@@ -197,6 +201,102 @@ public final class Patterns {
       default -> null;
     };
     return own != null ? own : f.label;
+  }
+
+  /** 칼럼 칸의 목록에 어느 테이블의 칼럼을 보일지. BOTH 는 두 테이블에 같은 이름으로 있는 칼럼만. */
+  public enum From { FIRST, SECOND, BOTH }
+
+  /** 두 테이블을 쓰는 무늬의 기준 칼럼 · 칼럼 칸은 양쪽에 다 있어야 문장이 돈다. 조인으로 붙일 칼럼만 둘째 테이블 것이다. */
+  public static From from(Kind k, Field f) {
+    if (!k.fields.contains(Field.TABLE2) || (f != Field.KEYS && f != Field.COLS)) return From.FIRST;
+    if (f == Field.COLS && (k == Kind.JOIN_LOOKUP || k == Kind.JOIN_INNER)) return From.SECOND;
+    return From.BOTH;
+  }
+
+  /** 하나만 받는 칼럼 칸: 부모-자식을 잇는 자기 ID 는 칼럼 하나다. */
+  public static boolean single(Kind k, Field f) {
+    return f == Field.KEYS && k.fields.contains(Field.PARENT);
+  }
+
+  /** 칼럼의 형 갈래. ANY 는 가리지 않거나 알 수 없음. */
+  public enum Type {
+    ANY(""), DATE("날짜"), NUMBER("숫자"), TEXT("글자");
+
+    final String label;
+
+    Type(String label) { this.label = label; }
+  }
+
+  private static final Set<Kind> DATE_ORDER = EnumSet.of(Kind.PERIOD, Kind.TODAY, Kind.RECENT_DAYS, Kind.THIS_MONTH, Kind.DAILY, Kind.MONTHLY, Kind.YEARLY, Kind.DELETE_OLD);
+  private static final Set<Kind> NUMBER_VALUE = EnumSet.of(Kind.SUM_BY, Kind.RANK, Kind.PREV_DIFF, Kind.MONTHLY, Kind.DAILY, Kind.YEARLY, Kind.ROLLUP, Kind.SHARE_IN_GROUP,
+      Kind.RUNNING_BY_GROUP, Kind.MOVING_AVG, Kind.ABOVE_AVG, Kind.GAP, Kind.PIVOT);
+  private static final Set<Kind> TEXT_COLS = EnumSet.of(Kind.KEYWORD, Kind.TRIM_CHECK);
+
+  /** 만든 문장이 돌려면 그 칸의 칼럼이 가져야 하는 형(날짜 함수 · 합계 · 글자 함수를 쓰는 칸). */
+  public static Type need(Kind k, Field f) {
+    if (f == Field.ORDER && DATE_ORDER.contains(k)) return Type.DATE;
+    if (f == Field.VALUE && NUMBER_VALUE.contains(k)) return Type.NUMBER;
+    if ((f == Field.COLS && TEXT_COLS.contains(k)) || (f == Field.VALUE && k == Kind.LENGTHS)) return Type.TEXT;
+    return Type.ANY;
+  }
+
+  /** DB 가 알려 준 형 이름(VARCHAR2 · timestamp · int4 …)의 갈래. 모르는 이름은 ANY. */
+  public static Type typeOf(String dbType) {
+    String t = dbType == null ? "" : dbType.toUpperCase(Locale.ROOT);
+    if (t.startsWith("INTERVAL")) return Type.ANY;
+    if (t.contains("DATE") || t.contains("TIME")) return Type.DATE;
+    if (t.contains("CHAR") || t.contains("TEXT") || t.contains("CLOB") || t.contains("STRING")) return Type.TEXT;
+    for (String n : NUMBER_WORDS) if (t.contains(n)) return Type.NUMBER;
+    return Type.ANY;
+  }
+
+  private static final List<String> NUMBER_WORDS = List.of("NUM", "INT", "DEC", "FLOAT", "DOUBLE", "REAL", "SERIAL", "MONEY");
+
+  /**
+   * 채운 칼럼이 테이블과 맞지 않는 점(화면에 알림으로 보인다). types1 · types2 는 첫 · 둘째 테이블의 「칼럼 이름(대문자) → 형 이름」 이고,
+   * 못 읽은 테이블은 빈 맵이라 그 테이블에 대한 것은 따지지 않는다. 따지는 것: 테이블에 없는 칼럼, 문장이 요구하는 형과 다른 칼럼,
+   * 두 테이블에서 형이 다른 칼럼, 하나만 받는 칸에 여러 칼럼, 기준 칼럼과 칼럼 칸에 함께 든 칼럼.
+   */
+  public static List<String> warnings(Kind k, Fill f, Map<String, String> types1, Map<String, String> types2) {
+    List<String> out = new ArrayList<>();
+    for (Field field : k.fields) {
+      List<String> names = switch (field) {
+        case KEYS -> f.keys();
+        case COLS -> f.cols();
+        case GROUP -> PickText.names(f.group() == null ? "" : f.group());
+        case VALUE -> PickText.names(f.value() == null ? "" : f.value());
+        case ORDER -> PickText.names(f.order() == null ? "" : f.order());
+        case PARENT -> PickText.names(f.parent() == null ? "" : f.parent());
+        case STATUS -> PickText.names(f.status() == null ? "" : f.status());
+        default -> List.of();
+      };
+      String label = "「" + label(k, field) + "」";
+      if (single(k, field) && names.size() > 1) out.add(label + " 은 칼럼 하나만 씁니다. 첫 칼럼 " + names.get(0) + " 만 썼습니다.");
+      From from = from(k, field);
+      Type need = need(k, field);
+      for (String raw : names) {
+        String key = raw.replace("\"", "").toUpperCase(Locale.ROOT);
+        String type1 = types1.get(key);
+        String type2 = types2.get(key);
+        if (from != From.SECOND && !types1.isEmpty() && type1 == null) out.add(label + " 의 " + raw + " 는 " + f.table() + " 에 없는 칼럼입니다.");
+        if (from != From.FIRST && !types2.isEmpty() && type2 == null) out.add(label + " 의 " + raw + " 는 " + f.table2() + " 에 없는 칼럼입니다.");
+        if (from == From.BOTH && type1 != null && type2 != null && typeOf(type1) != typeOf(type2)) {
+          out.add(raw + " 의 형이 두 테이블에서 다릅니다(" + f.table() + ": " + type1 + ", " + f.table2() + ": " + type2 + "). 그대로는 견줄 수 없을 수 있습니다.");
+        }
+        String type = from == From.SECOND ? type2 : type1;
+        if (need != Type.ANY && type != null && typeOf(type) != Type.ANY && typeOf(type) != need) {
+          out.add(label + " 의 " + raw + " 는 " + need.label + " 형이 아닙니다(" + type + "). 이 문장은 " + need.label + " 형 칼럼에 맞춰져 있어 그대로는 오류가 나거나 결과가 다를 수 있습니다.");
+        }
+      }
+    }
+    if (k.fields.contains(Field.KEYS) && k.fields.contains(Field.COLS) && from(k, Field.COLS) != From.SECOND) {
+      for (String key : f.keys()) {
+        for (String col : f.cols()) {
+          if (key.equalsIgnoreCase(col)) out.add(key + " 를 「" + label(k, Field.KEYS) + "」 와 「" + label(k, Field.COLS) + "」 양쪽에 골랐습니다. 한쪽에서만 고르세요.");
+        }
+      }
+    }
+    return out;
   }
 
   /** 칸이 비었을 때 회색으로 보일 예시. */
@@ -381,7 +481,8 @@ public final class Patterns {
       case UPDATE_FROM -> updateFrom(db, f, t, a, t2, b, keys, cols(db, f.cols(), ""));
       case INSERT_MISSING -> {
         List<String> all = new ArrayList<>(keys);
-        all.addAll(cols(db, f.cols(), ""));
+        // 기준 칼럼을 넣을 칼럼에도 골랐으면 한 번만 넣는다(INSERT 칼럼이 겹치면 오류).
+        for (String c : cols(db, f.cols(), "")) if (!all.contains(c)) all.add(c);
         yield "-- 없는 것만 넣기: " + f.table2() + " 의 행 중 " + f.table() + " 에 같은 " + String.join(", ", keys) + " 가 없는 것만\n"
             + "INSERT INTO " + t + " (" + String.join(", ", all) + ")\nSELECT\n" + list(prefix(all, b + ".")) + "  FROM " + t2 + " " + b + "\n WHERE NOT EXISTS (\n        SELECT 1\n          FROM " + t + " " + a + "\n"
             + matchLines(keys, a, b, "         WHERE ", "           AND ") + "       )";

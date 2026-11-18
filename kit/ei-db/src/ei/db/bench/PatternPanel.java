@@ -22,6 +22,7 @@ import javax.swing.event.DocumentEvent;
 import java.awt.BorderLayout;
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -36,7 +37,7 @@ final class PatternPanel {
   /** 「하고 싶은 것」 목록을 펼쳤을 때 한 번에 보일 줄 수(종류가 많아 스톡 기본 8줄로는 좁다). */
   private static final int KIND_ROWS = 30;
   private static final String NO_TABLES = "테이블 목록을 아직 읽지 못했습니다. 위에서 접속을 확인하세요. 이름을 직접 쳐도 됩니다.";
-  private static final String NO_COLUMNS = "칼럼 목록이 없습니다. 테이블을 먼저 고르세요. 이름을 직접 쳐도 됩니다.";
+  private static final String NO_COLUMNS = "고를 칼럼이 없습니다. 테이블을 먼저 고르세요(테이블이 둘이면 양쪽에 같은 이름으로 있는 칼럼만 나옵니다). 이름을 직접 쳐도 됩니다.";
 
   private final Bench bench;
   private final JPanel form;
@@ -46,7 +47,14 @@ final class PatternPanel {
   private final Map<Patterns.Field, JTextField> texts = new EnumMap<>(Patterns.Field.class);
   private final Map<Patterns.Field, JComponent[]> rows = new EnumMap<>(Patterns.Field.class);
   private final Map<Patterns.Field, JBLabel> labels = new EnumMap<>(Patterns.Field.class);
-  private final List<String> columnNames = new ArrayList<>();
+  /** 첫 테이블 칸 · 둘째 테이블 칸의 칼럼. 못 읽었으면 비어 있다. */
+  private final List<Meta.Column> columns1 = new ArrayList<>();
+  private final List<Meta.Column> columns2 = new ArrayList<>();
+  /** 둘째 테이블 칼럼 칸에 든 이름이 속한 표(대문자). 다른 표의 칼럼을 읽으면 두 테이블에 걸친 칼럼 칸을 비운다. */
+  private String columnsOf2 = "";
+  private final Timer loadTimer2 = new Timer(LOAD_DELAY_MS, e -> loadColumns2());
+  /** 칸을 비운 뒤의 무늬. 다른 무늬를 고르면 칸을 모두 비운다. */
+  private Patterns.Kind shownKind;
   /** 표 목록 상자 항목(「이름  — 설명」). 접속이 바뀌면 다시 읽는다. */
   private final List<String> tableItems = new ArrayList<>();
   private final Timer loadTimer = new Timer(LOAD_DELAY_MS, e -> loadColumns());
@@ -58,12 +66,14 @@ final class PatternPanel {
   PatternPanel(Bench bench) {
     this.bench = bench;
     loadTimer.setRepeats(false);
+    loadTimer2.setRepeats(false);
     for (Patterns.Kind k : Patterns.Kind.values()) kind.addItem(k);
     kind.setMaximumRowCount(KIND_ROWS);
     kind.setRenderer(new ColoredListCellRenderer<>() {
       @Override
       protected void customizeCellRenderer(@NotNull JList<? extends Patterns.Kind> list, Patterns.Kind k, int index, boolean selected, boolean focus) {
         if (k == null) return;
+        if (index >= 0) append(k.group + " · ", SimpleTextAttributes.GRAYED_ATTRIBUTES);
         append(k.label);
         if (index >= 0) append("   " + k.description, SimpleTextAttributes.GRAYED_ATTRIBUTES);
       }
@@ -85,7 +95,8 @@ final class PatternPanel {
         c = t;
       } else {
         boolean table = f == Patterns.Field.TABLE || f == Patterns.Field.TABLE2;
-        PickField pick = new PickField(f == Patterns.Field.KEYS || f == Patterns.Field.COLS || f == Patterns.Field.GROUP, table ? () -> tableItems : () -> columnNames,
+        boolean many = f == Patterns.Field.KEYS || f == Patterns.Field.COLS || f == Patterns.Field.GROUP;
+        PickField pick = new PickField(() -> many && !(kind.getSelectedItem() instanceof Patterns.Kind k && Patterns.single(k, f)), table ? () -> tableItems : () -> columnsFor(f),
             table ? NO_TABLES : NO_COLUMNS);
         pick.field.getEmptyText().setText(Patterns.hint(f));
         texts.put(f, pick.field);
@@ -100,13 +111,23 @@ final class PatternPanel {
     form = fb.getPanel();
     form.setBorder(JBUI.Borders.empty(8, 8, 4, 8));
 
-    kind.addActionListener(e -> refresh());
+    shownKind = (Patterns.Kind) kind.getSelectedItem();
+    kind.addActionListener(e -> {
+      if (kind.getSelectedItem() != shownKind) {
+        shownKind = (Patterns.Kind) kind.getSelectedItem();
+        for (JTextField t : texts.values()) t.setText("");
+        tableStatus.setVisible(false);
+      }
+      refresh();
+    });
     for (Map.Entry<Patterns.Field, JTextField> e : texts.entrySet()) {
       boolean table = e.getKey() == Patterns.Field.TABLE;
+      boolean table2 = e.getKey() == Patterns.Field.TABLE2;
       e.getValue().getDocument().addDocumentListener(new DocumentAdapter() {
         @Override
         protected void textChanged(@NotNull DocumentEvent ev) {
           if (table) loadTimer.restart();
+          if (table2) loadTimer2.restart();
           refresh();
         }
       });
@@ -119,7 +140,8 @@ final class PatternPanel {
   /** 접속이 바뀌면 칼럼을 다시 읽는다. 친 글은 그대로 둔다. */
   void connectionChanged() {
     loadedTable = "";
-    columnNames.clear();
+    columns1.clear();
+    columns2.clear();
     tableItems.clear();
     if (bench.config() != null) {
       bench.tables(all -> {
@@ -128,6 +150,54 @@ final class PatternPanel {
       });
     }
     loadColumns();
+    loadColumns2();
+  }
+
+  /** 칼럼 칸 f 의 목록: 지금 무늬가 정한 테이블의 칼럼(Patterns.from). 항목은 「이름  — 형 · 설명」. 두 테이블에 걸친 칸은 둘째 테이블 칼럼을 못 읽었으면 첫 테이블 칼럼을 그대로 보인다. */
+  private List<String> columnsFor(Patterns.Field f) {
+    Patterns.Kind k = (Patterns.Kind) kind.getSelectedItem();
+    Patterns.From from = k == null ? Patterns.From.FIRST : Patterns.from(k, f);
+    List<String> items = new ArrayList<>();
+    for (Meta.Column c : from == Patterns.From.SECOND ? columns2 : columns1) {
+      if (from == Patterns.From.BOTH && !columns2.isEmpty() && !types(columns2).containsKey(c.name().toUpperCase(Locale.ROOT))) continue;
+      items.add(c.name() + PickText.COMMENT_GAP + c.typeLabel() + (c.comment() == null || c.comment().isBlank() ? "" : " · " + c.comment()));
+    }
+    return items;
+  }
+
+  /** 「칼럼 이름(대문자) → 형 이름」. */
+  private static Map<String, String> types(List<Meta.Column> columns) {
+    Map<String, String> out = new HashMap<>();
+    for (Meta.Column c : columns) out.put(c.name().toUpperCase(Locale.ROOT), c.typeLabel());
+    return out;
+  }
+
+  /** 둘째 테이블 칸의 이름으로 칼럼을 읽는다. 못 찾거나 못 읽으면 비워 둔다(목록은 첫 테이블 칼럼으로 나온다). */
+  private void loadColumns2() {
+    String name = text(Patterns.Field.TABLE2);
+    columns2.clear();
+    if (name.isEmpty() || bench.config() == null) return;
+    String plain = SqlParts.simpleName(name).replace("\"", "");
+    bench.tables(all -> {
+      for (Meta.Table t : all) {
+        if (!t.name().equalsIgnoreCase(plain)) continue;
+        bench.columns(t.name(), list -> {
+          if (!name.equals(text(Patterns.Field.TABLE2))) return;
+          columns2.clear();
+          columns2.addAll(list);
+          String key = name.toUpperCase(Locale.ROOT);
+          Patterns.Kind k = (Patterns.Kind) kind.getSelectedItem();
+          if (k != null && !columnsOf2.isEmpty() && !columnsOf2.equals(key)) {
+            for (Patterns.Field f : List.of(Patterns.Field.KEYS, Patterns.Field.COLS)) {
+              if (Patterns.from(k, f) != Patterns.From.FIRST) texts.get(f).setText("");
+            }
+          }
+          columnsOf2 = key;
+          if (form.isShowing()) refresh();
+        });
+        return;
+      }
+    });
   }
 
   /** 표 칸의 이름으로 칼럼을 읽는다. 표 목록에 없으면 까닭을 보인다. */
@@ -135,6 +205,8 @@ final class PatternPanel {
     String name = text(Patterns.Field.TABLE);
     String key = name.toUpperCase(Locale.ROOT);
     if (name.isEmpty() || bench.config() == null) {
+      columns1.clear();
+      loadedTable = "";
       tableStatus.setVisible(false);
       return;
     }
@@ -148,7 +220,7 @@ final class PatternPanel {
       for (Meta.Table t : all) if (t.name().equalsIgnoreCase(plain)) meta = t.name();
       if (!name.equals(text(Patterns.Field.TABLE))) return;
       if (meta == null) {
-        columnNames.clear();
+        columns1.clear();
         loadedTable = "";
         warn("테이블 " + name + " 를 이 접속의 기본 스키마에서 찾지 못했습니다. 이름을 확인하거나 목록에서 고르세요. SQL 은 친 이름 그대로 만듭니다.");
         return;
@@ -156,11 +228,13 @@ final class PatternPanel {
       String found = meta;
       bench.columns(found, list -> {
         if (!name.equals(text(Patterns.Field.TABLE))) return;
-        columnNames.clear();
-        for (Meta.Column c : list) columnNames.add(c.name());
+        columns1.clear();
+        columns1.addAll(list);
         loadedTable = key;
         if (!columnsOf.isEmpty() && !columnsOf.equals(key)) clearColumns();
         columnsOf = key;
+        // 칼럼을 읽은 뒤에야 알 수 있는 알림(없는 칼럼 · 형)을 다시 낸다. 다른 탭이 SQL 칸을 쓰는 동안에는 건드리지 않는다.
+        if (form.isShowing()) refresh();
         if (list.isEmpty()) {
           warn("테이블 " + found + " 의 칼럼을 읽지 못했습니다(권한이 없거나 빈 테이블 정의). 칼럼 이름을 직접 치세요.");
         } else {
@@ -215,7 +289,7 @@ final class PatternPanel {
       bench.show("", List.of("문장을 만들지 못했습니다: " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage())));
       return;
     }
-    List<String> notes = new ArrayList<>();
+    List<String> notes = new ArrayList<>(Patterns.warnings(k, f, types(columns1), types(columns2)));
     if (!SqlParams.find(sql).isEmpty()) notes.add("값 자리(:이름 · #{이름})는 실행할 때 넣습니다.");
     bench.show(sql, notes);
   }

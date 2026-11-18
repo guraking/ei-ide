@@ -31,13 +31,14 @@ import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.List;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
 /**
  * 고르는 글 칸: 테두리 있는 스톡 글 칸 아래에 source 항목 목록을 편다. 직접 쳐도 되고 목록에서 골라도 된다.
  * - 칸을 누르거나 오른쪽 화살표 · ↓ 를 누르면 목록 전체를, 글을 치면 그 글을 담은 항목만 편다.
  * - ↑ ↓ 로 옮기고 Enter · 클릭으로 고른다. Esc · 다른 곳으로 가면 닫는다. 목록이 떠 있는 동안 Enter · Esc 는 대화창으로 가지 않는다.
- * - 여러 값 칸(many)은 골라도 목록이 닫히지 않는다. 고른 항목 앞에 CHOSEN_MARK 가 붙고, 다시 고르면 빠진다.
+ * - 여러 값 칸(many 가 참인 동안)은 골라도 목록이 닫히지 않는다. 고른 항목 앞에 CHOSEN_MARK 가 붙고, 다시 고르면 빠진다.
  * - 목록 창은 초점을 받지 않는다. 그래서 고르는 동안에도 글 칸에 계속 칠 수 있다.
  * 글 규칙(거르기 · 쉼표로 잇기)은 PickText.
  */
@@ -48,7 +49,7 @@ final class PickField {
   private static final String NOT_CHOSEN = "    ";
 
   final ExtendableTextField field = new ExtendableTextField();
-  private final boolean many;
+  private final BooleanSupplier many;
   private final Supplier<List<String>> source;
   private final JBList<String> list = new JBList<>();
   private JWindow popup;
@@ -57,15 +58,13 @@ final class PickField {
   private boolean adjusting;
 
   /** emptyText: 항목이 하나도 없을 때 목록 자리에 보일 글. */
-  PickField(boolean many, Supplier<List<String>> source, String emptyText) {
+  PickField(BooleanSupplier many, Supplier<List<String>> source, String emptyText) {
     this.many = many;
     this.source = source;
     list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
     list.setFocusable(false);
     list.getEmptyText().setText(emptyText);
-    if (many) {
-      list.setCellRenderer(SimpleListCellRenderer.create("", item -> (PickText.chosen(field.getText(), item) ? CHOSEN_MARK : NOT_CHOSEN) + item));
-    }
+    list.setCellRenderer(SimpleListCellRenderer.create("", item -> !many.getAsBoolean() ? item : (PickText.chosen(field.getText(), item) ? CHOSEN_MARK : NOT_CHOSEN) + item));
     field.addExtension(ExtendableTextComponent.Extension.create(AllIcons.General.ArrowDown, "목록 펼치기", () -> {
       field.requestFocusInWindow();
       open(true);
@@ -154,7 +153,7 @@ final class PickField {
     boolean picked = index >= 0 && index < list.getModel().getSize();
     boolean wasFiltered = !all;
     if (picked) {
-      String text = PickText.picked(field.getText(), list.getModel().getElementAt(index), many, all);
+      String text = PickText.picked(field.getText(), list.getModel().getElementAt(index), many.getAsBoolean(), all);
       adjusting = true;
       try {
         field.setText(text);
@@ -163,7 +162,7 @@ final class PickField {
         adjusting = false;
       }
     }
-    if (!picked || !many) {
+    if (!picked || !many.getAsBoolean()) {
       close();
       return;
     }
@@ -173,7 +172,7 @@ final class PickField {
 
   /** 목록을 편다. 통째로(wantAll) 펼 때는 항목이 없어도 까닭 글을 보이고, 치는 글로 거를 때 맞는 것이 없으면 닫는다. */
   private void open(boolean wantAll) {
-    List<String> items = PickText.filter(source.get(), field.getText(), many, wantAll);
+    List<String> items = PickText.filter(source.get(), field.getText(), many.getAsBoolean(), wantAll);
     Window owner = SwingUtilities.getWindowAncestor(field);
     if (!field.isShowing() || owner == null || (items.isEmpty() && !wantAll)) {
       close();
