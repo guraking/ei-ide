@@ -347,7 +347,7 @@ public final class QueryBenchDialog extends DialogWrapper {
     QueryBuilder.JoinStyle style = QueryBuilder.JoinStyle.OLD.name().equals(BenchSettings.get(project, STYLE_KEY, QueryBuilder.JoinStyle.OLD.name()))
         ? QueryBuilder.JoinStyle.OLD : QueryBuilder.JoinStyle.ANSI;
     QueryBuilder.Bind bind = QueryBuilder.Bind.COLON;
-    for (QueryBuilder.Bind b : QueryBuilder.Bind.values()) if (b.name().equals(BenchSettings.get(project, BIND_KEY, null))) bind = b;
+    for (QueryBuilder.Bind b : QueryBuilder.Bind.values()) if (b.name().equals(BenchSettings.get(project, BIND_KEY, QueryBuilder.Bind.COLON.name()))) bind = b;
     bench.setStyle(style);
     bench.setBind(bind);
     (bind == QueryBuilder.Bind.MYBATIS ? bindMybatis : bind == QueryBuilder.Bind.VALUE ? bindValue : bindColon).setSelected(true);
