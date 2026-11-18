@@ -227,6 +227,7 @@ public class SyncCheck {
     eq(SyncPanel.unquote("plain.txt"), "plain.txt");
     eq(SyncPanel.unquote("\"a\\\"\uD83D\uDE00.txt\""), "a\"\uD83D\uDE00.txt");
     checkNestedRepo();
+    checkChanging();
     checkAudit1106();
     checkCloneBranch();
     checkMavenUnignore();
@@ -788,6 +789,23 @@ public class SyncCheck {
     eq(SyncPanel.isNestedRepo(new File(outer, "plain/")), false);
     // git 은 중첩 저장소를 「?? inner/」 로 보고하므로 compare 가 이 줄을 거른다.
     eq(SyncPanel.git(outer, "status", "--porcelain=v1", "-unormal").contains("?? inner/"), true);
+  }
+
+  /** 작업본이 바뀌는 중: 이 창의 작업(beginWork) · 새 index.lock 이면 참, 오래된 index.lock · 없음이면 거짓. */
+  private static void checkChanging() throws Exception {
+    File root = java.nio.file.Files.createTempDirectory("changing").toFile();
+    File lock = new File(new File(root, ".git"), "index.lock");
+    eq(lock.getParentFile().mkdirs(), true);
+    eq(SyncPanel.changing(root), false);
+    eq(lock.createNewFile(), true);
+    eq(SyncPanel.changing(root), true);
+    eq(lock.setLastModified(System.currentTimeMillis() - java.util.concurrent.TimeUnit.HOURS.toMillis(1)), true);
+    eq(SyncPanel.changing(root), false);
+    eq(lock.delete(), true);
+    String work = SyncPanel.beginWork(root);
+    eq(SyncPanel.changing(root), true);
+    SyncPanel.endWork(work);
+    eq(SyncPanel.changing(root), false);
   }
 
   /** 열 때 Maven 무시 풀기: 우리가 무시한 pom 만, 우리 기록이 없는 저장소는 전부, 다른 저장소는 그대로, 닫은 폴더 표시만 있는 저장소(사용자가 모두 무시)는 그대로. */

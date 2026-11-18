@@ -239,6 +239,10 @@ final class SyncPanel extends SimpleToolWindowPanel {
   static final long GIT_LONG_TIMEOUT_SEC = TimeUnit.MINUTES.toSeconds(30);
   private static final int PATH_LIST_MAX = 10;
   private static final int REPO_CHANGE_DELAY_MS = 500;
+  // git 이 작업본 · 색인을 바꾸는 동안(checkout · merge · pull · reset) 잡는 잠금 파일(.git 안).
+  private static final String INDEX_LOCK = "index.lock";
+  // 이보다 오래된 index.lock 은 끊긴 git 이 남긴 것으로 보고 비교를 미루지 않는다. 남은 잠금 때문에 목록이 멈추지 않게 한다.
+  private static final long STALE_LOCK_MS = TimeUnit.MINUTES.toMillis(10);
   // 동시에 비교하는 저장소 수. 저장소마다 git 을 셋 넷 띄우므로, 저장소가 많은 작업 공간에서 git 수십 개가 한꺼번에 돌아 IDE 가 굼뜨지 않게 한다.
   private static final int MAX_PARALLEL_REPOS = 3;
   private static final Semaphore REPO_SLOTS = new Semaphore(MAX_PARALLEL_REPOS);
@@ -465,6 +469,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private List<Change> changes = List.of();
   // 비교를 시작할 때마다 하나 올린다(EDT 에서만). 늦게 끝난 옛 비교가 새 결과를 덮지 않게 끝날 때 이 값과 맞춰 본다.
   private int compareSeq;
+  // 저장소별 다시 비교 차례(EDT 에서만). 저장소 하나 비교가 겹치면 그 저장소에서 마지막에 시작한 비교 결과만 쓴다.
+  private final Map<File, Integer> rootSeqs = new HashMap<>();
   private volatile Kind modeFilter;  // null 이면 전체. 도구줄은 작업 스레드에서 읽는다.
   // 알림을 모아 두었다가 다시 비교할 저장소(EDT 에서만). Git 알림이 온 루트, 변경 목록에서 경로가 달라진 곳(Git · SVN).
   private final Set<File> pendingRoots = new HashSet<>();
@@ -784,7 +790,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
     if (busy || hidden) return;
     if (summaryShown && summaryTail == null) showSummary(changes, null);
     long every = TimeUnit.MINUTES.toMillis(SyncSettings.autoMinutes());
-    if (every > 0 && lastCheck > 0 && System.currentTimeMillis() - lastCheck >= every) refresh(true);
+    // 받기 · Merge Branches · 체크아웃이 도는 저장소가 있으면 이번 회차는 건너뛴다(lastCheck 를 두어 1분 뒤 다시 본다). 도중의 작업본을 읽지 않게 한다.
+    if (every > 0 && lastCheck > 0 && System.currentTimeMillis() - lastCheck >= every && !anyChanging()) refresh(true);
   }
 
   /** 트리 줄을 감싸 고른 파일 · 저장소를 IDE 동작에 알린다(VIRTUAL_FILE · NAVIGATABLE · FILE_PATH 등). */
@@ -1672,11 +1679,19 @@ final class SyncPanel extends SimpleToolWindowPanel {
       pendingPaths.clear();
       return;
     }
-    for (File root : switchedRoots) {
+    // 작업본을 바꾸는 중인 저장소는 남겨 두고 끝난 뒤 정보부터 읽는다. 도중에 읽으면 Merge Branches 가 잠깐 옮겨 간 브랜치의 목록이 보였다 사라진다.
+    Iterator<File> switched = switchedRoots.iterator();
+    while (switched.hasNext()) {
+      File root = switched.next();
+      // 옛 브랜치 정보로 비교하지 않게 모아 둔 알림에서도 뺀다. 끝난 뒤 refreshRepo 가 정보부터 읽어 비교한다.
       pendingRoots.remove(root);
+      if (changing(root)) {
+        debounce.restart();
+        continue;
+      }
+      switched.remove();
       refreshRepo(root, Vcs.GIT, false);
     }
-    switchedRoots.clear();
     // 커밋 · 브랜치 전환이 온 저장소는 역머지 안내도 다시 세고, 파일 저장만 온 저장소는 비교만 한다(안내 세기는 git 을 여섯 번 더 띄운다).
     List<Repo> changed = new ArrayList<>();
     List<Repo> saved = new ArrayList<>();
@@ -1745,14 +1760,25 @@ final class SyncPanel extends SimpleToolWindowPanel {
   }
 
   /** recompare 와 같고, note 가 거짓이면 저장소 줄의 역머지 안내(「develop 보다 N개 뒤」)를 다시 세지 않고 지난 것을 둔다. */
-  private void recompare(List<Repo> targets, boolean full, boolean assumed, boolean note) {
+  private void recompare(List<Repo> requested, boolean full, boolean assumed, boolean note) {
+    // 작업본을 바꾸는 중인 저장소는 지금 비교하지 않고 모아 둔 알림으로 넘겨 끝난 뒤 비교한다(지난 목록을 둔다).
+    List<Repo> targets = new ArrayList<>();
+    for (Repo repo : requested) {
+      if (changing(repo.root())) pendingRoots.add(repo.root());
+      else targets.add(repo);
+    }
+    if (targets.size() < requested.size()) debounce.restart();
     if (targets.isEmpty()) return;
     int seq = full ? ++compareSeq : compareSeq;
+    Map<File, Integer> started = new HashMap<>();
+    for (Repo repo : targets) started.put(repo.root(), rootSeqs.merge(repo.root(), 1, Integer::sum));
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
       List<Change> result = new ArrayList<>();
       AtomicReference<String> error = new AtomicReference<>();
       // 비교에 실패한 저장소. 그 저장소 줄은 지난 결과를 두고, 다른 저장소의 결과는 그대로 바꾼다.
       Set<File> failedRoots = ConcurrentHashMap.newKeySet();
+      // 비교하는 사이 작업본을 바꾸는 일이 시작된 저장소. 읽은 것이 도중 상태일 수 있어 지난 결과를 두고 끝난 뒤 다시 비교한다.
+      Set<File> deferred = ConcurrentHashMap.newKeySet();
       try {
         for (List<Change> part : inParallel(targets, repo -> {
           REPO_SLOTS.acquire();
@@ -1780,6 +1806,9 @@ final class SyncPanel extends SimpleToolWindowPanel {
         })) {
           result.addAll(part);
         }
+        for (Repo repo : targets) {
+          if (changing(repo.root())) deferred.add(repo.root());
+        }
       }
       catch (IOException ex) {
         error.set(messageOf(ex));
@@ -1791,10 +1820,16 @@ final class SyncPanel extends SimpleToolWindowPanel {
       String message = error.get();
       SwingUtilities.invokeLater(() -> {
         if (seq != compareSeq || project.isDisposed()) return;
+        if (!deferred.isEmpty()) {
+          pendingRoots.addAll(deferred);
+          debounce.restart();
+        }
         // 그사이 저장소 하나 새로고침이 저장소 정보(브랜치 · 추적 브랜치)를 바꿨으면 옛 정보로 한 그 저장소 비교는 버리고 지금 목록을 둔다.
+        // 그 저장소의 더 늦은 비교 · 새로고침이 시작됐어도 이 결과는 버린다.
         Set<File> roots = new HashSet<>();
         for (Repo repo : targets) {
-          if (repos.contains(repo) && !failedRoots.contains(repo.root())) roots.add(repo.root());
+          File root = repo.root();
+          if (repos.contains(repo) && !failedRoots.contains(root) && !deferred.contains(root) && started.get(root).equals(rootSeqs.get(root))) roots.add(root);
         }
         List<Change> next = new ArrayList<>();
         for (Change c : changes) {
@@ -2847,6 +2882,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
     }
     String name = root.getName();
     busy = true;
+    // 이 저장소의 앞서 시작한 다시 비교가 늦게 끝나도 이 새로고침 결과를 덮지 않게 한다.
+    rootSeqs.merge(root, 1, Integer::sum);
     // 새로고침 동안 받으면 받기 뒤 다시 비교가 새로고침 결과를 버린다. 끝나면 endBusy 가 다시 켠다.
     setPullEnabled(false);
     tree.setPaintBusy(true);
@@ -4167,6 +4204,29 @@ final class SyncPanel extends SimpleToolWindowPanel {
 
   static void endWork(String key) {
     WORKING.remove(key);
+  }
+
+  /**
+   * root 의 작업본이 바뀌는 중인가: 이 창의 받기 · Merge Branches · Undo 등(beginWork)이 돌거나, git 이 색인을 잡고 있다(.git/index.lock,
+   * IntelliJ 의 체크아웃 · 합치기 · 업데이트 포함). STALE_LOCK_MS 보다 오래된 잠금은 끊긴 git 이 남긴 것으로 보고 세지 않는다. EDT 에서도 부른다(파일 하나 확인).
+   */
+  static boolean changing(File root) {
+    File lock = new File(new File(root, GIT_DIR), INDEX_LOCK);
+    if (lock.isFile() && System.currentTimeMillis() - lock.lastModified() < STALE_LOCK_MS) return true;
+    try {
+      return WORKING.contains(root.getCanonicalPath());
+    }
+    catch (IOException e) {
+      return false;
+    }
+  }
+
+  /** 목록의 저장소 가운데 작업본이 바뀌는 중인 것이 있는가(changing). */
+  private boolean anyChanging() {
+    for (Repo repo : repos) {
+      if (changing(repo.root())) return true;
+    }
+    return false;
   }
 
   /** git 오류가 지워도 되는 원격 추적 참조 때문이면(값 어긋남 · 대소문자만 다른 폴더를 막는 옛 참조) 지울 참조 이름, 아니면 null. */
