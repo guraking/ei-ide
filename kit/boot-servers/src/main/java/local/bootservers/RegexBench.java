@@ -862,6 +862,56 @@ final class RegexBench {
 
     enum PartProblem { NO_KINDS, NO_WORDS, NO_EXCEPT, RANGE, NAME, EMPTY_GROUP, DUPLICATE_NAME }
 
+    /**
+     * needs 가운데 조합의 어느 조각도 낼 수 없는 것. 하나라도 있으면 글 전체 패턴은 어떤 글에도 맞지 않는다.
+     * 조각이 없으면(아무 글이나 받음) 비어 있다. 「아무 글자」 · 「이 글자 빼고」 조각은 무엇이든 낼 수 있다고 본다.
+     */
+    static Set<Need> unmet(List<Part> parts, Set<Need> needs) {
+        List<Piece> pieces = new ArrayList<>();
+        for (Part part : parts) {
+            if (part instanceof Bunch group) {
+                pieces.addAll(group.pieces());
+            } else {
+                pieces.add((Piece) part);
+            }
+        }
+        Set<Need> unmet = EnumSet.noneOf(Need.class);
+        if (pieces.isEmpty()) {
+            return unmet;
+        }
+        for (Need need : needs) {
+            boolean met = false;
+            for (Piece piece : pieces) {
+                met |= supplies(piece, need);
+            }
+            if (!met) {
+                unmet.add(need);
+            }
+        }
+        return unmet;
+    }
+
+    private static boolean supplies(Piece piece, Need need) {
+        if (piece.source() == Source.ANY || piece.source() == Source.EXCEPT) {
+            return true;
+        }
+        if (piece.source() == Source.KINDS) {
+            boolean byKind = switch (need) {
+                case LETTER -> piece.kinds().contains(CharKind.UPPER) || piece.kinds().contains(CharKind.LOWER);
+                case UPPER -> piece.kinds().contains(CharKind.UPPER);
+                case LOWER -> piece.kinds().contains(CharKind.LOWER);
+                case DIGIT -> piece.kinds().contains(CharKind.DIGIT);
+                case SYMBOL -> piece.kinds().contains(CharKind.SYMBOL);
+                case KOREAN -> piece.kinds().contains(CharKind.KOREAN);
+            };
+            if (byKind) {
+                return true;
+            }
+        }
+        // KINDS 의 「이 글자도」 와 WORDS 의 낱말은 글자 하나라도 need 에 맞으면 낼 수 있다
+        return Pattern.compile(need.atom).matcher(piece.text()).find();
+    }
+
     /** 조합 전체의 고칠 점. 줄마다 problem 을 보고, 없으면 두 줄 이상이 같은 이름으로 꺼내는지 본다. 없으면 null. */
     static PartProblem problem(List<Part> parts) {
         List<String> names = new ArrayList<>();

@@ -24,8 +24,8 @@ public final class SqlTools {
   private static final int PER_LINE = 10;
   private static final Pattern NUMBER = Pattern.compile("-?\\d+(\\.\\d+)?");
 
-  /** IN 목록 결과: 글, 값 개수, 뺀 중복 수. */
-  public record InResult(String sql, int count, int duplicates) {}
+  /** IN 목록 결과: 글, 값 개수, 뺀 중복 수, 붙여 넣은 값의 칸 수. */
+  public record InResult(String sql, int count, int duplicates, int width) {}
 
   /**
    * 붙여 넣은 값(엑셀에서 복사한 한 칸 또는 여러 칸)으로 IN 조건. 칸은 탭으로 나누고, 탭이 없고 한 줄이면 쉼표로 나눈다.
@@ -85,7 +85,7 @@ public final class SqlTools {
     }
     String note = "-- 값 " + items.size() + "개" + (dup > 0 ? " (같은 값 " + dup + "개 뺌)" : "")
         + (width == 1 && kind == DbKind.ORACLE && items.size() > ORACLE_IN_LIMIT ? ", Oracle 한도 " + ORACLE_IN_LIMIT + "개씩 나눔" : "") + "\n";
-    return new InResult(note + sql, items.size(), dup);
+    return new InResult(note + sql, items.size(), dup, width);
   }
 
   private static String wrap(List<String> items) {
@@ -112,6 +112,22 @@ public final class SqlTools {
 
   /** SELECT → 바꾸기 결과: 문장, 대상 표, 알림(없으면 빈 글). */
   public record Dml(String sql, String table, String note) {}
+
+  private static final Pattern WHERE_WORD = Pattern.compile("\\bWHERE\\b", Pattern.CASE_INSENSITIVE);
+
+  /**
+   * 두 문장의 조건(첫 WHERE 부터 끝까지)이 같으면 참. 공백 · 줄바꿈 · 끝 세미콜론 차이는 보지 않는다. 둘 다 WHERE 가 없어도 참.
+   * UPDATE 의 SET 을 손으로 채운 뒤에도 조건이 그대로인지 볼 때 쓴다.
+   */
+  public static boolean sameCondition(String a, String b) {
+    return condition(a).equals(condition(b));
+  }
+
+  private static String condition(String sql) {
+    Matcher m = WHERE_WORD.matcher(sql);
+    String tail = m.find() ? sql.substring(m.start()) : "";
+    return tail.strip().replaceAll(";+$", "").replaceAll("\\s+", " ").strip();
+  }
 
   /**
    * 조건을 확인한 SELECT 를 같은 조건의 DELETE 로. 대상은 FROM 의 첫 표. 다른 표가 있으면 그 표들과 조건을 EXISTS 안에 넣는다.

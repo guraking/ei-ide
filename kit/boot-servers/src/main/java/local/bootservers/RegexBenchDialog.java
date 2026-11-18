@@ -93,6 +93,8 @@ final class RegexBenchDialog extends DialogWrapper {
     private static final int MAKE_HEIGHT = 280;
     // 만들기 탭이 글 전체 패턴을 줄 때 켜는 플래그: 시험 글의 줄마다 따로 맞춘다
     private static final String LINE_FLAGS = "gm";
+    // 그 가운데 줄마다 맞추기. 글 안에서 찾는 패턴으로 바뀌면 만들기 탭이 켠 것만 도로 끈다.
+    private static final String MULTILINE_FLAG = "m";
     // 그룹 표 칸 수와 처음 칸 폭 비율(일치 · 그룹 · 이름 · 값 · 위치). 칸은 창 폭을 따라 늘고, 사용자가 끈 폭은 WIDTHS_KEY 에 기억한다.
     private static final int COLUMN_COUNT = 5;
     private static final double[] COLUMN_SHARES = {1 / 11.0, 1 / 11.0, 2 / 11.0, 5 / 11.0, 2 / 11.0};
@@ -101,6 +103,8 @@ final class RegexBenchDialog extends DialogWrapper {
     private static final Color WARNING = JBColor.namedColor("Label.warningForeground", new JBColor(0xA36200, 0xE0A040));
 
     private final ComboBox<RegexBench.Flavor> flavorBox = new ComboBox<>(RegexBench.Flavor.values());
+    /** 만들기 탭이 켠 줄마다 맞추기 플래그(사용자가 직접 켠 것은 들어가지 않는다). */
+    private final Set<RegexBench.Flag> autoMultiline = EnumSet.noneOf(RegexBench.Flag.class);
     private final RegexComposer composer = new RegexComposer(this::composed);
     private final RegexWizard wizard = new RegexWizard(this::use);
     private final RegexExamples examples = new RegexExamples(this::use);
@@ -325,11 +329,20 @@ final class RegexBenchDialog extends DialogWrapper {
     private void use(String pattern, boolean lines, @Nullable String sample) {
         if (lines) {
             Set<RegexBench.Flag> flags = RegexBench.flagsOf(LINE_FLAGS);
+            Set<RegexBench.Flag> multiline = RegexBench.flagsOf(MULTILINE_FLAG);
             for (Map.Entry<RegexBench.Flag, JBCheckBox> e : flagBoxes.entrySet()) {
                 if (flags.contains(e.getKey())) {
+                    if (!e.getValue().isSelected() && multiline.contains(e.getKey())) {
+                        autoMultiline.add(e.getKey());
+                    }
                     e.getValue().setSelected(true);
                 }
             }
+        } else {
+            for (RegexBench.Flag flag : autoMultiline) {
+                flagBoxes.get(flag).setSelected(false);
+            }
+            autoMultiline.clear();
         }
         patternField.setText(pattern);
         if (sample != null) {
@@ -433,6 +446,7 @@ final class RegexBenchDialog extends DialogWrapper {
 
     private void applyPreset(RegexBench.Preset preset) {
         Set<RegexBench.Flag> flags = RegexBench.flagsOf(preset.flags());
+        autoMultiline.clear();
         for (Map.Entry<RegexBench.Flag, JBCheckBox> e : flagBoxes.entrySet()) {
             e.getValue().setSelected(flags.contains(e.getKey()));
         }

@@ -53,6 +53,8 @@ final class ToolsPanel {
   private final JBLabel cteStatus = new JBLabel();
   /** UPDATE · DELETE 로 바꾸기 전의 SELECT(건수는 이것으로 센다). */
   private String dmlSource;
+  /** 바꿔 놓은 UPDATE · DELETE. SQL 칸의 조건이 이것과 달라졌으면 dmlSource 로 센 건수가 맞지 않는다. */
+  private String dmlSql;
 
   ToolsPanel(Bench bench, Supplier<String> sql) {
     this.bench = bench;
@@ -83,6 +85,8 @@ final class ToolsPanel {
         SqlTools.InResult r = SqlTools.inList(pasted.getText(), cols, bench.kind());
         List<String> notes = new ArrayList<>();
         notes.add(String.format(java.util.Locale.ROOT, "값 %,d개", r.count()) + (r.duplicates() > 0 ? ", 겹친 값 " + r.duplicates() + "개는 뺐습니다" : ""));
+        if (!cols.isEmpty() && cols.size() < r.width()) notes.add("붙여 넣은 값은 " + r.width() + "칸인데 칼럼 이름은 " + cols.size() + "개입니다. 이름이 없는 칸은 COL" + (cols.size() + 1) + " 처럼 넣었으니 고치세요.");
+        if (cols.size() > r.width()) notes.add("붙여 넣은 값은 " + r.width() + "칸인데 칼럼 이름은 " + cols.size() + "개입니다. 남는 이름은 쓰지 않았습니다.");
         if (bench.kind() == DbKind.ORACLE && r.count() > SqlTools.ORACLE_IN_LIMIT) notes.add("Oracle 은 IN 하나에 " + SqlTools.ORACLE_IN_LIMIT + "개까지라 OR 로 나눴습니다.");
         bench.replace(r.sql(), notes);
       } catch (IllegalArgumentException ex) {
@@ -134,6 +138,10 @@ final class ToolsPanel {
         dmlCount.setText("먼저 UPDATE · DELETE 로 바꾸세요.");
         return;
       }
+      if (!SqlTools.sameCondition(dmlSql, sql.get())) {
+        dmlCount.setText("SQL 칸의 조건이 바뀌었습니다. 다시 UPDATE · DELETE 로 바꾼 뒤 세세요.");
+        return;
+      }
       dmlCount.setText("세는 중…");
       bench.count(dmlSource, t -> dmlCount.setText("바뀔 행: " + t));
     });
@@ -147,6 +155,7 @@ final class ToolsPanel {
     try {
       SqlTools.Dml d = update ? SqlTools.toUpdate(select, bench.kind(), bench.bind()) : SqlTools.toDelete(select, bench.kind());
       dmlSource = select;
+      dmlSql = d.sql();
       dmlCount.setText("「바뀔 건수 세기」 로 먼저 확인하세요.");
       List<String> notes = new ArrayList<>();
       notes.add("대상 테이블: " + d.table());

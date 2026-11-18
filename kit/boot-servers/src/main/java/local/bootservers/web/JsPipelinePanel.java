@@ -5,6 +5,7 @@ import local.bootservers.BootServersBundle;
 import com.intellij.openapi.ui.ComboBox;
 import com.intellij.ui.EditorNotificationPanel;
 import com.intellij.ui.InlineBanner;
+import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBTextArea;
 import com.intellij.ui.components.JBRadioButton;
 import com.intellij.ui.components.JBScrollPane;
@@ -12,6 +13,7 @@ import com.intellij.ui.components.JBTextField;
 import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.JBFont;
 import com.intellij.util.ui.JBUI;
+import com.intellij.util.ui.NamedColorUtil;
 import com.intellij.util.ui.UIUtil;
 
 import javax.swing.ButtonGroup;
@@ -26,6 +28,7 @@ import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.Rectangle;
 import java.awt.GridLayout;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -54,7 +57,10 @@ final class JsPipelinePanel {
     private final JSpinner limit = new JSpinner(new SpinnerNumberModel(0, 0, LIMIT_MAX, LIMIT_STEP));
     private final JBTextArea hint = new JBTextArea(BootServersBundle.message("js.pipe.hint"));
     private final InlineBanner noData = new InlineBanner(BootServersBundle.message("js.pipe.no.data"), EditorNotificationPanel.Status.Warning);
+    private final JBLabel problem = new JBLabel();
     private final JComponent root;
+    /** 입력 데이터의 칸 이름(setColumns 가 준 것). */
+    private List<String> columns = List.of();
 
     JsPipelinePanel(Consumer<String> make) {
         aggregate.addItem(NONE);
@@ -77,7 +83,18 @@ final class JsPipelinePanel {
         hint.setForeground(UIUtil.getContextHelpForeground());
         JButton makeButton = new JButton(BootServersBundle.message("js.pipe.make"));
         makeButton.putClientProperty(com.intellij.ide.ui.laf.darcula.ui.DarculaButtonUI.DEFAULT_STYLE_KEY, true);
-        makeButton.addActionListener(e -> make.accept(JsPipeline.generate(spec())));
+        makeButton.addActionListener(e -> {
+            List<String> problems = JsPipeline.problems(spec());
+            problem.setText(String.join("  ", problems));
+            if (problems.isEmpty()) {
+                make.accept(JsPipeline.generate(spec()));
+            }
+        });
+        problem.setForeground(NamedColorUtil.getErrorForeground());
+        problem.setAllowAutoWrapping(true);
+        groupColumn.addActionListener(e -> fillSort());
+        aggregate.addActionListener(e -> fillSort());
+        aggColumn.addActionListener(e -> fillSort());
         noData.showCloseButton(false);
         JPanel form = FormBuilder.createFormBuilder()
                 .addComponent(noData)
@@ -97,6 +114,7 @@ final class JsPipelinePanel {
                 .addLabeledComponent(BootServersBundle.message("js.pipe.order"), orderRow)
                 .addLabeledComponent(BootServersBundle.message("js.pipe.limit"), limit)
                 .addSeparator()
+                .addComponent(problem)
                 .addComponent(makeButton)
                 .addComponentFillVertically(new JPanel(), 0)
                 .getPanel();
@@ -109,18 +127,42 @@ final class JsPipelinePanel {
         return root;
     }
 
-    /** 입력 데이터의 칸 이름으로 목록을 다시 채운다. 고르거나 쳐 둔 칸은 그대로 둔다. 칸이 없으면 맨 위에 붙여 넣으라는 알림을 보인다. */
+    /**
+     * 입력 데이터의 칸 이름으로 목록을 다시 채운다. 고르거나 쳐 둔 칸이 새 데이터에도 있으면 그대로 두고, 없으면 「(안 씀)」 으로 돌린다.
+     * 칸이 없으면(데이터가 비었거나 고치는 중) 고른 것은 그대로 두고 맨 위에 붙여 넣으라는 알림을 보인다.
+     */
     void setColumns(List<String> columns) {
+        this.columns = List.copyOf(columns);
         noData.setVisible(columns.isEmpty());
-        for (ComboBox<String> box : List.of(filterColumn, distinctColumn, groupColumn, aggColumn, sortColumn)) {
-            Object kept = box.getEditor().getItem();
-            box.removeAllItems();
-            box.addItem(NONE);
-            for (String c : columns) {
-                box.addItem(c);
-            }
-            box.setSelectedItem(kept == null || kept.toString().isBlank() ? NONE : kept.toString());
+        for (ComboBox<String> box : List.of(filterColumn, distinctColumn, groupColumn, aggColumn)) {
+            fill(box, columns);
         }
+        fillSort();
+    }
+
+    /** 정렬 칸 목록: 묶거나 집계하면 그 뒤에 남는 칸(묶은 칸 · 집계 결과 칸), 아니면 입력 데이터의 칸. */
+    private void fillSort() {
+        List<String> left = JsPipeline.columnsAfterGroup(spec());
+        fill(sortColumn, left.isEmpty() ? columns : left);
+    }
+
+    /** 목록을 choices 로 바꾼다. 고르거나 쳐 둔 값은 choices 에 있거나 choices 가 비었을 때만 남긴다. */
+    private static void fill(ComboBox<String> box, List<String> choices) {
+        String kept = picked(box);
+        List<String> now = new ArrayList<>();
+        for (int i = 1; i < box.getItemCount(); i++) {
+            now.add(box.getItemAt(i));
+        }
+        boolean keep = kept != null && (choices.isEmpty() || choices.contains(kept));
+        if (now.equals(choices) && (keep || kept == null)) {
+            return;
+        }
+        box.removeAllItems();
+        box.addItem(NONE);
+        for (String c : choices) {
+            box.addItem(c);
+        }
+        box.setSelectedItem(keep ? kept : NONE);
     }
 
     private JsPipeline.Spec spec() {

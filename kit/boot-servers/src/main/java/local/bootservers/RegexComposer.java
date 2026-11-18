@@ -573,6 +573,18 @@ final class RegexComposer {
         changed();
     }
 
+    /** 낼 수 없는 「꼭 들어갈 것」 을 알리는 글. 없으면 빈 글. */
+    static String unmetText(java.util.Set<Need> unmet) {
+        if (unmet.isEmpty()) {
+            return "";
+        }
+        java.util.StringJoiner names = new java.util.StringJoiner(" · ");
+        for (Need need : unmet) {
+            names.add(BootServersBundle.message("regex.need." + need.name()));
+        }
+        return BootServersBundle.message("regex.problem.UNMET", names.toString());
+    }
+
     /** 안내 줄을 고치고 onChange 를 부른다. */
     private void changed() {
         RegexBench.PartProblem problem = problem();
@@ -580,8 +592,10 @@ final class RegexComposer {
             problemLabel.setForeground(NamedColorUtil.getErrorForeground());
             problemLabel.setText(BootServersBundle.message("regex.problem." + problem.name()));
         } else {
-            problemLabel.setForeground(NamedColorUtil.getInactiveTextColor());
-            problemLabel.setText(isEmpty() ? BootServersBundle.message("regex.compose.start") : BootServersBundle.message("regex.compose.ok"));
+            String unmet = wholeRadio.isSelected() ? unmetText(RegexBench.unmet(records(), needs())) : "";
+            problemLabel.setForeground(unmet.isEmpty() ? NamedColorUtil.getInactiveTextColor() : NamedColorUtil.getErrorForeground());
+            problemLabel.setText(!unmet.isEmpty() ? unmet
+                    : isEmpty() ? BootServersBundle.message("regex.compose.start") : BootServersBundle.message("regex.compose.ok"));
         }
         onChange.run();
     }

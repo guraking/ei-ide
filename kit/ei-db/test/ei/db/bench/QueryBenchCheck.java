@@ -238,6 +238,12 @@ public class QueryBenchCheck {
     eq(del.sql(), "DELETE\n  FROM ORDERS o\n WHERE o.STATUS = 'X'");
     SqlTools.Dml up = SqlTools.toUpdate("SELECT o.MEMO, c.NAME FROM ORDERS o, CUSTOMER c WHERE o.CUST_ID = c.CUST_ID AND c.GRADE = 'VIP'", DbKind.ORACLE, QueryBuilder.Bind.COLON);
     eq(up.sql(), "UPDATE ORDERS o\n   SET MEMO = :memo\n WHERE EXISTS (\n        SELECT 1\n          FROM CUSTOMER c\n         WHERE o.CUST_ID = c.CUST_ID\n           AND c.GRADE = 'VIP'\n       )");
+    eq(in.width(), 1);
+    eq(SqlTools.inList("1\t2\n3\tx\n", List.of("A"), DbKind.POSTGRES).width(), 2);
+    yes(SqlTools.sameCondition(up.sql(), up.sql().replace("MEMO = :memo", "MEMO = 'x',\n STATUS = 'Y'") + " ;"), "SET 만 고치면 조건은 같다");
+    yes(!SqlTools.sameCondition(up.sql(), up.sql().replace("'VIP'", "'GOLD'")), "조건을 고치면 다르다");
+    yes(!SqlTools.sameCondition(del.sql(), "DELETE FROM ORDERS o"), "조건을 지우면 다르다");
+    yes(SqlTools.sameCondition("DELETE\n  FROM T", "delete from T;"), "둘 다 조건이 없으면 같다");
     try {
       SqlTools.toDelete("SELECT * FROM A a, B b WHERE a.X = b.X(+)", DbKind.ORACLE);
       throw new AssertionError("outer");
