@@ -179,6 +179,12 @@ public class QueryBenchCheck {
     yes(PickText.picked("A", "CUSTOMER", true, true).equals("A, CUSTOMER") && PickText.picked("A, ", "CUSTOMER", true, true).equals("A, CUSTOMER") && PickText.picked("", "CUSTOMER", true, true).equals("CUSTOMER"), "pick append");
     yes(PickText.picked("A, customer, B", "CUSTOMER", true, true).equals("A, B") && PickText.picked("cu", "CUSTOMER", true, false).equals("CUSTOMER"), "pick toggle");
     yes(PickText.chosen("A, orders", items.get(0)) && !PickText.chosen("A, ORDER", items.get(0)), "pick chosen");
+    yes(Patterns.render(Patterns.Kind.SET_MINUS, fill(DbKind.ORACLE)).contains("\nMINUS\n") && Patterns.render(Patterns.Kind.SET_MINUS, fill(DbKind.POSTGRES)).contains("\nEXCEPT\n"), "minus");
+    yes(Patterns.render(Patterns.Kind.ROLLUP, fill(DbKind.ORACLE)).endsWith("ROLLUP (o.STATUS)") && Patterns.render(Patterns.Kind.ROLLUP, fill(DbKind.MYSQL)).endsWith("WITH ROLLUP"), "rollup");
+    yes(Patterns.render(Patterns.Kind.FULL_JOIN, fill(DbKind.POSTGRES)).contains("FULL OUTER JOIN") && Patterns.render(Patterns.Kind.FULL_JOIN, fill(DbKind.MYSQL)).contains("RIGHT OUTER JOIN"), "full join");
+    yes(Patterns.render(Patterns.Kind.NOT_IN_LIST, fill(DbKind.ORACLE)).contains("NOT IN ('R', '진행')") && Patterns.render(Patterns.Kind.NOT_IN_LIST, fill(DbKind.ORACLE)).contains("IS NULL"), "not in");
+    yes(Patterns.render(Patterns.Kind.TODAY, fill(DbKind.ORACLE)).contains("< TRUNC(SYSDATE) + 1") && Patterns.render(Patterns.Kind.RECENT_DAYS, fill(DbKind.POSTGRES)).contains(">= CURRENT_DATE - 7"), "today · recent");
+    yes(Patterns.render(Patterns.Kind.DELETE_OLD, fill(DbKind.ORACLE)).contains("WHERE ORDER_DT < TO_DATE(:beforeDt") && Patterns.render(Patterns.Kind.DELETE_NOT_IN, fill(DbKind.ORACLE)).contains("WHERE ob.CUST_ID = ORDERS.CUST_ID"), "delete 는 조건이 붙는다");
     Patterns.Fill two = new Patterns.Fill(DbKind.ORACLE, QueryBuilder.JoinStyle.OLD, QueryBuilder.Bind.COLON, "orders", "", List.of(), List.of(), "status, cust_id", "amount", "", "", "", List.of());
     yes(Patterns.render(Patterns.Kind.COUNT_BY, two).contains("GROUP BY\n       o.STATUS\n     , o.CUST_ID") && Patterns.render(Patterns.Kind.SUM_BY, two).contains("o.STATUS\n     , o.CUST_ID\n     , COUNT(*) AS CNT"), "묶을 칼럼 여러 개");
     String dup = Patterns.render(Patterns.Kind.DUPLICATES, fill(DbKind.ORACLE));

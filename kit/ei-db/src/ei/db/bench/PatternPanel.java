@@ -33,6 +33,8 @@ import java.util.Map;
  */
 final class PatternPanel {
   private static final int LOAD_DELAY_MS = 500;
+  /** 「하고 싶은 것」 목록을 펼쳤을 때 한 번에 보일 줄 수(종류가 많아 스톡 기본 8줄로는 좁다). */
+  private static final int KIND_ROWS = 30;
   private static final String NO_TABLES = "테이블 목록을 아직 읽지 못했습니다. 위에서 접속을 확인하세요. 이름을 직접 쳐도 됩니다.";
   private static final String NO_COLUMNS = "칼럼 목록이 없습니다. 테이블을 먼저 고르세요. 이름을 직접 쳐도 됩니다.";
 
@@ -57,6 +59,7 @@ final class PatternPanel {
     this.bench = bench;
     loadTimer.setRepeats(false);
     for (Patterns.Kind k : Patterns.Kind.values()) kind.addItem(k);
+    kind.setMaximumRowCount(KIND_ROWS);
     kind.setRenderer(new ColoredListCellRenderer<>() {
       @Override
       protected void customizeCellRenderer(@NotNull JList<? extends Patterns.Kind> list, Patterns.Kind k, int index, boolean selected, boolean focus) {
