@@ -50,6 +50,8 @@ final class PatternPanel {
   private final Timer loadTimer = new Timer(LOAD_DELAY_MS, e -> loadColumns());
   /** 칼럼을 읽어 둔 표 이름(대문자). 같은 표면 다시 읽지 않는다. */
   private String loadedTable = "";
+  /** 칼럼 칸에 든 이름이 속한 표(대문자). 다른 표의 칼럼을 읽으면 칼럼 칸을 비운다. */
+  private String columnsOf = "";
 
   PatternPanel(Bench bench) {
     this.bench = bench;
@@ -154,6 +156,8 @@ final class PatternPanel {
         columnNames.clear();
         for (Meta.Column c : list) columnNames.add(c.name());
         loadedTable = key;
+        if (!columnsOf.isEmpty() && !columnsOf.equals(key)) clearColumns();
+        columnsOf = key;
         if (list.isEmpty()) {
           warn("테이블 " + found + " 의 칼럼을 읽지 못했습니다(권한이 없거나 빈 테이블 정의). 칼럼 이름을 직접 치세요.");
         } else {
@@ -162,6 +166,13 @@ final class PatternPanel {
         }
       });
     });
+  }
+
+  /** 표 칸 둘을 뺀 칸(칼럼 이름 · 그 칼럼의 값)을 비운다. */
+  private void clearColumns() {
+    for (Map.Entry<Patterns.Field, JTextField> e : texts.entrySet()) {
+      if (e.getKey() != Patterns.Field.TABLE && e.getKey() != Patterns.Field.TABLE2) e.getValue().setText("");
+    }
   }
 
   private void warn(String text) {
