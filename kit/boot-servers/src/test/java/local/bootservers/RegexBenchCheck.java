@@ -315,6 +315,15 @@ public final class RegexBenchCheck {
         eq("^(?=.*\\d)[a-z0-9_]{4,20}$", RegexBench.ask(true, EnumSet.of(CharKind.LOWER, CharKind.DIGIT), "_",
                 new Repeating(Repeat.RANGE, 4, 20, false, false, ""), false, Set.of(Need.DIGIT)), "아이디");
         eq(null, RegexBench.ask(true, EnumSet.noneOf(CharKind.class), "", any, false, Set.of()), "고른 글자가 없으면 null");
+        List<Part> korean = List.of(new Piece(Source.KINDS, EnumSet.of(CharKind.KOREAN), "", any, "", ""));
+        eq(EnumSet.of(Need.DIGIT), RegexBench.unmet(korean, EnumSet.of(Need.DIGIT, Need.KOREAN)), "한글만 고르고 숫자가 꼭 들어가야 하면 맞는 글이 없다");
+        List<Part> extra = List.of(new Piece(Source.KINDS, EnumSet.of(CharKind.LOWER), "7_", any, "", ""));
+        eq(EnumSet.of(Need.UPPER), RegexBench.unmet(extra, EnumSet.of(Need.LETTER, Need.DIGIT, Need.SYMBOL, Need.UPPER)), "「이 글자도」 의 글자도 센다");
+        List<Part> mixed = List.of(new Bunch(List.of(new Piece(Source.WORDS, EnumSet.noneOf(CharKind.class), "ab, 12", any, "", "")), false, Repeating.ONCE),
+                new Piece(Source.ANY, EnumSet.noneOf(CharKind.class), "", any, "", ""));
+        eq(EnumSet.noneOf(Need.class), RegexBench.unmet(mixed, EnumSet.allOf(Need.class)), "아무 글자 조각이 있으면 모두 낼 수 있다");
+        eq(EnumSet.of(Need.KOREAN), RegexBench.unmet(mixed.subList(0, 1), EnumSet.of(Need.LETTER, Need.DIGIT, Need.KOREAN)), "묶음 안 낱말의 글자");
+        eq(EnumSet.noneOf(Need.class), RegexBench.unmet(List.of(), EnumSet.allOf(Need.class)), "조각이 없으면 아무 글이나 받는다");
     }
 
     private static void guesses() {

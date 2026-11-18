@@ -151,6 +151,70 @@ public class QueryBenchCheck {
         yes(sql.startsWith("--") && !sql.contains("null"), k + "\n" + sql);
       }
     }
+    yes(Patterns.render(Patterns.Kind.TOP_N, fill(DbKind.ORACLE)).contains("FETCH FIRST 10 ROWS ONLY") && Patterns.render(Patterns.Kind.TOP_N, fill(DbKind.MYSQL)).endsWith("LIMIT 10"), "top n");
+    yes(Patterns.render(Patterns.Kind.PERIOD, fill(DbKind.ORACLE)).contains("< TO_DATE(:toDt, 'YYYY-MM-DD') + 1"), "period");
+    yes(Patterns.render(Patterns.Kind.JOIN_LOOKUP, fill(DbKind.ORACLE)).contains("o.CUST_ID = ob.CUST_ID(+)") && Patterns.render(Patterns.Kind.JOIN_LOOKUP, fill(DbKind.POSTGRES)).contains("LEFT OUTER JOIN ORDERS_BAK ob"), "join lookup");
+    yes(Patterns.render(Patterns.Kind.DELETE_DUP, fill(DbKind.ORACLE)).contains("ROWID IN") && Patterns.render(Patterns.Kind.DELETE_DUP, fill(DbKind.POSTGRES)).contains("CTID IN")
+        && Patterns.render(Patterns.Kind.DELETE_DUP, fill(DbKind.MYSQL)).contains("o.order_dt < b.order_dt"), "delete dup");
+    yes(Patterns.render(Patterns.Kind.UPDATE_FROM, fill(DbKind.ORACLE)).contains("MERGE INTO ORDERS o") && Patterns.render(Patterns.Kind.UPDATE_FROM, fill(DbKind.MYSQL)).contains("INNER JOIN orders_bak ob"), "update from");
+    yes(Patterns.render(Patterns.Kind.UPDATE_ROW, fill(DbKind.POSTGRES)).endsWith("WHERE CUST_ID = :custId") && Patterns.render(Patterns.Kind.DELETE_ROW, fill(DbKind.POSTGRES)).contains("WHERE CUST_ID = :custId"), "update · delete 는 조건이 붙는다");
+    // 꼭 채워야 하는 칸만 채워도(비워도 되는 칸은 빈 채로) 문장이 나온다.
+    for (DbKind kind : DbKind.values()) {
+      for (Patterns.Kind k : Patterns.Kind.values()) {
+        Patterns.Fill full = fill(kind);
+        Patterns.Fill empty = new Patterns.Fill(kind, full.style(), full.bind(), "", "", List.of(), List.of(), "", "", "", "", "", List.of());
+        List<Patterns.Field> need = Patterns.missing(k, empty);
+        Patterns.Fill only = new Patterns.Fill(kind, full.style(), full.bind(), full.table(), need.contains(Patterns.Field.TABLE2) ? full.table2() : "",
+            need.contains(Patterns.Field.KEYS) ? full.keys() : List.of(), need.contains(Patterns.Field.COLS) ? full.cols() : List.of(),
+            need.contains(Patterns.Field.GROUP) ? full.group() : "", need.contains(Patterns.Field.VALUE) ? full.value() : "",
+            need.contains(Patterns.Field.ORDER) ? full.order() : "", need.contains(Patterns.Field.PARENT) ? full.parent() : "",
+            need.contains(Patterns.Field.STATUS) ? full.status() : "", need.contains(Patterns.Field.STATUS_VALUES) ? full.statusValues() : List.of());
+        yes(Patterns.missing(k, only).isEmpty() && !Patterns.render(k, only).contains("null"), "꼭 필요한 칸만: " + kind + " " + k);
+      }
+    }
+    List<String> items = List.of("ORDERS" + PickText.COMMENT_GAP + "주문", "ORDER_ITEM", "CUSTOMER");
+    yes(PickText.filter(items, "ord", false, false).size() == 2 && PickText.filter(items, "주문", false, false).size() == 1 && PickText.filter(items, "zz", false, false).isEmpty(), "pick filter");
+    yes(PickText.filter(items, "PART, cu", true, false).equals(List.of("CUSTOMER")) && PickText.filter(items, "ORDERS", false, true).size() == 3, "pick filter many · all");
+    yes(PickText.picked("ord", items.get(0), false, false).equals("ORDERS") && PickText.picked("A, cu", "CUSTOMER", true, false).equals("A, CUSTOMER"), "pick put");
+    yes(PickText.picked("A", "CUSTOMER", true, true).equals("A, CUSTOMER") && PickText.picked("A, ", "CUSTOMER", true, true).equals("A, CUSTOMER") && PickText.picked("", "CUSTOMER", true, true).equals("CUSTOMER"), "pick append");
+    yes(PickText.picked("A, customer, B", "CUSTOMER", true, true).equals("A, B") && PickText.picked("cu", "CUSTOMER", true, false).equals("CUSTOMER"), "pick toggle");
+    yes(PickText.chosen("A, orders", items.get(0)) && !PickText.chosen("A, ORDER", items.get(0)), "pick chosen");
+    yes(Patterns.render(Patterns.Kind.SET_MINUS, fill(DbKind.ORACLE)).contains("\nMINUS\n") && Patterns.render(Patterns.Kind.SET_MINUS, fill(DbKind.POSTGRES)).contains("\nEXCEPT\n"), "minus");
+    yes(Patterns.render(Patterns.Kind.ROLLUP, fill(DbKind.ORACLE)).endsWith("ROLLUP (o.STATUS)") && Patterns.render(Patterns.Kind.ROLLUP, fill(DbKind.MYSQL)).endsWith("WITH ROLLUP"), "rollup");
+    yes(Patterns.render(Patterns.Kind.FULL_JOIN, fill(DbKind.POSTGRES)).contains("FULL OUTER JOIN") && Patterns.render(Patterns.Kind.FULL_JOIN, fill(DbKind.MYSQL)).contains("RIGHT OUTER JOIN"), "full join");
+    yes(Patterns.render(Patterns.Kind.NOT_IN_LIST, fill(DbKind.ORACLE)).contains("NOT IN ('R', '진행')") && Patterns.render(Patterns.Kind.NOT_IN_LIST, fill(DbKind.ORACLE)).contains("IS NULL"), "not in");
+    yes(Patterns.render(Patterns.Kind.TODAY, fill(DbKind.ORACLE)).contains("< TRUNC(SYSDATE) + 1") && Patterns.render(Patterns.Kind.RECENT_DAYS, fill(DbKind.POSTGRES)).contains(">= CURRENT_DATE - 7"), "today · recent");
+    yes(Patterns.render(Patterns.Kind.DELETE_OLD, fill(DbKind.ORACLE)).contains("WHERE ORDER_DT < TO_DATE(:beforeDt") && Patterns.render(Patterns.Kind.DELETE_NOT_IN, fill(DbKind.ORACLE)).contains("WHERE ob.CUST_ID = ORDERS.CUST_ID"), "delete 는 조건이 붙는다");
+    yes(Patterns.from(Patterns.Kind.SET_MINUS, Patterns.Field.COLS) == Patterns.From.BOTH && Patterns.from(Patterns.Kind.EXISTS, Patterns.Field.KEYS) == Patterns.From.BOTH
+        && Patterns.from(Patterns.Kind.JOIN_LOOKUP, Patterns.Field.COLS) == Patterns.From.SECOND && Patterns.from(Patterns.Kind.JOIN_LOOKUP, Patterns.Field.KEYS) == Patterns.From.BOTH
+        && Patterns.from(Patterns.Kind.LIST, Patterns.Field.COLS) == Patterns.From.FIRST && Patterns.from(Patterns.Kind.PARENT_COLS, Patterns.Field.COLS) == Patterns.From.FIRST, "칼럼 목록의 테이블");
+    yes(Patterns.typeOf("VARCHAR2(100)") == Patterns.Type.TEXT && Patterns.typeOf("timestamp") == Patterns.Type.DATE && Patterns.typeOf("int4") == Patterns.Type.NUMBER
+        && Patterns.typeOf("NUMBER(12,2)") == Patterns.Type.NUMBER && Patterns.typeOf("bool") == Patterns.Type.ANY && Patterns.typeOf("bpchar") == Patterns.Type.TEXT, "형 갈래");
+    yes(Patterns.single(Patterns.Kind.HIERARCHY, Patterns.Field.KEYS) && Patterns.single(Patterns.Kind.LEAF, Patterns.Field.KEYS) && !Patterns.single(Patterns.Kind.DUPLICATES, Patterns.Field.KEYS), "하나만 받는 칸");
+    java.util.Map<String, String> t1 = java.util.Map.of("CUST_ID", "NUMBER", "AMOUNT", "NUMBER(12,2)", "STATUS", "VARCHAR2(10)", "ORDER_DT", "DATE", "YMD", "VARCHAR2(8)", "PARENT_ID", "NUMBER");
+    java.util.Map<String, String> t2 = java.util.Map.of("CUST_ID", "VARCHAR2(20)", "STATUS", "VARCHAR2(10)");
+    java.util.Map<String, String> none = java.util.Map.of();
+    for (Patterns.Kind k : Patterns.Kind.values()) {
+      if (Patterns.need(k, Patterns.Field.COLS) != Patterns.Type.TEXT && Patterns.need(k, Patterns.Field.VALUE) != Patterns.Type.TEXT) {
+        yes(Patterns.warnings(k, fill(DbKind.ORACLE), t1, none).isEmpty(), "맞는 칼럼이면 알림 없음: " + k + " " + Patterns.warnings(k, fill(DbKind.ORACLE), t1, none));
+      }
+      yes(Patterns.warnings(k, fill(DbKind.ORACLE), none, none).isEmpty(), "칼럼을 못 읽었으면 따지지 않음: " + k);
+    }
+    List<String> setWarn = Patterns.warnings(Patterns.Kind.SET_MINUS, fill(DbKind.ORACLE), t1, t2);
+    yes(setWarn.size() == 1 && setWarn.get(0).contains("amount") && setWarn.get(0).contains("orders_bak 에 없는"), "둘째 테이블에 없는 칼럼: " + setWarn);
+    List<String> typeWarn = Patterns.warnings(Patterns.Kind.EXISTS, fill(DbKind.ORACLE), t1, t2);
+    yes(typeWarn.size() == 1 && typeWarn.get(0).contains("형이 두 테이블에서 다릅니다"), "두 테이블 형 다름: " + typeWarn);
+    Patterns.Fill ymd = new Patterns.Fill(DbKind.ORACLE, QueryBuilder.JoinStyle.OLD, QueryBuilder.Bind.COLON, "orders", "", List.of("cust_id", "amount"), List.of("nope"), "status", "status", "ymd", "parent_id", "status", List.of("R"));
+    yes(Patterns.warnings(Patterns.Kind.TODAY, ymd, t1, none).toString().contains("날짜 형이 아닙니다(VARCHAR2(8))"), "날짜 형 아님");
+    yes(Patterns.warnings(Patterns.Kind.SUM_BY, ymd, t1, none).toString().contains("숫자 형이 아닙니다"), "숫자 형 아님");
+    yes(Patterns.warnings(Patterns.Kind.LIST, ymd, t1, none).toString().contains("nope 는 orders 에 없는 칼럼"), "없는 칼럼");
+    yes(Patterns.warnings(Patterns.Kind.HIERARCHY, ymd, t1, none).toString().contains("칼럼 하나만 씁니다"), "하나만");
+    yes(Patterns.warnings(Patterns.Kind.JOIN_LOOKUP, fill(DbKind.ORACLE), t1, java.util.Map.of("CUST_ID", "NUMBER", "NAME", "VARCHAR2(10)")).toString().contains("amount 는 orders_bak 에 없는"), "조인으로 붙일 칼럼은 둘째 테이블 것");
+    Patterns.Fill same = new Patterns.Fill(DbKind.ORACLE, QueryBuilder.JoinStyle.OLD, QueryBuilder.Bind.COLON, "orders", "orders_bak", List.of("cust_id"), List.of("CUST_ID", "amount"), "", "", "", "", "", List.of());
+    yes(Patterns.warnings(Patterns.Kind.UPSERT, same, none, none).size() == 1 && Patterns.warnings(Patterns.Kind.JOIN_LOOKUP, same, none, none).isEmpty(), "기준 칼럼과 겹침");
+    yes(!Patterns.render(Patterns.Kind.INSERT_MISSING, same).contains("(CUST_ID, CUST_ID"), "없는 것만 넣기는 겹친 칼럼을 한 번만");
+    Patterns.Fill two = new Patterns.Fill(DbKind.ORACLE, QueryBuilder.JoinStyle.OLD, QueryBuilder.Bind.COLON, "orders", "", List.of(), List.of(), "status, cust_id", "amount", "", "", "", List.of());
+    yes(Patterns.render(Patterns.Kind.COUNT_BY, two).contains("GROUP BY\n       o.STATUS\n     , o.CUST_ID") && Patterns.render(Patterns.Kind.SUM_BY, two).contains("o.STATUS\n     , o.CUST_ID\n     , COUNT(*) AS CNT"), "묶을 칼럼 여러 개");
     String dup = Patterns.render(Patterns.Kind.DUPLICATES, fill(DbKind.ORACLE));
     yes(dup.contains("HAVING COUNT(*) > 1") && dup.contains("GROUP BY\n       CUST_ID\n"), dup);
     yes(Patterns.render(Patterns.Kind.HIERARCHY, fill(DbKind.POSTGRES)).startsWith("-- 계층") && Patterns.render(Patterns.Kind.HIERARCHY, fill(DbKind.POSTGRES)).contains("WITH RECURSIVE"), "hier");
@@ -174,6 +238,12 @@ public class QueryBenchCheck {
     eq(del.sql(), "DELETE\n  FROM ORDERS o\n WHERE o.STATUS = 'X'");
     SqlTools.Dml up = SqlTools.toUpdate("SELECT o.MEMO, c.NAME FROM ORDERS o, CUSTOMER c WHERE o.CUST_ID = c.CUST_ID AND c.GRADE = 'VIP'", DbKind.ORACLE, QueryBuilder.Bind.COLON);
     eq(up.sql(), "UPDATE ORDERS o\n   SET MEMO = :memo\n WHERE EXISTS (\n        SELECT 1\n          FROM CUSTOMER c\n         WHERE o.CUST_ID = c.CUST_ID\n           AND c.GRADE = 'VIP'\n       )");
+    eq(in.width(), 1);
+    eq(SqlTools.inList("1\t2\n3\tx\n", List.of("A"), DbKind.POSTGRES).width(), 2);
+    yes(SqlTools.sameCondition(up.sql(), up.sql().replace("MEMO = :memo", "MEMO = 'x',\n STATUS = 'Y'") + " ;"), "SET 만 고치면 조건은 같다");
+    yes(!SqlTools.sameCondition(up.sql(), up.sql().replace("'VIP'", "'GOLD'")), "조건을 고치면 다르다");
+    yes(!SqlTools.sameCondition(del.sql(), "DELETE FROM ORDERS o"), "조건을 지우면 다르다");
+    yes(SqlTools.sameCondition("DELETE\n  FROM T", "delete from T;"), "둘 다 조건이 없으면 같다");
     try {
       SqlTools.toDelete("SELECT * FROM A a, B b WHERE a.X = b.X(+)", DbKind.ORACLE);
       throw new AssertionError("outer");

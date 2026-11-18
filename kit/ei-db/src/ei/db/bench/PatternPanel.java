@@ -13,35 +13,31 @@ import ei.db.Meta;
 import ei.db.console.SqlParams;
 import org.jetbrains.annotations.NotNull;
 
-import javax.swing.DefaultComboBoxModel;
 import javax.swing.JComponent;
 import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
-import javax.swing.SwingUtilities;
-import javax.swing.event.PopupMenuEvent;
-import javax.swing.event.PopupMenuListener;
-import java.awt.event.ItemEvent;
 import javax.swing.Timer;
 import javax.swing.event.DocumentEvent;
 import java.awt.BorderLayout;
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.function.Supplier;
 
 /**
  * 「목적으로 만들기」 탭: 무늬를 고르면 그 무늬에 필요한 칸만 그 일에 맞는 이름으로 보이고, 칸을 채우는 대로 바로 아래 SQL 칸에 문장이 나온다.
- * 칸은 모두 줄 폭을 다 채우는 고칠 수 있는 목록 상자다. 표 칸은 표 목록, 칼럼 칸은 그 표의 칼럼 목록을 펼치고,
- * 치는 글을 담은 항목만 남긴다. 여러 칼럼 칸(KEYS · COLS)은 마지막 쉼표 뒤 글로 거르고, 고르면 쉼표로 이어 붙인다.
+ * 칸은 모두 줄 폭을 다 채우는 고르는 글 칸(PickField)이다. 표 칸은 표 목록, 칼럼 칸은 그 표의 칼럼 목록을 펼친다.
  * 표 이름은 치다가 LOAD_DELAY_MS 동안 멈추면 그 표의 칼럼을 읽는다. 못 읽거나 칼럼이 없으면 표 칸 아래에 까닭을 보인다.
  */
 final class PatternPanel {
   private static final int LOAD_DELAY_MS = 500;
-  /** 표 목록 항목에서 이름과 설명 사이. 고르면 앞 이름만 넣는다. */
-  private static final String COMMENT_GAP = "  — ";
+  /** 「하고 싶은 것」 목록을 펼쳤을 때 한 번에 보일 줄 수(종류가 많아 스톡 기본 8줄로는 좁다). */
+  private static final int KIND_ROWS = 30;
+  private static final String NO_TABLES = "테이블 목록을 아직 읽지 못했습니다. 위에서 접속을 확인하세요. 이름을 직접 쳐도 됩니다.";
+  private static final String NO_COLUMNS = "고를 칼럼이 없습니다. 테이블을 먼저 고르세요(테이블이 둘이면 양쪽에 같은 이름으로 있는 칼럼만 나옵니다). 이름을 직접 쳐도 됩니다.";
 
   private final Bench bench;
   private final JPanel form;
@@ -51,21 +47,33 @@ final class PatternPanel {
   private final Map<Patterns.Field, JTextField> texts = new EnumMap<>(Patterns.Field.class);
   private final Map<Patterns.Field, JComponent[]> rows = new EnumMap<>(Patterns.Field.class);
   private final Map<Patterns.Field, JBLabel> labels = new EnumMap<>(Patterns.Field.class);
-  private final List<String> columnNames = new ArrayList<>();
+  /** 첫 테이블 칸 · 둘째 테이블 칸의 칼럼. 못 읽었으면 비어 있다. */
+  private final List<Meta.Column> columns1 = new ArrayList<>();
+  private final List<Meta.Column> columns2 = new ArrayList<>();
+  /** 둘째 테이블 칼럼 칸에 든 이름이 속한 표(대문자). 다른 표의 칼럼을 읽으면 두 테이블에 걸친 칼럼 칸을 비운다. */
+  private String columnsOf2 = "";
+  private final Timer loadTimer2 = new Timer(LOAD_DELAY_MS, e -> loadColumns2());
+  /** 칸을 비운 뒤의 무늬. 다른 무늬를 고르면 칸을 모두 비운다. */
+  private Patterns.Kind shownKind;
   /** 표 목록 상자 항목(「이름  — 설명」). 접속이 바뀌면 다시 읽는다. */
   private final List<String> tableItems = new ArrayList<>();
   private final Timer loadTimer = new Timer(LOAD_DELAY_MS, e -> loadColumns());
   /** 칼럼을 읽어 둔 표 이름(대문자). 같은 표면 다시 읽지 않는다. */
   private String loadedTable = "";
+  /** 칼럼 칸에 든 이름이 속한 표(대문자). 다른 표의 칼럼을 읽으면 칼럼 칸을 비운다. */
+  private String columnsOf = "";
 
   PatternPanel(Bench bench) {
     this.bench = bench;
     loadTimer.setRepeats(false);
+    loadTimer2.setRepeats(false);
     for (Patterns.Kind k : Patterns.Kind.values()) kind.addItem(k);
+    kind.setMaximumRowCount(KIND_ROWS);
     kind.setRenderer(new ColoredListCellRenderer<>() {
       @Override
       protected void customizeCellRenderer(@NotNull JList<? extends Patterns.Kind> list, Patterns.Kind k, int index, boolean selected, boolean focus) {
         if (k == null) return;
+        if (index >= 0) append(k.group + " · ", SimpleTextAttributes.GRAYED_ATTRIBUTES);
         append(k.label);
         if (index >= 0) append("   " + k.description, SimpleTextAttributes.GRAYED_ATTRIBUTES);
       }
@@ -87,10 +95,12 @@ final class PatternPanel {
         c = t;
       } else {
         boolean table = f == Patterns.Field.TABLE || f == Patterns.Field.TABLE2;
-        PickBox box = new PickBox(f == Patterns.Field.KEYS || f == Patterns.Field.COLS, table ? () -> tableItems : () -> columnNames);
-        if (box.editor instanceof JBTextField jb) jb.getEmptyText().setText(Patterns.hint(f));
-        texts.put(f, box.editor);
-        c = full(box.box);
+        boolean many = f == Patterns.Field.KEYS || f == Patterns.Field.COLS || f == Patterns.Field.GROUP;
+        PickField pick = new PickField(() -> many && !(kind.getSelectedItem() instanceof Patterns.Kind k && Patterns.single(k, f)), table ? () -> tableItems : () -> columnsFor(f),
+            table ? NO_TABLES : NO_COLUMNS);
+        pick.field.getEmptyText().setText(Patterns.hint(f));
+        texts.put(f, pick.field);
+        c = full(pick.field);
       }
       JBLabel label = new JBLabel(f.label);
       labels.put(f, label);
@@ -101,13 +111,23 @@ final class PatternPanel {
     form = fb.getPanel();
     form.setBorder(JBUI.Borders.empty(8, 8, 4, 8));
 
-    kind.addActionListener(e -> refresh());
+    shownKind = (Patterns.Kind) kind.getSelectedItem();
+    kind.addActionListener(e -> {
+      if (kind.getSelectedItem() != shownKind) {
+        shownKind = (Patterns.Kind) kind.getSelectedItem();
+        for (JTextField t : texts.values()) t.setText("");
+        tableStatus.setVisible(false);
+      }
+      refresh();
+    });
     for (Map.Entry<Patterns.Field, JTextField> e : texts.entrySet()) {
       boolean table = e.getKey() == Patterns.Field.TABLE;
+      boolean table2 = e.getKey() == Patterns.Field.TABLE2;
       e.getValue().getDocument().addDocumentListener(new DocumentAdapter() {
         @Override
         protected void textChanged(@NotNull DocumentEvent ev) {
           if (table) loadTimer.restart();
+          if (table2) loadTimer2.restart();
           refresh();
         }
       });
@@ -120,15 +140,64 @@ final class PatternPanel {
   /** 접속이 바뀌면 칼럼을 다시 읽는다. 친 글은 그대로 둔다. */
   void connectionChanged() {
     loadedTable = "";
-    columnNames.clear();
+    columns1.clear();
+    columns2.clear();
     tableItems.clear();
     if (bench.config() != null) {
       bench.tables(all -> {
         tableItems.clear();
-        for (Meta.Table t : all) tableItems.add(t.comment().isEmpty() ? t.name() : t.name() + COMMENT_GAP + t.comment());
+        for (Meta.Table t : all) tableItems.add(t.comment().isEmpty() ? t.name() : t.name() + PickText.COMMENT_GAP + t.comment());
       });
     }
     loadColumns();
+    loadColumns2();
+  }
+
+  /** 칼럼 칸 f 의 목록: 지금 무늬가 정한 테이블의 칼럼(Patterns.from). 항목은 「이름  — 형 · 설명」. 두 테이블에 걸친 칸은 둘째 테이블 칼럼을 못 읽었으면 첫 테이블 칼럼을 그대로 보인다. */
+  private List<String> columnsFor(Patterns.Field f) {
+    Patterns.Kind k = (Patterns.Kind) kind.getSelectedItem();
+    Patterns.From from = k == null ? Patterns.From.FIRST : Patterns.from(k, f);
+    List<String> items = new ArrayList<>();
+    for (Meta.Column c : from == Patterns.From.SECOND ? columns2 : columns1) {
+      if (from == Patterns.From.BOTH && !columns2.isEmpty() && !types(columns2).containsKey(c.name().toUpperCase(Locale.ROOT))) continue;
+      items.add(c.name() + PickText.COMMENT_GAP + c.typeLabel() + (c.comment() == null || c.comment().isBlank() ? "" : " · " + c.comment()));
+    }
+    return items;
+  }
+
+  /** 「칼럼 이름(대문자) → 형 이름」. */
+  private static Map<String, String> types(List<Meta.Column> columns) {
+    Map<String, String> out = new HashMap<>();
+    for (Meta.Column c : columns) out.put(c.name().toUpperCase(Locale.ROOT), c.typeLabel());
+    return out;
+  }
+
+  /** 둘째 테이블 칸의 이름으로 칼럼을 읽는다. 못 찾거나 못 읽으면 비워 둔다(목록은 첫 테이블 칼럼으로 나온다). */
+  private void loadColumns2() {
+    String name = text(Patterns.Field.TABLE2);
+    columns2.clear();
+    if (name.isEmpty() || bench.config() == null) return;
+    String plain = SqlParts.simpleName(name).replace("\"", "");
+    bench.tables(all -> {
+      for (Meta.Table t : all) {
+        if (!t.name().equalsIgnoreCase(plain)) continue;
+        bench.columns(t.name(), list -> {
+          if (!name.equals(text(Patterns.Field.TABLE2))) return;
+          columns2.clear();
+          columns2.addAll(list);
+          String key = name.toUpperCase(Locale.ROOT);
+          Patterns.Kind k = (Patterns.Kind) kind.getSelectedItem();
+          if (k != null && !columnsOf2.isEmpty() && !columnsOf2.equals(key)) {
+            for (Patterns.Field f : List.of(Patterns.Field.KEYS, Patterns.Field.COLS)) {
+              if (Patterns.from(k, f) != Patterns.From.FIRST) texts.get(f).setText("");
+            }
+          }
+          columnsOf2 = key;
+          if (form.isShowing()) refresh();
+        });
+        return;
+      }
+    });
   }
 
   /** 표 칸의 이름으로 칼럼을 읽는다. 표 목록에 없으면 까닭을 보인다. */
@@ -136,6 +205,8 @@ final class PatternPanel {
     String name = text(Patterns.Field.TABLE);
     String key = name.toUpperCase(Locale.ROOT);
     if (name.isEmpty() || bench.config() == null) {
+      columns1.clear();
+      loadedTable = "";
       tableStatus.setVisible(false);
       return;
     }
@@ -149,7 +220,7 @@ final class PatternPanel {
       for (Meta.Table t : all) if (t.name().equalsIgnoreCase(plain)) meta = t.name();
       if (!name.equals(text(Patterns.Field.TABLE))) return;
       if (meta == null) {
-        columnNames.clear();
+        columns1.clear();
         loadedTable = "";
         warn("테이블 " + name + " 를 이 접속의 기본 스키마에서 찾지 못했습니다. 이름을 확인하거나 목록에서 고르세요. SQL 은 친 이름 그대로 만듭니다.");
         return;
@@ -157,9 +228,13 @@ final class PatternPanel {
       String found = meta;
       bench.columns(found, list -> {
         if (!name.equals(text(Patterns.Field.TABLE))) return;
-        columnNames.clear();
-        for (Meta.Column c : list) columnNames.add(c.name());
+        columns1.clear();
+        columns1.addAll(list);
         loadedTable = key;
+        if (!columnsOf.isEmpty() && !columnsOf.equals(key)) clearColumns();
+        columnsOf = key;
+        // 칼럼을 읽은 뒤에야 알 수 있는 알림(없는 칼럼 · 형)을 다시 낸다. 다른 탭이 SQL 칸을 쓰는 동안에는 건드리지 않는다.
+        if (form.isShowing()) refresh();
         if (list.isEmpty()) {
           warn("테이블 " + found + " 의 칼럼을 읽지 못했습니다(권한이 없거나 빈 테이블 정의). 칼럼 이름을 직접 치세요.");
         } else {
@@ -168,6 +243,13 @@ final class PatternPanel {
         }
       });
     });
+  }
+
+  /** 표 칸 둘을 뺀 칸(칼럼 이름 · 그 칼럼의 값)을 비운다. */
+  private void clearColumns() {
+    for (Map.Entry<Patterns.Field, JTextField> e : texts.entrySet()) {
+      if (e.getKey() != Patterns.Field.TABLE && e.getKey() != Patterns.Field.TABLE2) e.getValue().setText("");
+    }
   }
 
   private void warn(String text) {
@@ -207,101 +289,9 @@ final class PatternPanel {
       bench.show("", List.of("문장을 만들지 못했습니다: " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage())));
       return;
     }
-    List<String> notes = new ArrayList<>();
+    List<String> notes = new ArrayList<>(Patterns.warnings(k, f, types(columns1), types(columns2)));
     if (!SqlParams.find(sql).isEmpty()) notes.add("값 자리(:이름 · #{이름})는 실행할 때 넣습니다.");
     bench.show(sql, notes);
-  }
-
-  /**
-   * 고칠 수 있는 목록 상자. 펼칠 때와 글을 칠 때 source 항목 중 치는 글(여러 값이면 마지막 쉼표 뒤)을 담은 것만 남긴다.
-   * 방향키로 움직여도 글은 바뀌지 않고(isTableCellEditor), Enter · 클릭으로 고를 때만 넣는다.
-   * 「이름  — 설명」 항목은 이름만 넣는다. 모델을 다시 채우는 동안(adjusting)에는 친 글 · 커서를 지킨다.
-   */
-  private static final class PickBox {
-    final ComboBox<String> box = new ComboBox<>();
-    final JTextField editor;
-    private final boolean many;
-    private final Supplier<List<String>> source;
-    private boolean adjusting;
-    /** 사용자가 마지막으로 친 글. 여러 값 칸에서 고른 항목을 이 글의 마지막 쉼표 뒤에 붙인다. */
-    private String typed = "";
-
-    PickBox(boolean many, Supplier<List<String>> source) {
-      this.many = many;
-      this.source = source;
-      box.setEditable(true);
-      box.putClientProperty("JComboBox.isTableCellEditor", Boolean.TRUE);
-      // shortcut: 테마를 바꾸면 상자가 글 칸을 새로 만들어 이 참조 · 감시가 끊긴다. 작업대를 다시 열면 된다.
-      editor = (JTextField) box.getEditor().getEditorComponent();
-      editor.getDocument().addDocumentListener(new DocumentAdapter() {
-        @Override
-        protected void textChanged(@NotNull DocumentEvent e) {
-          if (adjusting) return;
-          typed = editor.getText();
-          // 문서 알림 안에서는 글을 못 바꾸므로 거르기는 알림이 끝난 뒤에 한다.
-          SwingUtilities.invokeLater(() -> {
-            if (!editor.isFocusOwner()) return;
-            rebuild();
-            if (box.getItemCount() > 0) box.showPopup();
-            else box.hidePopup();
-          });
-        }
-      });
-      box.addPopupMenuListener(new PopupMenuListener() {
-        @Override
-        public void popupMenuWillBecomeVisible(PopupMenuEvent e) { if (!adjusting) rebuild(); }
-        @Override
-        public void popupMenuWillBecomeInvisible(PopupMenuEvent e) { }
-        @Override
-        public void popupMenuCanceled(PopupMenuEvent e) { }
-      });
-      box.addItemListener(e -> {
-        if (adjusting || e.getStateChange() != ItemEvent.SELECTED || e.getItem() == null) return;
-        String name = e.getItem().toString().split(COMMENT_GAP)[0].strip();
-        // 상자가 고른 항목으로 글을 덮은 뒤에 넣는다.
-        SwingUtilities.invokeLater(() -> put(name));
-      });
-    }
-
-    private void put(String name) {
-      String text = many ? head(typed) + name : name;
-      adjusting = true;
-      try {
-        editor.setText(text);
-        editor.setCaretPosition(text.length());
-      } finally {
-        adjusting = false;
-      }
-      typed = text;
-      box.hidePopup();
-    }
-
-    private void rebuild() {
-      String keep = editor.getText();
-      int caret = editor.getCaretPosition();
-      String needle = (many ? tail(typed) : typed).strip().toLowerCase(Locale.ROOT);
-      adjusting = true;
-      try {
-        DefaultComboBoxModel<String> model = (DefaultComboBoxModel<String>) box.getModel();
-        model.removeAllElements();
-        for (String item : source.get()) if (item.toLowerCase(Locale.ROOT).contains(needle)) model.addElement(item);
-        model.setSelectedItem(null);
-        editor.setText(keep);
-        editor.setCaretPosition(Math.min(caret, keep.length()));
-      } finally {
-        adjusting = false;
-      }
-    }
-
-    /** 마지막 쉼표까지(쉼표 뒤 한 칸 포함). 쉼표가 없으면 빈 글. */
-    private static String head(String text) {
-      int comma = text.lastIndexOf(',');
-      return comma < 0 ? "" : text.substring(0, comma + 1) + " ";
-    }
-
-    private static String tail(String text) {
-      return text.substring(text.lastIndexOf(',') + 1);
-    }
   }
 
   /** 상자를 그 줄 폭에 맞게 늘린다(FormBuilder 는 상자를 원래 폭으로 둔다). */

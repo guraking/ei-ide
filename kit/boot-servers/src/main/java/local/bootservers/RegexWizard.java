@@ -144,7 +144,10 @@ final class RegexWizard {
             problemLabel.setText(BootServersBundle.message("regex.problem.NO_KINDS"));
             return;
         }
-        problemLabel.setText("");
+        // 맞는 글이 없는 식도 넘기되 까닭을 보인다(답을 고치면 바로 사라진다)
+        problemLabel.setText(wholeRadio.isSelected()
+                ? RegexComposer.unmetText(RegexBench.unmet(java.util.List.of(new RegexBench.Piece(RegexBench.Source.KINDS, kinds, extraField.getText(), repeating, "", "")), needs))
+                : "");
         use.use(pattern, wholeRadio.isSelected(), null);
     }
 }

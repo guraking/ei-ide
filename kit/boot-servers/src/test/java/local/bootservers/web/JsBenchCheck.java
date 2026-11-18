@@ -111,6 +111,17 @@ public final class JsBenchCheck {
         check(JsPipeline.field("r", "고객 이름").equals("r['고객 이름']"), "칸 대괄호");
         String none = JsPipeline.generate(new JsPipeline.Spec(null, JsPipeline.Op.EQ, "", null, null, null, null, null, false, 0));
         check(none.contains("console.table(rows)") && !none.contains("filter"), "단계 없음: " + none);
+        JsPipeline.Spec groupOnly = new JsPipeline.Spec(null, null, null, null, "DEPT", null, null, "AMT", false, 0);
+        check(JsPipeline.generate(groupOnly).contains("COUNT: list.length"), "묶을 칸만 고르면 개수로 묶는다");
+        check(JsPipeline.columnsAfterGroup(groupOnly).equals(List.of("DEPT", "COUNT")), "묶은 뒤 남는 칸");
+        check(JsPipeline.problems(groupOnly).size() == 1 && JsPipeline.problems(groupOnly).get(0).contains("DEPT · COUNT"), "묶은 뒤 없는 칸으로 정렬: " + JsPipeline.problems(groupOnly));
+        JsPipeline.Spec sum = new JsPipeline.Spec(null, null, null, null, "DEPT", JsPipeline.Agg.SUM, "AMT", "SUM_AMT", true, 0);
+        check(JsPipeline.problems(sum).isEmpty() && JsPipeline.columnsAfterGroup(sum).equals(List.of("DEPT", "SUM_AMT")), "집계 칸으로 정렬");
+        check(JsPipeline.problems(new JsPipeline.Spec(null, null, null, null, "DEPT", JsPipeline.Agg.SUM, null, null, false, 0)).size() == 1, "집계할 칸 없음");
+        check(JsPipeline.columnsAfterGroup(new JsPipeline.Spec(null, null, null, null, null, null, null, "AMT", false, 0)).isEmpty(), "묶지 않으면 원래 칸");
+        check(JsPipeline.problems(new JsPipeline.Spec("AMT", JsPipeline.Op.GT, "많이", null, null, null, null, null, false, 0)).size() == 1, "큼에 숫자 아닌 값");
+        check(JsPipeline.problems(new JsPipeline.Spec("AMT", JsPipeline.Op.GT, " 1,000 ", null, null, null, null, "AMT", false, 0)).isEmpty(), "쉼표 든 숫자");
+        check(JsPipeline.problems(new JsPipeline.Spec("AMT", JsPipeline.Op.EQ, "많이", null, null, null, null, null, false, 0)).isEmpty(), "같음은 글 비교");
     }
 
     private static final String SALES = """

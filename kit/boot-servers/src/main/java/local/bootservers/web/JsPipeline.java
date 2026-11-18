@@ -1,5 +1,7 @@
 package local.bootservers.web;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.regex.Pattern;
 
 /**
@@ -57,6 +59,7 @@ public final class JsPipeline {
     /**
      * 고른 단계. filterColumn · distinctColumn · groupColumn · aggregate · sortColumn 이 null 이면 그 단계를 쓰지 않는다.
      * aggregate 가 COUNT 가 아니면 aggColumn 이 있어야 한다. limit 이 0 이하면 자르지 않는다.
+     * groupColumn 만 있고 aggregate 가 null 이면 개수(COUNT)로 묶는다.
      */
     public record Spec(String filterColumn, Op filterOp, String filterValue, String distinctColumn,
                        String groupColumn, Agg aggregate, String aggColumn,
@@ -66,7 +69,51 @@ public final class JsPipeline {
     private JsPipeline() {
     }
 
-    public static String generate(Spec s) {
+    private static final Pattern NUMBER = Pattern.compile("-?\\d+(\\.\\d+)?");
+
+    /** 묶을 칸만 고르고 집계를 안 골랐으면 개수로 채운 Spec. 그 밖에는 그대로. */
+    private static Spec effective(Spec s) {
+        if (s.aggregate() != null || s.groupColumn() == null) {
+            return s;
+        }
+        return new Spec(s.filterColumn(), s.filterOp(), s.filterValue(), s.distinctColumn(), s.groupColumn(), Agg.COUNT, null,
+                s.sortColumn(), s.sortDescending(), s.limit());
+    }
+
+    /** 묶기 · 집계 뒤에 남는 칸(묶은 칸, 집계 결과 칸). 묶지도 집계하지도 않으면 빈 목록(원래 칸이 그대로 남는다). */
+    public static List<String> columnsAfterGroup(Spec spec) {
+        Spec s = effective(spec);
+        List<String> out = new ArrayList<>();
+        if (s.aggregate() == null || s.aggregate() != Agg.COUNT && s.aggColumn() == null) {
+            return out;
+        }
+        if (s.groupColumn() != null) {
+            out.add(s.groupColumn());
+        }
+        out.add(s.aggregate().column(s.aggColumn()));
+        return out;
+    }
+
+    /** 이대로 만들면 고른 것이 빠지거나 결과가 비는 점. 없으면 빈 목록. */
+    public static List<String> problems(Spec spec) {
+        Spec s = effective(spec);
+        List<String> out = new ArrayList<>();
+        if (s.filterColumn() != null && s.filterOp() != null && (s.filterOp() == Op.GT || s.filterOp() == Op.GE || s.filterOp() == Op.LT || s.filterOp() == Op.LE)
+                && !NUMBER.matcher(nullToEmpty(s.filterValue()).strip().replace(",", "")).matches()) {
+            out.add("「" + s.filterOp() + "」 은 숫자로 비교합니다. 값에 숫자를 넣으세요.");
+        }
+        if (s.aggregate() != null && s.aggregate() != Agg.COUNT && s.aggColumn() == null) {
+            out.add("「" + s.aggregate() + "」 를 낼 「집계할 칸」 을 고르세요.");
+        }
+        List<String> left = columnsAfterGroup(s);
+        if (s.sortColumn() != null && !left.isEmpty() && !left.contains(s.sortColumn())) {
+            out.add("묶은 뒤에는 " + String.join(" · ", left) + " 칸만 남습니다. 정렬 칸을 그중에서 고르세요.");
+        }
+        return out;
+    }
+
+    public static String generate(Spec spec) {
+        Spec s = effective(spec);
         StringBuilder out = new StringBuilder("let rows = Array.isArray(data) ? data : [];\n");
         if (s.filterColumn() != null && s.filterOp() != null) {
             out.append("\n// 거르기: ").append(s.filterColumn()).append(' ').append(s.filterOp())
@@ -151,7 +198,7 @@ public final class JsPipeline {
     /** 숫자로 읽히면 그 글 그대로(쉼표는 뗀다), 아니면 Number('…') 로 감싸 실행 때 NaN 이 되게 한다. */
     private static String number(String value) {
         String plain = value.strip().replace(",", "");
-        return plain.matches("-?\\d+(\\.\\d+)?") ? plain : "Number(" + quote(value) + ")";
+        return NUMBER.matcher(plain).matches() ? plain : "Number(" + quote(value) + ")";
     }
 
     static String field(String row, String column) {
