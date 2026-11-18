@@ -177,6 +177,10 @@ public class QueryBenchCheck {
     yes(PickText.filter(items, "PART, cu", true, false).equals(List.of("CUSTOMER")) && PickText.filter(items, "ORDERS", false, true).size() == 3, "pick filter many · all");
     yes(PickText.picked("ord", items.get(0), false, false).equals("ORDERS") && PickText.picked("A, cu", "CUSTOMER", true, false).equals("A, CUSTOMER"), "pick put");
     yes(PickText.picked("A", "CUSTOMER", true, true).equals("A, CUSTOMER") && PickText.picked("A, ", "CUSTOMER", true, true).equals("A, CUSTOMER") && PickText.picked("", "CUSTOMER", true, true).equals("CUSTOMER"), "pick append");
+    yes(PickText.picked("A, customer, B", "CUSTOMER", true, true).equals("A, B") && PickText.picked("cu", "CUSTOMER", true, false).equals("CUSTOMER"), "pick toggle");
+    yes(PickText.chosen("A, orders", items.get(0)) && !PickText.chosen("A, ORDER", items.get(0)), "pick chosen");
+    Patterns.Fill two = new Patterns.Fill(DbKind.ORACLE, QueryBuilder.JoinStyle.OLD, QueryBuilder.Bind.COLON, "orders", "", List.of(), List.of(), "status, cust_id", "amount", "", "", "", List.of());
+    yes(Patterns.render(Patterns.Kind.COUNT_BY, two).contains("GROUP BY\n       o.STATUS\n     , o.CUST_ID") && Patterns.render(Patterns.Kind.SUM_BY, two).contains("o.STATUS\n     , o.CUST_ID\n     , COUNT(*) AS CNT"), "묶을 칼럼 여러 개");
     String dup = Patterns.render(Patterns.Kind.DUPLICATES, fill(DbKind.ORACLE));
     yes(dup.contains("HAVING COUNT(*) > 1") && dup.contains("GROUP BY\n       CUST_ID\n"), dup);
     yes(Patterns.render(Patterns.Kind.HIERARCHY, fill(DbKind.POSTGRES)).startsWith("-- 계층") && Patterns.render(Patterns.Kind.HIERARCHY, fill(DbKind.POSTGRES)).contains("WITH RECURSIVE"), "hier");

@@ -167,7 +167,11 @@ public final class Patterns {
     String b = blank(f.table2()) ? "" : other(a, Names.alias(SqlParts.simpleName(f.table2())));
     List<String> keys = cols(db, f.keys(), "");
     List<String> ak = cols(db, f.keys(), a + ".");
-    String group = blank(f.group()) ? null : name(db, f.group());
+    // 묶을 칼럼은 쉼표로 여러 개 받는다. group 은 설명 글, ag 는 별칭 붙인 이름들, groupBy 는 GROUP BY 아래에 놓을 줄.
+    List<String> groups = cols(db, PickText.names(f.group() == null ? "" : f.group()), "");
+    String group = String.join(", ", groups);
+    List<String> ag = prefix(groups, a + ".");
+    String groupBy = String.join("\n     , ", ag);
     String value = blank(f.value()) ? null : name(db, f.value());
     String order = blank(f.order()) ? null : name(db, f.order());
     boolean oracle = db == DbKind.ORACLE;
@@ -186,7 +190,7 @@ public final class Patterns {
           + matchLines(keys, b, a, "         WHERE ", "           AND ") + "       )";
       case CTE -> "-- WITH 로 나눠 쓰기: base(거를 행) → summary(묶기) → 마지막 SELECT\n"
           + "WITH base AS (\n    SELECT\n           " + a + ".*\n      FROM " + t + " " + a + "\n     WHERE 1 = 1\n)\n"
-          + ", summary AS (\n    SELECT\n           " + group + "\n         , COUNT(*) AS CNT\n      FROM base\n     GROUP BY\n           " + group + "\n)\n"
+          + ", summary AS (\n    SELECT\n           " + String.join("\n         , ", groups) + "\n         , COUNT(*) AS CNT\n      FROM base\n     GROUP BY\n           " + String.join("\n         , ", groups) + "\n)\n"
           + "SELECT\n       s.*\n  FROM summary s\n ORDER BY\n       s.CNT DESC";
       case HIERARCHY -> hierarchy(db, t, a, keys.get(0), name(db, f.parent()));
       case RANK -> "-- 누적 합 · 순위: " + order + " 순서로 쌓인 " + value + " 합계와 " + value + " 큰 순위(같은 값은 같은 순위)\n"
@@ -201,13 +205,13 @@ public final class Patterns {
             + "  FROM (\n        SELECT " + String.join(", ", keys) + " FROM " + t2 + "\n        " + minus + "\n        SELECT " + String.join(", ", keys) + " FROM " + t + "\n       ) y";
       }
       case PIVOT -> {
-        List<String> items = new ArrayList<>(List.of(a + "." + group));
+        List<String> items = new ArrayList<>(ag);
         for (String sv : f.statusValues()) {
           String then = value == null ? "1" : a + "." + value;
           items.add("SUM(CASE WHEN " + a + "." + name(db, f.status()) + " = " + QueryBuilder.quote(db, sv) + " THEN " + then + " ELSE 0 END) AS " + label(sv));
         }
         yield "-- 세로 → 가로: " + group + " 마다 " + f.status() + " 값별 " + (value == null ? "건수" : value + " 합계") + "를 칸으로\n"
-            + "SELECT\n" + list(items) + "  FROM " + t + " " + a + "\n GROUP BY\n       " + a + "." + group + "\n ORDER BY\n       " + a + "." + group;
+            + "SELECT\n" + list(items) + "  FROM " + t + " " + a + "\n GROUP BY\n       " + groupBy + "\n ORDER BY\n       " + groupBy;
       }
       case UPSERT -> upsert(db, f, t, keys, cols(db, f.cols(), ""));
       case LIST -> "-- 칼럼 골라 조회: " + order + " 큰(최신) 순\n"
@@ -222,14 +226,14 @@ public final class Patterns {
           + "SELECT\n       " + a + ".*\n  FROM " + t + " " + a + "\n ORDER BY\n       " + a + "." + order + " DESC\n"
           + (oracle ? "OFFSET " + place(f, "OFFSET") + " ROWS FETCH NEXT " + place(f, "LIMIT") + " ROWS ONLY" : " LIMIT " + place(f, "LIMIT") + " OFFSET " + place(f, "OFFSET"));
       case COUNT_BY -> "-- 그룹별 건수: " + group + " 값마다 몇 건인지\n"
-          + select(List.of(a + "." + group), "COUNT(*) AS CNT") + "  FROM " + t + " " + a + "\n GROUP BY\n       " + a + "." + group + "\n ORDER BY\n       CNT DESC";
+          + select(ag, "COUNT(*) AS CNT") + "  FROM " + t + " " + a + "\n GROUP BY\n       " + groupBy + "\n ORDER BY\n       CNT DESC";
       case SUM_BY -> "-- 그룹별 합계: " + group + " 값마다 " + value + " 의 건수 · 합계 · 평균 · 최대 · 최소\n"
-          + "SELECT\n" + list(List.of(a + "." + group, "COUNT(*) AS CNT", "SUM(" + a + "." + value + ") AS SUM_" + bare(value), "ROUND(AVG(" + a + "." + value + "), 2) AS AVG_" + bare(value),
-              "MAX(" + a + "." + value + ") AS MAX_" + bare(value), "MIN(" + a + "." + value + ") AS MIN_" + bare(value)))
-          + "  FROM " + t + " " + a + "\n GROUP BY\n       " + a + "." + group + "\n ORDER BY\n       SUM_" + bare(value) + " DESC";
+          + select(ag, "COUNT(*) AS CNT\n     , SUM(" + a + "." + value + ") AS SUM_" + bare(value) + "\n     , ROUND(AVG(" + a + "." + value + "), 2) AS AVG_" + bare(value)
+              + "\n     , MAX(" + a + "." + value + ") AS MAX_" + bare(value) + "\n     , MIN(" + a + "." + value + ") AS MIN_" + bare(value))
+          + "  FROM " + t + " " + a + "\n GROUP BY\n       " + groupBy + "\n ORDER BY\n       SUM_" + bare(value) + " DESC";
       case RATIO -> "-- 그룹별 비율: " + group + " 값마다 건수와 전체 중 비율(%)\n"
-          + "SELECT\n" + list(List.of(a + "." + group, "COUNT(*) AS CNT", "ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1) AS PCT"))
-          + "  FROM " + t + " " + a + "\n GROUP BY\n       " + a + "." + group + "\n ORDER BY\n       CNT DESC";
+          + select(ag, "COUNT(*) AS CNT\n     , ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1) AS PCT")
+          + "  FROM " + t + " " + a + "\n GROUP BY\n       " + groupBy + "\n ORDER BY\n       CNT DESC";
       case MONTHLY -> {
         String ym = db == DbKind.MYSQL ? "DATE_FORMAT(" + a + "." + order + ", '%Y-%m')" : "TO_CHAR(" + a + "." + order + ", 'YYYY-MM')";
         List<String> items = new ArrayList<>(List.of(ym + " AS YM", "COUNT(*) AS CNT"));
@@ -260,7 +264,7 @@ public final class Patterns {
             : db == DbKind.MYSQL ? "GROUP_CONCAT(" + v + " ORDER BY " + v + " SEPARATOR ', ')"
             : "STRING_AGG(CAST(" + v + " AS VARCHAR), ', ' ORDER BY " + v + ")";
         yield "-- 한 칸에 합치기: " + group + " 값마다 " + value + " 를 쉼표로 이어 한 칸에\n"
-            + "SELECT\n" + list(List.of(a + "." + group, joined + " AS " + bare(value) + "_LIST")) + "  FROM " + t + " " + a + "\n GROUP BY\n       " + a + "." + group;
+            + select(ag, joined + " AS " + bare(value) + "_LIST") + "  FROM " + t + " " + a + "\n GROUP BY\n       " + groupBy;
       }
       case JOIN_LOOKUP -> {
         List<String> items = new ArrayList<>(List.of(a + ".*"));

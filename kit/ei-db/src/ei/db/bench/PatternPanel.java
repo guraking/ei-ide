@@ -80,11 +80,11 @@ final class PatternPanel {
         c = t;
       } else {
         boolean table = f == Patterns.Field.TABLE || f == Patterns.Field.TABLE2;
-        PickField pick = new PickField(f == Patterns.Field.KEYS || f == Patterns.Field.COLS, table ? () -> tableItems : () -> columnNames,
+        PickField pick = new PickField(f == Patterns.Field.KEYS || f == Patterns.Field.COLS || f == Patterns.Field.GROUP, table ? () -> tableItems : () -> columnNames,
             table ? NO_TABLES : NO_COLUMNS);
         pick.field.getEmptyText().setText(Patterns.hint(f));
         texts.put(f, pick.field);
-        c = pick.field;
+        c = full(pick.field);
       }
       JBLabel label = new JBLabel(f.label);
       labels.put(f, label);
