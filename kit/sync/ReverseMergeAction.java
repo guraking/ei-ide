@@ -103,6 +103,8 @@ public final class ReverseMergeAction extends DumbAwareAction {
   // 칸 사이 간격 · 단계 제목 아래 내용의 왼쪽 들여쓰기
   private static final int GAP = 8;
   private static final int STEP_INDENT = 26;
+  // 서로 바꾸기 단추 폭: 아이콘 폭의 몇 배인지.
+  private static final int SWAP_WIDTH_ICONS = 3;
   // 단계 사이 · 단계 안 줄 사이 세로 간격
   private static final int STEP_GAP = 14;
   private static final int ROW_GAP = 6;
@@ -435,7 +437,24 @@ public final class ReverseMergeAction extends DumbAwareAction {
       // 가운데 단추: From 과 Into 를 맞바꾸고 바로 다시 비교한다. 빨강 바탕 위에서도 또렷하도록 아이콘은 흰 선으로 직접 그린다.
       c.weightx = 0;
       c.insets = JBUI.insets(0, GAP);
-      JButton swap = new JButton(new SwapIcon());
+      // 기본 단추 최소 폭은 글 단추에 맞춰져 아이콘만 있으면 너무 넓다. 폭은 아이콘 폭의 SWAP_WIDTH_ICONS 배로 줄이고 높이는 상자와 같게 둔다.
+      JButton swap = new JButton(new SwapIcon()) {
+        @Override
+        public Dimension getPreferredSize() {
+          return narrow(super.getPreferredSize());
+        }
+
+        @Override
+        public Dimension getMinimumSize() {
+          return narrow(super.getMinimumSize());
+        }
+
+        private Dimension narrow(Dimension size) {
+          // JButton 생성 중(아이콘을 넣기 전)에도 불릴 수 있다.
+          Icon icon = getIcon();
+          return icon == null ? size : new Dimension(Math.min(size.width, icon.getIconWidth() * SWAP_WIDTH_ICONS), size.height);
+        }
+      };
       SyncPanel.tint(swap, SyncPanel.RESOLVE_BG);
       swap.setToolTipText(SyncBundle.message("rmerge.swap"));
       swap.getAccessibleContext().setAccessibleName(SyncBundle.message("rmerge.swap"));
