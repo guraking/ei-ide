@@ -404,6 +404,15 @@ public final class ReverseMergeAction extends DumbAwareAction {
       return new JBLabel(text, UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER);
     }
 
+    /** 브랜치 상자 밑 설명. 글 길이가 칸 폭을 정하지 않게 바라는 폭을 0 으로 두어 두 상자가 반씩 나누는 비율을 지키고, 좁으면 말줄임으로 잘린다. */
+    private static JBLabel hint(String key) {
+      JBLabel label = dim(SyncBundle.message(key));
+      Dimension size = new Dimension(0, label.getPreferredSize().height);
+      label.setPreferredSize(size);
+      label.setMinimumSize(size);
+      return label;
+    }
+
     @Override
     protected @Nullable JComponent createCenterPanel() {
       // 맨 위: 어느 저장소를 합치는지. 합치기 전에 꼭 확인할 값이라 이름만 빨강(Resolve Conflicts 단추 색) · 조금 큰 굵은 글씨로, 경로는 옆에 작게.
@@ -423,20 +432,13 @@ public final class ReverseMergeAction extends DumbAwareAction {
       c.fill = GridBagConstraints.HORIZONTAL;
       c.weightx = 1;
       branches.add(fromBox, c);
+      // 가운데 단추: From 과 Into 를 맞바꾸고 바로 다시 비교한다. 빨강 바탕 위에서도 또렷하도록 아이콘은 흰 선으로 직접 그린다.
       c.weightx = 0;
       c.insets = JBUI.insets(0, GAP);
-      // 가운데 화살표: 왼쪽(From)에서 오른쪽(Into)으로 가져온다는 방향.
-      JBLabel arrow = new JBLabel(AllIcons.General.ArrowRight);
-      arrow.setToolTipText(SyncBundle.message("rmerge.direction"));
-      branches.add(arrow, c);
-      c.weightx = 1;
-      c.insets = JBUI.emptyInsets();
-      branches.add(intoBox, c);
-      // Into 뒤 단추: From 과 Into 를 맞바꾸고 바로 다시 비교한다.
-      c.weightx = 0;
-      c.insets = JBUI.insetsLeft(GAP);
-      JButton swap = new JButton(SyncBundle.message("rmerge.swap"));
+      JButton swap = new JButton(new SwapIcon());
       SyncPanel.tint(swap, SyncPanel.RESOLVE_BG);
+      swap.setToolTipText(SyncBundle.message("rmerge.swap"));
+      swap.getAccessibleContext().setAccessibleName(SyncBundle.message("rmerge.swap"));
       swap.addActionListener(e -> {
         Object from = fromBox.getSelectedItem();
         fromBox.setSelectedItem(intoBox.getSelectedItem());
@@ -444,6 +446,9 @@ public final class ReverseMergeAction extends DumbAwareAction {
         reload(true);
       });
       branches.add(swap, c);
+      c.weightx = 1;
+      c.insets = JBUI.emptyInsets();
+      branches.add(intoBox, c);
       // Compare 는 브랜치 줄 오른쪽 끝, 저장소 띠와 같은 파랑 바탕으로 눈에 띄게.
       JButton compare = new JButton(SyncBundle.message("rmerge.compare"));
       SyncPanel.tint(compare, STEP_COLOR);
@@ -451,6 +456,14 @@ public final class ReverseMergeAction extends DumbAwareAction {
       c.weightx = 0;
       c.insets = JBUI.insetsLeft(GAP);
       branches.add(compare, c);
+      // 두 상자 밑 설명: 어느 쪽이 가져올 브랜치이고 어느 쪽이 받을 브랜치인지.
+      c.gridy = 1;
+      c.gridx = 0;
+      c.weightx = 1;
+      c.insets = JBUI.insetsTop(ROW_GAP / 2);
+      branches.add(hint("rmerge.from.hint"), c);
+      c.gridx = 2;
+      branches.add(hint("rmerge.into.hint"), c);
       branches.setBorder(JBUI.Borders.emptyLeft(STEP_INDENT));
       unpushed.setForeground(NamedColorUtil.getErrorForeground());
       intoUnpushed.setForeground(NamedColorUtil.getErrorForeground());
@@ -934,6 +947,44 @@ public final class ReverseMergeAction extends DumbAwareAction {
   }
 
   /** 둥근 바탕의 짧은 숫자 표시(커밋 · 파일 · 내 파일). */
+  /** 서로 바꾸기 단추의 ⇄ 아이콘: 위는 오른쪽, 아래는 왼쪽 화살표를 흰 선으로 그린다. 빨강 단추 바탕 위에서 테마와 상관없이 흰색으로 보인다. */
+  private static final class SwapIcon implements Icon {
+    // 기본 아이콘 크기(16)와 그 안의 선 위치. 화면 배율은 JBUI.scale 로 따른다.
+    private static final int SIZE = 16;
+    private static final float STROKE = 1.5f;
+
+    @Override
+    public void paintIcon(Component c, Graphics g, int x, int y) {
+      Graphics2D g2 = (Graphics2D)g.create();
+      try {
+        g2.translate(x, y);
+        g2.scale(JBUI.scale(1f), JBUI.scale(1f));
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g2.setColor(Color.WHITE);
+        g2.setStroke(new BasicStroke(STROKE, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        // 위: 왼쪽에서 오른쪽으로.
+        g2.drawLine(2, 5, 14, 5);
+        g2.drawPolyline(new int[]{11, 14, 11}, new int[]{2, 5, 8}, 3);
+        // 아래: 오른쪽에서 왼쪽으로.
+        g2.drawLine(14, 11, 2, 11);
+        g2.drawPolyline(new int[]{5, 2, 5}, new int[]{8, 11, 14}, 3);
+      }
+      finally {
+        g2.dispose();
+      }
+    }
+
+    @Override
+    public int getIconWidth() {
+      return JBUI.scale(SIZE);
+    }
+
+    @Override
+    public int getIconHeight() {
+      return JBUI.scale(SIZE);
+    }
+  }
+
   private static final class Chip extends JBLabel {
     private final Color fill;
 
