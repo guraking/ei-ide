@@ -119,6 +119,7 @@ def apply_kit():
         ("Git 인증", [KIT / "git-auth" / "apply_git_auth.py", NEW_SRC]),
         ("Defender 제외", [KIT / "defender" / "apply_defender.py", NEW_SRC]),
         ("Git 다시 하기", [KIT / "git-retry" / "apply_git_retry.py", NEW_SRC]),
+        ("Git status 동시에", [KIT / "git-status" / "apply_git_status.py", NEW_SRC]),
     ]
     results = []
     for name, args in steps:
