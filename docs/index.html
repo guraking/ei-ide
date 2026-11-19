@@ -2261,6 +2261,7 @@ python kit\defaults\apply_defaults.py intellij-community
 python kit\git-auth\apply_git_auth.py intellij-community
 python kit\defender\apply_defender.py intellij-community
 python kit\git-retry\apply_git_retry.py intellij-community
+python kit\git-status\apply_git_status.py intellij-community
 python kit\ko\apply_ko.py
 python kit\mingit\apply_mingit.py
 python kit\web\apply_web.py
@@ -2277,6 +2278,7 @@ build-windows.bat
       <tr><td><code>kit\git-auth\apply_git_auth.py</code></td><td>IntelliJ Git 이 https 원격에 <a href="#sync">Git 로그인</a> 값을 넘기게 손질합니다.</td></tr>
       <tr><td><code>kit\defender\apply_defender.py</code></td><td>Microsoft Defender 알림의 「제외」 단추가 실제로 폴더를 제외하게 합니다(직접 빌드한 판은 도우미 대본에 서명이 없어 멈추던 것).</td></tr>
       <tr><td><code>kit\git-retry\apply_git_retry.py</code></td><td>보안 프로그램이 Git 을 잠깐 막아 Clone · Push · Fetch 가 실패하면 1 · 2 · 3초 쉬고 세 번까지 다시 하게 손질합니다.</td></tr>
+      <tr><td><code>kit\git-status\apply_git_status.py</code></td><td>Commit 창 변경 목록을 새로 읽을 때 저장소마다의 <code>git status</code> 를 3개씩 동시에 돌리게 손질합니다. 결과는 그대로이고 기다리는 시간만 줄어듭니다.</td></tr>
       <tr><td><code>kit\ko\apply_ko.py</code></td><td>한국어 팩에 우리 번역(kit\ko\override)을 덮어 본체에 넣습니다. 자리표시 · 태그 · 단축 글자 모양이 팩과 다르면 멈춥니다.</td></tr>
       <tr><td><code>kit\mingit\apply_mingit.py</code></td><td>PC 에 Git 이 없을 때 쓸 MinGit 을 받아 넣습니다(판 · SHA-256 고정).</td></tr>
       <tr><td><code>kit\web\apply_web.py</code></td><td>Node.js 와 JavaScript · TypeScript · Vue 언어 서버를 받아 넣습니다. 인터넷이 막힌 PC 에서도 언어 서버가 뜹니다.</td></tr>
