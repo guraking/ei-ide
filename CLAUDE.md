@@ -15,7 +15,7 @@
   - `kit/web/apply_web.py` 설치본에 넣을 Node.js 와 웹 언어 서버(vtsls · Vue · typescript 5)를 받아 `bundled-plugins/boot-servers/web` 에 넣는다(판 · SHA-256 고정, 저장소에는 안 올림). 인터넷이 막힌 PC 에서도 .js · .ts · .vue 언어 서버가 뜬다
   - `kit/gradle/apply_gradle.py` 설치본에 넣을 Gradle 배포본 둘(9 대 · 8 대, 판 · SHA-256 고정)을 받아 `bundled-plugins/boot-servers/gradle` 에 푼다(저장소에는 안 올림). IntelliJ 는 모든 Gradle 프로젝트를 이 Gradle 로 돌린다(wrapper 가 9 보다 낮은 판이면 8 대, apply_defaults 35)
   - `kit/git-auth` IntelliJ Git 이 https 원격에 인증을 환경값으로 넘기는 손질(`apply_git_auth.py`), 점검 `EiGitAuthCheck.java`
-  - `kit/git-status` IntelliJ 가 Commit 창 변경 목록을 새로 읽을 때 저장소마다의 `git status` 를 3개씩 동시에 돌리게 하는 손질(`apply_git_status.py`), 점검 `apply_git_status_check.py`
+  - `kit/git-status` IntelliJ 가 Commit 창 변경 목록을 새로 읽을 때 저장소마다의 `git status` 와 켤 때 저장소 등록을 3개씩 동시에 돌리게 하는 손질(`apply_git_status.py`), 점검 `apply_git_status_check.py`
   - `kit/defender` Microsoft Defender 알림의 「제외」 단추가 서명 없는 도우미 대본(`bin\defender-exclusions.ps1`)도 돌리게 하는 손질(`apply_defender.py`), 점검 `apply_defender_check.py`
   - `kit/git-retry` IntelliJ Git 의 서버 명령(Clone · Push · Fetch)이 보안 프로그램에 막혀 libcurl-4.dll 을 못 읽으면 1 · 2 · 3초 쉬고 세 번까지 다시 하는 손질(`apply_git_retry.py`), 점검 `apply_git_retry_check.py`
   - `kit/intellij/make_plugin_zips.py` 보안 프로그램이 Moa 를 막을 때 IntelliJ IDEA(2026.3 이상)에 「디스크에서 설치」로 넣을 플러그인 zip 셋을 묶는다(plugin.xml 판 표시 · Moa 전용 메뉴를 IntelliJ 메뉴로), 점검 `make_plugin_zips_check.py`. IntelliJ 에서만 도는 코드는 `MoaProduct.isMoa()` 로 가린다

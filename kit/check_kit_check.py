@@ -37,7 +37,8 @@ def make_source(src):
     retry = c.load("git-retry/apply_git_retry.py")
     texts.setdefault(retry.TARGET, []).extend(old for _, old, _ in retry.EDITS)
     status = c.load("git-status/apply_git_status.py")
-    texts.setdefault(status.TARGET, []).extend(old for _, old, _ in status.EDITS)
+    for rel, old, _ in status.EDITS:
+        texts.setdefault(rel, []).append(old)
     auth = c.load("git-auth/apply_git_auth.py")
     texts.setdefault(auth.TARGET, []).append(auth.ANCHOR)
     menu = c.load("menu/apply_menu.py")
