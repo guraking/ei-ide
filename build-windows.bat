@@ -87,6 +87,13 @@ echo 완료. 결과물은 %CD%\out\idea-ce\artifacts 에 있습니다.
 >"%~dp0build-number.txt" echo %N%
 rem 노트북에 가져갈 수 있게 설치 파일을 release 폴더에도 둔다.
 copy /Y "%~dp0intellij-community\out\idea-ce\artifacts\moaide-*.exe" "%~dp0release\" >nul && echo 설치 파일을 release 폴더에도 복사했습니다.
+rem IntelliJ IDEA 에 「디스크에서 설치」로 넣는 플러그인 zip 셋(kit\intellij\make_plugin_zips.py, 방금 빌드에 들어간 bundled-plugins jar 로 묶음).
+rem 지난 빌드 zip 은 먼저 지운다. 만들지 못해도 설치 파일 빌드 · 릴리스는 그대로 간다.
+set "PLUGIN_ZIPS=%~dp0release\intellij-plugins"
+if exist "%PLUGIN_ZIPS%\*.zip" del /Q "%PLUGIN_ZIPS%\*.zip"
+%KIT_PY% "%~dp0kit\intellij\make_plugin_zips.py" "%PLUGIN_ZIPS%" || echo IntelliJ 용 플러그인 zip 만들기 실패 - 릴리스에는 설치 파일만 올립니다.
+set "ZIPS="
+for %%z in ("%PLUGIN_ZIPS%\*.zip") do call set ZIPS=%%ZIPS%% "%%~fz"
 rem 릴리스 설명은 수정내역.md 의 맨 위 절(「## 」 줄부터 다음 「## 」 줄 전까지)이다. 읽지 못하면 판 번호만 적는다.
 rem 경로는 환경 변수로 넘겨 한글 경로를 PowerShell 따옴표 안에 쓰지 않는다.
 set "CHANGELOG=%~dp0수정내역.md"
@@ -98,6 +105,8 @@ rem GitHub 릴리스로 올린다. gh 명령줄 도구가 있고 로그인돼 있어야 한다(winget in
 where gh >nul 2>&1 || echo gh 명령줄 도구가 없어 GitHub 릴리스 업로드는 건너뜁니다.
 where gh >nul 2>&1 && (
     gh release create "v%BUILD_NUMBER%" "%~dp0release\moaide-%BUILD_NUMBER%.exe" --repo guraking/ei-ide --title "Moa IDE %BUILD_NUMBER%" %NOTESOPT% "%NOTESVAL%" && echo GitHub 릴리스 v%BUILD_NUMBER% 로 올렸습니다. || echo GitHub 릴리스 올리기 실패 - gh 로그인과 같은 판 태그가 이미 있는지 확인하세요. 설치 파일은 release 폴더에 있습니다.
+    rem 플러그인 zip 은 릴리스를 만든 뒤 따로 붙인다. 붙이기에 실패해도 설치 파일 릴리스는 남는다.
+    if defined ZIPS gh release upload "v%BUILD_NUMBER%" %ZIPS% --repo guraking/ei-ide && echo IntelliJ 용 플러그인 zip 을 릴리스에 붙였습니다. || echo IntelliJ 용 플러그인 zip 붙이기 실패 - zip 은 %PLUGIN_ZIPS% 에 있습니다.
 )
 rem 더블클릭으로 돌렸을 때 결과를 읽을 수 있게 창을 닫지 않는다.
 pause
