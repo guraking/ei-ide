@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""IntelliJ Git(git4idea)이 변경 목록(Commit 창 Changes)을 새로 읽을 때 저장소마다의 git status 를 3개씩 동시에 돌리게 한다.
+"""IntelliJ 가 Git 저장소를 다루는 두 곳을 3개씩 동시에 돌게 한다: 변경 목록(Commit 창 Changes)의 git status, 켤 때 저장소 등록.
 
 사용법: python kit\\git-status\\apply_git_status.py <intellij-community 폴더>
 
@@ -8,6 +8,11 @@ GitChangeProvider.getChanges 는 고칠 저장소마다 GitStagingAreaHolder.ref
 status 만 EI_STATUS_SLOTS 개씩 동시에 먼저 돌려 두고, 변경 목록을 만드는 반복은 원래 순서 · 원래 코드 그대로 그 결과를 쓴다.
 git 명령 · 인자 · 결과 해석은 바꾸지 않는다. 실패하면 원래처럼 dirtyPaths 순서의 첫 실패를 던지고 남은 status 는 취소한다.
 저장소별 · 전체 시간은 kinggura-sync 의 git 시간 로그(#kinggura.sync.time, 디버그)에 같이 남는다.
+
+VcsRepositoryManager.findNewRoots 는 새 저장소를 하나씩 만든다. Git 저장소 하나를 만들 때 git 을 네 번 차례로 띄워
+(config -l · for-each-ref · reflog · worktree list) 회사 PC 에서 저장소 하나에 약 3초, 9개면 27초 동안 Commit 창이 기다렸다(11-20 회사 로그).
+새 저장소가 둘 이상이면 EI_CREATE_SLOTS 개씩 동시에 만든다. 화면 스레드에서 불렸거나 읽기 잠금을 쥔 채 불렸으면
+(기다리는 동안 쓰기 작업과 서로 막힐 수 있다) 원래대로 하나씩 만든다. 만들지 못한 root 를 빼는 것 · 예외는 원래와 같다.
 
 고칠 원문을 정확히 한 번 찾지 못하면 아무 파일도 바꾸지 않는다. 고치기 전 원본은
 <intellij-community>/../backup/<시각>-before-gitstatus/ 에 남긴다. 두 번 실행해도 같은 결과가 된다.
@@ -135,14 +140,126 @@ HELPER = (
     "    }\n"
     "  }\n"
     "\n") + HELPER_ANCHOR
+REPO_TARGET = "platform/dvcs-impl/src/com/intellij/dvcs/repo/VcsRepositoryManager.kt"
+REPO_DOC_LINE = "/**\n * VcsRepositoryManager creates, stores and updates all repository's information using registered [VcsRepositoryCreator]\n"
+REPO_CONSTANTS = (
+    "// Moa: 새 저장소를 동시에 만들 수. Commit 창 status(GitChangeProvider) · kinggura-sync 동기화 창과 같은 수다.\n"
+    "private const val EI_CREATE_SLOTS = 3\n"
+    "private val EI_CREATE_POOL =\n"
+    "  com.intellij.util.concurrency.AppExecutorUtil.createBoundedApplicationPoolExecutor(\"Moa VCS repository\", EI_CREATE_SLOTS)\n"
+    "// Moa: 만들기를 기다리는 동안 취소를 보는 간격.\n"
+    "private const val EI_CANCEL_CHECK_MS = 100L\n"
+    "// Moa: kinggura-sync 의 git 시간 로그(SyncPanel.TIME_LOG)와 같은 분류라 같은 디버그 설정으로 함께 켜진다.\n"
+    "private val EI_TIME_LOG = com.intellij.openapi.diagnostic.Logger.getInstance(\"#kinggura.sync.time\")\n"
+    "// Moa: 이 스레드가 eiCreateAll 의 저장소 만들기 중인지. 만들기 안에서 다시 저장소 목록을 고치려 하면 원래(같은 스레드가 MODIFY_LOCK 을 쥔 경우)처럼\n"
+    "// 오류를 남기고 돌아간다. 기다리면 MODIFY_LOCK 을 쥐고 이 만들기를 기다리는 스레드와 서로 막힌다.\n"
+    "private val EI_CREATING: ThreadLocal<Boolean> = ThreadLocal.withInitial { false }\n"
+    "\n") + REPO_DOC_LINE
+FIND_NEW_ROOTS = (
+    "  private fun findNewRoots(knownRoots: Set<VirtualFile>): Map<VirtualFile, Repository> {\n"
+    "    val newRootsMap = HashMap<VirtualFile, Repository>()\n")
+FIND_NEW_ROOTS_PARALLEL = FIND_NEW_ROOTS + (
+    "    // Moa: 새 저장소가 둘 이상이면 EI_CREATE_SLOTS 개씩 동시에 만든다(Git 저장소 하나에 git 을 네 번 차례로 띄운다).\n"
+    "    // 화면 스레드나 읽기 잠금을 쥔 채 불렸으면 기다리는 동안 쓰기 작업과 서로 막힐 수 있어 아래 원래대로 하나씩 만든다.\n"
+    "    val eiApp = ApplicationManager.getApplication()\n"
+    "    val eiRoots = vcsManager.getAllVcsRoots().filter { it.vcs != null && !knownRoots.contains(it.path) }\n"
+    "    if (eiRoots.size > 1 && !eiApp.isDispatchThread && !eiApp.isReadAccessAllowed) {\n"
+    "      return eiCreateAll(eiRoots)\n"
+    "    }\n")
+RECURSION_CHECK = "    if (MODIFY_LOCK.isHeldByCurrentThread) {\n"
+RECURSION_CHECK_POOL = (
+    "    // Moa: eiCreateAll 의 만들기 스레드도 MODIFY_LOCK 을 쥔 스레드 안에서 도는 것과 같다.\n"
+    "    if (MODIFY_LOCK.isHeldByCurrentThread || EI_CREATING.get()) {\n")
+INVALID_ROOTS = "  private fun findInvalidRoots(repositories: Collection<Repository>): Collection<VirtualFile> {\n"
+REPO_HELPERS = (
+    "  /**\n"
+    "   * Moa: roots 의 저장소를 EI_CREATE_SLOTS 개씩 동시에 만든 결과(root → 저장소). 만들지 못한 root 는 빠진다(findNewRoots 와 같다).\n"
+    "   * 만들기마다 지금 진행 표시(runUnderDisposeAwareIndicator)를 따르는 진행 표시 아래에서 돈다.\n"
+    "   * roots 순서로 결과를 받아 첫 예외를 그대로 던진다. 실패 · 취소로 빠져나가면 아직 돌지 않은 만들기는 버리고 도는 것은 취소한다.\n"
+    "   */\n"
+    "  private fun eiCreateAll(roots: List<com.intellij.openapi.vcs.VcsRoot>): Map<VirtualFile, Repository> {\n"
+    "    val started = System.nanoTime()\n"
+    "    val parent = com.intellij.openapi.progress.ProgressManager.getGlobalProgressIndicator()\n"
+    "                 ?: com.intellij.openapi.progress.EmptyProgressIndicator()\n"
+    "    val futures = LinkedHashMap<VirtualFile, java.util.concurrent.Future<Repository?>>()\n"
+    "    val indicators = ArrayList<com.intellij.openapi.progress.ProgressIndicator>()\n"
+    "    val newRootsMap = HashMap<VirtualFile, Repository>()\n"
+    "    var done = false\n"
+    "    try {\n"
+    "      for (root in roots) {\n"
+    "        val vcs = root.vcs ?: continue\n"
+    "        val rootPath = root.path\n"
+    "        // 부모 진행 표시가 취소되면 이것도 취소로 보인다. 이것만 따로 취소해도 부모는 그대로다.\n"
+    "        val indicator = com.intellij.concurrency.SensitiveProgressWrapper(parent)\n"
+    "        indicators.add(indicator)\n"
+    "        futures.put(rootPath, EI_CREATE_POOL.submit(java.util.concurrent.Callable {\n"
+    "          com.intellij.openapi.progress.ProgressManager.getInstance().runProcess(com.intellij.openapi.util.Computable {\n"
+    "            val createStarted = System.nanoTime()\n"
+    "            EI_CREATING.set(true)\n"
+    "            val repository = try {\n"
+    "              tryCreateRepository(project = project, vcs = vcs, rootPath = rootPath, disposable = this)\n"
+    "            }\n"
+    "            finally {\n"
+    "              EI_CREATING.set(false)\n"
+    "            }\n"
+    "            if (EI_TIME_LOG.isDebugEnabled) {\n"
+    "              EI_TIME_LOG.debug(\"[${rootPath.name}] IntelliJ 저장소 등록 ${(System.nanoTime() - createStarted) / 1_000_000} ms\")\n"
+    "            }\n"
+    "            repository\n"
+    "          }, indicator)\n"
+    "        }))\n"
+    "      }\n"
+    "      for ((rootPath, future) in futures) {\n"
+    "        val repository = eiAwait(future, parent) ?: continue\n"
+    "        newRootsMap.put(rootPath, repository)\n"
+    "      }\n"
+    "      done = true\n"
+    "    }\n"
+    "    finally {\n"
+    "      if (!done) {\n"
+    "        for (future in futures.values) future.cancel(false)\n"
+    "        for (indicator in indicators) indicator.cancel()\n"
+    "      }\n"
+    "    }\n"
+    "    if (EI_TIME_LOG.isDebugEnabled) {\n"
+    "      EI_TIME_LOG.debug(\"IntelliJ 저장소 등록 전체 ${(System.nanoTime() - started) / 1_000_000} ms, 리포지토리 ${futures.size}개\")\n"
+    "    }\n"
+    "    return newRootsMap\n"
+    "  }\n"
+    "\n"
+    "  /** Moa: future 의 결과. 기다리는 동안 parent 취소를 EI_CANCEL_CHECK_MS 마다 본다. 만들기가 던진 예외는 그대로 다시 던진다. */\n"
+    "  private fun eiAwait(future: java.util.concurrent.Future<Repository?>, parent: com.intellij.openapi.progress.ProgressIndicator): Repository? {\n"
+    "    while (true) {\n"
+    "      parent.checkCanceled()\n"
+    "      try {\n"
+    "        return future.get(EI_CANCEL_CHECK_MS, TimeUnit.MILLISECONDS)\n"
+    "      }\n"
+    "      catch (ignored: java.util.concurrent.TimeoutException) {\n"
+    "        // 아직 도는 중: 취소를 보고 다시 기다린다.\n"
+    "      }\n"
+    "      catch (e: InterruptedException) {\n"
+    "        Thread.currentThread().interrupt()\n"
+    "        throw ProcessCanceledException(e)\n"
+    "      }\n"
+    "      catch (e: java.util.concurrent.ExecutionException) {\n"
+    "        throw e.cause ?: e\n"
+    "      }\n"
+    "    }\n"
+    "  }\n"
+    "\n") + INVALID_ROOTS
+
 EDITS = [(TARGET, LOG_LINE, CONSTANTS), (TARGET, LOOP_LINE, LOOP), (TARGET, REFRESH_LINES, REFRESH),
-         (TARGET, HELPER_ANCHOR, HELPER)]
+         (TARGET, HELPER_ANCHOR, HELPER),
+         (REPO_TARGET, REPO_DOC_LINE, REPO_CONSTANTS), (REPO_TARGET, FIND_NEW_ROOTS, FIND_NEW_ROOTS_PARALLEL),
+         (REPO_TARGET, INVALID_ROOTS, REPO_HELPERS), (REPO_TARGET, RECURSION_CHECK, RECURSION_CHECK_POOL)]
 
 
-def patch(text):
-    """네 곳을 고친 글. 이미 모두 고쳐져 있으면 None. 원문이 정확히 한 번 있지 않으면 ValueError."""
+def patch(text, target=TARGET):
+    """target 파일의 글을 고친 글. 이미 모두 고쳐져 있으면 None. 원문이 정확히 한 번 있지 않으면 ValueError."""
     changed = False
-    for _, old, new in EDITS:
+    for rel, old, new in EDITS:
+        if rel != target:
+            continue
         fixed = patchlib.edit(text, old, new)
         if fixed is not None:
             text, changed = fixed, True
