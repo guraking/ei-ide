@@ -107,8 +107,6 @@
         <listener class="local.bootservers.HandCursor" topic="com.intellij.ide.AppLifecycleListener"/>
         <!-- 옛 설정 폴더에서 따라 들어온 JetBrains AI 플러그인을 한 번 끔 -->
         <listener class="local.bootservers.AiPluginOff" topic="com.intellij.ide.AppLifecycleListener"/>
-        <!-- IDE 끄기가 3초를 넘기면 30초까지 3초마다 스레드 덤프를 idea.log 에 남김 -->
-        <listener class="local.bootservers.ExitWatch" topic="com.intellij.ide.AppLifecycleListener"/>
     </applicationListeners>
 
     <projectListeners>

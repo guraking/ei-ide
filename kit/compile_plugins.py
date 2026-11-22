@@ -84,7 +84,8 @@ KIT_CHECKS = [KIT / "customize_check.py", KIT / "patchlib_check.py", KIT / "chec
               KIT / "defaults" / "apply_defaults_check.py", KIT / "ko" / "apply_ko_check.py",
               KIT / "defender" / "apply_defender_check.py",
               KIT / "git-retry" / "apply_git_retry_check.py",
-              KIT / "git-status" / "apply_git_status_check.py"]
+              KIT / "git-status" / "apply_git_status_check.py",
+              KIT / "exit-fast" / "apply_exit_fast_check.py"]
 # 순수 자바 점검: (소스 폴더, 점검 클래스, 함께 컴파일할 파일). IntelliJ 클래스 없이 JDK 만으로 컴파일 · 실행한다.
 KIT_JAVA_CHECKS = [(KIT / "git-auth", "git4idea.commands.EiGitAuthCheck", ["EiGitAuthCheck.java", "EiGitAuthText.java"])]
 # Moa Mono 글꼴: kit 원본 폴더 → 설치본에 파일로 들어갈 폴더. 원본 폴더의 파일(TTF · 라이선스)을 그대로 맞춘다.

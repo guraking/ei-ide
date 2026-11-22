@@ -77,6 +77,7 @@ def missing_steps(root):
     defender = load("defender/apply_defender.py")
     git_retry = load("git-retry/apply_git_retry.py")
     git_status = load("git-status/apply_git_status.py")
+    exit_fast = load("exit-fast/apply_exit_fast.py")
     steps = [
         ("이름 바꾸기(brand)", f'python kit\\customize.py {SRC_DIR} "{PRODUCT_NAME}" brand',
          lambda: edits_applied(src, customize.brand_edits(PRODUCT_NAME))),
@@ -89,6 +90,7 @@ def missing_steps(root):
          lambda: edits_applied(src, [(defender.TARGET, defender.ORIGINAL, defender.PATCHED)])),
         ("Git 다시 하기", f"python kit\\git-retry\\apply_git_retry.py {SRC_DIR}", lambda: edits_applied(src, git_retry.EDITS)),
         ("Git status 동시에", f"python kit\\git-status\\apply_git_status.py {SRC_DIR}", lambda: edits_applied(src, git_status.EDITS)),
+        ("끄기 빨리", f"python kit\\exit-fast\\apply_exit_fast.py {SRC_DIR}", lambda: edits_applied(src, exit_fast.EDITS)),
         ("한국어 팩", "python kit\\ko\\apply_ko.py", lambda: any((root / KO_LIB).glob("*.jar"))),
         ("그림(아이콘 · 시작 화면)", "kit\\brand\\apply_brand.bat",
          lambda: all(same_files(KIT / "brand" / d, src / t) for d, t in BRAND_DIRS.items())),
