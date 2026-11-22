@@ -41,6 +41,9 @@
     <!-- 설정 → 버전 관리 → 동기화 창: 원격 자동 확인 간격(기본 끔). -->
     <applicationConfigurable parentId="project.propVCSSupport.Mappings" id="kinggura.sync.settings"
                              instance="kinggura.sync.SyncSettings" key="syncsettings.title"/>
+    <!-- 설정 → 버전 관리 → 커밋 문구 이름표: 커밋 창 「문구 넣기」가 한국어 이름을 못 찾은 영어 낱말의 한국어. -->
+    <applicationConfigurable parentId="project.propVCSSupport.Mappings" id="kinggura.sync.commitNames"
+                             instance="kinggura.sync.CommitSummarySettings" key="commitnames.title"/>
     <!-- 워크스페이스 폴더 프로젝트는 프로젝트 창 맨 위의 프로젝트 폴더 줄을 그리기 전에 거른다(깜빡임 없음). -->
     <treeStructureProvider implementation="kinggura.sync.CloneIntoProject$HideWorkspaceRoot"/>
   </extensions>
@@ -106,6 +109,10 @@
     <action id="KingGura.ReverseMerge" class="kinggura.sync.ReverseMergeAction" icon="AllIcons.Vcs.Merge">
       <add-to-group group-id="Git.MainMenu" anchor="after" relative-to-action="KingGura.SynchronizeWorkspace"/>
       <add-to-group group-id="Git.ContextMenu" anchor="after" relative-to-action="KingGura.SynchronizeWorkspace"/>
+    </action>
+    <!-- 커밋 창 문구 칸 위(문구 기록 단추 옆): 체크한 변경을 읽어 무엇을 고쳤는지 메뉴별로 문구 칸에 넣는다. -->
+    <action id="KingGura.CommitSummary" class="kinggura.sync.CommitSummaryAction" icon="AllIcons.Actions.ListChanges">
+      <add-to-group group-id="Vcs.MessageActionGroup" anchor="after" relative-to-action="Vcs.ShowMessageHistory"/>
     </action>
     <!-- 지금 브랜치로 GitLab 새 Merge Request 페이지를 연다(받는 쪽은 설정 → 동기화 창). 동기화 창 저장소 줄 우클릭에도 있다. -->
     <action id="KingGura.MergeRequest" class="kinggura.sync.MergeRequest">
