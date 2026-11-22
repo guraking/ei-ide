@@ -111,7 +111,7 @@
       <add-to-group group-id="Git.ContextMenu" anchor="after" relative-to-action="KingGura.SynchronizeWorkspace"/>
     </action>
     <!-- 커밋 창 문구 칸 위(문구 기록 단추 옆): 체크한 변경을 읽어 무엇을 고쳤는지 메뉴별로 문구 칸에 넣는다. -->
-    <action id="KingGura.CommitSummary" class="kinggura.sync.CommitSummaryAction" icon="AllIcons.Actions.ListChanges">
+    <action id="KingGura.CommitSummary" class="kinggura.sync.CommitSummaryAction" icon="AllIcons.Actions.Edit">
       <add-to-group group-id="Vcs.MessageActionGroup" anchor="after" relative-to-action="Vcs.ShowMessageHistory"/>
     </action>
     <!-- 지금 브랜치로 GitLab 새 Merge Request 페이지를 연다(받는 쪽은 설정 → 동기화 창). 동기화 창 저장소 줄 우클릭에도 있다. -->
