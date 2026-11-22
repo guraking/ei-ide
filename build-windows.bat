@@ -75,6 +75,8 @@ echo 빌드를 시작합니다. 기록: %LOG%
 cd intellij-community
 call installers.cmd -Dbuild.number=%BUILD_NUMBER% -Dintellij.build.target.os=current -Dintellij.build.target.arch=current -Dintellij.build.incremental.compilation=true -Dintellij.build.skip.build.steps=%SKIP% > "%LOG%" 2>&1
 set "BUILD_RC=%ERRORLEVEL%"
+rem 빌드가 끝나면(성공 · 실패 모두) 이 소스의 Bazel 서버(java.exe, 메모리 3GB 안팎)를 끈다. 다음 빌드는 서버를 새로 띄운다.
+call bazel.cmd shutdown >nul 2>&1
 chcp 949 >nul
 rem 위 줄: 빌드 도구가 코드 페이지를 바꿔 두므로, 한글 줄을 읽기 전에 949 로 되돌린다. 빌드 결과는 chcp 가 errorlevel 을 덮기 전에 BUILD_RC 에 담는다.
 if not "%BUILD_RC%"=="0" (
