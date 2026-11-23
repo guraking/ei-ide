@@ -39,6 +39,8 @@ def make_source(src):
     status = c.load("git-status/apply_git_status.py")
     for rel, old, _ in status.EDITS:
         texts.setdefault(rel, []).append(old)
+    exit_fast = c.load("exit-fast/apply_exit_fast.py")
+    texts.setdefault(exit_fast.TARGET, []).extend(old for _, old, _ in exit_fast.EDITS)
     auth = c.load("git-auth/apply_git_auth.py")
     texts.setdefault(auth.TARGET, []).append(auth.ANCHOR)
     menu = c.load("menu/apply_menu.py")
@@ -57,7 +59,7 @@ def apply_all(root):
     run(KIT / "customize.py", src, c.PRODUCT_NAME, "slim")
     for script in ("menu/apply_menu.py", "defaults/apply_defaults.py", "git-auth/apply_git_auth.py",
                    "defender/apply_defender.py", "git-retry/apply_git_retry.py",
-                   "git-status/apply_git_status.py"):
+                   "git-status/apply_git_status.py", "exit-fast/apply_exit_fast.py"):
         run(KIT / script, src)
     for folder, target in c.BRAND_DIRS.items():
         shutil.copytree(KIT / "brand" / folder, src / target, dirs_exist_ok=True)
@@ -74,7 +76,7 @@ def main():
         fonts.mkdir()
         (fonts / "Fake.ttf").write_bytes(b"ttf")
         c.compile_plugins.FONT_SOURCE = fonts
-        assert len(c.missing_steps(root)) == 11, c.missing_steps(root)
+        assert len(c.missing_steps(root)) == 12, c.missing_steps(root)
         make_source(root / c.SRC_DIR)
         apply_all(root)
         missing = c.missing_steps(root)

@@ -120,6 +120,7 @@ def apply_kit():
         ("Defender 제외", [KIT / "defender" / "apply_defender.py", NEW_SRC]),
         ("Git 다시 하기", [KIT / "git-retry" / "apply_git_retry.py", NEW_SRC]),
         ("Git status 동시에", [KIT / "git-status" / "apply_git_status.py", NEW_SRC]),
+        ("끄기 빨리", [KIT / "exit-fast" / "apply_exit_fast.py", NEW_SRC]),
     ]
     results = []
     for name, args in steps:
