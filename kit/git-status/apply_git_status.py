@@ -14,6 +14,10 @@ VcsRepositoryManager.findNewRoots 는 새 저장소를 하나씩 만든다. Git 
 새 저장소가 둘 이상이면 EI_CREATE_SLOTS 개씩 동시에 만든다. 화면 스레드에서 불렸거나 읽기 잠금을 쥔 채 불렸으면
 (기다리는 동안 쓰기 작업과 서로 막힐 수 있다) 원래대로 하나씩 만든다. 만들지 못한 root 를 빼는 것 · 예외는 원래와 같다.
 
+GitRepositoryImpl 은 저장소 하나를 만들 때 worktree 목록(git worktree list)과 최근 브랜치(git reflog)를 다 읽을 때까지 등록을 막았다.
+둘 다 뒤에서 읽고, 다 읽으면 화면(workingTreesLoaded · repositoryUpdated)에 알린다. 브랜치 목록은 apply_defaults 39 가 파일에서 읽게 한다.
+GitUserRegistry 는 저장소마다 user.name · user.email 을 git 두 번으로 읽었다. 한 번(git config --get-regexp)으로 읽는다.
+
 고칠 원문을 정확히 한 번 찾지 못하면 아무 파일도 바꾸지 않는다. 고치기 전 원본은
 <intellij-community>/../backup/<시각>-before-gitstatus/ 에 남긴다. 두 번 실행해도 같은 결과가 된다.
 """
@@ -248,10 +252,99 @@ REPO_HELPERS = (
     "  }\n"
     "\n") + INVALID_ROOTS
 
+GIT_REPO_TARGET = "plugins/git4idea/backend/src/repo/GitRepositoryImpl.kt"
+GIT_REPO_IMPORT = "import kotlinx.coroutines.cancel\n"
+GIT_REPO_IMPORTS = GIT_REPO_IMPORT + "import kotlinx.coroutines.Dispatchers\nimport kotlinx.coroutines.launch\n"
+RECENT_FIELD = "  private var recentCheckoutBranches = emptyList<GitLocalBranch>()\n"
+RECENT_FIELD_SEQ = RECENT_FIELD + (
+    "\n"
+    "  // Moa: 뒤에서 읽는 최근 브랜치(reflog)의 차례 번호. 늦게 끝난 옛 읽기가 새 결과를 덮지 않게 한다.\n"
+    "  private val eiRecentSeq = java.util.concurrent.atomic.AtomicLong()\n")
+INIT_WORKTREES = (
+    "    repoInfo = readRepoInfo(config)\n"
+    "\n"
+    "    runBlockingMaybeCancellable {\n"
+    "      workingTreeHolder.updateState()\n"
+    "    }\n")
+INIT_WORKTREES_ASYNC = (
+    "    repoInfo = readRepoInfo(config)\n"
+    "\n"
+    "    // Moa: worktree 목록(git worktree list)은 저장소 등록을 막지 않고 뒤에서 읽는다. 다 읽으면 workingTreesLoaded 로 화면에 알린다.\n"
+    "    workingTreeHolder.scheduleReload()\n")
+RECENT_READ = "      recentCheckoutBranches = collectRecentCheckoutBranches(project, root) { branch: GitLocalBranch -> localBranches.containsKey(branch) }\n"
+RECENT_READ_ASYNC = (
+    "      // Moa: 최근 브랜치(git reflog)는 여기서 기다리지 않는다. 저장소를 알린 뒤(createInstance) · 다시 읽은 뒤(update) eiReadRecentLater 가 뒤에서 읽는다.\n")
+UPDATE_READ = "    repoInfo = readRepoInfo()\n"
+UPDATE_READ_RECENT = UPDATE_READ + "    eiReadRecentLater()\n"
+CREATED_TAGS = "        tagsHolder.scheduleReload()\n"
+CREATED_TAGS_RECENT = CREATED_TAGS + "        eiReadRecentLater()\n"
+RECENT_HELPER_ANCHOR = "  override fun dispose() {\n"
+RECENT_HELPER = (
+    "  /**\n"
+    "   * Moa: 최근 브랜치(git reflog)를 뒤에서 읽어 recentCheckoutBranches 에 넣고, 바뀌었으면 repositoryUpdated 로 브랜치 창에 알린다.\n"
+    "   * 저장소를 만들 때는 repositoryCreated 를 보낸 뒤, 정보를 다시 읽을 때는 repoInfo 를 바꾼 뒤 부른다. 다 읽기 전에는 지난 결과(처음엔 빈 목록)를 쓴다.\n"
+    "   * 그사이 더 새 읽기가 시작됐으면 이 결과는 버린다. 저장소가 닫히면(coroutineScope 취소) 알리지 않는다.\n"
+    "   */\n"
+    "  private fun eiReadRecentLater() {\n"
+    "    val eiSeq = eiRecentSeq.incrementAndGet()\n"
+    "    val localBranches = repoInfo.localBranchesWithHashes\n"
+    "    coroutineScope.launch(Dispatchers.IO) {\n"
+    "      val recent = collectRecentCheckoutBranches(project, root) { branch: GitLocalBranch -> localBranches.containsKey(branch) }\n"
+    "      if (eiRecentSeq.get() != eiSeq || recent == recentCheckoutBranches) return@launch\n"
+    "      recentCheckoutBranches = recent\n"
+    "      if (!project.isDisposed && !isDisposed) {\n"
+    "        project.messageBus.syncPublisher(GitRepositoryFrontendSynchronizer.TOPIC).repositoryUpdated(this@GitRepositoryImpl)\n"
+    "      }\n"
+    "    }\n"
+    "  }\n"
+    "\n") + RECENT_HELPER_ANCHOR
+USER_TARGET = "plugins/git4idea/backend/src/GitUserRegistry.java"
+USER_READ = (
+    "    String userName = StringUtil.nullize(GitConfigUtil.getValue(project, root, GitConfigUtil.USER_NAME));\n"
+    "    String userEmail = StringUtil.notNullize(GitConfigUtil.getValue(project, root, GitConfigUtil.USER_EMAIL));\n")
+USER_READ_ONCE = (
+    "    // Moa: user.name · user.email 을 git config 한 번으로 읽는다(저장소마다 git 두 번 → 한 번).\n"
+    "    Map<String, String> eiUser = eiReadUser(project, root);\n"
+    "    String userName = StringUtil.nullize(eiUser.get(GitConfigUtil.USER_NAME));\n"
+    "    String userEmail = StringUtil.notNullize(eiUser.get(GitConfigUtil.USER_EMAIL));\n")
+USER_HELPER_ANCHOR = "  @Override\n  public void dispose() {\n"
+USER_HELPER = (
+    "  // Moa: eiReadUser 가 읽는 키. git 은 키 이름을 소문자로 내놓는다.\n"
+    "  private static final String EI_USER_KEYS = \"^user\\\\.(name|email)$\";\n"
+    "\n"
+    "  /**\n"
+    "   * Moa: root 에서 git config --null --get-regexp 로 읽은 user.name · user.email(키 → 값). 값이 여럿이면 git config --get 처럼 마지막 값이다.\n"
+    "   * 둘 다 없으면(종료 코드 1) 빈 표. 그 밖의 실패는 GitConfigUtil.getValue 처럼 VcsException 을 던진다.\n"
+    "   */\n"
+    "  private static @NotNull Map<String, String> eiReadUser(@NotNull Project project, @NotNull VirtualFile root) throws VcsException {\n"
+    "    git4idea.commands.GitLineHandler h = new git4idea.commands.GitLineHandler(project, root, git4idea.commands.GitCommand.CONFIG);\n"
+    "    h.setEnableInteractiveCallbacks(false);\n"
+    "    h.setSilent(true);\n"
+    "    h.addParameters(\"--null\", \"--get-regexp\", EI_USER_KEYS);\n"
+    "    String output = git4idea.commands.Git.getInstance().runCommand(h).getOutputOrThrow(1);\n"
+    "    Map<String, String> values = new java.util.HashMap<>();\n"
+    "    int start = 0;\n"
+    "    int keyEnd;\n"
+    "    // 한 항목은 「키\\n값\\0」 이다(GitConfigUtil.getValues 와 같은 해석).\n"
+    "    while ((keyEnd = output.indexOf('\\n', start)) != -1) {\n"
+    "      int valueEnd = output.indexOf('\\u0000', keyEnd + 1);\n"
+    "      if (valueEnd == -1) break;\n"
+    "      values.put(output.substring(start, keyEnd), output.substring(keyEnd + 1, valueEnd));\n"
+    "      start = valueEnd + 1;\n"
+    "    }\n"
+    "    return values;\n"
+    "  }\n"
+    "\n") + USER_HELPER_ANCHOR
+
 EDITS = [(TARGET, LOG_LINE, CONSTANTS), (TARGET, LOOP_LINE, LOOP), (TARGET, REFRESH_LINES, REFRESH),
          (TARGET, HELPER_ANCHOR, HELPER),
          (REPO_TARGET, REPO_DOC_LINE, REPO_CONSTANTS), (REPO_TARGET, FIND_NEW_ROOTS, FIND_NEW_ROOTS_PARALLEL),
-         (REPO_TARGET, INVALID_ROOTS, REPO_HELPERS), (REPO_TARGET, RECURSION_CHECK, RECURSION_CHECK_POOL)]
+         (REPO_TARGET, INVALID_ROOTS, REPO_HELPERS), (REPO_TARGET, RECURSION_CHECK, RECURSION_CHECK_POOL),
+         (GIT_REPO_TARGET, GIT_REPO_IMPORT, GIT_REPO_IMPORTS), (GIT_REPO_TARGET, RECENT_FIELD, RECENT_FIELD_SEQ),
+         (GIT_REPO_TARGET, INIT_WORKTREES, INIT_WORKTREES_ASYNC), (GIT_REPO_TARGET, RECENT_READ, RECENT_READ_ASYNC),
+         (GIT_REPO_TARGET, UPDATE_READ, UPDATE_READ_RECENT), (GIT_REPO_TARGET, CREATED_TAGS, CREATED_TAGS_RECENT),
+         (GIT_REPO_TARGET, RECENT_HELPER_ANCHOR, RECENT_HELPER),
+         (USER_TARGET, USER_READ, USER_READ_ONCE), (USER_TARGET, USER_HELPER_ANCHOR, USER_HELPER)]
 
 
 def patch(text, target=TARGET):

@@ -8,7 +8,15 @@ REPO_SAMPLE = "a\n" + t.REPO_DOC_LINE + "b\n" + t.RECURSION_CHECK + "c\n" + t.FI
 REPO_EXPECTED = ("a\n" + t.REPO_CONSTANTS + "b\n" + t.RECURSION_CHECK_POOL + "c\n" + t.FIND_NEW_ROOTS_PARALLEL + "d\n"
                  + t.REPO_HELPERS + "e\n")
 
-for target, sample, expected in ((t.TARGET, STATUS_SAMPLE, STATUS_EXPECTED), (t.REPO_TARGET, REPO_SAMPLE, REPO_EXPECTED)):
+GIT_REPO_SAMPLE = ("a\n" + t.GIT_REPO_IMPORT + "b\n" + t.RECENT_FIELD + "c\n" + t.INIT_WORKTREES + "d\n" + t.UPDATE_READ + "e\n"
+                   + t.RECENT_READ + "f\n" + t.RECENT_HELPER_ANCHOR + "g\n" + t.CREATED_TAGS + "h\n")
+GIT_REPO_EXPECTED = ("a\n" + t.GIT_REPO_IMPORTS + "b\n" + t.RECENT_FIELD_SEQ + "c\n" + t.INIT_WORKTREES_ASYNC + "d\n"
+                     + t.UPDATE_READ_RECENT + "e\n" + t.RECENT_READ_ASYNC + "f\n" + t.RECENT_HELPER + "g\n" + t.CREATED_TAGS_RECENT + "h\n")
+USER_SAMPLE = "a\n" + t.USER_READ + "b\n" + t.USER_HELPER_ANCHOR + "c\n"
+USER_EXPECTED = "a\n" + t.USER_READ_ONCE + "b\n" + t.USER_HELPER + "c\n"
+
+for target, sample, expected in ((t.TARGET, STATUS_SAMPLE, STATUS_EXPECTED), (t.REPO_TARGET, REPO_SAMPLE, REPO_EXPECTED),
+                                 (t.GIT_REPO_TARGET, GIT_REPO_SAMPLE, GIT_REPO_EXPECTED), (t.USER_TARGET, USER_SAMPLE, USER_EXPECTED)):
     fixed = t.patch(sample, target)
     assert fixed == expected, fixed
     assert t.patch(fixed, target) is None
@@ -27,4 +35,9 @@ assert "stageAreaHolder.refresh(rootDirtyPaths)" in t.REFRESH
 # 저장소 만들기: 화면 스레드 · 읽기 잠금이면 원래대로 하나씩, 만들기 스레드의 다시 들어오기는 원래 오류 처리로.
 assert "!eiApp.isDispatchThread && !eiApp.isReadAccessAllowed" in t.FIND_NEW_ROOTS_PARALLEL
 assert "EI_CREATING.set(false)" in t.REPO_HELPERS and "EI_CREATING.get()" in t.RECURSION_CHECK_POOL
+# 저장소 등록: worktree · reflog 는 기다리지 않고, 늦게 끝난 옛 reflog 결과는 버린다. 사용자 읽기는 git 한 번.
+assert "runBlockingMaybeCancellable" not in t.INIT_WORKTREES_ASYNC and "scheduleReload()" in t.INIT_WORKTREES_ASYNC
+assert "collectRecentCheckoutBranches" not in t.RECENT_READ_ASYNC
+assert "eiRecentSeq.get() != eiSeq" in t.RECENT_HELPER and "repositoryUpdated" in t.RECENT_HELPER
+assert t.USER_READ_ONCE.count("eiReadUser(") == 1 and "GitConfigUtil.getValue(" not in t.USER_READ_ONCE
 print("apply_git_status_check 통과")
