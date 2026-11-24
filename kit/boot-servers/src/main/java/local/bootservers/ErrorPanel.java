@@ -24,6 +24,7 @@ import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
+import com.intellij.openapi.actionSystem.CommonShortcuts;
 import com.intellij.openapi.actionSystem.DataContext;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.actionSystem.ex.ActionUtil;
@@ -53,6 +54,7 @@ import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.ui.ColoredListCellRenderer;
 import com.intellij.ui.HyperlinkAdapter;
 import com.intellij.ui.OnePixelSplitter;
+import com.intellij.ui.PopupHandler;
 import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.SimpleTextAttributes;
 import com.intellij.ui.components.JBLabel;
@@ -72,6 +74,9 @@ import javax.swing.JPanel;
 import javax.swing.event.HyperlinkEvent;
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Component;
+import java.awt.Point;
+import java.awt.Rectangle;
 import java.awt.datatransfer.StringSelection;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -104,8 +109,7 @@ final class ErrorPanel extends JPanel {
     private static final String TOOLBAR_PLACE = "MoaErrorPanel";
     /** 목록 한 줄에 보일 원인 글자 수. */
     private static final int MAX_CAUSE_CHARS = 200;
-    /** 복사할 때 붙일 스택 줄 수. */
-    private static final int COPY_STACK_LINES = 40;
+    private static final String POPUP_PLACE = "MoaErrorPanel.Popup";
     /** plugin.xml 의 notificationGroup id. 설정 → 알림에서 끌 수 있다. */
     private static final String NOTIFICATION_GROUP = "서버 오류";
     /** 오류 알림 사이의 최소 간격. 오류가 쏟아져도 이 사이에는 알림을 하나만 띄운다. */
@@ -195,9 +199,26 @@ final class ErrorPanel extends JPanel {
         detailScroll = ScrollPaneFactory.createScrollPane(detail, true);
         split.setSecondComponent(detailScroll);
 
+        // 「오류 복사」 는 아이콘만으로는 찾기 어려워 도구줄에 글자도 보인다. 목록 오른쪽 클릭 · Ctrl+C 도 같은 일을 한다.
+        AnAction copy = action("errors.action.copy", AllIcons.Actions.Copy, this::copyAll);
+        copy.getTemplatePresentation().setDescription(BootServersBundle.message("errors.action.copy.description"));
+        copy.getTemplatePresentation().putClientProperty(ActionUtil.SHOW_TEXT_IN_TOOLBAR, true);
+        copy.registerCustomShortcutSet(CommonShortcuts.getCopy(), list);
+        list.addMouseListener(new PopupHandler() {
+            @Override
+            public void invokePopup(Component comp, int x, int y) {
+                int index = list.locationToIndex(new Point(x, y));
+                Rectangle row = index < 0 ? null : list.getCellBounds(index, index);
+                if (row != null && row.contains(x, y)) {
+                    list.setSelectedIndex(index);
+                    ActionManager.getInstance().createActionPopupMenu(POPUP_PLACE, new DefaultActionGroup(copy))
+                            .getComponent().show(comp, x, y);
+                }
+            }
+        });
         DefaultActionGroup actions = new DefaultActionGroup(
                 action("errors.action.console", AllIcons.Actions.Find, this::jumpToConsole),
-                action("errors.action.copy", AllIcons.Actions.Copy, this::copyAll),
+                copy,
                 action("errors.action.clear", AllIcons.Actions.GC, watcher::clear));
         ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar(TOOLBAR_PLACE, actions, true);
         toolbar.setTargetComponent(this);
@@ -767,7 +788,8 @@ final class ErrorPanel extends JPanel {
         ErrorScan.Item item = list.getSelectedValue();
         if (item != null) {
             ErrorReport r = item.last();
-            copy(r.copyText(r.sql() == null ? null : SqlFill.fill(r.sql(), r.sqlParams()), COPY_STACK_LINES));
+            // 스택은 모아 둔 줄을 모두 붙인다(한 오류는 ErrorReport 가 이미 줄 수 · 글자 수를 제한해 둔다).
+            copy(r.copyText(r.sql() == null ? null : SqlFill.fill(r.sql(), r.sqlParams()), Integer.MAX_VALUE));
         }
     }
 
