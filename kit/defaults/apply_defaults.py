@@ -29,6 +29,7 @@
   34) Maven 은 Maven Wrapper(mvnw) 대신 언제나 내장 Maven 3 을 쓰고, Wrapper 배포본을 받지 않는다.
   35) Gradle 은 Wrapper 대신 언제나 설치본에 넣은 Gradle(kit/gradle/apply_gradle.py)을 쓴다.
       프로젝트의 wrapper 가 9 보다 낮은 판을 적었으면 설치본의 8 대, 그 밖에는 9 대다.
+  39) Git 브랜치 목록을 git for-each-ref 대신 .git 폴더(refs · packed-refs)에서 바로 읽는다(IntelliJ 설정 git.read.branches.from.disk).
 고치기 전 원본은 <intellij-community>/../backup/<시각>-before/ 에 같은 상대경로로 남긴다.
 모든 원문을 먼저 찾아 본 뒤에 쓴다. 하나라도 못 찾으면 아무 파일도 바꾸지 않는다. 줄끝(LF · CRLF)은 파일마다 원래대로 둔다.
 두 번 실행해도 같은 결과가 된다.
@@ -638,6 +639,12 @@ EDITS = [
      "      override fun mousePressed(e: MouseEvent?) {\n"
      "        javax.swing.SwingUtilities.updateComponentTreeUI(menu)  // Moa IDE: 38\n"
      "        JBPopupMenu.showBelow(ic, menu)\n"),
+    # 39) IntelliJ 는 저장소를 등록할 때와 .git 이 바뀔 때마다(커밋 · 브랜치 전환 · fetch) git for-each-ref 로 브랜치 목록을 읽는다.
+    #     회사 PC 는 보안 프로그램 때문에 git 하나에 0.8~1.4초라, 켤 때 저장소마다 그만큼 등록이 늦었다(11-23 로그).
+    #     IntelliJ 에 남아 있는 파일 읽기(.git/refs · packed-refs)를 기본으로 쓴다. reftable 저장소는 HEAD 가 달라 IntelliJ 가 git 으로 읽는다.
+    ("plugins/git4idea/backend/resources/intellij.vcs.git.backend.xml",
+     '    <registryKey key="git.read.branches.from.disk" defaultValue="false"\n',
+     '    <registryKey key="git.read.branches.from.disk" defaultValue="true"\n'),
 ]
 
 
