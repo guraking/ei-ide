@@ -121,6 +121,7 @@ final class ErrorPanel extends JPanel {
     private static final String LINK_SQL_CONSOLE = "sqlConsole";
     private static final String LINK_SQL_COPY = "sqlCopy";
     private static final String LINK_CONSOLE = "console";
+    private static final String LINK_COPY = "copy";
     // 「{id:[7], name:[a, b]}」 의 한 칸(스프링 DispatcherServlet DEBUG 의 parameters)
     private static final Pattern SPRING_PARAM = Pattern.compile("([^\\s,{}:\\[\\]]+):\\[([^\\]]*)]");
     private static final String API_SOURCE = "로그";
@@ -195,13 +196,9 @@ final class ErrorPanel extends JPanel {
         detailScroll = ScrollPaneFactory.createScrollPane(detail, true);
         split.setSecondComponent(detailScroll);
 
-        // 「오류 복사」 는 아이콘만으로는 찾기 어려워 도구줄에 글자도 보인다.
-        AnAction copy = action("errors.action.copy", AllIcons.Actions.Copy, this::copyAll);
-        copy.getTemplatePresentation().setDescription(BootServersBundle.message("errors.action.copy.description"));
-        copy.getTemplatePresentation().putClientProperty(ActionUtil.SHOW_TEXT_IN_TOOLBAR, true);
         DefaultActionGroup actions = new DefaultActionGroup(
                 action("errors.action.console", AllIcons.Actions.Find, this::jumpToConsole),
-                copy,
+                action("errors.action.copy", AllIcons.Actions.Copy, this::copyAll),
                 action("errors.action.clear", AllIcons.Actions.GC, watcher::clear));
         ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar(TOOLBAR_PLACE, actions, true);
         toolbar.setTargetComponent(this);
@@ -502,7 +499,9 @@ final class ErrorPanel extends JPanel {
         if (r.lines().size() > 1) {
             section(b, "errors.stack", stackHtml(r));
         }
-        return html(b.append("</table>").append(link(LINK_CONSOLE, BootServersBundle.message("errors.action.console"))).toString());
+        b.append("</table>").append(link(LINK_CONSOLE, BootServersBundle.message("errors.action.console")))
+                .append(" &nbsp; ").append(link(LINK_COPY, BootServersBundle.message("errors.detail.copy")));
+        return html(b.toString());
     }
 
     /** 예외 · 원인 줄과 우리 코드 줄만 남기고, 이어진 라이브러리 줄은 「… 라이브러리 n줄」 로 접는다. 우리 코드 줄은 누르면 간다. */
@@ -568,6 +567,9 @@ final class ErrorPanel extends JPanel {
         }
         else if (href.equals(LINK_CONSOLE)) {
             jumpToConsole();
+        }
+        else if (href.equals(LINK_COPY)) {
+            copyAll();
         }
     }
 
