@@ -273,7 +273,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
   // 파일 줄 앞 상태 글자 칸의 최소 폭(JBUI.scale 전). 「M」 · 「??」 · 「충돌」 뒤 파일 아이콘이 한 줄로 서게 한다.
   // 파일 줄 앞 상태 글자 칸 폭을 정하는 가장 넓은 두 글자 상태(git status 의 XY). 폭은 이 글자의 글꼴 폭에 간격 하나를 더한 것이다.
   private static final String STATUS_SAMPLE = "MM";
-  // 왼쪽 목록이 처음 차지하는 폭 비율. 저장소 줄의 「develop 보다 N개 뒤 · 내 커밋」 안내까지 한 줄에 들어가게 넓게 잡는다. 끌어 바꾼 값은 저장한다.
+  // 왼쪽 목록이 처음 차지하는 폭 비율. 저장소 줄의 「develop 에서 받을 커밋 N개 · develop 으로 보낼 내 커밋 N개」 안내까지 한 줄에 들어가게 넓게 잡는다. 끌어 바꾼 값은 저장한다.
   private static final float TREE_PROPORTION = 0.45f;
   // 저장 키. 이 비율로 바꿀 때 키를 새로 해서, 앞 비율을 저장해 둔 PC 도 한 번은 새 비율로 연다.
   private static final String SPLITTER_KEY = "kinggura.sync.splitter.v2";
@@ -493,7 +493,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private volatile boolean stale;
   // 지난 변경 목록 알림 때 IDE 가 알던 작업본 변경 · 새 파일 경로. 다음 알림과 비교해 달라진 경로만 본다(알림 스레드에서만).
   private volatile Set<String> lastLocalPaths = Set.of();
-  // Git 루트별 역머지 기준 브랜치와의 차이(「develop 보다 3개 뒤 · 내 파일 2개 겹침」). 기준 브랜치를 고른 적 없거나 같으면 없다.
+  // Git 루트별 역머지 기준 브랜치와의 차이(「develop 에서 받을 커밋 3개 · 내 파일 2개 겹침」). 기준 브랜치를 고른 적 없거나 같으면 없다.
   private final Map<File, ReverseNote> reverseNotes = new ConcurrentHashMap<>();
 
   // Git 저장소가 합치기 · rebase · cherry-pick · revert 도중에 멈춰 있으면 그 안내(저장소 줄 끝 주황). compare 가 채운다.
@@ -521,7 +521,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
   record Tracking(int ahead, int behind) {}
 
   /** 위쪽 줄 · 저장소 줄 끝에 붙는 역머지 안내. warn 이면 내 파일과 겹쳐 주황으로 보인다. error 는 세지 못했을 때 git 오류 원문(풍선 도움말), 아니면 null. */
-  record ReverseNote(String text, boolean warn, String error) {}
+  // text: 받을 커밋 · 겹침 조각(없으면 null), ahead: 기준 브랜치로 보낼 내 커밋 조각(없으면 null). 둘 다 null 이면 안내를 두지 않는다.
+  record ReverseNote(String text, boolean warn, String error, String ahead) {}
 
   // 저장소별 마지막으로 센 역머지 안내와 그때 읽은 상태(updateReverseNote 의 key). note 가 null 이면 안내 없음.
   private record CachedNote(String key, ReverseNote note) {}
@@ -565,7 +566,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     title.setOpaque(false);
     status.setOpaque(false);
     title.append(SyncBundle.message("sync.title"));
-    // 위쪽 줄의 역머지 안내(「develop 보다 3개 뒤」)를 누르면 Reverse Merge 창을 그 저장소로 연다.
+    // 위쪽 줄의 역머지 안내(「develop 에서 받을 커밋 3개」)를 누르면 Reverse Merge 창을 그 저장소로 연다.
     title.addMouseListener(new MouseAdapter() {
       @Override
       public void mouseClicked(MouseEvent e) {
@@ -1781,7 +1782,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     recompare(targets, full, assumed, true);
   }
 
-  /** recompare 와 같고, note 가 거짓이면 저장소 줄의 역머지 안내(「develop 보다 N개 뒤」)를 다시 세지 않고 지난 것을 둔다. */
+  /** recompare 와 같고, note 가 거짓이면 저장소 줄의 역머지 안내(「develop 에서 받을 커밋 N개」)를 다시 세지 않고 지난 것을 둔다. */
   private void recompare(List<Repo> requested, boolean full, boolean assumed, boolean note) {
     // 작업본을 바꾸는 중인 저장소는 지금 비교하지 않고 모아 둔 알림으로 넘겨 끝난 뒤 비교한다(지난 목록을 둔다).
     List<Repo> targets = new ArrayList<>();
@@ -1873,7 +1874,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
         changes = next;
         rebuildTree();
       });
-      // 커밋 · 브랜치 전환 뒤 위쪽 줄의 「develop 보다 N개 뒤 · 내 파일 N개 겹침」도 마지막으로 받아 둔 서버 상태로 다시 센다.
+      // 커밋 · 브랜치 전환 뒤 위쪽 줄의 「develop 에서 받을 커밋 N개 · 내 파일 N개 겹침」도 마지막으로 받아 둔 서버 상태로 다시 센다.
       // git 을 저장소마다 여러 번 띄우므로 목록을 먼저 보인 뒤에 센다.
       if (note) updateReverseNotes(targets);
     });
@@ -3414,15 +3415,14 @@ final class SyncPanel extends SimpleToolWindowPanel {
       ReverseMerge.Preview preview = ReverseMerge.preview(root, cfg, remote, from, repo.branch(), repo.branch());
       int mine = preview.mineCount();
       // 합치기 커밋은 세지 않는다. develop 을 내 브랜치로 합친 뒤 Push 하지 않은 합치기 커밋은 내용이 이미 develop 에 있어 머지 요청할 것이 아니다.
-      // 「N개 뒤」도 합치기 커밋은 세지 않는다. 내 브랜치를 develop 에 합친 GitLab 머지 커밋만 있으면 받을 내용이 없다. 앞선 · 뒤진 수는 git 한 번으로 센다.
+      // 「받을 커밋 N개」도 합치기 커밋은 세지 않는다. 내 브랜치를 develop 에 합친 GitLab 머지 커밋만 있으면 받을 내용이 없다. 앞선 · 뒤진 수는 git 한 번으로 센다.
       Tracking counts = parseLeftRight(git(root, "rev-list", "--left-right", "--count", "--no-merges", "HEAD..." + ReverseMerge.remoteRef(remote, from)));
       int ahead = counts.ahead();
       int behind = counts.behind();
-      List<String> parts = new ArrayList<>();
-      if (behind > 0) parts.add(mine > 0 ? SyncBundle.message("rmerge.note.mine", from, behind, mine)
-                                         : SyncBundle.message("rmerge.note", from, behind));
-      if (ahead > 0) parts.add(SyncBundle.message("rmerge.note.ahead", from, ahead));
-      ReverseNote note = parts.isEmpty() ? null : new ReverseNote(String.join(NOTE_SEP, parts), mine > 0, null);
+      String behindText = behind <= 0 ? null : mine > 0 ? SyncBundle.message("rmerge.note.mine", from, behind, mine)
+                                                         : SyncBundle.message("rmerge.note", from, behind);
+      String aheadText = ahead > 0 ? SyncBundle.message("rmerge.note.ahead", from, ahead) : null;
+      ReverseNote note = behindText == null && aheadText == null ? null : new ReverseNote(behindText, mine > 0, null, aheadText);
       if (note == null) reverseNotes.remove(root);
       else reverseNotes.put(root, note);
       if (tip != null) noteCache.put(root, new CachedNote(key, note));
@@ -3431,7 +3431,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       noteCache.remove(root);
       // 세지 못한 이유를 숨기지 않는다: 줄 끝에 「기준 비교 실패」, 풍선 도움말에 git 오류 원문.
       LOG.warn("역머지 안내를 세지 못함 " + root + ": " + e.getMessage());
-      reverseNotes.put(root, new ReverseNote(SyncBundle.message("rmerge.note.failed", from == null ? "" : from), false, messageOf(e)));
+      reverseNotes.put(root, new ReverseNote(SyncBundle.message("rmerge.note.failed", from == null ? "" : from), false, messageOf(e), null));
     }
     finally {
       if (fetch) unlockFetch(root);
@@ -3439,15 +3439,27 @@ final class SyncPanel extends SimpleToolWindowPanel {
   }
 
   /**
-   * 역머지 안내가 있으면 component 끝에 밑줄 친 링크 모양으로 붙인다. 겹침이 있으면 주황, 없으면 회색.
+   * 역머지 안내가 있으면 component 끝에 밑줄 친 링크 모양으로 붙인다. 받을 커밋 조각은 겹침이 있으면 주황, 없으면 회색,
+   * 보낼 내 커밋 조각은 받을 커밋과 헷갈리지 않게 IDE 링크 색으로 그린다.
    * tag 는 그 조각에 거는 값이다(트리 줄은 누르면 Merge Branches 를 여는 Runnable, 위쪽 줄은 자체 클릭 처리라 null).
    */
   private void appendReverseNote(SimpleColoredComponent component, Repo repo, Object tag) {
     ReverseNote note = reverseNotes.get(repo.root());
     if (note == null) return;
-    Color color = note.warn() ? ReverseMergeAction.MINE_COLOR : SimpleTextAttributes.GRAYED_ATTRIBUTES.getFgColor();
+    SimpleTextAttributes grey = new SimpleTextAttributes(SimpleTextAttributes.STYLE_UNDERLINE, SimpleTextAttributes.GRAYED_ATTRIBUTES.getFgColor());
+    SimpleTextAttributes main = note.warn() ? new SimpleTextAttributes(SimpleTextAttributes.STYLE_UNDERLINE, ReverseMergeAction.MINE_COLOR) : grey;
+    SimpleTextAttributes link = new SimpleTextAttributes(SimpleTextAttributes.STYLE_UNDERLINE, JBUI.CurrentTheme.Link.Foreground.ENABLED);
     component.append("   ");
-    component.append(note.text() + NOTE_LINK_MARK, new SimpleTextAttributes(SimpleTextAttributes.STYLE_UNDERLINE, color), tag);
+    if (note.ahead() == null) {
+      component.append(note.text() + NOTE_LINK_MARK, main, tag);
+    }
+    else {
+      if (note.text() != null) {
+        component.append(note.text(), main, tag);
+        component.append(NOTE_SEP, grey, tag);
+      }
+      component.append(note.ahead() + NOTE_LINK_MARK, link, tag);
+    }
     if (note.error() != null) component.setToolTipText(note.error());
   }
 
