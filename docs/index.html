@@ -1097,7 +1097,7 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
             <div class="cols" style="grid-template-columns:45fr 55fr; min-height:300px">
               <div class="treeview" style="position:relative">
                 <div>▾ backend <span class="muted">feature/order ↔ origin/feature/order</span></div>
-                <div class="l1" style="color:var(--warn)"><span class="mark">5</span> develop 보다 3개 뒤 · 내 파일 2개 겹침</div>
+                <div class="l1" style="color:var(--warn)"><span class="mark">5</span> develop 에서 받을 커밋 3개 · 내 파일 2개 겹침</div>
                 <div class="l1">▾ 들어올 변경 <span class="tag in">2</span></div>
                 <div class="l2">OrderService.java</div>
                 <div class="l2">application.yml</div>
@@ -1136,7 +1136,7 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
         <li><span class="mark">2</span><div><b>파일 우클릭</b> <span class="t">Commit… · Push · Replace with HEAD · Add to .gitignore · 이 PC 에서만 무시 · Assume Unchanged. 「??」 새 파일에는 Assume Unchanged 가 걸리지 않습니다(Git 이 아직 모르는 파일). 리포지토리에 안 올리고 나만 빼려면 「이 PC 에서만 무시」를 씁니다(<code>.git/info/exclude</code>, 풀기는 프로젝트 트리 우클릭). 새로 추가 · 이름 바꿈 · 복사한 파일은 지워지지 않게 Replace with HEAD 에서 빠지고 「Unstage Only, Keep Files」로 갑니다.</span></div></li>
         <li><span class="mark">3</span><div><b>Assume Unchanged</b> <span class="t"><code>application-local.yml</code> 처럼 내 PC 에서만 고친 파일이 커밋 목록에 계속 뜰 때 씁니다. 커밋 창 · 프로젝트 트리의 파일 우클릭에도 있습니다(프로젝트 트리에는 「No Assume Unchanged」도). 원격에서 그 파일이 바뀌면 받기(Pull)가 멈추니 그때는 먼저 No Assume Unchanged 로 푸세요.</span></div></li>
         <li><span class="mark">4</span><div><b>Assume Unchanged · 풀기</b> <span class="t">Assume Unchanged 로 둔 파일은 「모두 보기」 맨 아래 「Assume Unchanged」 묶음에 모입니다. 우클릭 「No Assume Unchanged」로 되돌리면 내 변경이 다시 나갈 변경으로 보입니다. 파일 내용은 그대로입니다.</span></div></li>
-        <li><span class="mark">5</span><div><b>역머지 안내</b> <span class="t">Merge Branches 를 한 번 한 리포지토리 줄에 「develop 보다 3개 뒤 · 내 파일 2개 겹침」(겹치면 주황), 아직 안 머지된 내 커밋이 있으면 「develop 에 안 머지된 내 커밋 N개」가 나옵니다(머지 커밋은 세지 않습니다).</span></div></li>
+        <li><span class="mark">5</span><div><b>역머지 안내</b> <span class="t">Merge Branches 를 한 번 한 리포지토리 줄에 「develop 에서 받을 커밋 3개 · 내 파일 2개 겹침」(겹치면 주황), 아직 안 머지된 내 커밋이 있으면 「develop 으로 보낼 내 커밋 N개」가 파란색으로 나옵니다(머지 커밋은 세지 않습니다).</span></div></li>
         <li><span class="mark">6</span><div><b>비교 칸</b> <span class="t">왼쪽 원격 · 오른쪽 내 작업본. × 로 닫을 수 있습니다.</span></div></li>
         <li><span class="mark">7</span><div><b>아래 단추 줄</b> <span class="t">받기는 파랑, 올리기는 초록, 충돌은 빨강, 머지는 보라입니다.</span></div></li>
         <li><span class="mark">+</span><div><b>IDE 파일은 처음부터 안 뜸</b> <span class="t">프로젝트를 열면 리포지토리마다 <code>.git/info/exclude</code> 에 <code>*.iml</code> · <code>.idea/</code> · <code>.project</code> · <code>.classpath</code> · <code>.settings/</code> 를 넣습니다. 팀 <code>.gitignore</code> 와 서버에는 영향이 없습니다.</span></div></li>
@@ -1188,7 +1188,7 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
       <tr><td>충돌을 푼 뒤 Push 가 거절되면</td><td>충돌을 풀어 마무리한 머지는 그대로 두고, 서버의 새 커밋을 받아 그 위에 머지한 뒤 한 번 더 올립니다. 그 머지도 충돌이 나면 멈추고, Into 브랜치에서 Pull · Push 하라고 알립니다.</td></tr>
       <tr><td>대소문자만 바뀐 이름</td><td>머지해 올 쪽에서 누가 파일 이름의 대소문자만 바꿨으면(예: Designchanges.vue → DesignChanges.vue) 윈도우에서는 git 이 「untracked working tree files would be overwritten」으로 멈춥니다. Merge 를 누르면 이런 이름을 먼저 찾아 목록으로 보여 주고, 「Match Case and Merge」 를 누르면 내 브랜치에서 이름을 먼저 맞춰 커밋한 뒤 머지합니다. 머지가 실패하면 그 커밋도 되돌립니다.</td></tr>
     </table>
-    <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note"><b>Synchronize 창 위쪽 줄</b>한 번 역머지하면 그 뒤로는 Synchronize 창을 새로 고칠 때 From 브랜치도 받아 와서 「develop 보다 3개 뒤 · 내 파일 2개 겹침」을 보여 줍니다(겹치면 주황). 그 글을 누르면 Merge Branches 창이 열립니다.</div></div>
+    <div class="notes" style="grid-template-columns:minmax(0,1fr)"><div class="note"><b>Synchronize 창 위쪽 줄</b>한 번 역머지하면 그 뒤로는 Synchronize 창을 새로 고칠 때 From 브랜치도 받아 와서 「develop 에서 받을 커밋 3개 · 내 파일 2개 겹침」을 보여 줍니다(겹치면 주황). 그 글을 누르면 Merge Branches 창이 열립니다.</div></div>
 
     <h3>Merge Request 만들기 · Push 알림 단추 · Git → Merge Request 만들기…</h3>
     <p class="lead">develop 에 바로 올릴 권한이 없을 때의 흐름입니다: 내 브랜치로 Push 하고, GitLab 사이트에서 내 브랜치 → develop 으로 Merge Request 를 만듭니다. 사이트에서 브랜치를 고르는 일을 Moa 가 대신 채워 줍니다.</p>
