@@ -208,6 +208,8 @@ public class SyncCheck {
     eq(SyncPanel.undoOf(out("A", svn)), SyncPanel.Undo.REVERT);
     eq(SyncPanel.undoOf(new SyncPanel.Change(SyncPanel.Kind.INCOMING, "M", "a", r)), SyncPanel.Undo.NONE);
 
+    checkSecured();
+
     // svn propget --xml
     eq(SyncPanel.parseSvnProperty(""), "");
     eq(SyncPanel.parseSvnProperty("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<properties>\n</properties>\n"), "");
@@ -423,6 +425,54 @@ public class SyncCheck {
     java.nio.file.Files.createDirectories(repo.resolve("a/b/c"));
     java.nio.file.Files.writeString(repo.resolve("a/b/c/pom.xml"), "");
     eq(CloneIntoProject.outputDirs(repo), List.of(app.resolve("build"), front.resolve("node_modules"), eclipse.resolve("bin"), eclipse.resolve("target")));
+  }
+
+  /** 문서 보안: 첫 바이트가 형식과 다른 문서의 M 만 SECURED. Moa 가 만든 .idea · .iml 새 파일은 SVN 목록에서 뺀다. */
+  private static void checkSecured() throws IOException {
+    java.nio.file.Path tmp = java.nio.file.Files.createTempDirectory("secured");
+    java.nio.file.Files.write(tmp.resolve("plain.pptx"), new byte[] {'P', 'K', 3, 4, 20, 0});
+    java.nio.file.Files.write(tmp.resolve("drm.pptx"), "<DOCUMENT SAFER>".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+    java.nio.file.Files.write(tmp.resolve("drm.XLS"), "SCDSA002".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+    java.nio.file.Files.write(tmp.resolve("short.pdf"), new byte[] {'%'});
+    java.nio.file.Files.write(tmp.resolve("code.java"), "class A {}".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+    java.nio.file.Files.createDirectories(tmp.resolve("sub"));
+    java.nio.file.Files.write(tmp.resolve("sub/drm.docx"), new byte[] {1, 2, 3, 4});
+    SyncPanel.Repo svn = new SyncPanel.Repo(tmp.toFile(), SyncPanel.Vcs.SVN, null, "12");
+    List<SyncPanel.Change> marked = SyncPanel.markSecured(List.of(
+      new SyncPanel.Change(SyncPanel.Kind.OUTGOING, "M", "plain.pptx", svn),
+      new SyncPanel.Change(SyncPanel.Kind.OUTGOING, "M", "drm.pptx", svn),
+      new SyncPanel.Change(SyncPanel.Kind.OUTGOING, "M", "drm.XLS", svn),
+      new SyncPanel.Change(SyncPanel.Kind.OUTGOING, "M", "short.pdf", svn),
+      new SyncPanel.Change(SyncPanel.Kind.OUTGOING, "M", "code.java", svn),
+      new SyncPanel.Change(SyncPanel.Kind.OUTGOING, "M", "sub/drm.docx", svn),
+      new SyncPanel.Change(SyncPanel.Kind.OUTGOING, "M", "gone.pptx", svn),
+      new SyncPanel.Change(SyncPanel.Kind.OUTGOING, "A", "drm.pptx", svn),
+      new SyncPanel.Change(SyncPanel.Kind.CONFLICT, "C", "drm.pptx", svn)));
+    List<SyncPanel.Kind> kinds = new java.util.ArrayList<>();
+    for (SyncPanel.Change c : marked) kinds.add(c.kind());
+    eq(kinds, List.of(SyncPanel.Kind.OUTGOING, SyncPanel.Kind.SECURED, SyncPanel.Kind.SECURED, SyncPanel.Kind.OUTGOING, SyncPanel.Kind.OUTGOING,
+                      SyncPanel.Kind.SECURED, SyncPanel.Kind.OUTGOING, SyncPanel.Kind.OUTGOING, SyncPanel.Kind.CONFLICT));
+    eq(SyncPanel.isDocument("12. 화면/a.PPTX"), true);
+    eq(SyncPanel.isDocument("pptx"), false);
+    eq(SyncPanel.isDocument("a.java"), false);
+    eq(SyncPanel.undoOf(marked.get(1)), SyncPanel.Undo.NONE);
+    eq(SyncPanel.summary(List.of(marked.get(1))), "원격과 같습니다 · 문서 보안 1");
+    eq(SyncPanel.summary(List.of(marked.get(0), marked.get(1))), "들어올 0 · 나갈 1 · 충돌 0 · 문서 보안 1");
+
+    eq(ExcludeIdeFiles.isIdeFile(".idea"), true);
+    eq(ExcludeIdeFiles.isIdeFile("mod/.idea/"), true);
+    eq(ExcludeIdeFiles.isIdeFile("dxplm.iml"), true);
+    eq(ExcludeIdeFiles.isIdeFile("a/.idea-notes"), false);
+    eq(ExcludeIdeFiles.isIdeFile("idea"), false);
+    String xml = "<?xml version=\"1.0\"?>\n<status><target path=\".\">"
+                 + "<entry path=\".idea\"><wc-status item=\"unversioned\"/></entry>"
+                 + "<entry path=\"dxplm.iml\"><wc-status item=\"unversioned\"/></entry>"
+                 + "<entry path=\"tracked.iml\"><wc-status item=\"modified\"/></entry>"
+                 + "<entry path=\"new.txt\"><wc-status item=\"unversioned\"/></entry>"
+                 + "</target></status>";
+    List<String> paths = new java.util.ArrayList<>();
+    for (SyncPanel.Change c : SyncPanel.parseSvnStatus(svn, xml, new java.util.LinkedHashMap<>())) paths.add(c.status() + " " + c.path());
+    eq(paths, List.of("? new.txt", "M tracked.iml"));
   }
 
   /** SVN 작업본 판정: 그 폴더나 위 어디에 .svn 폴더가 있으면 SVN 이다(.svn 파일은 아니다). */

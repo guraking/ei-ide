@@ -31,6 +31,9 @@ public final class ExcludeIdeFiles implements VcsListener {
 
     private static final Logger LOG = Logger.getInstance(ExcludeIdeFiles.class);
     private static final List<String> IDE_LINES = List.of("*.iml", ".idea/");
+    // IDE_LINES 와 같은 파일을 경로 이름으로 가를 때 쓴다(isIdeFile).
+    private static final String IDEA_DIR = ".idea";
+    private static final String IML_SUFFIX = ".iml";
     private static final List<String> ECLIPSE_LINES = List.of(".project", ".classpath", ".settings/");
     // 저장소 어디든 추적 중인 이클립스 설정 파일.
     private static final String[] TRACKED_ECLIPSE = {"ls-files", "--", ":(glob)**/.project", ":(glob)**/.classpath"};
@@ -43,6 +46,13 @@ public final class ExcludeIdeFiles implements VcsListener {
 
     public ExcludeIdeFiles(Project project) {
         this.project = project;
+    }
+
+    /** 저장소 기준 경로(구분자 /)의 마지막 이름이 .idea 이거나 .iml 로 끝나면 true. SVN 에는 exclude 가 없어 동기화 창이 이것으로 거른다. */
+    static boolean isIdeFile(String path) {
+        String trimmed = path.endsWith("/") ? path.substring(0, path.length() - 1) : path;
+        String name = trimmed.substring(trimmed.lastIndexOf('/') + 1);
+        return name.equals(IDEA_DIR) || name.endsWith(IML_SUFFIX);
     }
 
     @Override

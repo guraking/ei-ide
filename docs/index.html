@@ -1068,7 +1068,8 @@ h3{scroll-margin-top:72px} section{scroll-margin-top:60px}
       <tr><td>Refresh All · Selected Repository Only</td><td>모든 리포지토리 · 고른 리포지토리 하나만 원격과 다시 비교</td></tr>
       
       <tr><td>Pull All · Pull Selected (파랑)</td><td>아래 단추 줄. Pull All 은 고른 것과 상관없이 모든 리포지토리를 한 번에 받기(IDE 의 Update Project), Pull Selected 는 트리에서 고른 리포지토리만 받기. SVN 은 svn update</td></tr>
-      <tr><td>Resolve Conflicts (빨강)</td><td>충돌 해결 창</td></tr>
+      <tr><td>Resolve Conflicts (빨강)</td><td>충돌 해결 창. SVN 의 충돌 문서(pptx · xlsx · docx · hwp · pdf 등)는 합칠 수 없어, 확인창 뒤 서버 것으로 받습니다(svn revert 뒤 svn update --accept theirs-full). 그 문서에 이 PC 에서 고친 내용은 사라집니다</td></tr>
+      <tr><td>「문서 보안으로 바뀐 파일」 묶음 (SVN)</td><td>회사 문서 보안(DRM) 프로그램이 받은 문서를 암호화하면 열어 보지 않아도 SVN 이 수정(M)으로 봅니다. 파일 첫 바이트가 그 형식(pptx 는 PK 등)이 아닌 수정 문서는 나갈 변경 대신 이 회색 묶음에 모이고, 위쪽 ↑ 수에서 빠집니다. 「나갈」 보기에서도 보입니다. Commit and Push… 는 이 문서들을 뺀 나갈 변경만 체크된 커밋 창을 엽니다. 정말 고친 문서는 골라서 우클릭 Commit… 으로 올립니다</td></tr>
       <tr><td>Merge Branches (보라)</td><td>고른 리포지토리(없으면 지금 리포지토리)로 역머지 창</td></tr>
       <tr><td>Push (초록)</td><td>고른 리포지토리(없으면 전부)를 올리는 Push 창</td></tr>
       <tr><td>Commit and Push… (초록)</td><td>커밋 창을 엽니다. 파일을 체크하고 Commit and Push 로 커밋과 올리기를 한 번에</td></tr>
@@ -2231,6 +2232,7 @@ insert into order_log(log_no, order_no, memo) values ('L1', 'O100', '주문 확�
       <tr><th>이런 글 · 증상</th><th>먼저 볼 것</th></tr>
       <tr><td>Lombok 오류로 컴파일 실패</td><td>프로젝트 JDK 를 17 · 21 로 둡니다(Lombok 1.18.30 은 24 이상에서 깨짐).</td></tr>
       <tr><td>SVN 이 「svn cleanup 하라」</td><td>트리 우클릭 Subversion → Cleanup 뒤 다시 받습니다.</td></tr>
+      <tr><td>SVN 문서 저장소에 열지 않은 pptx · xlsx 가 계속 나갈 변경 · 충돌로 쌓임</td><td>문서 보안(DRM)이 받은 파일을 암호화한 것입니다. 동기화 창 「문서 보안으로 바뀐 파일」 묶음으로 모이고, 충돌은 Resolve Conflicts 로 서버 것으로 받습니다. 근본 해결은 그 SVN 폴더 · svn.exe 를 DRM 예외로 두는 것입니다.</td></tr>
       <tr><td>받기가 Assume Unchanged 파일 때문에 멈춤</td><td>동기화 창에서 그 파일을 No Assume Unchanged → 받기 → 다시 Assume Unchanged.</td></tr>
       <tr><td>API 요청이 「연결할 수 없습니다」</td><td>서버 창에서 서버가 떠 있는지, 요청 화면 주소의 포트 · 컨텍스트 경로가 맞는지 봅니다.</td></tr>
       <tr><td>JS · Vue 코드 컴플리션이 없음</td><td>설치 폴더 <code>plugins\boot-servers\web</code> 가 있는지 봅니다. 없으면 다시 설치하거나 알림의 받기 단추를 누릅니다.</td></tr>
