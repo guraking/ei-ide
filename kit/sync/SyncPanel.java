@@ -154,14 +154,19 @@ import java.util.regex.Pattern;
  * (gitExecutable · svnExecutable). SVN 은 CLI 만 쓰므로 svn4idea 플러그인이 없어도 동작한다.
  */
 final class SyncPanel extends SimpleToolWindowPanel {
-  /** ASSUMED 는 변경이 아니라 skip-worktree(예전 판은 assume-unchanged)로 모른 척 중인 Git 파일이다. 「모두 보기」에서만 맨 아래 묶음으로 보인다. */
-  enum Kind { CONFLICT, INCOMING, OUTGOING, ASSUMED;
+  /**
+   * ASSUMED 는 변경이 아니라 skip-worktree(예전 판은 assume-unchanged)로 모른 척 중인 Git 파일이다. 「모두 보기」에서만 맨 아래 묶음으로 보인다.
+   * SECURED 는 SVN 의 수정(M) 문서 가운데 문서 보안(DRM) 프로그램이 암호화해 원래 형식이 아닌 것이다(securedDocument).
+   * 나갈 변경이지만 위쪽 ↑ 수와 「커밋하고 푸시」에서 빼고, 「나갈」 보기에서는 나갈 변경 아래 따로 묶는다.
+   */
+  enum Kind { CONFLICT, INCOMING, OUTGOING, SECURED, ASSUMED;
     /** 트리 묶음 줄에 보일 이름. */
     String label() {
       return switch (this) {
         case CONFLICT -> SyncBundle.message("sync.kind.conflict");
         case INCOMING -> SyncBundle.message("sync.kind.incoming");
         case OUTGOING -> SyncBundle.message("sync.kind.outgoing");
+        case SECURED -> SyncBundle.message("sync.kind.secured");
         case ASSUMED -> SyncBundle.message("sync.kind.assumed");
       };
     }
@@ -399,6 +404,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static final String ACTION_REVERSE_MERGE = "KingGura.ReverseMerge";
   private static final String ACTION_PUSH = "Vcs.Push";
   private static final String ACTION_COMMIT = "CheckinProject";
+  private static final String ACTION_RESOLVE = "Git.ResolveConflicts";
   // 고른 파일만 체크된 채로 커밋 창을 연다(CommonCheckinFilesAction, VcsDataKeys.FILE_PATHS 를 읽는다).
   private static final String ACTION_COMMIT_FILES = "CheckinFiles";
   // IDE 의 「Update Project」(Ctrl+T). 프로젝트의 모든 VCS 루트를 받는다(Git 은 받기 방식을 묻고, SVN 은 svn update).
@@ -420,6 +426,16 @@ final class SyncPanel extends SimpleToolWindowPanel {
   private static final String SVN_ITEM_CONFLICTED = "conflicted";
   private static final String SVN_ITEM_UNVERSIONED = "unversioned";
   private static final String SVN_ITEM_MISSING = "missing";
+  private static final String SVN_ITEM_MODIFIED = "modified";
+  // 문서 형식별 파일 첫 바이트. Office Open XML · HWPX 는 ZIP(PKZIP 로컬 파일 머리), 옛 Office · HWP 5 는 OLE 복합 문서(MS-CFB), PDF 는 「%PDF」(ISO 32000).
+  private static final byte[] ZIP_MAGIC = {'P', 'K', 3, 4};
+  private static final byte[] OLE_MAGIC = {(byte) 0xD0, (byte) 0xCF, 0x11, (byte) 0xE0, (byte) 0xA1, (byte) 0xB1, 0x1A, (byte) 0xE1};
+  private static final byte[] PDF_MAGIC = {'%', 'P', 'D', 'F'};
+  private static final Map<String, byte[]> DOCUMENT_MAGIC = Map.ofEntries(
+    Map.entry("docx", ZIP_MAGIC), Map.entry("xlsx", ZIP_MAGIC), Map.entry("pptx", ZIP_MAGIC),
+    Map.entry("docm", ZIP_MAGIC), Map.entry("xlsm", ZIP_MAGIC), Map.entry("pptm", ZIP_MAGIC), Map.entry("hwpx", ZIP_MAGIC),
+    Map.entry("doc", OLE_MAGIC), Map.entry("xls", OLE_MAGIC), Map.entry("ppt", OLE_MAGIC), Map.entry("hwp", OLE_MAGIC),
+    Map.entry("pdf", PDF_MAGIC));
   // 새 파일 표시. Git 은 "??", SVN 은 "?"(svn 자체 표기). 되돌리기에서 제외하는 기준이다.
   private static final Set<String> UNTRACKED_STATUS = Set.of("??", "?");
   // Git 상태 글자 가운데 경로가 HEAD 에 없을 수 있는 것: 추가 · 이름 바꿈 · 복사. restore --worktree 를 하면 파일이 지워진다.
@@ -625,7 +641,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     pushButton = actionButton(SyncBundle.message("sync.button.push"), IconLoader.getIcon(PUSH_ICON, SyncPanel.class), ACTION_PUSH, true);
     bottom.add(tint(pushButton, PUSH_BG));
     bottom.add(tint(actionButton(SyncBundle.message("sync.button.commit.push"), null, ACTION_COMMIT, false), PUSH_BG));
-    resolveButton = actionButton(SyncBundle.message("sync.button.resolve"), null, "Git.ResolveConflicts", false);
+    resolveButton = actionButton(SyncBundle.message("sync.button.resolve"), null, ACTION_RESOLVE, false);
     bottom.add(tint(resolveButton, RESOLVE_BG));
     // 고른 저장소(없으면 지금 저장소)로 Merge Branches 창을 연다.
     bottom.add(tint(actionButton(SyncBundle.message("sync.button.reverse"), null, ACTION_REVERSE_MERGE, true), MERGE_BG));
@@ -952,7 +968,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
    */
   private void addSyncItems(List<AnAction> items, List<Change> targets) {
     List<Change> incoming = targets.stream().filter(c -> c.kind() == Kind.INCOMING).toList();
-    List<Change> outgoing = targets.stream().filter(c -> c.kind() == Kind.OUTGOING).toList();
+    // 문서 보안으로 바뀐 문서도 골라서는 커밋할 수 있다(정말 고친 문서).
+    List<Change> outgoing = targets.stream().filter(c -> c.kind() == Kind.OUTGOING || c.kind() == Kind.SECURED).toList();
     boolean conflict = targets.stream().anyMatch(c -> c.kind() == Kind.CONFLICT);
     if (!incoming.isEmpty() || conflict) items.add(item(SyncBundle.message("sync.menu.pull"), pullButton.getIcon(), pullButton::doClick));
     List<Change> svnIncoming = incoming.stream().filter(c -> c.repo().vcs() == Vcs.SVN).toList();
@@ -2085,6 +2102,26 @@ final class SyncPanel extends SimpleToolWindowPanel {
         pushIfAhead(button, text, targets);
         return;
       }
+      // 문서 보안으로 바뀐 문서가 있으면 그것을 뺀 나갈 변경만 체크된 커밋 창을 연다. 암호화된 문서가 서버에 올라가지 않게 한다.
+      int secured = (int) changes.stream().filter(c -> c.kind() == Kind.SECURED).count();
+      if (ACTION_COMMIT.equals(actionId) && secured > 0) {
+        List<Change> outgoing = changes.stream().filter(c -> c.kind() == Kind.OUTGOING && !UNTRACKED_STATUS.contains(c.status())).toList();
+        if (outgoing.isEmpty()) {
+          showStatus(SyncBundle.message("sync.commit.only.secured", secured));
+          return;
+        }
+        commitFiles(text, outgoing);
+        showStatus(SyncBundle.message("sync.commit.secured.left", secured));
+        return;
+      }
+      // SVN 의 충돌 문서는 합칠 수 없어 서버 것으로 받는다. Git 충돌이 함께 있으면 이어서 IntelliJ 충돌 해결 창을 연다.
+      if (ACTION_RESOLVE.equals(actionId)) {
+        List<Change> docs = changes.stream().filter(c -> c.kind() == Kind.CONFLICT && c.repo().vcs() == Vcs.SVN && isDocument(c.path())).toList();
+        if (!docs.isEmpty()) {
+          takeServerDocs(text, docs);
+          if (changes.stream().noneMatch(c -> c.kind() == Kind.CONFLICT && c.repo().vcs() == Vcs.GIT)) return;
+        }
+      }
       runAction(text, actionId, forSelectedRepo ? selectedGitRootsContext() : DataManager.getInstance().getDataContext(this));
     });
     return button;
@@ -2502,6 +2539,75 @@ final class SyncPanel extends SimpleToolWindowPanel {
     });
   }
 
+  /**
+   * SVN 충돌 문서를 서버 것으로 받는다: 확인을 받은 뒤 저장소마다 svn revert 로 내 변경 · 충돌 표시를 지우고 svn update --accept theirs-full 로 받는다.
+   * revert 뒤 문서 보안 프로그램이 파일을 다시 암호화해도 update 가 서버 것을 고른다. 한 저장소가 실패해도 나머지는 받고, 끝나면 서버에 물어 다시 비교한다.
+   */
+  private void takeServerDocs(String text, List<Change> docs) {
+    int answer = Messages.showYesNoDialog(project, SyncBundle.message("sync.take.server.confirm") + "\n\n" + pathList(docs),
+                                          text, Messages.getWarningIcon());
+    if (answer != Messages.YES) return;
+    startPull();
+    showStatus("");
+    showGauge(SyncBundle.message("sync.take.server.running", text), 0, 0);
+    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+      try {
+        Map<File, String> failed = new LinkedHashMap<>();
+        List<File> touched = new ArrayList<>();
+        int done = 0;
+        for (Map.Entry<Repo, List<Change>> entry : byRepo(docs).entrySet()) {
+          File root = entry.getKey().root();
+          String work;
+          try {
+            work = beginWork(root);
+          }
+          catch (IOException running) {
+            failed.put(root, messageOf(running));
+            continue;
+          }
+          try {
+            List<String> paths = new ArrayList<>();
+            for (Change c : entry.getValue()) paths.add(c.path());
+            for (List<String> part : chunks(paths)) {
+              List<String> revert = new ArrayList<>(List.of("revert", "--"));
+              List<String> update = new ArrayList<>(List.of("update", SVN_NO_PROMPT, "--accept", "theirs-full", "--"));
+              for (String path : part) {
+                revert.add(svnPath(path));
+                update.add(svnPath(path));
+              }
+              run(root, SVN_UPDATE_TIMEOUT_SEC, "svn", revert.toArray(String[]::new));
+              run(root, SVN_UPDATE_TIMEOUT_SEC, "svn", update.toArray(String[]::new));
+              done += part.size();
+              for (String path : part) touched.add(new File(root, path));
+            }
+          }
+          catch (IOException ex) {
+            LOG.warn("서버 것으로 받기 실패 [" + root.getName() + "] " + ex.getMessage());
+            failed.put(root, messageOf(ex));
+          }
+          catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            return;
+          }
+          finally {
+            endWork(work);
+          }
+        }
+        String message = withFailures(SyncBundle.message("sync.take.server.done", done), failed);
+        LocalFileSystem.getInstance().refreshIoFiles(touched, true, false, null);
+        List<Repo> targets = new ArrayList<>(byRepo(docs).keySet());
+        ApplicationManager.getApplication().invokeLater(() -> {
+          showStatus(message);
+          notifyFailures(failed);
+          recompare(targets, true, true);
+        }, ModalityState.nonModal(), project.getDisposed());
+      }
+      finally {
+        SwingUtilities.invokeLater(this::endPull);
+      }
+    });
+  }
+
   /** IDE 동작 하나를 context 로 부른다. 동작이 꺼져 있으면(예: 충돌 해결은 git 이 실제 충돌 상태인 파일이 있을 때만) 아무 일도 없이 끝나므로 이유를 상태줄에 적는다. */
   private void runAction(String text, String actionId, DataContext context) {
     AnAction action = ActionManager.getInstance().getAction(actionId);
@@ -2512,7 +2618,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
     AnActionEvent event = AnActionEvent.createFromAnAction(action, null, "KingGuraSynchronize", context);
     ActionUtil.updateAction(action, event);
     if (!event.getPresentation().isEnabled()) {
-      showStatus("Git.ResolveConflicts".equals(actionId)
+      showStatus(ACTION_RESOLVE.equals(actionId)
         ? SyncBundle.message("sync.action.disabled.resolve", text) : SyncBundle.message("sync.action.disabled", text));
       return;
     }
@@ -2552,8 +2658,9 @@ final class SyncPanel extends SimpleToolWindowPanel {
     Map<Kind, Integer> count = new EnumMap<>(Kind.class);
     for (Change c : list) count.merge(c.kind(), 1, Integer::sum);
     int assumed = count.getOrDefault(Kind.ASSUMED, 0);
+    int secured = count.getOrDefault(Kind.SECURED, 0);
     status.clear();
-    if (list.size() == assumed) {
+    if (list.size() == assumed + secured) {
       status.append(summary(list), SimpleTextAttributes.GRAYED_ATTRIBUTES);
     }
     else {
@@ -2566,6 +2673,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
         status.append(lead + mark.getValue() + n, new SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, color == null ? null : color.getColor()));
         lead = " ";
       }
+      if (secured > 0) status.append(SUMMARY_SEP + Kind.SECURED.label() + " " + secured, SimpleTextAttributes.GRAYED_ATTRIBUTES);
       if (assumed > 0) status.append(SUMMARY_SEP + Kind.ASSUMED.label() + " " + assumed, SimpleTextAttributes.GRAYED_ATTRIBUTES);
     }
     if (tail != null) {
@@ -2615,7 +2723,7 @@ final class SyncPanel extends SimpleToolWindowPanel {
       case CONFLICT -> FileStatus.MERGED_WITH_CONFLICTS;
       case INCOMING -> FileStatus.MODIFIED;
       case OUTGOING -> FileStatus.MERGE;
-      case ASSUMED -> null;
+      case SECURED, ASSUMED -> null;
     };
   }
 
@@ -3855,7 +3963,46 @@ final class SyncPanel extends SimpleToolWindowPanel {
   /** incoming 에 미리 넣어 둔 서버 쪽 변경도 들어올 변경으로 보고, 이번에 받은 서버 쪽 변경은 incoming 에 더한다. */
   static List<Change> compareSvn(Repo repo, boolean remote, Map<String, String> incoming) throws IOException, InterruptedException {
     String xml = remote ? run(repo.root(), "svn", "status", "-u", SVN_NO_PROMPT, "--xml") : run(repo.root(), "svn", "status", "--xml");
-    return parseSvnStatus(repo, xml, incoming);
+    return markSecured(parseSvnStatus(repo, xml, incoming));
+  }
+
+  /** 나갈 변경 가운데 수정(M)이고 문서 보안으로 암호화된 문서(securedDocument)를 SECURED 로 바꾼다. 파일 첫 바이트를 읽으므로 작업 스레드에서 부른다. */
+  static List<Change> markSecured(List<Change> changes) {
+    String modified = svnStatusLetter(SVN_ITEM_MODIFIED);
+    List<Change> result = new ArrayList<>(changes.size());
+    for (Change c : changes) {
+      boolean secured = c.kind() == Kind.OUTGOING && modified.equals(c.status()) && securedDocument(new File(c.repo().root(), c.path()));
+      result.add(secured ? new Change(Kind.SECURED, c.status(), c.path(), c.repo()) : c);
+    }
+    return result;
+  }
+
+  /** 확장자로 본 문서 파일(DOCUMENT_MAGIC 에 있는 형식)이면 true. */
+  static boolean isDocument(String path) {
+    return DOCUMENT_MAGIC.containsKey(extensionOf(path));
+  }
+
+  /**
+   * 문서 파일인데 첫 바이트가 그 형식의 시작(DOCUMENT_MAGIC)과 다르면 true. 문서 보안 프로그램이 암호화한 파일이다.
+   * 형식을 모르는 파일 · 그 길이보다 짧은 파일 · 읽지 못한 파일은 false 라 보통 나갈 변경으로 남는다.
+   */
+  static boolean securedDocument(File file) {
+    byte[] magic = DOCUMENT_MAGIC.get(extensionOf(file.getName()));
+    if (magic == null) return false;
+    byte[] head = new byte[magic.length];
+    try (java.io.InputStream in = Files.newInputStream(file.toPath())) {
+      return in.readNBytes(head, 0, head.length) == head.length && !Arrays.equals(head, magic);
+    }
+    catch (IOException e) {
+      return false;
+    }
+  }
+
+  /** 마지막 . 뒤 확장자(소문자). 없으면 빈 글. */
+  private static String extensionOf(String path) {
+    String name = path.substring(path.lastIndexOf('/') + 1);
+    int dot = name.lastIndexOf('.');
+    return dot < 0 ? "" : name.substring(dot + 1).toLowerCase(Locale.ROOT);
   }
 
   /**
@@ -3875,7 +4022,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
       if (path.startsWith("./")) path = path.substring(2);
       if (path.isEmpty() || path.equals(".")) continue;
       String local = childItem(entry, "wc-status");
-      if (SVN_ITEM_UNVERSIONED.equals(local) && isNestedRepo(new File(repo.root(), path))) continue;
+      // Moa 가 만드는 .idea · .iml 은 Git 처럼(ExcludeIdeFiles) 이 PC 에서만 뺀다. 서버의 svn:ignore 는 건드리지 않는다.
+      if (SVN_ITEM_UNVERSIONED.equals(local) && (isNestedRepo(new File(repo.root(), path)) || ExcludeIdeFiles.isIdeFile(path))) continue;
       String server = childItem(entry, "repos-status");
       if (SVN_ITEM_CONFLICTED.equals(local)) unmerged.add(path);
       else if (SVN_LOCAL_CHANGED.contains(local)) outgoing.put(path, svnStatusLetter(local));
@@ -4022,8 +4170,9 @@ final class SyncPanel extends SimpleToolWindowPanel {
     Map<Kind, Integer> count = new EnumMap<>(Kind.class);
     for (Change c : changes) count.merge(c.kind(), 1, Integer::sum);
     int assumed = count.getOrDefault(Kind.ASSUMED, 0);
-    String tail = assumed > 0 ? " · Assume Unchanged " + assumed : "";
-    if (changes.size() == assumed) return "원격과 같습니다" + tail;
+    int secured = count.getOrDefault(Kind.SECURED, 0);
+    String tail = (secured > 0 ? " · 문서 보안 " + secured : "") + (assumed > 0 ? " · Assume Unchanged " + assumed : "");
+    if (changes.size() == assumed + secured) return "원격과 같습니다" + tail;
     return "들어올 " + count.getOrDefault(Kind.INCOMING, 0) + " · 나갈 " + count.getOrDefault(Kind.OUTGOING, 0)
            + " · 충돌 " + count.getOrDefault(Kind.CONFLICT, 0) + tail;
   }
@@ -4099,7 +4248,8 @@ final class SyncPanel extends SimpleToolWindowPanel {
 
   private void addKindGroups(DefaultMutableTreeNode parent, List<Change> source) {
     for (Kind kind : Kind.values()) {
-      if (modeFilter != null && modeFilter != kind) continue;
+      // 「나갈」 보기는 문서 보안으로 바뀐 파일도 나갈 변경 아래 따로 묶어 보인다.
+      if (modeFilter != null && modeFilter != kind && !(modeFilter == Kind.OUTGOING && kind == Kind.SECURED)) continue;
       List<Change> ofKind = source.stream().filter(c -> c.kind() == kind).toList();
       if (ofKind.isEmpty()) continue;
       DefaultMutableTreeNode group = new DefaultMutableTreeNode(new Group(kind, ofKind.size()));
